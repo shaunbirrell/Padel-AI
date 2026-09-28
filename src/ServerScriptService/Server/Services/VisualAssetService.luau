@@ -50,6 +50,7 @@ local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
 local RigBuilder = require(script.Parent.Parent.Modules.RigBuilder) -- R-RIG
 local RigConfig = require(Shared.Configs.RigConfig) -- R-RIG
+local AirBodyRig = require(script.Parent.Parent.Modules.AirBodyRig) -- air-looks: aircraft body anchor / floor / mounts / rotors
 
 local VisualAssetService = {}
 
@@ -70,6 +71,12 @@ type AssetRef = {
 	BodyScale: number?, -- vscale: the fitted body's scale (1 = Roblox size); nil = as long as the kit chassis
 	BodySeats: { [string]: Vector3 }?, -- vscale: kit seat -> the body's own seat top (unscaled, body box frame)
 	BodyRoofParts: { string }?, -- vscale: kit parts (the Armed 4x4 turret) lifted onto the fitted body's roof
+	BodyAnchor: string?, -- air-looks: this BodySeats seat is put over the kit seat of that name (the body moves, the kit stays)
+	BodyFloor: string?, -- air-looks: "Collide" = lowest body point on the kit's lowest collidable part (no physics wheels)
+	BodyMounts: { [string]: Vector3 }?, -- air-looks: kit weapon mount -> its front face on the body (AirBodyRig.Apply)
+	RotorParts: { any }?, -- air-looks: spinning body / kit parts (AirBodyRig.Apply, AircraftBodyClient)
+	ChaseCamera: boolean?, -- air-looks: WE_CamMinZoom for the seated camera (AirBodyRig.Apply)
+	BodyLift: number?, -- air2 fix1: the fitted body stands this many studs over the kit's floor line (drawn gear under it)
 	OmitParts: { string }?, -- owner list: pack piece parts removed before the part count
 	NoFamilyFallback: boolean?, -- owner list: a vehicle ref at 0 never takes the family body
 	KeepHost: boolean?, -- hooks: props: the host keeps its look (no fade)
@@ -964,8 +971,18 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 			end
 		end
 	end
+	-- air-looks: an aircraft stands on its skids / gear (BodyFloor), its cockpit over the kit seat (BodyAnchor)
+	if ref.BodyFloor == "Collide" and not found then
+		bottom = AirBodyRig.KitFloor(hostModel, primary, bottom)
+	end
+	local shift = AirBodyRig.AnchorShift(hostModel, primary, ref, s, yawDeg)
+	if shift ~= Vector3.zero then
+		clone:SetAttribute("WE_BodyShift", shift)
+	end
+	-- air2 fix1: BodyLift stands a long aircraft body higher on its drawn gear (AirBodyRig), so its tail clears the runway
+	local lift = if fitScale and typeof(ref.BodyLift) == "number" then math.clamp(ref.BodyLift, 0, 4) else 0
 	local anchor = Vector3.new((lx + hx) * 0.5, ly, (lz + hz) * 0.5)
-	local base = primary.CFrame * CFrame.new(0, bottom, 0) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local base = primary.CFrame * CFrame.new(shift.X, bottom + lift, shift.Z) * CFrame.Angles(0, math.rad(yawDeg), 0)
 	-- vscale: FitShadowShare of the FITTED body's length (at BodyScale the chassis is far shorter than the body)
 	local shadowMin = (if fitScale then bodyLen * s else primary.Size.Z) * (tonumber((VisualAssetConfig :: any).FitShadowShare) or 0.5)
 	for _, p in ipairs(parts) do
@@ -1027,7 +1044,9 @@ local function placeKitOnBody(hostModel: Model, primary: BasePart, clone: Model,
 	if bottom > roofY then
 		return
 	end
-	local base = primary.CFrame * CFrame.new(0, bottom, 0) * CFrame.Angles(0, math.rad(tonumber(ref.Yaw) or 0), 0)
+	local shift = clone:GetAttribute("WE_BodyShift") -- air-looks: BodyAnchor moved the body (AirBodyRig.AnchorShift)
+	local sh = if typeof(shift) == "Vector3" then shift else Vector3.zero
+	local base = primary.CFrame * CFrame.new(sh.X, bottom, sh.Z) * CFrame.Angles(0, math.rad(tonumber(ref.Yaw) or 0), 0)
 	-- vscale R2.1: the kit's collidable half width / length (every CanCollide part but the seats, as WE_HalfWidth /
 	-- WE_HalfLength will be): a moved seat keeps its centre BodySeatKitInset inside it. A seat past the kit's nose or
 	-- tail (the Cargo Van's front row, the Dispatch Car's back seat) sits inside a wall the kit touches, and so does
@@ -1081,6 +1100,8 @@ local function placeKitOnBody(hostModel: Model, primary: BasePart, clone: Model,
 	hostModel:SetAttribute("WE_VisualHalfLength", halfZ)
 	hostModel:SetAttribute("WE_VisualHalfWidth", halfX)
 	hostModel:SetAttribute("WE_VisualTop", topY)
+	-- air-looks: weapon mounts on the body, rotor joints, the seated chase camera (a no-op for a ref without them)
+	AirBodyRig.Apply(hostModel, primary, clone, ref)
 end
 
 -- W3 LOOK: under a fitted body the Part-kit visuals go (Transparency 1). Physics, seats, hit boxes and names stay.
@@ -1120,6 +1141,7 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 	if not clone then
 		return false
 	end
+	AirBodyRig.StripSigns(clone, ref) -- air-looks: a store body's name signs (and decals with StripDecals) go, whole model or pack piece
 	local fitted = ref.Fit == "Kit" and fitBodyToKit(clone, hostModel, primary, ref) ~= nil
 	local attached, stripped = weldCloneToPrimary(clone, primary, "WE_CatalogVisual", fitted)
 	if not attached then

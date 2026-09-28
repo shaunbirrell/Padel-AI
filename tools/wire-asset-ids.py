@@ -39,8 +39,15 @@ Gates, in order (any failure refuses that id; nothing is half-written):
   2. owned: inventory API (or --got FILE: `GOT <id>` lines or bare ids; trusted only with --offline).
   3. store re-check (not with --offline): same creator id, asset type and still free.
   4. flags: OWNER needs --owner-ok <id>; STUDIO needs a `WE_CHECK OK <id> ... parts=N ... humanoids=0` line in
-     --we-check FILE with N <= 40 (docs/ASSET_SHORTLIST.md §5 step 5). A WE_CHECK FAIL line refuses. OMIT needs the
-     config ref to hold OmitParts first (the part the Studio check named, e.g. a translucent bounds box).
+     --we-check FILE with N <= 40 (docs/ASSET_SHORTLIST.md §5 step 5), or the owner's second-check lines of that id
+     (`WE_CHECK2 <id> HEAD ... loader=N ... hum=0`, tools/WeCheck2.luau). A WE_CHECK / WE_CHECK2 FAIL line refuses. OMIT needs the
+     config ref to hold OmitParts first (the part the Studio check named, e.g. a translucent bounds box). An OMIT pick
+     with N > 40 passes only as a pack piece (ChildName + OmitParts: VisualAssetService drops OmitParts before the part
+     count only when it splits a pack; a whole model is counted whole) and only when the same --we-check FILE holds the
+     id's complete WE_CHECK2 part lines: the parts the game's loader keeps, minus the OmitParts names, must be <= 40 and
+     <= OMIT_TARGET (the owner's own trim target, e.g. 35 for the rescue helicopter).
+     Vehicles: a body with more Creator Store triangles than VisualAssetConfig.VehicleBodyMaxTriangles (phones) needs
+     --heavy-ok <id> (or a HEAVY_OK entry): the owner's phone test then carries a frame-rate check.
      Then HOLD: an id on HOLD (below the registry) is refused until its HOLD line is deleted.
   5. vehicles get Fit = "Kit", Yaw, HideKit, StripDecals; Yaw = --yaw, else YAW_HINT, else 0 when the WE_CHECK size has
      Z >= X and 90 otherwise (that size rule is wrong for 4 of the 6 vehicle picks the check passed: wc2/veh).
@@ -220,17 +227,23 @@ REGISTRY_ROWS = [
     ('NightAttackHeli', 'VEHICLES', 'REJECT', 14652689347, 14652689347, '', '-', '', [], [], '', 'copy of a game-franchise gunship (Half-Life 2)'),
     ('PremiumStormwing', 'VEHICLES', 'REJECT', 14652689347, 14652689347, '', '-', '', [], [], '', 'copy of a game-franchise gunship (Half-Life 2)'),
     ('RescueHeli', 'VEHICLES', 'REJECT', 11357157285, 11357157285, '', '-', '', ['Vehicles.RescueHeli'], [], '', 'owner check (Open Cloud, v75): 78 parts (cap 40); second check: only "Part" (49) and "Wedge" (29) names, so no trim keeps the body'),
+    ('RescueHeliV2', 'VEHICLES', 'REJECT', 9120014090, 9120014090, '', '-', '', ['Vehicles.RescueHeli'], [], '', "your replacement pick (2026-09-28), not used: the origin check failed. Its 7 rotor MeshParts use 7 meshes and 7 paint images uploaded by another creator (JaimeEsP, 2020-03-02), five months before the seller's account existed, and never published by their maker; 65,837 tris (3x the 20,000 phone cap). Your Part kit stays; a new pick is needed"),
     ('MedevacHeli', 'VEHICLES', 'REJECT', 11357398877, 11357157285, '', '-', '', ['Vehicles.MedevacHeli'], [], '', 'owner check (Open Cloud, v75): 78 parts (cap 40); same model as the Rescue Heli pick 11357157285 (no trim keeps the body)'),
+    ('MedevacHeliV2', 'VEHICLES', 'REJECT', 9120014090, 9120014090, '', '-', '', ['Vehicles.MedevacHeli'], [], '', "your replacement pick (2026-09-28), not used: the origin check failed. Its 7 rotor MeshParts use 7 meshes and 7 paint images uploaded by another creator (JaimeEsP, 2020-03-02), five months before the seller's account existed, and never published by their maker; 65,837 tris (3x the 20,000 phone cap). Your Part kit stays; a new pick is needed"),
     ('VTOLTransport', 'VEHICLES', 'REJECT', 10551768980, 10551768980, '', '-', '', [], [], '', "the uploader does not claim it ('Unknown Vtol'); looks ripped"),
     ('CargoPlane', 'VEHICLES', 'REJECT', 4631044408, 4631044408, '', '-', '', [], [], '', '47 parts (over 40) and a real cargo-plane look'),
     ('AWACSPlane', 'VEHICLES', 'REJECT', 4631044408, 4631044408, '', '-', '', [], [], '', '47 parts (over 40) and a real cargo-plane look'),
     ('TankerPlane', 'VEHICLES', 'REJECT', 4631044408, 4631044408, '', '-', '', [], [], '', '47 parts (over 40) and a real cargo-plane look'),
     ('StrikeJet', 'VEHICLES', 'REJECT', 14451400891, 14451400891, '', '-', '', [], [], '', 'copy of a real jet (F-16)'),
     ('CASJet', 'VEHICLES', 'REJECT', 14451400891, 14451400891, '', '-', '', [], [], '', 'copy of a real jet (F-16)'),
-    ('FighterJet', 'VEHICLES', 'PENDING-GET', 3553891209, 3553891209, 'STUDIO', 'LATER', 'P3', ['Vehicles.FighterJet'], [], '', "fictional concept fighter, 3,032 tris, 1 MeshPart; the 2026-09-24 judge's JetFighter pick"),
-    ('InterceptorJet', 'VEHICLES', 'PENDING-GET', 3553891209, 3553891209, 'STUDIO', 'LATER', 'P3', ['Vehicles.InterceptorJet'], [], '', "fictional concept fighter, 3,032 tris, 1 MeshPart; the 2026-09-24 judge's JetFighter pick"),
-    ('TrainerJet', 'VEHICLES', 'PENDING-GET', 3553891209, 3553891209, 'STUDIO', 'LATER', 'P3', ['Vehicles.TrainerJet'], [], '', "fictional concept fighter, 3,032 tris, 1 MeshPart; the 2026-09-24 judge's JetFighter pick"),
-    ('LightFighter', 'VEHICLES', 'PENDING-GET', 3553891209, 3553891209, 'STUDIO', 'LATER', 'P3', ['Vehicles.LightFighter'], [], '', "fictional concept fighter, 3,032 tris, 1 MeshPart; the 2026-09-24 judge's JetFighter pick"),
+    ('FighterJet', 'VEHICLES', 'REJECT', 3553891209, 3553891209, '', '-', '', ['Vehicles.FighterJet'], [], '', "replaced by your pick 14589101870 (2026-09-28); its paint was another artist's drawing"),
+    ('FighterJetV2', 'VEHICLES', 'PENDING-GET', 14589101870, 14589101870, 'STUDIO', 'LATER', 'P5', ['Vehicles.FighterJet'], [], '', 'your replacement pick (picture one, 2026-09-28): the uploader\'s first Blender model, 8 MeshParts (your v83 check), 11,460 tris, 0 scripts, 0 decals; no name or markings'),
+    ('InterceptorJet', 'VEHICLES', 'REJECT', 3553891209, 3553891209, '', '-', '', ['Vehicles.InterceptorJet'], [], '', "replaced by your pick 14589101870 (2026-09-28); its paint was another artist's drawing"),
+    ('InterceptorJetV2', 'VEHICLES', 'PENDING-GET', 14589101870, 14589101870, 'STUDIO', 'LATER', 'P5', ['Vehicles.InterceptorJet'], [], '', 'your replacement pick (picture one, 2026-09-28): the uploader\'s first Blender model, 8 MeshParts (your v83 check), 11,460 tris, 0 scripts, 0 decals; no name or markings'),
+    ('TrainerJet', 'VEHICLES', 'REJECT', 3553891209, 3553891209, '', '-', '', ['Vehicles.TrainerJet'], [], '', "replaced by your pick 14589101870 (2026-09-28); its paint was another artist's drawing"),
+    ('TrainerJetV2', 'VEHICLES', 'PENDING-GET', 14589101870, 14589101870, 'STUDIO', 'LATER', 'P5', ['Vehicles.TrainerJet'], [], '', 'your replacement pick (picture one, 2026-09-28): the uploader\'s first Blender model, 8 MeshParts (your v83 check), 11,460 tris, 0 scripts, 0 decals; no name or markings'),
+    ('LightFighter', 'VEHICLES', 'REJECT', 3553891209, 3553891209, '', '-', '', ['Vehicles.LightFighter'], [], '', "replaced by your pick 14589101870 (2026-09-28); its paint was another artist's drawing"),
+    ('LightFighterV2', 'VEHICLES', 'PENDING-GET', 14589101870, 14589101870, 'STUDIO', 'LATER', 'P5', ['Vehicles.LightFighter'], [], '', 'your replacement pick (picture one, 2026-09-28): the uploader\'s first Blender model, 8 MeshParts (your v83 check), 11,460 tris, 0 scripts, 0 decals; no name or markings'),
     ('StrikeBomber', 'VEHICLES', 'REJECT', 12592130497, 12592130497, '', '-', '', [], [], '', 'national-style roundel on the wing; made by someone else'),
     ('ReconPlane', 'VEHICLES', 'PENDING-GET', 4954987035, 4954987035, 'OWNER STUDIO', 'LATER', 'P3', ['Vehicles.ReconPlane'], [], '', 'crude wood-textured plane (reads as a wooden toy; lane B: worse than the kit)'),
     ('PatrolBoat', 'VEHICLES', 'REJECT', 5177695483, 5177695483, '', '-', '', ['Vehicles.PatrolBoat'], [], '', 'owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long'),
@@ -374,6 +387,7 @@ STORE = {
     1315600448: ('Radome', 'funkyfeelings', 128298931, 'User', 10, '2018-01-09', 910, 0),
     1409417554: ('Security guard', 'justjbm3', 273729132, 'User', 10, '2018-02-11', 3826, 0),
     1439808070: ('Antenna', 'Sereinmachy', 91085504, 'User', 10, '2018-02-20', 40, 0),
+    1577255368: ('Search and rescue helicopter', 'KiloOfficial', 70685931, 'User', 10, '2018-05-29', 23927, 20),
     1962122463: ('Oil Rig', 'cooldewman45', 56265044, 'User', 10, '2018-06-20', 8654, 0),
     2107703217: ('Shipwreck', 'caelanserrano', 92730996, 'User', 10, '2018-07-20', 4614, 0),
     2474869838: ('Low poly helicopter', 'Azarth', 31265920, 'User', 10, '2018-10-12', 1016, 0),
@@ -435,12 +449,14 @@ STORE = {
     8712482791: ('training ground', 'ponchogeneraldev', 2224449153, 'User', 10, '2022-02-02', 2380, 0),
     8788183000: ('radio tower', 'meryless', 1810843604, 'User', 10, '2022-02-11', 5600, 0),
     9076240315: ('APC', 'CorzCringe', 2027522302, 'User', 10, '2022-03-15', 3314, 0),
+    9120014090: ('Medical Helicopter', 'TripleTripleTwinTips', 1826196871, 'User', 10, '2022-03-16', 65837, 3),
     9359074735: ('Garden Shed', 'GnomeCode', 18799320, 'User', 10, '2022-04-13', 6634, 0),
     9425248992: ('Refinery Chimney', 'niv1003', 491675113, 'User', 10, '2022-04-21', 1644, 0),
     9436861676: ('Talking Villager NPC', 'EvelienSterk', 680575656, 'User', 10, '2023-03-24', 3044, 6),
     9732307513: (' Landing Craft', 'sev_nik', 410254420, 'User', 10, '2022-05-26', 1238, 0),
     9986063643: ('Joshua tree', 'Dragon_Planet', 553045342, 'User', 10, '2022-06-22', 3960, 0),
     10069416832: ('anti aircraft Tank', 'XCX1001', 926649583, 'User', 10, '2022-06-30', 12554, 0),
+    10077899617: ("War's Helicopter (Original)", 'SarahNeedle_mouse', 3319118651, 'User', 10, '2023-02-11', 5992, 3),
     10112923897: ('Military defense outpost.', 'Roseaity', 287667536, 'User', 10, '2022-07-04', 4680, 0),
     10153551618: ('bank', 'kevini44', 10749712, 'User', 10, '2022-07-08', 570, 0),
     10551768980: ('Unknown Vtol', 'MrElfy0007', 713009521, 'User', 10, '2022-08-11', 6674, 0),
@@ -462,11 +478,14 @@ STORE = {
     13958174035: ('Market Stand', 'w_affIe', 1232109727, 'User', 10, '2023-07-04', 696, 0),
     14408455045: ('Tycoon Dropper', 'tinghang77', 3494372811, 'User', 10, '2023-08-12', 184, 0),
     14451400891: ('Jet', 'OIogist', 148166235, 'User', 10, '2023-08-16', 4504, 0),
+    14589101870: ('Basic Fighter jet', 'Alecose1', 94240346, 'User', 10, '2023-08-27', 11460, 0),
     14652689347: ('Gunship', 'ChaseRW1', 267720627, 'User', 10, '2023-09-02', 5708, 0),
+    15024427757: ('Jet Fighter', 'BSPMC2271', 3307482544, 'User', 10, '2023-10-10', 3054, 8),
     15192621369: ('Oil Rig / Pumpjack', 'sadfiacs', 1607785544, 'User', 10, '2023-11-03', 1398, 0),
     15271872710: ('SandBag Wall', 'Herbie778811', 561823031, 'User', 10, '2023-11-05', 240, 0),
     15838664806: ('Basic Gunboat', 'Confused Giants Studio', 33020211, 'Group', 10, '2024-03-01', 4428, 0),
     16835152672: ('truck with a gun', 'CamoConeCamo', 1394327078, 'User', 10, '2024-03-23', 3824, 0),
+    16967628140: ('Oceaniet Stealth Fighter', 'BSPMC2271', 3307482544, 'User', 10, '2025-06-29', 13248, 13),
     17659258441: ('Wooden jetty', 'devstackfull', 1683011272, 'User', 10, '2024-06-20', 2328, 0),
     18220523228: ('ATM', '0GColt', 3592203545, 'User', 10, '2024-06-26', 1032, 0),
     93078960435881: ('super heavy tank', '09lvibruvi', 2633657112, 'User', 10, '2025-07-10', 17736, 0),
@@ -489,6 +508,8 @@ STUDIO_DONE: dict[int, int] = {
     31538715: 93, 43773162: 211, 2474869838: 1, 2627182035: 109, 3304171953: 219, 3553891209: 25, 4954987035: 20,
     5177695483: 114, 5318635087: 55, 8455894899: 53, 8546141386: 1, 9076240315: 12, 10069416832: 301, 11357157285: 78,
     11552687660: 321, 11756438288: 174, 15838664806: 3,
+    # air-looks P5: the owner's WE_CHECK2 run on live v83 (2026-09-28): HEAD loader= in his raw lines (fb4 wc4_all_raw.txt)
+    14589101870: 8, 9120014090: 48,
     # batch P4: the owner's first check of 2026-09-27 (same script, Open Cloud, live place version 75, shaunie6)
     3322196012: 1, 4362642898: 28, 5589684833: 1, 14408455045: 14,
 }
@@ -506,10 +527,20 @@ HOLD: dict[int, str] = {
     4362642898: "the P4 second check (part names: its bounds box, and one piece for the Signature role; 28 parts > 3 roles)",
     5589684833: "the P4 second check (which end is the barrel) + a FitScale look on the Roblox-size 4x4",
     14408455045: "the P4 second check (neon parts, upright pose) + the droppers lane (v1b reads its WE_CatalogProp)",
+    # air2 (2026-09-28): the owner's raw v83 lines arrived: the jet 14589101870 is promoted (its HOLD line went with it) and
+    # the rescue helicopter 9120014090 is a REJECT row (origin check), so neither waits here any more
 }
+# The owner's own trim targets (his words, below MAX_PARTS): promote compares the parts kept after OmitParts with these.
+OMIT_TARGET: dict[int, int] = {
+    9120014090: 35,  # the owner's bot, live v83 check summary 2026-09-28: "48 parts -> trim to <=35"
+}
+# Vehicle bodies over VisualAssetConfig.VehicleBodyMaxTriangles that the lead accepted for phones (id -> when / why);
+# promote takes them in place of --heavy-ok. Empty: the rescue helicopter pick (65,837) needs that call first.
+HEAVY_OK: dict[int, str] = {}
 # Vehicle yaw read from the store pictures (wc2/veh, calibrated on Roblox's own car packs); promote uses it when --yaw is
 # not given. The second check (WE_CHECK2) may correct it: pass --yaw to override.
 YAW_HINT: dict[int, int] = {
+    14589101870: 180, 9120014090: 180,  # air-looks: the owner's v83 check summary (front along +Z)
     3553891209: 90, 2474869838: 0, 9076240315: 0, 8546141386: 180, 4954987035: -90, 15838664806: -90,
 }
 # The owner's yes / no answers on record (promote accepts them in place of --owner-ok; the status table stops asking).
@@ -1190,7 +1221,82 @@ def parse_we_check(text: str) -> dict[int, dict]:
         mm = re.findall(r"(?<![\w=])size=([\d.]+)x([\d.]+)x([\d.]+)", rest)
         rec["size"] = tuple(float(x) for x in mm[-1]) if mm else None
         out[aid] = rec
+    # air2 (2026-09-28): the owner's second-check lines (tools/WeCheck2.luau) settle an id that has no first-check line:
+    # HEAD loader= is the count the game's loader keeps (its part cap), hum= its Humanoids, BOX size= its box; a FAIL line
+    # is a load failure. A first-check (WE_CHECK) line of the same id always wins.
+    for line in text.splitlines():
+        m = re.search(r"WE_CHECK2 (\d+) (HEAD|FAIL|BOX) (.*)$", line)
+        if not m or int(m.group(1)) == 0:
+            continue
+        aid, kind, body = int(m.group(1)), m.group(2), m.group(3)
+        if aid in out and out[aid].get("src") != "WE_CHECK2":
+            continue
+        if kind == "FAIL":
+            out[aid] = {"ok": False, "why": body.strip()[:120], "src": "WE_CHECK2"}
+            continue
+        rec = out.setdefault(aid, {"ok": True, "src": "WE_CHECK2", "parts": None, "humanoids": None, "scripts": None,
+                                   "lights": None, "decals": None, "size": None})
+        if rec.get("ok") is False:
+            continue
+        if kind == "HEAD":
+            for k, key in (("parts", "loader"), ("humanoids", "hum"), ("scripts", "scripts"), ("lights", "lights"),
+                           ("decals", "dec")):
+                mm = re.search(rf"(?<![\w=]){key}=(\d+)", body)
+                rec[k] = int(mm.group(1)) if mm else None
+        else:
+            mm = re.search(r"(?<![\w=])size=([\d.]+),([\d.]+),([\d.]+)", body)
+            rec["size"] = tuple(float(x) for x in mm.groups()) if mm else rec.get("size")
     return out
+
+
+# air-looks fix1: the WE_CHECK2 lines of one id (tools/WeCheck2.luau format): HEAD parts / loader, END cut, and every P line
+# as (name, class, dropped by the loader). promote reads them for an OMIT pick over MAX_PARTS.
+def parse_we_check2_parts(text: str) -> dict[int, dict]:
+    out: dict[int, dict] = {}
+    for line in text.splitlines():
+        m = re.search(r"WE_CHECK2 (\d+) (HEAD|P|END) ?(.*)$", line)
+        if not m:
+            continue
+        rec = out.setdefault(int(m.group(1)), {"parts": None, "loader": None, "cut": None, "p": []})
+        body = m.group(3)
+        if m.group(2) == "HEAD":
+            for k in ("parts", "loader"):
+                mm = re.search(rf"(?<![\w=]){k}=(\d+)", body)
+                rec[k] = int(mm.group(1)) if mm else None
+        elif m.group(2) == "END":
+            mm = re.search(r"(?<![\w=])cut=(\S+)", body)
+            rec["cut"] = mm.group(1) if mm else None
+        else:
+            mm = re.match(r'\d+ "((?:[^"\\]|\\.)*)" c=(\w+)(.*)$', body)
+            if mm:
+                rec["p"].append((mm.group(1).replace('\\"', '"'), mm.group(2), bool(re.search(r"(?<![\w=])x=1\b", mm.group(3)))))
+    return out
+
+
+def lua_string_list(raw: str | None) -> list[str]:
+    """`{ "A", "B" }` -> ["A", "B"] (a config OmitParts value); [] when absent."""
+    return re.findall(r'"((?:[^"\\]|\\.)*)"', raw or "")
+
+
+def omit_kept(aid: int, w2: dict | None, omit: list[str]) -> tuple[int | None, str | None]:
+    """(parts the game's loader keeps after OmitParts, why not) from the id's WE_CHECK2 lines. Every P line must be
+    there (HEAD parts = P lines, nothing cut): the loader-kept parts (no x=1) whose name is not in OmitParts."""
+    if not w2 or w2.get("parts") is None:
+        return None, f"needs the WE_CHECK2 lines of {aid} in the --we-check FILE (the part names OmitParts drops)"
+    if len(w2["p"]) != w2["parts"] or (w2.get("cut") not in (None, "0") and "P" in str(w2.get("cut"))):
+        return None, f"WE_CHECK2 part lines incomplete ({len(w2['p'])} of {w2['parts']}): the post-OmitParts count is unknown"
+    drop = set(omit)
+    return sum(1 for (name, _cls, gone) in w2["p"] if not gone and name not in drop), None
+
+
+def body_tri_cap(vac: "Config") -> int | None:
+    m = re.search(r"^\s*VehicleBodyMaxTriangles\s*=\s*(\d+)", vac.text, re.M)
+    return int(m.group(1)) if m else None
+
+
+def shown_pending(r: "Row", p: str | None) -> str | None:
+    """The PendingAssetId a registry row shows: a rejected pick's row never shows the replacement waiting in its ref."""
+    return p if p and (r.decision == "PENDING-GET" or p == str(r.id)) else None
 
 
 # ── BuyPathStatic needles ─────────────────────────────────────────────────────────────────────────────────────────
@@ -1417,7 +1523,7 @@ def revert_hunks(text: str, hunks: list[list[str]], rel: str) -> str:
 
 
 # ── status table ──────────────────────────────────────────────────────────────────────────────────────────────────
-def gate_text(r: Row, state: str) -> str:
+def gate_text(r: Row, state: str, tri_cap: int | None = None) -> str:
     if r.decision != "PENDING-GET":
         why = r.why if len(r.why) <= 90 else r.why[:87].rstrip() + "…"
         return why.replace("|", "/")
@@ -1439,6 +1545,10 @@ def gate_text(r: Row, state: str) -> str:
         need.append("OmitParts")
     if r.id in HOLD:
         need.append(HOLD[r.id])
+    tris = STORE.get(r.id, ())[6] if len(STORE.get(r.id, ())) > 6 else None
+    if (tri_cap and r.targets and r.targets[0].startswith("Vehicles.") and isinstance(tris, int) and tris > tri_cap
+            and r.id not in HEAVY_OK):
+        need.append(f"heavy for phones ({tris:,} triangles > {tri_cap:,}): the lead's call, then your frame-rate test")
     base = " + ".join(need) if need else "ready"
     extra = " (recorded only)" if "INERT" in r.flags else ""
     return f"{done}{base}, batch {r.batch}{extra}"
@@ -1459,13 +1569,14 @@ def render_status(tree: Tree) -> str:
             if r.decision == "LIVE-NOW" and v != r.id:
                 live = f"{v} (expected {r.id})"
             p = tree.vac.raw(r.targets[0], "PendingAssetId")
-            pend = p if p else "–"
+            # air-looks: a rejected pick's row does not show the replacement pick waiting in the same config ref
+            pend = shown_pending(r, p) or "–"
         elif r.where:
             live = f"{r.id} ({r.where.split('.')[0]})" if not r.where.startswith("via") else f"{r.where.split(' ')[1].split('.')[-1]} body"
         if r.decision == "PENDING-GET" and pend == "–" and state != "live":
             pend = f"{r.id} (not in config)"
         own = owned_0805(r.id) if r.id else "–"
-        out.append(f"| {plain(r.key)} | {DECISION_LABEL[r.decision]} | {live} | {pend} | {own} | {gate_text(r, state)} |")
+        out.append(f"| {plain(r.key)} | {DECISION_LABEL[r.decision]} | {live} | {pend} | {own} | {gate_text(r, state, body_tri_cap(tree.vac))} |")
     out += ["", STATUS_END]
     return "\n".join(out)
 
@@ -1651,8 +1762,12 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
     got = parse_got(Path(a.got).read_text(encoding="utf-8")) if a.got else None
     if a.offline and got is None:
         raise ToolError("--offline needs --got FILE (the owner's GOT lines are the ownership proof)")
-    we = parse_we_check(Path(a.we_check).read_text(encoding="utf-8")) if a.we_check else {}
+    we_text = Path(a.we_check).read_text(encoding="utf-8") if a.we_check else ""
+    we = parse_we_check(we_text) if a.we_check else {}
+    we2 = parse_we_check2_parts(we_text)
     owner_ok = {int(x) for x in re.findall(r"\d+", a.owner_ok or "")}
+    heavy_ok = {int(x) for x in re.findall(r"\d+", getattr(a, "heavy_ok", None) or "")}
+    tri_cap = body_tri_cap(tree.vac)
     yaw_override: dict[int, int] = {}
     for x in a.yaw or []:
         m_yaw = re.fullmatch(r"\s*(\d+)\s*=\s*(-?\d{1,3})\s*", x)
@@ -1708,7 +1823,7 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
                 why = "needs a WE_CHECK OK line (--we-check FILE; docs/ASSET_SHORTLIST.md §5 step 5)"
             elif not wc["ok"]:
                 why = f"WE_CHECK FAIL: {wc['why']}"
-            elif wc.get("parts") is None or wc["parts"] > MAX_PARTS:
+            elif wc.get("parts") is None or (wc["parts"] > MAX_PARTS and "OMIT" not in flags):
                 why = f"WE_CHECK parts={wc.get('parts')} (cap {MAX_PARTS})"
             elif wc.get("humanoids") != 0:
                 why = f"WE_CHECK humanoids={wc.get('humanoids')} (must be 0)"
@@ -1718,6 +1833,30 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
                 why = "needs OmitParts in " + ", ".join(no_omit) + " first (the part the Studio check names, e.g. its bounds box)"
         if not why and aid in HOLD:
             why = f"on hold: {HOLD[aid]} (docs/ASSET_WIRING.md §5; delete its HOLD line in this tool when that is done)"
+        # air-looks fix1: an OMIT pick over the cap is counted after OmitParts, and only a pack piece is trimmed before the
+        # game's load count (VisualAssetService extractPiece; a whole model is refused at its full count)
+        target_cap = min(MAX_PARTS, OMIT_TARGET.get(aid, MAX_PARTS))
+        if not why and "OMIT" in flags and wc and wc.get("ok") and ((wc.get("parts") or 0) > MAX_PARTS or aid in OMIT_TARGET):
+            whole = [r.targets[0] for r in rows if tree.vac.raw(r.targets[0], "ChildName") is None]
+            if whole and (wc.get("parts") or 0) > MAX_PARTS:
+                why = ("needs ChildName in " + ", ".join(whole) + " first: OmitParts trims a pack piece before the part count, "
+                       f"a whole model is counted whole ({wc.get('parts')} > {MAX_PARTS})")
+            else:
+                omit_names: set[str] = set()
+                for r in rows:
+                    omit_names.update(lua_string_list(tree.vac.raw(r.targets[0], "OmitParts")))
+                kept, kwhy = omit_kept(aid, we2.get(aid), sorted(omit_names))
+                if kwhy:
+                    why = kwhy
+                elif kept is not None and kept > target_cap:
+                    why = (f"after OmitParts the loader keeps {kept} parts (cap {target_cap}"
+                           + (f": your target {OMIT_TARGET[aid]}" if aid in OMIT_TARGET else "") + ")")
+        if not why and tri_cap and any(r.targets and r.targets[0].startswith("Vehicles.") for r in rows):
+            tris = STORE.get(aid, (None,) * 8)[6] if len(STORE.get(aid, ())) > 6 else None
+            if isinstance(tris, int) and tris > tri_cap and aid not in heavy_ok and aid not in HEAVY_OK:
+                why = (f"{tris:,} Creator Store triangles > VisualAssetConfig.VehicleBodyMaxTriangles {tri_cap:,} (heavy for "
+                       f"phones): pass --heavy-ok {aid} once the lead accepts it; the owner's phone test then checks the frame rate "
+                       "with two or more in view at Graphics Quality 3 / a mid-range Android")
         if not why:
             for r in rows:
                 if r.targets and r.targets[0].startswith("Businesses."):
@@ -1806,9 +1945,14 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
             if weak:
                 notes.append("[WEAK] owner tag: use but flag")
             if plan["wc"] and plan["wc"].get("ok"):
-                notes.append(f"WE_CHECK parts={plan['wc'].get('parts')} humanoids=0")
+                if plan["wc"].get("src") == "WE_CHECK2":  # air2: the owner's second-check lines settled it (loader count)
+                    notes.append(f"WE_CHECK2 loader={plan['wc'].get('parts')} humanoids=0")
+                else:
+                    notes.append(f"WE_CHECK parts={plan['wc'].get('parts')} humanoids=0")
             if any("OWNER" in r.flags for r in rows):
                 notes.append("owner yes on record")
+            if (aid in heavy_ok or aid in HEAVY_OK) and tri_cap:
+                notes.append(f"heavy for phones ({STORE[aid][6]:,} tris > {tri_cap:,}): accepted, frame-rate check in the phone test")
             lic, _added = add_licence_row(lic, licence_row(aid, rows, used_by, plan["verified"], "; ".join(notes)), aid)
             files.set(BPS_REL, bps)
             files.set(LIC_REL, lic)
@@ -2075,6 +2219,9 @@ def cmd_reject(a: argparse.Namespace, root: Path) -> int:
                     if pend is None:
                         continue
                     if pend != str(aid):
+                        newer = [q.key for q in PENDING_BY_ID.get(int(pend), []) if path in q.targets] if pend.isdigit() else []
+                        if newer:
+                            continue  # air-looks fix1: the ref already waits for the replacement pick (e.g. FighterJetV2)
                         raise ToolError(f"{path}: PendingAssetId is {pend}, not {aid}")
                     live = cfg.num(path)
                     note = reject_note(r, path, cfg.raw(path, "Note"), live, wc)
@@ -2139,9 +2286,9 @@ def cmd_status(a: argparse.Namespace, root: Path) -> int:
     for r in ordered_rows():
         state = tree.row_state(r) if r.decision == "PENDING-GET" else ""
         live = tree.row_live_id(r)
-        pend = tree.vac.raw(r.targets[0], "PendingAssetId") if r.targets and tree.vac.has(r.targets[0]) else None
+        pend = shown_pending(r, tree.vac.raw(r.targets[0], "PendingAssetId") if r.targets and tree.vac.has(r.targets[0]) else None)
         rows.append({"key": r.key, "decision": r.decision, "id": r.id, "live": live, "pending": pend, "flags": sorted(r.flags),
-                     "batch": r.batch, "state": state, "gate": gate_text(r, state), "owned_0805": owned_0805(r.id) if r.id else None,
+                     "batch": r.batch, "state": state, "gate": gate_text(r, state, body_tri_cap(tree.vac)), "owned_0805": owned_0805(r.id) if r.id else None,
                      "studio_parts": STUDIO_DONE.get(r.id), "hold": HOLD.get(r.id) if r.decision == "PENDING-GET" else None})
     proj = project_live_ids(tree.vac, tree.svc, tree.families)
     boot_ids, after_ids = outage_ids(tree.vac, tree.svc, tree.families)
@@ -2167,8 +2314,11 @@ def cmd_status(a: argparse.Namespace, root: Path) -> int:
     print(f"load budget: {len(proj)} distinct live VisualAssetService ids (cap {budget_cap(tree.vac)})")
     print(f"outage budget: {len(after_ids)} ids first asked after boot (LoadRetryReserve {reserve}); "
           f"{len(boot_ids)} boot ids (MaxLoadAttempts - LoadRetryReserve = {max_attempts(tree.vac) - reserve})")
+    waiting = [i for i in sorted(HOLD) if i in PENDING_BY_ID]
     print(f"check on record: {len(STUDIO_DONE)} ids ({STUDIO_CHECK_SOURCE}); on hold: "
-          + (", ".join(f"{i} ({HOLD[i]})" for i in sorted(HOLD)) or "none"))
+          + (", ".join(f"{i} ({HOLD[i]})" for i in waiting) or "none")
+          + (f"; replaced picks (hold kept as history): {', '.join(str(i) for i in sorted(HOLD) if i not in PENDING_BY_ID)}"
+             if len(waiting) < len(HOLD) else ""))
     heavy = [h for h in HEAVY_IDS if id_token(h).search(tree.vac.text) or (tree.svc and id_token(h).search(tree.svc.text))]
     if heavy:
         print(f"WARN rule 5 heavy ids still in config: {heavy}")
@@ -2185,6 +2335,8 @@ def cmd_pending(a: argparse.Namespace, root: Path) -> int:
         ok = any(path in r.targets for r in rows)
         verdict = (f"verified: {', '.join(r.key for r in rows)} batch {rows[0].batch} flags {' '.join(sorted(rows[0].flags)) or '-'}"
                    if ok else "UNVERIFIED: not a registry PENDING-GET target (promote refuses it)")
+        if ok and pid in HOLD:
+            verdict += f"; on hold: {HOLD[pid]}"
         print(f"{path:<34} pending={pid:<14} live={live:<15} {verdict}")
     return 0
 
@@ -2253,6 +2405,7 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--offline", action="store_true")
     pr.add_argument("--we-check", dest="we_check", default=None)
     pr.add_argument("--owner-ok", dest="owner_ok", default=None)
+    pr.add_argument("--heavy-ok", dest="heavy_ok", default=None, help="ids of vehicle bodies over VehicleBodyMaxTriangles the lead accepts")
     pr.add_argument("--yaw", action="append", default=None, help="ID=DEG (vehicles)")
     pr.add_argument("--allow-budget", dest="allow_budget", action="store_true")
     pr.add_argument("--dry-run", dest="dry_run", action="store_true")

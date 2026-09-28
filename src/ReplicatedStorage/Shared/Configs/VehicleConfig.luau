@@ -484,8 +484,9 @@ local VehicleConfig = {
 			in front of it (those two only while the car moves toward that end slower than EndMaxSpeed); then the same
 			four FarStep further out. A spot needs solid ground within StepUp above / MaxDrop below the car's
 			wheel line (never water, never the void), an empty standing box (CanCollide parts; this car and characters
-			are ignored) and a clear line from the seat. No clear spot = Roblox's own jump-out, as before. Car mode only
-			(boats and aircraft keep Roblox's exit). The plain Part kit (no body) uses its own width. ]]
+			are ignored) and a clear line from the seat. No clear spot = Roblox's own jump-out, as before. Car mode, plus
+			(air2 fix2) a plane that wears a fitted body (BodyModes); boats, helicopters and Part-kit planes keep Roblox's
+			exit. The plain Part kit (no body) uses its own width. ]]
 		ExitSpot = {
 			Enabled = true,
 			Modes = { Car = true } :: { [string]: boolean },
@@ -513,6 +514,11 @@ local VehicleConfig = {
 			-- per seat: "Left" / "Right" = the car's own left / right (it faces -Z); a seat not listed exits on the side
 			-- its centre is on (x < 0 = left; the kit's centred DriverSeat and the bodies' driver seats = left)
 			Side = { DriverSeat = "Left" } :: { [string]: string },
+			-- air2 fix2: these modes too, but only for a vehicle that wears a fitted body (WE_VisualHalfLength set): its seats
+			-- sit inside that body, which never collides, so Roblox's own jump-out lands the rider on the hidden kit inside it
+			-- (the owner's 44-stud jet: standing in the fuselage, head out of its top). Beside the wing tip instead; in the
+			-- air (no ground within MaxDrop) nothing changes. A Part-kit plane keeps Roblox's own exit, as before.
+			BodyModes = { Plane = true } :: { [string]: boolean },
 		},
 		--[[ vscale R2: passengers board by touch (the moved seats sit inside the kit's Cabin / Cargo, where touch-to-sit
 			cannot reach them). One "Ride" ProximityPrompt per car (WE_RidePrompt, on the Chassis): the server enables it
@@ -528,6 +534,10 @@ local VehicleConfig = {
 			HoldSeconds = 0.3, -- a short hold: works with a finger, no accidental boarding
 			RequestRate = 2, -- RateLimitService "vehicle_ride" tokens/s
 			RequestBurst = 2,
+			-- air2 fix2: these modes too, but only for a vehicle that wears a fitted body (WE_VisualHalfLength set) and has a
+			-- passenger seat: the body hides its seats inside it, where touch-to-sit cannot reach them (the Trainer Jet's back
+			-- seat). A Part-kit plane keeps its visible seats (touch to sit), as before.
+			BodyModes = { Plane = true } :: { [string]: boolean },
 		},
 
 		--[[ Rollover fix (owner, phone, 2026-09-24: "The quad falls over when driving super easy"). Built once per

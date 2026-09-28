@@ -40,6 +40,37 @@
 	Humanoid, or it is refused and the Part kit stays.
 ]]
 
+-- air-looks (2026-09-28): one spinning rotor of a store aircraft body (AssetRef.RotorParts; AirBodyRig + AircraftBodyClient)
+export type AirRotor = {
+	Parts: { string }, -- BasePart names in the body (every descendant with one of these names spins with this rotor)
+	Hub: string?, -- the spin centre is this part's centre (default: the average centre of Parts)
+	Axis: string, -- the spin axis in the kit chassis frame after the fit: "Y" up (main rotor), "X" sideways (tail rotor), "Z"
+	Rps: number, -- turns per second at full speed (drawn with RotorSpin.Steps precomputed angles)
+	Kit: boolean?, -- true: the names are Part-kit parts (the kit rotor, kept visible with KeepVisible) instead of body parts
+}
+
+-- air2 fix1 (2026-09-28): one invisible hit plate over a fitted store aircraft body (AssetRef.BodyHitBoxes; AirBodyRig)
+export type AirHitBox = {
+	At: Vector3, -- box centre, unscaled body frame like BodySeats (x / z from the body box centre, y above its lowest point, before Yaw)
+	Size: Vector3, -- box size, unscaled (x across, y up, z along the body before Yaw)
+}
+
+-- air2 fix1: drawn landing gear under a fitted store aircraft body that has none (AssetRef.BodyGear; AirBodyRig). Drawn
+-- only: never collides, massless; the hidden kit gear still stands and rolls the aircraft (physics unchanged).
+export type AirGearLeg = {
+	At: Vector3, -- the wheel's x / z, unscaled body frame like BodySeats (y unused: the wheel stands on the kit's floor)
+	Wheel: number, -- wheel diameter, studs
+}
+export type AirGear = {
+	Legs: { AirGearLeg },
+	Strut: number, -- strut thickness, studs; the strut runs from the wheel centre up into the body underside above it
+	Into: number, -- studs the strut reaches into the body box above the leg (it never ends in the air under a round belly)
+	WheelColor: Color3?, -- air2 fix2: the look (config first); nil = near-black SmoothPlastic wheels, grey Metal struts
+	WheelMaterial: Enum.Material?,
+	StrutColor: Color3?,
+	StrutMaterial: Enum.Material?,
+}
+
 export type AssetRef = {
 	ModelAssetId: number?, -- InsertService / AssetService:LoadAssetAsync catalog Model
 	MeshId: number?, -- optional SpecialMesh / MeshPart MeshId (0 = unused)
@@ -62,6 +93,16 @@ export type AssetRef = {
 	BodyScale: number?, -- Fit: body scale (1 = Roblox size); nil = as long as the kit chassis. The kit still drives
 	BodySeats: { [string]: Vector3 }?, -- BodyScale: kit seat -> body seat top (unscaled studs: x/z from the body box centre, y above its lowest point)
 	BodyRoofParts: { string }?, -- BodyScale: kit parts lifted onto the body roof (the Armed 4x4 keeps its Part turret)
+	-- air-looks (2026-09-28): store aircraft bodies (VisualAssetService + Server/Modules/AirBodyRig, AircraftBodyClient)
+	BodyAnchor: string?, -- BodyScale: a BodySeats name; the body moves (kit X / Z) so that seat is over the kit seat of that name
+	BodyFloor: string?, -- BodyScale: "Collide" = the body's lowest point on the kit's lowest collidable part (skids, gear)
+	BodyMounts: { [string]: Vector3 }?, -- BodyScale: kit weapon mount part -> where its front face sits on the body (unscaled, like BodySeats)
+	RotorParts: { AirRotor }?, -- BodyScale: body (or kit) parts that spin on each client while the driver seat is taken
+	ChaseCamera: boolean?, -- BodyScale: a seated player's camera stays at least AirBody.ChaseCameraMargin past the body's far end
+	BodyHitBoxes: { AirHitBox }?, -- BodyScale (air2 fix1): invisible hit plates over the body, so shots hit what players see (AirBody.BodyHitBoxes)
+	BodyLift: number?, -- BodyScale (air2 fix1): studs the fitted body stands over the kit's chassis bottom (drawn gear under it)
+	BodyGear: AirGear?, -- BodyScale (air2 fix1): drawn landing gear from the kit's floor up into the body
+	TailGuard: boolean?, -- BodyScale (air2 fix1): near the ground the plane law eases nose-up pitch and bank so the body never dips into it (AirBody.TailGuard)
 	-- Owner asset list (2026-09-25)
 	PendingAssetId: number?, -- the owner's third-party pick; NEVER loaded (VisualAssetService ignores it); tools/wire-asset-ids.py promotes it
 	OmitParts: { string }?, -- pack piece: BaseParts with these names are removed before the part count (Pickup Truck tail-light glass)
@@ -83,6 +124,35 @@ export type AssetRef = {
 	ToLevel: number?, -- BusinessPieces: worn up to this business level (nil = to the top)
 	Rig: string?, -- R-RIG: "R6" = animated rig (RigBuilder); the template holds no Humanoid
 	Headwear: string?, -- R-RIG: "Beret" | "KitHelmet" | "None"
+}
+
+-- air2 fix1 (2026-09-28): the owner's jet 14589101870 (Vehicles.FighterJet / InterceptorJet / TrainerJet / LightFighter)
+-- shares these two tables. Unscaled body frame like BodySeats: x / z from the body box centre, y over its lowest point,
+-- before the Yaw (its nose is +Z). Hit plates = the boxes of the owner's WE_CHECK2 P lines (a mesh never leaves its box):
+-- fuselage (its nose cone narrower), belly block, wings with the wing-tip missiles, strakes, tailplanes and fin. The
+-- drawn gear stands where a real jet's does: two main wheels under the wing roots, level with the kit's main wheels (the
+-- aircraft rolls and rotates on those), one nose wheel under the canopy's front.
+local JET_HIT_BOXES: { AirHitBox } = {
+	{ At = Vector3.new(0.07, 1.485, -1.4), Size = Vector3.new(2, 1.97, 13.69) }, -- fuselage, tail to the canopy front
+	{ At = Vector3.new(0.07, 1.485, 7.1), Size = Vector3.new(1.2, 1.2, 3.29) }, -- nose cone
+	{ At = Vector3.new(0.04, 1.115, -1.93), Size = Vector3.new(1.56, 2.23, 10.53) }, -- belly block under the fuselage
+	{ At = Vector3.new(0, 1.338, -1.34), Size = Vector3.new(11.52, 0.745, 4.96) }, -- wings with the wing-tip missiles
+	{ At = Vector3.new(0.07, 1.335, 1.68), Size = Vector3.new(3.95, 0.4, 5.23) }, -- strakes by the cockpit
+	{ At = Vector3.new(0.07, 1.47, -6.19), Size = Vector3.new(6.07, 0.5, 5.11) }, -- tailplanes
+	{ At = Vector3.new(0.07, 3.245, -6.19), Size = Vector3.new(0.4, 3.05, 5.11) }, -- fin
+}
+local JET_GEAR: AirGear = {
+	Legs = {
+		{ At = Vector3.new(1.23, 0, 0.7), Wheel = 1.6 }, -- main wheel, under the wing root
+		{ At = Vector3.new(-1.09, 0, 0.7), Wheel = 1.6 }, -- main wheel, the other side (both 1.16 off the fuselage axis)
+		{ At = Vector3.new(0.07, 0, 5.5), Wheel = 1.2 }, -- nose wheel, under the canopy's front
+	},
+	Strut = 0.35,
+	Into = 0.6,
+	WheelColor = Color3.fromRGB(28, 28, 30), -- black tyres
+	WheelMaterial = Enum.Material.SmoothPlastic,
+	StrutColor = Color3.fromRGB(120, 122, 126), -- grey legs
+	StrutMaterial = Enum.Material.Metal,
 }
 
 local VisualAssetConfig = {
@@ -139,6 +209,45 @@ local VisualAssetConfig = {
 	-- beside a tall van or truck sees them over the roof (R2.2's flat 1 left the bar 0.08 over the roof, hidden by it).
 	-- Van / trucks about 3.1, 4x4 2.4, Quad 2.6. { Base = 1, PerStud = 0 } = R2.2.
 	BodyLabelMargin = { Base = 1, PerStud = 0.4, EyeHeight = 4.5 },
+	-- air-looks (2026-09-28): store aircraft bodies. ChaseCamera refs: the seated player's minimum camera zoom is the body's
+	-- far end (WE_VisualHalfLength) + ChaseCameraMargin, at most ChaseCameraMax and never past the player's own max zoom,
+	-- restored on exit (AircraftBodyClient). RotorSpin: RotorParts joints (tag WE_RotorJoint) turn on each client, cheap:
+	-- one Stepped loop at Hz, Steps precomputed angles (no allocation per frame), only while someone sits in the driver
+	-- seat (WE_DriverUserId), spun up / down over SpinUpSeconds, only the MaxAircraft nearest within MaxDistance of the
+	-- camera (re-picked every Refresh seconds). Enabled = false: every rotor stands still (the body still loads).
+	-- air2 (2026-09-28): margin 6 -> 18. With the owner's 44-stud jet (the only ChaseCamera refs) 6 put the phone camera
+	-- 5 studs behind the tail, where its fin fills the screen; 18 gives a 46-stud chase (fix1 seat) that shows the whole jet and the
+	-- sky ahead (fb4/air2 renders). The player can still zoom out to his own maximum.
+	-- air2 fix1: BodyHitBoxes = true: a ref's BodyHitBoxes become invisible hit plates (CanQuery, never collide, massless,
+	-- welded) over the fitted body, and the kit's hidden parts stop taking shots, so a gun or missile hits the jet players
+	-- see (44 long) instead of the hidden 12-stud kit under its nose. false = shots hit the kit as before (one switch).
+	-- TailGuard (refs with TailGuard = true): the fitted body reaches far behind the kit's wheels (the owner's jet: 24 studs)
+	-- and never collides, so a 6-15 degree lift-off or a flare near the ground would sink its tail into the runway (and a
+	-- dive its nose, a low turn a wing tip). The server writes the body's lowest box corners (WE_TailGuard, each Margin
+	-- studs lower); near the ground the plane law (VehicleDriveClient Laws.TailGuard) eases pitch and bank back toward
+	-- level together until every corner clears the ground, looking LeadSeconds ahead while sinking; a lift-off keeps at
+	-- least MinPitch (a climb, over the touchdown line). Enabled = false: the law is exactly as before.
+	AirBody = {
+		ChaseCameraMargin = 18,
+		ChaseCameraMax = 60,
+		BodyHitBoxes = true,
+		TailGuard = { Enabled = true, Margin = 0.3, MinPitch = 3.5, LeadSeconds = 0.15 },
+		RotorSpin = {
+			Enabled = true,
+			Hz = 30,
+			Steps = 24,
+			MaxAircraft = 6,
+			MaxDistance = 400,
+			SpinUpSeconds = 2.5,
+			Refresh = 0.5,
+		},
+	},
+	-- air-looks fix1 (2026-09-28): the phone cost of ONE store vehicle body, in Creator Store triangles (the whole model;
+	-- a pack counts in full). tools/wire-asset-ids.py promote refuses a vehicle body above it unless the lead accepts it
+	-- (--heavy-ok / HEAVY_OK); the owner's phone test then checks the frame rate with two or more in view at Graphics
+	-- Quality 3 or on a mid-range Android. A tool gate only: a script cannot read a mesh's triangle count. Live bodies:
+	-- Recon Plane 738, APC 3,314; the jet pick 11,460 passes, the rescue helicopter pick 65,837 does not.
+	VehicleBodyMaxTriangles = 20000,
 	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)
 	CharacterVisualScale = 1.0,
 	BuildingVisualScale = 1.0, -- ScaleTo uses TargetFootprint; do NOT squash to plinth
@@ -230,7 +339,7 @@ local VisualAssetConfig = {
 		LightScoutHeli = { ModelAssetId = 0, PendingAssetId = 2474869838, Note = "owner pick Low poly helicopter (Azarth): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		GunshipHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
 		HeavyLiftHeli = { ModelAssetId = 0, Note = "owner pick transport helicopter (blokkere) not used: owner check 2026-09-25 (Open Cloud, v75), 109 parts > 40 - family body / Part kit" } :: AssetRef,
-		RescueHeli = { ModelAssetId = 0, Note = "owner pick Rescue Helicopter (KiboSprite) not used: owner check 2026-09-25 (Open Cloud, v75), 78 parts > 40 - family body / Part kit" } :: AssetRef,
+		RescueHeli = { ModelAssetId = 0, Note = "owner replacement pick Medical Helicopter (TripleTripleTwinTips) not used: origin check 2026-09-28 (its rotor meshes and paint were uploaded by another creator) - family body / Part kit" } :: AssetRef,
 		StealthHeli = { ModelAssetId = 0, Note = "Gunship/stealth heli" } :: AssetRef,
 		-- Classic free pack (trucks / APC fallback)
 		_FallbackWheeled = { ModelAssetId = 0, Note = "Military Vehicle Meshes pack (free)" } :: AssetRef,
@@ -278,9 +387,88 @@ local VisualAssetConfig = {
 		} :: AssetRef,
 		-- Free jet family (classic + named free fighter)
 		_FallbackJet = { ModelAssetId = 0, Note = "Classic free fighter jet" } :: AssetRef,
-		FighterJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		InterceptorJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		TrainerJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		-- air2 (owner's raw v83 lines, 2026-09-28): 8 MeshParts, 11.52 x 4.77 x 17.5, no paint images, 0 scripts; every mesh
+		-- uploaded by the seller (origin check). Nose at +Z (the fuselage tip at z 8.74, the tail fins at z -8.75), so Yaw
+		-- 180. BodyScale 2.5 (the owner's number): 43.7 long, 28.8 wide, 11.9 tall, about a real fighter next to a 5-stud
+		-- avatar. The kit (12 long) still flies it: physics, collisions and drive are the kit's; shots hit JET_HIT_BOXES.
+		-- air2 fix1 (review): the whole seated pilot is inside the body. Seat z 3.3 (round 0) left the shins and feet under
+		-- the fuselage, ahead of the belly block Cube.001 (z -7.2..3.34, the only part that reaches below the round
+		-- fuselage); at z 2.35 the legs (up to 2.05 ahead of the seat, 0.82 unscaled) end 0.41 studs short of its front.
+		-- fix2 (review): x 0.04 = the belly block's centre line, seat top 0.72 over the lowest point (1.8 at 2.5). Checked
+		-- against a rounder proxy (the canopy a half tube, the fuselage a round tube of radius 0.80 by the cockpit, where the
+		-- canopy's bottom edges meet it): the head top (seat top + 3.7, VS-A5) 0.68 under the canopy top, a +0.5 avatar's
+		-- head inside the canopy's curve; hips, legs, body and arms in the belly block, the arms' outer edges at most 0.05
+		-- studs past its sides (a seated avatar is 4.0 wide, the block 3.9). BodyLift 1: the body
+		-- stands 1 stud higher (belly 2 over the runway) on JET_GEAR, drawn gear the size of a real jet's (the kit's 0.9-stud
+		-- wheels stay hidden under it and still carry the jet); TailGuard keeps its tail out of the runway at lift-off.
+		FighterJet = {
+			ModelAssetId = 14589101870,
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- over the belly block's centre line, head inside the canopy (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyMounts = {
+				Nose = Vector3.new(0.07, 1.49, 8.74), -- gun: the fuselage's nose tip
+				WingL = Vector3.new(5.48, 1.24, 0.18), -- missiles: the front of the wing-tip missile (mirrored right)
+			},
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			StripDecals = true,
+			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
+		InterceptorJet = {
+			ModelAssetId = 14589101870,
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- over the belly block's centre line, head inside the canopy (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyMounts = {
+				Nose = Vector3.new(0.07, 1.49, 8.74), -- gun: the fuselage's nose tip
+				WingL = Vector3.new(5.48, 1.24, 0.18), -- missiles: the front of the wing-tip missile (mirrored right)
+			},
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			StripDecals = true,
+			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
+		-- air2: the same jet as a two-seat trainer (unarmed). fix1: both riders inside the body: the front seat where the
+		-- fighters' pilot sits, the rear one 2.75 studs behind it (1.1 unscaled: a seated avatar reaches 2.05 forward and 0.55
+		-- back). fix2 (review): its head sits at the canopy's flat back end, where only the belly block and the fuselage
+		-- tube cover it, so the rear seat is 0.5 studs lower (0.55): the whole head inside the belly block, a +0.5 avatar's
+		-- head top level with it. The passenger boards with the Ride prompt (Drive.Ride.BodyModes).
+		TrainerJet = {
+			ModelAssetId = 14589101870,
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- tandem: front seat, over the belly block's centre line (air2 fix2)
+				PassengerSeat1 = Vector3.new(0.04, 0.55, 1.25), -- tandem: rear seat, 2.75 studs behind and 0.43 lower (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			StripDecals = true,
+			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
 		-- wc3 (owner yes 2026-09-27; second check, live place v75): nose at -X (propeller blade and ball nose at -X, fin and
 		-- tail plane at +X), so Yaw -90. Roblox size: 18 long, 25.3 wide. The pilot sits just behind the wing, sunk in the
 		-- solid fuselage (the model has no cockpit opening): seat top 1.2 over the lowest point (unscaled), seated head top
@@ -300,7 +488,28 @@ local VisualAssetConfig = {
 			StripDecals = true,
 			Note = "owner pick: Old propeller plane by Deadex40_Extra (promoted 2026-09-27 by tools/wire-asset-ids.py)",
 		} :: AssetRef,
-		LightFighter = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		LightFighter = {
+			ModelAssetId = 14589101870,
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- over the belly block's centre line, head inside the canopy (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyMounts = {
+				Nose = Vector3.new(0.07, 1.49, 8.74), -- gun: the fuselage's nose tip
+				WingL = Vector3.new(5.48, 1.24, 0.18), -- missiles: the front of the wing-tip missile (mirrored right)
+			},
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			StripDecals = true,
+			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
 		StrikeJet = { ModelAssetId = 0, Note = "owner list: pick rejected (real-world aircraft copy) - family body / Part kit" } :: AssetRef,
 		CASJet = { ModelAssetId = 0, Note = "owner list: pick rejected (real-world aircraft copy) - family body / Part kit" } :: AssetRef,
 		StealthStrikeJet = { ModelAssetId = 0, Note = "Strike/CAS jet" } :: AssetRef,
@@ -468,7 +677,7 @@ local VisualAssetConfig = {
 		RailgunCarrier = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) → TrackedArtillery family body, else Part kit" } :: AssetRef,
 		DispatchCar = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep, fitted to the smaller kit)" } :: AssetRef,
 		UtilityHeli = { ModelAssetId = 0, PendingAssetId = 2474869838, Note = "owner pick Low poly helicopter (Azarth): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		MedevacHeli = { ModelAssetId = 0, Note = "owner pick Rescue Helicopter (KiboSprite) not used: owner check 2026-09-25 (Open Cloud, v75), 78 parts > 40 - family body / Part kit" } :: AssetRef,
+		MedevacHeli = { ModelAssetId = 0, Note = "owner replacement pick Medical Helicopter (TripleTripleTwinTips) not used: origin check 2026-09-28 (its rotor meshes and paint were uploaded by another creator) - family body / Part kit" } :: AssetRef,
 		EscortHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
 		VTOLTransport = { ModelAssetId = 0, Note = "owner list: pick rejected (provenance) - family body / Part kit" } :: AssetRef,
 		HeavyBomber = { ModelAssetId = 0, Note = "Bomber/cargo/AWACS family" } :: AssetRef,

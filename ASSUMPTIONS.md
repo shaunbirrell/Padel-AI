@@ -7733,3 +7733,153 @@ round-2 texts (never merged). Numbers in brackets are from the headless stand-in
   the record. Read only by `CombatService.NPCThreat`.
 - **ARMY-A0-8 — D1 / D8 stay off.** `Guard.FightRaiders` (lanes A / D) and the Town Gate garrison `HitsUnits` (lanes
   B / E) are pinned `false` wherever they are set. In this lane's tree neither key exists; the pins bite after the merge.
+
+## 2026-09-28 — The owner's raw v83 lines (air, AIR2): his jet promoted on the four fighter keys, his rescue helicopter rejected (origin), the old air picks retired
+
+- **AIR2-1 The raw log is three runs of one check.** fb4 wc4_all_raw.txt (758 lines, live server as User 470626172; the
+  script reports place version 79 for what the owner calls live v83) holds run 1 (ENV ids=12, 6 ids printed, no DONE),
+  run 2 (ids=6, 4 printed, no DONE) and run 3 (ids=2, DONE ok=2): the owner stopped (or the log cut) two runs and
+  re-ran the ids that were left. tools/parse_we_check2.py now reads such a log (the ground2 lane's current file,
+  adopted byte for byte in fix round 2, md5 a22bbb95…): a stopped run is accepted when the next run asks for as many ids
+  as it did not finish. That is a count check (ENV carries only ids=N, not the id list; fix round 2 corrects the
+  round-1 wording "exactly the ids"); every id still needs its own END count, and all runs must share creator / place /
+  server. `--strict`: 0 problems. Lane test (fb4/air2/work/parser_test): 13/0, including single-run logs identical to
+  the old parser and 6 mutated logs that must fail.
+- **AIR2-2 Origin check, jet: PASS.** 14589101870's 8 MeshParts use 8 meshes uploaded by the seller (Alecose1, User
+  94240346) 11 minutes before the model; no paint images (tex=- on every P line), 0 decals, 0 scripts, 0 GUIs. Promoted
+  (tools/wire-asset-ids.py promote, ownership + store re-checked 2026-09-28 08:19Z) on the four keys the dropped jet
+  3553891209 held: FighterJet, InterceptorJet, TrainerJet, LightFighter (all KitFamily JetFighter). The strike family
+  (StrikeJet, CASJet, StealthStrike: JetStrike) keeps its Part kit: the owner's "Jet" slot replaced 3553891209, which
+  never covered them. The owner text and phone test (fix round 2) tell him the strike family still looks like the old
+  small jet and ask a yes / no; on a yes the three refs take the same fields (seats, mounts, plates, one pin update).
+  StealthStrikeJet stays a dead ref (0, no VehicleConfig key; the vehicle is StealthStrike): left as it is (removing it
+  would rewrite licence / shortlist history rows). Reversible: `wire-asset-ids.py demote 14589101870`.
+- **AIR2-3 One size for the family: BodyScale 2.5 (the owner's number) on all four keys**, whatever their kit scale
+  (0.9-1.05): 43.7 long, 28.8 wide, 11.9 tall, a real fighter's size next to a 5-stud avatar. Nose at +Z in his lines
+  (fuselage tip z 8.74, tail fins at -8.75, canopy at +1.2..+5.45), so Yaw 180. The kit (12 long) still flies it: physics,
+  collisions and drive stay the kit's; shots hit the drawn jet (AIR2-6, fix round 1).
+- **AIR2-4 Pilot inside the cockpit (fix round 2: the seats on the belly block's centre line).** Every jet key's pilot seat
+  is x 0.04 (the belly block Cube.001's centre line; round 1: 0.06), seat top 0.72 over the body's lowest point (1.8 studs
+  at 2.5; round 1: 0.75), z 2.35 (round 0: 3.3 left the shins and feet under the round fuselage). The Trainer's rear seat
+  is z 1.25 (2.75 studs behind) and 0.43 studs lower, top 0.55: its head sits at the canopy's flat back end, where only the
+  belly block and the fuselage tube cover it. Stand-in, two measures on every seat of the four keys: (1) boxes: all 216
+  grid points of a seated avatar's boxes (torso, head, arms, thighs, shins with feet) and a +0.5 avatar's head lie inside
+  a body part's box; (2) fix round 2, the reviewer's rounder proxy: the canopy a half tube (half ellipse over its box
+  bottom, flat back), the fuselage a ROUND tube of radius 0.80 unscaled from the cockpit forward (the canopy's bottom
+  edges (±0.755, -0.625) lie on it), the belly block and the thin flat parts as boxes. Against the proxy only the arms'
+  outer edges leave the body, by 0.05 studs on each side (a seated avatar is 4.0 studs wide, the block 3.9); everything
+  else and a +0.5 avatar's head are inside, on every seat (round 1: one arm 0.10 out, the rear +0.5 head 0.44 over the
+  fuselage top). Still a proxy: the real round shapes are the owner's phone check (step 3: he stays seated, a friend
+  looks and sends a screenshot; only the owner can sit in a one-seat jet). The canopy is Glass at Transparency 0 in the
+  model, so the pilot is hidden, not seen through it.
+- **AIR2-5 BodyAnchor DriverSeat, BodyLift 1 and drawn gear (fix round 1).** The body moves back along the kit (2.76
+  studs for the Fighter Jet) so the cockpit is over the kit's pilot seat; seats stay inside the kit's collidable box.
+  Parked, the body now stands BodyLift = 1 stud higher: the belly 2.0 over the runway (round 0 said 1.2; it was 1.0).
+  VisualAssetConfig JET_GEAR draws landing gear the size of a real jet's: two 1.6-stud main wheels under the wing roots,
+  2.9 either side of the fuselage and level with the kit's rolling wheels (the jet rolls and rotates on those), one
+  1.2-stud nose wheel under the canopy's front, struts up 0.6 into the body box above each leg (AirBodyRig, Folder
+  WE_GearDress). Drawn only: never collide, massless, no shadow; they take shots like the rest of the jet. The kit's
+  0.9-stud gear is hidden but still carries the jet (KeepVisible dropped). 6 parts per jet. Fix round 2: the look is in
+  the config (JET_GEAR WheelColor / WheelMaterial / StrutColor / StrutMaterial: near-black tyres, grey metal legs);
+  AirBodyRig keeps the same values only as fallbacks for a gear table without them.
+- **AIR2-6 Hit volume (fix round 1: fixed).** AirBody.BodyHitBoxes = true: JET_HIT_BOXES become 7 invisible plates
+  (Parts WE_HitPlate: Transparency 1, CanQuery, never CanCollide / CanTouch, massless, welded) over the owner's P-line
+  boxes at 2.5 (fuselage with a narrower nose cone, belly block, wings with the wing-tip missiles, strakes, tailplanes,
+  fin). The kit's hidden non-colliding parts stop taking shots (CanQuery false), and so do the BodyMounts muzzle parts
+  (round 0 moved the queryable WingL plate to the left wing tip only: a lopsided hit box). Stand-in: 97.6 % of the drawn
+  top-view cells and 95.0 % of the side-view cells are hittable (round 0: 10 % / 8 %), left 97.7 % = right 97.5 %;
+  real CombatDamage.Raycast shots at the nose tip, fin top, rear fuselage and both wing tips all resolve to the jet
+  (VehicleHealth.FindVehicleModel). Its own gun and missiles pass its own plates (AirWeaponService filterFor holds the
+  firing model; without it the missiles would start inside the wing plate). NPC line of sight and every drive, spawn and
+  camera ray use RespectCanCollide and so ignore the plates, as they ignored the hidden kit parts. Balance note: the jet
+  is a 44-stud target now, as it looks (the live kit jet was 12). One switch: BodyHitBoxes = false puts shots back on
+  the kit.
+- **AIR2-7 Seated chase camera margin 6 -> 18 (VisualAssetConfig.AirBody.ChaseCameraMargin; only ChaseCamera refs, i.e.
+  these four jets, use it).** The minimum zoom is the reach from the pilot to the far end + margin: 36 put the phone
+  camera 5 studs behind the tail with the fin filling the screen (fb4/air2 camera sheet); 46 (fix round 1: the seat 2.4
+  studs further back; all four keys) shows the whole jet and the sky ahead. Cap 60 and the player's own max zoom
+  unchanged. Reversible: one number.
+- **AIR2-8 Weapons on the body.** BodyMounts on the three armed keys: Nose (0.07, 1.49, 8.74) = the fuselage tip, WingL
+  (5.48, 1.24, 0.18) = the front of the left wing-tip missile (MirrorX gives the right). Stand-in (AirWeaponService's
+  muzzle sums): gun muzzle 1 stud ahead of the nose tip, missiles 0.5 ahead of the wing-tip missiles (x ±13.7). The
+  Trainer stays unarmed; AircraftWeaponConfig is unchanged (WeaponsLive false; owner-only testing as before).
+- **AIR2-9 Origin check, rescue helicopter 9120014090: FAIL -> REJECT.** Its 7 MeshParts (the main and tail rotor
+  pieces) use 7 meshes + 7 paint images uploaded by another user (JaimeEsP, User 441906628) on 2020-03-02/03, five months
+  before the seller's account (TripleTripleTwinTips, created 2020-08-15) existed; JaimeEsP has no Creator Store models
+  (the creator-filtered store search finds 0, and the same filter finds the jet seller's). Its 24 unions and 17 Parts
+  cannot be traced from the lines. Same rule as the truck 9803446425. RescueHeli / MedevacHeli keep their Part kit; the
+  registry rows RescueHeliV2 / MedevacHeliV2 are REJECT, the config holds no 9120014090. The trim / rotor / cabin work
+  was not done (moot). Phone cost stated, not measured: 65,837 Creator Store triangles, 3.3x the 20,000 body cap; two in
+  view about 132,000 (40x the live APC body). The owner is asked for a new helicopter pick (made by its uploader, <= 35
+  parts). Reversible: the rows and two Notes.
+- **AIR2-10 Retired air ids, with notes (fix round 2: the integrator appends these five rows to the ground2 lane's
+  RETIRED table in the merge commit; the exact rows are in fb4/air2/out/merge_notes.txt, step 3):** 3553891209 (dropped by the owner; its REJECT rows and wc3-pinned HOLD /
+  OWNER_YES / YAW_HINT history kept), 11357157285 (REJECT: 78 parts, no trim), 1577255368 (the owner's bot: a copy of a
+  real helicopter; never in the config), 10077899617 (another version of someone else's model, rocket pods; never in
+  the config), 9120014090 (AIR2-9). None can be promoted: no PENDING-GET row names them.
+- **AIR2-11 Tool:** wire-asset-ids.py reads the owner's second-check lines (WE_CHECK2 HEAD loader= / hum=, BOX, FAIL)
+  for an id with no first-check line (a WE_CHECK line always wins), and the licence row then says "WE_CHECK2
+  loader=N". The promote used the raw lines as the check on record; the HOLD lines of both air ids are gone.
+- **AIR2-12 Load budget (tool):** 25 -> 26 distinct live ids (cap 56); first loads after boot 9 -> 10 (reserve 24); boot
+  ids 24. Stand-in census: census_all 55 of 64 attempts, capRefused 0 (main and base 54: the jet is asked
+  in LATER, 6 -> 7 ids); census_fail (every load fails) BOOT 41 / PLOT 43 / LATER 51 attempts, capRefused 0 through
+  LATER (main 41 / 43 / 50); the PREFER / UPPER phases, not live, refuse 5 / 17 (main 4 / 16). The helicopter adds
+  nothing (not promoted), so the air lane's projected BOOT 15 -> 16 does not happen.
+- **AIR2-13 Supersedes AIR-16 for the jet:** the change note may say the owner's jet is in the game; it must not say the
+  rescue helicopter replacement is done. Not verified on a device: the look, the pilot hidden in the cockpit, the feet,
+  the chase camera, flight, weapons from the body, frame rate (11,460 triangles per jet), the Trainer's Ride prompt
+  and the exit beside the wing tip (fix round 2).
+- **AIR2-14 TailGuard (fix round 1): the drawn jet never dips into the ground.** The body reaches 24 studs behind the
+  kit's wheels and never collides, so main's lift-off (6 degrees at once, then 15 within about 0.25 s), a flare or a
+  low turn would sink the tail, a wing tip or (in a dive) the nose into the runway (reviewer: 1.3 / 2.9 / 4.8 studs
+  under at 6 / 10 / 15 degrees). Refs with TailGuard = true get WE_TailGuard (AirBodyRig: the 4 bottom corners of each
+  body part box, AirBody.TailGuard.Margin 0.3 lower, plus MinPitch 3.5 and LeadSeconds 0.15). The driver's plane law
+  (VehicleDriveClient Laws.TailGuard, only while airborne) eases pitch and bank toward level together (10 bisection
+  steps, no allocation) until every corner clears the ground, looking 0.15 s ahead while sinking; a lift-off keeps at
+  least 3.5 degrees (a climb over the touchdown line; the Vto floor of 40 gives 2.4 studs/s > 2). Kit planes (no
+  attribute) fly exactly as before. Stand-in (the real Laws.Step, orientation applied at once, worse than Roblox's
+  AlignOrientation lag), all four keys: auto take-off, stick held back, full turn after lift-off, dive then flare and
+  turn, landing flare: the lowest drawn corner stays 0.35-0.40 over the runway (guard off: 0.6-5.6 under). The lift-off
+  starts at 4.4-4.9 degrees and reaches the 15-degree climb-out 0.4 s after lift-off (main: 0.2 s). Enabled = false:
+  main's law. Device check: the real rotation point is Roblox physics.
+- **AIR2-15 Runway spots by the body (fix round 1, VehicleService choosePlane).** A plane's runway inset and spacing use
+  max(kit HalfZ, WE_VisualHalfLength): the jet's tail never hangs past the runway end and the next jet fits behind it.
+  Every plot's runway now holds 2 jets (round 0: 1, the rest started in the air); kit planes are placed exactly as
+  before (no VisHalfZ). One active vehicle per player, so this is about a second player's jet on a friend's runway. The
+  live Recon Plane body (wc3) also counts: its 18-stud body now gets its own length on the runway (spacing about 24
+  instead of 16.2, where two bodies overlapped).
+- **AIR2-16 Look-alike (for the owner to decide).** The jet's outline is close to a well-known real single-engine
+  fighter. The registry rejects 14451400891 (Strike Jet / CAS Jet) as a copy of a real jet: that was a detailed,
+  painted replica; this one is a plain low-poly black jet with no names, marks or paint images. Kept because the owner
+  picked it by id; the owner text now says so plainly. All four fighter keys look the same (one pick); a colour per key
+  is possible on request.
+- **AIR2-17 World scale (not changed).** The runway is 24 wide against the jet's 28.8 wing span, and the default hangar
+  (40 x 18 x 28) is smaller than the jet (44 x 12 x 29): both were sized for the 12-stud kit jets. Parked jets stand
+  on the runway (stand-in: clear of every solid); widening the runway or the hangar is an owner decision.
+- **AIR2-18 The rescue helicopter backup 10077899617 (fix round 2: fails the origin rule).** The owner's bot named it the
+  backup. Its raw P lines (raw log lines 323-368) list 14 mesh / paint ids; the economy API resolves 13 of them (2026-09-28):
+  kangerujack 9, Jumn0p 2, DehAmazinBuilder 1, deltaforce515 1; none is the uploader's (SarahNeedle_mouse, User
+  3319118651). Its store text also says it is another person's version, and its parts are named after real weapons. It
+  cannot be used either way; the owner text no longer offers it on a yes (round 1 did). Evidence:
+  out/evidence/origin_backup_10077899617.txt.
+- **AIR2-19 Ride and the exit spot on a plane that wears a fitted body (fix round 2).** Drive.Ride.BodyModes and
+  Drive.ExitSpot.BodyModes = { Plane = true } (VehicleConfig; VehicleService._ModeOn: the Modes, or a BodyModes mode only
+  when the model has WE_VisualHalfLength, i.e. a fitted body). The Trainer Jet's back seat is hidden inside the body, so
+  touch-to-sit could not reach it and there was no Ride prompt on planes: now a friend holds Ride by the jet (the client
+  still hides it from the owner and from anyone seated, main's rule, stand-in 7/0 for planes). A rider who jumps out of
+  a parked bodied plane (the four jets, and the live Recon Plane body) lands on the ground beside the wing tip instead of
+  on the hidden kit inside the body; in the air (no ground within MaxDrop) nothing changes (Roblox's own exit, as on main).
+  Part-kit planes and helicopters keep their visible touch seats and Roblox's exit. Stand-in (real RequestSpawn, Ride and
+  exit code on world mocks): friend seated in PassengerSeat1, prompt closes when full, far player refused; back-seat
+  rider and pilot land 1.0 stud clear of the drawn wing tip, on the ground, in no solid; 60 studs up: not moved. As on
+  main for every plane passenger: a passenger's jump in the air is not held (the EXIT hold is the pilot's); not changed.
+  Reversible: BodyModes = {}.
+- **AIR2-20 Only the middle of the jet is solid (told, not changed).** The hidden kit chassis and its gear collide; the
+  drawn wings, tail and fin do not (the plates are for shots only). Players can walk through three quarters of the jet,
+  and an idle jet parked on uneven ground can dip a wing tip into it (TailGuard works in the air). A collision group
+  that lets the plates block characters only would change how the jet is pushed around; it is left for a device check.
+  The owner text and phone test (step 8) say so.
+- **AIR2-21 The owner's seat check is one he can do (fix round 2).** The Fighter, Interceptor and Light Fighter have one
+  seat and only the owner may drive, so round 1's "let your friend get in" could not work. Step 3 now keeps the owner
+  seated while a friend walks round and sends a screenshot; the Trainer step uses the new Ride prompt and has the owner
+  walk round his seated friend.

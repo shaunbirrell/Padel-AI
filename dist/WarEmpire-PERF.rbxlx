@@ -11473,8 +11473,9 @@ local VehicleConfig = {
 			in front of it (those two only while the car moves toward that end slower than EndMaxSpeed); then the same
 			four FarStep further out. A spot needs solid ground within StepUp above / MaxDrop below the car's
 			wheel line (never water, never the void), an empty standing box (CanCollide parts; this car and characters
-			are ignored) and a clear line from the seat. No clear spot = Roblox's own jump-out, as before. Car mode only
-			(boats and aircraft keep Roblox's exit). The plain Part kit (no body) uses its own width. ]]
+			are ignored) and a clear line from the seat. No clear spot = Roblox's own jump-out, as before. Car mode, plus
+			(air2 fix2) a plane that wears a fitted body (BodyModes); boats, helicopters and Part-kit planes keep Roblox's
+			exit. The plain Part kit (no body) uses its own width. ]]
 		ExitSpot = {
 			Enabled = true,
 			Modes = { Car = true } :: { [string]: boolean },
@@ -11502,6 +11503,11 @@ local VehicleConfig = {
 			-- per seat: "Left" / "Right" = the car's own left / right (it faces -Z); a seat not listed exits on the side
 			-- its centre is on (x < 0 = left; the kit's centred DriverSeat and the bodies' driver seats = left)
 			Side = { DriverSeat = "Left" } :: { [string]: string },
+			-- air2 fix2: these modes too, but only for a vehicle that wears a fitted body (WE_VisualHalfLength set): its seats
+			-- sit inside that body, which never collides, so Roblox's own jump-out lands the rider on the hidden kit inside it
+			-- (the owner's 44-stud jet: standing in the fuselage, head out of its top). Beside the wing tip instead; in the
+			-- air (no ground within MaxDrop) nothing changes. A Part-kit plane keeps Roblox's own exit, as before.
+			BodyModes = { Plane = true } :: { [string]: boolean },
 		},
 		--[[ vscale R2: passengers board by touch (the moved seats sit inside the kit's Cabin / Cargo, where touch-to-sit
 			cannot reach them). One "Ride" ProximityPrompt per car (WE_RidePrompt, on the Chassis): the server enables it
@@ -11517,6 +11523,10 @@ local VehicleConfig = {
 			HoldSeconds = 0.3, -- a short hold: works with a finger, no accidental boarding
 			RequestRate = 2, -- RateLimitService "vehicle_ride" tokens/s
 			RequestBurst = 2,
+			-- air2 fix2: these modes too, but only for a vehicle that wears a fitted body (WE_VisualHalfLength set) and has a
+			-- passenger seat: the body hides its seats inside it, where touch-to-sit cannot reach them (the Trainer Jet's back
+			-- seat). A Part-kit plane keeps its visible seats (touch to sit), as before.
+			BodyModes = { Plane = true } :: { [string]: boolean },
 		},
 
 		--[[ Rollover fix (owner, phone, 2026-09-24: "The quad falls over when driving super easy"). Built once per
@@ -12249,6 +12259,37 @@ return VehicleWeaponConfig
 	Humanoid, or it is refused and the Part kit stays.
 ]]
 
+-- air-looks (2026-09-28): one spinning rotor of a store aircraft body (AssetRef.RotorParts; AirBodyRig + AircraftBodyClient)
+export type AirRotor = {
+	Parts: { string }, -- BasePart names in the body (every descendant with one of these names spins with this rotor)
+	Hub: string?, -- the spin centre is this part's centre (default: the average centre of Parts)
+	Axis: string, -- the spin axis in the kit chassis frame after the fit: "Y" up (main rotor), "X" sideways (tail rotor), "Z"
+	Rps: number, -- turns per second at full speed (drawn with RotorSpin.Steps precomputed angles)
+	Kit: boolean?, -- true: the names are Part-kit parts (the kit rotor, kept visible with KeepVisible) instead of body parts
+}
+
+-- air2 fix1 (2026-09-28): one invisible hit plate over a fitted store aircraft body (AssetRef.BodyHitBoxes; AirBodyRig)
+export type AirHitBox = {
+	At: Vector3, -- box centre, unscaled body frame like BodySeats (x / z from the body box centre, y above its lowest point, before Yaw)
+	Size: Vector3, -- box size, unscaled (x across, y up, z along the body before Yaw)
+}
+
+-- air2 fix1: drawn landing gear under a fitted store aircraft body that has none (AssetRef.BodyGear; AirBodyRig). Drawn
+-- only: never collides, massless; the hidden kit gear still stands and rolls the aircraft (physics unchanged).
+export type AirGearLeg = {
+	At: Vector3, -- the wheel's x / z, unscaled body frame like BodySeats (y unused: the wheel stands on the kit's floor)
+	Wheel: number, -- wheel diameter, studs
+}
+export type AirGear = {
+	Legs: { AirGearLeg },
+	Strut: number, -- strut thickness, studs; the strut runs from the wheel centre up into the body underside above it
+	Into: number, -- studs the strut reaches into the body box above the leg (it never ends in the air under a round belly)
+	WheelColor: Color3?, -- air2 fix2: the look (config first); nil = near-black SmoothPlastic wheels, grey Metal struts
+	WheelMaterial: Enum.Material?,
+	StrutColor: Color3?,
+	StrutMaterial: Enum.Material?,
+}
+
 export type AssetRef = {
 	ModelAssetId: number?, -- InsertService / AssetService:LoadAssetAsync catalog Model
 	MeshId: number?, -- optional SpecialMesh / MeshPart MeshId (0 = unused)
@@ -12271,6 +12312,16 @@ export type AssetRef = {
 	BodyScale: number?, -- Fit: body scale (1 = Roblox size); nil = as long as the kit chassis. The kit still drives
 	BodySeats: { [string]: Vector3 }?, -- BodyScale: kit seat -> body seat top (unscaled studs: x/z from the body box centre, y above its lowest point)
 	BodyRoofParts: { string }?, -- BodyScale: kit parts lifted onto the body roof (the Armed 4x4 keeps its Part turret)
+	-- air-looks (2026-09-28): store aircraft bodies (VisualAssetService + Server/Modules/AirBodyRig, AircraftBodyClient)
+	BodyAnchor: string?, -- BodyScale: a BodySeats name; the body moves (kit X / Z) so that seat is over the kit seat of that name
+	BodyFloor: string?, -- BodyScale: "Collide" = the body's lowest point on the kit's lowest collidable part (skids, gear)
+	BodyMounts: { [string]: Vector3 }?, -- BodyScale: kit weapon mount part -> where its front face sits on the body (unscaled, like BodySeats)
+	RotorParts: { AirRotor }?, -- BodyScale: body (or kit) parts that spin on each client while the driver seat is taken
+	ChaseCamera: boolean?, -- BodyScale: a seated player's camera stays at least AirBody.ChaseCameraMargin past the body's far end
+	BodyHitBoxes: { AirHitBox }?, -- BodyScale (air2 fix1): invisible hit plates over the body, so shots hit what players see (AirBody.BodyHitBoxes)
+	BodyLift: number?, -- BodyScale (air2 fix1): studs the fitted body stands over the kit's chassis bottom (drawn gear under it)
+	BodyGear: AirGear?, -- BodyScale (air2 fix1): drawn landing gear from the kit's floor up into the body
+	TailGuard: boolean?, -- BodyScale (air2 fix1): near the ground the plane law eases nose-up pitch and bank so the body never dips into it (AirBody.TailGuard)
 	-- Owner asset list (2026-09-25)
 	PendingAssetId: number?, -- the owner's third-party pick; NEVER loaded (VisualAssetService ignores it); tools/wire-asset-ids.py promotes it
 	OmitParts: { string }?, -- pack piece: BaseParts with these names are removed before the part count (Pickup Truck tail-light glass)
@@ -12292,6 +12343,35 @@ export type AssetRef = {
 	ToLevel: number?, -- BusinessPieces: worn up to this business level (nil = to the top)
 	Rig: string?, -- R-RIG: "R6" = animated rig (RigBuilder); the template holds no Humanoid
 	Headwear: string?, -- R-RIG: "Beret" | "KitHelmet" | "None"
+}
+
+-- air2 fix1 (2026-09-28): the owner's jet 14589101870 (Vehicles.FighterJet / InterceptorJet / TrainerJet / LightFighter)
+-- shares these two tables. Unscaled body frame like BodySeats: x / z from the body box centre, y over its lowest point,
+-- before the Yaw (its nose is +Z). Hit plates = the boxes of the owner's WE_CHECK2 P lines (a mesh never leaves its box):
+-- fuselage (its nose cone narrower), belly block, wings with the wing-tip missiles, strakes, tailplanes and fin. The
+-- drawn gear stands where a real jet's does: two main wheels under the wing roots, level with the kit's main wheels (the
+-- aircraft rolls and rotates on those), one nose wheel under the canopy's front.
+local JET_HIT_BOXES: { AirHitBox } = {
+	{ At = Vector3.new(0.07, 1.485, -1.4), Size = Vector3.new(2, 1.97, 13.69) }, -- fuselage, tail to the canopy front
+	{ At = Vector3.new(0.07, 1.485, 7.1), Size = Vector3.new(1.2, 1.2, 3.29) }, -- nose cone
+	{ At = Vector3.new(0.04, 1.115, -1.93), Size = Vector3.new(1.56, 2.23, 10.53) }, -- belly block under the fuselage
+	{ At = Vector3.new(0, 1.338, -1.34), Size = Vector3.new(11.52, 0.745, 4.96) }, -- wings with the wing-tip missiles
+	{ At = Vector3.new(0.07, 1.335, 1.68), Size = Vector3.new(3.95, 0.4, 5.23) }, -- strakes by the cockpit
+	{ At = Vector3.new(0.07, 1.47, -6.19), Size = Vector3.new(6.07, 0.5, 5.11) }, -- tailplanes
+	{ At = Vector3.new(0.07, 3.245, -6.19), Size = Vector3.new(0.4, 3.05, 5.11) }, -- fin
+}
+local JET_GEAR: AirGear = {
+	Legs = {
+		{ At = Vector3.new(1.23, 0, 0.7), Wheel = 1.6 }, -- main wheel, under the wing root
+		{ At = Vector3.new(-1.09, 0, 0.7), Wheel = 1.6 }, -- main wheel, the other side (both 1.16 off the fuselage axis)
+		{ At = Vector3.new(0.07, 0, 5.5), Wheel = 1.2 }, -- nose wheel, under the canopy's front
+	},
+	Strut = 0.35,
+	Into = 0.6,
+	WheelColor = Color3.fromRGB(28, 28, 30), -- black tyres
+	WheelMaterial = Enum.Material.SmoothPlastic,
+	StrutColor = Color3.fromRGB(120, 122, 126), -- grey legs
+	StrutMaterial = Enum.Material.Metal,
 }
 
 local VisualAssetConfig = {
@@ -12348,6 +12428,45 @@ local VisualAssetConfig = {
 	-- beside a tall van or truck sees them over the roof (R2.2's flat 1 left the bar 0.08 over the roof, hidden by it).
 	-- Van / trucks about 3.1, 4x4 2.4, Quad 2.6. { Base = 1, PerStud = 0 } = R2.2.
 	BodyLabelMargin = { Base = 1, PerStud = 0.4, EyeHeight = 4.5 },
+	-- air-looks (2026-09-28): store aircraft bodies. ChaseCamera refs: the seated player's minimum camera zoom is the body's
+	-- far end (WE_VisualHalfLength) + ChaseCameraMargin, at most ChaseCameraMax and never past the player's own max zoom,
+	-- restored on exit (AircraftBodyClient). RotorSpin: RotorParts joints (tag WE_RotorJoint) turn on each client, cheap:
+	-- one Stepped loop at Hz, Steps precomputed angles (no allocation per frame), only while someone sits in the driver
+	-- seat (WE_DriverUserId), spun up / down over SpinUpSeconds, only the MaxAircraft nearest within MaxDistance of the
+	-- camera (re-picked every Refresh seconds). Enabled = false: every rotor stands still (the body still loads).
+	-- air2 (2026-09-28): margin 6 -> 18. With the owner's 44-stud jet (the only ChaseCamera refs) 6 put the phone camera
+	-- 5 studs behind the tail, where its fin fills the screen; 18 gives a 46-stud chase (fix1 seat) that shows the whole jet and the
+	-- sky ahead (fb4/air2 renders). The player can still zoom out to his own maximum.
+	-- air2 fix1: BodyHitBoxes = true: a ref's BodyHitBoxes become invisible hit plates (CanQuery, never collide, massless,
+	-- welded) over the fitted body, and the kit's hidden parts stop taking shots, so a gun or missile hits the jet players
+	-- see (44 long) instead of the hidden 12-stud kit under its nose. false = shots hit the kit as before (one switch).
+	-- TailGuard (refs with TailGuard = true): the fitted body reaches far behind the kit's wheels (the owner's jet: 24 studs)
+	-- and never collides, so a 6-15 degree lift-off or a flare near the ground would sink its tail into the runway (and a
+	-- dive its nose, a low turn a wing tip). The server writes the body's lowest box corners (WE_TailGuard, each Margin
+	-- studs lower); near the ground the plane law (VehicleDriveClient Laws.TailGuard) eases pitch and bank back toward
+	-- level together until every corner clears the ground, looking LeadSeconds ahead while sinking; a lift-off keeps at
+	-- least MinPitch (a climb, over the touchdown line). Enabled = false: the law is exactly as before.
+	AirBody = {
+		ChaseCameraMargin = 18,
+		ChaseCameraMax = 60,
+		BodyHitBoxes = true,
+		TailGuard = { Enabled = true, Margin = 0.3, MinPitch = 3.5, LeadSeconds = 0.15 },
+		RotorSpin = {
+			Enabled = true,
+			Hz = 30,
+			Steps = 24,
+			MaxAircraft = 6,
+			MaxDistance = 400,
+			SpinUpSeconds = 2.5,
+			Refresh = 0.5,
+		},
+	},
+	-- air-looks fix1 (2026-09-28): the phone cost of ONE store vehicle body, in Creator Store triangles (the whole model;
+	-- a pack counts in full). tools/wire-asset-ids.py promote refuses a vehicle body above it unless the lead accepts it
+	-- (--heavy-ok / HEAVY_OK); the owner's phone test then checks the frame rate with two or more in view at Graphics
+	-- Quality 3 or on a mid-range Android. A tool gate only: a script cannot read a mesh's triangle count. Live bodies:
+	-- Recon Plane 738, APC 3,314; the jet pick 11,460 passes, the rescue helicopter pick 65,837 does not.
+	VehicleBodyMaxTriangles = 20000,
 	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)
 	CharacterVisualScale = 1.0,
 	BuildingVisualScale = 1.0, -- ScaleTo uses TargetFootprint; do NOT squash to plinth
@@ -12439,7 +12558,7 @@ local VisualAssetConfig = {
 		LightScoutHeli = { ModelAssetId = 0, PendingAssetId = 2474869838, Note = "owner pick Low poly helicopter (Azarth): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		GunshipHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
 		HeavyLiftHeli = { ModelAssetId = 0, Note = "owner pick transport helicopter (blokkere) not used: owner check 2026-09-25 (Open Cloud, v75), 109 parts > 40 - family body / Part kit" } :: AssetRef,
-		RescueHeli = { ModelAssetId = 0, Note = "owner pick Rescue Helicopter (KiboSprite) not used: owner check 2026-09-25 (Open Cloud, v75), 78 parts > 40 - family body / Part kit" } :: AssetRef,
+		RescueHeli = { ModelAssetId = 0, Note = "owner replacement pick Medical Helicopter (TripleTripleTwinTips) not used: origin check 2026-09-28 (its rotor meshes and paint were uploaded by another creator) - family body / Part kit" } :: AssetRef,
 		StealthHeli = { ModelAssetId = 0, Note = "Gunship/stealth heli" } :: AssetRef,
 		-- Classic free pack (trucks / APC fallback)
 		_FallbackWheeled = { ModelAssetId = 0, Note = "Military Vehicle Meshes pack (free)" } :: AssetRef,
@@ -12487,9 +12606,88 @@ local VisualAssetConfig = {
 		} :: AssetRef,
 		-- Free jet family (classic + named free fighter)
 		_FallbackJet = { ModelAssetId = 0, Note = "Classic free fighter jet" } :: AssetRef,
-		FighterJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		InterceptorJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		TrainerJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		-- air2 (owner's raw v83 lines, 2026-09-28): 8 MeshParts, 11.52 x 4.77 x 17.5, no paint images, 0 scripts; every mesh
+		-- uploaded by the seller (origin check). Nose at +Z (the fuselage tip at z 8.74, the tail fins at z -8.75), so Yaw
+		-- 180. BodyScale 2.5 (the owner's number): 43.7 long, 28.8 wide, 11.9 tall, about a real fighter next to a 5-stud
+		-- avatar. The kit (12 long) still flies it: physics, collisions and drive are the kit's; shots hit JET_HIT_BOXES.
+		-- air2 fix1 (review): the whole seated pilot is inside the body. Seat z 3.3 (round 0) left the shins and feet under
+		-- the fuselage, ahead of the belly block Cube.001 (z -7.2..3.34, the only part that reaches below the round
+		-- fuselage); at z 2.35 the legs (up to 2.05 ahead of the seat, 0.82 unscaled) end 0.41 studs short of its front.
+		-- fix2 (review): x 0.04 = the belly block's centre line, seat top 0.72 over the lowest point (1.8 at 2.5). Checked
+		-- against a rounder proxy (the canopy a half tube, the fuselage a round tube of radius 0.80 by the cockpit, where the
+		-- canopy's bottom edges meet it): the head top (seat top + 3.7, VS-A5) 0.68 under the canopy top, a +0.5 avatar's
+		-- head inside the canopy's curve; hips, legs, body and arms in the belly block, the arms' outer edges at most 0.05
+		-- studs past its sides (a seated avatar is 4.0 wide, the block 3.9). BodyLift 1: the body
+		-- stands 1 stud higher (belly 2 over the runway) on JET_GEAR, drawn gear the size of a real jet's (the kit's 0.9-stud
+		-- wheels stay hidden under it and still carry the jet); TailGuard keeps its tail out of the runway at lift-off.
+		FighterJet = {
+			ModelAssetId = 14589101870,
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- over the belly block's centre line, head inside the canopy (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyMounts = {
+				Nose = Vector3.new(0.07, 1.49, 8.74), -- gun: the fuselage's nose tip
+				WingL = Vector3.new(5.48, 1.24, 0.18), -- missiles: the front of the wing-tip missile (mirrored right)
+			},
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			StripDecals = true,
+			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
+		InterceptorJet = {
+			ModelAssetId = 14589101870,
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- over the belly block's centre line, head inside the canopy (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyMounts = {
+				Nose = Vector3.new(0.07, 1.49, 8.74), -- gun: the fuselage's nose tip
+				WingL = Vector3.new(5.48, 1.24, 0.18), -- missiles: the front of the wing-tip missile (mirrored right)
+			},
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			StripDecals = true,
+			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
+		-- air2: the same jet as a two-seat trainer (unarmed). fix1: both riders inside the body: the front seat where the
+		-- fighters' pilot sits, the rear one 2.75 studs behind it (1.1 unscaled: a seated avatar reaches 2.05 forward and 0.55
+		-- back). fix2 (review): its head sits at the canopy's flat back end, where only the belly block and the fuselage
+		-- tube cover it, so the rear seat is 0.5 studs lower (0.55): the whole head inside the belly block, a +0.5 avatar's
+		-- head top level with it. The passenger boards with the Ride prompt (Drive.Ride.BodyModes).
+		TrainerJet = {
+			ModelAssetId = 14589101870,
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- tandem: front seat, over the belly block's centre line (air2 fix2)
+				PassengerSeat1 = Vector3.new(0.04, 0.55, 1.25), -- tandem: rear seat, 2.75 studs behind and 0.43 lower (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			StripDecals = true,
+			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
 		-- wc3 (owner yes 2026-09-27; second check, live place v75): nose at -X (propeller blade and ball nose at -X, fin and
 		-- tail plane at +X), so Yaw -90. Roblox size: 18 long, 25.3 wide. The pilot sits just behind the wing, sunk in the
 		-- solid fuselage (the model has no cockpit opening): seat top 1.2 over the lowest point (unscaled), seated head top
@@ -12509,7 +12707,28 @@ local VisualAssetConfig = {
 			StripDecals = true,
 			Note = "owner pick: Old propeller plane by Deadex40_Extra (promoted 2026-09-27 by tools/wire-asset-ids.py)",
 		} :: AssetRef,
-		LightFighter = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		LightFighter = {
+			ModelAssetId = 14589101870,
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- over the belly block's centre line, head inside the canopy (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyMounts = {
+				Nose = Vector3.new(0.07, 1.49, 8.74), -- gun: the fuselage's nose tip
+				WingL = Vector3.new(5.48, 1.24, 0.18), -- missiles: the front of the wing-tip missile (mirrored right)
+			},
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			StripDecals = true,
+			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
 		StrikeJet = { ModelAssetId = 0, Note = "owner list: pick rejected (real-world aircraft copy) - family body / Part kit" } :: AssetRef,
 		CASJet = { ModelAssetId = 0, Note = "owner list: pick rejected (real-world aircraft copy) - family body / Part kit" } :: AssetRef,
 		StealthStrikeJet = { ModelAssetId = 0, Note = "Strike/CAS jet" } :: AssetRef,
@@ -12677,7 +12896,7 @@ local VisualAssetConfig = {
 		RailgunCarrier = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) → TrackedArtillery family body, else Part kit" } :: AssetRef,
 		DispatchCar = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep, fitted to the smaller kit)" } :: AssetRef,
 		UtilityHeli = { ModelAssetId = 0, PendingAssetId = 2474869838, Note = "owner pick Low poly helicopter (Azarth): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		MedevacHeli = { ModelAssetId = 0, Note = "owner pick Rescue Helicopter (KiboSprite) not used: owner check 2026-09-25 (Open Cloud, v75), 78 parts > 40 - family body / Part kit" } :: AssetRef,
+		MedevacHeli = { ModelAssetId = 0, Note = "owner replacement pick Medical Helicopter (TripleTripleTwinTips) not used: origin check 2026-09-28 (its rotor meshes and paint were uploaded by another creator) - family body / Part kit" } :: AssetRef,
 		EscortHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
 		VTOLTransport = { ModelAssetId = 0, Note = "owner list: pick rejected (provenance) - family body / Part kit" } :: AssetRef,
 		HeavyBomber = { ModelAssetId = 0, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
@@ -20193,7 +20412,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 85)
+		player:SetAttribute("WE_Build", 86)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -20569,6 +20788,480 @@ return ActivityAnchors
         </Item>
         <Item class="ModuleScript" referent="91">
           <Properties>
+            <string name="Name">AirBodyRig</string>
+            <string name="Source"><![CDATA[--!strict
+--[[ air-looks (2026-09-28): the extras a store AIRCRAFT body needs on top of the vscale fit (VisualAssetService
+	fitBodyToKit / placeKitOnBody). Every one of them is read from the vehicle's VisualAssetConfig ref and does nothing
+	when the ref leaves it out, so kit-only aircraft and every car / boat body are unchanged.
+
+	  • AnchorShift (ref.BodyAnchor = a BodySeats name): a Roblox-size aircraft is far longer than its kit, and its
+	    cockpit sits well ahead of the body's box centre, past the kit's collidable box, where placeKitOnBody would clamp
+	    the pilot seat back into the fuselage. Instead the whole BODY moves along the kit's length (chassis Z; it stays
+	    centred across) so that seat's body point lands level with the kit seat of the same name: the pilot sits in the
+	    cockpit, the kit (physics, collisions, the drive movers, the HUD) stays exactly where it was. Other BodySeats move
+	    with the body (placeKitOnBody still keeps every seat inside the kit's box).
+	  • KitFloor (ref.BodyFloor = "Collide"): an aircraft has no physics wheels, so the fit would put the body's lowest
+	    point on the chassis bottom while the kit's skids / wheels (its lowest collidable parts) stand lower on the pad:
+	    the parked body would float. This gives the lowest collidable kit point (seats excepted) instead.
+	  • Apply, after placeKitOnBody:
+	      - BodyMounts: each named kit part (the AirWeaponService muzzle mounts: Nose, WingL, StubWingL, Cockpit ...) is
+	        re-welded with its front face centre on a point of the body (unscaled body box frame, like BodySeats), so guns
+	        fire from the body's nose and missiles leave its wing rails (AirWeaponService adds MuzzleForward / MuzzleDrop
+	        to that face). Only non-colliding, non-seat kit parts move; the chassis never does.
+	      - RotorParts: the named body (or kit) parts get a Motor6D to the chassis instead of their WeldConstraint, with
+	        the joint's Y axis on the rotor axis, tagged WE_RotorJoint (attribute WE_RotorRps). Each client turns them
+	        (AircraftBodyClient: Motor6D.Transform, local only, never replicated); the server never moves them, so
+	        physics and replication are unchanged.
+	      - ChaseCamera: WE_CamMinZoom on the model = the body's reach from the pilot seat (its farthest end: tail, nose
+	        or wing tip) + AirBody.ChaseCameraMargin, capped at ChaseCameraMax, for AircraftBodyClient's seated camera.
+	      - BodyHitBoxes (air2 fix1, with AirBody.BodyHitBoxes on): invisible hit plates (Parts "WE_HitPlate": Transparency 1,
+	        CanQuery, never CanCollide / CanTouch, Massless, welded) over the fitted body (unscaled boxes, like BodySeats),
+	        so a shot hits the aircraft players see. The kit's hidden non-colliding parts (its old nose, wings, fins ...)
+	        stop taking shots; the chassis, the seats and the visible gear keep theirs. Physics and collisions unchanged.
+	      - A BodyMounts kit part (a muzzle point on the body) never takes a shot (CanQuery false): moved to a wing tip it
+	        would be a hit box beside the aircraft.
+	      - BodyGear (air2 fix1): drawn landing gear (Folder "WE_GearDress" in the body: a strut and a wheel per leg), the
+	        wheel on the kit's floor line (its lowest collidable point), the strut up into the body box over the leg. Never
+	        collides, massless, no shadow; it takes shots like the body plates. The hidden kit gear still stands the jet.
+	      - TailGuard (air2 fix1, with AirBody.TailGuard.Enabled): WE_TailGuard on the model = "MinPitch,LeadSeconds;x,y,z;..."
+	        the four bottom corners of every body part box in the chassis frame, Margin lower (the drawn gear excepted).
+	        The driver's plane law (VehicleDriveClient Laws.TailGuard) keeps them over the ground near the ground.
+	  • StripSigns: a store body's BillboardGui / SurfaceGui signs always go (whole model or pack piece), its decals with
+	    ref.StripDecals.
+	Kit parts are moved with an unweld / set / weld (a CFrame set on a welded part would move the whole aircraft). ]]
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- server module: the Rojo place ships ReplicatedStorage.Shared, so index it (no WaitForChild without a timeout)
+local VisualAssetConfig = require(ReplicatedStorage.Shared.Configs.VisualAssetConfig)
+
+local AirBodyRig = {}
+
+AirBodyRig.RotorTag = "WE_RotorJoint"
+AirBodyRig.RotorJointName = "WE_RotorJoint"
+AirBodyRig.HitPlateName = "WE_HitPlate"
+AirBodyRig.GearName = "WE_GearDress"
+
+local AXES: { [string]: CFrame } = {
+	Y = CFrame.identity,
+	X = CFrame.Angles(0, 0, -math.pi / 2), -- joint Y -> chassis X
+	Z = CFrame.Angles(math.pi / 2, 0, 0), -- joint Y -> chassis Z
+}
+
+-- chassis-frame half extent of a part along Y, and its full extents
+local function extents(rel: CFrame, size: Vector3): Vector3
+	local h = size * 0.5
+	local r, u, l = rel.RightVector, rel.UpVector, rel.LookVector
+	return Vector3.new(
+		math.abs(r.X) * h.X + math.abs(u.X) * h.Y + math.abs(l.X) * h.Z,
+		math.abs(r.Y) * h.X + math.abs(u.Y) * h.Y + math.abs(l.Y) * h.Z,
+		math.abs(r.Z) * h.X + math.abs(u.Z) * h.Y + math.abs(l.Z) * h.Z
+	)
+end
+
+-- the box Roblox draws for a part (as VisualAssetService drawnSize: a round Part is drawn smaller than its Size box)
+local function drawn(p: BasePart): Vector3
+	local size = p.Size
+	if p:IsA("Part") then
+		if p.Shape == Enum.PartType.Cylinder then
+			local d = math.min(size.Y, size.Z)
+			return Vector3.new(size.X, d, d)
+		elseif p.Shape == Enum.PartType.Ball then
+			local d = math.min(size.X, size.Y, size.Z)
+			return Vector3.new(d, d, d)
+		end
+	end
+	return size
+end
+
+local function isSeat(p: Instance): boolean
+	return p:IsA("Seat") or p:IsA("VehicleSeat")
+end
+
+-- The lowest point of the kit's collidable parts (seats excepted) in the chassis frame, else `fallback`.
+function AirBodyRig.KitFloor(hostModel: Model, primary: BasePart, fallback: number): number
+	local low: number? = nil
+	for _, d in ipairs(hostModel:GetDescendants()) do
+		if d:IsA("BasePart") and d.CanCollide and not isSeat(d) then
+			local rel = primary.CFrame:ToObjectSpace(d.CFrame)
+			local b = rel.Position.Y - extents(rel, d.Size).Y
+			if low == nil or b < low then
+				low = b
+			end
+		end
+	end
+	return if low ~= nil then math.min(low, fallback) else fallback
+end
+
+-- The chassis-frame X / Z move that puts ref.BodySeats[ref.BodyAnchor] (scaled by s, turned by yawDeg, measured from
+-- the body box centre as fitBodyToKit places it) over the kit seat named ref.BodyAnchor. Zero when not configured.
+function AirBodyRig.AnchorShift(hostModel: Model, primary: BasePart, ref: any, s: number, yawDeg: number): Vector3
+	local name = ref.BodyAnchor
+	local seats = ref.BodySeats
+	if typeof(name) ~= "string" or typeof(seats) ~= "table" then
+		return Vector3.zero
+	end
+	local top = seats[name]
+	local kitSeat = hostModel:FindFirstChild(name)
+	if typeof(top) ~= "Vector3" or kitSeat == nil or not kitSeat:IsA("BasePart") then
+		return Vector3.zero
+	end
+	local k = primary.CFrame:PointToObjectSpace(kitSeat.Position)
+	local v = CFrame.Angles(0, math.rad(yawDeg), 0) * (top * s)
+	-- along the kit's length only: the body stays centred across the kit (its seats' X still clamp into the kit box)
+	return Vector3.new(0, 0, k.Z - v.Z)
+end
+
+-- unweld `part` from the chassis (WeldConstraints either side), set its CFrame, weld it again
+local function reweld(primary: BasePart, part: BasePart, cf: CFrame)
+	for _, holder in ipairs({ primary :: Instance, part :: Instance }) do
+		for _, w in ipairs(holder:GetChildren()) do
+			if w:IsA("WeldConstraint") and ((w.Part0 == primary and w.Part1 == part) or (w.Part0 == part and w.Part1 == primary)) then
+				w:Destroy()
+			end
+		end
+	end
+	part.CFrame = cf
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = primary
+	w.Part1 = part
+	w.Parent = primary
+end
+
+-- the fitted body's frame (chassis X / Z shift, lowest point, turned by the ref's Yaw, as fitBodyToKit placed it) and
+-- the body's reach from the kit's DriverSeat in the chassis X / Z plane (its farthest end in any orbit direction)
+local function bodyBase(hostModel: Model, primary: BasePart, clone: Model, ref: any): (CFrame?, number)
+	local bottom, front, rear, side = math.huge, math.huge, -math.huge, 0
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local rel = primary.CFrame:ToObjectSpace(d.CFrame)
+			local e = extents(rel, drawn(d))
+			bottom = math.min(bottom, rel.Position.Y - e.Y)
+			front, rear = math.min(front, rel.Position.Z - e.Z), math.max(rear, rel.Position.Z + e.Z)
+			side = math.max(side, math.abs(rel.Position.X) + e.X)
+		end
+	end
+	if bottom == math.huge then
+		return nil, 0
+	end
+	local seat = hostModel:FindFirstChild("DriverSeat")
+	local seatZ = if seat and seat:IsA("BasePart") then primary.CFrame:PointToObjectSpace(seat.Position).Z else 0
+	local reach = math.max(rear - seatZ, seatZ - front, side)
+	local shift = clone:GetAttribute("WE_BodyShift")
+	local sh = if typeof(shift) == "Vector3" then shift else Vector3.zero
+	return primary.CFrame * CFrame.new(sh.X, bottom, sh.Z) * CFrame.Angles(0, math.rad(tonumber(ref.Yaw) or 0), 0), reach
+end
+
+local function namedParts(root: Instance, names: { string }): { BasePart }
+	local want: { [string]: boolean } = {}
+	for _, n in ipairs(names) do
+		if typeof(n) == "string" then
+			want[n] = true
+		end
+	end
+	local out: { BasePart } = {}
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("BasePart") and want[d.Name] and not isSeat(d) then
+			table.insert(out, d)
+		end
+	end
+	return out
+end
+
+-- one rotor: every part gets a Motor6D to the chassis whose joint frame sits on the spin centre with Y on the axis
+local function rigRotor(hostModel: Model, primary: BasePart, clone: Model, spec: any): number
+	if typeof(spec) ~= "table" or typeof(spec.Parts) ~= "table" then
+		return 0
+	end
+	local axis: CFrame? = AXES[tostring(spec.Axis)]
+	local rps = tonumber(spec.Rps) or 0
+	if axis == nil or rps <= 0 then
+		return 0
+	end
+	local root: Instance = if spec.Kit == true then hostModel else clone
+	local parts = namedParts(root, spec.Parts)
+	if spec.Kit == true then
+		-- kit rotor parts only (never the body's own parts under the same name)
+		local kit: { BasePart } = {}
+		for _, p in ipairs(parts) do
+			if not p:IsDescendantOf(clone) then
+				table.insert(kit, p)
+			end
+		end
+		parts = kit
+	end
+	if #parts == 0 then
+		return 0
+	end
+	local centre = Vector3.zero
+	local hub = if typeof(spec.Hub) == "string" then root:FindFirstChild(spec.Hub, true) else nil
+	if hub and hub:IsA("BasePart") then
+		centre = hub.Position
+	else
+		for _, p in ipairs(parts) do
+			centre += p.Position
+		end
+		centre /= #parts
+	end
+	local joint = CFrame.new(centre) * (primary.CFrame - primary.CFrame.Position) * axis
+	local n = 0
+	for _, p in ipairs(parts) do
+		for _, holder in ipairs({ primary :: Instance, p :: Instance }) do
+			for _, w in ipairs(holder:GetChildren()) do
+				if w:IsA("WeldConstraint") and ((w.Part0 == primary and w.Part1 == p) or (w.Part0 == p and w.Part1 == primary)) then
+					w:Destroy()
+				end
+			end
+		end
+		local m = Instance.new("Motor6D")
+		m.Name = AirBodyRig.RotorJointName
+		m.Part0 = primary
+		m.Part1 = p
+		m.C0 = primary.CFrame:ToObjectSpace(joint)
+		m.C1 = p.CFrame:ToObjectSpace(joint)
+		m:SetAttribute("WE_RotorRps", rps)
+		m.Parent = p
+		CollectionService:AddTag(m, AirBodyRig.RotorTag)
+		p.Massless = true
+		p.CanCollide = false
+		p.CanTouch = false
+		n += 1
+	end
+	return n
+end
+
+-- A store body on a vehicle never shows the seller's signs: every BillboardGui / SurfaceGui (a floating name label such as
+-- a helicopter's "Medical Helicopter" sign, CLAUDE.md world-label rules) goes, and with ref.StripDecals its Decals /
+-- Textures too. Whole models AND pack pieces (ChildName): a piece already lost its decals when the pack was split
+-- (extractPiece, StripDecals), but not its GUIs, and a trimmed body (OmitParts before the part count) is always a piece.
+-- Returns how many objects went. Any vehicle family; a no-op for the live bodies (the Recon Plane and the APC carry none;
+-- the jeep / buggy / van / pickup packs keep their only GUIs inside LocalScripts, which the loader strips).
+function AirBodyRig.StripSigns(clone: Instance, ref: any): number
+	local decals = ref.StripDecals == true
+	local gone = 0
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d.Parent ~= nil and (d:IsA("BillboardGui") or d:IsA("SurfaceGui") or (decals and (d:IsA("Decal") or d:IsA("Texture")))) then
+			d:Destroy()
+			gone += 1
+		end
+	end
+	return gone
+end
+
+-- air2 fix1: the fitted body's hit plates (ref.BodyHitBoxes, unscaled body boxes) and the kit's hidden parts out of the
+-- shot. Returns the number of plates made.
+local function hitPlates(hostModel: Model, primary: BasePart, clone: Model, ref: any, base: CFrame, s: number): number
+	local keep: { [string]: boolean } = {}
+	for _, n in ipairs(ref.KeepVisible or {}) do
+		if typeof(n) == "string" then
+			keep[n] = true
+		end
+	end
+	-- the kit's non-colliding parts under the body (hidden by HideKit) take no shot: the plates are the aircraft now
+	for _, d in ipairs(hostModel:GetDescendants()) do
+		if
+			d:IsA("BasePart")
+			and d ~= primary
+			and not d.CanCollide
+			and not isSeat(d)
+			and not keep[d.Name]
+			and not d:IsDescendantOf(clone)
+			and d:GetAttribute("WE_PhysicsWheel") ~= true
+		then
+			d.CanQuery = false
+		end
+	end
+	local n = 0
+	for _, hb in ipairs(ref.BodyHitBoxes) do
+		if typeof(hb) == "table" and typeof(hb.At) == "Vector3" and typeof(hb.Size) == "Vector3" then
+			local p = Instance.new("Part")
+			p.Name = AirBodyRig.HitPlateName
+			p.Size = hb.Size * s
+			p.CFrame = base * CFrame.new(hb.At * s)
+			p.Transparency = 1
+			p.CanCollide = false
+			p.CanTouch = false
+			p.CanQuery = true
+			p.Massless = true
+			p.CastShadow = false
+			p.Anchored = false
+			local w = Instance.new("WeldConstraint")
+			w.Part0 = primary
+			w.Part1 = p
+			w.Parent = p
+			p.Parent = hostModel
+			n += 1
+		end
+	end
+	return n
+end
+
+-- chassis-frame box of every part of the store body (the drawn gear, which Apply adds after, excepted)
+local function bodyBoxes(primary: BasePart, clone: Model): { { number } }
+	local out: { { number } } = {}
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") and d.Parent ~= nil and d.Parent.Name ~= AirBodyRig.GearName then
+			local rel = primary.CFrame:ToObjectSpace(d.CFrame)
+			local e = extents(rel, drawn(d))
+			local c = rel.Position
+			table.insert(out, { c.X - e.X, c.Y - e.Y, c.Z - e.Z, c.X + e.X, c.Y + e.Y, c.Z + e.Z })
+		end
+	end
+	return out
+end
+
+-- air2 fix1: drawn landing gear under the body (ref.BodyGear). Each leg: its wheel on the kit's floor line, its strut from
+-- the wheel centre up into the lowest body box over the leg (the body's lowest point when none is over it). Returns the
+-- number of parts made.
+local function gearDress(hostModel: Model, primary: BasePart, clone: Model, gear: any, base: CFrame, s: number): number
+	if typeof(gear.Legs) ~= "table" then
+		return 0
+	end
+	local boxes = bodyBoxes(primary, clone)
+	local bodyLow = math.huge
+	for _, b in ipairs(boxes) do
+		bodyLow = math.min(bodyLow, b[2])
+	end
+	local floor = AirBodyRig.KitFloor(hostModel, primary, -primary.Size.Y * 0.5)
+	local strut = math.clamp(tonumber(gear.Strut) or 0.3, 0.05, 2)
+	local into = math.clamp(tonumber(gear.Into) or 0.3, 0, 3)
+	-- air2 fix2: the look comes from the config (JET_GEAR); these are only the fallbacks for a table without it
+	local wheelCol: Color3 = if typeof(gear.WheelColor) == "Color3" then gear.WheelColor else Color3.fromRGB(28, 28, 30)
+	local strutCol: Color3 = if typeof(gear.StrutColor) == "Color3" then gear.StrutColor else Color3.fromRGB(120, 122, 126)
+	local wm: any, sm: any = gear.WheelMaterial, gear.StrutMaterial
+	local wheelMat: Enum.Material = if typeof(wm) == "EnumItem" then (wm :: any) else Enum.Material.SmoothPlastic
+	local strutMat: Enum.Material = if typeof(sm) == "EnumItem" then (sm :: any) else Enum.Material.Metal
+	local folder = Instance.new("Folder")
+	folder.Name = AirBodyRig.GearName
+	local rot = primary.CFrame - primary.CFrame.Position
+	local n = 0
+	local function part(name: string, size: Vector3, at: Vector3, round: boolean)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		if round then
+			p.Shape = Enum.PartType.Cylinder -- a Part cylinder turns about its X axis: the kit's across axis, rolling along Z
+			p.Material = wheelMat
+			p.Color = wheelCol
+		else
+			p.Material = strutMat
+			p.Color = strutCol
+		end
+		p.CFrame = CFrame.new(primary.CFrame:PointToWorldSpace(at)) * rot
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanTouch = false
+		p.CanQuery = true -- what players see takes the shot, like the body's hit plates
+		p.Massless = true
+		p.CastShadow = false
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = primary
+		w.Part1 = p
+		w.Parent = p
+		p.Parent = folder
+		n += 1
+	end
+	for _, leg in ipairs(gear.Legs) do
+		local wheel = if typeof(leg) == "table" then tonumber(leg.Wheel) else nil
+		if typeof(leg) == "table" and typeof(leg.At) == "Vector3" and wheel and wheel > 0 then
+			local at = primary.CFrame:PointToObjectSpace((base * CFrame.new(leg.At * s)).Position)
+			local top: number? = nil
+			for _, b in ipairs(boxes) do
+				if at.X >= b[1] and at.X <= b[4] and at.Z >= b[3] and at.Z <= b[6] then
+					top = math.min(top or math.huge, b[2])
+				end
+			end
+			local sTop = (top or bodyLow) + into
+			local wy = floor + wheel * 0.5
+			if sTop > wy then
+				part("GearStrut", Vector3.new(strut, sTop - wy, strut), Vector3.new(at.X, (wy + sTop) * 0.5, at.Z), false)
+			end
+			part("GearWheel", Vector3.new(wheel * 0.45, wheel, wheel), Vector3.new(at.X, wy, at.Z), true)
+		end
+	end
+	folder.Parent = clone
+	return n
+end
+
+-- air2 fix1: the body's lowest box corners for the driver's plane law (WE_TailGuard; VehicleDriveClient Laws.TailGuard)
+local function tailGuard(hostModel: Model, primary: BasePart, clone: Model, cfg: any)
+	local margin = math.clamp(tonumber(cfg.Margin) or 0.3, 0, 2)
+	local minPitch = math.clamp(tonumber(cfg.MinPitch) or 3.5, 0, 15)
+	local lead = math.clamp(tonumber(cfg.LeadSeconds) or 0.15, 0, 1)
+	local pts: { string } = { string.format("%.2f,%.3f", minPitch, lead) }
+	for _, b in ipairs(bodyBoxes(primary, clone)) do
+		for _, x in ipairs({ b[1], b[4] }) do
+			for _, z in ipairs({ b[3], b[6] }) do
+				table.insert(pts, string.format("%.3f,%.3f,%.3f", x, b[2] - margin, z))
+			end
+		end
+	end
+	if #pts > 1 then
+		hostModel:SetAttribute("WE_TailGuard", table.concat(pts, ";"))
+	end
+end
+
+-- After placeKitOnBody (a fitted BodyScale body): BodyMounts, RotorParts, ChaseCamera, BodyHitBoxes, BodyGear and
+-- TailGuard. Returns the number of rotor joints made (for tests). Never errors on a bad ref entry: it is skipped.
+function AirBodyRig.Apply(hostModel: Model, primary: BasePart, clone: Model, ref: any): number
+	if
+		ref.BodyMounts == nil
+		and ref.RotorParts == nil
+		and ref.ChaseCamera ~= true
+		and ref.BodyHitBoxes == nil
+		and ref.BodyGear == nil
+		and ref.TailGuard ~= true
+	then
+		return 0 -- every car / boat body and every aircraft ref without the air-looks fields
+	end
+	local base, reach = bodyBase(hostModel, primary, clone, ref)
+	if base == nil then
+		return 0
+	end
+	local s = math.clamp(tonumber(ref.BodyScale) or 1, 0.05, 4)
+	if typeof(ref.BodyMounts) == "table" then
+		for name, at in pairs(ref.BodyMounts) do
+			local p = if typeof(name) == "string" then hostModel:FindFirstChild(name) else nil
+			if p and p:IsA("BasePart") and p ~= primary and not isSeat(p) and not p.CanCollide and typeof(at) == "Vector3" then
+				-- the part's FRONT face centre lands on the point, so the muzzle (front face + the weapon's MuzzleForward /
+				-- MuzzleDrop) is the same for every kit scale
+				local rot = p.CFrame - p.CFrame.Position
+				reweld(primary, p, CFrame.new((base * CFrame.new(at * s)).Position) * rot * CFrame.new(0, 0, p.Size.Z * 0.5))
+				p.CanQuery = false -- air2 fix1: a muzzle point, never a hit box beside the aircraft
+			end
+		end
+	end
+	local joints = 0
+	if typeof(ref.RotorParts) == "table" then
+		for _, spec in ipairs(ref.RotorParts) do
+			joints += rigRotor(hostModel, primary, clone, spec)
+		end
+	end
+	local cfg = (VisualAssetConfig :: any).AirBody or {}
+	if ref.ChaseCamera == true then
+		local zoom = reach + (tonumber(cfg.ChaseCameraMargin) or 6)
+		hostModel:SetAttribute("WE_CamMinZoom", math.min(zoom, tonumber(cfg.ChaseCameraMax) or 60))
+	end
+	if cfg.BodyHitBoxes == true and typeof(ref.BodyHitBoxes) == "table" and #ref.BodyHitBoxes > 0 then
+		hitPlates(hostModel, primary, clone, ref, base, s)
+	end
+	local guard = cfg.TailGuard
+	if ref.TailGuard == true and typeof(guard) == "table" and guard.Enabled == true then
+		tailGuard(hostModel, primary, clone, guard) -- before the gear: the drawn wheels stand on the ground
+	end
+	if typeof(ref.BodyGear) == "table" then
+		gearDress(hostModel, primary, clone, ref.BodyGear, base, s)
+	end
+	return joints
+end
+
+return AirBodyRig
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="92">
+          <Properties>
             <string name="Name">AirOrdnance</string>
             <string name="Source"><![CDATA[--!strict
 --[[ Aircraft ordnance (AirWeaponService): server kinematic rockets, homing missiles and falling bombs.
@@ -20839,7 +21532,7 @@ return AirOrdnance
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="92">
+        <Item class="ModuleScript" referent="93">
           <Properties>
             <string name="Name">BaseLayout</string>
             <string name="Source"><![CDATA[--!strict
@@ -20988,7 +21681,7 @@ return BaseLayout
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="93">
+        <Item class="ModuleScript" referent="94">
           <Properties>
             <string name="Name">DesertFlora</string>
             <string name="Source"><![CDATA[--!strict
@@ -21330,7 +22023,7 @@ return DesertFlora
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="94">
+        <Item class="ModuleScript" referent="95">
           <Properties>
             <string name="Name">HollowBuildingBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -22591,11 +23284,11 @@ return HollowBuildingBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="95">
+        <Item class="Folder" referent="96">
           <Properties>
             <string name="Name">Installations</string>
           </Properties>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">Airfield</string>
               <string name="Source"><![CDATA[--!strict
@@ -22728,7 +23421,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">Checkpoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -22859,7 +23552,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">Helipad</string>
               <string name="Source"><![CDATA[--!strict
@@ -22967,7 +23660,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">MissileDefense</string>
               <string name="Source"><![CDATA[--!strict
@@ -23071,7 +23764,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">PowerStation</string>
               <string name="Source"><![CDATA[--!strict
@@ -23221,7 +23914,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">Radar</string>
               <string name="Source"><![CDATA[--!strict
@@ -23329,7 +24022,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">Watchtower</string>
               <string name="Source"><![CDATA[--!strict
@@ -23438,11 +24131,11 @@ end
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="103">
+        <Item class="Folder" referent="104">
           <Properties>
             <string name="Name">Interiors</string>
           </Properties>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">Armory</string>
               <string name="Source"><![CDATA[--!strict
@@ -23758,7 +24451,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">Barracks</string>
               <string name="Source"><![CDATA[--!strict
@@ -23971,7 +24664,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="107">
             <Properties>
               <string name="Name">CommandCenter</string>
               <string name="Source"><![CDATA[--!strict
@@ -24113,7 +24806,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">ResearchLab</string>
               <string name="Source"><![CDATA[--!strict
@@ -24509,7 +25202,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">SpecialForces</string>
               <string name="Source"><![CDATA[--!strict
@@ -24741,7 +25434,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">VehicleDepot</string>
               <string name="Source"><![CDATA[--!strict
@@ -25025,7 +25718,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">Warehouse</string>
               <string name="Source"><![CDATA[--!strict
@@ -25409,7 +26102,7 @@ end
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="111">
+        <Item class="ModuleScript" referent="112">
           <Properties>
             <string name="Name">MapDressing</string>
             <string name="Source"><![CDATA[--!strict
@@ -26020,7 +26713,7 @@ return MapDressing
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="112">
+        <Item class="ModuleScript" referent="113">
           <Properties>
             <string name="Name">MapSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -29369,7 +30062,7 @@ return MapSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="113">
+        <Item class="ModuleScript" referent="114">
           <Properties>
             <string name="Name">NationFlag</string>
             <string name="Source"><![CDATA[--!strict
@@ -29747,11 +30440,11 @@ return NationFlag
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="114">
+        <Item class="Folder" referent="115">
           <Properties>
             <string name="Name">POILayouts</string>
           </Properties>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">Frontier</string>
               <string name="Source"><![CDATA[--!strict
@@ -29951,7 +30644,7 @@ return Layouts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">Industry</string>
               <string name="Source"><![CDATA[--!strict
@@ -30216,7 +30909,7 @@ return Layouts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="117">
+          <Item class="ModuleScript" referent="118">
             <Properties>
               <string name="Name">Wilds</string>
               <string name="Source"><![CDATA[--!strict
@@ -30465,7 +31158,7 @@ return Layouts
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="118">
+        <Item class="ModuleScript" referent="119">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -31398,7 +32091,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="119">
+        <Item class="ModuleScript" referent="120">
           <Properties>
             <string name="Name">Projectile</string>
             <string name="Source"><![CDATA[--!strict
@@ -31596,7 +32289,7 @@ return Projectile
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="120">
+        <Item class="ModuleScript" referent="121">
           <Properties>
             <string name="Name">RemoteGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -31664,7 +32357,7 @@ return RemoteGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="121">
+        <Item class="ModuleScript" referent="122">
           <Properties>
             <string name="Name">RemoteSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -31977,7 +32670,7 @@ return RemoteSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="122">
+        <Item class="ModuleScript" referent="123">
           <Properties>
             <string name="Name">RigBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -32400,7 +33093,7 @@ return RigBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="123">
+        <Item class="ModuleScript" referent="124">
           <Properties>
             <string name="Name">SessionLock</string>
             <string name="Source"><![CDATA[--!strict
@@ -32659,7 +33352,7 @@ return SessionLock
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="124">
+        <Item class="ModuleScript" referent="125">
           <Properties>
             <string name="Name">StreamPrefetch</string>
             <string name="Source"><![CDATA[--!strict
@@ -32929,7 +33622,7 @@ return StreamPrefetch
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="125">
+        <Item class="ModuleScript" referent="126">
           <Properties>
             <string name="Name">StructureKitBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -34506,7 +35199,7 @@ return StructureKitBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="126">
+        <Item class="ModuleScript" referent="127">
           <Properties>
             <string name="Name">StudioBuySmoke</string>
             <string name="Source"><![CDATA[--!strict
@@ -34797,7 +35490,7 @@ return StudioBuySmoke
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="127">
+        <Item class="ModuleScript" referent="128">
           <Properties>
             <string name="Name">TrainingYardBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -35008,7 +35701,7 @@ return TrainingYardBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="128">
+        <Item class="ModuleScript" referent="129">
           <Properties>
             <string name="Name">VehicleHealth</string>
             <string name="Source"><![CDATA[--!strict
@@ -35832,7 +36525,7 @@ return VehicleHealth
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="129">
+        <Item class="ModuleScript" referent="130">
           <Properties>
             <string name="Name">VehicleWaterGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -36677,7 +37370,7 @@ return VehicleWaterGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="130">
+        <Item class="ModuleScript" referent="131">
           <Properties>
             <string name="Name">Waterways</string>
             <string name="Source"><![CDATA[--!strict
@@ -37501,7 +38194,7 @@ return Waterways
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="131">
+        <Item class="ModuleScript" referent="132">
           <Properties>
             <string name="Name">WeaponAssetLoader</string>
             <string name="Source"><![CDATA[--!strict
@@ -37792,7 +38485,7 @@ return WeaponAssetLoader
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="132">
+        <Item class="ModuleScript" referent="133">
           <Properties>
             <string name="Name">WorldAtmosphere</string>
             <string name="Source"><![CDATA[--!strict
@@ -38075,7 +38768,7 @@ return WorldAtmosphere
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="133">
+        <Item class="ModuleScript" referent="134">
           <Properties>
             <string name="Name">WorldBounds</string>
             <string name="Source"><![CDATA[--!strict
@@ -38476,7 +39169,7 @@ return WorldBounds
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="134">
+        <Item class="ModuleScript" referent="135">
           <Properties>
             <string name="Name">WorldDress</string>
             <string name="Source"><![CDATA[--!strict
@@ -40147,7 +40840,7 @@ return WorldDress
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="135">
+        <Item class="ModuleScript" referent="136">
           <Properties>
             <string name="Name">WorldHygiene</string>
             <string name="Source"><![CDATA[--!strict
@@ -41406,7 +42099,7 @@ return WorldHygiene
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="136">
+        <Item class="ModuleScript" referent="137">
           <Properties>
             <string name="Name">WorldKits</string>
             <string name="Source"><![CDATA[--!strict
@@ -43496,7 +44189,7 @@ return WorldKits
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="137">
+        <Item class="ModuleScript" referent="138">
           <Properties>
             <string name="Name">WorldLabelPolicy</string>
             <string name="Source"><![CDATA[--!strict
@@ -43642,7 +44335,7 @@ return WorldLabelPolicy
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="138">
+        <Item class="ModuleScript" referent="139">
           <Properties>
             <string name="Name">WorldPOI</string>
             <string name="Source"><![CDATA[--!strict
@@ -44546,7 +45239,7 @@ return WorldPOI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="139">
+        <Item class="ModuleScript" referent="140">
           <Properties>
             <string name="Name">WorldTerrain</string>
             <string name="Source"><![CDATA[--!strict
@@ -45307,11 +46000,11 @@ return WorldTerrain
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="140">
+      <Item class="Folder" referent="141">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="141">
+        <Item class="ModuleScript" referent="142">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -45996,7 +46689,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="142">
+        <Item class="ModuleScript" referent="143">
           <Properties>
             <string name="Name">AirWeaponService</string>
             <string name="Source"><![CDATA[--!strict
@@ -46892,7 +47585,7 @@ return AirWeaponService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="143">
+        <Item class="ModuleScript" referent="144">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -46941,7 +47634,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="144">
+        <Item class="ModuleScript" referent="145">
           <Properties>
             <string name="Name">AntiExploitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -47062,7 +47755,7 @@ return AntiExploitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="145">
+        <Item class="ModuleScript" referent="146">
           <Properties>
             <string name="Name">BankRaidService</string>
             <string name="Source"><![CDATA[--!strict
@@ -47984,7 +48677,7 @@ return BankRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="146">
+        <Item class="ModuleScript" referent="147">
           <Properties>
             <string name="Name">BaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -49798,7 +50491,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 85)
+			player:SetAttribute("WE_Build", 86)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -49946,7 +50639,7 @@ return BaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="147">
+        <Item class="ModuleScript" referent="148">
           <Properties>
             <string name="Name">BattlePassService</string>
             <string name="Source"><![CDATA[--!strict
@@ -50305,7 +50998,7 @@ return BattlePassService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="148">
+        <Item class="ModuleScript" referent="149">
           <Properties>
             <string name="Name">BusinessService</string>
             <string name="Source"><![CDATA[--!strict
@@ -50859,7 +51552,7 @@ return BusinessService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="149">
+        <Item class="ModuleScript" referent="150">
           <Properties>
             <string name="Name">CaptureStipendService</string>
             <string name="Source"><![CDATA[--!strict
@@ -50966,7 +51659,7 @@ return CaptureStipendService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="150">
+        <Item class="ModuleScript" referent="151">
           <Properties>
             <string name="Name">ClanService</string>
             <string name="Source"><![CDATA[--!strict
@@ -51593,7 +52286,7 @@ return ClanService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="151">
+        <Item class="ModuleScript" referent="152">
           <Properties>
             <string name="Name">ClanWarService</string>
             <string name="Source"><![CDATA[--!strict
@@ -52052,7 +52745,7 @@ return ClanWarService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="152">
+        <Item class="ModuleScript" referent="153">
           <Properties>
             <string name="Name">CodesService</string>
             <string name="Source"><![CDATA[--!strict
@@ -52205,7 +52898,7 @@ return CodesService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="153">
+        <Item class="ModuleScript" referent="154">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -55083,7 +55776,7 @@ end
 return CombatService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="154">
+          <Item class="ModuleScript" referent="155">
             <Properties>
               <string name="Name">CombatAssist</string>
               <string name="Source"><![CDATA[--!strict
@@ -55304,7 +55997,7 @@ return CombatAssist
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="155">
+          <Item class="ModuleScript" referent="156">
             <Properties>
               <string name="Name">CombatDamage</string>
               <string name="Source"><![CDATA[--!strict
@@ -55428,7 +56121,7 @@ return CombatDamage
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="156">
+          <Item class="ModuleScript" referent="157">
             <Properties>
               <string name="Name">CombatFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -55666,7 +56359,7 @@ return CombatFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="157">
+          <Item class="ModuleScript" referent="158">
             <Properties>
               <string name="Name">CombatNPC</string>
               <string name="Source"><![CDATA[--!strict
@@ -56330,7 +57023,7 @@ return CombatNPC
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="158">
+          <Item class="ModuleScript" referent="159">
             <Properties>
               <string name="Name">CombatWeaponLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -56384,7 +57077,7 @@ return CombatWeaponLogic
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="159">
+        <Item class="ModuleScript" referent="160">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -56597,7 +57290,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 85)
+		player:SetAttribute("WE_Build", 86)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -56737,7 +57430,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=85",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=86",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -56915,7 +57608,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="160">
+        <Item class="ModuleScript" referent="161">
           <Properties>
             <string name="Name">EconomyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -57558,7 +58251,7 @@ return EconomyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="161">
+        <Item class="ModuleScript" referent="162">
           <Properties>
             <string name="Name">FallSafetyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -57671,7 +58364,7 @@ return FallSafetyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="162">
+        <Item class="ModuleScript" referent="163">
           <Properties>
             <string name="Name">GateDefenseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -60042,7 +60735,7 @@ return GateDefenseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="163">
+        <Item class="ModuleScript" referent="164">
           <Properties>
             <string name="Name">ManualDropperService</string>
             <string name="Source"><![CDATA[--!strict
@@ -60754,7 +61447,7 @@ return ManualDropperService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="164">
+        <Item class="ModuleScript" referent="165">
           <Properties>
             <string name="Name">MissileStrikeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -61481,7 +62174,7 @@ return MissileStrikeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="165">
+        <Item class="ModuleScript" referent="166">
           <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -62551,7 +63244,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="166">
+        <Item class="ModuleScript" referent="167">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -64095,7 +64788,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="167">
+        <Item class="ModuleScript" referent="168">
           <Properties>
             <string name="Name">MoneyCollectorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -65469,7 +66162,7 @@ return MoneyCollectorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="168">
+        <Item class="ModuleScript" referent="169">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -66035,7 +66728,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="169">
+        <Item class="ModuleScript" referent="170">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -66108,7 +66801,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="170">
+        <Item class="ModuleScript" referent="171">
           <Properties>
             <string name="Name">OpsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -67257,7 +67950,7 @@ end
 return OpsService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="171">
+          <Item class="ModuleScript" referent="172">
             <Properties>
               <string name="Name">OpsCargo</string>
               <string name="Source"><![CDATA[--!strict
@@ -67730,7 +68423,7 @@ return OpsCargo
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="172">
+          <Item class="ModuleScript" referent="173">
             <Properties>
               <string name="Name">OpsDirector</string>
               <string name="Source"><![CDATA[--!strict
@@ -67878,7 +68571,7 @@ return OpsDirector
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="173">
+          <Item class="ModuleScript" referent="174">
             <Properties>
               <string name="Name">OpsGarrison</string>
               <string name="Source"><![CDATA[--!strict
@@ -68375,7 +69068,7 @@ return OpsGarrison
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="174">
+          <Item class="ModuleScript" referent="175">
             <Properties>
               <string name="Name">OpsKinds</string>
               <string name="Source"><![CDATA[--!strict
@@ -69204,7 +69897,7 @@ return OpsKinds
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="175">
+          <Item class="ModuleScript" referent="176">
             <Properties>
               <string name="Name">OpsRewards</string>
               <string name="Source"><![CDATA[--!strict
@@ -69502,7 +70195,7 @@ return OpsRewards
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="176">
+          <Item class="ModuleScript" referent="177">
             <Properties>
               <string name="Name">OpsSites</string>
               <string name="Source"><![CDATA[--!strict
@@ -69985,7 +70678,7 @@ return OpsSites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="177">
+          <Item class="ModuleScript" referent="178">
             <Properties>
               <string name="Name">OpsZones</string>
               <string name="Source"><![CDATA[--!strict
@@ -70174,7 +70867,7 @@ return OpsZones
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="178">
+        <Item class="ModuleScript" referent="179">
           <Properties>
             <string name="Name">PlotOilPumpService</string>
             <string name="Source"><![CDATA[--!strict
@@ -70606,7 +71299,7 @@ return PlotOilPumpService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="179">
+        <Item class="ModuleScript" referent="180">
           <Properties>
             <string name="Name">PremiumPadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -71026,7 +71719,7 @@ return PremiumPadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="180">
+        <Item class="ModuleScript" referent="181">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -71664,7 +72357,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="181">
+        <Item class="ModuleScript" referent="182">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -71716,7 +72409,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="182">
+        <Item class="ModuleScript" referent="183">
           <Properties>
             <string name="Name">ResearchService</string>
             <string name="Source"><![CDATA[--!strict
@@ -72214,7 +72907,7 @@ return ResearchService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="183">
+        <Item class="ModuleScript" referent="184">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -72478,7 +73171,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="184">
+        <Item class="ModuleScript" referent="185">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -72882,7 +73575,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="185">
+        <Item class="ModuleScript" referent="186">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -73041,7 +73734,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="186">
+        <Item class="ModuleScript" referent="187">
           <Properties>
             <string name="Name">SquadOrdersService</string>
             <string name="Source"><![CDATA[--!strict
@@ -75211,7 +75904,7 @@ return SquadOrdersService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="187">
+        <Item class="ModuleScript" referent="188">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -75533,7 +76226,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="188">
+        <Item class="ModuleScript" referent="189">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -76937,7 +77630,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="189">
+          <Item class="ModuleScript" referent="190">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -77067,7 +77760,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="190">
+          <Item class="ModuleScript" referent="191">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -77144,7 +77837,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="191">
+          <Item class="ModuleScript" referent="192">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -77213,7 +77906,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="192">
+        <Item class="ModuleScript" referent="193">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -77687,7 +78380,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="193">
+        <Item class="ModuleScript" referent="194">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -78399,7 +79092,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="194">
+        <Item class="ModuleScript" referent="195">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -80777,14 +81470,19 @@ local function choosePlane(ctx: SpawnCtx): SpawnChoice
 		-- (runway X/Z, the ends and the heading are plot-local; plotXZ / yawOf(frame) turn them with the plot)
 		local minX, maxX = road.X - road.SizeX * 0.5, road.X + road.SizeX * 0.5
 		local fromMin = math.abs(minX) >= math.abs(maxX)
-		local startX = if fromMin then minX + SpawnCfg.RunwayInset else maxX - SpawnCfg.RunwayInset
+		-- air2 fix1: a fitted store body far longer than its kit (the owner's 44-stud jet: VisHalfZ 24.6, kit HalfZ 6) is
+		-- kept on the runway and spaced by the BODY: its tail never hangs past the runway end, and the next one fits
+		-- behind it (spotFree keeps two body radii apart). A kit plane (no VisHalfZ) is placed exactly as before.
+		local halfZ = math.max(fp.HalfZ, fp.VisHalfZ or 0)
+		local inset = math.max(SpawnCfg.RunwayInset, halfZ + 1)
+		local startX = if fromMin then minX + inset else maxX - inset
 		local step = if fromMin then 1 else -1
 		local heading = (if fromMin then -math.pi / 2 else math.pi / 2) + yawOf(frame) -- plot +X / -X
 		local refTop = plot.Y + 0.5 + SpawnCfg.RunwayHeight
-		local spacing = 2 * fp.HalfZ + 6
+		local spacing = 2 * halfZ + 6
 		for k = 0, 3 do
 			local x = startX + step * k * spacing
-			if math.abs(x - road.X) > road.SizeX * 0.5 - fp.HalfZ then
+			if math.abs(x - road.X) > road.SizeX * 0.5 - halfZ then
 				break
 			end
 			if k > 0 and math.abs(x - startX) > road.SizeX * 0.5 then
@@ -82795,15 +83493,28 @@ VehicleService._PlaceExit = function(rec: VehicleRec, seat: BasePart, hum: Human
 	return spot
 end
 
+-- air2 fix2: Drive.ExitSpot / Drive.Ride apply in their Modes, and in their BodyModes only to a vehicle that wears a
+-- fitted body (WE_VisualHalfLength, written when the body is fitted at build): its seats sit inside a body that never
+-- collides, where touch-to-sit cannot reach them and Roblox's own jump-out lands on the hidden kit inside it
+VehicleService._ModeOn = function(modes: { [string]: boolean }, bodyModes: { [string]: boolean }?, rec: VehicleRec): boolean
+	if modes[rec.Mode] == true then
+		return true
+	end
+	return bodyModes ~= nil and bodyModes[rec.Mode] == true and rec.Model:GetAttribute("WE_VisualHalfLength") ~= nil
+end
+
 VehicleService._OnSeatLeft = function(rec: VehicleRec, seat: BasePart, hum: Humanoid)
 	local cfg = Drive.ExitSpot
+	-- fb4 water rule: EXIT from a plane on the water = ashore (the guard); air2 fix2: that comes first, before a bodied
+	-- plane's exit spot
+	if rec.Mode == "Plane" and VehicleService._WaterGuard.Left(rec, seat, hum) then
+		return
+	end
 	-- fb4 water rule: a sinking vehicle's riders are put ashore by the guard, not beside the vehicle
-	if cfg.Enabled and cfg.Modes[rec.Mode] and not VehicleService._WaterGuard.Sinking(rec.Model) then
+	if cfg.Enabled and VehicleService._ModeOn(cfg.Modes, cfg.BodyModes, rec) and not VehicleService._WaterGuard.Sinking(rec.Model) then
 		task.defer(function()
 			pcall(VehicleService._PlaceExit, rec, seat, hum)
 		end)
-	elseif rec.Mode == "Plane" then
-		VehicleService._WaterGuard.Left(rec, seat, hum) -- fb4 water rule: EXIT from a plane on the water = ashore
 	end
 end
 
@@ -82882,7 +83593,7 @@ end
 
 VehicleService._AddRidePrompt = function(rec: VehicleRec, def: VehicleDef)
 	local cfg = Drive.Ride
-	if not (cfg.Enabled and cfg.Modes[rec.Mode]) or #rec.Passengers == 0 or rec.Chassis:FindFirstChild("WE_RidePrompt") then
+	if not (cfg.Enabled and VehicleService._ModeOn(cfg.Modes, cfg.BodyModes, rec)) or #rec.Passengers == 0 or rec.Chassis:FindFirstChild("WE_RidePrompt") then
 		return
 	end
 	local model = rec.Model
@@ -83668,7 +84379,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="195">
+        <Item class="ModuleScript" referent="196">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -83723,6 +84434,7 @@ local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
 local RigBuilder = require(script.Parent.Parent.Modules.RigBuilder) -- R-RIG
 local RigConfig = require(Shared.Configs.RigConfig) -- R-RIG
+local AirBodyRig = require(script.Parent.Parent.Modules.AirBodyRig) -- air-looks: aircraft body anchor / floor / mounts / rotors
 
 local VisualAssetService = {}
 
@@ -83743,6 +84455,12 @@ type AssetRef = {
 	BodyScale: number?, -- vscale: the fitted body's scale (1 = Roblox size); nil = as long as the kit chassis
 	BodySeats: { [string]: Vector3 }?, -- vscale: kit seat -> the body's own seat top (unscaled, body box frame)
 	BodyRoofParts: { string }?, -- vscale: kit parts (the Armed 4x4 turret) lifted onto the fitted body's roof
+	BodyAnchor: string?, -- air-looks: this BodySeats seat is put over the kit seat of that name (the body moves, the kit stays)
+	BodyFloor: string?, -- air-looks: "Collide" = lowest body point on the kit's lowest collidable part (no physics wheels)
+	BodyMounts: { [string]: Vector3 }?, -- air-looks: kit weapon mount -> its front face on the body (AirBodyRig.Apply)
+	RotorParts: { any }?, -- air-looks: spinning body / kit parts (AirBodyRig.Apply, AircraftBodyClient)
+	ChaseCamera: boolean?, -- air-looks: WE_CamMinZoom for the seated camera (AirBodyRig.Apply)
+	BodyLift: number?, -- air2 fix1: the fitted body stands this many studs over the kit's floor line (drawn gear under it)
 	OmitParts: { string }?, -- owner list: pack piece parts removed before the part count
 	NoFamilyFallback: boolean?, -- owner list: a vehicle ref at 0 never takes the family body
 	KeepHost: boolean?, -- hooks: props: the host keeps its look (no fade)
@@ -84637,8 +85355,18 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 			end
 		end
 	end
+	-- air-looks: an aircraft stands on its skids / gear (BodyFloor), its cockpit over the kit seat (BodyAnchor)
+	if ref.BodyFloor == "Collide" and not found then
+		bottom = AirBodyRig.KitFloor(hostModel, primary, bottom)
+	end
+	local shift = AirBodyRig.AnchorShift(hostModel, primary, ref, s, yawDeg)
+	if shift ~= Vector3.zero then
+		clone:SetAttribute("WE_BodyShift", shift)
+	end
+	-- air2 fix1: BodyLift stands a long aircraft body higher on its drawn gear (AirBodyRig), so its tail clears the runway
+	local lift = if fitScale and typeof(ref.BodyLift) == "number" then math.clamp(ref.BodyLift, 0, 4) else 0
 	local anchor = Vector3.new((lx + hx) * 0.5, ly, (lz + hz) * 0.5)
-	local base = primary.CFrame * CFrame.new(0, bottom, 0) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local base = primary.CFrame * CFrame.new(shift.X, bottom + lift, shift.Z) * CFrame.Angles(0, math.rad(yawDeg), 0)
 	-- vscale: FitShadowShare of the FITTED body's length (at BodyScale the chassis is far shorter than the body)
 	local shadowMin = (if fitScale then bodyLen * s else primary.Size.Z) * (tonumber((VisualAssetConfig :: any).FitShadowShare) or 0.5)
 	for _, p in ipairs(parts) do
@@ -84700,7 +85428,9 @@ local function placeKitOnBody(hostModel: Model, primary: BasePart, clone: Model,
 	if bottom > roofY then
 		return
 	end
-	local base = primary.CFrame * CFrame.new(0, bottom, 0) * CFrame.Angles(0, math.rad(tonumber(ref.Yaw) or 0), 0)
+	local shift = clone:GetAttribute("WE_BodyShift") -- air-looks: BodyAnchor moved the body (AirBodyRig.AnchorShift)
+	local sh = if typeof(shift) == "Vector3" then shift else Vector3.zero
+	local base = primary.CFrame * CFrame.new(sh.X, bottom, sh.Z) * CFrame.Angles(0, math.rad(tonumber(ref.Yaw) or 0), 0)
 	-- vscale R2.1: the kit's collidable half width / length (every CanCollide part but the seats, as WE_HalfWidth /
 	-- WE_HalfLength will be): a moved seat keeps its centre BodySeatKitInset inside it. A seat past the kit's nose or
 	-- tail (the Cargo Van's front row, the Dispatch Car's back seat) sits inside a wall the kit touches, and so does
@@ -84754,6 +85484,8 @@ local function placeKitOnBody(hostModel: Model, primary: BasePart, clone: Model,
 	hostModel:SetAttribute("WE_VisualHalfLength", halfZ)
 	hostModel:SetAttribute("WE_VisualHalfWidth", halfX)
 	hostModel:SetAttribute("WE_VisualTop", topY)
+	-- air-looks: weapon mounts on the body, rotor joints, the seated chase camera (a no-op for a ref without them)
+	AirBodyRig.Apply(hostModel, primary, clone, ref)
 end
 
 -- W3 LOOK: under a fitted body the Part-kit visuals go (Transparency 1). Physics, seats, hit boxes and names stay.
@@ -84793,6 +85525,7 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 	if not clone then
 		return false
 	end
+	AirBodyRig.StripSigns(clone, ref) -- air-looks: a store body's name signs (and decals with StripDecals) go, whole model or pack piece
 	local fitted = ref.Fit == "Kit" and fitBodyToKit(clone, hostModel, primary, ref) ~= nil
 	local attached, stripped = weldCloneToPrimary(clone, primary, "WE_CatalogVisual", fitted)
 	if not attached then
@@ -86371,7 +87104,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="196">
+        <Item class="ModuleScript" referent="197">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -86784,19 +87517,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="197">
+  <Item class="StarterPlayer" referent="198">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="198">
+    <Item class="StarterPlayerScripts" referent="199">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="199">
+      <Item class="Folder" referent="200">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="200">
+        <Item class="LocalScript" referent="201">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -86942,16 +87675,17 @@ safeInit("NextPadChevrons", safeRequire("NextPadChevrons", Modules:WaitForChild(
 safeInit("LabelGovernor", safeRequire("LabelGovernor", Modules:WaitForChild("LabelGovernor", 5) :: Instance)) -- at most 3 base labels on screen (WorldLabelConfig.BaseLabelGovernor.Enabled)
 safeInit("OpsController", safeRequire("OpsController", Controllers:WaitForChild("OpsController", 5) :: Instance)) -- W3s2 Phase B Jobs: JOBS rows, job card, hold pill (a no-op while OpsConfig.Enabled is false)
 safeInit("RigAnimator", safeRequire("RigAnimator", Modules:WaitForChild("RigAnimator", 5) :: Instance)) -- R-RIG: soldier animation, army escorts, far LOD (client only; a no-op while RigConfig.Enabled is false)
+safeInit("AircraftBodyClient", safeRequire("AircraftBodyClient", Modules:WaitForChild("AircraftBodyClient", 5) :: Instance)) -- air-looks: store aircraft rotors spin + seated chase camera (client only; nothing to do until a store aircraft body is live)
 
 print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="201">
+        <Item class="Folder" referent="202">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="202">
+          <Item class="ModuleScript" referent="203">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -87622,7 +88356,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="203">
+          <Item class="ModuleScript" referent="204">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -87895,7 +88629,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="204">
+          <Item class="ModuleScript" referent="205">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -88596,7 +89330,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="205">
+          <Item class="ModuleScript" referent="206">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -90974,7 +91708,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="206">
+          <Item class="ModuleScript" referent="207">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -91351,7 +92085,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="207">
+          <Item class="ModuleScript" referent="208">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -93210,7 +93944,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="208">
+          <Item class="ModuleScript" referent="209">
             <Properties>
               <string name="Name">MissileController</string>
               <string name="Source"><![CDATA[--!strict
@@ -95092,7 +95826,7 @@ return MissileController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="209">
+          <Item class="ModuleScript" referent="210">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -96036,7 +96770,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="210">
+          <Item class="ModuleScript" referent="211">
             <Properties>
               <string name="Name">NationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -97492,7 +98226,7 @@ return NationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="211">
+          <Item class="ModuleScript" referent="212">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -98597,7 +99331,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="212">
+          <Item class="ModuleScript" referent="213">
             <Properties>
               <string name="Name">OpsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -99490,7 +100224,7 @@ return OpsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="213">
+          <Item class="ModuleScript" referent="214">
             <Properties>
               <string name="Name">OrdersController</string>
               <string name="Source"><![CDATA[--!strict
@@ -100056,7 +100790,7 @@ return OrdersController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="214">
+          <Item class="ModuleScript" referent="215">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -101036,7 +101770,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="215">
+            <Item class="ModuleScript" referent="216">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -101201,7 +101935,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="216">
+            <Item class="ModuleScript" referent="217">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -101241,7 +101975,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="217">
+          <Item class="ModuleScript" referent="218">
             <Properties>
               <string name="Name">PromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -102156,7 +102890,7 @@ return PromptController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="218">
+          <Item class="ModuleScript" referent="219">
             <Properties>
               <string name="Name">ResearchController</string>
               <string name="Source"><![CDATA[--!strict
@@ -103252,7 +103986,7 @@ return ResearchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="219">
+          <Item class="ModuleScript" referent="220">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -103764,7 +104498,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="220">
+          <Item class="ModuleScript" referent="221">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -105547,7 +106281,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="221">
+          <Item class="ModuleScript" referent="222">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -106734,7 +107468,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="222">
+          <Item class="ModuleScript" referent="223">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -108370,7 +109104,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="223">
+          <Item class="ModuleScript" referent="224">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -108695,7 +109429,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="224">
+          <Item class="ModuleScript" referent="225">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -110059,7 +110793,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="225">
+          <Item class="ModuleScript" referent="226">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -112360,11 +113094,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="226">
+        <Item class="Folder" referent="227">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="227">
+          <Item class="ModuleScript" referent="228">
             <Properties>
               <string name="Name">AimTargets</string>
               <string name="Source"><![CDATA[--!strict
@@ -112907,7 +113641,7 @@ return AimTargets
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="228">
+          <Item class="ModuleScript" referent="229">
             <Properties>
               <string name="Name">AirWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -113559,7 +114293,305 @@ return AirWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="229">
+          <Item class="ModuleScript" referent="230">
+            <Properties>
+              <string name="Name">AircraftBodyClient</string>
+              <string name="Source"><![CDATA[--!strict
+--[[ air-looks (2026-09-28): store aircraft bodies, the client half (VisualAssetConfig.AirBody; server:
+	Server/Modules/AirBodyRig). Purely visual and local: nothing here is replicated or sent to the server.
+
+	  • Rotors: every Motor6D tagged WE_RotorJoint (AirBodyRig made it for a RotorParts part, its joint Y axis on the
+	    rotor axis, attribute WE_RotorRps) turns by setting Motor6D.Transform to one of RotorSpin.Steps precomputed
+	    CFrames (no allocation per update). One PreSimulation loop for every aircraft, at most RotorSpin.Hz updates a
+	    second. A rotor turns only while its aircraft's driver seat is taken (the server's WE_DriverUserId), spins up
+	    and down over SpinUpSeconds, and only the MaxAircraft nearest aircraft within MaxDistance of the camera are
+	    updated (re-picked every Refresh seconds; the others hold their last angle). No tree scans: joints come
+	    and go with the tag's added / removed signals (StreamingEnabled-safe: a streamed-out aircraft drops out).
+	  • Chase camera: while the local player sits in any seat of a vehicle that carries WE_CamMinZoom (AirBodyRig,
+	    ChaseCamera refs), Player.CameraMinZoomDistance = min(WE_CamMinZoom, CameraMaxZoomDistance), so the camera
+	    stays behind a Roblox-size body instead of inside it (the body parts are CanQuery false, so Roblox's camera
+	    does not pop in front of them). The player's own value comes back when they leave the seat, die or respawn.
+	    Touch, keyboard and gamepad alike; no button, no text. ]]
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local AircraftBodyClient = {}
+
+local TAG = "WE_RotorJoint"
+
+type Joint = {
+	motor: Motor6D,
+	model: Model?, -- the vehicle (the ancestor Model with a VehicleId attribute)
+	rps: number,
+	turns: number, -- 0..1
+	speed: number, -- turns per second now
+	idx: number, -- LUT index last written (0 = never)
+	near: boolean, -- among the MaxAircraft nearest within MaxDistance at the last refresh
+}
+
+local cfg = {
+	Enabled = true,
+	Hz = 30,
+	Steps = 24,
+	MaxAircraft = 6,
+	MaxDistance = 400,
+	SpinUpSeconds = 2.5,
+	Refresh = 0.5,
+}
+local joints: { Joint } = {}
+local byMotor: { [Motor6D]: Joint } = {}
+local lut: { CFrame } = {}
+local acc, sinceRefresh = 0, math.huge
+local started = false
+
+local function readConfig()
+	local ok, VisualAssetConfig = pcall(function()
+		local shared = ReplicatedStorage:FindFirstChild("Shared")
+		local configs = shared and shared:FindFirstChild("Configs")
+		local mod = configs and configs:FindFirstChild("VisualAssetConfig")
+		return if mod and mod:IsA("ModuleScript") then require(mod) :: any else nil
+	end)
+	local rs = ok and VisualAssetConfig and VisualAssetConfig.AirBody and VisualAssetConfig.AirBody.RotorSpin
+	if typeof(rs) == "table" then
+		for k, v in pairs(rs) do
+			if (cfg :: any)[k] ~= nil and typeof(v) == typeof((cfg :: any)[k]) then
+				(cfg :: any)[k] = v
+			end
+		end
+	end
+	cfg.Hz = math.clamp(cfg.Hz, 1, 60)
+	cfg.Steps = math.clamp(math.floor(cfg.Steps), 4, 360)
+	cfg.MaxAircraft = math.max(0, math.floor(cfg.MaxAircraft))
+	table.clear(lut)
+	for i = 1, cfg.Steps do
+		lut[i] = CFrame.Angles(0, (i - 1) / cfg.Steps * 2 * math.pi, 0)
+	end
+end
+
+local function vehicleOf(inst: Instance): Model?
+	local x = inst.Parent
+	while x and x ~= Workspace do
+		if x:IsA("Model") and x:GetAttribute("VehicleId") ~= nil then
+			return x
+		end
+		x = x.Parent
+	end
+	return nil
+end
+
+local function addJoint(inst: Instance)
+	if not inst:IsA("Motor6D") or byMotor[inst] then
+		return
+	end
+	local rps = inst:GetAttribute("WE_RotorRps")
+	local j: Joint = {
+		motor = inst,
+		model = vehicleOf(inst),
+		rps = if typeof(rps) == "number" and rps > 0 then rps else 0,
+		turns = 0,
+		speed = 0,
+		idx = 0,
+		near = false,
+	}
+	byMotor[inst] = j
+	table.insert(joints, j)
+	sinceRefresh = math.huge -- re-pick the nearest aircraft on the next update
+end
+
+local function removeJoint(inst: Instance)
+	local j = if inst:IsA("Motor6D") then byMotor[inst] else nil
+	if j == nil then
+		return
+	end
+	byMotor[inst :: Motor6D] = nil
+	for i = #joints, 1, -1 do
+		if joints[i] == j then
+			joints[i] = joints[#joints]
+			joints[#joints] = nil
+			break
+		end
+	end
+end
+
+local function powered(m: Model?): boolean
+	if m == nil or m.Parent == nil then
+		return false
+	end
+	local u = m:GetAttribute("WE_DriverUserId")
+	return typeof(u) == "number" and u ~= 0
+end
+
+-- the MaxAircraft nearest aircraft within MaxDistance of the camera (a few times a second, never per frame)
+local function refresh()
+	local cam = Workspace.CurrentCamera
+	local at = if cam then cam.CFrame.Position else nil
+	local dist: { [Model]: number } = {}
+	local models: { Model } = {}
+	for _, j in ipairs(joints) do
+		local m = j.model
+		if m and dist[m] == nil then
+			local pp = m.PrimaryPart
+			local d = if at and pp then (pp.Position - at).Magnitude else math.huge
+			dist[m] = d
+			if d <= cfg.MaxDistance then
+				table.insert(models, m)
+			end
+		end
+	end
+	table.sort(models, function(a: Model, b: Model): boolean
+		return dist[a] < dist[b]
+	end)
+	local keep: { [Model]: boolean } = {}
+	for i = 1, math.min(#models, cfg.MaxAircraft) do
+		keep[models[i]] = true
+	end
+	for _, j in ipairs(joints) do
+		j.near = j.model ~= nil and keep[j.model :: Model] == true
+	end
+end
+
+-- one update of every near joint: dt seconds of spin. No allocation (LUT CFrames, numbers only).
+function AircraftBodyClient._Step(dt: number)
+	local up = if cfg.SpinUpSeconds > 0 then dt / cfg.SpinUpSeconds else 1
+	for _, j in ipairs(joints) do
+		if j.near and j.rps > 0 then
+			local target = if powered(j.model) then j.rps else 0
+			if j.speed < target then
+				j.speed = math.min(target, j.speed + j.rps * up)
+			elseif j.speed > target then
+				j.speed = math.max(target, j.speed - j.rps * up)
+			end
+			if j.speed > 0 then
+				j.turns = (j.turns + j.speed * dt) % 1
+				local idx = math.floor(j.turns * cfg.Steps) % cfg.Steps + 1
+				if idx ~= j.idx then
+					j.idx = idx
+					j.motor.Transform = lut[idx]
+				end
+			end
+		end
+	end
+end
+
+local function onStep(dt: number)
+	if not cfg.Enabled or #joints == 0 then
+		return
+	end
+	sinceRefresh += dt
+	if sinceRefresh >= cfg.Refresh then
+		sinceRefresh = 0
+		refresh()
+	end
+	acc += dt
+	local period = 1 / cfg.Hz
+	if acc < period then
+		return
+	end
+	local step = math.min(acc, 0.25)
+	acc = 0
+	AircraftBodyClient._Step(step)
+end
+
+-- ── chase camera ──────────────────────────────────────────────────────────────────────────────────────────────────
+local savedMin: number? = nil -- the player's own CameraMinZoomDistance while a chase zoom is applied
+
+local function restoreZoom()
+	local plr = Players.LocalPlayer
+	if savedMin ~= nil and plr then
+		plr.CameraMinZoomDistance = savedMin
+	end
+	savedMin = nil
+end
+
+local function onSeated(isSeated: boolean, seat: Instance?)
+	local plr = Players.LocalPlayer
+	if plr == nil then
+		return
+	end
+	if not isSeated or seat == nil then
+		restoreZoom()
+		return
+	end
+	local m = vehicleOf(seat)
+	local zoom = if m then m:GetAttribute("WE_CamMinZoom") else nil
+	if typeof(zoom) ~= "number" or zoom <= 0 then
+		restoreZoom()
+		return
+	end
+	if savedMin == nil then
+		savedMin = plr.CameraMinZoomDistance
+	end
+	plr.CameraMinZoomDistance = math.min(zoom, plr.CameraMaxZoomDistance)
+end
+
+local function bindHumanoid(hum: Humanoid)
+	hum.Seated:Connect(onSeated)
+	hum.Died:Connect(restoreZoom)
+	if hum.SeatPart then
+		onSeated(true, hum.SeatPart)
+	end
+end
+
+local function bindCharacter(char: Model)
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		bindHumanoid(hum)
+		return
+	end
+	local conn: RBXScriptConnection? = nil
+	conn = char.ChildAdded:Connect(function(c: Instance)
+		if c:IsA("Humanoid") then
+			if conn then
+				conn:Disconnect()
+			end
+			bindHumanoid(c)
+		end
+	end)
+end
+
+function AircraftBodyClient._Joints(): { Joint }
+	return joints
+end
+
+function AircraftBodyClient._Refresh()
+	refresh()
+end
+
+function AircraftBodyClient._Config(): { [string]: any }
+	return cfg :: any
+end
+
+function AircraftBodyClient.Init()
+	if started then
+		return
+	end
+	started = true
+	readConfig()
+	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
+		addJoint(inst)
+	end
+	CollectionService:GetInstanceAddedSignal(TAG):Connect(addJoint)
+	CollectionService:GetInstanceRemovedSignal(TAG):Connect(removeJoint)
+	RunService.PreSimulation:Connect(onStep)
+	local plr = Players.LocalPlayer
+	if plr then
+		if plr.Character then
+			bindCharacter(plr.Character)
+		end
+		plr.CharacterAdded:Connect(bindCharacter)
+		plr.CharacterRemoving:Connect(restoreZoom)
+	end
+end
+
+return AircraftBodyClient
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="231">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -114386,7 +115418,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="230">
+          <Item class="ModuleScript" referent="232">
             <Properties>
               <string name="Name">AudioHooks</string>
               <string name="Source"><![CDATA[--!strict
@@ -114918,7 +115950,7 @@ return AudioHooks
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="231">
+          <Item class="ModuleScript" referent="233">
             <Properties>
               <string name="Name">BusinessVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -116353,7 +117385,7 @@ return BusinessVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="232">
+          <Item class="ModuleScript" referent="234">
             <Properties>
               <string name="Name">CameraFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -116897,7 +117929,7 @@ return CameraFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="233">
+          <Item class="ModuleScript" referent="235">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -116965,7 +117997,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="234">
+          <Item class="ModuleScript" referent="236">
             <Properties>
               <string name="Name">ConsoleWaypoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -117279,7 +118311,7 @@ return ConsoleWaypoint
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="235">
+          <Item class="ModuleScript" referent="237">
             <Properties>
               <string name="Name">HudIcons</string>
               <string name="Source"><![CDATA[--!strict
@@ -117628,7 +118660,7 @@ return HudIcons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="236">
+          <Item class="ModuleScript" referent="238">
             <Properties>
               <string name="Name">HudLayout</string>
               <string name="Source"><![CDATA[--!strict
@@ -118945,7 +119977,7 @@ return HudLayout
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="237">
+          <Item class="ModuleScript" referent="239">
             <Properties>
               <string name="Name">LabelGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -119187,7 +120219,7 @@ return LabelGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="238">
+          <Item class="ModuleScript" referent="240">
             <Properties>
               <string name="Name">NextPadChevrons</string>
               <string name="Source"><![CDATA[--!strict
@@ -119675,7 +120707,7 @@ return NextPadChevrons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="239">
+          <Item class="ModuleScript" referent="241">
             <Properties>
               <string name="Name">ObjectiveMarker</string>
               <string name="Source"><![CDATA[--!strict
@@ -120134,7 +121166,7 @@ return ObjectiveMarker
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="240">
+          <Item class="ModuleScript" referent="242">
             <Properties>
               <string name="Name">OpsJobs</string>
               <string name="Source"><![CDATA[--!strict
@@ -120758,7 +121790,7 @@ return OpsJobs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="241">
+          <Item class="ModuleScript" referent="243">
             <Properties>
               <string name="Name">PanelShell</string>
               <string name="Source"><![CDATA[--!strict
@@ -121004,7 +122036,7 @@ return PanelShell
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="242">
+          <Item class="ModuleScript" referent="244">
             <Properties>
               <string name="Name">ProducerLabels</string>
               <string name="Source"><![CDATA[--!strict
@@ -121437,7 +122469,7 @@ return ProducerLabels
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="243">
+          <Item class="ModuleScript" referent="245">
             <Properties>
               <string name="Name">ProductionFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -122687,7 +123719,7 @@ return ProductionFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="244">
+          <Item class="ModuleScript" referent="246">
             <Properties>
               <string name="Name">ProgressPill</string>
               <string name="Source"><![CDATA[--!strict
@@ -122866,7 +123898,7 @@ return ProgressPill
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="245">
+          <Item class="ModuleScript" referent="247">
             <Properties>
               <string name="Name">RebirthConfirm</string>
               <string name="Source"><![CDATA[--!strict
@@ -123752,7 +124784,7 @@ return RebirthConfirm
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="246">
+          <Item class="ModuleScript" referent="248">
             <Properties>
               <string name="Name">RigAnimator</string>
               <string name="Source"><![CDATA[--!strict
@@ -124443,7 +125475,7 @@ return RigAnimator
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="247">
+          <Item class="ModuleScript" referent="249">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -124508,7 +125540,7 @@ return StudioSmokeClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="248">
+          <Item class="ModuleScript" referent="250">
             <Properties>
               <string name="Name">VehicleCombatClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -125198,7 +126230,7 @@ return VehicleCombatClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="249">
+          <Item class="ModuleScript" referent="251">
             <Properties>
               <string name="Name">VehicleDriveClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -125332,6 +126364,7 @@ export type Params = {
 	SoftBound: number,
 	AutoTakeoff: boolean,
 	AirBox: AirBox?,
+	TailGuard: { number }?, -- air2 fix1: WE_TailGuard parsed (Laws.TailGuard): { MinPitch, reach, LeadSeconds, x1, y1, z1, ... }
 	C: { [string]: number },
 }
 
@@ -125733,6 +126766,83 @@ function Laws.AirBoxParams(drive: any): AirBox?
 	}
 end
 
+-- air2 fix1: WE_TailGuard (AirBodyRig, a fitted store aircraft body) "MinPitch,LeadSeconds;x,y,z;..." -> { MinPitch,
+-- reach, LeadSeconds, x, y, z, ... } (reach = the farthest corner from the chassis centre: higher than that nothing can
+-- touch the ground); nil when absent or malformed (the law is then exactly as before)
+local function parseTailGuard(v: any): { number }?
+	if typeof(v) ~= "string" then
+		return nil
+	end
+	local g: { number } = {}
+	local reach = 0
+	for field in string.gmatch(v, "[^;]+") do
+		if #g == 0 then
+			local sm, sl = string.match(field, "^([^,]+),([^,]+)$")
+			local m, l = tonumber(sm), tonumber(sl)
+			if m == nil or l == nil then
+				return nil
+			end
+			g[1], g[2], g[3] = m, 0, math.clamp(l, 0, 1)
+		else
+			local sx, sy, sz = string.match(field, "^([^,]+),([^,]+),([^,]+)$")
+			local x, y, z = tonumber(sx), tonumber(sy), tonumber(sz)
+			if x == nil or y == nil or z == nil then
+				return nil
+			end
+			table.insert(g, x)
+			table.insert(g, y)
+			table.insert(g, z)
+			reach = math.max(reach, math.sqrt(x * x + y * y + z * z))
+		end
+	end
+	if #g < 6 then
+		return nil
+	end
+	g[2] = reach
+	return g
+end
+
+-- air2 fix1: the lowest corner of g (Laws.TailGuard) under orient(pitch, h, bank), relative to the chassis centre
+local function guardLowest(g: { number }, pitchDeg: number, bankDeg: number): number
+	local rp, rb = math.rad(pitchDeg), math.rad(bankDeg)
+	local sp, cp, sb, cb = math.sin(rp), math.cos(rp), math.sin(rb), math.cos(rb)
+	local low = math.huge
+	for i = 4, #g - 2, 3 do
+		-- orient: Rx(pitch) * Rz(-bank); the world height of chassis point (x, y, z)
+		local h = (g[i + 1] * cb - g[i] * sb) * cp - g[i + 2] * sp
+		if h < low then
+			low = h
+		end
+	end
+	return low
+end
+
+--[[ air2 fix1: a fitted store aircraft body far longer than its kit (the owner's 44-stud jet on a 12-stud kit) never dips
+	into the ground. g = parsed WE_TailGuard; height = the chassis centre over the ground (Clearance + AGL). When a corner
+	would go under the ground at (pitch, bank), the pitch (tail down or nose down) and the bank are eased back toward
+	level together (10 bisection steps) until every corner clears (level always clears: the parked body stands over its
+	gear); a nose-up pitch never drops below min(pitch, MinPitch), so a lift-off stays a climb over the touchdown line.
+	Returns (pitch, bank). ]]
+function Laws.TailGuard(g: { number }, pitchDeg: number, bankDeg: number, height: number): (number, number)
+	if not (height < g[2]) or guardLowest(g, pitchDeg, bankDeg) >= -height then
+		return pitchDeg, bankDeg
+	end
+	local lo, hi = 0, 1
+	for _ = 1, 10 do
+		local k = (lo + hi) * 0.5
+		if guardLowest(g, pitchDeg * k, bankDeg * k) >= -height then
+			lo = k
+		else
+			hi = k
+		end
+	end
+	local pitch = pitchDeg * lo
+	if pitchDeg > 0 then
+		pitch = math.max(pitch, math.min(pitchDeg, g[1]))
+	end
+	return pitch, bankDeg * lo
+end
+
 --[[ Params from the vehicle model's attributes (spec 6.2) + VehicleConfig.Drive (or DEFAULTS). ]]
 function Laws.BuildParams(mode: string, attrs: { [string]: any }, drive: any?): Params
 	local function a(key: string): number?
@@ -125780,6 +126890,7 @@ function Laws.BuildParams(mode: string, attrs: { [string]: any }, drive: any?): 
 		SoftBound = softBound,
 		AutoTakeoff = autoTakeoff,
 		AirBox = if mode == "Heli" or mode == "Plane" then Laws.AirBoxParams(drive) else nil,
+		TailGuard = if mode == "Plane" then parseTailGuard(attrs.WE_TailGuard) else nil,
 		C = C,
 	}
 end
@@ -126199,6 +127310,13 @@ local function stepPlane(st: State, P: Params, input: Input, sense: Sense, dt: n
 	end
 	st.Pitch = approach(st.Pitch, pitchT, C.PitchRate, dt)
 	st.Bank = approach(st.Bank, s * C.MaxBank, C.BankRate, dt)
+	-- air2 fix1: a long store body's tail, nose and wing tips stay out of the ground (WE_TailGuard; kit planes have none).
+	-- The height looks LeadSeconds ahead while sinking (the step's own drop, the AlignOrientation lag).
+	local guard = P.TailGuard
+	if guard ~= nil then
+		local height = P.Clearance + agl + math.min(0, sense.Velocity.Y) * guard[3]
+		st.Pitch, st.Bank = Laws.TailGuard(guard, st.Pitch, st.Bank, height)
+	end
 	st.Heading -= (st.Bank / C.MaxBank) * P.TurnRate * math.clamp(st.Airspeed / Vto, 0.5, 1) * dt
 	local sink = if st.Stalled then C.StallSinkMax * math.max(0, 1 - st.Airspeed / Vstall) else 0
 	local vel = lookVector(st.Pitch, st.Heading) * st.Airspeed - Vector3.new(0, sink, 0)
@@ -128880,7 +129998,7 @@ return VehicleDriveClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="250">
+          <Item class="ModuleScript" referent="252">
             <Properties>
               <string name="Name">WeaponVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -131015,7 +132133,7 @@ return WeaponVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="251">
+          <Item class="ModuleScript" referent="253">
             <Properties>
               <string name="Name">WorldSpinners</string>
               <string name="Source"><![CDATA[--!strict
@@ -131156,7 +132274,7 @@ return WorldSpinners
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="252">
+  <Item class="Workspace" referent="254">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

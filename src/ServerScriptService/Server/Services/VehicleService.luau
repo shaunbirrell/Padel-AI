@@ -2373,14 +2373,19 @@ local function choosePlane(ctx: SpawnCtx): SpawnChoice
 		-- (runway X/Z, the ends and the heading are plot-local; plotXZ / yawOf(frame) turn them with the plot)
 		local minX, maxX = road.X - road.SizeX * 0.5, road.X + road.SizeX * 0.5
 		local fromMin = math.abs(minX) >= math.abs(maxX)
-		local startX = if fromMin then minX + SpawnCfg.RunwayInset else maxX - SpawnCfg.RunwayInset
+		-- air2 fix1: a fitted store body far longer than its kit (the owner's 44-stud jet: VisHalfZ 24.6, kit HalfZ 6) is
+		-- kept on the runway and spaced by the BODY: its tail never hangs past the runway end, and the next one fits
+		-- behind it (spotFree keeps two body radii apart). A kit plane (no VisHalfZ) is placed exactly as before.
+		local halfZ = math.max(fp.HalfZ, fp.VisHalfZ or 0)
+		local inset = math.max(SpawnCfg.RunwayInset, halfZ + 1)
+		local startX = if fromMin then minX + inset else maxX - inset
 		local step = if fromMin then 1 else -1
 		local heading = (if fromMin then -math.pi / 2 else math.pi / 2) + yawOf(frame) -- plot +X / -X
 		local refTop = plot.Y + 0.5 + SpawnCfg.RunwayHeight
-		local spacing = 2 * fp.HalfZ + 6
+		local spacing = 2 * halfZ + 6
 		for k = 0, 3 do
 			local x = startX + step * k * spacing
-			if math.abs(x - road.X) > road.SizeX * 0.5 - fp.HalfZ then
+			if math.abs(x - road.X) > road.SizeX * 0.5 - halfZ then
 				break
 			end
 			if k > 0 and math.abs(x - startX) > road.SizeX * 0.5 then
@@ -4391,15 +4396,28 @@ VehicleService._PlaceExit = function(rec: VehicleRec, seat: BasePart, hum: Human
 	return spot
 end
 
+-- air2 fix2: Drive.ExitSpot / Drive.Ride apply in their Modes, and in their BodyModes only to a vehicle that wears a
+-- fitted body (WE_VisualHalfLength, written when the body is fitted at build): its seats sit inside a body that never
+-- collides, where touch-to-sit cannot reach them and Roblox's own jump-out lands on the hidden kit inside it
+VehicleService._ModeOn = function(modes: { [string]: boolean }, bodyModes: { [string]: boolean }?, rec: VehicleRec): boolean
+	if modes[rec.Mode] == true then
+		return true
+	end
+	return bodyModes ~= nil and bodyModes[rec.Mode] == true and rec.Model:GetAttribute("WE_VisualHalfLength") ~= nil
+end
+
 VehicleService._OnSeatLeft = function(rec: VehicleRec, seat: BasePart, hum: Humanoid)
 	local cfg = Drive.ExitSpot
+	-- fb4 water rule: EXIT from a plane on the water = ashore (the guard); air2 fix2: that comes first, before a bodied
+	-- plane's exit spot
+	if rec.Mode == "Plane" and VehicleService._WaterGuard.Left(rec, seat, hum) then
+		return
+	end
 	-- fb4 water rule: a sinking vehicle's riders are put ashore by the guard, not beside the vehicle
-	if cfg.Enabled and cfg.Modes[rec.Mode] and not VehicleService._WaterGuard.Sinking(rec.Model) then
+	if cfg.Enabled and VehicleService._ModeOn(cfg.Modes, cfg.BodyModes, rec) and not VehicleService._WaterGuard.Sinking(rec.Model) then
 		task.defer(function()
 			pcall(VehicleService._PlaceExit, rec, seat, hum)
 		end)
-	elseif rec.Mode == "Plane" then
-		VehicleService._WaterGuard.Left(rec, seat, hum) -- fb4 water rule: EXIT from a plane on the water = ashore
 	end
 end
 
@@ -4478,7 +4496,7 @@ end
 
 VehicleService._AddRidePrompt = function(rec: VehicleRec, def: VehicleDef)
 	local cfg = Drive.Ride
-	if not (cfg.Enabled and cfg.Modes[rec.Mode]) or #rec.Passengers == 0 or rec.Chassis:FindFirstChild("WE_RidePrompt") then
+	if not (cfg.Enabled and VehicleService._ModeOn(cfg.Modes, cfg.BodyModes, rec)) or #rec.Passengers == 0 or rec.Chassis:FindFirstChild("WE_RidePrompt") then
 		return
 	end
 	local model = rec.Model
