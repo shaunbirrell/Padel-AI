@@ -53,8 +53,7 @@ else:
     bad("CODEBOT v87: only the gunboat lowers the scale floor (every other body keeps 0.05)")
 # rejected / kept on the kit
 must_not_contain(_cb87_vac, "16675798409", "CODEBOT v87: the Lütjens model 16675798409 is never wired (no real-world copies)")
-for _cb87_k in ("Destroyer", "Cruiser", "MissileCruiser", "Battleship"):  # v88: the rest of the v87 kit list now wears the wc6 bodies (codebot_v88.py)
-    must_contain(_cb87_vac, f"\t\t{_cb87_k} = {{ ModelAssetId = 0,", f"CODEBOT v87: Vehicles.{_cb87_k} keeps the Part kit")
+# v88 / v89: the v87 kit list now wears the wc6 / wc7 bodies (codebot_v88.py, codebot_v89.py)
 # the gate: resolved ref (own or family) checked against the owner before any load; parked plot dress never uses them
 must_contain(_cb87_vas, "function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: string, kitFamily: string?, ownerUserId: number?): boolean\n\tlocal ref = resolveVehicleRef(vehicleId, kitFamily)\n\tif not ref then\n\t\treturn false\n\tend\n\t-- v87: an owner-only store body (Rollout = \"Body\") on anyone else's vehicle: the Part kit stays (no load at all)\n\tif not VisualAssetService.BodyAllowed(ref, ownerUserId) then\n\t\treturn false\n\tend", "CODEBOT v87: TryAttachVehicleVisual refuses an owner-only body before templateForRef (no load for other players)")
 must_contain(_cb87_vas, "\tif typeof(ref) ~= \"table\" or ref.Rollout ~= \"Body\" then\n\t\treturn true\n\tend", "CODEBOT v87: BodyAllowed leaves every non-rollout ref alone (cars, jets unchanged)")

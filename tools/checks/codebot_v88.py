@@ -9,7 +9,6 @@ _cb88_map = {
     "BODY_STEALTH_HELI": ("11240665977", ("StealthHeli",)),
     "BODY_STRIKE_JET": ("3553891209", ("StrikeJet", "CASJet")),
     "BODY_STEALTH_STRIKE": ("7976374439", ("StealthStrike", "StealthStrikeJet")),
-    "BODY_AIRLINER": ("17033079003", ("CargoPlane", "AWACSPlane", "TankerPlane")),
     "BODY_BARGE": ("12235335847", ("LandingCraft", "AssaultLanding")),
     "BODY_SUPPORT_SHIP": ("2625253037", ("HospitalShip", "SupplyShip")),
     "BODY_HOVER": ("3626114334", ("HoverTransport",)),
@@ -28,7 +27,7 @@ for _cb88_tb, (_cb88_id, _cb88_keys) in _cb88_map.items():
         ok(f"CODEBOT v88: {_cb88_tb} ({_cb88_id}) is an owner-only fitted body (Rollout Body, Fit Kit, HideKit, seats, anchor)")
     for _cb88_k in _cb88_keys:
         must_contain(_cb88_vac, f"\t\t{_cb88_k} = bodyRef({_cb88_tb}, \"v88 owner pick {_cb88_id} ", f"CODEBOT v88: Vehicles.{_cb88_k} wears {_cb88_tb} ({_cb88_id}), owner-only")
-must_not_contain(_cb88_vac, "ModelAssetId = 2475398012", "CODEBOT v88: the prop transport 2475398012 is replaced by 17033079003 everywhere")
+must_not_contain(_cb88_vac, "ModelAssetId = 2475398012", "CODEBOT v88: the prop transport 2475398012 is gone everywhere")
 must_not_contain(_cb88_vac, "ModelAssetId = 11839207737", "CODEBOT v88: the Little Bird look-alike 11839207737 is never wired (StealthHeli = the attack-heli body, near-black)")
 must_contain(_cb88_vac, "\tBodyColor = Color3.fromRGB(20, 22, 26), -- near-black", "CODEBOT v88: StealthHeli is recoloured near-black")
 for _cb88_need, _cb88_label in (
@@ -43,10 +42,7 @@ if '"Meshes/bargepiece12_Cylinder.051", "Meshes/bargepiece12_Cube.130", "Meshes/
     ok("CODEBOT v88: the barge drops its hanging anchor and chain")
 else:
     bad("CODEBOT v88: the barge drops its hanging anchor and chain — OmitParts missing in BODY_BARGE")
-if "\tBodyMaxScale = 30," in _cb88_table("BODY_AIRLINER") and _cb88_src.count("BodyMaxScale = ") == 1:
-    ok("CODEBOT v88: only the airliner raises the scale cap (BodyMaxScale 30)")
-else:
-    bad("CODEBOT v88: only the airliner raises the scale cap (BodyMaxScale 30)")
+# v89: the airliner (and its BodyMaxScale 30) is replaced by the airlifter; the cap pins are in codebot_v89.py
 _cb88_rp = _cb88_table("BODY_VTOL")
 if _cb88_rp.count("Axis = \"Y\", Rps = 4 }") == 2:
     ok("CODEBOT v88: both VTOL proprotors spin about their own hubs")
@@ -56,12 +52,7 @@ if '{ Parts = { "Blades" }, Hub = "Thing for Blades", Axis = "Y", Rps = 5 }' in 
     ok("CODEBOT v88: the attack heli main rotor spins")
 else:
     bad("CODEBOT v88: the attack heli main rotor spins")
-# capital ships still being searched: never inherit the barge through NavalCapital -> LandingCraft
-for _cb88_k in ("Destroyer", "Cruiser", "MissileCruiser", "Battleship"):
-    if __import__("re").search(r"\n\t\t" + _cb88_k + r" = \{ ModelAssetId = 0, Note = \"[^\"]*\", NoFamilyFallback = true \} :: AssetRef,", _cb88_src):
-        ok(f"CODEBOT v88: Vehicles.{_cb88_k} keeps the Part kit and never inherits the LandingCraft barge")
-    else:
-        bad(f"CODEBOT v88: Vehicles.{_cb88_k} keeps the Part kit and never inherits the LandingCraft barge (NoFamilyFallback)")
+# v89: the capital ships now wear their own wc7 bodies (codebot_v89.py), so the v88 NoFamilyFallback exclusion is gone
 # carrier / amphib: the body moves across too, so the captain sits in the island bridge
 for _cb88_tb in ("BODY_CARRIER", "BODY_AMPHIB"):
     if "\tBodyAnchorX = true," in _cb88_table(_cb88_tb):

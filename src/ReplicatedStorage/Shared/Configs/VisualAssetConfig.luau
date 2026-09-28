@@ -524,25 +524,25 @@ local BODY_STEALTH_STRIKE = {
 	StripDecals = true,
 }
 
--- 17033079003 generic twin-jet transport (1 mesh; replaces 2475398012). Nose -Z. Crew inside the fuselage.
-local BODY_AIRLINER = {
-	ModelAssetId = 17033079003,
+-- v89: 10649792198 cargo plane mesh (yulikemir; high-wing 4-engine airlifter, 1 mesh; replaces 17033079003). Nose -X
+-- (Yaw -90). Pilot in the nose, crew in the cargo bay.
+local BODY_AIRLIFTER = {
+	ModelAssetId = 10649792198,
 	Rollout = "Body",
 	Fit = "Kit",
-	Yaw = 0,
+	Yaw = -90,
 	HideKit = true,
-	BodyScale = 30,
+	BodyScale = 2.1,
 	BodySeats = {
-		DriverSeat = Vector3.new(0, 0.12, -0.8),
-		PassengerSeat1 = Vector3.new(-0.05, 0.12, -0.4),
-		PassengerSeat2 = Vector3.new(0.05, 0.12, -0.4),
-		PassengerSeat3 = Vector3.new(-0.05, 0.12, -0.1),
-		PassengerSeat4 = Vector3.new(0.05, 0.12, -0.1),
+		DriverSeat = Vector3.new(-10.5, 2.0, 0),
+		PassengerSeat1 = Vector3.new(-7, 1.9, -1.2),
+		PassengerSeat2 = Vector3.new(-7, 1.9, 1.2),
+		PassengerSeat3 = Vector3.new(-4, 1.9, -1.2),
+		PassengerSeat4 = Vector3.new(-4, 1.9, 1.2),
 	},
 	BodyAnchor = "DriverSeat",
-	BodyMaxScale = 30, -- authored 2.1 studs long: fitted at 30 (63 long, 55 span)
 	BodyFloor = "Collide",
-	BodyColor = Color3.fromRGB(70, 74, 80), -- dark grey
+	BodyColor = Color3.fromRGB(70, 74, 80), -- dark grey (untextured default grey mesh)
 	BodyMaterial = Enum.Material.Metal,
 	TailGuard = true,
 	ChaseCamera = true,
@@ -607,6 +607,121 @@ local BODY_HOVER = {
 	},
 	BodyAnchor = "DriverSeat",
 	BodyWaterline = 2.9,
+	StripDecals = true,
+}
+
+-- v89 (Code Bot, 2026-09-28): the wc7 winners for the capital ships (owner-only, same system). Outlines / bows from the
+-- Open Cloud raycast grids grid89 + side89.
+-- 6860896505 Stud Class Cruiser (flipper_b, fictional class; 1 mesh). Bow +Z (Yaw 180): the pointed end with the full-depth
+-- stem; -Z is the rounded overhanging cruiser stern with the superfiring aft turrets. Captain inside the bridge block
+-- (body z 65, forward of the tall tower), crew on the foredeck.
+local BODY_DESTROYER = {
+	ModelAssetId = 6860896505,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 180,
+	HideKit = true,
+	BodyScale = 0.2,
+	BodyWaterline = 2.5,
+	BodyColor = Color3.fromRGB(58, 62, 68), -- dark naval grey (the store mesh is untextured default grey)
+	BodyMaterial = Enum.Material.Metal,
+	BodySeats = {
+		DriverSeat = Vector3.new(0, 55, 65),
+		PassengerSeat1 = Vector3.new(-4, 55.6, 94),
+		PassengerSeat2 = Vector3.new(4, 55.6, 94),
+		PassengerSeat3 = Vector3.new(-4, 55.3, 108),
+		PassengerSeat4 = Vector3.new(4, 55.3, 108),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyMounts = { -- the kit's forward / aft turret points onto the body's own turrets (body frame, like BodySeats)
+		TurretF = Vector3.new(0, 50, 140),
+		BarrelF = Vector3.new(0, 42, 185),
+		TurretA = Vector3.new(0, 50, -100),
+	},
+	StripDecals = true,
+}
+
+-- Cruiser: the same Stud Class hull, a little larger.
+local BODY_CRUISER = {
+	ModelAssetId = 6860896505,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 180,
+	HideKit = true,
+	BodyScale = 0.22,
+	BodyWaterline = 2.8,
+	BodyColor = Color3.fromRGB(58, 62, 68), -- dark naval grey (the store mesh is untextured default grey)
+	BodyMaterial = Enum.Material.Metal,
+	BodySeats = {
+		DriverSeat = Vector3.new(0, 55, 65),
+		PassengerSeat1 = Vector3.new(-4, 55.6, 94),
+		PassengerSeat2 = Vector3.new(4, 55.6, 94),
+		PassengerSeat3 = Vector3.new(-4, 55.3, 108),
+		PassengerSeat4 = Vector3.new(4, 55.3, 108),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyMounts = { -- the kit's forward / aft turret points onto the body's own turrets (body frame, like BodySeats)
+		TurretF = Vector3.new(0, 50, 140),
+		BarrelF = Vector3.new(0, 42, 185),
+		TurretA = Vector3.new(0, 50, -100),
+	},
+	StripDecals = true,
+}
+
+-- 104820847233642 Missile_boat (someonejamhoss; 1 mesh). Bow -Z: the fine prow with the forward gun, square transom aft.
+-- Captain inside the forward bridge, crew on the aft deck.
+local BODY_MISSILE_CRUISER = {
+	ModelAssetId = 104820847233642,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 0,
+	HideKit = true,
+	BodyScale = 18,
+	BodyMaxScale = 18, -- authored 5.7 studs long: fitted at 18 (102 long)
+	BodyWaterline = 4.3,
+	BodyColor = Color3.fromRGB(58, 62, 68), -- dark naval grey (the store mesh is untextured default grey)
+	BodyMaterial = Enum.Material.Metal,
+	BodySeats = {
+		DriverSeat = Vector3.new(0, 0.73, -0.6),
+		PassengerSeat1 = Vector3.new(-0.12, 0.62, 1.3),
+		PassengerSeat2 = Vector3.new(0.12, 0.62, 1.3),
+		PassengerSeat3 = Vector3.new(-0.12, 0.62, 1.6),
+		PassengerSeat4 = Vector3.new(0.12, 0.62, 1.6),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyMounts = { -- the kit's forward / aft turret points onto the body's own turrets (body frame, like BodySeats)
+		TurretF = Vector3.new(0, 0.72, -1.9),
+		BarrelF = Vector3.new(0, 0.72, -2.2),
+		TurretA = Vector3.new(0, 0.62, 1.0),
+	},
+	StripDecals = true,
+}
+
+-- 12442299148 Battleship (poopori_guy, no nation; 1 mesh). Bow -Z: the fine raked end with three stepped turrets
+-- facing it. Captain inside the overhanging bridge block, crew on the aft superstructure deck.
+local BODY_BATTLESHIP = {
+	ModelAssetId = 12442299148,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 0,
+	HideKit = true,
+	BodyScale = 2.0,
+	BodyWaterline = 4.0,
+	BodyColor = Color3.fromRGB(58, 62, 68), -- dark naval grey (the store mesh is untextured default grey)
+	BodyMaterial = Enum.Material.Metal,
+	BodySeats = {
+		DriverSeat = Vector3.new(0, 11.8, 0.3),
+		PassengerSeat1 = Vector3.new(-1.8, 8.25, 10),
+		PassengerSeat2 = Vector3.new(1.8, 8.25, 10),
+		PassengerSeat3 = Vector3.new(-1.8, 8.15, 12.5),
+		PassengerSeat4 = Vector3.new(1.8, 8.15, 12.5),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyMounts = { -- the kit's forward / aft turret points onto the body's own turrets (body frame, like BodySeats)
+		TurretF = Vector3.new(0, 8.5, -12),
+		BarrelF = Vector3.new(0, 8.0, -17),
+		TurretA = Vector3.new(0, 7.0, 17),
+	},
 	StripDecals = true,
 }
 
@@ -972,9 +1087,9 @@ local VisualAssetConfig = {
 		CASJet = bodyRef(BODY_STRIKE_JET, "v88 owner pick 3553891209 Fighter Jet concept, texture cleared, dark (wc6), owner-only rollout"),
 		StealthStrikeJet = bodyRef(BODY_STEALTH_STRIKE, "v88 owner pick 7976374439 stealth (wc6), owner-only rollout"),
 		StrikeBomber = bodyRef(BODY_BOMBER, "v87 owner pick 14669079591 delta-wing bomber (wc5), owner-only rollout"),
-		CargoPlane = bodyRef(BODY_AIRLINER, "v88 owner pick 17033079003 twin-jet transport, dark grey (wc6; replaces 2475398012), owner-only rollout"),
-		AWACSPlane = bodyRef(BODY_AIRLINER, "v88 owner pick 17033079003 twin-jet transport, dark grey (wc6; replaces 2475398012), owner-only rollout"),
-		TankerPlane = bodyRef(BODY_AIRLINER, "v88 owner pick 17033079003 twin-jet transport, dark grey (wc6; replaces 2475398012), owner-only rollout"),
+		CargoPlane = bodyRef(BODY_AIRLIFTER, "v89 owner pick 10649792198 4-engine airlifter, dark grey (wc7; replaces 17033079003), owner-only rollout"),
+		AWACSPlane = bodyRef(BODY_AIRLIFTER, "v89 owner pick 10649792198 4-engine airlifter, dark grey (wc7; replaces 17033079003), owner-only rollout"),
+		TankerPlane = bodyRef(BODY_AIRLIFTER, "v89 owner pick 10649792198 4-engine airlifter, dark grey (wc7; replaces 17033079003), owner-only rollout"),
 		-- Free naval family
 		_FallbackNaval = { ModelAssetId = 0, Note = "Free Boat (Creator Store)" } :: AssetRef,
 		PatrolBoat = bodyRef(BODY_PATROL_BOAT, "v87 owner pick 16692908395 patrol boat (wc5), owner-only rollout"),
@@ -993,10 +1108,10 @@ local VisualAssetConfig = {
 		SupplyShip = bodyRef(BODY_SUPPORT_SHIP, "v88 owner pick 2625253037 Civillian tanker (wc6), owner-only rollout"),
 		AmphibAssault = bodyRef(BODY_AMPHIB, "v87 owner pick 5545544418 amphibious assault ship (wc5), owner-only rollout"),
 		Corvette = bodyRef(BODY_FRIGATE, "v87 owner pick 473576954 frigate hull (wc5), owner-only rollout"),
-		Destroyer = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit; owner list: [WEAK] warship pick declined", NoFamilyFallback = true } :: AssetRef,
+		Destroyer = bodyRef(BODY_DESTROYER, "v89 owner pick 6860896505 Stud Class hull, bow +Z (Yaw 180), naval grey (wc7), owner-only rollout"),
 		Frigate = bodyRef(BODY_FRIGATE, "v87 owner pick 473576954 frigate hull (wc5), owner-only rollout"),
 		CarrierEscort = bodyRef(BODY_FRIGATE, "v87 owner pick 473576954 frigate hull (wc5), owner-only rollout"),
-		Battleship = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit", NoFamilyFallback = true } :: AssetRef,
+		Battleship = bodyRef(BODY_BATTLESHIP, "v89 owner pick 12442299148 battleship, naval grey (wc7), owner-only rollout"),
 		AircraftCarrier = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
 		SubSurfaceRunner = bodyRef(BODY_SUB, "v87 owner pick 116924692473761 submarine (wc5), owner-only rollout"),
 		AttackSub = bodyRef(BODY_SUB, "v87 owner pick 116924692473761 submarine (wc5), owner-only rollout"),
@@ -1141,8 +1256,8 @@ local VisualAssetConfig = {
 		HeavyBomber = bodyRef(BODY_BOMBER, "v87 owner pick 14669079591 delta-wing bomber (wc5), owner-only rollout"),
 		StealthStrike = bodyRef(BODY_STEALTH_STRIKE, "v88 owner pick 7976374439 stealth (wc6), owner-only rollout"),
 		-- Depth-pass capital / bomber IDs previously missing from catalog map
-		Cruiser = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit", NoFamilyFallback = true } :: AssetRef,
-		MissileCruiser = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit", NoFamilyFallback = true } :: AssetRef,
+		Cruiser = bodyRef(BODY_CRUISER, "v89 owner pick 6860896505 Stud Class hull at 0.22, bow +Z (Yaw 180), naval grey (wc7), owner-only rollout"),
+		MissileCruiser = bodyRef(BODY_MISSILE_CRUISER, "v89 owner pick 104820847233642 missile destroyer at 18, naval grey (wc7), owner-only rollout"),
 		FleetCarrier = bodyRef(BODY_CARRIER, "v87 owner pick 7941124517 aircraft carrier (wc5), owner-only rollout"),
 		StrategicBomber = bodyRef(BODY_BOMBER, "v87 owner pick 14669079591 delta-wing bomber (wc5), owner-only rollout"),
 	} :: { [string]: AssetRef },
