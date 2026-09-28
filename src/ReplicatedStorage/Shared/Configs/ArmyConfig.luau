@@ -3,8 +3,9 @@
 	ArmyConfig — the field army (SquadOrdersService units). SPEC-ARMY-FINAL §10.1. Config-first; server and client read it.
 
 	████ army lane A0 blocks: Rollout · Escort · ShotFx · Text (+ the LiveFor / IsLive helper) ████
-	Other army lanes add their own self-contained blocks to this same table (lane FIX: Follow / Recover / Gate; lane A:
-	Home / Guard / Hold / Path / Ui; lane C: March). Keep each block self-contained; this file requires only AdminConfig.
+	████ army fix blocks (the despawn fix): Follow · Recover · Gate · Loop (+ the ThreatStandingFor helper) ████
+	Other army lanes add their own self-contained blocks to this same table (lane A: Home / Guard / Hold / Path / Ui;
+	lane C: March). Keep each block self-contained; this file requires only AdminConfig.
 
 	ROLLOUT (owner 2026-09-28, integrator decision): each part is "off" | "owner" | "all".
 	  "off"   = today's game (e506c9c) for everyone;
@@ -35,6 +36,27 @@
 	  tracer lands MissOffsetStuds beside the target (no random numbers: the hit roll sequence is untouched).
 
 	TEXT: device-neutral army strings (no key names, no "click" / "tap"); lanes A and C show them.
+
+	DESPAWN FIX (army fix; v90: Rollout.Fix, owner first):
+	  • Follow  — keeping up in FOLLOW: aim at where the owner will be (Lead), walk at his pace (smoothed and stepped:
+	    PaceSmooth / PaceStep / PaceJumpStuds) and run only when well behind (CatchUp), follow as at e506c9c near a
+	    hostile (ThreatStuds / ThreatStandingFor); while he walks, escort units keep the formation and shoot from it
+	    (EscortWalkInFormation / EscortWalkLeash).
+	  • Recover — RECOVER (SPEC-ARMY-FINAL §6.5): a unit is NEVER deleted for distance, a failed walk or a wall. One that
+	    is far behind, stuck, fallen or deep in another player's plot is moved (Model:PivotTo, the same unit and id) to
+	    a clear spot behind its owner. The only ways a unit is removed stay the lifecycle ones: its Humanoid died, the
+	    army shrank (dismiss / research), the owner left, OrdersConfig.Enabled = false.
+	  • Loop    — one army's error never stops the think loop of every army (pcall + a rate-limited log line).
+	  • Gate    — the owner's friendly gate barrier also opens for his own units while they FOLLOW him through it
+	    (GateDefenseService.updateFriendlyGate), only while they are still on the far side of it (CrossingRule,
+	    CrossClearStuds 0); never for units on his side, never for Hold / Attack / Retreat, never with him dead or away.
+
+	v90 (Code Bot): THE DESPAWN FIX ships behind Rollout.Fix ("owner" first; everyone else keeps v85 FollowPace /
+	4d26673 until it is "all"; for a Fix-live owner it replaces v85 FollowPace). Within it each block has its own kill switch (Enabled / OwnUnitsOpen /
+	KeepTrailPoint / EscortWalkInFormation / CrossingRule; ThreatStuds = 0 turns the near-hostile pacing off); with all
+	of them off SquadOrdersService / GateDefenseService behave as at 4d26673 (units walk at OrdersConfig.UnitWalkSpeed,
+	straight to the unled slot, never moved). Numbers are measured on the headless stand-in (army/build/fix and army/build/fix_ship
+	reports); Humanoid physics needs a real device.
 ]]
 
 local AdminConfig = require(script.Parent.AdminConfig)
@@ -45,6 +67,7 @@ local ArmyConfig = {
 		Escort = "owner", -- lane A0: bank fix / defend / focus fire / side-step / visible unit shots
 		Army = "owner", -- lane A: guard line, follow outside, movement
 		March = "owner", -- lane C: ATTACK takes checkpoints
+		Fix = "owner", -- v90 (Code Bot): the army despawn fix (Follow / Recover / Gate blocks); "all" once the owner has phone-tested it
 	},
 
 	-- ── Escort (FOLLOW; SPEC-ARMY-FINAL §7.1 / §7.2) ──────────────────────────────────────────────────────────────
@@ -125,6 +148,177 @@ local ArmyConfig = {
 		UnderAttack = "%s under attack",
 		NoBase = "No base to guard",
 	},
+
+	-- ════ army fix (the despawn fix) blocks: Follow · Recover · Gate · Loop ════
+	Follow = {
+		-- MoveTo goals are refreshed once per think (OrdersConfig.ThinkInterval 0.4 s) and a Humanoid stops at its goal,
+		-- so a follow unit aims at its slot around where the owner WILL be: his flat velocity over the last think x
+		-- Seconds, at most MaxStuds. A faster jump (teleport, respawn, fast vehicle) gives no lead, and neither does a
+		-- think at under DropOnSlowdown x the one before (he is stopping). When he has stopped, a unit whose goal lies
+		-- just behind it (within MaxStuds + StopHoldStuds, along his facing) stands facing his way instead of turning
+		-- back toward the camera. MaxStuds 4: a unit in its slot walks smoothly at his pace (measured: stopped in about
+		-- 1 % of walking ticks; 12 made them stop and start 5 times a second).
+		Lead = {
+			Enabled = true,
+			Seconds = 0.4, -- = OrdersConfig.ThinkInterval
+			MaxStuds = 4,
+			MaxOwnerSpeed = 40, -- studs/s; faster owner moves are jumps (no lead)
+			DropOnSlowdown = 0.5,
+			StopHoldStuds = 2,
+			StopHoldSeconds = 1.5, -- ...only right after he stopped (a unit walking back later still does)
+		},
+		-- A follow unit walks at its owner's pace (never below OrdersConfig.UnitWalkSpeed, so it falls back to
+		-- UnitWalkSpeed once he stands still). More than StartStuds behind (its goal further than StartStuds + the lead
+		-- distance) with a walkable line to it, it runs SpeedMult x that pace, at most MaxSpeed: owner 16 / 18.4 / 20
+		-- (research) -> 24 / 27.6 / 28. A unit whose line to its goal is blocked never runs (no sprinting into a wall).
+		-- The spec's 18 studs/s cannot keep up with an owner at 18.4 or 20.
+		CatchUp = {
+			Enabled = true,
+			StartStuds = 6,
+			SpeedMult = 1.5,
+			MaxSpeed = 28,
+			-- ship: the pace comes from his speed smoothed over passes (weight PaceSmooth per 0.4 s pass) and moves only in
+			-- PaceStep studs/s steps: every Humanoid.WalkSpeed write replicates to every client, and a client-owned
+			-- character's replicated position jitters (stand-in, +-0.4 studs per step: 20 writes/s per army at step 0).
+			PaceSmooth = 0.4,
+			PaceStep = 1,
+			PaceJumpStuds = 3, -- ...a change bigger than this passes at once (a start / stop / sprint: no lag, no catch-up run)
+		},
+		-- While a hostile the escort would pick (not a calm one, one this army may hit) is within ThreatStuds of the
+		-- owner, FOLLOW units follow as at e506c9c (no lead, UnitWalkSpeed) so a fight starts from the e506c9c formation.
+		-- ThreatStuds 55 = CombatFairnessConfig.EscortEngageRadius: only where the escort itself would fight (ship merge;
+		-- 130 slowed the army on every approach to a camp, a checkpoint or the bank and dropped it behind the phone camera).
+		--   • ThreatStandingFor live for him: only while he STANDS (below 1 stud/s); walking toward it, units keep the lead
+		--     and the catch-up. Lane A0's defend-when-targeted escort (Rollout.Escort) fights the bank guards for him, so
+		--     keep ThreatStandingFor equal to Rollout.Escort (both "owner" today).
+		--   • Otherwise: while he stands or walks toward it (ThreatApproachOnly; walking away = the normal follow).
+		-- Measured on the stand-in, merged tree (army/build/fix_ship; 4d26673 = HEAD):
+		--   owner mode: bank stand 40-55 studs, all 5 guards down in 91 of 99 approaches (HEAD 91); Town walk at
+		--     16 / 18.4 / 20: no soldier on the phone camera in 1/126, 2/110, 4/101 walking seconds (HEAD 121/126).
+		--   everyone else: 79 of 99 (HEAD 87). The band: standing or seated about 50-55 studs from the nearest guard,
+		--     one guard can stay at its post ~61 studs away, out of the 55-stud escort range, and keep firing (dense
+		--     sweep 48-56 studs x 9 lines: 28 of 72 vs HEAD 41, all lost at 51-53; guard shots +19 %); a mortal player
+		--     on 40-55 studs takes the same total damage (8436 vs 8448) and moving fights are equal. The fix is
+		--     Rollout.Escort = "all" with ThreatStandingFor = "all". Town walk 2/126, 4/110, 5/101; a walk up to the
+		--     Ridge camp 0/16, 0/14, 0/13 (HEAD 15/16, 13/14, 13/13).
+		--   ThreatStuds 130 (fix round 2): everyone else 47 of 99 at the bank and 3/16 at the camp.
+		-- ThreatKeepCatchUp = true drops only the lead near a hostile (not shipped). ThreatStuds = 0 = off.
+		ThreatStuds = 55,
+		ThreatApproachOnly = true,
+		ThreatStandingFor = "owner", -- "off" | "owner" | "all": keep it equal to lane A0's Rollout.Escort
+		ThreatKeepCatchUp = false,
+		-- A unit on the player's trail (OrdersConfig.FollowPath) that finds no walkable trail point keeps walking to the
+		-- last one it had instead of straight at its slot behind a wall (the doorway stranding). false = e506c9c.
+		KeepTrailPoint = true,
+		-- While the owner walks on foot (1+ studs/s, not seated), FOLLOW escort units keep the formation: they walk to
+		-- their led slot (or his trail) with the catch-up run allowed, and shoot from there (the escort shot is taken
+		-- first every think). They close in, stand to fight, walk back at the leash or side-step (lane A0) only while he
+		-- stands. On e506c9c they stood to shoot while he walked on and trailed him at the 20-stud escort leash, behind
+		-- the ~12.5-stud phone camera (the bank hall walk). false = e506c9c escort walk.
+		EscortWalkInFormation = true,
+		-- ...except inside EscortWalkLeash studs of him (less than the ~12.5-stud phone camera distance): there a unit
+		-- keeps his pace toward its target on his line to it, at most 90 % of this out (between him and the target, as
+		-- the e506c9c close-in does). 0 = formation only.
+		EscortWalkLeash = 10,
+	},
+
+	Recover = {
+		Enabled = true,
+		-- Triggers (per unit, in FOLLOW only; Hold / Retreat / Attack keep the e506c9c behaviour):
+		FollowFarStuds = 80, -- far: more than this from the owner (flat) ...
+		FollowFarSeconds = 4, -- ... for this long (not while he drives faster than VehicleDeferSpeed)
+		StuckSeconds = 4, -- stuck: less than ProgressStuds of progress toward its goal in this window ...
+		ProgressStuds = 2,
+		StuckGoalStuds = 4, -- ... while its goal is further than this (a unit at its goal is never stuck) ...
+		StuckMinOwnerStuds = 25, -- ... and it is further than this from the owner
+		-- fallen: its root is below this height. -8 = under the 8-stud Part ground (bottom -7.5, top 0.5) and above
+		-- MapSetup's SafetyCatch floor under the map (top -26: a unit that drops through the ground stands on it at about
+		-- -23, so -50 never fired). No walkable surface is below 0 (water spans 0.3..1.5; players are rescued at 0.15).
+		FallY = -8,
+		PlotMinOwnerStuds = 30, -- plot: more than this from the owner inside a plot square another player owns ...
+		PlotSeconds = 4, -- ... for this long, while the owner has been out of that plot this long
+		-- plus regroup: a vehicle stop (below VehicleStopSpeed for VehicleStopSeconds, or getting out) after a fast drive,
+		-- or a jump on foot (a teleport, a respawn at his plot, a fall rescue: he appears more than FollowPath.ResetJump
+		-- away), with it more than VehicleRegroupStuds away (for RegroupWindowSeconds after it; no FollowFarSeconds wait)
+		VehicleDeferSpeed = 20, -- studs/s: no recover at all while the seated owner moves faster than this
+		VehicleStopSpeed = 6,
+		VehicleStopSeconds = 1.5,
+		VehicleRegroupStuds = 150,
+		RegroupWindowSeconds = 10,
+		-- Where to (the first CLEAR spot, at most MaxTries tried): its slot when that is BehindStuds behind the owner's
+		-- facing or out of his sight; up to MaxTrailTries of the owner's trail points at least BehindStuds from him and
+		-- not ahead of him (newest first, at most TrailMaxStuds away); BehindStuds behind him along his facing, then
+		-- back-right, back-left, the same three NearBehindStuds from him; then left and right (SideNeedsCover: only where his head cannot see the spot, else the
+		-- unit waits up to MaxDeferSeconds for a better one). Every spot but the slot is moved by the unit's own slot
+		-- offset (SpreadScale x its side offset sideways, its slot depth further back), and a spot within LandApartStuds
+		-- of another landing of his army in the last LandApartSeconds (or of one of his units) is skipped: units land
+		-- apart, never on one another. BehindStuds away and not ahead of him is outside a phone's landscape view (the
+		-- camera is ~12 behind him), so units run in and never pop up in front of him. Clear = a ProbeDown-stud ray down
+		-- hits a solid part or terrain that is not water, the spot is outside every plot but his own and not under a
+		-- WE_Water surface, and the FollowPath body probe plus one ray at root height (a closed gate barrier) reach it
+		-- from the owner's root. The unit stands StandHeight above the hit.
+		BehindStuds = 24,
+		TrailMaxStuds = 60,
+		MaxTrailTries = 4,
+		SpreadScale = 0.7, -- slot side offsets 5.5 / 10 / 14.5 -> 3.85 / 7 / 10.15: neighbours land >= 3 apart
+		LandApartStuds = 3,
+		LandApartSeconds = 2.5, -- ship: 2 s plus a margin (a landing exactly 5 thinks = 2.0 s later could slip past a float compare)
+		SideNeedsCover = true,
+		NearBehindStuds = 14, -- ...the three behind spots again this near (a walled yard, a street)
+		MaxTries = 14, -- 4 rays each
+		ProbeDown = 12,
+		StandHeight = 3.2,
+		-- Limits
+		CooldownSeconds = 8, -- at most one recover per unit per this ...
+		MinMoveStuds = 4, -- ...and a found spot within this of where the unit stands is no move (no PivotTo onto itself)
+		MissRetrySeconds = 2, -- ... a search that found no clear spot looks again after this
+		PerOwnerPerSecond = 4, -- at most this many recover SEARCHES per owner per second (the rest wait for the next think)
+		NoPlayerWithin = 25, -- never land this close to another player ...
+		MaxDeferSeconds = 10, -- ... wait up to this long for the first clear spot, then take the next one
+		-- Counters: WE_ArmyRecover (number attribute on the owner's Player) + at most one server log line per owner per
+		-- LogSeconds. No debug label.
+		LogSeconds = 30,
+		-- A unit whose root left its model without its Humanoid dying (fell out of the world) is no longer a living
+		-- unit: SyncArmy re-forms it (the existing not-living path), queued at most once per owner per second and
+		-- ReformPerMinute per owner per minute, and only while the owner is alive with ground under him.
+		-- Recover.Enabled = false turns this off too.
+		ReformRootless = true,
+		ReformPerMinute = 8,
+		ReformWindowSeconds = 60, -- the ReformPerMinute window
+		ReformDelaySeconds = 1, -- a queued re-form runs this long after it is queued (one per owner per this)
+		LandRing = 8, -- recover landings remembered per army (1-32; read once at server start)
+		WaterRereadSeconds = 10, -- the WE_Water surface list is re-read at most this often, only while a recover searches
+	},
+
+	Gate = {
+		-- The owner's FOLLOW units within RaidConfig.Defense.GateOpenRadius open his friendly gate, only while he is
+		-- alive within OwnerNearStuds (flat) of it, and units alone (no owner / ally player at the gate) for at most
+		-- UnitHoldSeconds in a row: they pass through with him (or come home to him) and it shuts behind them; units
+		-- that stand there after that keep it shut. Units on Hold / Attack / Retreat never open it.
+		OwnUnitsOpen = true,
+		OwnerNearStuds = 40,
+		UnitHoldSeconds = 8,
+		-- ...and that 8 s count starts over only once no FOLLOW unit of his has been at the gate for UnitRearmSeconds
+		-- (units shuffling in and out of the circle while he idles near it never re-open it again and again)
+		UnitRearmSeconds = 3,
+		-- ship (crossing rule, the FIX round-3 reviewers' GATETAIL): a unit holds the gate open only while it is still on
+		-- the far side of the barrier from him (its centre not more than CrossClearStuds past the barrier plane on his
+		-- side). Units that are through never hold it behind him: stand-in, the owner stopping 16 studs inside with a
+		-- raider tailing him 35 / 50 / 70 studs behind: the barrier stayed open 9.6 s after he passed and the raider
+		-- walked in (4d26673: 1.4 s, kept out; with this rule: 1.6 s, kept out). false = the round-2 rule.
+		-- CrossClearStuds 0 (ship fix round 1, GATECAMP): with 3, his rear-rank units standing in their slots against the
+		-- shut barrier on HIS side counted as crossing: him standing 13-16 studs from the gate (beyond his own 12-stud
+		-- GateOpenRadius) opened it for ~9 s after each turn and a raider camping at it walked in (4d26673: shut). A unit
+		-- mid-crossing is covered by RaidConfig.Defense.GateCloseDelay (1 s).
+		CrossingRule = true,
+		CrossClearStuds = 0,
+	},
+
+	-- The FOLLOW think loop runs every army on the server in one task: an error in one owner's motion or one unit's
+	-- think is caught (pcall), logged at most once per owner per ErrorLogSeconds, and the loop goes on.
+	Loop = {
+		ErrorLogSeconds = 30,
+	},
 }
 
 -- army lane A0: the rollout value of one part, normalised ("off" for a missing part or any other value: fail closed)
@@ -156,6 +350,17 @@ function ArmyConfig.IsLive(part: string, player: any): boolean
 		return false
 	end
 	return ArmyConfig.LiveFor(part, (player :: Player).UserId)
+end
+
+-- Follow.ThreatStandingFor: is the standing-only near-hostile pacing live for this player? ("owner": the playtest
+-- owner's account only, AdminConfig.IsPlaytestOwner; "all": everyone; anything else: nobody, the round-1 rule)
+function ArmyConfig.ThreatStandingFor(userId: any): boolean
+	local f = ArmyConfig.Follow
+	local v = if typeof(f) == "table" then (f :: any).ThreatStandingFor else nil
+	if v == "all" then
+		return true
+	end
+	return v == "owner" and AdminConfig.IsPlaytestOwner(userId) == true
 end
 
 return ArmyConfig

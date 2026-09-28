@@ -8734,7 +8734,7 @@ def _a0_rules() -> None:
     ac = _a0_code(A0_AC)
     # 1. rollout shipping values (integrator decision: every part "owner" = the owner's playtest account only)
     vals = dict(re.findall(r'^\t\t(\w+) = "(\w+)",', _a0_block(ac, "Rollout"), re.M))
-    _a0_check(vals == {"Escort": "owner", "Army": "owner", "March": "owner"},
+    _a0_check(vals == {"Escort": "owner", "Army": "owner", "March": "owner", "Fix": "owner"},  # v90: + Fix (army despawn fix, owner first)
               'ArmyConfig.Rollout ships Escort / Army / March = "owner" (the owner\'s playtest account only)',
               f"found {vals or 'no Rollout block'} in {A0_AC}")
     # 2. the gate: "all" = everyone, "owner" = AdminConfig.IsPlaytestOwner only, anything else = off (fail closed)
@@ -8785,8 +8785,8 @@ def _a0_rules() -> None:
               "live / HEAD escort pick lines missing in SquadOrdersService.Init's think loop")
     eu = _a0_fn(sq, "local function escortUnit(") or ""
     _a0_check("\tlocal leash = escortLeash\n" in eu and "\t\t\tif escortLive then\n\t\t\t\tstepSaw(unit)\n" in eu
-              and "\t\t\tif escortLive and fromPlayer <= leash then\n\t\t\t\tstepBlocked(player, unit, playerRoot, troot, now)\n" in eu
-              and "\tif escortLive and stepMove(unit, playerRoot, troot, fromPlayer, now) then\n\t\treturn true\n\tend\n" in eu,
+              and "\t\t\tif escortLive and fromPlayer <= leash and not walkForm then\n\t\t\t\tstepBlocked(player, unit, playerRoot, troot, now)\n" in eu
+              and "\tif escortLive and stepMove(unit, playerRoot, troot, fromPlayer, now) then\n\t\tfollowSpeed(st, unit, 0, false)\n\t\tunit.Goal = nil\n\t\treturn true\n\tend\n" in eu,
               "escortUnit: the leash comes from the pass (EscortLeash unless live + defending); side-step only for a live owner, only while blocked and inside the leash",
               "escortUnit escortLeash / side-step guards changed or missing")
     pick = _a0_fn(sq, "local function escortPickLive(") or ""
@@ -9101,6 +9101,433 @@ import glob as _lane_glob
 for _lane_file in sorted(_lane_glob.glob(str(ROOT / "tools" / "checks" / "*.py"))):
     with open(_lane_file, encoding="utf-8") as _lane_fh:
         exec(compile(_lane_fh.read(), _lane_file, "exec"), globals())
+
+# ── army fix (lane FIX, ASSUMPTIONS ARMY-FIX-1..30): the army "despawn" fix. A unit is never removed for distance, a
+# failed walk or a wall: RECOVER moves the same unit (one Model:PivotTo); lead + catch-up keep FOLLOW up with the owner
+# (e506c9c pacing near a hostile); the owner's own FOLLOW units open his friendly gate only while he is alive and near
+# it. Every pin below fails on e506c9c or on a mutant (army/build/fix report, gates/mutants.py).
+# Ship merge onto 4d26673 (lane A0): the pins read the merged code (A0's live escort pick also does the ThreatStuds
+# scan; hostileScan holds the one GetTagged); plus the walking-formation escort (Follow.EscortWalkInFormation, closing in
+# only inside Follow.EscortWalkLeash), the side-step follow-state reset, ThreatStuds <= the escort engage radius, the gate
+# crossing rule (Gate.CrossingRule) and the smoothed, stepped follow pace (CatchUp.PaceSmooth / PaceStep)
+# (army/build/fix_ship). Ship fix round 1: CrossClearStuds 0 (GATECAMP), FallY between the ground and the SafetyCatch
+# (UNDER), a fallen unit's no-move check in 3D, recover warns throttled per owner, a rebuilt gate forgets the unit hold.
+AF_SO = "src/ServerScriptService/Server/Services/SquadOrdersService.luau"
+AF_AC = "src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau"
+AF_GD = "src/ServerScriptService/Server/Services/GateDefenseService.luau"
+AF_BOOT = "src/ServerScriptService/Server/Bootstrap.server.luau"
+AF_MS = "src/ServerScriptService/Server/Modules/MapSetup.luau"
+
+
+def _af_fn_spans(code: str) -> list:
+    """(name, start, end) of every top-level function of comment-stripped Luau: a line starting `local function X(` or
+    `function A.B(`; each one ends where the next one starts."""
+    heads = [(m.group(1) or m.group(2), m.start()) for m in re.finditer(r"^(?:local function (\w+)|function ([\w.]+))\(", code, re.M)]
+    return [(name, start, heads[i + 1][1] if i + 1 < len(heads) else len(code)) for i, (name, start) in enumerate(heads)]
+
+
+def _af_where(spans: list, pos: int) -> str | None:
+    for name, s, e in spans:
+        if s <= pos < e:
+            return name
+    return None
+
+
+def _af_fn(code: str, name: str) -> str | None:
+    for n, s, e in _af_fn_spans(code):
+        if n == name:
+            return code[s:e]
+    return None
+
+
+def _af_block(code: str, key: str) -> str | None:
+    """The inside of the first `key = { ... }` (balanced braces) of comment-stripped Luau, or None."""
+    m = re.search(r"\b" + re.escape(key) + r"\s*=\s*\{", code)
+    if not m:
+        return None
+    depth = 0
+    for i in range(m.end() - 1, len(code)):
+        if code[i] == "{":
+            depth += 1
+        elif code[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return code[m.end():i]
+    return None
+
+
+def _af_num(block: str | None, key: str) -> float | None:
+    m = re.search(r"\b" + re.escape(key) + r"\s*=\s*(-?[\d.]+)", block or "")
+    return float(m.group(1)) if m else None
+
+
+def _af_has(body: str, needles: tuple, label: str) -> None:
+    missing = [n for n in needles if n not in body]
+    if missing:
+        bad(f"army fix: {label} (missing {missing[0]!r})")
+    else:
+        ok(f"army fix: {label}")
+
+
+def _army_fix_pins() -> None:
+    so = _db_luau_code(read(AF_SO) or "")
+    ac = _db_luau_code(read(AF_AC) or "")
+    gd = _db_luau_code(read(AF_GD) or "")
+    boot = _db_luau_code(read(AF_BOOT) or "")
+    # 1) the kill switches ship ON: the fix is live for everyone (not behind the owner-only rollout)
+    follow = _af_block(ac, "Follow")
+    rec = _af_block(ac, "Recover")
+    gate = _af_block(ac, "Gate")
+    lead = _af_block(follow or "", "Lead")
+    cu = _af_block(follow or "", "CatchUp")
+    for label, block, pat in (
+        ("Follow.Lead.Enabled", lead, r"\bEnabled\s*=\s*true\b"),
+        ("Follow.CatchUp.Enabled", cu, r"\bEnabled\s*=\s*true\b"),
+        ("Follow.KeepTrailPoint", follow, r"\bKeepTrailPoint\s*=\s*true\b"),
+        ("Recover.Enabled", rec, r"\bEnabled\s*=\s*true\b"),
+        ("Recover.ReformRootless", rec, r"\bReformRootless\s*=\s*true\b"),
+        ("Recover.SideNeedsCover", rec, r"\bSideNeedsCover\s*=\s*true\b"),
+        ("Follow.ThreatApproachOnly", follow, r"\bThreatApproachOnly\s*=\s*true\b"),
+        ("Gate.OwnUnitsOpen", gate, r"\bOwnUnitsOpen\s*=\s*true\b"),
+    ):
+        if block is not None and re.search(pat, block):
+            ok(f"army fix: ArmyConfig.{label} = true (live for everyone)")
+        else:
+            bad(f"army fix: ArmyConfig.{label} must be true (the despawn fix ships on for everyone)")
+    # the SPEC-ARMY-FINAL §6.5 limits, the reviewed bounds and the measured tuning
+    for blk, bname, key, lo, hi in (
+        (rec, "Recover", "VehicleDeferSpeed", 20, 20), (rec, "Recover", "NoPlayerWithin", 25, 25), (rec, "Recover", "MaxDeferSeconds", 10, 10),
+        (rec, "Recover", "CooldownSeconds", 8, 8), (rec, "Recover", "PerOwnerPerSecond", 1, 4), (rec, "Recover", "BehindStuds", 24, 24),
+        (rec, "Recover", "PlotMinOwnerStuds", 30, 1e9), (rec, "Recover", "PlotSeconds", 4, 1e9),
+        (rec, "Recover", "LandApartStuds", 3, 1e9), (rec, "Recover", "LandApartSeconds", 2, 1e9), (rec, "Recover", "MaxTrailTries", 1, 4),
+        (rec, "Recover", "ReformPerMinute", 1, 8), (rec, "Recover", "SpreadScale", 0.62, 1.0),
+        (rec, "Recover", "NearBehindStuds", 10, 20), (rec, "Recover", "MissRetrySeconds", 1, 8),
+        (lead, "Follow.Lead", "MaxStuds", 1, 4), (lead, "Follow.Lead", "StopHoldStuds", 0.5, 3),
+        (follow, "Follow", "ThreatStuds", 30, 55), (follow, "Follow", "EscortWalkLeash", 4, 12), (rec, "Recover", "MinMoveStuds", 1, 8),
+        (gate, "Gate", "OwnerNearStuds", 12, 40), (gate, "Gate", "UnitHoldSeconds", 1, 8), (gate, "Gate", "UnitRearmSeconds", 2, 10),
+        (rec, "Recover", "LandRing", 4, 32), (rec, "Recover", "ReformWindowSeconds", 60, 60), (rec, "Recover", "ReformDelaySeconds", 0.5, 2),
+        (rec, "Recover", "WaterRereadSeconds", 5, 30), (_af_block(ac, "Loop"), "Loop", "ErrorLogSeconds", 10, 60),
+    ):
+        got = _af_num(blk, key)
+        if got is not None and lo <= got <= hi:
+            ok(f"army fix: ArmyConfig.{bname}.{key} = {got:g} (in [{lo:g}, {hi:g}])")
+        else:
+            bad(f"army fix: ArmyConfig.{bname}.{key} must be in [{lo:g}, {hi:g}] (got {got})")
+    mt, mtt = _af_num(rec, "MaxTries"), _af_num(rec, "MaxTrailTries")
+    if mt is not None and mtt is not None and mt >= mtt + 9:
+        ok("army fix: Recover.MaxTries leaves room for the slot, the trail tries and all 8 fallback spots")
+    else:
+        bad(f"army fix: Recover.MaxTries must be >= MaxTrailTries + 9 (got {mt} / {mtt})")
+    ts = _af_num(follow, "ThreatStuds")
+    er = _af_num(read("src/ReplicatedStorage/Shared/Configs/CombatFairnessConfig.luau") or "", "EscortEngageRadius")
+    if ts is not None and er is not None and 0 < ts <= er:
+        ok(f"army fix: Follow.ThreatStuds {ts:g} <= CombatFairnessConfig.EscortEngageRadius {er:g} (e506c9c pacing only where the escort would fight)")
+    else:
+        bad(f"army fix: Follow.ThreatStuds must be > 0 and <= CombatFairnessConfig.EscortEngageRadius (got {ts} / {er}); 130 slowed the army on every camp / checkpoint approach, behind the phone camera")
+    mult, maxs = _af_num(cu, "SpeedMult"), _af_num(cu, "MaxSpeed")
+    if mult is not None and maxs is not None and 1.0 < mult <= 1.6 and 20 <= maxs <= 30:
+        ok(f"army fix: CatchUp SpeedMult {mult} / MaxSpeed {maxs} (keeps up with an owner at 16 / 18.4 / 20)")
+    else:
+        bad(f"army fix: CatchUp SpeedMult must be in (1, 1.6] and MaxSpeed in [20, 30] (got {mult} / {maxs})")
+    # 2) a unit model is removed only on the lifecycle paths: Humanoid.Died (spawnUnit), the SyncArmy not-living cull and
+    #    trim, clearSquad on OrdersConfig.Enabled = false (SyncArmy) and on PlayerRemoving (Init). Nothing else.
+    spans = _af_fn_spans(so)
+    dwhere = sorted(str(_af_where(spans, m.start())) for m in re.finditer(r"(?<!function )\bdestroyUnit\(", so))
+    if dwhere == ["SquadOrdersService.SyncArmy", "SquadOrdersService.SyncArmy", "clearSquad"]:
+        ok("army fix: destroyUnit is called only by clearSquad and SyncArmy (not-living cull + trim to desired)")
+    else:
+        bad(f"army fix: destroyUnit call sites must be clearSquad + 2x SyncArmy, got {dwhere}")
+    cwhere = sorted(str(_af_where(spans, m.start())) for m in re.finditer(r"(?<!function )\bclearSquad\(", so))
+    if cwhere == ["SquadOrdersService.Init", "SquadOrdersService.SyncArmy"]:
+        ok("army fix: clearSquad is called only by SyncArmy (Enabled = false) and Init (PlayerRemoving)")
+    else:
+        bad(f"army fix: clearSquad call sites must be SyncArmy + Init, got {cwhere}")
+    must_contain(AF_SO, "\tif not OrdersConfig.Enabled then\n\t\tclearSquad(player.UserId)\n", "army fix: SyncArmy clears the squad only when OrdersConfig.Enabled is false")
+    must_contain(AF_SO, "\tPlayers.PlayerRemoving:Connect(function(player: Player)\n\t\tclearSquad(player.UserId)\n", "army fix: Init clears the squad on PlayerRemoving")
+    # the not-living cull, whole: alive, in the world, root in its model, hp > 0 -> living; nothing else (no distance)
+    must_contain(AF_SO, "\tfor _, u in ipairs(st.Units) do\n\t\tif u.Alive and u.Model.Parent and (not rootless or u.Root.Parent == u.Model) and u.Humanoid.Health > 0 then\n\t\t\ttable.insert(living, u)\n\t\telse\n\t\t\tdestroyUnit(u)\n\t\tend\n",
+                 "army fix: SyncArmy's not-living cull tests only Alive / in the world / root in its model / hp (no distance)")
+    # the trim keeps the desired count (the unit furthest from the owner goes first, as at e506c9c)
+    must_contain(AF_SO, "\t\tlocal u = table.remove(st.Units, worst)\n\t\tif u then\n\t\t\tdestroyUnit(u)\n\t\tend\n", "army fix: the SyncArmy trim removes only above the desired count")
+    mwhere = sorted(str(_af_where(spans, m.start())) for m in re.finditer(r"\bModel:Destroy\(\)", so))
+    if mwhere == ["destroyUnit", "spawnUnit"]:
+        ok("army fix: a unit Model is destroyed only in destroyUnit and its Humanoid.Died handler (spawnUnit)")
+    else:
+        bad(f"army fix: Model:Destroy() may only be in destroyUnit + the Died handler, got {mwhere}")
+    must_contain(AF_SO, "\thumanoid.Died:Connect(function()\n\t\tif not unit.Alive then\n\t\t\treturn\n\t\tend\n\t\tunit.Alive = false\n\t\ttask.delay(0.35, function()\n\t\t\tif unit.Model and unit.Model.Parent then\n\t\t\t\tunit.Model:Destroy()\n",
+                 "army fix: the Died handler is the only other Model:Destroy (a dead unit, removed 0.35 s later)")
+    for tok in ("Debris", ":Remove()", "ClearAllChildren"):
+        if tok in so:
+            bad(f"army fix: SquadOrdersService must not use {tok} (units leave only through destroyUnit / Died)")
+        else:
+            ok(f"army fix: SquadOrdersService uses no {tok}")
+    # SyncArmy is re-run only by the lifecycle hooks and the rootless re-form (queueReform), never by movement code
+    swhere = sorted(set(str(_af_where(spans, m.start())) for m in re.finditer(r"(?<!function )SquadOrdersService\.SyncArmy\(", so)))
+    if swhere == ["SquadOrdersService.ApplyResearch", "SquadOrdersService.Init", "SquadOrdersService.SetOrder", "queueReform", "spawnUnit"]:
+        ok("army fix: SyncArmy is re-run only by SetOrder / ApplyResearch / Init hooks (e506c9c), the Died handler and queueReform")
+    else:
+        bad(f"army fix: SyncArmy may only be called from SetOrder / ApplyResearch / Init / the Died handler / queueReform, got {swhere}")
+    # 3) RECOVER and every movement helper never removes, re-forms or re-parents a unit (one PivotTo of the same unit)
+    for fn in ("recoverUnit", "recoverSpot", "tryRecoverSpot", "recoverGround", "ownerOnWater", "recoverProbe", "trackGoal",
+               "noteRecover", "followSpeed", "setSpeed", "updateOwnerMotion", "keptTrailPoint", "followMove", "followGoal",
+               "escortUnit", "plotAt", "underWater", "waterList", "nearOtherPlayer", "seatVehicle", "landingTaken", "noteLanding",
+               "stopHoldStuds", "SquadOrdersService.AnyUnitNear", "escortWalkInFormation", "stepEnd", "escortPickLive"):
+        body = _af_fn(so, fn)
+        if body is None:
+            bad(f"army fix: SquadOrdersService.{fn} is missing")
+            continue
+        hits = [t for t in (":Destroy(", "Debris", "destroyUnit(", "clearSquad(", "SyncArmy(", "queueReform(", ".Parent = nil", ":Remove(", "spawnUnit(") if t in body]
+        if hits:
+            bad(f"army fix: {fn} must never remove / re-form a unit (found {hits})")
+        else:
+            ok(f"army fix: {fn} never removes, re-forms or re-parents a unit")
+    ru = _af_fn(so, "recoverUnit") or ""
+    _af_has(ru, ("unit.Model:PivotTo(at)",), "recoverUnit — the recover is one PivotTo of the same unit")
+    _af_has(ru, ('st.Seated and st.OwnerSpeed > cfgNum(rc, "VehicleDeferSpeed", 20)',), "recoverUnit — no recover while the owner drives faster than VehicleDeferSpeed")
+    _af_has(ru, ("now - unit.RecoverAt < cooldown",), "recoverUnit — at most one recover per unit per CooldownSeconds")
+    _af_has(ru, ("ownerOnWater(player, st, playerRoot, rc, now)",), "recoverUnit — no recover while the owner is on water")
+    _af_has(ru, ("resetChase(unit)", "unit.Humanoid:MoveTo(at.Position)"), "recoverUnit — chase state reset and MoveTo re-issued after a recover")
+    _af_has(ru, ("noteLanding(st, at.Position, now)",), "recoverUnit — every landing is remembered (units land apart)")
+    i_mm, i_pv = ru.find('if moveBy < cfgNum(rc, "MinMoveStuds", 4) then'), ru.find("unit.Model:PivotTo(at)")
+    if 0 <= i_mm < i_pv and "unit.ProgSince = now" in ru[i_mm:i_pv] and "return false" in ru[i_mm:i_pv]:
+        ok("army fix: recoverUnit — a found spot within Recover.MinMoveStuds of the unit is no move (no PivotTo onto itself; the stuck window starts over)")
+    else:
+        bad("army fix: recoverUnit must skip a spot within Recover.MinMoveStuds of the unit before its PivotTo (restart the stuck window, return false)")
+    # ship fix round 1 (UNDER): a fallen unit's spot is compared in 3D (one straight above it under the map is a move)
+    _af_has(ru, ('local moveBy = if why == "fallen" then (at.Position - pos).Magnitude else flatDist(at.Position, pos)',),
+            "recoverUnit — a fallen unit's MinMoveStuds check is 3D (a spot straight above it is a move), every other one flat")
+    # ship fix round 1 (UNDER): FallY sits between the Part ground's bottom and a unit standing on the SafetyCatch floor
+    ms_src = _db_luau_code(read(AF_MS) or "")
+    m_top, m_th = re.search(r"\blocal GROUND_TOP_Y\s*=\s*(-?[\d.]+)", ms_src), re.search(r"\blocal GROUND_THICKNESS\s*=\s*(-?[\d.]+)", ms_src)
+    m_sf = re.search(r"\blocal SAFETY_FLOOR_Y\s*=\s*(-?[\d.]+)", ms_src)
+    m_st = re.search(r'At = Vector3\.new\(x, SAFETY_FLOOR_Y, z\), Size = Vector3\.new\(tile, ([\d.]+), tile\)', ms_src)
+    fall, stand = _af_num(rec, "FallY"), _af_num(rec, "StandHeight")
+    if m_top and m_th and m_sf and m_st and fall is not None and stand is not None:
+        g_bottom = float(m_top.group(1)) - float(m_th.group(1))
+        on_catch = float(m_sf.group(1)) + float(m_st.group(1)) * 0.5 + stand
+        if on_catch < fall < g_bottom:
+            ok(f"army fix: ArmyConfig.Recover.FallY = {fall:g} (below the ground's bottom {g_bottom:g}, above a unit standing on the SafetyCatch {on_catch:g})")
+        else:
+            bad(f"army fix: ArmyConfig.Recover.FallY must be between a unit standing on the SafetyCatch ({on_catch:g}) and the ground's bottom ({g_bottom:g}) (got {fall:g}: at or below the SafetyCatch stand height it never fires, as -50 did; above the ground's bottom it would fire on units standing on the ground)")
+    else:
+        bad("army fix: Recover.FallY / StandHeight or MapSetup GROUND_TOP_Y / GROUND_THICKNESS / SAFETY_FLOOR_Y / SafetyCatch size not found")
+    # ship fix round 1: a recover search / move error is a throttled per-owner log line, never a raw warn per unit
+    _af_has(ru, ('recoverWarn(player.UserId, now, "recover search failed", cf)', 'recoverWarn(player.UserId, now, "recover move failed", errM)'),
+            "recoverUnit — recover search / move errors go through recoverWarn")
+    if "warn(" not in ru.replace("recoverWarn(", ""):
+        ok("army fix: recoverUnit has no raw warn (its log lines are throttled per owner)")
+    else:
+        bad("army fix: recoverUnit must not warn directly (route it through recoverWarn: one line per owner per Loop.ErrorLogSeconds)")
+    _af_has(_af_fn(so, "recoverWarn") or "", ("if now - (recoverErrAt[uid] or -math.huge) >= every then", "recoverErrAt[uid] = now"),
+            "recoverWarn — at most one recover error line per owner per Loop.ErrorLogSeconds")
+    _af_has(so, ("recoverErrAt[player.UserId] = nil",), "recoverErrAt is cleared when the owner leaves")
+    # the per-owner budget counts SEARCHES (a failed or deferred one costs rays too), before the search
+    i_cap = ru.find('st.RecoverWinN >= math.max(1, math.floor(cfgNum(rc, "PerOwnerPerSecond", 4)))')
+    i_inc, i_srch = ru.find("st.RecoverWinN += 1"), ru.find("pcall(recoverSpot,")
+    if 0 <= i_cap < i_inc < i_srch and ru.count("st.RecoverWinN += 1") == 1:
+        ok("army fix: recoverUnit — PerOwnerPerSecond counts every search, before it runs")
+    else:
+        bad("army fix: recoverUnit — the PerOwnerPerSecond budget must count each search once, before pcall(recoverSpot)")
+    # the plot trigger: only a unit well away from the owner, in that plot for PlotSeconds, with him out of it that long
+    _af_has(ru, ("if d > plotMin then", "now - unit.PlotSince >= plotSec", "st.OwnerPlot ~= inForeign",
+                 "not (st.OwnerPlotLeft == inForeign and now - st.OwnerPlotLeftAt < plotSec)"),
+            "recoverUnit — the plot trigger needs distance + dwell (no teleport loop at another plot's edge)")
+    ts = _af_fn(so, "tryRecoverSpot") or ""
+    _af_has(ts, ("pid ~= ownPlot and (pid ~= nil or ownerHome)",), "tryRecoverSpot — never into another plot, never outside his own while he is in it")
+    _af_has(ts, ('nearOtherPlayer(player, at, cfgNum(rc, "NoPlayerWithin", 25))',), "tryRecoverSpot — never within NoPlayerWithin of another player")
+    _af_has(ts, ("bodyClear(from, at, probe)", "Workspace:Raycast(from, at - from, probe.Params) ~= nil"),
+            "tryRecoverSpot — the body probe AND a root-height ray reach it (never under a closed gate barrier)")
+    _af_has(ts, ("recoverGround(spot, rc, probe, now)",), "tryRecoverSpot — solid ground under it")
+    _af_has(ts, ("landingTaken(st, unit, spot, rc, now)",), "tryRecoverSpot — never onto another unit or a fresh landing")
+    lt = _af_fn(so, "landingTaken") or ""
+    _af_has(lt, ("now - st.LandAt[i] <= win", "flatDist(u.Root.Position, spot) < r"), "landingTaken checks recent landings and standing units")
+    rs = _af_fn(so, "recoverSpot") or ""
+    _af_has(rs, ("table.insert(cands, pt + own)", "ppos - look * behind + own", "ppos - right * behind + own", "ppos + right * behind + own", "used >= maxPts"),
+            "recoverSpot — every fallback spot carries the unit's own offset; trail tries capped")
+    _af_has(rs, ("i >= firstSide and sideCover and not waitOver", "Workspace:Raycast(head, at - head, probe.Params) == nil"),
+            "recoverSpot — a spot beside the owner in his view waits (SideNeedsCover)")
+    rg = _af_fn(so, "recoverGround") or ""
+    if "Enum.Material.Water" in rg and "Constants.Tags.Water" in rg and "underWater(" in rg:
+        ok("army fix: recoverGround rejects terrain water, WE_Water parts and ground under a WE_Water surface")
+    else:
+        bad("army fix: recoverGround must reject terrain water, WE_Water parts and ground under a WE_Water surface")
+    if "WE_ArmyRecover" in (_af_fn(so, "noteRecover") or ""):
+        ok("army fix: every recover counts on the owner's WE_ArmyRecover attribute")
+    else:
+        bad("army fix: noteRecover must count WE_ArmyRecover on the owner's Player")
+    tu = _af_fn(so, "thinkUnit") or ""
+    i_rec, i_esc = tu.find("recoverUnit(player, st, unit, playerRoot, now)"), tu.find("escortUnit(player, st, unit, playerRoot, escortHum, escortRoot, now)")
+    if 0 <= i_rec < i_esc:
+        ok("army fix: a FOLLOW unit's think runs RECOVER before its escort / follow move")
+    else:
+        bad("army fix: thinkUnit must call recoverUnit before escortUnit in the FOLLOW branch")
+    must_contain(AF_SO, "\tif unit.Alive and (unit.Model.Parent == nil or unit.Root.Parent ~= unit.Model) and reformRootless(player.UserId) then\n\t\tqueueReform(player, st, now)",
+                 "army fix: thinkUnit queues a re-form only for a unit whose root or model left it (fell out of the world)")
+    qr = _af_fn(so, "queueReform") or ""
+    _af_has(qr, ("recoverGround(root.Position - Vector3.new(0, 1, 0), rc, probe, now) == nil", 'st.ReformWinN >= math.max(1, math.floor(cfgNum(rc, "ReformPerMinute", 8)))'),
+            "queueReform — only with ground under the owner, at most ReformPerMinute (no re-form loop over the void)")
+    # 4) lead + catch-up (FOLLOW keeps up with an owner at 16 / 18.4 / 20); e506c9c pacing near a hostile
+    fm = _af_fn(so, "followMove") or ""
+    eu = _af_fn(so, "escortUnit") or ""
+    uo = _af_fn(so, "updateOwnerMotion") or ""
+    fs = _af_fn(so, "followSpeed") or ""
+    _af_has(fm, ("playerRoot.CFrame + st.Lead", "followSpeed(st, unit, toGoal, walkable)"), "followMove aims at the led slot and sets the catch-up pace")
+    _af_has(fm, ("toGoal <= stopHoldStuds()", "unit.StopHeld = true", "if st.OwnerSpeed >= 1 and not (st.Slowing and not st.Engaged) then\n\t\t\tunit.StopHeld = false"),  # v90: inside the Rollout.Fix branch
+            "followMove — after the owner stops, a unit that overshot stands (no turn back toward the camera)")
+    _af_has(fm, ('if unit.StopHeld and st.Order == "Follow" and not (st.OwnerSpeed >= 1 and not (st.Slowing and not st.Engaged)) then',
+                 "flatDist(slotPos, up) <= stopHoldStuds()"),
+            "followMove — a held unit keeps standing with no walkable-line probe (no rays per think while the owner stands)")
+    i_hold, i_goal = fm.find("if unit.StopHeld and st.Order"), fm.find("followGoal(unit, leadCf")
+    if 0 <= i_hold < i_goal:
+        ok("army fix: followMove checks the held stand before the followGoal probe")
+    else:
+        bad("army fix: followMove must check the held stand before calling followGoal")
+    _af_has(eu, ("unitOffset(st, unit.Slot))).Position + st.Lead", "followSpeed(st, unit, flatDist(goal, unitPos), false)"),
+            "the escort leash walk-back aims at the led slot at the owner's pace (never a run into a wall)")
+    if re.search(r"\bEscortWalkInFormation\s*=\s*true\b", follow or ""):
+        ok("army fix: ArmyConfig.Follow.EscortWalkInFormation = true (escort units keep the formation while the owner walks)")
+    else:
+        bad("army fix: ArmyConfig.Follow.EscortWalkInFormation must be true (the bank-hall walk: escorts trailed at the 20-stud leash, behind the phone camera)")
+    ewf = _af_fn(so, "escortWalkInFormation") or ""
+    _af_has(ewf, ("f.EscortWalkInFormation == true and st.OwnerSpeed >= 1 and not st.Seated",),
+            "escortWalkInFormation — only while the owner walks on foot (1+ studs/s, not seated)")
+    i_shot, i_wf, i_step = eu.find("pickShot(player, unit, th, troot, range, escortCands"), eu.find("\tif walkForm then\n"), eu.find("if escortLive and stepMove(")
+    wseg = eu[i_wf:i_step] if 0 <= i_wf < i_step else ""
+    _v90_v85 = wseg.find("\tif followCtx.Live and followCtx.Moving then")  # v90: the v85 FollowPace branch follows (Fix off)
+    if _v90_v85 >= 0:
+        wseg = wseg[:_v90_v85]
+    if ("local walkForm = escortWalkInFormation(st)" in eu and 0 <= i_shot < i_wf < i_step
+            and "\t\tif escortLive then\n\t\t\tstepEnd(unit)\n\t\tend\n\t\tlocal wl = math.min(leash, escortWalkLeash())\n\t\tif wl <= 0 or fromPlayer > wl then\n\t\t\treturn false\n\t\tend\n" in wseg
+            and "local maxW = wl * 0.9" in wseg and "followSpeed(st, unit, 0, false)" in wseg and wseg.rstrip().endswith("return true\n\tend")):
+        ok("army fix: escortUnit — while the owner walks, the shot is taken first; beyond Follow.EscortWalkLeash the unit returns to the formation (followMove, catch-up allowed), inside it closes in at his pace at most 90 % of that out; no stand / side-step walk")
+    else:
+        bad("army fix: escortUnit must shoot first, then hand a walking owner's escort unit beyond EscortWalkLeash to followMove (walkForm -> stepEnd, return false) and close in only inside it, before any side-step walk")
+    ewl = _af_fn(so, "escortWalkLeash") or ""
+    _af_has(ewl, ("tonumber(f.EscortWalkLeash)", "return if v and v > 0 then v else 0"),
+            "escortWalkLeash — the walking close-in leash comes from ArmyConfig.Follow.EscortWalkLeash (0 = formation only)")
+    _af_has(eu, ("if escortLive and fromPlayer <= leash and not walkForm then",),
+            "escortUnit — no side-step probe (rays) while the owner walks")
+    if re.search(r"if escortLive and stepMove\(unit, playerRoot, troot, fromPlayer, now\) then\s*followSpeed\(st, unit, 0, false\)\s*unit\.Goal = nil\s*return true\b", eu):
+        ok("army fix: escortUnit — a side-step walk resets the follow state (the owner's pace, no follow goal for the stuck check)")
+    else:
+        bad("army fix: escortUnit — a side-step walk must reset the follow state (followSpeed(st, unit, 0, false); unit.Goal = nil) before its return")
+    se = _af_fn(so, "stepEnd") or ""
+    _af_has(se, ("s.Goal = nil",), "stepEnd ends a side-step walk (the blocked count is kept)")
+    _af_has(uo, ('lead = v * cfgNum(lc, "Seconds", 0.4)', "lead = lead.Unit * cap", 'speed >= st.PrevSpeed * cfgNum(lc, "DropOnSlowdown", 0.5)'),
+            "the lead is the owner's velocity x Lead.Seconds, capped, dropped when he slows hard")
+    _af_has(fs, ("math.clamp(st.PaceSpeed, base, maxSpeed)", 'walkable and toGoal - st.Lead.Magnitude > cfgNum(cu, "StartStuds", 6)'),
+            "followSpeed — owner's pace, the run only when well behind with a walkable line (the lead alone never starts it)")
+    _af_has(fs, ('if cu == nil or (st.Engaged and not threatFlag("ThreatKeepCatchUp")) then\n\t\tsetSpeed(unit, base)',),
+            "followSpeed — e506c9c pacing (UnitWalkSpeed) while engaged: a hostile within ThreatStuds and the owner standing")
+    if re.search(r'\bThreatStandingFor\s*=\s*"(owner|all)"', follow or ""):
+        ok("army fix: ArmyConfig.Follow.ThreatStandingFor is live (owner / all: the standing-only near-hostile pacing)")
+    else:
+        bad('army fix: ArmyConfig.Follow.ThreatStandingFor must be "owner" or "all" (with lane A0\'s Rollout.Escort)')
+    tsf = _af_fn(ac, "ArmyConfig.ThreatStandingFor") or ""
+    _af_has(tsf, ('if v == "all" then\n\t\treturn true', 'return v == "owner" and AdminConfig.IsPlaytestOwner(userId) == true'),
+            "ArmyConfig.ThreatStandingFor — all = everyone, owner = the playtest owner's account only (AdminConfig), else nobody")
+    if re.findall(r"require\(([^)]*)\)", ac) == ["script.Parent.AdminConfig"]:
+        ok("army fix: ArmyConfig requires only AdminConfig (no cycle)")
+    else:
+        bad("army fix: ArmyConfig may require only AdminConfig")
+    if re.search(r"\bThreatKeepCatchUp\s*=\s*false\b", follow or ""):
+        ok("army fix: ArmyConfig.Follow.ThreatKeepCatchUp = false (only the standing case is e506c9c pacing)")
+    else:
+        bad("army fix: ArmyConfig.Follow.ThreatKeepCatchUp must be false (measured no better at the bank: 12 of 30 vs 13 of 30)")
+    _af_has(so, ('local threat = if st.Order == "Follow" and proot then threatStuds() else 0\n\t\t\t\t\tthreatScanStuds = threat\n',
+                 "\t\t\t\t\t\t\tescortHum, escortRoot = nearestHostile(proot.Position, r, CombatFairnessConfig.EscortIgnoreCalm == true, player, escortCands, r)\n\t\t\t\t\t\tend\n\t\t\t\t\t\tthreatScanStuds = 0\n\t\t\t\t\t\tlocal trt = threatNearRoot\n",
+                 "threatNearRoot = nil",
+                 "st.Engaged = threat > 0 and trt ~= nil and not (threatApproachOnly() and st.OwnerSpeed >= 1 and st.OwnerVel:Dot((trt :: BasePart).Position - proot.Position) < 0)\n\t\t\t\t\t\t\tand not (ArmyConfig.ThreatStandingFor(player.UserId) and st.OwnerSpeed >= 1)",
+                 "if st.Engaged then\n\t\t\t\t\t\t\tst.Lead = Vector3.zero"),
+            "the think loop: the one escort scan (A0's live pick or nearestHostile) also finds the nearest hostile out to ThreatStuds (no lead near it; escort pick unchanged)")
+    epl = _af_fn(so, "escortPickLive") or ""
+    _af_has(epl, ("local tScan = threatScanStuds", "if d <= dr or d <= tScan then", "if d <= tScan and d < tDist then", "if d <= dr then\n", "if tScan > 0 then\n\t\tthreatNearRoot = tRoot"),
+            "escortPickLive (lane A0) notes the nearest hostile within ThreatStuds with the same filters; its defend / engage picks stay within DefendRadius")
+    nh = _af_fn(so, "nearestHostile") or ""
+    _af_has(nh, ("local tScan = threatScanStuds", "if d <= tScan and d < tDist then", "if tScan > 0 then\n\t\tthreatNearRoot = tRoot"),
+            "nearestHostile notes the nearest hostile within ThreatStuds only during the FOLLOW escort pick (inert otherwise)")
+    _af_has(so, ("local okM, errM = pcall(updateOwnerMotion :: any, st, proot, now)",
+                 "local okT, errT = pcall(thinkUnit :: any, player, st, unit, now, escortHum, escortRoot, trail, probe)"),
+            "the think loop reads the owner's motion once per pass and pcalls each unit's think (one error never stops every army)")
+    if re.search(r"^\s*thinkUnit\(|^\s*updateOwnerMotion\(", so, re.M) is None:
+        ok("army fix: thinkUnit / updateOwnerMotion are only called under pcall")
+    else:
+        bad("army fix: thinkUnit / updateOwnerMotion must only be called under pcall in the think loop")
+    _af_has(_af_fn(so, "thinkError") or "", ("if now - (thinkErrAt[uid] or -math.huge) >= every then", "thinkErrAt[uid] = now", "warn("),
+            "thinkError — a caught think error is logged at most once per owner per Loop.ErrorLogSeconds")
+    _af_has(_af_fn(so, "reformRootless") or "", ("rc.Enabled == true and rc.ReformRootless == true",),
+            "reformRootless — off with the Recover kill switch too")
+    _af_has(so, ('local LAND_RING = math.clamp(math.floor(tonumber(((ArmyConfig :: any).Recover or {}).LandRing) or 8), 1, 32)',),
+            "LAND_RING comes from ArmyConfig.Recover.LandRing (config first)")
+    # 5) the owner's own FOLLOW units open his friendly gate, only with him alive and near, for a bounded time
+    fg = _af_fn(gd, "updateFriendlyGate") or ""
+    _af_has(fg, ("gate.OwnUnitsOpen == true", "SquadOrdersService.AnyUnitNear(def.OwnerUserId, gatePos, D.GateOpenRadius, D.GateOpenHeight, tonumber(gate.OwnerNearStuds) or 40,\n\t\t\t\tif gate.CrossingRule == true then def.GateCf.LookVector else nil, tonumber(gate.CrossClearStuds) or 0) == true",
+                 "local since = def.GateUnitSince or tnow", "allyNear = tnow - since <= (tonumber(gate.UnitHoldSeconds) or 8)",
+                 "if allyNear then\n\t\tdef.GateUnitSince = nil", "def.GateUnitSeenAt = tnow",
+                 "tnow - (def.GateUnitSeenAt or -math.huge) < (if typeof(gate) == \"table\" then tonumber(gate.UnitRearmSeconds) or 3 else 3)"),
+            "updateFriendlyGate — units alone keep it open at most UnitHoldSeconds; the count re-arms only after UnitRearmSeconds away")
+    uo2 = _af_fn(so, "updateOwnerMotion") or ""
+    _af_has(uo2, ("if jumped then\n\t\tst.RegroupAt = now",), "updateOwnerMotion — a jump on foot (teleport / respawn) opens the regroup window")
+    ru2 = _af_fn(so, "recoverUnit") or ""
+    _af_has(ru2, ('unit.RecoverAt = now - cooldown + math.min(cooldown, cfgNum(rc, "MissRetrySeconds", 2))',), "recoverUnit — a search with no clear spot looks again after MissRetrySeconds")
+    an = _af_fn(so, "SquadOrdersService.AnyUnitNear") or ""
+    _af_has(an, ('if st == nil or st.Order ~= "Follow" then\n\t\treturn false', "characterRoot(owner)", "ox * ox + oz * oz > near * near"),
+            "AnyUnitNear — FOLLOW only (never Hold / Attack / Retreat), owner alive and within OwnerNearStuds")
+    if an and not any(t in an for t in ("GetTagged", "GetDescendants", "Raycast", "{}")):
+        ok("army fix: AnyUnitNear is distance checks only (no scan, no ray, no table)")
+    else:
+        bad("army fix: SquadOrdersService.AnyUnitNear must exist and do distance checks only")
+    # ship (the FIX round-3 reviewers' GATETAIL): a unit holds the gate only until it has crossed to the owner's side
+    _af_has(an, ("normal: Vector3?, crossClear: number?", "side = if so >= 0 then 1 else -1",
+                 "(side == 0 or (dx * nx + dz * nz) * side <= clear)", "local clear = crossClear or 0"),
+            "AnyUnitNear — with the barrier normal, a unit counts only until it is more than crossClear past the plane on the owner's side (crossing rule)")
+    if re.search(r"\bCrossingRule\s*=\s*true\b", gate or ""):
+        ok("army fix: ArmyConfig.Gate.CrossingRule = true (units through the gate never hold it open behind him)")
+    else:
+        bad("army fix: ArmyConfig.Gate.CrossingRule must be true (GATETAIL: a raider tailing the owner home walked in while his units held the gate 9.6 s)")
+    # ship fix round 1 (GATECAMP): only units still on the far side hold it; 3 counted his rear rank standing against the
+    # shut barrier on his side and a camping raider walked in whenever he stood 13-16 studs from the gate
+    ccs = _af_num(gate, "CrossClearStuds")
+    if ccs is not None and 0 <= ccs <= 1:
+        ok(f"army fix: ArmyConfig.Gate.CrossClearStuds = {ccs:g} (in [0, 1])")
+    else:
+        bad(f"army fix: ArmyConfig.Gate.CrossClearStuds must be in [0, 1] (got {ccs}; 3 let his rear rank on his side hold the gate open for a camping raider)")
+    rg = _af_fn(gd, "rebuildGate") or ""
+    _af_has(rg, ("def.GateUnitSince = nil", "def.GateUnitSeenAt = nil"), "rebuildGate — a rebuilt gate starts with no units' hold count left over")
+    # ship (OPENJIT): the pace is smoothed and stepped, so a jittery owner position does not rewrite WalkSpeed every pass
+    _af_has(uo, ('st.PaceAvg = if speed < 1 or st.PaceAvg < 1 or math.abs(speed - st.PaceAvg) > jump then speed else st.PaceAvg + (speed - st.PaceAvg) * alpha',
+                 'if step <= 0 or st.PaceAvg < 1 or math.abs(st.PaceAvg - st.PaceSpeed) >= step then\n\t\tst.PaceSpeed = st.PaceAvg'),
+            "updateOwnerMotion — the follow pace is his speed smoothed (PaceSmooth), a jump over PaceJumpStuds passes at once, moved only in PaceStep steps")
+    psm, pst, pjs = _af_num(cu, "PaceSmooth"), _af_num(cu, "PaceStep"), _af_num(cu, "PaceJumpStuds")
+    if psm is not None and pst is not None and 0.1 <= psm <= 0.8 and 0.5 <= pst <= 3:
+        ok(f"army fix: CatchUp PaceSmooth {psm:g} / PaceStep {pst:g} (fewer WalkSpeed writes with a jittery owner position)")
+    else:
+        bad(f"army fix: CatchUp PaceSmooth must be in [0.1, 0.8] and PaceStep in [0.5, 3] (got {psm} / {pst}); OPENJIT: 20 WalkSpeed writes/s per army")
+    if pjs is not None and pst is not None and pst < pjs <= 6:
+        ok(f"army fix: CatchUp PaceJumpStuds {pjs:g} (a real start or sprint is not smoothed: no lag, no catch-up run)")
+    else:
+        bad(f"army fix: CatchUp PaceJumpStuds must be above PaceStep and at most 6 (got {pjs}); SLIDE: smoothing lag behind a start made catch-up runs")
+    if "SquadOrdersService = deps.SquadOrdersService" in gd and not re.search(r"require\([^)]*SquadOrdersService", gd):
+        ok("army fix: GateDefenseService takes SquadOrdersService from deps (no require, no cycle)")
+    else:
+        bad("army fix: GateDefenseService must take SquadOrdersService from deps, never require it")
+    b_sq, b_gd = boot.find('safeInit("SquadOrdersService", SquadOrdersService, deps)'), boot.find('safeInit("GateDefenseService", GateDefenseService, deps)')
+    if 0 <= b_sq < b_gd:
+        ok("army fix: Bootstrap inits GateDefenseService after SquadOrdersService")
+    else:
+        bad("army fix: Bootstrap must init GateDefenseService after SquadOrdersService")
+    # 6) no whole-tree scan added: GetTagged only in nearestHostile (e506c9c) and waterList (a recover search, <= 1 / 10 s);
+    #    the recover probe drops its references to a player who left
+    gt = sorted(str(_af_where(spans, m.start())) for m in re.finditer(r"\bGetTagged\(", so))
+    if gt == ["hostileScan", "waterList"] and "GetDescendants(" not in so:
+        ok("army fix: SquadOrdersService scans nothing per unit (GetTagged only in hostileScan (lane A0, once per pass) + waterList, no GetDescendants)")
+    else:
+        bad(f"army fix: GetTagged may only be in hostileScan + waterList and GetDescendants nowhere, got {gt}")
+    must_contain(AF_SO, "\t\tif recoverFor == player then", "army fix: PlayerRemoving drops the recover probe's references to the player")
+
+
+_army_fix_pins()
+# ── end army fix
 
 parse_gate()
 

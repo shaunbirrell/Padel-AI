@@ -28,6 +28,15 @@
 	remembered, and a fresh approach there would let three walled spots take turns forever).
 	A check that found nothing in sight is repeated at most once per shot cooldown (LosCheckAt). ATTACK units fire only
 	inside 85 % of AttackRange, as before. The same order again within UnitRepeatOrderGraceSeconds changes nothing.
+	Army fix (ArmyConfig.Follow / Recover / Gate): a FOLLOW unit aims at its slot where the player will be at the next
+	think (Follow.Lead) and walks at the player's pace, faster while it is behind with a walkable line (Follow.CatchUp).
+	A unit is never removed for distance, a failed walk or a wall: one that is far behind, stuck, fallen or inside
+	another player's plot is moved back (recoverUnit: one Model:PivotTo of the same unit, same id) to a clear spot
+	behind the player. destroyUnit runs only on the lifecycle paths: Humanoid.Died, the SyncArmy not-living cull, the
+	trim to the desired count, OrdersConfig.Enabled = false and PlayerRemoving. The player's own FOLLOW units open his
+	friendly gate while he is alive and near it (AnyUnitNear, read by GateDefenseService); never on Hold / Attack /
+	Retreat, never while he is dead or away. Near a hostile (Follow.ThreatStuds; with ThreatStandingFor live
+	for the player only while he stands) FOLLOW units follow as at e506c9c (no lead, UnitWalkSpeed).
 ]]
 
 local Players = game:GetService("Players")
@@ -40,11 +49,18 @@ local Constants = require(Shared.Constants)
 local OrdersConfig = require(Shared.Configs.OrdersConfig)
 local RigConfig = require(Shared.Configs.RigConfig) -- R-RIG: escort figures per unit (army D14)
 local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P1-4 escort + kill credit
+local ArmyConfig = require(Shared.Configs.ArmyConfig) -- army fix: Follow (lead + catch-up), Recover
+local BaseConfig = require(Shared.Configs.BaseConfig) -- army fix: plot squares (Recover)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local PlotFrame = require(Shared.Util.PlotFrame) -- army fix: plot centres (Recover)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
 local SquadOrdersService = {}
+-- v90 (Code Bot): the army despawn fix (Follow / Recover / Gate blocks) is live only for owners with
+-- ArmyConfig.LiveFor("Fix", userId); set per owner at the top of his think pass (a module field: this chunk is near the
+-- 200-register limit). False = v85 FollowPace (Rollout.Army) / 4d26673 behaviour.
+SquadOrdersService._FixLive = false
 
 local DataService: any = nil
 local SoldierService: any = nil
@@ -70,6 +86,7 @@ type SquadUnit = {
 	HoldPos: Vector3?,
 	Alive: boolean,
 	Crumb: number?, -- FollowPath: serial of the trail point this unit walks to while its slot is blocked
+	CrumbPos: Vector3?, -- army fix (Follow.KeepTrailPoint): where that trail point is (kept after it leaves the trail)
 	CrumbScanAt: number, -- FollowPath: no full trail scan before this (a scan found nothing in sight)
 	CrumbCheckAt: number, -- FollowPath: next check that the trail point is still in sight
 	LosBlocked: boolean, -- squadfair: the last shot check found nothing in sight (an ATTACK unit closes in)
@@ -84,6 +101,18 @@ type SquadUnit = {
 	AimRoot: BasePart?, -- squadfair: the fallback hostile this unit last shot at (it faces it between shots)
 	AimHum: Humanoid?, -- ...and its Humanoid (a dead one is let go)
 	ChaseHum: Humanoid?, -- squadfair: ATTACK: the hostile it chases (the nearest); another one beyond the band = a fresh blocked spell
+	Speed: number, -- army fix: the WalkSpeed last written (written only on a change)
+	Goal: Vector3?, -- army fix: where its move this think went (nil: it stands); the stuck check
+	ProgPos: Vector3?, -- army fix: its root at the last think while it walked to a goal further than StuckGoalStuds
+	ProgDir: Vector3?, -- ...and the flat direction to that goal then
+	ProgSum: number, -- ...studs made toward its goals since ProgSince
+	ProgSince: number,
+	FarSince: number?, -- army fix: since when it is more than Recover.FollowFarStuds from its owner
+	RecoverAt: number, -- army fix: its last recover or failed search (Recover.CooldownSeconds)
+	DeferSince: number?, -- army fix: since when its first clear spot is too near another player
+	PlotId: number?, -- army fix: the foreign plot square it stands in (Recover plot trigger), nil outside any
+	PlotSince: number, -- ...since when
+	StopHeld: boolean, -- army fix: it stands where the owner's stop left it (Follow.Lead.StopHoldStuds) until he moves
 }
 
 -- squadfair: up to `cap` hostiles, nearest first (the visible-target fallback). Refilled in place: no table per think.
@@ -107,6 +136,35 @@ type SquadState = {
 	DesiredCount: number,
 	Mirror: boolean, -- lane C: wings swapped left <-> right (the player turned round; nobody crosses behind them)
 	OrderAt: number?, -- squadfair: when the current order was last given (UnitRepeatOrderGraceSeconds)
+	Lead: Vector3, -- army fix: the owner's flat velocity x Follow.Lead.Seconds this pass (capped; zero after a jump)
+	OwnerSpeed: number, -- army fix: his flat speed over the last pass (0 after a jump on foot)
+	PaceAvg: number, -- ship: his speed smoothed over passes (Follow.CatchUp.PaceSmooth)
+	PaceSpeed: number, -- ship: the pace follow units walk at; it moves only in Follow.CatchUp.PaceStep steps
+	LastPos: Vector3?, -- ...his root at the last pass
+	LastAt: number, -- ...and when
+	Seated: boolean, -- army fix: he sits (a vehicle seat) this pass
+	FastAt: number?, -- army fix: the last pass he drove faster than Recover.VehicleDeferSpeed (until he stops)
+	SlowSince: number?, -- ...since when he moves slower than VehicleStopSpeed after that
+	RegroupAt: number?, -- ...when that drive ended (stop or exit): far units regroup for RegroupWindowSeconds
+	WaterAt: number, -- army fix: the pass his on-water test was made (lazily, only when a unit would recover)
+	OnWater: boolean,
+	RecoverWinAt: number, -- army fix: the per-owner recover budget window (Recover.PerOwnerPerSecond)
+	RecoverWinN: number,
+	RecoverLogAt: number, -- army fix: the last server log line for this owner (Recover.LogSeconds)
+	RecoverLogN: number, -- ...recovers since
+	PrevSpeed: number, -- army fix: his measured flat speed the pass before (Follow.Lead.DropOnSlowdown)
+	Engaged: boolean, -- army fix: a hostile is within Follow.ThreatStuds of him this pass (e506c9c follow pacing)
+	OwnerPlot: number?, -- army fix: the plot square he stands in (Recover plot trigger)
+	OwnerPlotLeft: number?, -- ...the one he last left
+	OwnerPlotLeftAt: number, -- ...and when
+	LandPos: { Vector3 }, -- army fix: the last LAND_RING recover landing spots of this army (units never land on one another)
+	LandAt: { number }, -- ...and when
+	LandI: number,
+	ReformWinAt: number, -- army fix: the per-owner re-form window (Recover.ReformPerMinute)
+	ReformWinN: number,
+	WalkAt: number, -- army fix: the last pass he moved at 2 studs/s or more (Follow.Lead.StopHoldSeconds)
+	OwnerVel: Vector3, -- army fix: his flat velocity over the last pass (Follow.ThreatApproachOnly)
+	Slowing: boolean, -- army fix: this pass he moved at under Lead.DropOnSlowdown x the pass before (he is stopping)
 }
 
 local VALID: { [string]: boolean } = {
@@ -133,6 +191,23 @@ local losIgnore: { Instance } = {}
 local npcBodyFolder: Instance? = nil -- squadfair: CombatService's NPC folder (CombatFairnessConfig.UnitLosIgnoreNPCBodies)
 local hitErrLogAt = -math.huge -- squadfair: the last ApplyUnitHit error warning (UnitHitErrorLogSeconds)
 local hitErrMuted = 0 -- ...and the errors not logged since
+local reformAt: { [number]: number } = {} -- army fix: owner -> until when a queued re-form SyncArmy covers him
+-- army fix: the recover probes (RespectCanCollide, squads + characters + the owner's vehicle ignored); the ignore list is
+-- refilled once per owner per pass, and only when one of his units needs a spot
+local recoverParams = RaycastParams.new()
+recoverParams.FilterType = Enum.RaycastFilterType.Exclude
+recoverParams.RespectCanCollide = true
+local recoverIgnore: { Instance } = {}
+local recoverFor: Player? = nil -- ...whose pass the list was filled for
+local recoverForAt = -math.huge
+-- army fix: recover landings remembered per army (SquadState.LandPos / LandAt; ArmyConfig.Recover.LandRing)
+local LAND_RING = math.clamp(math.floor(tonumber(((ArmyConfig :: any).Recover or {}).LandRing) or 8), 1, 32)
+local thinkErrAt: { [number]: number } = {} -- army fix (ArmyConfig.Loop): owner -> his last think-error log line
+local recoverErrAt: { [number]: number } = {} -- army fix (ArmyConfig.Loop): owner -> his last recover-error log line
+local threatScanStuds = 0 -- army fix (Follow.ThreatStuds): > 0 only during the FOLLOW escort pick (nearestHostile)
+local threatNearRoot: BasePart? = nil -- ...the nearest hostile it found within that range (cleared right after)
+local waterParts: { BasePart } = {} -- army fix: the WE_Water surfaces (Constants.Tags.Water), re-read at most every 10 s
+local waterReadAt = -math.huge
 
 -- squadfair: the folder CombatService keeps every NPC model in (nil until the first NPC spawns); cached
 local function npcBodies(): Instance?
@@ -438,6 +513,23 @@ local function wallHugPoint(playerCf: CFrame, offset: Vector3, probe: Probe, cfg
 	return (playerCf * CFrame.new(if offset.X < 0 then -x else x, 0, offset.Z)).Position
 end
 
+-- army fix (ArmyConfig.Follow.KeepTrailPoint): with no walkable trail point, a unit that was on the trail keeps
+-- walking to the last point it had (the player walked there, and it was walkable from about here) instead of straight
+-- at its blocked slot. Dropped once reached (ReachStuds), when it lies within StopGap of the player (a cut-off unit
+-- still stops behind him), when the slot opens up, and on a recover. No rays.
+local function keptTrailPoint(unit: SquadUnit, from: Vector3, playerPos: Vector3, gap: number, cfg: { [string]: any }): Vector3?
+	local p = unit.CrumbPos
+	if p == nil then
+		return nil
+	end
+	local f = (ArmyConfig :: any).Follow
+	if not SquadOrdersService._FixLive or typeof(f) ~= "table" or f.KeepTrailPoint ~= true or flatDist(p, from) <= cfgNum(cfg, "ReachStuds", 2.5) or flatDist(p, playerPos) < gap then
+		unit.CrumbPos = nil
+		return nil
+	end
+	return p
+end
+
 --[[ Where a Follow unit walks this think:
 	1. its slot, when the unit is there or its body can walk straight to it;
 	2. against the wall beside the player (wallHugPoint), when the slot is inside or behind that wall;
@@ -448,21 +540,26 @@ end
 	   them. Every RescanSeconds it re-checks its point (it may have been pushed). Nothing walkable → the slot, as
 	   before, and no new full scan for RescanSeconds.
 	Rays per unit per think: 0 in its slot, 2 on the way to a slot it can reach, 5 against a wall or squeezed in,
-	5-11 on the trail, up to 2 x MaxCrumbs more on a scan. ]]
-local function followGoal(unit: SquadUnit, playerCf: CFrame, offset: Vector3, slotPos: Vector3, trail: Trail?, probe: Probe?, cfg: { [string]: any }?, now: number): Vector3
+	5-11 on the trail, up to 2 x MaxCrumbs more on a scan.
+	army fix: with nothing walkable, the last trail point it had (keptTrailPoint) comes before the blocked slot.
+	army fix: the second result says whether the goal was found walkable (false: a blocked straight line; the unit then
+	walks at its owner's pace, never the catch-up run). ]]
+local function followGoal(unit: SquadUnit, playerCf: CFrame, offset: Vector3, slotPos: Vector3, trail: Trail?, probe: Probe?, cfg: { [string]: any }?, now: number): (Vector3, boolean)
 	if trail == nil or probe == nil or cfg == nil then
 		unit.Crumb = nil
-		return slotPos
+		return slotPos, true
 	end
 	local from = unit.Root.Position
 	if flatDist(from, slotPos) <= (OrdersConfig.FollowArriveStuds or 2) or bodyClear(from, slotPos, probe) then
 		unit.Crumb = nil
-		return slotPos
+		unit.CrumbPos = nil
+		return slotPos, true
 	end
 	local hug = wallHugPoint(playerCf, offset, probe, cfg)
 	if hug and (flatDist(from, hug) <= (OrdersConfig.FollowArriveStuds or 2) or bodyClear(from, hug, probe)) then
 		unit.Crumb = nil
-		return hug
+		unit.CrumbPos = nil
+		return hug, true
 	end
 	-- the slot is in the open but a wall end or a crate is in the unit's way: the same depth, SqueezeStuds nearer
 	-- the player's centre line (never within MinSide of it)
@@ -472,7 +569,8 @@ local function followGoal(unit: SquadUnit, playerCf: CFrame, offset: Vector3, sl
 		local squeezed = (playerCf * CFrame.new(if offset.X < 0 then -x else x, 0, offset.Z)).Position
 		if bodyClear(from, squeezed, probe) then
 			unit.Crumb = nil
-			return squeezed
+			unit.CrumbPos = nil
+			return squeezed, true
 		end
 	end
 	local pts, ids = trail.Points, trail.Ids
@@ -485,7 +583,7 @@ local function followGoal(unit: SquadUnit, playerCf: CFrame, offset: Vector3, sl
 	end
 	if last == 0 then
 		unit.Crumb = nil
-		return hug or slotPos
+		return keptTrailPoint(unit, from, playerPos, gap, cfg) or hug or slotPos, false
 	end
 	local idx: number? = nil
 	local want = unit.Crumb
@@ -507,7 +605,7 @@ local function followGoal(unit: SquadUnit, playerCf: CFrame, offset: Vector3, sl
 	end
 	if idx == nil then
 		if not lost and now < unit.CrumbScanAt then
-			return hug or slotPos
+			return keptTrailPoint(unit, from, playerPos, gap, cfg) or hug or slotPos, false
 		end
 		for i = last, 1, -1 do
 			if bodyClear(from, pts[i], probe) then
@@ -518,7 +616,7 @@ local function followGoal(unit: SquadUnit, playerCf: CFrame, offset: Vector3, sl
 		if idx == nil then
 			unit.Crumb = nil
 			unit.CrumbScanAt = now + rescan
-			return hug or slotPos
+			return keptTrailPoint(unit, from, playerPos, gap, cfg) or hug or slotPos, false
 		end
 		unit.CrumbCheckAt = now + rescan
 	else
@@ -537,7 +635,118 @@ local function followGoal(unit: SquadUnit, playerCf: CFrame, offset: Vector3, sl
 	end
 	local k = idx :: number
 	unit.Crumb = ids[k]
-	return pts[k]
+	unit.CrumbPos = pts[k]
+	return pts[k], true
+end
+
+-- army fix: a unit's WalkSpeed, written only when it changes (no property write per think)
+local function setSpeed(unit: SquadUnit, speed: number)
+	if math.abs(unit.Speed - speed) > 0.05 then
+		unit.Speed = speed
+		unit.Humanoid.WalkSpeed = speed
+	end
+end
+
+-- army fix: a block of ArmyConfig.Follow (Lead / CatchUp) when it is on, else nil
+local function followCfg(key: string): { [string]: any }?
+	if not SquadOrdersService._FixLive then
+		return nil -- v90: Rollout.Fix not live for this owner
+	end
+	local f = (ArmyConfig :: any).Follow
+	local b = if typeof(f) == "table" then f[key] else nil
+	if typeof(b) == "table" and b.Enabled == true then
+		return b
+	end
+	return nil
+end
+
+-- ...and with Follow.ThreatApproachOnly only while he stands or walks toward that hostile (walking away: normal follow)
+local function threatApproachOnly(): boolean
+	local f = (ArmyConfig :: any).Follow
+	return typeof(f) == "table" and f.ThreatApproachOnly == true
+end
+
+-- Follow.ThreatKeepCatchUp keeps the catch-up run near a hostile too (only the lead is dropped); the standing-only rule
+-- is ArmyConfig.ThreatStandingFor(userId)
+local function threatFlag(key: string): boolean
+	local f = (ArmyConfig :: any).Follow
+	return typeof(f) == "table" and f[key] == true
+end
+
+-- army fix (Follow.ThreatStuds): FOLLOW units follow as at e506c9c (no lead, UnitWalkSpeed) while a hostile the escort
+-- would pick is within this of the owner; 0 = off
+local function threatStuds(): number
+	if not SquadOrdersService._FixLive then
+		return 0 -- v90: Rollout.Fix not live for this owner
+	end
+	local f = (ArmyConfig :: any).Follow
+	local t = if typeof(f) == "table" then tonumber(f.ThreatStuds) else nil
+	return if t and t > 0 then t else 0
+end
+
+-- army fix (Follow.EscortWalkInFormation): while the owner walks on foot, FOLLOW escort units keep the formation (their
+-- led slot, catch-up allowed) and shoot from it, closing in only inside Follow.EscortWalkLeash of him; they stand to
+-- fight, walk back at the escort leash or side-step only while he stands
+local function escortWalkInFormation(st: SquadState): boolean
+	local f = (ArmyConfig :: any).Follow
+	return SquadOrdersService._FixLive and typeof(f) == "table" and f.EscortWalkInFormation == true and st.OwnerSpeed >= 1 and not st.Seated
+end
+
+-- ...and the walking leash (studs from him) inside which such a unit closes in toward its target instead (0 = never)
+local function escortWalkLeash(): number
+	local f = (ArmyConfig :: any).Follow
+	local v = if typeof(f) == "table" then tonumber(f.EscortWalkLeash) else nil
+	return if v and v > 0 then v else 0
+end
+
+local function recoverCfg(): { [string]: any }?
+	local rc = (ArmyConfig :: any).Recover
+	if SquadOrdersService._FixLive and typeof(rc) == "table" and rc.Enabled == true then
+		return rc
+	end
+	return nil
+end
+
+--[[ army fix (Follow.CatchUp): a FOLLOW unit walks at its owner's pace (his flat speed over the last pass, never below
+	UnitWalkSpeed, so it falls back to UnitWalkSpeed while he stands) and runs SpeedMult x that pace (at most MaxSpeed)
+	only while it is more than StartStuds behind: its goal is further than StartStuds + the lead distance (the lead
+	alone never starts a run, so a unit in its slot walks at his pace) and its line to the goal is walkable (a unit
+	whose line is blocked never runs). CatchUp off, or engaged (st.Engaged: a hostile near him, Follow.ThreatStuds): UnitWalkSpeed,
+	as at e506c9c. ]]
+local function followSpeed(st: SquadState, unit: SquadUnit, toGoal: number, walkable: boolean)
+	if not SquadOrdersService._FixLive then
+		return -- v90: not a Fix-live owner: the speed stays with v85 FollowPace / UnitWalkSpeed (4d26673)
+	end
+	local base = OrdersConfig.UnitWalkSpeed or 14
+	local cu = followCfg("CatchUp")
+	if cu == nil or (st.Engaged and not threatFlag("ThreatKeepCatchUp")) then
+		setSpeed(unit, base)
+		return
+	end
+	local maxSpeed = math.max(base, cfgNum(cu, "MaxSpeed", 28))
+	local pace = math.clamp(st.PaceSpeed, base, maxSpeed) -- ship: the smoothed, stepped pace (updateOwnerMotion)
+	if walkable and toGoal - st.Lead.Magnitude > cfgNum(cu, "StartStuds", 6) then
+		pace = math.min(maxSpeed, pace * cfgNum(cu, "SpeedMult", 1.5))
+	end
+	setSpeed(unit, pace)
+end
+
+-- army fix (Follow.Lead.StopHoldStuds): when the owner stops, a unit whose goal lies behind it (along his facing) and
+-- within this many studs overshot on the last lead: it stands, facing his way, instead of turning back toward the
+-- camera. 0 when the lead is off.
+local function stopHoldStuds(): number
+	local lc = followCfg("Lead")
+	if lc == nil then
+		return 0
+	end
+	return cfgNum(lc, "MaxStuds", 4) + cfgNum(lc, "StopHoldStuds", 2)
+end
+
+-- ...only for a unit that stops within this many seconds of his last walking pass (a unit walking back to its slot
+-- later, e.g. after he turned round on the spot, still does)
+local function stopHoldSeconds(): number
+	local lc = followCfg("Lead")
+	return if lc then cfgNum(lc, "StopHoldSeconds", 1.5) else 0
 end
 
 local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
@@ -651,6 +860,7 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 		HoldPos = nil,
 		Alive = true,
 		Crumb = nil,
+		CrumbPos = nil,
 		CrumbScanAt = 0,
 		CrumbCheckAt = 0,
 		LosBlocked = false,
@@ -664,6 +874,18 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 		AimRoot = nil,
 		AimHum = nil,
 		ChaseHum = nil,
+		Speed = humanoid.WalkSpeed,
+		Goal = nil,
+		ProgPos = nil,
+		ProgDir = nil,
+		ProgSum = 0,
+		ProgSince = 0,
+		FarSince = nil,
+		RecoverAt = -math.huge,
+		DeferSince = nil,
+		PlotId = nil,
+		PlotSince = 0,
+		StopHeld = false,
 	}
 
 	humanoid.Died:Connect(function()
@@ -734,7 +956,7 @@ local function nearSpot(pos: Vector3, a: Vector3?, b: Vector3?, r: number): bool
 end
 
 -- ── army lane A0 (ArmyConfig Rollout.Escort / Escort / ShotFx; SPEC-ARMY-FINAL §7.1-7.2) ─────────────────────────
-local ArmyCfg = require(Shared.Configs.ArmyConfig)
+local ArmyCfg = ArmyConfig -- army lane A0 (the same module, required once at the top by the army fix)
 -- One hostile list per think pass (Escort.NpcSnapshot, every army): CombatService.LiveNPCSnapshot refills it in place
 -- at the start of the pass; nearestHostile reads it instead of a CollectionService:GetTagged per unit. Outside a pass
 -- (or with the switch off / no CombatService) it scans the tag as before.
@@ -764,6 +986,9 @@ function SquadOrdersService._PaceBegin(player: Player, proot: BasePart): boolean
 	followCtx.Moving = false
 	followCtx.Lead = Vector3.zero
 	local c = (ArmyCfg :: any).FollowPace
+	if SquadOrdersService._FixLive then
+		return false -- v90: the army fix (Rollout.Fix) drives this owner's pace, lead and recover instead
+	end
 	if typeof(c) ~= "table" or c.Enabled ~= true or not ArmyCfg.LiveFor("Army", player.UserId) then
 		return false
 	end
@@ -883,6 +1108,9 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 	if list then
 		candReset(list)
 	end
+	local tScan = threatScanStuds -- army fix (Follow.ThreatStuds): 0 except during the FOLLOW escort pick
+	local tDist = math.huge
+	local tRoot: BasePart? = nil
 	for _, inst in ipairs(hostileScan(npcTag)) do -- army lane A0: the pass's NPC list (was GetTagged per call)
 		-- squadfair: a CombatService NPC only (it has an NPCId); a static WE_NPC statue takes no damage from any shot
 		if
@@ -900,9 +1128,13 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 				heldA = heldA or inA
 				heldB = heldB or inB
 				local d = (p - fromPos).Magnitude
-				if d < bestDist or d < zoneDist or d <= lr then
+				if d < bestDist or d < zoneDist or d <= lr or d <= tScan then
 					local id = inst:GetAttribute("NPCId")
 					if not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(owner, id) == false) then
+						if d <= tScan and d < tDist then -- army fix: the nearest hostile within ThreatStuds
+							tDist = d
+							tRoot = root
+						end
 						if inA or inB then
 							if d < zoneDist then
 								zoneDist = d
@@ -921,6 +1153,9 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 				end
 			end
 		end
+	end
+	if tScan > 0 then
+		threatNearRoot = tRoot -- army fix: read (and cleared) by the think loop right after the escort pick
 	end
 	return bestHum, bestRoot, bestDist, zoneHum, zoneRoot, zoneDist, heldA, heldB
 end
@@ -954,6 +1189,9 @@ local function escortPickLive(player: Player, proot: BasePart): (Humanoid?, Base
 	candReset(escortCands)
 	local bestHum: Humanoid?, bestRoot: BasePart?, bestDist = nil, nil, r
 	local defHum: Humanoid?, defRoot: BasePart?, defDist = nil, nil, math.huge
+	local tScan = threatScanStuds -- army fix (Follow.ThreatStuds): the nearest pickable hostile out to it, same filters
+	local tDist = math.huge
+	local tRoot: BasePart? = nil
 	for _, inst in ipairs(hostileScan(Constants.Tags.NPC)) do
 		if
 			inst:IsA("Model")
@@ -965,32 +1203,41 @@ local function escortPickLive(player: Player, proot: BasePart): (Humanoid?, Base
 			local root = inst:FindFirstChild("HumanoidRootPart")
 			if hum and root and root:IsA("BasePart") and hum.Health > 0 then
 				local d = (root.Position - from).Magnitude
-				if d <= dr then
+				if d <= dr or d <= tScan then
 					local id = inst:GetAttribute("NPCId")
 					if not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(player, id) == false) then
-						local aiming, recent = false, false
-						if threat ~= nil then
-							aiming, recent = threat(id, player, focus)
+						if d <= tScan and d < tDist then -- army fix: the nearest hostile within ThreatStuds
+							tDist = d
+							tRoot = root
 						end
-						if aiming == true or recent == true then
-							if d < defDist then
-								defDist = d
-								defHum = hum
-								defRoot = root
+						if d <= dr then
+							local aiming, recent = false, false
+							if threat ~= nil then
+								aiming, recent = threat(id, player, focus)
 							end
-							candInsert(escortCands, cap, hum, root, d - dr - 1) -- sorts before every other hostile
-						elseif d <= r then
-							if d < bestDist then
-								bestDist = d
-								bestHum = hum
-								bestRoot = root
+							if aiming == true or recent == true then
+								if d < defDist then
+									defDist = d
+									defHum = hum
+									defRoot = root
+								end
+								candInsert(escortCands, cap, hum, root, d - dr - 1) -- sorts before every other hostile
+							elseif d <= r then
+								if d < bestDist then
+									bestDist = d
+									bestHum = hum
+									bestRoot = root
+								end
+								candInsert(escortCands, cap, hum, root, d)
 							end
-							candInsert(escortCands, cap, hum, root, d)
 						end
 					end
 				end
 			end
 		end
+	end
+	if tScan > 0 then
+		threatNearRoot = tRoot -- army fix: read (and cleared) by the think loop right after the escort pick
 	end
 	escortStats.LivePasses += 1
 	if defHum ~= nil then
@@ -1262,6 +1509,14 @@ local function stepSaw(unit: SquadUnit)
 	end
 end
 
+-- army fix: the owner walks (Follow.EscortWalkInFormation): a side-step walk ends (the blocked count is kept)
+local function stepEnd(unit: SquadUnit)
+	local s = stepState[unit]
+	if s then
+		s.Goal = nil
+	end
+end
+
 --[[ One probe (<= 4 rays): SideStepStuds[ring] to the unit's left and right (across its line to the target). A side is
 	tried only when that spot stays within 90 % of the escort leash from the owner and within AttackRange of the target:
 	one knee-height ray for walk clearance (collidable geometry), then one sight ray from the spot's eye to the target
@@ -1397,6 +1652,7 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 	local playerPos = playerRoot.Position
 	local unitPos = unit.Root.Position
 	local fromPlayer = (unitPos - playerPos).Magnitude
+	local walkForm = escortWalkInFormation(st) -- army fix: he walks on foot (formation, shooting from it)
 	-- squadfair: the shot first (the unit faces what it shoots), then the escort's walk as before
 	if losCheckDue(unit, now) then
 		local sh, sr, rays = pickShot(player, unit, th, troot, range, escortCands, CombatFairnessConfig.EscortRequireLos == true)
@@ -1412,10 +1668,33 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 			end
 		elseif rays > 0 then
 			losBlockedFor(unit, now)
-			if escortLive and fromPlayer <= leash then
+			if escortLive and fromPlayer <= leash and not walkForm then
 				stepBlocked(player, unit, playerRoot, troot, now) -- army lane A0: side-step after SideStepAfterBlocked
 			end
 		end
+	end
+	if walkForm then
+		-- army fix (Follow.EscortWalkInFormation): he walks. No stand to fight and no side-step walk: beyond the
+		-- walking leash (Follow.EscortWalkLeash, shorter than the phone camera's distance behind him) the unit goes
+		-- back to the formation (the caller runs followMove: the led slot or his trail, catch-up allowed); inside it,
+		-- it keeps his pace toward the target on his line to it, at most 90 % of that leash out. It shoots from
+		-- either (the shot above).
+		if escortLive then
+			stepEnd(unit)
+		end
+		local wl = math.min(leash, escortWalkLeash())
+		if wl <= 0 or fromPlayer > wl then
+			return false
+		end
+		local aimW = aimPoint(unit, troot)
+		faceYaw(unit.Root, aimW)
+		local offW = aimW - playerPos
+		local maxW = wl * 0.9
+		local goalW = if offW.Magnitude > maxW then playerPos + offW.Unit * maxW else aimW
+		followSpeed(st, unit, 0, false) -- his pace (a unit that falls beyond the walking leash catches up in followMove)
+		unit.Goal = goalW
+		unit.Humanoid:MoveTo(goalW)
+		return true
 	end
 	if followCtx.Live and followCtx.Moving then
 		-- v85 FollowPace: the owner is walking: the escort shoots on the move from its slot (followMove), never stands
@@ -1423,6 +1702,8 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		return false
 	end
 	if escortLive and stepMove(unit, playerRoot, troot, fromPlayer, now) then
+		followSpeed(st, unit, 0, false) -- army fix: a side-step walks at the owner's pace (never a catch-up run)
+		unit.Goal = nil -- army fix: a side-step spot is not a follow goal (the stuck window starts over)
 		return true -- army lane A0: walking to (or standing on) a side-step spot that sees the target
 	end
 
@@ -1430,16 +1711,29 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 	local dist = (aimAt - unitPos).Magnitude
 	faceYaw(unit.Root, aimAt)
 	if fromPlayer > leash then
-		-- back to the formation slot next to the player (still shooting on the way when possible)
-		SquadOrdersService._PaceSpeed(unit, fromPlayer) -- v85 FollowPace (base speed when not live)
-		unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position)
+		if SquadOrdersService._FixLive then
+			-- back to the formation slot next to the player (still shooting on the way when possible); army fix: around
+			-- where the player will be (Follow.Lead; st.Lead is zero when off or near a hostile)
+			local goal = (playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position + st.Lead
+			followSpeed(st, unit, flatDist(goal, unitPos), false) -- the owner's pace: never a run into a wall
+			unit.Goal = goal
+			unit.Humanoid:MoveTo(goal)
+		else
+			-- back to the formation slot next to the player (still shooting on the way when possible)
+			SquadOrdersService._PaceSpeed(unit, fromPlayer) -- v85 FollowPace (base speed when not live)
+			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position)
+		end
 	elseif dist > range * 0.85 then
 		-- close in, but never past 90 % of the leash from the player
 		local off = aimAt - playerPos
 		local maxOff = leash * 0.9
 		local goal = if off.Magnitude > maxOff then playerPos + off.Unit * maxOff else aimAt
+		followSpeed(st, unit, 0, false) -- army fix: the owner's pace
+		unit.Goal = goal
 		unit.Humanoid:MoveTo(goal)
 	else
+		followSpeed(st, unit, 0, false)
+		unit.Goal = nil
 		unit.Humanoid:MoveTo(unitPos)
 	end
 	return true
@@ -1449,11 +1743,39 @@ end
 -- (followGoal). squadfair: also an ATTACK unit that gave up a blocked chase (UnitBlockedChaseSeconds).
 local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart, trail: Trail?, probe: Probe?, now: number)
 	local offset = unitOffset(st, unit.Slot)
-	-- v85 FollowPace: a live owner's slot is taken where he will be LeadSeconds ahead (never behind him)
-	local pcf = if followCtx.Live then playerRoot.CFrame + followCtx.Lead else playerRoot.CFrame
-	local slotPos = (pcf * CFrame.new(offset)).Position
-	local target = followGoal(unit, pcf, offset, slotPos, trail, probe, followPathCfg(), now)
-	SquadOrdersService._PaceSpeed(unit, flatDist(unit.Root.Position, slotPos))
+	-- v90: the army fix (Rollout.Fix) replaces v85 FollowPace for a Fix-live owner; everyone else keeps v85 / 4d26673
+	local target: Vector3
+	if SquadOrdersService._FixLive then
+		-- army fix (Follow.Lead): the slot around where the player will be at the next think (st.Lead is zero when off; an
+		-- ATTACK give-up walks the unled slot, as before)
+		local leadCf = if st.Order == "Follow" then playerRoot.CFrame + st.Lead else playerRoot.CFrame
+		local slotPos = (leadCf * CFrame.new(offset)).Position
+		if unit.StopHeld and st.Order == "Follow" and not (st.OwnerSpeed >= 1 and not (st.Slowing and not st.Engaged)) then
+			-- army fix: held after he stopped (below), and its slot is still just behind it: it keeps standing, with no
+			-- walkable-line probe (no rays per think while he stands)
+			local lv = playerRoot.CFrame.LookVector
+			local up = unit.Root.Position
+			if flatDist(slotPos, up) <= stopHoldStuds() and (slotPos.X - up.X) * lv.X + (slotPos.Z - up.Z) * lv.Z < 0 then
+				unit.Goal = nil
+				unit.Humanoid:MoveTo(up)
+				faceYaw(unit.Root, up + lv * 8)
+				return
+			end
+		end
+		local walkable
+		target, walkable = followGoal(unit, leadCf, offset, slotPos, trail, probe, followPathCfg(), now)
+		local toGoal = flatDist(target, unit.Root.Position)
+		if st.Order == "Follow" then
+			followSpeed(st, unit, toGoal, walkable) -- army fix (Follow.CatchUp); an ATTACK give-up walks at its own speed
+		end
+		unit.Goal = target
+	else
+		-- v85 FollowPace: a live owner's slot is taken where he will be LeadSeconds ahead (never behind him)
+		local pcf = if followCtx.Live then playerRoot.CFrame + followCtx.Lead else playerRoot.CFrame
+		local slotPos = (pcf * CFrame.new(offset)).Position
+		target = followGoal(unit, pcf, offset, slotPos, trail, probe, followPathCfg(), now)
+		SquadOrdersService._PaceSpeed(unit, flatDist(unit.Root.Position, slotPos))
+	end
 	if followSlotList() == nil then
 		-- old grid (FollowSlots empty): the original player-distance rules
 		local dist = (unit.Root.Position - playerRoot.Position).Magnitude
@@ -1464,6 +1786,7 @@ local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart,
 		elseif dist > stop then
 			unit.Humanoid:MoveTo(target)
 		else
+			unit.Goal = nil
 			unit.Humanoid:MoveTo(unit.Root.Position)
 		end
 		return
@@ -1472,12 +1795,32 @@ local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart,
 	-- where it goes and, once in its slot, stands facing where the player faces (the old "face the player
 	-- beyond 10 studs" rule would crab-walk the outer wings sideways)
 	local toGoal = flatDist(target, unit.Root.Position)
-	if toGoal > (OrdersConfig.FollowArriveStuds or 2) or (followCtx.Live and followCtx.Moving) then
+	local arrive = OrdersConfig.FollowArriveStuds or 2
+	local go: boolean
+	if SquadOrdersService._FixLive then
+		if st.OwnerSpeed >= 1 and not (st.Slowing and not st.Engaged) then
+			unit.StopHeld = false
+		elseif st.Order == "Follow" and toGoal > arrive and toGoal <= stopHoldStuds() and (unit.StopHeld or now - st.WalkAt <= stopHoldSeconds()) then
+			-- army fix: he has just stopped and its goal is just behind it (the last lead carried it past its slot): it has
+			-- arrived, and stays put until he moves again
+			local lv = playerRoot.CFrame.LookVector
+			local up = unit.Root.Position
+			if (target.X - up.X) * lv.X + (target.Z - up.Z) * lv.Z < 0 then
+				toGoal = 0
+				unit.StopHeld = true
+			end
+		end
+		go = toGoal > arrive
+	else
+		go = toGoal > arrive or (followCtx.Live and followCtx.Moving) -- v85 FollowPace
+	end
+	if go then
 		unit.Humanoid:MoveTo(target)
 		if toGoal > 4 then
 			faceYaw(unit.Root, target)
 		end
 	else
+		unit.Goal = nil
 		unit.Humanoid:MoveTo(unit.Root.Position)
 		faceYaw(unit.Root, unit.Root.Position + playerRoot.CFrame.LookVector * 8)
 	end
@@ -1651,7 +1994,573 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 	end
 end
 
+-- ── army fix: RECOVER (ArmyConfig.Recover, SPEC-ARMY-FINAL §6.5): never delete, reposition ──────────────────────────
+
+-- the plot square (BaseConfig.PlotSize, flat) that holds `pos`, or nil
+local function plotAt(pos: Vector3): number?
+	local half = BaseConfig.PlotSize.X * 0.5
+	for id = 1, BaseConfig.MaxPlots do
+		local c = PlotFrame.PlotPosition(id)
+		if c and math.abs(pos.X - c.X) <= half and math.abs(pos.Z - c.Z) <= half then
+			return id
+		end
+	end
+	return nil
+end
+
+local function plotOwnerId(plotId: number): number?
+	if BaseService and BaseService.GetOwnerUserId then
+		local uid = BaseService.GetOwnerUserId(plotId)
+		if typeof(uid) == "number" then
+			return uid
+		end
+	end
+	return nil
+end
+
+local function ownPlotId(player: Player): number?
+	if BaseService and BaseService.GetOwnedPlotId then
+		local id = BaseService.GetOwnedPlotId(player)
+		if typeof(id) == "number" then
+			return id
+		end
+	end
+	return nil
+end
+
+-- the WE_Water surfaces (Constants.Tags.Water), re-read at most every Recover.WaterRereadSeconds (10) and only while a
+-- recover looks for a spot
+local function waterList(now: number): { BasePart }
+	local rcw = (ArmyConfig :: any).Recover
+	if now - waterReadAt >= (if typeof(rcw) == "table" then tonumber(rcw.WaterRereadSeconds) or 10 else 10) then
+		waterReadAt = now
+		table.clear(waterParts)
+		for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.Water)) do
+			if inst:IsA("BasePart") then
+				table.insert(waterParts, inst)
+			end
+		end
+	end
+	return waterParts
+end
+
+-- ground at height y under a WE_Water surface (the VehicleService rule: inside its footprint, below its top)
+local function underWater(x: number, y: number, z: number, now: number): boolean
+	for _, wp in ipairs(waterList(now)) do
+		if wp.Parent then
+			local lp = wp.CFrame:PointToObjectSpace(Vector3.new(x, y, z))
+			if math.abs(lp.X) <= wp.Size.X * 0.5 and math.abs(lp.Z) <= wp.Size.Z * 0.5 and wp.Position.Y + wp.Size.Y * 0.5 > y - 0.5 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- the vehicle model a seat belongs to (the ancestor with a VehicleId), else the seat's parent
+local function seatVehicle(seat: Instance): Instance
+	local m: Instance? = seat.Parent
+	while m ~= nil and m ~= Workspace do
+		if m:GetAttribute("VehicleId") ~= nil then
+			return m
+		end
+		m = m.Parent
+	end
+	return seat.Parent or seat
+end
+
+local recoverProbeRec: Probe = { Params = recoverParams, Drop = 1, Half = 0.9 }
+
+-- the recover probe for this owner this pass (FollowPath's ray rules): every squad, every character and the vehicle he
+-- sits in are ignored; the ignore list is refilled at most once per owner per pass
+local function recoverProbe(player: Player, playerRoot: BasePart, now: number): Probe
+	if recoverFor ~= player or recoverForAt ~= now then
+		recoverFor = player
+		recoverForAt = now
+		table.clear(recoverIgnore)
+		table.insert(recoverIgnore, ensureFolder())
+		for _, p in ipairs(Players:GetPlayers()) do
+			local character = p.Character
+			if character then
+				table.insert(recoverIgnore, character)
+			end
+		end
+		local hum = if playerRoot.Parent then playerRoot.Parent:FindFirstChildOfClass("Humanoid") else nil
+		local seat = if hum then hum.SeatPart else nil
+		if seat then
+			table.insert(recoverIgnore, seatVehicle(seat))
+		end
+		recoverParams.FilterDescendantsInstances = recoverIgnore -- the property takes a copy of the list
+		local cfg = followPathCfg()
+		recoverProbeRec.Drop = if cfg then cfgNum(cfg, "RayDrop", 1) else 1
+		recoverProbeRec.Half = if cfg then cfgNum(cfg, "RayHalfWidth", 0.9) else 0.9
+	end
+	return recoverProbeRec
+end
+
+-- the ground under a candidate spot: a ProbeDown ray from 1 stud above it must hit a solid part or terrain that is not
+-- water (terrain water, a WE_Water part, or ground under a WE_Water surface); nil otherwise (air, void, water)
+local function recoverGround(spot: Vector3, rc: { [string]: any }, probe: Probe, now: number): number?
+	local hit = Workspace:Raycast(spot + Vector3.new(0, 1, 0), Vector3.new(0, -(cfgNum(rc, "ProbeDown", 12) + 1), 0), probe.Params)
+	if hit == nil or hit.Material == Enum.Material.Water or CollectionService:HasTag(hit.Instance, Constants.Tags.Water) then
+		return nil
+	end
+	local y = hit.Position.Y
+	if underWater(spot.X, y, spot.Z, now) then
+		return nil
+	end
+	return y
+end
+
+-- is the owner on water (swimming, a boat)? One ray, at most once per owner per pass, only when a unit would recover
+local function ownerOnWater(player: Player, st: SquadState, playerRoot: BasePart, rc: { [string]: any }, now: number): boolean
+	if st.WaterAt == now then
+		return st.OnWater
+	end
+	st.WaterAt = now
+	local wet = false
+	local hum = if playerRoot.Parent then playerRoot.Parent:FindFirstChildOfClass("Humanoid") else nil
+	if hum and hum.FloorMaterial == Enum.Material.Water then
+		wet = true
+	else
+		local probe = recoverProbe(player, playerRoot, now)
+		local p = playerRoot.Position
+		local hit = Workspace:Raycast(p, Vector3.new(0, -(cfgNum(rc, "ProbeDown", 12) + 4), 0), probe.Params)
+		if hit then
+			wet = hit.Material == Enum.Material.Water or CollectionService:HasTag(hit.Instance, Constants.Tags.Water) or underWater(p.X, hit.Position.Y, p.Z, now)
+		else
+			wet = underWater(p.X, p.Y - 3, p.Z, now)
+		end
+	end
+	st.OnWater = wet
+	return wet
+end
+
+local function nearOtherPlayer(player: Player, pos: Vector3, r: number): boolean
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player then
+			local root = characterRoot(p)
+			if root and (root.Position - pos).Magnitude <= r then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- a recover landing of this army within LandApartStuds of `spot` in the last LandApartSeconds, or one of its units
+-- standing there now: units never land on one another (no pile-up, no physics fling). At most LAND_RING + MaxFieldUnits
+-- distance checks, no allocation.
+local function landingTaken(st: SquadState, unit: SquadUnit, spot: Vector3, rc: { [string]: any }, now: number): boolean
+	local r = cfgNum(rc, "LandApartStuds", 3)
+	local win = cfgNum(rc, "LandApartSeconds", 2)
+	for i = 1, LAND_RING do
+		if now - st.LandAt[i] <= win and flatDist(st.LandPos[i], spot) < r then
+			return true
+		end
+	end
+	for _, u in ipairs(st.Units) do
+		if u ~= unit and u.Alive and u.Root.Parent ~= nil and flatDist(u.Root.Position, spot) < r then
+			return true
+		end
+	end
+	return false
+end
+
+local function noteLanding(st: SquadState, at: Vector3, now: number)
+	local i = st.LandI % LAND_RING + 1
+	st.LandI = i
+	st.LandPos[i] = at
+	st.LandAt[i] = now
+end
+
+-- one recover candidate: its stand CFrame (facing `look`) when clear, else nil; the second result is true when the
+-- spot was clear but within NoPlayerWithin of another player. Clear: outside every plot but his own (inside his own
+-- while he stands in it: never beyond his own wall and gate), not where
+-- another unit of his landed or stands (landingTaken), ground under it (recoverGround), the FollowPath body probe from
+-- his root reaches it AND one ray at root height does too (a closed gate barrier, or anything else with a raised
+-- underside, blocks the knee band's view no more).
+local function tryRecoverSpot(player: Player, st: SquadState, unit: SquadUnit, spot: Vector3, from: Vector3, ownPlot: number?, ownerHome: boolean, look: Vector3, rc: { [string]: any }, probe: Probe, now: number): (CFrame?, boolean)
+	local pid = plotAt(spot)
+	if pid ~= ownPlot and (pid ~= nil or ownerHome) then
+		return nil, false -- never into another plot; while he is inside his own plot, never outside it
+	end
+	if landingTaken(st, unit, spot, rc, now) then
+		return nil, false
+	end
+	local gy = recoverGround(spot, rc, probe, now)
+	if gy == nil then
+		return nil, false
+	end
+	local at = Vector3.new(spot.X, gy + cfgNum(rc, "StandHeight", 3.2), spot.Z)
+	if not bodyClear(from, at, probe) or Workspace:Raycast(from, at - from, probe.Params) ~= nil then
+		return nil, false
+	end
+	if nearOtherPlayer(player, at, cfgNum(rc, "NoPlayerWithin", 25)) then
+		return nil, true
+	end
+	return CFrame.lookAt(at, at + look), false
+end
+
+--[[ where a recovered unit goes: the first CLEAR candidate (tryRecoverSpot) of
+	1. its slot, when that is BehindStuds behind the owner's facing or out of his sight;
+	2. the owner's trail points at least BehindStuds from him and not ahead of him (newest first, at most TrailMaxStuds
+	   away, at most MaxTrailTries of them);
+	3. BehindStuds (+ its slot depth) behind him along his facing, then back-right and back-left, then the same three
+	   NearBehindStuds from him;
+	4. BehindStuds left and right of him: with SideNeedsCover only when his head cannot see the spot, else the unit
+	   waits (second result true) for a better one, at most MaxDeferSeconds.
+	Every candidate but the slot is moved by the unit's own slot offset (SpreadScale x its side offset sideways, its
+	slot depth further back), and landingTaken skips spots another unit of his took: units land apart. A spot
+	BehindStuds away and not ahead of the player is outside a phone's landscape view (the camera stands about 12
+	behind him): units run in and never pop up in front of him. At most MaxTries candidates (4 rays each). A clear spot
+	too near another player defers the unit (second result true) until MaxDeferSeconds have passed, then such spots are
+	skipped. ]]
+local function recoverSpot(player: Player, st: SquadState, unit: SquadUnit, playerRoot: BasePart, rc: { [string]: any }, now: number): (CFrame?, boolean)
+	local probe = recoverProbe(player, playerRoot, now)
+	local ppos = playerRoot.Position
+	local lv = playerRoot.CFrame.LookVector
+	local look = Vector3.new(lv.X, 0, lv.Z)
+	look = if look.Magnitude > 0.05 then look.Unit else Vector3.new(0, 0, -1)
+	local right = Vector3.new(-look.Z, 0, look.X)
+	local behind = cfgNum(rc, "BehindStuds", 24)
+	local offset = unitOffset(st, unit.Slot)
+	local own = right * (offset.X * cfgNum(rc, "SpreadScale", 0.7)) - look * math.max(offset.Z, 0)
+	local waitOver = unit.DeferSince ~= nil and now - (unit.DeferSince :: number) >= cfgNum(rc, "MaxDeferSeconds", 10)
+	local head = ppos + Vector3.new(0, 1.5, 0)
+	local cands: { Vector3 } = {} -- (a recover is rare: this list is not a per-think allocation)
+	local slotPos = (playerRoot.CFrame * CFrame.new(offset)).Position
+	if (slotPos - ppos):Dot(look) <= -behind then
+		table.insert(cands, slotPos)
+	elseif Workspace:Raycast(head, slotPos - head, probe.Params) ~= nil then
+		table.insert(cands, slotPos) -- out of his sight
+	end
+	local trail = trailByUser[player.UserId]
+	if trail then
+		local maxTrail = cfgNum(rc, "TrailMaxStuds", 60)
+		local maxPts = math.max(0, math.floor(cfgNum(rc, "MaxTrailTries", 4)))
+		local used = 0
+		for i = #trail.Points, 1, -1 do
+			if used >= maxPts then
+				break
+			end
+			local pt = trail.Points[i]
+			local fd = flatDist(pt, ppos)
+			if fd >= behind and fd <= maxTrail and (pt - ppos):Dot(look) <= 0 then
+				table.insert(cands, pt + own)
+				used += 1
+			end
+		end
+	end
+	local diag = (look + right).Unit
+	local diag2 = (look - right).Unit
+	table.insert(cands, ppos - look * behind + own)
+	table.insert(cands, ppos - diag2 * behind + own) -- back-right
+	table.insert(cands, ppos - diag * behind + own) -- back-left
+	local nearB = cfgNum(rc, "NearBehindStuds", 14)
+	if nearB > 0 and nearB < behind then
+		-- (the same three nearer in: a spot behind him in a walled yard or a street)
+		table.insert(cands, ppos - look * nearB + own)
+		table.insert(cands, ppos - diag2 * nearB + own)
+		table.insert(cands, ppos - diag * nearB + own)
+	end
+	local firstSide = #cands + 1
+	table.insert(cands, ppos - right * behind + own) -- left
+	table.insert(cands, ppos + right * behind + own) -- right
+	local sideCover = rc.SideNeedsCover == true
+	local ownPlot = ownPlotId(player)
+	local ownerHome = ownPlot ~= nil and plotAt(ppos) == ownPlot
+	local tries = math.max(1, math.floor(cfgNum(rc, "MaxTries", 12)))
+	local waiting = false
+	for i, spot in ipairs(cands) do
+		if i > tries then
+			break
+		end
+		local cf, near = tryRecoverSpot(player, st, unit, spot, ppos, ownPlot, ownerHome, look, rc, probe, now)
+		if cf then
+			if i >= firstSide and sideCover and not waitOver then
+				local at = (cf :: CFrame).Position
+				if Workspace:Raycast(head, at - head, probe.Params) == nil then
+					waiting = true -- beside him and in his view: wait for a spot behind him
+					cf = nil
+				end
+			end
+			if cf then
+				return cf, false
+			end
+		elseif near and not waitOver then
+			return nil, true
+		end
+	end
+	return nil, waiting
+end
+
+-- the WE_ArmyRecover counter on the owner (tests, the Studio explorer) + at most one log line per owner per LogSeconds
+local function noteRecover(player: Player, st: SquadState, why: string, rc: { [string]: any }, now: number)
+	local n = player:GetAttribute("WE_ArmyRecover")
+	player:SetAttribute("WE_ArmyRecover", (if typeof(n) == "number" then n else 0) + 1)
+	st.RecoverLogN += 1
+	if now - st.RecoverLogAt >= cfgNum(rc, "LogSeconds", 30) then
+		print(string.format("[WAR EMPIRE] SquadOrdersService: moved %d unit(s) of %s back behind them since the last line (latest: %s)", st.RecoverLogN, player.Name, why))
+		st.RecoverLogAt = now
+		st.RecoverLogN = 0
+	end
+end
+
+-- army fix (ArmyConfig.Loop): a recover search / move error is logged at most once per owner per Loop.ErrorLogSeconds
+-- (the unit's CooldownSeconds alone would let one broken owner write a line a second)
+local function recoverWarn(uid: number, now: number, what: string, err: any)
+	local lp = (ArmyConfig :: any).Loop
+	local every = if typeof(lp) == "table" then tonumber(lp.ErrorLogSeconds) or 30 else 30
+	if now - (recoverErrAt[uid] or -math.huge) >= every then
+		recoverErrAt[uid] = now
+		warn(string.format("[WAR EMPIRE] SquadOrdersService: %s for %d: %s", what, uid, tostring(err)))
+	end
+end
+
+--[[ RECOVER one FOLLOW unit, once per think before its move. Triggers: fallen (root below FallY), far (more than
+	FollowFarStuds from the owner for FollowFarSeconds), regroup (a fast drive ended with it more than
+	VehicleRegroupStuds away), stuck (less than ProgressStuds toward its goal in StuckSeconds while more than
+	StuckMinOwnerStuds from him) and plot (more than PlotMinOwnerStuds from him inside a plot square another player
+	owns, for PlotSeconds, while he has been out of it that long). Limits: nothing while he drives faster than
+	VehicleDeferSpeed (the far timer runs on, so it goes as soon as he stops) or is on water; one try per unit per
+	CooldownSeconds; at most PerOwnerPerSecond searches per owner (the rest wait a think). The move
+	is ONE Model:PivotTo of the same unit: never Destroy, never SyncArmy. Chase / give-up / trail state is reset and a
+	MoveTo re-issued. Returns true when it moved the unit this think. ]]
+local function recoverUnit(player: Player, st: SquadState, unit: SquadUnit, playerRoot: BasePart, now: number): boolean
+	local rc = recoverCfg()
+	if rc == nil then
+		return false
+	end
+	local pos = unit.Root.Position
+	local ppos = playerRoot.Position
+	local d = flatDist(pos, ppos)
+	-- stuck: the studs it made since the last think along the direction to its goal then (trackGoal)
+	local lp, dir = unit.ProgPos, unit.ProgDir
+	local stuck = false
+	if lp ~= nil and dir ~= nil then
+		local moved = pos - lp
+		unit.ProgSum += moved.X * dir.X + moved.Z * dir.Z
+		if unit.ProgSum >= cfgNum(rc, "ProgressStuds", 2) then
+			unit.ProgSince = now
+			unit.ProgSum = 0
+		else
+			stuck = now - unit.ProgSince >= cfgNum(rc, "StuckSeconds", 4)
+		end
+	else
+		unit.ProgSince = now
+		unit.ProgSum = 0
+	end
+	if d > cfgNum(rc, "FollowFarStuds", 80) then
+		if unit.FarSince == nil then
+			unit.FarSince = now
+		end
+	else
+		unit.FarSince = nil
+	end
+	-- plot: only a unit well away from him (PlotMinOwnerStuds) that has stood in that foreign plot for PlotSeconds
+	-- while he has been out of it that long (a squad at his side at another plot's edge or gate is left alone)
+	local plotMin = cfgNum(rc, "PlotMinOwnerStuds", 30)
+	local plotSec = cfgNum(rc, "PlotSeconds", 4)
+	local inForeign: number? = nil
+	if d > plotMin then
+		local pid = plotAt(pos)
+		if pid ~= nil then
+			local owner = plotOwnerId(pid)
+			if owner ~= nil and owner ~= player.UserId then
+				inForeign = pid
+			end
+		end
+	end
+	if inForeign == nil then
+		unit.PlotId = nil
+	elseif unit.PlotId ~= inForeign then
+		unit.PlotId = inForeign
+		unit.PlotSince = now
+	end
+	local why: string? = nil
+	if pos.Y < cfgNum(rc, "FallY", -50) then
+		why = "fallen"
+	elseif unit.FarSince ~= nil and now - (unit.FarSince :: number) >= cfgNum(rc, "FollowFarSeconds", 4) then
+		why = "far"
+	elseif st.RegroupAt ~= nil and d > cfgNum(rc, "VehicleRegroupStuds", 150) then
+		why = "regroup"
+	elseif stuck and d > cfgNum(rc, "StuckMinOwnerStuds", 25) then
+		why = "stuck" -- lane A (ArmyPath) asks for a path here first; RECOVER only when that fails or stalls
+	elseif
+		inForeign ~= nil
+		and now - unit.PlotSince >= plotSec
+		and st.OwnerPlot ~= inForeign
+		and not (st.OwnerPlotLeft == inForeign and now - st.OwnerPlotLeftAt < plotSec)
+	then
+		why = "plot"
+	end
+	if why == nil then
+		unit.DeferSince = nil
+		return false
+	end
+	if st.Seated and st.OwnerSpeed > cfgNum(rc, "VehicleDeferSpeed", 20) then
+		return false
+	end
+	local cooldown = cfgNum(rc, "CooldownSeconds", 8)
+	if now - unit.RecoverAt < cooldown then
+		return false
+	end
+	if now - st.RecoverWinAt >= 1 then
+		st.RecoverWinAt = now
+		st.RecoverWinN = 0
+	end
+	if st.RecoverWinN >= math.max(1, math.floor(cfgNum(rc, "PerOwnerPerSecond", 4))) then
+		return false
+	end
+	if ownerOnWater(player, st, playerRoot, rc, now) then
+		return false
+	end
+	st.RecoverWinN += 1 -- the budget counts searches (a failed or deferred one costs rays too), not only moves
+	-- the search and the move are pcall'd: an error there must never stop the think loop (every army) for good
+	local okS, cf, deferred = pcall(recoverSpot, player, st, unit, playerRoot, rc, now)
+	if not okS then
+		unit.RecoverAt = now
+		recoverWarn(player.UserId, now, "recover search failed", cf)
+		return false
+	end
+	if cf == nil then
+		if deferred then
+			if unit.DeferSince == nil then
+				unit.DeferSince = now
+			end
+			unit.RecoverAt = now - cooldown + 1 -- a deferred unit looks again in 1 s
+		else
+			unit.DeferSince = nil
+			-- no clear spot (e.g. every spot just taken by the others): it stays where it is and looks again after
+			-- MissRetrySeconds (each search counts against PerOwnerPerSecond)
+			unit.RecoverAt = now - cooldown + math.min(cooldown, cfgNum(rc, "MissRetrySeconds", 2))
+		end
+		return false
+	end
+	local at = cf :: CFrame
+	unit.RecoverAt = now
+	-- a fallen unit is compared in 3D (a spot straight above it under the map is a move); every other one flat
+	local moveBy = if why == "fallen" then (at.Position - pos).Magnitude else flatDist(at.Position, pos)
+	if moveBy < cfgNum(rc, "MinMoveStuds", 4) then
+		-- army fix: the best clear spot is where it already stands (a stuck unit on a landing spot): no move, the
+		-- stuck window starts over and it looks again after CooldownSeconds
+		unit.DeferSince = nil
+		unit.FarSince = nil
+		unit.ProgSince = now
+		unit.ProgSum = 0
+		return false
+	end
+	local okM, errM = pcall(function()
+		unit.Model:PivotTo(at) -- the same unit, moved: never Destroy, never a new model
+		unit.Root.AssemblyLinearVelocity = Vector3.zero
+		local gyro = unit.Root:FindFirstChild("NPCFaceGyro")
+		if gyro and gyro:IsA("BodyGyro") then
+			gyro.CFrame = at
+		end
+	end)
+	if not okM then
+		recoverWarn(player.UserId, now, "recover move failed", errM)
+		return false
+	end
+	resetChase(unit)
+	unit.AimRoot = nil
+	unit.AimHum = nil
+	unit.Crumb = nil
+	unit.CrumbPos = nil
+	unit.CrumbScanAt = 0
+	unit.CrumbCheckAt = 0
+	unit.FarSince = nil
+	unit.DeferSince = nil
+	unit.Goal = nil
+	unit.ProgPos = nil
+	unit.ProgDir = nil
+	unit.ProgSum = 0
+	unit.ProgSince = now
+	unit.PlotId = nil
+	unit.Humanoid:MoveTo(at.Position)
+	noteLanding(st, at.Position, now)
+	noteRecover(player, st, why :: string, rc, now)
+	return true
+end
+
+-- after the move: the goal it walks to now, for the next think's stuck check (no goal, or one within StuckGoalStuds:
+-- it is not walking and the window starts over)
+local function trackGoal(unit: SquadUnit, rc: { [string]: any }?)
+	local g = unit.Goal
+	if rc ~= nil and g ~= nil then
+		local pos = unit.Root.Position
+		local fx, fz = g.X - pos.X, g.Z - pos.Z
+		local m = math.sqrt(fx * fx + fz * fz)
+		if m > cfgNum(rc, "StuckGoalStuds", 4) then
+			unit.ProgPos = pos
+			unit.ProgDir = Vector3.new(fx / m, 0, fz / m)
+			return
+		end
+	end
+	unit.ProgPos = nil
+	unit.ProgDir = nil
+end
+
+-- army fix (Recover.ReformRootless): SyncArmy (its not-living cull) re-forms a unit whose root or model left without
+-- Humanoid.Died (it fell out of the world); one queued SyncArmy per owner per second, at most ReformPerMinute per owner
+-- per minute, and only while he is alive with ground under him (SyncArmy spawns the new unit at him: one re-formed in
+-- the air or over the void would fall again). One down ray, only when a unit needs it.
+local function queueReform(player: Player, st: SquadState, now: number)
+	local uid = player.UserId
+	if (reformAt[uid] or -math.huge) > now then
+		return
+	end
+	local rcv = (ArmyConfig :: any).Recover
+	local rc: { [string]: any } = if typeof(rcv) == "table" then rcv else {}
+	local root = characterRoot(player)
+	if root == nil then
+		return
+	end
+	local probe = recoverProbe(player, root, now)
+	if recoverGround(root.Position - Vector3.new(0, 1, 0), rc, probe, now) == nil then
+		return -- airborne, over the void or on water: wait
+	end
+	if now - st.ReformWinAt >= cfgNum(rc, "ReformWindowSeconds", 60) then
+		st.ReformWinAt = now
+		st.ReformWinN = 0
+	end
+	if st.ReformWinN >= math.max(1, math.floor(cfgNum(rc, "ReformPerMinute", 8))) then
+		return
+	end
+	st.ReformWinN += 1
+	local delaySec = math.max(0.1, cfgNum(rc, "ReformDelaySeconds", 1))
+	reformAt[uid] = now + delaySec
+	task.delay(delaySec, function()
+		if player.Parent then
+			SquadOrdersService.SyncArmy(player)
+		end
+	end)
+end
+
+-- army fix (ArmyConfig.Loop): the think loop caught an error for this owner: at most one warn per owner per
+-- Loop.ErrorLogSeconds (the loop goes on for every other unit and army)
+local function thinkError(player: Player, err: any, now: number)
+	local lp = (ArmyConfig :: any).Loop
+	local every = if typeof(lp) == "table" then tonumber(lp.ErrorLogSeconds) or 30 else 30
+	local uid = player.UserId
+	if now - (thinkErrAt[uid] or -math.huge) >= every then
+		thinkErrAt[uid] = now
+		warn(string.format("[SquadOrders] think error for %d (loop continues): %s", uid, tostring(err)))
+	end
+end
+
+local function reformRootless(uid: number): boolean
+	local rc = (ArmyConfig :: any).Recover
+	-- off with the Recover kill switch; v90: only for a Rollout.Fix owner
+	return ArmyConfig.LiveFor("Fix", uid) and typeof(rc) == "table" and rc.Enabled == true and rc.ReformRootless == true
+end
+
 local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: number, escortHum: Humanoid?, escortRoot: BasePart?, trail: Trail?, probe: Probe?)
+	if unit.Alive and (unit.Model.Parent == nil or unit.Root.Parent ~= unit.Model) and reformRootless(player.UserId) then
+		queueReform(player, st, now) -- army fix: it fell out of the world without dying
+		return
+	end
 	if not unit.Alive or unit.Humanoid.Health <= 0 or not unit.Root.Parent then
 		return
 	end
@@ -1663,14 +2572,24 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 
 	if order == "Follow" then
 		if not playerRoot then
+			-- the owner is dead: units hold where they stand; army fix: the stuck window starts over once he is back
+			unit.ProgPos = nil
+			unit.ProgDir = nil
 			return
 		end
-		if escortUnit(player, st, unit, playerRoot, escortHum, escortRoot, now) then
+		if recoverUnit(player, st, unit, playerRoot, now) then -- army fix: far / stuck / fallen / plot / regroup
 			return
 		end
-		followMove(st, unit, playerRoot, trail, probe, now)
+		if not escortUnit(player, st, unit, playerRoot, escortHum, escortRoot, now) then
+			followMove(st, unit, playerRoot, trail, probe, now)
+		end
+		trackGoal(unit, recoverCfg()) -- army fix
 		return
 	end
+
+	setSpeed(unit, OrdersConfig.UnitWalkSpeed or 14) -- army fix: every other order walks at the unit's own speed
+	unit.ProgPos = nil
+	unit.ProgDir = nil
 
 	if order == "Hold" then
 		if not unit.HoldPos then
@@ -1710,6 +2629,121 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 		return
 	end
 end
+
+--[[ army fix: once per pass per squad: the owner's flat velocity over the last pass (Follow.Lead; the CatchUp pace),
+	the plot square he stands in (Recover plot trigger) and the end of a fast drive (Recover regroup: he stops below
+	VehicleStopSpeed for VehicleStopSeconds, or gets out). No lead on a pass at under Lead.DropOnSlowdown x the pass
+	before (he is stopping); the think loop clears it while a hostile is within Follow.ThreatStuds (st.Engaged). A
+	jump faster than Lead.MaxOwnerSpeed on foot (teleport, respawn) gives no lead and pace 0; seated, the real speed is
+	kept (the vehicle defer). No root (dead): no lead, pace 0, his last position kept. One Humanoid lookup, no rays. ]]
+local function updateOwnerMotion(st: SquadState, root: BasePart?, now: number)
+	local lead = Vector3.zero
+	local speed = 0
+	local seated = false
+	local jumped = false
+	local slowing = false
+	if root then
+		local hum = if root.Parent then root.Parent:FindFirstChildOfClass("Humanoid") else nil
+		seated = hum ~= nil and (hum.Sit or hum.SeatPart ~= nil)
+		local lp = st.LastPos
+		local dt = now - st.LastAt
+		if lp and dt > 0.05 and dt < 2 then
+			local v = Vector3.new(root.Position.X - lp.X, 0, root.Position.Z - lp.Z) / dt
+			speed = v.Magnitude
+			local lc = followCfg("Lead")
+			local maxOwner = if lc then cfgNum(lc, "MaxOwnerSpeed", 40) else 40
+			if speed > maxOwner then
+				if not seated then
+					speed = 0 -- a jump, not a walk
+				end
+			elseif lc and speed >= st.PrevSpeed * cfgNum(lc, "DropOnSlowdown", 0.5) then
+				-- (a pass at under DropOnSlowdown x the one before: he is stopping, no lead to overshoot on)
+				lead = v * cfgNum(lc, "Seconds", 0.4)
+				local cap = cfgNum(lc, "MaxStuds", 4)
+				if lead.Magnitude > cap then
+					lead = lead.Unit * cap
+				end
+			end
+			slowing = lc ~= nil and speed <= maxOwner and speed < st.PrevSpeed * cfgNum(lc, "DropOnSlowdown", 0.5)
+			st.PrevSpeed = v.Magnitude
+			st.OwnerVel = v
+			if speed >= 2 then
+				st.WalkAt = now
+			end
+		end
+		-- a jump on foot: he appeared more than FollowPath.ResetJump from where he last had a root (a teleport, a
+		-- respawn at his plot, a fall rescue), however long that took
+		local pc = followPathCfg()
+		if lp and not seated and flatDist(root.Position, lp) > (if pc then cfgNum(pc, "ResetJump", 40) else 40) and (dt >= 2 or speed == 0) then
+			jumped = true
+		end
+		st.LastPos = root.Position
+		st.LastAt = now
+	end
+	st.Lead = lead
+	st.Slowing = slowing
+	st.OwnerSpeed = speed
+	st.Seated = seated
+	-- ship (Follow.CatchUp.PaceSmooth / PaceStep): the pace a follow unit walks at is his speed smoothed over a few passes
+	-- and moved only in PaceStep steps. A client-owned character's replicated position jitters between network updates,
+	-- and every Humanoid.WalkSpeed write replicates to every client (the FIX round-3 reviewers' OPENJIT: +-0.4 studs of
+	-- jitter gave 20 writes/s per army). Below 1 stud/s (he stops) the pace drops at once; a change bigger than
+	-- PaceJumpStuds passes at once too (no smoothing lag behind a real start or sprint: that made catch-up runs).
+	local cuP = followCfg("CatchUp")
+	local alpha = if cuP then math.clamp(cfgNum(cuP, "PaceSmooth", 1), 0.05, 1) else 1
+	local step = if cuP then math.max(0, cfgNum(cuP, "PaceStep", 0)) else 0
+	local jump = if cuP then math.max(0, cfgNum(cuP, "PaceJumpStuds", 0)) else 0
+	st.PaceAvg = if speed < 1 or st.PaceAvg < 1 or math.abs(speed - st.PaceAvg) > jump then speed else st.PaceAvg + (speed - st.PaceAvg) * alpha
+	if step <= 0 or st.PaceAvg < 1 or math.abs(st.PaceAvg - st.PaceSpeed) >= step then
+		st.PaceSpeed = st.PaceAvg
+	end
+	local rc = recoverCfg()
+	if rc == nil then
+		st.FastAt = nil
+		st.SlowSince = nil
+		st.RegroupAt = nil
+		return
+	end
+	if jumped then
+		st.RegroupAt = now -- a teleport / respawn / fall rescue: far units regroup now (no FollowFarSeconds wait)
+	end
+	if root then
+		local op = plotAt(root.Position)
+		if op ~= st.OwnerPlot then
+			if st.OwnerPlot ~= nil then
+				st.OwnerPlotLeft = st.OwnerPlot
+				st.OwnerPlotLeftAt = now
+			end
+			st.OwnerPlot = op
+		end
+	end
+	if seated and speed > cfgNum(rc, "VehicleDeferSpeed", 20) then
+		st.FastAt = now
+		st.SlowSince = nil
+		st.RegroupAt = nil
+	elseif st.FastAt ~= nil then
+		if not seated then
+			st.RegroupAt = now -- he got out
+			st.FastAt = nil
+			st.SlowSince = nil
+		elseif speed < cfgNum(rc, "VehicleStopSpeed", 6) then
+			local since = st.SlowSince or now
+			st.SlowSince = since
+			if now - since >= cfgNum(rc, "VehicleStopSeconds", 1.5) then
+				st.RegroupAt = now -- he stopped
+				st.FastAt = nil
+				st.SlowSince = nil
+			end
+		else
+			st.SlowSince = nil
+		end
+	end
+	local rg = st.RegroupAt
+	if rg ~= nil and now - rg > cfgNum(rc, "RegroupWindowSeconds", 10) then
+		st.RegroupAt = nil
+	end
+end
+
 
 -- lane C: a new unit appears in its slot; when a wall stands between the player and that slot (e.g. recruiting
 -- inside the Barracks), at the old grid spot behind the player, else on the player's trail, else in the slot as before
@@ -1801,14 +2835,44 @@ function SquadOrdersService.SyncArmy(player: Player)
 			Units = {},
 			DesiredCount = 0,
 			Mirror = false,
+			Lead = Vector3.zero,
+			OwnerSpeed = 0,
+			PaceAvg = 0,
+			PaceSpeed = 0,
+			LastPos = nil,
+			LastAt = 0,
+			Seated = false,
+			FastAt = nil,
+			SlowSince = nil,
+			RegroupAt = nil,
+			WaterAt = -math.huge,
+			OnWater = false,
+			RecoverWinAt = -math.huge,
+			RecoverWinN = 0,
+			RecoverLogAt = -math.huge,
+			RecoverLogN = 0,
+			PrevSpeed = 0,
+			Engaged = false,
+			OwnerPlot = nil,
+			OwnerPlotLeft = nil,
+			OwnerPlotLeftAt = -math.huge,
+			LandPos = table.create(LAND_RING, Vector3.zero),
+			LandAt = table.create(LAND_RING, -math.huge),
+			LandI = 0,
+			ReformWinAt = -math.huge,
+			ReformWinN = 0,
+			WalkAt = -math.huge,
+			OwnerVel = Vector3.zero,
+			Slowing = false,
 		}
 		squadByUser[player.UserId] = st
 	end
 	st.DesiredCount = desired
 
 	local living: { SquadUnit } = {}
+	local rootless = reformRootless(player.UserId) -- army fix: a unit whose root left its model is not living (it is re-formed)
 	for _, u in ipairs(st.Units) do
-		if u.Alive and u.Model.Parent and u.Humanoid.Health > 0 then
+		if u.Alive and u.Model.Parent and (not rootless or u.Root.Parent == u.Model) and u.Humanoid.Health > 0 then
 			table.insert(living, u)
 		else
 			destroyUnit(u)
@@ -1986,6 +3050,10 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 			resetChase(u) -- a new order (or ATTACK again after the grace) starts with no stale chase / given-up state
 			u.AimRoot = nil
 			u.AimHum = nil
+			u.FarSince = nil -- army fix: a new order starts the recover windows over
+			u.PlotId = nil
+			u.ProgPos = nil
+			u.ProgDir = nil
 		end
 	end
 
@@ -2001,6 +3069,54 @@ end
 
 function SquadOrdersService.Push(player: Player)
 	pushState(player)
+end
+
+-- army fix (ArmyConfig.Gate): may this owner's army open his gate at `pos`? Only while his squad FOLLOWS him (never
+-- Hold / Attack / Retreat), he is alive and within `ownerStuds` (flat) of `pos`, and a living unit of his is within
+-- `radius` (flat) and `height` of it. Ship: with `normal` (the barrier plane's normal, e.g. the gate CFrame's LookVector)
+-- a unit counts only until it has crossed: while it is NOT more than `crossClear` studs past the plane on his side
+-- (Gate.CrossClearStuds 0: only units still on the far side; units already through, or standing in their slots on his
+-- side, never hold it open: a raider tailing him home or camping at the gate meets a shut gate). GateDefenseService
+-- also caps how long units alone keep it open (Gate.UnitHoldSeconds after the last owner / ally player). At most
+-- MaxFieldUnits distance checks, no allocation, no rays.
+function SquadOrdersService.AnyUnitNear(userId: number, pos: Vector3, radius: number, height: number, ownerStuds: number?, normal: Vector3?, crossClear: number?): boolean
+	local st = squadByUser[userId]
+	if st == nil or st.Order ~= "Follow" then
+		return false
+	end
+	local owner = Players:GetPlayerByUserId(userId)
+	local oroot = if owner then characterRoot(owner) else nil
+	if oroot == nil then
+		return false -- he is dead or gone: his units never hold the gate
+	end
+	local near = ownerStuds or 40
+	local op = oroot.Position
+	local ox, oz = op.X - pos.X, op.Z - pos.Z
+	if ox * ox + oz * oz > near * near then
+		return false
+	end
+	-- ship (crossing rule): his side of the barrier plane; a unit past it on his side by more than crossClear has crossed
+	local nx, nz, side = 0, 0, 0
+	if normal ~= nil then
+		local m = math.sqrt(normal.X * normal.X + normal.Z * normal.Z)
+		if m > 1e-3 then
+			nx, nz = normal.X / m, normal.Z / m
+			local so = ox * nx + oz * nz
+			side = if so >= 0 then 1 else -1
+		end
+	end
+	local clear = crossClear or 0
+	local r2 = radius * radius
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Root.Parent == u.Model and u.Humanoid.Health > 0 then
+			local p = u.Root.Position
+			local dx, dz = p.X - pos.X, p.Z - pos.Z
+			if dx * dx + dz * dz <= r2 and math.abs(p.Y - pos.Y) <= height and (side == 0 or (dx * nx + dz * nz) * side <= clear) then
+				return true
+			end
+		end
+	end
+	return false
 end
 
 function SquadOrdersService.ApplyResearch(player: Player) -- v69 research: rescale living units' HP, add units
@@ -2093,6 +3209,15 @@ function SquadOrdersService.Init(deps: { [string]: any })
 		clearSquad(player.UserId)
 		squadByUser[player.UserId] = nil
 		trailByUser[player.UserId] = nil
+		reformAt[player.UserId] = nil -- army fix
+		thinkErrAt[player.UserId] = nil -- army fix
+		recoverErrAt[player.UserId] = nil -- army fix
+		if recoverFor == player then -- army fix: the recover probe holds no Player / Character / vehicle after he leaves
+			recoverFor = nil
+			recoverForAt = -math.huge
+			table.clear(recoverIgnore)
+			recoverParams.FilterDescendantsInstances = {}
+		end
 	end)
 
 	task.spawn(function()
@@ -2111,10 +3236,20 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					-- every player, every order: a switch to Follow and a recruit spawned indoors both find a trail
 					trail = recordTrail(player, proot, pathCfg)
 				end
+				SquadOrdersService._FixLive = st ~= nil and ArmyConfig.LiveFor("Fix", player.UserId) -- v90: Rollout.Fix
 				if st and #st.Units > 0 then
+					local okM, errM = pcall(updateOwnerMotion :: any, st, proot, now) -- army fix: Follow.Lead / CatchUp pace / Recover regroup
+					if not okM then
+						thinkError(player, errM, now)
+					end
 					-- P1-4 escort: one hostile pick per player per pass (nearest to the player); squadfair: plus the
 					-- hostiles near the player for the visible-target fallback (escortCands), only ones this squad may hurt
 					local escortHum: Humanoid?, escortRoot: BasePart? = nil, nil
+					-- army fix (Follow.ThreatStuds): the FOLLOW escort pick's one scan (either pick below) also finds the
+					-- nearest hostile out to ThreatStuds (the escort target and escortCands are unchanged); near it the
+					-- army follows as at e506c9c
+					local threat = if st.Order == "Follow" and proot then threatStuds() else 0
+					threatScanStuds = threat
 					-- v85 FollowPace: live only for a Rollout.Army owner on foot in FOLLOW
 					if not (st.Order == "Follow" and proot and SquadOrdersService._PaceBegin(player, proot)) then
 						followCtx.Live = false
@@ -2134,14 +3269,28 @@ function SquadOrdersService.Init(deps: { [string]: any })
 						else
 							escortHum, escortRoot = nearestHostile(proot.Position, r, CombatFairnessConfig.EscortIgnoreCalm == true, player, escortCands, r)
 						end
+						threatScanStuds = 0
+						local trt = threatNearRoot
+						threatNearRoot = nil -- hold no reference to the NPC between passes
+						st.Engaged = threat > 0 and trt ~= nil and not (threatApproachOnly() and st.OwnerSpeed >= 1 and st.OwnerVel:Dot((trt :: BasePart).Position - proot.Position) < 0)
+							and not (ArmyConfig.ThreatStandingFor(player.UserId) and st.OwnerSpeed >= 1)
+						if st.Engaged then
+							st.Lead = Vector3.zero -- e506c9c follow near a hostile: no lead (followSpeed: UnitWalkSpeed)
+						end
 						updateMirror(st, proot.CFrame)
+					else
+						st.Engaged = false
 					end
 					-- lane C FollowPath (squadfair: also ATTACK once a unit has given up a chase: it walks the trail)
 					if (st.Order == "Follow" or (st.Order == "Attack" and anyGaveUp(st))) and proot and pathCfg and probe == nil then
 						probe = buildProbe(pathCfg)
 					end
 					for _, unit in ipairs(st.Units) do
-						thinkUnit(player, st, unit, now, escortHum, escortRoot, trail, probe)
+						-- army fix (ArmyConfig.Loop): an error in one unit's think never stops the loop for every army
+						local okT, errT = pcall(thinkUnit :: any, player, st, unit, now, escortHum, escortRoot, trail, probe)
+						if not okT then
+							thinkError(player, errT, now)
+						end
 					end
 					if followCtx.Live and proot then
 						for _, unit in ipairs(st.Units) do
@@ -2152,7 +3301,9 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					followCtx.Moving = false
 					candReset(escortCands) -- hold no reference to the NPCs between passes
 				end
+				SquadOrdersService._FixLive = false
 			end
+			SquadOrdersService._FixLive = false
 			hostileSnapValid = false -- army lane A0: the list is this pass's only (no NPC reference kept between passes)
 			table.clear(hostileSnap)
 		end

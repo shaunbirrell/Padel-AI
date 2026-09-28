@@ -48,6 +48,7 @@ local RaidConfig = require(Shared.Configs.RaidConfig)
 local HudConfig = require(Shared.Configs.HudConfig)
 local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
 local AircraftWeaponConfig = require(Shared.Configs.AircraftWeaponConfig) -- aircraft weapon reach (ApplyDamage)
+local ArmyConfig = require(Shared.Configs.ArmyConfig) -- army fix: Gate.OwnUnitsOpen (the owner's units open his gate)
 
 local GateDefenseService = {}
 
@@ -58,6 +59,7 @@ local ClanService: any = nil
 local ResearchService: any = nil
 local EconomyService: any = nil
 local NotificationService: any = nil
+local SquadOrdersService: any = nil -- army fix: deps.SquadOrdersService (AnyUnitNear; Init after it, no require cycle)
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local GATE_POST_LIFT = 3 -- the gate CFrame stands this far above the gate posts' bottoms (the plot surface)
@@ -108,6 +110,8 @@ type PlotDefense = {
 	LastDownLabelAt: number,
 	GateOpen: boolean, -- friendly gate: leaves open for the owner / clan-mates
 	GateAllyAt: number, -- os.clock an ally was last at the gate
+	GateUnitSince: number?, -- army fix: since when only the owner's units (no player) keep it open (Gate.UnitHoldSeconds)
+	GateUnitSeenAt: number?, -- army fix: the last tick one of his FOLLOW units was at it (Gate.UnitRearmSeconds)
 	PadCenter: Vector3?, -- plot pad (WE_BasePlot) centre, for "inside the walls"
 	PadHalf: number,
 }
@@ -1443,6 +1447,8 @@ local function rebuildGate(def: PlotDefense)
 	def.GateHealth = def.GateMaxHealth
 	def.GateRebuildAt = nil
 	def.GateOpen = false
+	def.GateUnitSince = nil -- army fix: a rebuilt gate starts with no units' hold count left over from before
+	def.GateUnitSeenAt = nil
 	setGateBarrierOpen(def.GateBarriers, false)
 	for _, p in ipairs(def.GateBarriers) do
 		if p and p.Parent then
@@ -1636,6 +1642,36 @@ local function updateFriendlyGate(def: PlotDefense, tnow: number)
 					break
 				end
 			end
+		end
+	end
+	-- army fix (ArmyConfig.Gate.OwnUnitsOpen): the owner's own units FOLLOWING him through keep it open too (units of
+	-- other players never do): only while he is alive within Gate.OwnerNearStuds of it (AnyUnitNear: never on Hold /
+	-- Attack / Retreat), only units that have not yet crossed to his side of the barrier (Gate.CrossingRule: the gate
+	-- CFrame's LookVector is the plane normal), and units alone for at most Gate.UnitHoldSeconds in a row (then it stays
+	-- shut while they stand there, until a player opens it or they leave). At most MaxFieldUnits distance checks, no rays.
+	if allyNear then
+		def.GateUnitSince = nil
+	elseif SquadOrdersService and SquadOrdersService.AnyUnitNear then
+		local gate = (ArmyConfig :: any).Gate
+		if
+			typeof(gate) == "table"
+			and gate.OwnUnitsOpen == true
+			and ArmyConfig.LiveFor("Fix", def.OwnerUserId) -- v90: owner-only rollout of the army fix (Rollout.Fix)
+			and SquadOrdersService.AnyUnitNear(def.OwnerUserId, gatePos, D.GateOpenRadius, D.GateOpenHeight, tonumber(gate.OwnerNearStuds) or 40,
+				if gate.CrossingRule == true then def.GateCf.LookVector else nil, tonumber(gate.CrossClearStuds) or 0) == true
+		then
+			local since = def.GateUnitSince or tnow
+			def.GateUnitSince = since
+			def.GateUnitSeenAt = tnow
+			allyNear = tnow - since <= (tonumber(gate.UnitHoldSeconds) or 8)
+		elseif
+			def.GateUnitSince ~= nil
+			and tnow - (def.GateUnitSeenAt or -math.huge) < (if typeof(gate) == "table" then tonumber(gate.UnitRearmSeconds) or 3 else 3)
+		then
+			-- away for less than UnitRearmSeconds: the hold count goes on (units at the circle edge never re-arm it)
+			allyNear = false
+		else
+			def.GateUnitSince = nil
 		end
 	end
 	if allyNear then
@@ -1964,6 +2000,7 @@ local function syncPlotNow(plotId: number)
 		LastDownLabelAt = 0,
 		GateOpen = false,
 		GateAllyAt = 0,
+		GateUnitSince = nil, -- army fix
 		PadCenter = padCenter,
 		PadHalf = padHalf,
 	}
@@ -2204,6 +2241,7 @@ function GateDefenseService.Init(deps: { [string]: any })
 	ResearchService = deps.ResearchService
 	EconomyService = deps.EconomyService
 	NotificationService = deps.NotificationService
+	SquadOrdersService = deps.SquadOrdersService -- army fix
 
 	if not GateDefenseConfig.Enabled then
 		return
