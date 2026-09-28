@@ -1095,8 +1095,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 92)', "v92 WE_Build=92 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 92)', "v92 WE_Build=92 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1161,7 +1161,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 91)', "v91 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 92)', "v92 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1234,9 +1234,9 @@ must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau
 must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 91)', "v91 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 92)', "v92 WE_Build=92 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 92)', "v92 WE_Build=92 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 92)', "v92 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1263,9 +1263,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 91)', "v91 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 92)', "v92 WE_Build=92 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 92)', "v92 WE_Build=92 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 92)', "v92 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1318,9 +1318,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService is nil before BaseService.Init", "v66 Bootstrap warns (no assert) on nil deps.DataService")
 must_not_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "assert(deps.DataService", "v66 Bootstrap has no fatal DataService assert")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 91)', "v91 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 92)', "v92 WE_Build=92 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 92)', "v92 WE_Build=92 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 92)', "v92 EarlyRemotes WE_Build")
 # Keep v64 hardenings
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")
@@ -3893,7 +3893,7 @@ Z_TUS = "src/ServerScriptService/Server/Services/TutorialService.luau"
 Z_NAT = "src/ReplicatedStorage/Shared/Configs/NationConfig.luau"
 # flags switched on (spec §1 item 9); each is reversible by setting it back to false
 must_contain(Z_TER, "\tStarter = {\n\t\tEnabled = true,", "Z: F10 Home Outpost on")
-must_contain(Z_ECO, "\t\tPersistClaims = true,", "Z: F3 Empire Tax claims persist across servers")
+must_contain(Z_ECO, "\t\tPersistClaims = false,", "Z: F3 claims no longer persist across servers (fb4 capture lane, owner 2026-09-28)")
 must_contain(Z_ECO, "\tProducerLabels = {\n\t\tEnabled = true,", "Z: F4 producer labels on")
 must_contain(Z_CFC, "\tNoviceShield = {\n\t\tEnabled = true,", "Z: F6 novice shield on")
 must_contain(Z_WLC, "\tBaseLabelGovernor = {\n\t\tEnabled = true,", "Z: F4 base label governor on (<= 3 base labels on screen)")
@@ -9528,7 +9528,249 @@ def _army_fix_pins() -> None:
 
 _army_fix_pins()
 # ── end army fix
+# ── fb4 capture lane (owner 2026-09-28: "left and rejoined and I had the circle again" / "standing on the circle
+#    it's not going through"): outposts never come back by themselves (PersistClaims off + TerritoryConfig.ReleaseOnLeave),
+#    and the capture bar is never silent while you stand in your own or a contested zone (TerritoryConfig.StandingBar);
+#    fix rounds 1 and 2 below (_cap_fix1_rules, _cap_fix2_rules) ──
+CAP_TC = "src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau"
+CAP_EC = "src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau"
+CAP_TS = "src/ServerScriptService/Server/Services/TerritoryService/init.luau"
+CAP_CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau"
+CAP_TY = "src/ReplicatedStorage/Shared/Types.luau"
+CAP_AH = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/AudioHooks.luau"
+CAP_CAPT = "src/ServerScriptService/Server/Services/TerritoryService/TerritoryCapture.luau"
+CAP_MAP = "src/ServerScriptService/Server/Modules/MapSetup.luau"
 
+
+def _cap_code(rel: str) -> str:
+    """The file with -- comments removed (a commented-out line never satisfies a rule)."""
+    out = []
+    for line in (read(rel) or "").splitlines():
+        i = line.find("--")
+        out.append(line if i < 0 else line[:i])
+    return "\n".join(out)
+
+
+def _cap_rules() -> None:
+    # 1. the owner's rule needs BOTH switches: no re-plant on join AND a leaver's zones go back to Neutral
+    ec, tc = _cap_code(CAP_EC), _cap_code(CAP_TC)
+    persist = re.search(r"\bPersistClaims\s*=\s*(true|false)\b", ec)
+    release = re.search(r"^\tReleaseOnLeave\s*=\s*(true|false)\b", tc, re.M)
+    if persist and persist.group(1) == "false" and release and release.group(1) == "true":
+        ok("fb4 capture: PersistClaims = false and TerritoryConfig.ReleaseOnLeave = true (no outpost comes back on rejoin)")
+    else:
+        bad(f"fb4 capture: need PersistClaims = false and ReleaseOnLeave = true (PersistClaims {persist and persist.group(1)}, ReleaseOnLeave {release and release.group(1)})")
+    sb = re.search(r"^\tStandingBar\s*=\s*\{(.*?)^\t\}", tc, re.M | re.S)
+    body = sb.group(1) if sb else ""
+    title = re.search(r'HeldTitle\s*=\s*"([^"]*)"', body)
+    word = title.group(1) if title else ""
+    if (sb and re.search(r"\bHeld\s*=\s*true\b", body) and re.search(r"\bContested\s*=\s*true\b", body)
+            and 0 < len(word) <= 12 and word == word.upper()
+            and not re.search(r"click|tap|press|\[|key", word, re.I)):
+        ok(f"fb4 capture: StandingBar on (Held + Contested), held title '{word}' short, upper case, no key / click word")
+    else:
+        bad(f"fb4 capture: TerritoryConfig.StandingBar must be on with a short phone-safe HeldTitle (found {bool(sb)}, title '{word}')")
+
+    # 2. server: re-plant only behind PersistClaims; the leave release follows ReleaseOnLeave; one release path
+    ts = _cap_code(CAP_TS)
+    calls = [m.start() for m in re.finditer(r"\breplantClaims\(player\)", ts)]
+    guarded = len(calls) == 1 and ts[max(0, calls[0] - 60):calls[0]].rstrip().endswith("if persistClaimsOn() then")
+    if guarded:
+        ok("fb4 capture: replantClaims runs only inside `if persistClaimsOn() then` (once, on profile load)")
+    else:
+        bad(f"fb4 capture: replantClaims must run only behind persistClaimsOn() ({len(calls)} calls)")
+    rm = re.search(r"Players\.PlayerRemoving:Connect\(function\(player\)(.*?)\n\tend\)", ts, re.S)
+    rbody = rm.group(1) if rm else ""
+    if (re.search(r"local persist = persistClaimsOn\(\) or \(TerritoryConfig :: any\)\.ReleaseOnLeave == true", rbody)
+            and re.search(r"\(persist or isStarterRt\(rt\)\) then\s*\n\s*releaseOwnership\(rt, \"leave\"\)", rbody)):
+        ok("fb4 capture: PlayerRemoving sends the leaver's zones to Neutral when ReleaseOnLeave (or PersistClaims) is on")
+    else:
+        bad("fb4 capture: PlayerRemoving must release the leaver's zones behind ReleaseOnLeave / PersistClaims (Home Outposts always)")
+
+    # 3. server: the standing bar never counts as capturing and never grants anything
+    tick = re.search(r"local function tickTerritory\(rt: TerritoryRuntime, dt: number\)(.*?)\nend\n", ts, re.S)
+    if tick and re.search(r"\n\trt\.Inside = inside\n", tick.group(1)) and "rt.InsideSig = sig" in tick.group(1):
+        ok("fb4 capture: tickTerritory records who stands inside (rt.Inside / InsideSig) every tick")
+    else:
+        bad("fb4 capture: tickTerritory must record rt.Inside and rt.InsideSig")
+    st = re.search(r"\tif player and not localCapture\.Capturing then\n\t\tlocal srt, contested, held = standingZoneOf\(player\)(.*?)\n\tend\n", ts, re.S)
+    sbody = st.group(1) if st else ""
+    if st and "Capturing = true" not in sbody and "awardCapture" not in sbody and "Progress +=" not in sbody and "OwnerUserId =" not in sbody \
+            and "localCapture.Held = held" in sbody and "localCapture.Contested = contested" in sbody:
+        ok("fb4 capture: the standing bar only names the zone (Capturing stays false, no progress / ownership write)")
+    else:
+        bad("fb4 capture: buildPayloadForPlayer's standing branch must only fill Held / Contested (never Capturing, progress or ownership)")
+    fn = re.search(r"local function standingZoneOf\(player: Player\)(.*?)\nend\n", ts, re.S)
+    zbody = fn.group(1) if fn else ""
+    if (fn and "\t\tlocal inside = rt.Inside\n\t\tif inside and table.find(inside, player) then" in zbody
+            and "local onDisc = rt.Standing\n" in zbody and "and onDisc ~= nil and table.find(onDisc, player) ~= nil" in zbody
+            and "rt.OwnerUserId == player.UserId" in zbody):
+        ok("fb4 capture: standingZoneOf decides from the server's own lists (Inside: CONTESTED for everyone counted; Standing: YOURS on the disc)")
+    else:
+        bad("fb4 capture: standingZoneOf must take CONTESTED from rt.Inside and YOURS from rt.Standing (on the disc) and server ownership only")
+    loop = re.search(r"local beforeSig = rt\.InsideSig\n(?:\t\t\t\tlocal beforeInside = rt\.Inside\n)?\t\t\t\ttickTerritory\(rt, dt\)(.*?)\n\t\t\tend\n", ts, re.S)
+    if loop and "elseif standingBar and rt.InsideSig ~= beforeSig then" in loop.group(1):
+        ok("fb4 capture: a change of who stands in a zone pushes at the capture cadence (only while StandingBar is on)")
+    else:
+        bad("fb4 capture: the capture loop must push on an Inside change behind StandingBar")
+
+    # 4. client: the bar shows a standing-only state only when the config allows it; titles from the config
+    cl = _cap_code(CAP_CL)
+    ap = re.search(r"local function applyCapture\(localCap: any\)(.*?)\nend\n", cl, re.S)
+    abody = ap.group(1) if ap else ""
+    if ("(localCap.Capturing or standingShown(localCap))" in abody and 'word .. " · " .. name' in abody
+            and '"CONTESTED · " .. name' in abody and '"CAPTURING " .. name' in abody
+            and re.search(r"local held = show and localCap\.Held == true and not localCap\.Capturing and not contested", abody)):
+        ok("fb4 capture: applyCapture shows CAPTURING / CONTESTED / YOURS; held never wins over contested or capturing")
+    else:
+        bad("fb4 capture: applyCapture must gate the standing bar on standingShown and keep CAPTURING / CONTESTED titles")
+    sh = re.search(r"local function standingShown\(localCap: any\): boolean(.*?)\nend\n", cl, re.S)
+    if sh and "localCap.Capturing" in sh.group(1) and "sb.Contested == true" in sh.group(1) and "sb.Held == true" in sh.group(1):
+        ok("fb4 capture: standingShown follows TerritoryConfig.StandingBar (Held / Contested switches)")
+    else:
+        bad("fb4 capture: standingShown must follow TerritoryConfig.StandingBar")
+    # the capture-start sound stays on Capturing only (a held / contested bar never plays it)
+    if re.search(r"lc\.Capturing == true and type\(lc\.TerritoryId\) == \"string\"", _cap_code(CAP_AH)):
+        ok("fb4 capture: AudioHooks CaptureStart still keys on LocalCapture.Capturing only")
+    else:
+        bad("fb4 capture: AudioHooks must play CaptureStart only for LocalCapture.Capturing")
+
+
+must_contain(CAP_TC, "\tReleaseOnLeave = true,\n", "fb4 capture: TerritoryConfig.ReleaseOnLeave on (a leaver's zones go Neutral)")
+must_contain(CAP_TC, "\tStandingBar = {\n\t\tHeld = true,\n\t\tContested = true,\n", "fb4 capture: TerritoryConfig.StandingBar on")
+must_contain(CAP_EC, "\t\tPersistClaims = false,", "fb4 capture: PersistClaims off (no re-plant of saved claims on join)")
+must_contain(CAP_TY, "\t\tHeld: boolean?, -- fb4 capture lane", "fb4 capture: LocalCapture.Held in the payload type")
+must_contain("BALANCE.md", "(`TerritoryConfig.ReleaseOnLeave = true`) and nothing comes back when you rejoin (`PersistClaims = false`)",
+             "fb4 capture: BALANCE Empire Tax says outposts do not persist across servers")
+must_not_contain("BALANCE.md", "Persists across servers (`PersistClaims = true`)", "fb4 capture: BALANCE no longer says claims persist")
+_cap_rules()
+
+
+def _cap_fix1_rules() -> None:
+    """fb4 capture lane fix round 1: the standing bar follows the visible disc (capture reach unchanged), YOURS is a
+    short cue, the contested pulse is written at most 10 Hz, a finished Neutral contest goes back to Neutral."""
+    tc, ts, cl = _cap_code(CAP_TC), _cap_code(CAP_TS), _cap_code(CAP_CL)
+    sb = re.search(r"^\tStandingBar\s*=\s*\{(.*?)^\t\}", tc, re.M | re.S)
+    body = sb.group(1) if sb else ""
+    pad = re.search(r"\bDiscPad\s*=\s*(\d+(?:\.\d+)?)", body)
+    secs = re.search(r"\bHeldSeconds\s*=\s*(\d+(?:\.\d+)?)", body)
+    ring = re.search(r"local ringD = if isOilRig then math\.min\(diameter \+ (\d+), 46\) else diameter \+ (\d+)\n", _cap_code(CAP_MAP))
+    if (re.search(r"\bOnDisc\s*=\s*true\b", body) and pad and ring and ring.group(1) == ring.group(2)
+            and float(pad.group(1)) * 2 == float(ring.group(2)) and secs and 2 <= float(secs.group(1)) <= 10):
+        ok(f"fb4 capture fix1: StandingBar.OnDisc on, DiscPad {pad.group(1)} = half MapSetup's ring pad {ring.group(2)}, HeldSeconds {secs.group(1)} (2..10)")
+    else:
+        bad(f"fb4 capture fix1: StandingBar needs OnDisc = true, DiscPad = half of MapSetup's ringD pad, HeldSeconds 2..10 "
+            f"(pad {pad and pad.group(1)}, ring {ring and ring.groups()}, secs {secs and secs.group(1)})")
+    dr = re.search(r"local function standingDiscRadius\(rt: TerritoryRuntime\): number\?(.*?)\nend\n", ts, re.S)
+    dbody = dr.group(1) if dr else ""
+    if (dr and "sb.OnDisc ~= true or (rt.Def :: any).IsOilRig == true then\n\t\treturn nil" in dbody
+            and 'FindFirstChild(rt.Id .. "_Ring")' in dbody and "rt.DiscRadius = r" in dbody):
+        ok("fb4 capture fix1: standingDiscRadius reads the <Id>_Ring once; OnDisc off or an oil rig = no limit")
+    else:
+        bad("fb4 capture fix1: standingDiscRadius must read <Id>_Ring (cached) and skip oil rigs / OnDisc off")
+    tick = re.search(r"local function tickTerritory\(rt: TerritoryRuntime, dt: number\)(.*?)\nend\n", ts, re.S)
+    tbody = tick.group(1) if tick else ""
+    disc = re.search(r"\tif discR then\n(.*?)\n\tend\n\trt\.Standing = standing\n", tbody, re.S)
+    if (disc and "for _, p in ipairs(inside) do" in disc.group(1) and "table.insert(standing, p)" in disc.group(1)
+            and "dx * dx + dz * dz <= discR * discR" in disc.group(1)
+            and "local discR = if #inside > 0 then standingDiscRadius(rt) else nil" in tbody
+            and re.search(r"for _, p in ipairs\(standing\) do\n\t\tsig = ", tbody)):
+        ok("fb4 capture fix1: rt.Standing = the counted players on the disc (a subset of Inside), and it is part of InsideSig")
+    else:
+        bad("fb4 capture fix1: tickTerritory must build rt.Standing from Inside within the disc radius and sign it")
+    resets = re.findall(r"if rt\.OwnerType == ot\.Contested then\n\t+rt\.OwnerType = ot\.Neutral\b", tbody)
+    empty = re.search(r"\n\tif #inside == 0 then\n(.*?)\n\t\treturn\n", tbody, re.S)
+    if len(resets) >= 2 and empty and "rt.OwnerType = ot.Neutral" in empty.group(1):
+        ok(f"fb4 capture fix1: a Neutral zone's finished contest goes back to Neutral (empty zone and one player left: {len(resets)} resets)")
+    else:
+        bad(f"fb4 capture fix1: tickTerritory must reset OwnerType Contested -> Neutral when the contest ends ({len(resets)} resets)")
+    # capture / contest reach unchanged: the marker's half-diagonal (fort walls, boats)
+    pz = re.search(r"function TerritoryCapture\.PlayersInZone\(rt: any\)(.*?)\nend\n", _cap_code(CAP_CAPT), re.S)
+    if pz and "local half = marker.Size.Magnitude * 0.5" in pz.group(1) and "radius = math.max(radius, half)" in pz.group(1):
+        ok("fb4 capture fix1: capture / contest reach unchanged (TerritoryCapture: marker half-diagonal)")
+    else:
+        bad("fb4 capture fix1: TerritoryCapture.PlayersInZone reach changed (the disc limit is for the standing bar only)")
+    # client: YOURS cue and the pulse rate
+    ap = re.search(r"local function applyCapture\(localCap: any\)(.*?)\nend\n", cl, re.S)
+    abody = ap.group(1) if ap else ""
+    if ("local secs = heldSeconds()" in abody and "elseif secs > 0 and os.clock() - heldSince >= secs then\n\t\t\tshow = false" in abody
+            and "task.delay(secs + 0.05, function()" in abody and "\t\theldKey = nil\n" in abody):
+        ok("fb4 capture fix1: YOURS shows for StandingBar.HeldSeconds, then hides until the player steps off and back on")
+    else:
+        bad("fb4 capture fix1: applyCapture must end the YOURS cue after HeldSeconds and re-arm it off the disc")
+    step = re.search(r"^local PULSE_STEP = (\d+(?:\.\d+)?)\b", cl, re.M)
+    hb = re.search(r"RunService\.Heartbeat:Connect\(function\(dt\)(.*?)\n\tend\)", cl, re.S)
+    hbody = hb.group(1) if hb else ""
+    writes = hbody.count("cp.Fill.BackgroundColor3 =")
+    gated = re.search(r"pulseAccum \+= dt\n\t+if pulseAccum >= PULSE_STEP then\n\t+pulseAccum = 0\n(?:.*\n){0,2}\t+cp\.Fill\.BackgroundColor3 = ", hbody)
+    if step and float(step.group(1)) >= 0.1 and writes == 1 and gated:
+        ok(f"fb4 capture fix1: the contested pulse is written at most {1 / float(step.group(1)):.0f} Hz (CLAUDE.md UI cap 10 Hz)")
+    else:
+        bad(f"fb4 capture fix1: the Heartbeat pulse must be gated by PULSE_STEP >= 0.1 (step {step and step.group(1)}, writes {writes}, gated {bool(gated)})")
+
+
+_cap_fix1_rules()
+
+
+def _cap_fix2_rules() -> None:
+    """fb4 capture lane fix round 2: the capturer's bar only for a zone he is counted inside, CONTESTED for everyone
+    counted (the blocker too), no YOURS cue on top of the capture toast, the Empire Tax recount on join, and a change of
+    who stands in a zone pushes only to the players who stepped in or out."""
+    tc, ts, cl = _cap_code(CAP_TC), _cap_code(CAP_TS), _cap_code(CAP_CL)
+    # 1. the Capturing branch: counted inside this tick (rt.Inside), lower Id first, the only place Capturing turns true
+    bp = re.search(r"local function buildPayloadForPlayer\(player: Player\?\)(.*?)\nend\n", ts, re.S)
+    body = bp.group(1) if bp else ""
+    cap = re.search(r"\n\t\tif player and rt\.CapturingUserId == player\.UserId and rt\.Progress > 0(.*?) then\n\t\t\tlocalCapture\.TerritoryId = rt\.Id\n", body, re.S)
+    cin = re.search(r"local function countedIn\(rt: TerritoryRuntime, player: Player\): boolean(.*?)\nend\n", ts, re.S)
+    if (cap and "and countedIn(rt, player)" in cap.group(1)
+            and "(localCapture.TerritoryId == nil or rt.Id < (localCapture.TerritoryId :: string))" in cap.group(1)
+            and cin and "local inside = rt.Inside\n" in cin.group(1)
+            and "return inside ~= nil and table.find(inside, player) ~= nil" in cin.group(1)
+            and body.count("localCapture.Capturing = true") == 1):
+        ok("fb4 capture fix2: the capturer's bar names only a zone he is counted inside this tick (rt.Inside), lower Id first")
+    else:
+        bad("fb4 capture fix2: buildPayloadForPlayer must set Capturing only for a zone the player is counted inside (countedIn, rt.Inside), lower Id first")
+    # 2. join: ownership sync, then the Empire Tax recount (a v83 save's stacks drop to what is held), then the push
+    pl = re.search(r"DataService\.OnProfileLoaded\(function\(player: Player, _profile: Types\.PlayerProfile\)(.*?)\n\tend\)", ts, re.S)
+    pbody = pl.group(1) if pl else ""
+    i_sync = pbody.find("\n\t\tsyncProfileOwnership(player)\n")
+    i_tax = pbody.find("\n\t\tsyncEmpireTax(player)\n")
+    i_push = pbody.find("\n\t\tTerritoryService.PushPlayer(player)")
+    se = re.search(r"local function syncEmpireTax\(player: Player\)(.*?)\nend\n", ts, re.S)
+    if 0 <= i_sync < i_tax < i_push and se and "_EconomyService.SyncOutpostIncomeStacks(player)" in se.group(1):
+        ok("fb4 capture fix2: on join syncProfileOwnership, then syncEmpireTax (EconomyService.SyncOutpostIncomeStacks), then the push")
+    else:
+        bad(f"fb4 capture fix2: OnProfileLoaded must run syncProfileOwnership, syncEmpireTax, PushPlayer in that order ({i_sync}, {i_tax}, {i_push})")
+    # 3. a change of who stands in a zone: a push for the players who stepped in or out only (no PushAll)
+    loop = re.search(r"local beforeInside = rt\.Inside\n\t\t\t\ttickTerritory\(rt, dt\)\n(.*?)\n\t\t\tend\n", ts, re.S)
+    lbody = loop.group(1) if loop else ""
+    br = re.search(r"elseif standingBar and rt\.InsideSig ~= beforeSig then\n(.*?)\n\t\t\t\tend", lbody, re.S)
+    bbody = br.group(1) if br else ""
+    post = re.search(r"\n\t\t\tif moved and not pushedAll then\n\t+for p in pairs\(moved\) do\n\t+if p\.Parent == Players then\n\t+TerritoryService\.PushPlayer\(p\)\n", ts)
+    if (br and "anyProgress" not in bbody and "ipairs(beforeInside or {})" in bbody and "ipairs(rt.Inside or {})" in bbody
+            and bbody.count("m[p] = true") == 2 and post
+            and re.search(r"TerritoryService\.PushAll\(\)\n\t+pushDirty = false\n\t+pushedAll = true\n", ts)):
+        ok("fb4 capture fix2: a change of who stands in a zone pushes only to the players who stepped in or out (no PushAll)")
+    else:
+        bad("fb4 capture fix2: the capture loop must push a presence change to the moved players only (PushPlayer), never set anyProgress for it")
+    # 4. client: no YOURS cue the moment his own capture finishes (HeldAfterCapture off)
+    sb = re.search(r"^\tStandingBar\s*=\s*\{(.*?)^\t\}", tc, re.M | re.S)
+    sbody = sb.group(1) if sb else ""
+    ap = re.search(r"local function applyCapture\(localCap: any\)(.*?)\nend\n", cl, re.S)
+    abody = ap.group(1) if ap else ""
+    hf = re.search(r"local function heldAfterCapture\(\): boolean(.*?)\nend\n", cl, re.S)
+    if (re.search(r"\bHeldAfterCapture\s*=\s*false\b", sbody) and hf and "sb.HeldAfterCapture == true" in hf.group(1)
+            and "local justTaken = held and lastCapId == id" in abody
+            and "lastCapId = if show and localCap.Capturing then id else nil" in abody
+            and abody.find("local justTaken") < abody.find("lastCapId = if show")
+            and re.search(r"if justTaken and secs > 0 and not heldAfterCapture\(\) then\n(?:\t*\n)*\t+heldSince -= secs\n\t+show = false\n", abody)):
+        ok("fb4 capture fix2: no YOURS cue on top of the capture toast (StandingBar.HeldAfterCapture = false)")
+    else:
+        bad("fb4 capture fix2: applyCapture must skip the YOURS cue when the previous payload was capturing the same zone (HeldAfterCapture off)")
+
+
+_cap_fix2_rules()
+# ── end fb4 capture lane
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

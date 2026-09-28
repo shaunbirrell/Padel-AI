@@ -7,6 +7,13 @@
 	  so it works the same for land outposts and the v70 naval outposts (oil rigs taken by a boat's driver or from
 	  the deck) and stays visible while Driving. Contested → amber edge + "CONTESTED · NAME" and the nation-colour
 	  pulse (contestedPulseActive); Protected → blue "PROTECTED · NAME" (capture slowed).
+	  fb4 capture lane (TerritoryConfig.StandingBar): the same bar also shows while the player stands in a zone that is
+	  not counting for them (LocalCapture.Capturing false): Held → "YOURS · NAME" with a full green bar; Contested →
+	  "CONTESTED · NAME" (two or more players inside, nobody gains). Before, both were silent. Fix 1: the server names
+	  these only while the player is on the visible disc (StandingBar.OnDisc); YOURS is a HeldSeconds cue (hidden
+	  after that until the player steps off and back on); the contested pulse is written at most 10 Hz. Fix 2: OnDisc
+	  limits YOURS only (the server sends CONTESTED to everyone it counts), and no YOURS cue the moment his own capture
+	  finishes (StandingBar.HeldAfterCapture off: the "Outpost taken" toast says it, one message at a time).
 	* F3 "Empire Tax +N%" → one silent Info toast through NotificationController when the server's WE_EmpireTaxPct
 	  (EconomyConfig.OutpostIncomeBuff.Attribute) rises or falls to N > 0 (it replaced "Outposts held: N"). Skipped
 	  when a server toast named Empire Tax within TAX.SkipWindow (2 s) of the change (the capture / loss toasts carry
@@ -72,6 +79,13 @@ local captureActive = false
 local contestedPulseActive = false
 local contestedColA: Color3? = nil
 local contestedColB: Color3? = nil
+local PULSE_STEP = 0.1 -- fb4 capture lane fix 1: the pulse is written at most 10 Hz (CLAUDE.md UI refresh cap)
+-- fb4 capture lane fix 1 (StandingBar.HeldSeconds): the YOURS cue: the zone it is showing for, since when, and a token
+-- that stale hide timers check
+local heldKey: string? = nil
+local heldSince = 0
+local heldToken = 0
+local lastCapId: string? = nil -- fb4 fix 2: the zone the last applied payload was capturing (its end skips the YOURS cue)
 
 -- radar
 local radarActive = false
@@ -968,20 +982,74 @@ local function setCaptureVisible(visible: boolean)
 	end
 end
 
+-- fb4 capture lane: a standing-only LocalCapture (Capturing false) the StandingBar config lets this bar show
+local function standingShown(localCap: any): boolean
+	local sb = (TerritoryConfig :: any).StandingBar
+	if typeof(sb) ~= "table" or localCap.Capturing then
+		return false
+	end
+	return (localCap.Contested == true and sb.Contested == true) or (localCap.Held == true and sb.Held == true)
+end
+
+-- fb4 capture lane fix 1: StandingBar.HeldSeconds (0 / missing = YOURS stays while you stand there)
+local function heldSeconds(): number
+	local sb = (TerritoryConfig :: any).StandingBar
+	local s = if typeof(sb) == "table" then tonumber(sb.HeldSeconds) else nil
+	return if s and s > 0 then s else 0
+end
+
+-- fb4 capture lane fix 2: StandingBar.HeldAfterCapture (false / missing = no YOURS cue as his own capture finishes)
+local function heldAfterCapture(): boolean
+	local sb = (TerritoryConfig :: any).StandingBar
+	return typeof(sb) == "table" and sb.HeldAfterCapture == true
+end
+
 local function applyCapture(localCap: any)
 	local p = capture
-	if not (localCap and localCap.Capturing and localCap.TerritoryId) then
+	local show = localCap and localCap.TerritoryId and (localCap.Capturing or standingShown(localCap))
+	local contested = show and localCap.Contested == true
+	local held = show and localCap.Held == true and not localCap.Capturing and not contested -- fb4: your own zone
+	local id = if show then tostring(localCap.TerritoryId) else ""
+	-- fb4 fix 2: this payload ends his own capture of this zone (the one applied before was capturing it)
+	local justTaken = held and lastCapId == id
+	lastCapId = if show and localCap.Capturing then id else nil
+	-- fb4 fix 1: YOURS is a cue of HeldSeconds from the moment it appears for this zone; then hidden until the player
+	-- steps off the disc (a payload without it) and back on. A timer re-applies the newest payload when it runs out.
+	if held then
+		local secs = heldSeconds()
+		if heldKey ~= id then
+			heldKey = id
+			heldSince = os.clock()
+			heldToken += 1
+			local my = heldToken
+			if justTaken and secs > 0 and not heldAfterCapture() then
+				-- fb4 fix 2: the capture toast says it; the cue is spent until he steps off the disc and back on
+				heldSince -= secs
+				show = false
+			elseif secs > 0 then
+				task.delay(secs + 0.05, function()
+					if my == heldToken then
+						local lp = lastPayload
+						applyCapture(if lp then lp.LocalCapture else nil)
+					end
+				end)
+			end
+		elseif secs > 0 and os.clock() - heldSince >= secs then
+			show = false
+		end
+	else
+		heldKey = nil
+	end
+	if not show then
 		setCaptureVisible(false)
 		contestedPulseActive = false
 		contestedColA = nil
 		contestedColB = nil
 		return
 	end
-	local id = tostring(localCap.TerritoryId)
 	local def = TerritoryConfig.Territories[id]
 	local name = string.upper(if def then def.DisplayName else id)
 	local frac = math.clamp(tonumber(localCap.Progress) or 0, 0, 1)
-	local contested = localCap.Contested == true
 	local protected = localCap.Protected == true
 	if p then
 		p.Value.Text = ProgressPill.Percent(frac)
@@ -990,6 +1058,12 @@ local function applyCapture(localCap: any)
 			p.Title.Text = "CONTESTED · " .. name
 			p.Title.TextColor3 = COL.Contested
 			ProgressPill.AccentStroke(p, COL.Contested)
+		elseif held then
+			local sb = (TerritoryConfig :: any).StandingBar
+			local word = if typeof(sb) == "table" and typeof(sb.HeldTitle) == "string" then sb.HeldTitle else "YOURS"
+			p.Title.Text = word .. " · " .. name
+			p.Title.TextColor3 = COL.You
+			ProgressPill.ResetStroke(p)
 		elseif protected then
 			p.Title.Text = "PROTECTED · " .. name
 			p.Title.TextColor3 = COL.Protected
@@ -1020,7 +1094,7 @@ local function applyCapture(localCap: any)
 		contestedColA = nil
 		contestedColB = nil
 		if p then
-			p.Fill.BackgroundColor3 = if protected then COL.Protected else ProgressPill.Colors.Fill
+			p.Fill.BackgroundColor3 = if held then COL.You elseif protected then COL.Protected else ProgressPill.Colors.Fill
 		end
 	end
 	setCaptureVisible(true)
@@ -1111,12 +1185,18 @@ function TerritoryController.Init()
 	end)
 
 	local radarAccum = 0
+	local pulseAccum = 0
 	RunService.Heartbeat:Connect(function(dt)
-		-- v38: continuous contested dual-color pulse on the capture bar
+		-- v38: continuous contested dual-color pulse on the capture bar (fb4 capture lane fix 1: at most 10 Hz, one Lerp
+		-- per step, not one per frame)
 		local cp = capture
 		if contestedPulseActive and cp and contestedColA and contestedColB then
-			local pulse = (math.sin(os.clock() * 5) + 1) * 0.5
-			cp.Fill.BackgroundColor3 = contestedColA:Lerp(contestedColB, pulse)
+			pulseAccum += dt
+			if pulseAccum >= PULSE_STEP then
+				pulseAccum = 0
+				local pulse = (math.sin(os.clock() * 5) + 1) * 0.5
+				cp.Fill.BackgroundColor3 = contestedColA:Lerp(contestedColB, pulse)
+			end
 		end
 		-- W3 step 2 lane U0: the contested diamond yields to the objective marker (4 Hz)
 		diamondAccum += dt

@@ -117,7 +117,7 @@ Config: `EconomyConfig.OutpostIncomeBuff`, `TerritoryConfig.Starter`. Server onl
 
 - Applies to every cash reason that is not exempt (`MonetizationConfig.CashMultExemptReasons` plus EconomyService's never-multiplied list): passive and business income, training, missions, stipends. Exempt: the ATM `collector` (already multiplied when it accrued), `plot_oil`, Robux, admin, refunds, rebirth, battle pass, codes, spinner, supply drops, bank raid, clan war, the manual drop and ATM raids.
 - Multiplies with prestige (+10% per rebirth), VIP / 2x Cash and the season.
-- Persists across servers (`PersistClaims = true`): saved claims are re-planted on join onto Neutral or NPC-held zones, dropped when another online player holds the zone, released when you leave. Losing a zone drops the %.
+- Held only while you are in the server (owner 2026-09-28): when you leave, your outposts go back to Neutral (`TerritoryConfig.ReleaseOnLeave = true`) and nothing comes back when you rejoin (`PersistClaims = false`), so you take them again. Your Home Outpost is the exception: once taken, you hold it again on every join. Losing a zone drops the %.
 - Rebirth keeps Empire Tax (outposts are not reset).
 
 ## Daily missions (Phase 6)

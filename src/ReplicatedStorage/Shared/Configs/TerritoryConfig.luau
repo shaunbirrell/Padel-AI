@@ -48,6 +48,36 @@ local TerritoryConfig = {
 	-- boat or jeep no longer contests its own capture. Naval outposts (oil rigs): WaterConfig.NavalOutposts.
 	VehiclePassengersCount = false,
 
+	-- fb4 capture lane (owner 2026-09-28: "left and rejoined and I had the circle again" / "standing on the circle it's
+	-- not going through"). ReleaseOnLeave: a player's zones go back to Neutral the moment they leave the server, and a
+	-- rejoin (this server or another) starts with none, so the circle has to be taken again. Home Outposts keep their F10
+	-- rule (Neutral on leave, held again on rejoin once taken). false = the old soft release (a leaver keeps his zones on
+	-- that server until someone takes them). EconomyConfig.OutpostIncomeBuff.PersistClaims (off) would re-plant saved
+	-- claims on join and always releases on leave.
+	ReleaseOnLeave = true,
+	-- StandingBar: the capture bar (TerritoryController) also shows while you stand in a zone that is not counting for
+	-- you: Held = your own zone, alone ("YOURS · CENTRAL PLAZA", full bar); Contested = two or more players inside
+	-- ("CONTESTED · CENTRAL PLAZA", nobody gains; every player counted inside sees it, the one blocking too). Both were
+	-- silent before. false = the old silence.
+	StandingBar = {
+		Held = true,
+		Contested = true,
+		HeldTitle = "YOURS", -- short, no key names (phone text)
+		-- OnDisc: YOURS follows the visible disc (MapSetup's <Id>_Ring, Radius + DiscPad): on it, it shows; off it, it
+		-- hides. CAPTURING and CONTESTED follow the counted reach (TerritoryCapture: the marker's half-diagonal, about
+		-- 1.41 x Radius: fort walls, boats), because that reach is what takes or blocks a zone: they can start a few steps
+		-- before the disc and last a few steps past it. Oil rigs keep the counted reach for YOURS too (their ring is capped
+		-- at the deck and boats take them from the water). false = YOURS in the whole counted reach.
+		OnDisc = true,
+		DiscPad = 4, -- MapSetup ring diameter = 2 x Radius + 8; used only when the ring part is missing
+		-- HeldSeconds: YOURS is a short cue: shown for this long after you step onto your own disc (or a contest there
+		-- ends), then hidden until you step off and back on. 0 = shown the whole time you stand there. CONTESTED stays.
+		HeldSeconds = 5,
+		-- HeldAfterCapture: false = no YOURS cue the moment your own capture finishes (the "Outpost taken" toast already
+		-- says it: one message at a time); it shows the next time you step onto the disc. true = shown with the toast.
+		HeldAfterCapture = false,
+	},
+
 	-- F10: owner-only Home Outpost per plot (see the header). Switched on by lane Z (reversible: false removes the six
 	-- rows and the tutorial falls back to 4x4 then outpost, tutorial order version 2).
 	Starter = {

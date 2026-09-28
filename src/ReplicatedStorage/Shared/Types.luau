@@ -327,6 +327,7 @@ export type TerritoryStatePayload = {
 		Capturing: boolean,
 		Contested: boolean?,
 		Protected: boolean?,
+		Held: boolean?, -- fb4 capture lane (TerritoryConfig.StandingBar): standing in your own zone (Capturing false)
 	}?,
 	RadarReveal: boolean?,
 	RadarRadius: number?,

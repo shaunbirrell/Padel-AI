@@ -33,6 +33,19 @@
 	      (UserId + HumanoidRootPart position, Instance-free, nearest first) and the holder gets its own payload every
 	      RADAR_STREAM.PushSeconds, so TerritoryController can mark the ones it has not streamed in. With streaming off
 	      the payload and the push rate are exactly as before (every character is on every client).
+fb4 capture lane (owner 2026-09-28: "left and rejoined and I had the circle again" / "standing on the circle it's not
+      going through"): EconomyConfig.OutpostIncomeBuff.PersistClaims is off (no re-plant on join; the first sync on
+      join rewrites profile.Territories from this server's zones, so an older save's claims drop out and the Empire Tax
+      matches what is really held) and TerritoryConfig.ReleaseOnLeave sends a leaver's zones back to Neutral, so a rejoin
+      in any server starts without them. TerritoryConfig.StandingBar: the payload's LocalCapture also names the zone the
+      player stands in when it is not counting for them (Held = their own zone alone; Contested = two or more players
+      inside), with Capturing false, so the capture bar is never silent there; a change of who stands in a zone pushes
+      at the capture cadence (0.5 s). Both off = the old behaviour. Fix 1: with StandingBar.OnDisc that standing bar
+      is named only to players on the visible disc (the <Id>_Ring; capture and contest reach are unchanged), and a
+      Neutral zone whose contest ended goes back from "Contested" to Neutral (it used to stay "Contested"). Fix 2: the
+      capturer's bar names only a zone he is counted inside this tick (rt.Inside), so a part-done capture he walked
+      away from no longer hides the zone under him; OnDisc limits YOURS only (CONTESTED goes to everyone counted, the
+      blocker too); a change of who stands in a zone pushes only to the players who stepped in or out.
 ]]
 
 local Players = game:GetService("Players")
@@ -71,6 +84,12 @@ type TerritoryRuntime = {
 	ContesterA: number?,
 	ContesterB: number?,
 	Marker: BasePart?,
+	-- fb4 capture lane: who counted inside on the last tick (the capturer's bar and CONTESTED), who of them stands on
+	-- the visible disc (YOURS, StandingBar.OnDisc), a cheap signature of both sets, and the disc radius (ring part)
+	Inside: { Player }?,
+	Standing: { Player }?,
+	InsideSig: number?,
+	DiscRadius: number?,
 }
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
@@ -627,6 +646,77 @@ local function radarTargetsFor(viewer: Player, radius: number): { Types.RadarTar
 	return out
 end
 
+-- fb4 capture lane: TerritoryConfig.StandingBar switches (nil / false = off: the old silence)
+local function standingBarFlags(): (boolean, boolean)
+	local sb = (TerritoryConfig :: any).StandingBar
+	if typeof(sb) ~= "table" then
+		return false, false
+	end
+	return sb.Held == true, sb.Contested == true
+end
+
+--[[ fb4 capture lane fix 1 (StandingBar.OnDisc): the radius of the visible disc (MapSetup's <Id>_Ring, Radius + 4 on
+	land), read once from the ring part (the DiscPad fallback when it is missing); nil = no limit: OnDisc off, or an oil
+	rig (its ring is capped at the deck and a boat takes it from the water). Capture and contest reach never change. ]]
+local function standingDiscRadius(rt: TerritoryRuntime): number?
+	local sb = (TerritoryConfig :: any).StandingBar
+	if typeof(sb) ~= "table" or sb.OnDisc ~= true or (rt.Def :: any).IsOilRig == true then
+		return nil
+	end
+	local cached = rt.DiscRadius
+	if cached then
+		return cached
+	end
+	local r = 0
+	local marker = rt.Marker
+	local ring = if marker and marker.Parent then marker.Parent:FindFirstChild(rt.Id .. "_Ring") else nil
+	if ring and ring:IsA("BasePart") then
+		r = math.max(ring.Size.Y, ring.Size.Z) * 0.5 -- a Cylinder lying on its side: Y and Z are the diameter
+	end
+	if r <= 0 then
+		r = (tonumber(rt.Def.Radius) or 30) + (tonumber(sb.DiscPad) or 4)
+	end
+	rt.DiscRadius = r
+	return r
+end
+
+--[[ fb4 capture lane (StandingBar): the zone this player stands in that is not counting for them: contested (two or
+	more players counted inside: last tick's Inside list, the same reach that blocks the capture, so the blocker sees it
+	too) or their own zone held alone (last tick's Standing list: with OnDisc, on the visible disc only). Contested wins
+	over held, then the lower Id, so the pick never depends on table order. Returns (runtime, contested, held) or nil. ]]
+local function standingZoneOf(player: Player): (TerritoryRuntime?, boolean, boolean)
+	local wantHeld, wantContested = standingBarFlags()
+	if not (wantHeld or wantContested) then
+		return nil, false, false
+	end
+	local best: TerritoryRuntime? = nil
+	local bestContested, bestHeld = false, false
+	for _, rt in pairs(territories) do
+		local inside = rt.Inside
+		if inside and table.find(inside, player) then
+			local contested = wantContested and rt.Contested == true
+			local onDisc = rt.Standing
+			local held = rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == player.UserId
+				and onDisc ~= nil and table.find(onDisc, player) ~= nil
+			if contested or (wantHeld and held) then
+				local better = best == nil
+					or (contested and not bestContested)
+					or (contested == bestContested and rt.Id < (best :: TerritoryRuntime).Id)
+				if better then
+					best, bestContested, bestHeld = rt, contested, held
+				end
+			end
+		end
+	end
+	return best, bestContested, bestHeld
+end
+
+-- fb4 capture lane fix 2: counted inside this zone on the last capture tick (TerritoryCapture reach, rt.Inside)
+local function countedIn(rt: TerritoryRuntime, player: Player): boolean
+	local inside = rt.Inside
+	return inside ~= nil and table.find(inside, player) ~= nil
+end
+
 local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePayload
 	local list: { Types.TerritoryEntryPayload } = {}
 	local localCapture = {
@@ -635,6 +725,7 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 		Capturing = false,
 		Contested = false,
 		Protected = false,
+		Held = false,
 	}
 	-- F10: another plot's Home Outpost is not listed (only its owner can take it; TerritoryRadar.ShownTo)
 	local viewerPlotId: number? = nil
@@ -662,7 +753,10 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 			BonusValue = rt.Def.BonusValue,
 			Contested = rt.Contested,
 		})
-		if player and rt.CapturingUserId == player.UserId and rt.Progress > 0 then
+		-- fb4 capture lane fix 2: only a zone he is counted inside now (a part-done capture he walked away from decays
+		-- without the bar, so it never hides the zone under him); the lower Id wins if two of his captures overlap
+		if player and rt.CapturingUserId == player.UserId and rt.Progress > 0 and countedIn(rt, player)
+			and (localCapture.TerritoryId == nil or rt.Id < (localCapture.TerritoryId :: string)) then
 			localCapture.TerritoryId = rt.Id
 			localCapture.Progress = math.clamp(rt.Progress / math.max(1, rt.Def.CaptureTimeSeconds), 0, 1)
 			localCapture.Capturing = true
@@ -684,6 +778,26 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 				local colA, colB = contestColors(rt)
 				;(localCapture :: any).ContesterColorA = packColor(colA)
 				;(localCapture :: any).ContesterColorB = packColor(colB)
+			end
+		end
+	end
+
+	-- fb4 capture lane (StandingBar): nothing counting for this player, but they stand in a contested zone or their own
+	-- zone: name it with Capturing false (older clients ignore it). Held shows a full bar; contested shows the zone's
+	-- current progress (frozen while contested) with the same contester colours as the capturer's bar.
+	if player and not localCapture.Capturing then
+		local srt, contested, held = standingZoneOf(player)
+		if srt then
+			localCapture.TerritoryId = srt.Id
+			localCapture.Progress = if contested
+				then math.clamp(srt.Progress / math.max(1, srt.Def.CaptureTimeSeconds), 0, 1)
+				else 1
+			localCapture.Contested = contested
+			localCapture.Held = held
+			if contested then
+				local colA, colB = contestColors(srt)
+				;(localCapture :: any).ContesterColorA = if colA then { colA.R, colA.G, colA.B } else nil
+				;(localCapture :: any).ContesterColorB = if colB then { colB.R, colB.G, colB.B } else nil
 			end
 		end
 	end
@@ -1005,11 +1119,43 @@ end
 local function tickTerritory(rt: TerritoryRuntime, dt: number)
 	local inside = playersInZone(rt)
 	local ot = ownerTypes()
+	-- fb4 capture lane: remember who counted this tick (the capturer's bar, CONTESTED) and who of them stands on the
+	-- visible disc (YOURS); the signature changes when either set changes
+	rt.Inside = inside
+	local standing = inside
+	local discR = if #inside > 0 then standingDiscRadius(rt) else nil
+	if discR then
+		standing = {}
+		local marker = rt.Marker
+		local c = if marker then marker.Position else rt.Def.Position
+		for _, p in ipairs(inside) do
+			local ch = p.Character
+			local root = if ch then ch:FindFirstChild("HumanoidRootPart") else nil
+			if root and root:IsA("BasePart") then
+				local dx, dz = root.Position.X - c.X, root.Position.Z - c.Z
+				if dx * dx + dz * dz <= discR * discR then
+					table.insert(standing, p)
+				end
+			end
+		end
+	end
+	rt.Standing = standing
+	local sig = #inside
+	for _, p in ipairs(inside) do
+		sig = (sig * 31 + p.UserId) % 2147483647
+	end
+	for _, p in ipairs(standing) do
+		sig = (sig * 37 + p.UserId + 1) % 2147483647
+	end
+	rt.InsideSig = sig
 
 	if #inside == 0 then
 		rt.Contested = false
 		rt.ContesterA = nil
 		rt.ContesterB = nil
+		if rt.OwnerType == ot.Contested then
+			rt.OwnerType = ot.Neutral -- fb4 fix 1: a Neutral zone's contest ends when it empties (it stayed "Contested")
+		end
 		if rt.Progress > 0 then
 			rt.Progress = math.max(0, rt.Progress - TerritoryConfig.ProgressDecayPerSecond * dt)
 		end
@@ -1069,6 +1215,9 @@ local function tickTerritory(rt: TerritoryRuntime, dt: number)
 	rt.Contested = false
 	rt.ContesterA = nil
 	rt.ContesterB = nil
+	if rt.OwnerType == ot.Contested then
+		rt.OwnerType = ot.Neutral -- fb4 fix 1: one player left on a Neutral zone: the contest is over
+	end
 	local capturer = inside[1]
 	-- If capturer already owns it, just refresh presence (no progress needed)
 	if rt.OwnerType == ot.Player and rt.OwnerUserId == capturer.UserId then
@@ -1332,13 +1481,15 @@ function TerritoryService.Init(deps: { [string]: any })
 	end
 
 	Players.PlayerRemoving:Connect(function(player)
-		-- Soft-release (PersistClaims off): keep world ownership so others can contest; clear profile sync only.
+		-- Soft-release (PersistClaims and ReleaseOnLeave off): keep world ownership so others can contest.
 		-- F3 PersistClaims on: the leaver's zones go back to Neutral (their saved claims are kept for the next server).
+		-- fb4 capture lane, TerritoryConfig.ReleaseOnLeave on: the leaver's zones go back to Neutral; with PersistClaims
+		-- off the next join rewrites profile.Territories from that server's zones, so nothing comes back by itself.
 		-- F10: a Home Outpost always goes back to Neutral when its owner leaves.
 		local uid = player.UserId
 		firstOutpostLogged[uid] = nil
 		lastRadarPushAt[player] = nil
-		local persist = persistClaimsOn()
+		local persist = persistClaimsOn() or (TerritoryConfig :: any).ReleaseOnLeave == true
 		for _, rt in pairs(territories) do
 			if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == uid and (persist or isStarterRt(rt)) then
 				releaseOwnership(rt, "leave")
@@ -1356,20 +1507,45 @@ function TerritoryService.Init(deps: { [string]: any })
 			task.wait(dt)
 			ensureRuntime()
 			local anyProgress = false
+			local wantHeld, wantContested = standingBarFlags()
+			local standingBar = wantHeld or wantContested
+			local moved: { [Player]: boolean }? = nil
 			for _, rt in pairs(territories) do
 				local before = rt.Progress
 				local beforeCap = rt.CapturingUserId
+				local beforeSig = rt.InsideSig
+				local beforeInside = rt.Inside
 				tickTerritory(rt, dt)
 				if rt.Progress ~= before or rt.CapturingUserId ~= beforeCap or rt.Contested then
 					anyProgress = true
+				elseif standingBar and rt.InsideSig ~= beforeSig then
+					-- fb4 StandingBar fix 2: only who stands there changed: the players who stepped in or out (before
+					-- and now) get their own payload at the capture cadence; nobody else's payload changed
+					local m = moved or {}
+					moved = m
+					for _, p in ipairs(beforeInside or {}) do
+						m[p] = true
+					end
+					for _, p in ipairs(rt.Inside or {}) do
+						m[p] = true
+					end
 				end
 			end
 			-- Throttle full pushes; skip when idle and recently pushed
 			local now = os.clock()
+			local pushedAll = false
 			if anyProgress or pushDirty or (now - lastPushAt >= 2.0) then
 				if now - lastPushAt >= (if anyProgress then 0.5 else 2.0) then
 					TerritoryService.PushAll()
 					pushDirty = false
+					pushedAll = true
+				end
+			end
+			if moved and not pushedAll then
+				for p in pairs(moved) do
+					if p.Parent == Players then
+						TerritoryService.PushPlayer(p)
+					end
 				end
 			end
 			-- lane C2 (F7): while streaming is on, a radar holder's markers move only when a payload lands, so a

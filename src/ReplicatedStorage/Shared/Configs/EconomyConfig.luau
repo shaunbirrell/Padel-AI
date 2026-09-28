@@ -53,7 +53,9 @@ local EconomyConfig = {
 	-- EconomyService.EmpireTaxPct(p) is the whole-number total; it is mirrored (display only, written on change) to
 	-- the player attribute Attribute. PersistClaims: saved claims are re-planted on join in any server (Neutral or
 	-- NPC-held zones), released when the player leaves, dropped when another online player holds the zone; false =
-	-- claims live only in the current server (lane Z switches it on). Toast args: ToastSecured / ToastLost (total %),
+	-- claims live only in the current server (lane Z switched it on; fb4 capture lane switched it off again: owner
+	-- 2026-09-28, a rejoin must never bring an outpost back; TerritoryConfig.ReleaseOnLeave frees a leaver's zones).
+	-- Toast args: ToastSecured / ToastLost (total %),
 	-- ToastStolenFromYou / ToastStealGain (zone name, total %), ToastClaimHeld (zone name, holder name).
 	OutpostIncomeBuff = {
 		DisplayName = "Empire Tax",
@@ -61,7 +63,7 @@ local EconomyConfig = {
 		MaxStacks = 5, -- cap +50%
 		StarterPct = 5, -- F10: the player's own Home Outpost, whole percent (not a stack)
 		Attribute = "WE_EmpireTaxPct", -- player attribute, whole percent (0 = chip hidden)
-		PersistClaims = true, -- F3: on since lane Z (reversible)
+		PersistClaims = false, -- F3: off since fb4 capture lane (owner: no outpost comes back on rejoin); true = lane Z re-plant
 		ToastSecured = "Outpost taken  Empire Tax +%d%%",
 		ToastLost = "Outpost lost  Empire Tax +%d%%",
 		ToastStolenFromYou = "%s taken  Empire Tax +%d%%",
