@@ -1,0 +1,9 @@
+Thank you for the raw check lines. They settled it: none of the truck or tanker store picks can go in.
+- Fuel Tanker 1578555399: all 24 of its shapes were uploaded by another person (AnathielSage), not by the seller. The "14.4 wide" was only because the model is saved turned; it is really 7.8 wide.
+- Tanker backup 17497975440 uses shapes by two other people and a third person's flag decal. 3284598659 stays out too (a copy of a real tanker).
+- Truck backup 14423269703: the seller did upload its shape and paint, but the model copies a real army truck (its paint file is named after the Ural-4320), and its paint looks taken from another game, which our rules do not allow. It stays out even if you like it; it could only come back if its maker shows where it comes from. The Troop Truck 9803446425 copies another user's model.
+- You do not need to pick again. The fix for "I sit above the car" is our own built trucks with a cab you sit inside: a separate change, still being finished, that this one ships with.
+- Our latest check of those built trucks (a test program, not your phone): you sit inside the cab in all 7, the loads now sit on the truck, and while driving they look about as big on screen as today's trucks.
+- Still being fixed before they ship: a few small parts not touching the body (mirrors, a side fuel tank, the Armored Truck's gun), the driver landing behind some trucks instead of beside them, and the Supply Truck and Ammo Carrier sharing one cab.
+- Pictures (test pictures, not the game): renders/after_merged_vkit/sheet.png (the built trucks so far) and renders/before_main/sheet.png (today).
+- When they ship, please try the 7 steps in phone_test.md on your phone. Send a new pick only if you want a store model instead (under 40 parts, made by the uploader, no markings, not a copy of a real vehicle).

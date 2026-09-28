@@ -1,0 +1,2683 @@
+diff --git a/src/ReplicatedStorage/Shared/Configs/NukeConfig.luau b/src/ReplicatedStorage/Shared/Configs/NukeConfig.luau
+--- a/src/ReplicatedStorage/Shared/Configs/NukeConfig.luau
++++ b/src/ReplicatedStorage/Shared/Configs/NukeConfig.luau
+@@ -263,13 +263,17 @@
+ end
+ 
+ -- F10: the nuke target filter for a TerritoryConfig.Territories row (Home Outposts are skipped).
+-function NukeConfig.IsTerritoryTargetable(def: { IsStarter: boolean? }?): boolean
++-- army lane B: a checkpoint post (TerritoryConfig.Posts row, IsPost) is never a nuke target either.
++function NukeConfig.IsTerritoryTargetable(def: { IsStarter: boolean?, IsPost: boolean? }?): boolean
+ 	if def == nil then
+ 		return false
+ 	end
+ 	if NukeConfig.Targeting.SkipStarterOutposts and def.IsStarter == true then
+ 		return false
+ 	end
++	if def.IsPost == true then
++		return false
++	end
+ 	return true
+ end
+ 
+diff --git a/src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau b/src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau
+--- a/src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau
++++ b/src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau
+@@ -30,8 +30,21 @@
+ 	PlotId: number?, -- the plot whose owner alone can capture it (OwnerOnly)
+ 	OwnerOnly: boolean?, -- only BaseService.GetOwnerUserId(PlotId) captures or contests
+ 	Light: boolean?, -- false = no WE_OwnerLight / stripe on the marker
++	-- army lane B (TerritoryConfig.Posts rows only; nil on every other zone)
++	IsPost: boolean?, -- a checkpoint post (Forward Post / Town Gate): session-only, player-owned, no Empire Tax
++	PostKind: string?, -- "Forward" | "TownGate"
++	ExactRadius: boolean?, -- TerritoryCapture counts def.Radius exactly (the visible ring), not the marker half-diagonal
++	ArmyCounts: boolean?, -- a squad (TerritoryCapture army presence provider) may capture it at Posts.ArmyRate
++	NoDressKeepOut: boolean?, -- WorldDress / WorldHygiene H3 skip this row (the kit is not a dressing keep-out)
++	RequireClear: boolean?, -- frozen for everyone while a garrison NPC of this gate lives (PostService)
++	Arm: string?, -- Town Gate: "N" | "E" | "S" | "W"
++	Kit: string?, -- Town Gate: the Town checkpoint site id ("Town.CP_N"): garrison anchors, Ops fail-closed check
++	FlagPos: Vector3?, -- Town Gate: the flag's centre on the booth roof
++	FlagYaw: number?, -- Town Gate: the kit yaw (degrees), so the flag faces arriving traffic
+ }
+ 
++local AdminConfig = require(script.Parent.AdminConfig) -- army lane B: Posts.Live = "owner" (IsPlaytestOwner; requires nothing)
++
+ local TerritoryConfig = {
+ 	-- Balance knobs
+ 	MaxPersonalTerritories = 6, -- oil + fortresses + land POIs
+@@ -91,6 +104,97 @@
+ 		GroundY = 1, -- world Y of the marker centre (same as the land outposts)
+ 	},
+ 
++	-- army lane B (spec SPEC-ARMY-FINAL §3.4 / §4 / §5 / §10.2; owner 2026-09-28 "too much dead space ... capture
++	-- checkpoints along the way and hold onto the checkpoint"): per base a Forward Post (open desert, 3-part kit) and
++	-- one Town Gate per Town road (the existing checkpoint, 2-part kit, flag on the booth roof) between the base and the
++	-- Centre. Rows are generated below (like the Starter loop) only while Enabled: 10 rows, 26 world parts, 0 collidable,
++	-- 0 lights, 0 Neon, 0 SurfaceGuis. Posts are session-only (never in profile.Territories), always owned by the
++	-- player (never a clan), pay StipendCash every CaptureStipend.TickSeconds and nothing else (no Empire Tax, no
++	-- MaxPersonalTerritories, no ClanWar, no Stats.TerritoriesCaptured, no XP, never a nuke target).
++	-- Live: "off" | "owner" | "all": who may see, list and count on posts (PostsLiveFor). "owner" = the owner's playtest
++	-- account only (AdminConfig.IsPlaytestOwner, like AircraftWeaponConfig.LiveFor); everyone else keeps today's game:
++	-- the kit is hidden on their client, and the server neither lists nor counts posts for them or their army.
++	-- Enabled = false: no rows, no kit, no PostService (byte-identical to the build before).
++	Posts = {
++		Enabled = true,
++		Live = "owner",
++		MaxHeld = 3, -- posts one player holds at once; a 4th capture releases the oldest
++		ArmyMinUnits = 2, -- living units of one owner in the ring for his army to count
++		ArmyRate = 0.5, -- an army alone captures at half speed (a player always beats an army)
++		OwnerLeashStuds = 320, -- the army counts only while its owner is this close (own Forward Post: anywhere in his plot)
++		MaxHeightDelta = 14, -- unit root within this many studs of the ring height
++		OutnumberSeconds = 6, -- two or more armies and no player: the bigger army captures after this long ...
++		OutnumberMargin = 1, -- ... when it has at least this many more units present; a tie stays frozen
++		KeepAwayStuds = 600, -- a holder not within this distance ...
++		KeepAwaySeconds = 600, -- ... for this long loses the post (his own chain, Forward Post and Town Gate: never while
++		-- he is in his own base; a base-centre to own-gate trip is 634-652 studs, just over KeepAwayStuds)
++		MissionCooldownSeconds = 600, -- mission CaptureTerritory +1 at most once per post per player per this long
++		UnderAttackToastGap = 60, -- the holder's "under attack" toast at most once per post per this long
++		UnderFireSeconds = 3, -- ... and never while the holder lost health this recently
++		NeutralColor = Color3.fromRGB(170, 150, 100),
++		GroundY = 1, -- world Y of the row Position (as the land outposts); the ring top is RingTop
++		Forward = {
++			IdPrefix = "Post_FP",
++			DisplayName = "Forward Post",
++			Description = "A checkpoint on your road to the Centre.",
++			Radius = 16,
++			CaptureTimeSeconds = 8,
++			StipendCash = 1000,
++			RingTop = 0.58,
++			PoleHeight = 14,
++			Sites = { [1] = { -454, -219 }, [2] = { -454, 181 }, [3] = { 24, -454 }, [4] = { -24, 454 }, [5] = { 454, -181 }, [6] = { 454, 219 } },
++			-- fix round 3: each Forward Post is named for its side of the map (its label, list row, bar and toasts), so two
++			-- held posts never read the same; the road's Gate shares the word (North Post -> North Gate). Compass words only.
++			Names = { [1] = "Northwest Post", [2] = "Southwest Post", [3] = "North Post", [4] = "South Post", [5] = "Northeast Post", [6] = "Southeast Post" },
++		},
++		TownGate = {
++			IdPrefix = "Post_TG_",
++			Description = "The Town checkpoint on your road to the Centre.",
++			Radius = 18,
++			CaptureTimeSeconds = 12,
++			StipendCash = 2000,
++			RequireClear = true,
++			RingTop = 0.62,
++			FlagY = 9.5, -- flag centre (standing on the booth roof, top 7.9)
++			-- HitsUnits (spec Lane E, D8: not built): garrisons never shoot squad units; must stay false in this build
++			Garrison = { { Role = "Alarm", Type = "HeavyInfantry" }, { Role = "G1", Type = "Infantry" }, HitsUnits = false },
++			Ledger = 4, -- garrison NPCs alive server-wide (inside CombatService's OverCap 18 + 4; not in the regular 18)
++			-- LedgerJobsOn: the ledger while OpsConfig.Enabled (Jobs / events may fill the specials' +4 themselves; other
++			-- spawns never count garrisons, so the server then holds at most 18 + 4 + 2 = 24 NPCs; 22 with Ops off)
++			LedgerJobsOn = 2,
++			-- WakeStuds: a live player this close, on foot OR seated in a vehicle, wakes the gate (a driver parked on the
++			-- ring must not take it without clearing the guards); an army that counts in the ring (ArmyMinUnits, live
++			-- owner within OwnerLeashStuds) wakes it too. Guards still never shoot a seated player (TargetZone).
++			WakeStuds = 150,
++			GuardTag = "WE_PostGuard", -- CollectionService tag on garrison models: non-live clients hide them locally
++			TargetZoneStuds = 60, -- garrison targets: players on foot this close to the gate, or who hurt it ...
++			HitBackSeconds = 10, -- ... in the last HitBackSeconds (never a passer-by)
++			SleepRadius = 400, -- nobody this close ...
++			SleepSeconds = 60, -- ... for this long (and nobody hurt them): the garrison despawns (no pay)
++			RegarrisonDelay = 60, -- a cleared gate re-arms this long after it is Neutral again ...
++			RegarrisonClear = 100, -- ... once no player is this close
++			Leash = 30,
++			SpawnGap = 0.2,
++			CapRetrySeconds = 5, -- a wake whose every guard the NPC cap refused retries this much later (the gate stays guarded)
++			RootLift = 3, -- NPC root above the anchor (R6 legs + half torso, as OpsConfig.Npc.RootLift)
++			Sites = {
++				N = { Name = "North Gate", X = 0, Z = -310, FlagX = 17.5, FlagZ = -308.4, Yaw = 0, Kit = "Town.CP_N" },
++				E = { Name = "East Gate", X = 310, Z = 0, FlagX = 308.4, FlagZ = 17.5, Yaw = -90, Kit = "Town.CP_E" },
++				S = { Name = "South Gate", X = 0, Z = 310, FlagX = -17.5, FlagZ = 308.4, Yaw = 180, Kit = "Town.CP_S" },
++				W = { Name = "West Gate", X = -310, Z = 0, FlagX = -308.4, FlagZ = -17.5, Yaw = 90, Kit = "Town.CP_W" },
++			},
++		},
++		Chain = { [1] = "W", [2] = "W", [3] = "N", [4] = "S", [5] = "E", [6] = "E" }, -- plot -> its Town Gate arm
++		-- phone text: short, no key names, no "click" / "tap"
++		Text = {
++			Taken = "%s taken", -- the capturer (player or army owner)
++			Lost = "%s lost", -- the holder (stolen or kept away too long)
++			UnderAttack = "%s under attack", -- the holder, when someone else starts taking it
++			ArmyTitle = "ARMY", -- capture bar while your army takes a post: "ARMY · FORWARD POST"
++			GuardsTitle = "CLEAR GUARDS", -- capture bar on a guarded Town Gate: "CLEAR GUARDS · NORTH GATE"
++		},
++	},
++
+ 	-- Periodic stipend for owned territories (MT-style ~every 90s)
+ 	CaptureStipend = {
+ 		TickSeconds = 90,
+@@ -288,4 +392,107 @@
+ 	return def ~= nil and def.IsStarter == true
+ end
+ 
++-- army lane B: the post rows (Forward Post per plot, Town Gate per arm), built only while Posts.Enabled (require time;
++-- pure math, no instances). Every row: IsPost, PostKind, ExactRadius, ArmyCounts, NoDressKeepOut, BonusType "Post".
++if TerritoryConfig.Posts.Enabled then
++	local P = TerritoryConfig.Posts
++	local fp = P.Forward
++	for n = 1, BaseConfig.MaxPlots do
++		local site = fp.Sites[n]
++		if site then
++			local id = fp.IdPrefix .. tostring(n)
++			TerritoryConfig.Territories[id] = {
++				Id = id,
++				DisplayName = fp.Names[n] or fp.DisplayName,
++				Description = fp.Description,
++				CaptureTimeSeconds = fp.CaptureTimeSeconds,
++				BonusType = "Post",
++				BonusValue = 0,
++				Position = Vector3.new(site[1], P.GroundY, site[2]),
++				Radius = fp.Radius,
++				Color = P.NeutralColor,
++				StipendCash = fp.StipendCash,
++				PlotId = n,
++				Light = false,
++				IsPost = true,
++				PostKind = "Forward",
++				ExactRadius = true,
++				ArmyCounts = true,
++				NoDressKeepOut = true,
++			}
++		end
++	end
++	local tg = P.TownGate
++	for _, arm in ipairs({ "N", "E", "S", "W" }) do
++		local s = (tg.Sites :: any)[arm]
++		local id = tg.IdPrefix .. arm
++		TerritoryConfig.Territories[id] = {
++			Id = id,
++			DisplayName = s.Name,
++			Description = tg.Description,
++			CaptureTimeSeconds = tg.CaptureTimeSeconds,
++			BonusType = "Post",
++			BonusValue = 0,
++			Position = Vector3.new(s.X, P.GroundY, s.Z),
++			Radius = tg.Radius,
++			Color = P.NeutralColor,
++			StipendCash = tg.StipendCash,
++			Light = false,
++			IsPost = true,
++			PostKind = "TownGate",
++			ExactRadius = true,
++			ArmyCounts = true,
++			NoDressKeepOut = true,
++			RequireClear = tg.RequireClear == true,
++			Arm = arm,
++			Kit = s.Kit,
++			FlagPos = Vector3.new(s.FlagX, tg.FlagY, s.FlagZ),
++			FlagYaw = s.Yaw,
++		}
++	end
++end
++
++-- army lane B: true for a post row (Forward Post / Town Gate). Posts never count for Empire Tax, MaxPersonalTerritories,
++-- ClanWar, Stats.TerritoriesCaptured or nuke targets, and are never written to a profile.
++function TerritoryConfig.IsPostDef(def: TerritoryDef?): boolean
++	return def ~= nil and def.IsPost == true
++end
++
++-- army lane B: may this UserId see, list and count on posts? Posts.Enabled and Live "all", or Live "owner" and the
++-- owner's playtest account (AdminConfig.IsPlaytestOwner). Pure: server and client read the same answer.
++function TerritoryConfig.PostsLiveFor(userId: any): boolean
++	local P = TerritoryConfig.Posts
++	if P.Enabled ~= true then
++		return false
++	end
++	if P.Live == "all" then
++		return true
++	end
++	if P.Live == "owner" then
++		return AdminConfig.IsPlaytestOwner(userId) == true
++	end
++	return false
++end
++
++-- army lane B: a plot's chain of post ids, nearest first ({ "Post_FP<n>", "Post_TG_<arm>" }); empty while Posts is off
++-- or for an unknown plot. Allocates: call it on a change, never per frame.
++function TerritoryConfig.PostChain(plotId: any): { string }
++	local out: { string } = {}
++	local P = TerritoryConfig.Posts
++	local n = tonumber(plotId)
++	if P.Enabled ~= true or n == nil then
++		return out
++	end
++	local fpId = P.Forward.IdPrefix .. tostring(n)
++	if TerritoryConfig.Territories[fpId] then
++		table.insert(out, fpId)
++	end
++	local arm = (P.Chain :: any)[n]
++	local tgId = if typeof(arm) == "string" then P.TownGate.IdPrefix .. arm else nil
++	if tgId and TerritoryConfig.Territories[tgId] then
++		table.insert(out, tgId)
++	end
++	return out
++end
++
+ return TerritoryConfig
+diff --git a/src/ServerScriptService/Server/Bootstrap.server.luau b/src/ServerScriptService/Server/Bootstrap.server.luau
+--- a/src/ServerScriptService/Server/Bootstrap.server.luau
++++ b/src/ServerScriptService/Server/Bootstrap.server.luau
+@@ -75,6 +75,7 @@
+ local MissileStrikeService = safeRequire("MissileStrikeService", Services.MissileStrikeService) -- v69 CC strikes
+ local PlotOilPumpService = safeRequire("PlotOilPumpService", Services.PlotOilPumpService)
+ local AirWeaponService = safeRequire("AirWeaponService", Services.AirWeaponService) -- aircraft weapons (WeaponsLive)
++local PostService = safeRequire("PostService", Services.PostService) -- army lane B: checkpoint posts (TerritoryConfig.Posts)
+ local StudioBuySmoke = safeRequire("StudioBuySmoke", Modules.StudioBuySmoke)
+ 
+ RemoteSetup.Init() -- idempotent; ensure remotes still present after requires
+@@ -122,6 +123,7 @@
+ 	MissileStrikeService = MissileStrikeService,
+ 	PlotOilPumpService = PlotOilPumpService,
+ 	AirWeaponService = AirWeaponService,
++	PostService = PostService, -- army lane B
+ }
+ 
+ local function safeInit(label: string, svc: any, ...: any)
+@@ -547,6 +549,9 @@
+ safeInit("SoldierService", SoldierService, deps)
+ safeInit("BusinessService", BusinessService, deps) -- v72: after SoldierService (GetCap / OnArmyChanged); no-op while the guide is off
+ safeInit("SquadOrdersService", SquadOrdersService, deps)
++-- army lane B: after DataService, CombatService, TerritoryService and SquadOrdersService (it binds TerritoryCapture's
++-- army presence + gate check and reads SquadOrdersService.UnitsOf); a no-op while TerritoryConfig.Posts.Enabled is false
++safeInit("PostService", PostService, deps)
+ safeInit("OpsService", OpsService, deps) -- W3s2 Jobs: after Data / Combat / Mission / Clan / SquadOrders; off while OpsConfig.Enabled = false
+ safeInit("SeasonService", SeasonService, deps)
+ safeInit("ClanWarService", ClanWarService, deps)
+diff --git a/src/ServerScriptService/Server/Modules/MapSetup.luau b/src/ServerScriptService/Server/Modules/MapSetup.luau
+--- a/src/ServerScriptService/Server/Modules/MapSetup.luau
++++ b/src/ServerScriptService/Server/Modules/MapSetup.luau
+@@ -155,7 +155,7 @@
+ 	end
+ 	local rest: { string } = {}
+ 	for id in pairs(rows) do
+-		if not seen[id] then
++		if not seen[id] and not TerritoryConfig.IsPostDef(rows[id]) then -- army lane B: posts are built by buildPostKits
+ 			table.insert(rest, id)
+ 		end
+ 	end
+@@ -226,6 +226,106 @@
+ 	return p
+ end
+ 
++--[[ army lane B (SPEC-ARMY-FINAL §4.3): the checkpoint post kits, one Atomic Model "<Id>_Zone" per post, tagged
++	WE_PostKit (non-live clients hide it locally, TerritoryController). 0 collidable, 0 lights, 0 Neon, 0 SurfaceGuis:
++	  Forward Post (3 parts): <Id> = the ring AND the capture marker (flat Cylinder 0.12 x 32 x 32, top at RingTop, the
++	    visible ring is exactly the counted radius: ExactRadius), <Id>_FlagPole (0.4 x 14 x 0.4), <Id>_Flag (5.5 x 3.2).
++	  Town Gate (2 parts): <Id> = ring + marker (36 across, top at RingTop, above the asphalt), <Id>_Flag standing on
++	    the checkpoint booth roof (FlagPos), turned with the kit (FlagYaw) so it faces arriving traffic.
++	The flags show the holder's banner colour only (TerritoryService), never a nation flag. One stud-scaled zone label
++	(WE_ZoneLabel, MaxDistance 40, never AlwaysOnTop) per post. Nothing is built while Posts.Enabled is false. ]]
++local function buildPostKits(parent: Instance)
++	local P = TerritoryConfig.Posts
++	if P.Enabled ~= true then
++		return
++	end
++	local ids: { string } = {}
++	for id, def in pairs(TerritoryConfig.Territories) do
++		if TerritoryConfig.IsPostDef(def) then
++			table.insert(ids, id)
++		end
++	end
++	table.sort(ids)
++	for _, id in ipairs(ids) do
++		local def = TerritoryConfig.Territories[id]
++		local pos = def.Position
++		local isGate = def.PostKind == "TownGate"
++		local kind = if isGate then P.TownGate else P.Forward
++		local zone = Instance.new("Model")
++		zone.ModelStreamingMode = Enum.ModelStreamingMode.Atomic -- set before it is parented (streaming2 S4 pattern)
++		zone.Name = id .. "_Zone"
++		zone:SetAttribute("TerritoryId", id)
++		local d = def.Radius * 2
++		local ringTop = GROUND_TOP_Y + (kind.RingTop - 0.5)
++		local ring = part({
++			Name = id,
++			Size = Vector3.new(0.12, d, d),
++			CFrame = CFrame.new(pos.X, ringTop - 0.06, pos.Z) * CFrame.Angles(0, 0, math.rad(90)),
++			Color = def.Color,
++			Transparency = 0.55,
++			Material = Enum.Material.SmoothPlastic,
++			Shape = Enum.PartType.Cylinder,
++			CanCollide = false,
++			Parent = zone,
++		})
++		ring.CanQuery = false
++		ring.CanTouch = false
++		ring:SetAttribute("TerritoryId", id)
++		ring:SetAttribute("Radius", def.Radius)
++		ring:SetAttribute("IsPost", true)
++		ring:SetAttribute("PostKind", def.PostKind)
++		ring:SetAttribute("OwnerType", "Neutral")
++		ring:SetAttribute("OwnerUserId", 0)
++		ring:SetAttribute("CaptureProgress", 0)
++		if def.PlotId ~= nil then
++			ring:SetAttribute("PlotId", def.PlotId)
++		end
++		CollectionService:AddTag(ring, TAG_TERRITORY)
++		CollectionService:AddTag(ring, TAG_CAPTURE)
++		WorldLabel.Create(ring, def.DisplayName, {
++			Name = "WE_ZoneLabel",
++			Studs = Vector2.new(8, 1.6),
++			Offset = Vector3.new(0, 16, 0),
++			MaxDistance = 40,
++		})
++		local flagCf: CFrame
++		local flagPos = def.FlagPos
++		if isGate and flagPos ~= nil then
++			flagCf = CFrame.new(flagPos) * CFrame.Angles(0, math.rad(def.FlagYaw or 0), 0)
++		else
++			local poleH = P.Forward.PoleHeight
++			local pole = part({
++				Name = id .. "_FlagPole",
++				Size = Vector3.new(0.4, poleH, 0.4),
++				Position = Vector3.new(pos.X, GROUND_TOP_Y + poleH * 0.5, pos.Z),
++				Color = Color3.fromRGB(55, 55, 55),
++				Material = Enum.Material.Metal,
++				CanCollide = false,
++				Parent = zone,
++			})
++			pole.CanQuery = false
++			pole.CanTouch = false
++			flagCf = CFrame.new(pos.X + 2.95, GROUND_TOP_Y + poleH - 1.8, pos.Z)
++		end
++		local flag = part({
++			Name = id .. "_Flag",
++			Size = Vector3.new(5.5, 3.2, 0.22),
++			CFrame = flagCf,
++			Color = def.Color,
++			Material = Enum.Material.SmoothPlastic,
++			Transparency = 0,
++			CanCollide = false,
++			Parent = zone,
++		})
++		flag.CanQuery = false
++		flag.CanTouch = false
++		flag:SetAttribute("TerritoryId", id)
++		flag:SetAttribute("WE_Flag", true)
++		CollectionService:AddTag(zone, "WE_PostKit")
++		zone.Parent = parent -- parented whole (every piece is an initial descendant)
++	end
++end
++
+ local function siteFrameOf(plinth: BasePart): CFrame
+ 	local cf = plinth:GetAttribute("WE_SiteCFrame")
+ 	if typeof(cf) == "CFrame" then
+@@ -1017,6 +1117,7 @@
+ -- +10 while TerritoryConfig.Starter.Enabled (the 6 Home Outpost kits), so flipping that flag also rebuilds a baked map.
+ -- +10 keeps the FaceMapCentre parity (even = off, odd = on).
+ MapSetup.MAP_GEN = (if BaseLayout.FacesMapCentre() then 83 else 82) + (if TerritoryConfig.Starter.Enabled then 10 else 0)
++	+ (if TerritoryConfig.Posts.Enabled then 20 else 0) -- army lane B: the 10 post kits (a baked map without them is rebuilt)
+ 
+ -- v70: healthy ground tiles under setup.Map (Bootstrap "Ground AFTER heal" check)
+ function MapSetup.CountGroundTiles(setup: Instance): number
+@@ -2991,6 +3092,7 @@
+ 			-- World v2 W1: no "FORTRESS · High stipend" card (the zone label names the fort; no debug labels)
+ 		end
+ 	end
++	buildPostKits(territories) -- army lane B: the checkpoint posts (only while TerritoryConfig.Posts.Enabled)
+ 
+ 	-- World v2 (spec §3.3): spawn pads and anchors come from WorldConfig.Spawns (the three makeSpawnFolder rings at
+ 	-- 650 / 550 / 500 are gone: their pads sat on the roads, carried Neon edges, H marks and a beacon pole through the jeep).
+diff --git a/src/ServerScriptService/Server/Modules/WorldDress.luau b/src/ServerScriptService/Server/Modules/WorldDress.luau
+--- a/src/ServerScriptService/Server/Modules/WorldDress.luau
++++ b/src/ServerScriptService/Server/Modules/WorldDress.luau
+@@ -239,7 +239,8 @@
+ 	-- capture clear circles (TerritoryCapture uses the marker half-diagonal)
+ 	local skip = toSet(K.CaptureSkip)
+ 	for id, t in pairs(TerritoryConfig.Territories :: { [string]: any }) do
+-		if not skip[id] then
++		-- army lane B: a checkpoint post row (NoDressKeepOut) is not a dressing keep-out: the dressing stays as it was
++		if not skip[id] and t.NoDressKeepOut ~= true then
+ 			local p: Vector3 = t.Position
+ 			local r: number = t.Radius
+ 			table.insert(zones.Captures, { Name = id, X = p.X, Z = p.Z, R = r * K.CaptureScale + K.CaptureExtra })
+diff --git a/src/ServerScriptService/Server/Modules/WorldHygiene.luau b/src/ServerScriptService/Server/Modules/WorldHygiene.luau
+--- a/src/ServerScriptService/Server/Modules/WorldHygiene.luau
++++ b/src/ServerScriptService/Server/Modules/WorldHygiene.luau
+@@ -276,6 +276,9 @@
+ 		})
+ 	end
+ 	for id, t in pairs(TerritoryConfig.Territories :: { [string]: any }) do
++		if t.NoDressKeepOut == true then
++			continue -- army lane B: a checkpoint post: neither an H3 clear zone nor an orphan anchor (the census stays as it was)
++		end
+ 		local pos: Vector3 = t.Position
+ 		local r: number = t.Radius
+ 		table.insert(ctx.Territories, { Name = id, X = pos.X, Z = pos.Z, R = r })
+diff --git a/src/ServerScriptService/Server/Services/CombatService/CombatFx.luau b/src/ServerScriptService/Server/Services/CombatService/CombatFx.luau
+--- a/src/ServerScriptService/Server/Services/CombatService/CombatFx.luau
++++ b/src/ServerScriptService/Server/Services/CombatService/CombatFx.luau
+@@ -80,7 +80,17 @@
+ 	return nil
+ end
+ 
+-local function fanOut(payload: Types.WeaponFxPayload, excludeUid: number?)
++-- `allow` (army lane B): nil for every caller but a Town Gate garrison NPC; when set, only players it says yes to get
++-- the event (a raising or non-true answer = no). nil keeps the fan-out exactly as before.
++local function allowed(allow: ((Player) -> boolean)?, plr: Player): boolean
++	if allow == nil then
++		return true
++	end
++	local ok, yes = pcall(allow, plr)
++	return ok and yes == true
++end
++
++local function fanOut(payload: Types.WeaponFxPayload, excludeUid: number?, allow: ((Player) -> boolean)?)
+ 	local r = remote()
+ 	if r == nil then
+ 		stats.Failed += 1
+@@ -91,7 +101,7 @@
+ 	local o, p = payload.O, payload.P
+ 	local t = now()
+ 	for _, plr in ipairs(Players:GetPlayers()) do
+-		if plr.UserId ~= excludeUid then
++		if plr.UserId ~= excludeUid and allowed(allow, plr) then
+ 			local char = plr.Character
+ 			local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
+ 			if root and root:IsA("BasePart") then
+@@ -117,8 +127,8 @@
+ end
+ 
+ --[[ One bullet event. `shooterKey` is the player's UserId (players) or the NPC record id (NPCs, S = 0).
+-	Returns false when the shooter bucket dropped it. ]]
+-function CombatFx.Bullet(shooterKey: any, shooterUid: number, weaponId: string, origin: Vector3, landed: Vector3, kind: string): boolean
++	Returns false when the shooter bucket dropped it. `allow` (optional, army lane B) limits the recipients. ]]
++function CombatFx.Bullet(shooterKey: any, shooterUid: number, weaponId: string, origin: Vector3, landed: Vector3, kind: string, allow: ((Player) -> boolean)?): boolean
+ 	local fx = CombatFeelConfig.Fx
+ 	if not take(shooterBuckets, shooterKey, fx.PerShooterHz, fx.PerShooterBurst, now()) then
+ 		stats.DroppedShooter += 1
+@@ -126,7 +136,7 @@
+ 	end
+ 	stats.Events += 1
+ 	local payload: Types.WeaponFxPayload = { S = shooterUid, W = weaponId, O = origin, P = landed, K = kind }
+-	fanOut(payload, if shooterUid ~= 0 then shooterUid else nil)
++	fanOut(payload, if shooterUid ~= 0 then shooterUid else nil, allow)
+ 	return true
+ end
+ 
+diff --git a/src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau b/src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau
+--- a/src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau
++++ b/src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau
+@@ -68,6 +68,8 @@
+ 	getTagged: (string) -> { Instance },
+ 	-- W2 (optional): one WeaponFx bullet event per NPC shot (origin = eye, landed, kind "P" / "V" / "M")
+ 	fx: ((rec: any, origin: Vector3, landed: Vector3, kind: string) -> ())?,
++	-- army lane B (optional): appends the Town Gate guard models this player's client hides to an exclude list
++	hiddenBodies: ((list: { Instance }, player: Player?) -> { Instance })?,
+ }
+ 
+ local B: Bindings
+@@ -111,6 +113,42 @@
+ 	return best, math.sqrt(bestDistSq)
+ end
+ 
++--[[ army lane B: the target pick of an NPC spawned with a TargetZone (a Town Gate garrison, PostService): the nearest
++	living player within AggroRange who is either ON FOOT with his root within zone.Radius (flat) of zone.Center (and
++	zone.Eligible says yes: the live filter), or on the zone's hit-back list (hurt one of this garrison within
++	HitBackSeconds). A driver passing on the road, or a player far off who never fired, is never picked. No allocation. ]]
++local function nearestZoneTarget(rec: any, zone: any): (Player?, number)
++	local position = rec.Root.Position
++	local maxRange = rec.Def.AggroRange
++	local best: Player? = nil
++	local bestDistSq = maxRange * maxRange
++	local centre: Vector3 = zone.Center
++	local r2 = zone.Radius * zone.Radius
++	local now = B.clock()
++	local eligible = zone.Eligible
++	for _, player in ipairs(Players:GetPlayers()) do
++		local _, hum, root = B.characterParts(player)
++		if hum and root and hum.Health > 0 then
++			local p = root.Position
++			local hitBack = zone.HitBack[player.UserId]
++			local ok = hitBack ~= nil and hitBack > now
++			if not ok and hum.SeatPart == nil then
++				local dx, dz = p.X - centre.X, p.Z - centre.Z
++				ok = dx * dx + dz * dz <= r2 and (eligible == nil or eligible(player) == true)
++			end
++			if ok then
++				local delta = p - position
++				local dSq = delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z
++				if dSq < bestDistSq then
++					bestDistSq = dSq
++					best = player
++				end
++			end
++		end
++	end
++	return best, math.sqrt(bestDistSq)
++end
++
+ -- Tests seed the hit roll; production uses an unseeded Random
+ function CombatNPC.SetRandom(seedOrRandom: any)
+ 	if typeof(seedOrRandom) == "Random" then
+@@ -235,6 +273,10 @@
+ 			table.insert(ignore, vehicle)
+ 		end
+ 	end
++	local hide = B.hiddenBodies
++	if hide then
++		hide(ignore, target) -- army lane B: a Town Gate guard the target's client hides never shields him (none if he is live)
++	end
+ 	local eye = rec.Root.Position + Vector3.new(0, CombatFairnessConfig.NpcEyeHeight, 0)
+ 	return CombatDamage.LineOfSight(eye, troot.Position, ignore, nil, CombatFairnessConfig.NpcLosRespectCanCollide)
+ end
+@@ -514,6 +556,10 @@
+ 	if target and g and provoked then
+ 		g.LastContact = now -- contact keeps a provoked group fighting
+ 	end
++	local zone = rec.TargetZone
++	if zone ~= nil then
++		target, dist = nearestZoneTarget(rec, zone) -- army lane B: a Town Gate garrison picks only zone / hit-back targets
++	end
+ 	local held = holdsFire(rec, g)
+ 	if held then
+ 		-- not provoked: never walks to a target, never fires; the reaction delay starts only once provoked
+@@ -592,7 +638,9 @@
+ 	thinkTick += 1
+ 	for _, rec in pairs(B.npcRecords) do
+ 		if rec.Alive and rec.Humanoid.Health > 0 and rec.Root.Parent then
+-			if rec.Leash == nil and not usesGroup(rec) then
++			if rec.TargetZone ~= nil then
++				thinkStance(rec, now) -- army lane B: a Town Gate garrison (TargetZone) always takes the stance path
++			elseif rec.Leash == nil and not usesGroup(rec) then
+ 				-- today's NPC (no opts, or Aggressive with no leash and no group): unchanged
+ 				local target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)
+ 				aim(rec, target, now)
+diff --git a/src/ServerScriptService/Server/Services/CombatService/init.luau b/src/ServerScriptService/Server/Services/CombatService/init.luau
+--- a/src/ServerScriptService/Server/Services/CombatService/init.luau
++++ b/src/ServerScriptService/Server/Services/CombatService/init.luau
+@@ -126,6 +126,8 @@
+ 	SpawnOpts: NPCSpawnOpts?, -- a copy of the opts, reused by a respawn (nil for a 2-argument spawn)
+ 	Returning: boolean, -- walking back past the leash (targets ignored until home)
+ 	DeathFired: boolean, -- OnNPCDeath fired (or silenced by DespawnNPC): once per death
++	TargetZone: NPCTargetZone?, -- army lane B: a Town Gate garrison's target zone (nil = today's target pick)
++	FxAllow: ((Player) -> boolean)?, -- army lane B: a garrison's WeaponFx recipient filter, made once at spawn
+ }
+ 
+ local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+@@ -169,6 +171,19 @@
+ 	ProvokeRadius: number?, -- Passive only (default: never provoked by proximity)
+ 	OverCap: boolean?, -- may use the SpecialOverCap headroom like a special type (event NPCs)
+ 	Static: boolean?, -- model attribute WE_Static = true; never MoveTo (tower deck, interior); implies Stance "Post"
++	TargetZone: NPCTargetZone?, -- army lane B: pick targets only in this zone (+ the players who hurt it); nil = today
++}
++--[[ army lane B (Town Gate garrisons, PostService): an NPC with a TargetZone considers only players ON FOOT whose root is
++	within Radius (flat) of Center and for whom Eligible (optional) says true, plus any player in HitBack (userId -> the
++	os.clock() until which he counts: set for HitBackSeconds when he hurts any NPC sharing this table). A passer-by, a
++	driver on the road or a player far off who never fired is never a target. Every shot keeps today's line-of-sight and
++	hit-chance gates. One table is shared by a garrison (the same reference in every SpawnNPC opts). ]]
++export type NPCTargetZone = {
++	Center: Vector3,
++	Radius: number,
++	HitBack: { [number]: number },
++	HitBackSeconds: number,
++	Eligible: ((Player) -> boolean)?,
+ }
+ export type NPCInfo = { Id: string, TypeId: string, GroupId: string?, Alive: boolean, Position: Vector3, Provoked: boolean, Stance: string }
+ export type NPCDeathInfo = { Id: string, TypeId: string, GroupId: string?, Killer: Player?, ByUnit: boolean, Position: Vector3 }
+@@ -727,9 +742,71 @@
+ 	return n
+ end
+ 
++-- army lane B: alive Town Gate garrison NPCs (TargetZone; PostService keeps its own ledger of at most 4). SpawnNPC lifts
++-- every NON-garrison spawn's cap by this many, so a garrison never fills the regular 18 nor the specials' +4 headroom (a
++-- camp NPC or bank guard that dies while a garrison is awake still respawns). A garrison spawn itself counts every NPC
++-- against 18 + SpecialOverCap. 0 with no garrison alive (HEAD behaviour).
++local function aliveGarrisonCount(): number
++	local n = 0
++	for _, rec in pairs(npcRecords) do
++		if rec.Alive and rec.TargetZone ~= nil then
++			n += 1
++		end
++	end
++	return n
++end
++
++-- army lane B: a target-zone NPC (Town Gate garrison) that this player may not fight: its zone's Eligible filter (the
++-- posts live filter, TerritoryConfig.PostsLiveFor) says no. His shots, his squad and aim assist leave it alone, so a
++-- player who cannot see posts (they are hidden on his client) never hurts, farms or provokes a garrison.
++local function zoneBars(rec: NPCRecord, player: Player?): boolean
++	local zone = rec.TargetZone
++	if zone == nil or player == nil or zone.Eligible == nil then
++		return false
++	end
++	local ok, yes = pcall(zone.Eligible :: (Player) -> boolean, player)
++	return not (ok and yes == true)
++end
++
++-- army lane B: every target-zone NPC record (Town Gate garrison) from SpawnNPC until destroyNPC, its corpse included: at
++-- most PostService's Ledger (4). Empty while no garrison exists, so every list below is exactly today's.
++local zoneRecs: { NPCRecord } = {}
++
++--[[ army lane B: a player whose client hides the Town Gate guards (zoneBars: not live for posts; TerritoryController
++	destroys WE_PostGuard models on his client) has no guard in his world, so the server's rays for him must not have one
++	either: his shot's exclude list (the exact ray, a projectile, the aim-assist sight line), his claim's line of sight
++	(validateClaim) and an NPC's shot at him (CombatNPC npcHasLos) pass through them, as on his screen. Appends those
++	guard models to `list` and returns it; adds nothing for a live player (the owner still hits his guards and they still
++	cover him) or while no garrison exists. At most 4 records; a record CombatService no longer holds is dropped here. ]]
++local function addHiddenBodies(list: { Instance }, player: Player?): { Instance }
++	if #zoneRecs == 0 or player == nil then
++		return list
++	end
++	for i = #zoneRecs, 1, -1 do
++		local rec = zoneRecs[i]
++		if npcRecords[rec.Id] ~= rec then
++			table.remove(zoneRecs, i)
++		elseif rec.Model.Parent ~= nil and zoneBars(rec, player) then
++			table.insert(list, rec.Model)
++		end
++	end
++	return list
++end
++
++-- army lane B: the WeaponFx recipient filter of a garrison NPC with no filter of its own (never expected): nobody
++local function noFxRecipient(_: Player): boolean
++	return false
++end
++
+ local function destroyNPC(rec: NPCRecord)
+ 	rec.Alive = false
+ 	npcRecords[rec.Id] = nil
++	if rec.TargetZone ~= nil then
++		local zi = table.find(zoneRecs, rec)
++		if zi then
++			table.remove(zoneRecs, zi) -- army lane B: its body leaves the hidden-body list with the model
++		end
++	end
+ 	CombatFx.Forget(rec.Id) -- W2 verify: its WeaponFx shooter bucket goes too (NPC ids never repeat)
+ 	CombatNPC.ForgetRecord(npcRecords, rec) -- lane N: its group's stance state goes with the last member
+ 	if rec.Model and rec.Model.Parent then
+@@ -835,11 +912,20 @@
+ 	if not (damage > 0) then
+ 		return 0, false
+ 	end
++	if zoneBars(rec, attacker) then
++		return 0, false -- army lane B: a garrison this player may not fight (not live for posts): no damage, no hit-back
++	end
+ 	-- squadfair: a NoCredit hit (an ATTACK squad shot with UnitKillCreditOnAttack off) leaves the creator tag alone
+ 	local credit = not (fb ~= nil and fb.NoCredit == true)
+ 	if attacker and credit then
+ 		tagCreator(rec.Humanoid, attacker, fb and fb.UnitShot)
+ 	end
++	-- army lane B: a player's own hit on a target-zone NPC (Town Gate garrison) puts him on its hit-back list (squad
++	-- unit shots do not: a garrison never turns on an owner who is not in the fight himself)
++	local zone = rec.TargetZone
++	if attacker and zone and not (fb ~= nil and fb.UnitShot == true) then
++		zone.HitBack[attacker.UserId] = clock() + zone.HitBackSeconds
++	end
+ 	local before = rec.Humanoid.Health
+ 	-- W2: Died may fire inside TakeDamage (immediate signals); its handler reads this to pay the kill quietly
+ 	rec.KillCtx = if fb then { Quiet = fb.Quiet, NoKillMarker = fb.NoKillMarker } else nil
+@@ -894,7 +980,14 @@
+ 		return if typeof(v) == "number" and v > 0 and v < max then v else nil
+ 	end
+ 	local gid = if o ~= nil and typeof(o.GroupId) == "string" and #o.GroupId > 0 and #o.GroupId <= 64 then o.GroupId else nil
++	-- army lane B: a TargetZone is kept by reference (a garrison shares one HitBack list); a malformed one is dropped
++	local tz = if o ~= nil and typeof(o.TargetZone) == "table" then o.TargetZone else nil
++	if tz ~= nil and not (typeof(tz.Center) == "Vector3" and typeof(tz.Radius) == "number" and tz.Radius > 0
++		and typeof(tz.HitBack) == "table" and typeof(tz.HitBackSeconds) == "number") then
++		tz = nil
++	end
+ 	return {
++		TargetZone = tz :: NPCTargetZone?,
+ 		GroupId = gid :: string?,
+ 		NoRespawn = o ~= nil and o.NoRespawn == true,
+ 		Home = if o ~= nil and typeof(o.Home) == "CFrame" then o.Home :: CFrame else at,
+@@ -914,6 +1007,11 @@
+ 	local isSpecial = table.find(CombatConfig.SpecialNPCTypes, tid) ~= nil or o.OverCap
+ 	local cap = CombatConfig.MaxActiveNPCs or 18
+ 	-- Special guards may exceed soft field pool by SpecialOverCap (+4) so bank always gets guards
++	if o.TargetZone == nil then
++		-- army lane B: only a garrison spawn counts Town Gate garrison NPCs. The regular 18 and the specials' +4 headroom
++		-- (bank / oil rig / fort guards, OverCap event NPCs) see exactly today's numbers while a garrison is awake.
++		cap += aliveGarrisonCount()
++	end
+ 	if aliveNPCCount() >= (if isSpecial then cap + CombatConfig.SpecialOverCap else cap) then
+ 		print(string.format("[CombatService] SpawnNPC blocked at cap alive=%d tid=%s", aliveNPCCount(), tostring(tid)))
+ 		return nil
+@@ -1080,8 +1178,16 @@
+ 		SpawnOpts = o.Copy,
+ 		Returning = false,
+ 		DeathFired = false,
++		TargetZone = o.TargetZone, -- army lane B (nil for every NPC but a Town Gate garrison)
+ 	}
+ 	npcRecords[id] = rec
++	if rec.TargetZone ~= nil then
++		-- army lane B: a garrison NPC's tracer filter (one closure per NPC, not per shot) and its hidden-body entry
++		rec.FxAllow = function(plr: Player): boolean
++			return not zoneBars(rec, plr)
++		end
++		table.insert(zoneRecs, rec)
++	end
+ 	CombatNPC.JoinGroup(npcRecords, rec) -- lane N (no-op for a 2-argument spawn)
+ 
+ 	humanoid.Died:Connect(function()
+@@ -1397,7 +1503,9 @@
+ 
+ --[[ A claimed target counts only if its torso is in front of the fire ray (0 < along <= maxAlong), within `range` of
+ 	the origin, at most CombatFairnessConfig.MissTolerance studs sideways of the ray, and a server ray from the origin
+-	to that torso (the shot's own filter: only the shooter is excluded) touches the target before anything else. ]]
++	to that torso (the shot's own filter: only the shooter is excluded) touches the target before anything else.
++	army lane B: when that ray is blocked, it is cast once more without the Town Gate guards `shooterPlayer`'s client
++	hides (addHiddenBodies), so a guard he cannot see never blocks his claim. ]]
+ local function validateClaim(
+ 	shooter: Model,
+ 	origin: Vector3,
+@@ -1405,7 +1513,8 @@
+ 	range: number,
+ 	maxAlong: number,
+ 	target: Model,
+-	torsoPos: Vector3
++	torsoPos: Vector3,
++	shooterPlayer: Player?
+ ): (boolean, string)
+ 	local v = torsoPos - origin
+ 	local along = v:Dot(direction)
+@@ -1423,7 +1532,12 @@
+ 		return false, string.format("%.1f studs off the ray", lateral)
+ 	end
+ 	if not CombatDamage.LineOfSight(origin, torsoPos, { shooter }, target, false, CombatFairnessConfig.ClaimLosPastTorsoStuds) then
+-		return false, "no line of sight"
++		-- army lane B: the same ray without the Town Gate guards this shooter's client hides (none for a live player or
++		-- while no garrison exists: then the claim is refused exactly as before)
++		local hidden = addHiddenBodies({ shooter }, shooterPlayer)
++		if #hidden == 1 or not CombatDamage.LineOfSight(origin, torsoPos, hidden, target, false, CombatFairnessConfig.ClaimLosPastTorsoStuds) then
++			return false, "no line of sight"
++		end
+ 	end
+ 	return true, "ok"
+ end
+@@ -1865,6 +1979,9 @@
+ 	opens a fight its owner is not part of, and never keeps one going after the owner has left (an owner far away cannot
+ 	wake guards, or keep them awake, onto a bystander). ]]
+ local function unitMayHit(owner: Player, rec: NPCRecord): boolean
++	if zoneBars(rec, owner) then
++		return false -- army lane B: a garrison this owner may not fight (not live for posts)
++	end
+ 	if CombatFairnessConfig.UnitProvokeNeedsOwner ~= true or not (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then
+ 		return true
+ 	end
+@@ -2156,7 +2273,7 @@
+ 		end
+ 	end
+ 	for id, rec in pairs(npcRecords) do
+-		if rec.Alive and rec.Humanoid.Health > 0 and rec.Model.Parent ~= nil then
++		if rec.Alive and rec.Humanoid.Health > 0 and rec.Model.Parent ~= nil and not zoneBars(rec, player) then
+ 			CombatAssist.Offer(rec.Model, torsoOf(rec.Model, rec.Root), nil, id)
+ 		end
+ 	end
+@@ -2279,7 +2396,9 @@
+ 	if character:GetAttribute(CombatFeelConfig.Drawn.Attribute) == nil then
+ 		setGunOut(player, state.WeaponId)
+ 	end
+-	local shotFilter = shotFilterFor(character, seatVeh)
++	-- army lane B: plus the Town Gate guards this shooter's client hides (addHiddenBodies; nothing for a live player or
++	-- while no garrison exists): his exact ray, a projectile and the assist's sight line pass through them
++	local shotFilter = addHiddenBodies(shotFilterFor(character, seatVeh), player)
+ 
+ 	if isProjectile then
+ 		launchProjectile(player, def, state.WeaponId, origin, direction, shotFilter)
+@@ -2348,7 +2467,7 @@
+ 					logClaimRefusal(player, "target dead or absent", "user " .. tostring(targetPlayer.UserId))
+ 				else
+ 					local torso = torsoOf(tchar, troot)
+-					local ok, why = validateClaim(character, origin, direction, range, maxAlong, tchar, torso.Position)
++					local ok, why = validateClaim(character, origin, direction, range, maxAlong, tchar, torso.Position, player)
+ 					if ok then
+ 						how = "Claim"
+ 						local amount = damage * CombatDamage.FalloffMult(def, (torso.Position - origin).Magnitude)
+@@ -2364,8 +2483,11 @@
+ 			local rec = if #targetNpcId <= 64 then npcRecords[targetNpcId] else nil
+ 			if rec == nil or not rec.Alive or rec.Humanoid.Health <= 0 or rec.Model.Parent == nil then
+ 				logClaimRefusal(player, "target dead or absent", "npc " .. string.sub(targetNpcId, 1, 64))
++			elseif zoneBars(rec, player) then
++				-- army lane B: a Town Gate guard his client hides is no target of his (only a doctored client names it)
++				logClaimRefusal(player, "hidden guard", "npc " .. targetNpcId)
+ 			else
+-				local ok, why = validateClaim(character, origin, direction, range, maxAlong, rec.Model, rec.Root.Position)
++				local ok, why = validateClaim(character, origin, direction, range, maxAlong, rec.Model, rec.Root.Position, player)
+ 				if ok then
+ 					how = "Claim"
+ 					local amount = damage * CombatDamage.FalloffMult(def, (rec.Root.Position - origin).Magnitude)
+@@ -2600,7 +2722,15 @@
+ 			return CombatService.SpawnNPC(typeId, at)
+ 		end,
+ 		getTagged = getTaggedCached,
++		hiddenBodies = addHiddenBodies, -- army lane B: Town Gate guards the NPC's target cannot see never block its shot
+ 		fx = function(rec: any, origin: Vector3, landed: Vector3, kind: string) -- W2: NPC WeaponFx (S = 0)
++			if rec.TargetZone ~= nil then
++				-- army lane B: a garrison's tracers go only to players its zone lets fight it (the posts live filter, the
++				-- record's FxAllow made at spawn), so a player whose client hides the guards never sees shots from empty
++				-- air. Every other NPC: as before.
++				CombatFx.Bullet(rec.Id, 0, "NPC", origin, landed, kind, rec.FxAllow or noFxRecipient)
++				return
++			end
+ 			CombatFx.Bullet(rec.Id, 0, "NPC", origin, landed, kind)
+ 		end,
+ 	})
+diff --git a/src/ServerScriptService/Server/Services/EconomyService.luau b/src/ServerScriptService/Server/Services/EconomyService.luau
+--- a/src/ServerScriptService/Server/Services/EconomyService.luau
++++ b/src/ServerScriptService/Server/Services/EconomyService.luau
+@@ -137,6 +137,24 @@
+ 	return typeof(prefix) == "string" and prefix ~= "" and string.sub(id, 1, #prefix) == prefix
+ end
+ 
++--[[ army lane B (belt and braces): a checkpoint post id (TerritoryConfig.Posts row, or a leftover "Post_FP" / "Post_TG_"
++	id) is never an Empire Tax stack. TerritoryService never writes posts to profile.Territories (session-only). ]]
++local function isPostId(id: any): boolean
++	if typeof(id) ~= "string" then
++		return false
++	end
++	if TerritoryConfig.IsPostDef(TerritoryConfig.Territories[id]) then
++		return true
++	end
++	local P = TerritoryConfig.Posts
++	for _, prefix in ipairs({ P.Forward.IdPrefix, P.TownGate.IdPrefix }) do
++		if typeof(prefix) == "string" and prefix ~= "" and string.sub(id, 1, #prefix) == prefix then
++			return true
++		end
++	end
++	return false
++end
++
+ local function ownsOwnStarter(profile: any): boolean
+ 	local st = TerritoryConfig.Starter
+ 	local plotId = tonumber(profile.BasePlotId)
+@@ -581,6 +599,9 @@
+ 		for id in pairs(profile.Territories) do
+ 			if not isStarterId(id) then
+ 				owned += 1
++				if isPostId(id) then
++					owned -= 1 -- army lane B (belt and braces): a checkpoint post id is never a stack
++				end
+ 			end
+ 		end
+ 	end
+diff --git a/src/ServerScriptService/Server/Services/PostService.luau b/src/ServerScriptService/Server/Services/PostService.luau
+new file mode 100644
+--- /dev/null
++++ b/src/ServerScriptService/Server/Services/PostService.luau
+@@ -0,0 +1,631 @@
++--!strict
++--[[
++	PostService — army lane B (SPEC-ARMY-FINAL §3.4, §4, §5; owner 2026-09-28: "too much dead space between the base and
++	the centre ... capture checkpoints along the way and hold onto the checkpoint").
++
++	The checkpoint posts themselves are TerritoryConfig.Posts rows: MapSetup builds their kits, TerritoryService runs
++	their capture tick (TerritoryCapture.PostPresence). This service owns what is neither:
++	  * the chain: PostService.ChainOf(plotId) -> { "Post_FP<n>", "Post_TG_<arm>" } (TerritoryConfig.PostChain);
++	  * the ARMY PRESENCE provider (TerritoryCapture.SetArmyPresence): per owner, the living squad units
++	    (SquadOrdersService.UnitsOf, read-only) with their root in the ring and within Posts.MaxHeightDelta of its
++	    height, counted only while the owner is alive and within Posts.OwnerLeashStuds of the post (his own Forward
++	    Post: anywhere inside his own plot). The live filter and ArmyMinUnits are TerritoryCapture's;
++	  * the TOWN GATE GARRISONS (TerritoryCapture.SetPostGate): per gate 2 NPCs (Posts.TownGate.Garrison at the kit's
++	    activity anchors Town.CP_<x>.Alarm / .G1), spawned through CombatService.SpawnNPC with NoRespawn, OverCap
++	    (inside the 18 + 4 total; CombatService keeps them out of the regular 18, so a camp NPC that dies while a
++	    garrison is awake still respawns), Leash and a TargetZone: they shoot only live players ON FOOT within
++	    TargetZoneStuds of the gate, or live players who hurt them in the last HitBackSeconds (never a driver passing
++	    on the road, never a player far off who never fired). Every shot keeps CombatNPC's line-of-sight and
++	    hit-chance gates. Each garrison model carries TownGate.GuardTag: a viewer who is not live hides it locally
++	    (TerritoryController), CombatService ignores his hits on it (TargetZone.Eligible), and the server's rays for him
++	    (his shots and claims, NPC shots at him) pass through it (CombatService addHiddenBodies), as on his screen.
++	      - wake: a live player within WakeStuds of an armed, Neutral gate, on foot OR seated (a driver parked on the
++	        ring must clear the guards too), an army that counts in the ring (the same presence the capture tick uses:
++	        ArmyMinUnits units, a live owner within OwnerLeashStuds), or the optional army-wake hook lane C sets for an
++	        ATTACK march. A ledger of at most Ledger NPCs alive server-wide (LedgerJobsOn while the Ops master switch is
++	        on): with it full the gate stays asleep and UNGUARDED (capturable on time alone; logged once; spec §5.5);
++	      - RequireClear: while one of them lives the post is frozen for everyone ("guards"); a guard CombatService no
++	        longer runs (a dead record, or its model removed elsewhere) leaves the ledger on the next tick;
++	      - sleep: nobody (live player or army) within SleepRadius and nobody hurt them for SleepSeconds: despawned
++	        silently (no pay), the gate is armed again;
++	      - cleared: all dead (the gate can be taken); it re-arms RegarrisonDelay after it is Neutral again, once no
++	        player is within RegarrisonClear. A held gate never has a garrison;
++	      - Ops cutover, fail closed: while OpsConfig.SiteSwitchedOn(the kit's site, "Town.CP_<x>") the post is "off"
++	        (nobody counts on it) and has no garrison (logged once), so two garrisons never share one kit.
++	Nothing here is sent to a client, nothing is saved, nothing is granted (kills pay CombatService's normal NPC rewards).
++	TerritoryConfig.Posts.Enabled = false: Init returns at once (no provider, no loop, no NPC).
++	Server only; 1 Hz loop, no per-frame work, no GetDescendants.
++]]
++
++local Players = game:GetService("Players")
++local ReplicatedStorage = game:GetService("ReplicatedStorage")
++local CollectionService = game:GetService("CollectionService")
++
++local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
++local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
++local OpsConfig = require(Shared.Configs.OpsConfig)
++local WorldConfig = require(Shared.Configs.WorldConfig)
++local BaseLayoutConfig = require(Shared.Configs.BaseLayoutConfig)
++local PlotFrame = require(Shared.Util.PlotFrame)
++
++local TerritoryCapture = require(script.Parent.TerritoryService.TerritoryCapture)
++local ActivityAnchors = require(script.Parent.Parent.Modules.ActivityAnchors)
++
++local PostService = {}
++
++local TerritoryService: any = nil
++local CombatService: any = nil
++local SquadOrdersService: any = nil
++local BaseService: any = nil
++
++type Gate = {
++	Id: string, -- the post's territory id ("Post_TG_N")
++	Def: any,
++	Name: string,
++	Center: Vector3,
++	Kit: string, -- the Town checkpoint site id ("Town.CP_N")
++	State: string, -- "armed" | "awake" | "cleared" | "off"
++	Npcs: { string }, -- living garrison NPC ids
++	Pending: number, -- spawns scheduled (SpawnGap) but not made yet
++	Zone: any, -- CombatService NPCTargetZone, shared by this garrison (the hit-back list)
++	LastActiveAt: number,
++	ClearedAt: number?,
++	NeutralSince: number?,
++	WasHeld: boolean,
++	LoggedFull: boolean,
++	LoggedOff: boolean,
++	LoggedCap: boolean,
++	WakeSpawned: number, -- guards this wake actually spawned
++	RetryAt: number, -- no re-wake before this (a wake the NPC cap refused)
++}
++
++local gates: { [string]: Gate } = {}
++local gateOrder: { Gate } = {}
++local npcGate: { [string]: Gate } = {}
++local npcRec: { [string]: any } = {} -- garrison NPC id -> its CombatService record (SpawnNPC's return), for the stale check
++local armyWake: ((gateId: string) -> boolean)? = nil
++local started = false
++
++local function now(): number
++	return os.clock()
++end
++
++local function postsOn(): boolean
++	return TerritoryConfig.Posts.Enabled == true
++end
++
++-- a living character's root and humanoid, or nil
++local function liveParts(player: Player): (BasePart?, Humanoid?)
++	local ch = player.Character
++	if ch == nil then
++		return nil, nil
++	end
++	local root = ch:FindFirstChild("HumanoidRootPart")
++	local hum = ch:FindFirstChildOfClass("Humanoid")
++	if root and root:IsA("BasePart") and hum and hum.Health > 0 then
++		return root, hum
++	end
++	return nil, nil
++end
++
++-- the player's own plot square contains pos, and that plot is plotId
++local function inOwnPlot(player: Player, pos: Vector3, plotId: number): boolean
++	if BaseService == nil or BaseService.GetOwnedPlotId == nil then
++		return false
++	end
++	local ok, own = pcall(BaseService.GetOwnedPlotId, player)
++	if not ok or own ~= plotId then
++		return false
++	end
++	local centre = PlotFrame.PlotPosition(plotId)
++	if centre == nil then
++		return false
++	end
++	local half = (tonumber(BaseLayoutConfig.PlotSize) or 320) * 0.5
++	return math.abs(pos.X - centre.X) <= half and math.abs(pos.Z - centre.Z) <= half
++end
++
++-- the chain of a plot (nearest first): its Forward Post, then its Town Gate (lane C's ATTACK targets)
++function PostService.ChainOf(plotId: any): { string }
++	return TerritoryConfig.PostChain(plotId)
++end
++
++---------------------------------------------------------------------------------------------------------------
++-- army presence (TerritoryCapture.SetArmyPresence)
++---------------------------------------------------------------------------------------------------------------
++
++local function armyPresence(def: any, center: Vector3, radius: number, maxDy: number, out: { [number]: number })
++	local sqs = SquadOrdersService
++	if sqs == nil or typeof(sqs.UnitsOf) ~= "function" then
++		return
++	end
++	local P = TerritoryConfig.Posts
++	local leash = tonumber(P.OwnerLeashStuds) or 320
++	local r2 = radius * radius
++	for _, owner in ipairs(Players:GetPlayers()) do
++		if not TerritoryConfig.PostsLiveFor(owner.UserId) then
++			continue
++		end
++		local units = sqs.UnitsOf(owner.UserId)
++		if typeof(units) ~= "table" or #units == 0 then
++			continue
++		end
++		local root = liveParts(owner)
++		if root == nil then
++			continue -- the owner must be alive
++		end
++		local op = root.Position
++		local ox, oz = op.X - center.X, op.Z - center.Z
++		local ownerOk = ox * ox + oz * oz <= leash * leash
++		if not ownerOk and def.PostKind == "Forward" and typeof(def.PlotId) == "number" then
++			ownerOk = inOwnPlot(owner, op, def.PlotId) -- his own Forward Post counts from anywhere in his base
++		end
++		if not ownerOk then
++			continue
++		end
++		local n = 0
++		for _, u in ipairs(units) do
++			local ur = u.Root
++			local uh = u.Humanoid
++			if u.Alive and uh and uh.Health > 0 and ur and ur.Parent then
++				local p = ur.Position
++				local ux, uz = p.X - center.X, p.Z - center.Z
++				if ux * ux + uz * uz <= r2 and math.abs(p.Y - center.Y) <= maxDy then
++					n += 1
++				end
++			end
++		end
++		if n > 0 then
++			out[owner.UserId] = n
++		end
++	end
++end
++
++-- test / lane C hook: an army march wakes a gate (default: none; lane C sets it for an ATTACK on this gate)
++function PostService.SetArmyWake(fn: ((gateId: string) -> boolean)?)
++	armyWake = fn
++end
++
++---------------------------------------------------------------------------------------------------------------
++-- Town Gate garrisons
++---------------------------------------------------------------------------------------------------------------
++
++-- the garrison ledger: TownGate.Ledger (4), or TownGate.LedgerJobsOn (2) while the Ops master switch is on. Other
++-- spawns never count garrison NPCs (CombatService lifts their caps), so with Jobs / events filling the specials' +4 the
++-- server holds at most 18 + 4 + LedgerJobsOn = 24 NPCs (22 with Ops off: 13 camp + 5 bank + 4 garrison).
++local function ledgerCap(): number
++	local T = TerritoryConfig.Posts.TownGate
++	if OpsConfig.Enabled == true then
++		return tonumber(T.LedgerJobsOn) or 2
++	end
++	return tonumber(T.Ledger) or 4
++end
++
++local function ledgerUsed(): number
++	local n = 0
++	for _, g in ipairs(gateOrder) do
++		n += #g.Npcs + g.Pending
++	end
++	return n
++end
++
++-- living garrison NPCs of a post id (0 for a Forward Post / unknown id)
++function PostService.GarrisonAlive(postId: string): number
++	local g = gates[postId]
++	return if g then #g.Npcs else 0
++end
++
++-- every living garrison NPC server-wide (the ledger)
++function PostService.GarrisonTotal(): number
++	local n = 0
++	for _, g in ipairs(gateOrder) do
++		n += #g.Npcs
++	end
++	return n
++end
++
++-- test hook: a gate's state ("armed" | "awake" | "cleared" | "off")
++function PostService.GateState(postId: string): string?
++	local g = gates[postId]
++	return if g then g.State else nil
++end
++
++-- TerritoryCapture.SetPostGate: "off" (Ops owns the kit), "guards" (a garrison NPC lives) or nil
++local function gateState(def: any): string?
++	if typeof(def) ~= "table" or def.PostKind ~= "TownGate" then
++		return nil
++	end
++	local g = gates[def.Id]
++	if g == nil then
++		return nil
++	end
++	if g.State == "off" then
++		return "off"
++	end
++	if #g.Npcs > 0 then
++		return "guards"
++	end
++	return nil
++end
++
++-- where a garrison role stands: the kit's activity anchor, else the same point from config (kit frame + template)
++local function roleCFrame(g: Gate, role: string): CFrame?
++	local okA, a = pcall(ActivityAnchors.Get, g.Kit .. "." .. role)
++	if okA and a ~= nil then
++		return a.CFrame
++	end
++	local site = (TerritoryConfig.Posts.TownGate.Sites :: any)[g.Def.Arm]
++	if site == nil then
++		return nil
++	end
++	for _, t in ipairs(WorldConfig.Activity.CheckpointAnchors) do
++		if t.Role == role then
++			local kit = CFrame.new(site.X, 0, site.Z) * CFrame.Angles(0, math.rad(site.Yaw or 0), 0)
++			local p = (kit * CFrame.new(t.X, 0, t.Z)).Position
++			return CFrame.new(p.X, WorldConfig.Activity.FloorY, p.Z) * CFrame.Angles(0, math.rad((site.Yaw or 0) + (t.Yaw or 0)), 0)
++		end
++	end
++	return nil
++end
++
++local function removeNpc(g: Gate, id: string)
++	local i = table.find(g.Npcs, id)
++	if i then
++		table.remove(g.Npcs, i)
++	end
++	npcGate[id] = nil
++	npcRec[id] = nil
++end
++
++local function despawnAll(g: Gate)
++	local ids = table.clone(g.Npcs)
++	for _, id in ipairs(ids) do
++		npcGate[id] = nil
++		npcRec[id] = nil
++		if CombatService and CombatService.DespawnNPC then
++			pcall(CombatService.DespawnNPC, id)
++		end
++	end
++	table.clear(g.Npcs)
++	table.clear(g.Zone.HitBack)
++end
++
++local function spawnOne(g: Gate, typeId: string, cf: CFrame)
++	local T = TerritoryConfig.Posts.TownGate
++	g.Pending = math.max(0, g.Pending - 1)
++	if g.State ~= "awake" or CombatService == nil or CombatService.SpawnNPC == nil then
++		return
++	end
++	local at = cf + Vector3.new(0, T.RootLift, 0)
++	local ok, rec = pcall(CombatService.SpawnNPC, typeId, at, {
++		NoRespawn = true,
++		OverCap = true, -- inside CombatConfig's 18 + SpecialOverCap (4) cap
++		Leash = T.Leash,
++		Home = at,
++		TargetZone = g.Zone,
++	})
++	if ok and typeof(rec) == "table" and typeof(rec.Id) == "string" then
++		table.insert(g.Npcs, rec.Id)
++		npcGate[rec.Id] = g
++		npcRec[rec.Id] = rec
++		-- non-live viewers hide the guards locally (TerritoryController), as they hide the kit
++		local model = rec.Model
++		if typeof(model) == "Instance" and typeof(T.GuardTag) == "string" then
++			pcall(CollectionService.AddTag, CollectionService, model, T.GuardTag)
++		end
++		g.WakeSpawned += 1
++		g.LoggedCap = false
++		return
++	elseif not ok then
++		warn("[PostService] garrison spawn failed at " .. g.Id .. ": " .. tostring(rec))
++	elseif not g.LoggedCap then
++		g.LoggedCap = true -- nil: CombatService refused it at the NPC cap
++		warn(string.format("[PostService] garrison spawn refused at the NPC cap: %s", g.Name))
++	end
++	-- no guard of this wake spawned: back to armed (RequireClear still holds; retry after CapRetrySeconds), never a
++	-- silently "cleared" gate with no guards
++	if g.Pending == 0 and g.WakeSpawned == 0 and #g.Npcs == 0 then
++		despawnAll(g)
++		g.State = "armed"
++		g.RetryAt = now() + (tonumber(T.CapRetrySeconds) or 5)
++	end
++end
++
++-- wake: the whole garrison, spawned SpawnGap apart, or nothing while the ledger has no room (the gate stays unguarded)
++local function wake(g: Gate, t: number)
++	local T = TerritoryConfig.Posts.TownGate
++	local rows = T.Garrison
++	local cap = ledgerCap()
++	if ledgerUsed() + #rows > cap then
++		if not g.LoggedFull then
++			g.LoggedFull = true
++			warn(string.format("[PostService] garrison ledger full (%d): %s stays unguarded until one sleeps", cap, g.Name))
++		end
++		return
++	end
++	g.State = "awake"
++	g.LastActiveAt = t
++	g.WakeSpawned = 0
++	table.clear(g.Zone.HitBack)
++	-- Pending counts the whole wake first, so a refused first guard does not end the wake before the second tries
++	local plan: { { Type: string, At: CFrame, Gap: number } } = {}
++	for i, row in ipairs(rows) do
++		local cf = roleCFrame(g, row.Role)
++		if cf then
++			table.insert(plan, { Type = row.Type, At = cf, Gap = (i - 1) * (tonumber(T.SpawnGap) or 0.2) })
++		end
++	end
++	g.Pending += #plan
++	for i, p in ipairs(plan) do
++		if i == 1 then
++			spawnOne(g, p.Type, p.At)
++		else
++			task.delay(p.Gap, spawnOne, g, p.Type, p.At)
++		end
++	end
++end
++
++-- a live player within radius of pos (onFoot: not seated)
++local function livePlayerWithin(pos: Vector3, radius: number, onFoot: boolean): boolean
++	local r2 = radius * radius
++	for _, p in ipairs(Players:GetPlayers()) do
++		if TerritoryConfig.PostsLiveFor(p.UserId) then
++			local root, hum = liveParts(p)
++			if root and hum and (not onFoot or hum.SeatPart == nil) then
++				local d = root.Position - pos
++				if d.X * d.X + d.Z * d.Z <= r2 then
++					return true
++				end
++			end
++		end
++	end
++	return false
++end
++
++-- any player at all within radius (the re-garrison clearance: nobody sees guards pop in beside him)
++local function anyPlayerWithin(pos: Vector3, radius: number): boolean
++	local r2 = radius * radius
++	for _, p in ipairs(Players:GetPlayers()) do
++		local root = liveParts(p)
++		if root then
++			local d = root.Position - pos
++			if d.X * d.X + d.Z * d.Z <= r2 then
++				return true
++			end
++		end
++	end
++	return false
++end
++
++-- an army that counts in this gate's ring right now (the capture tick's own presence rule: ArmyMinUnits living units in
++-- the ring, owner alive and within OwnerLeashStuds, live filter). It would otherwise take the gate unguarded.
++local function armyInRing(g: Gate): boolean
++	local P = TerritoryConfig.Posts
++	local raw: { [number]: number } = {}
++	armyPresence(g.Def, g.Center, tonumber(g.Def.Radius) or 18, tonumber(P.MaxHeightDelta) or 14, raw)
++	local minUnits = math.max(1, math.floor(tonumber(P.ArmyMinUnits) or 2))
++	for uid, n in pairs(raw) do
++		if n >= minUnits and TerritoryConfig.PostsLiveFor(uid) then
++			return true
++		end
++	end
++	return false
++end
++
++-- a live owner's living unit within radius of pos
++local function armyWithin(pos: Vector3, radius: number): boolean
++	local sqs = SquadOrdersService
++	if sqs == nil or typeof(sqs.UnitsOf) ~= "function" then
++		return false
++	end
++	local r2 = radius * radius
++	for _, owner in ipairs(Players:GetPlayers()) do
++		if TerritoryConfig.PostsLiveFor(owner.UserId) then
++			local units = sqs.UnitsOf(owner.UserId)
++			if typeof(units) == "table" then
++				for _, u in ipairs(units) do
++					local ur = u.Root
++					if u.Alive and ur and ur.Parent then
++						local d = ur.Position - pos
++						if d.X * d.X + d.Z * d.Z <= r2 then
++							return true
++						end
++					end
++				end
++			end
++		end
++	end
++	return false
++end
++
++-- the latest hit-back stamp minus its window = when someone last hurt this garrison
++local function lastHurtAt(g: Gate): number
++	local latest = -math.huge
++	for _, untilT in pairs(g.Zone.HitBack) do
++		if untilT > latest then
++			latest = untilT
++		end
++	end
++	return latest - (tonumber(g.Zone.HitBackSeconds) or 10)
++end
++
++local function tickGate(g: Gate, t: number)
++	local T = TerritoryConfig.Posts.TownGate
++	-- Ops cutover, fail closed: the kit belongs to the Jobs site
++	local okOps, opsOn = pcall(OpsConfig.SiteSwitchedOn, g.Kit)
++	if okOps and opsOn == true then
++		if g.State ~= "off" then
++			despawnAll(g)
++			g.State = "off"
++			if not g.LoggedOff then
++				g.LoggedOff = true
++				warn(string.format("[PostService] %s is off: the Ops site %s owns its checkpoint kit", g.Name, g.Kit))
++			end
++		end
++		return
++	elseif g.State == "off" then
++		g.State = "armed"
++	end
++
++	local rt = if TerritoryService and TerritoryService.GetRuntime then TerritoryService.GetRuntime(g.Id) else nil
++	local held = rt ~= nil and rt.OwnerType == TerritoryConfig.OwnerTypes.Player
++	if held then
++		g.WasHeld = true
++		g.NeutralSince = nil
++		if g.State ~= "awake" then
++			g.State = "cleared" -- a held gate has no garrison
++			g.ClearedAt = g.ClearedAt or t
++		end
++	elseif g.WasHeld then
++		g.WasHeld = false
++		g.NeutralSince = t
++	end
++
++	if g.State == "awake" then
++		-- a guard CombatService no longer runs leaves the ledger here, so a stale id never keeps the gate frozen
++		-- ("guards") with nobody there: its record is dead (CombatService already let it go), or its model was removed
++		-- outside CombatService (the record is despawned too). Only on that evidence; at most 2 ids, no allocation.
++		for i = #g.Npcs, 1, -1 do
++			local id = g.Npcs[i]
++			local rec = npcRec[id]
++			if rec == nil or rec.Alive == false then
++				removeNpc(g, id)
++			elseif typeof(rec.Model) == "Instance" and rec.Model.Parent == nil then
++				if CombatService and CombatService.DespawnNPC then
++					pcall(CombatService.DespawnNPC, id)
++				end
++				removeNpc(g, id)
++			end
++		end
++		if #g.Npcs == 0 and g.Pending == 0 then
++			g.State = "cleared"
++			g.ClearedAt = t
++			return
++		end
++		local active = livePlayerWithin(g.Center, T.SleepRadius, false) or armyWithin(g.Center, T.SleepRadius)
++			or t - lastHurtAt(g) < T.SleepSeconds
++		if active then
++			g.LastActiveAt = t
++		elseif t - g.LastActiveAt >= T.SleepSeconds then
++			despawnAll(g) -- asleep: no pay, no respawn
++			g.State = "armed"
++		end
++	elseif g.State == "armed" then
++		if held then
++			return
++		end
++		-- any live player (on foot or seated: a parked driver counts on the ring) or an army counting in the ring
++		local woke = livePlayerWithin(g.Center, T.WakeStuds, false) or armyInRing(g)
++		local hook = armyWake
++		if not woke and hook then
++			local okW, w = pcall(hook, g.Id)
++			woke = okW and w == true
++		end
++		if woke and t >= g.RetryAt then
++			wake(g, t)
++		end
++	elseif g.State == "cleared" then
++		if held then
++			return
++		end
++		local since = math.max(g.ClearedAt or t, g.NeutralSince or -math.huge)
++		if t - since >= T.RegarrisonDelay and not anyPlayerWithin(g.Center, T.RegarrisonClear) then
++			g.State = "armed"
++			g.ClearedAt = nil
++			g.LoggedFull = false
++		end
++	end
++end
++
++-- one garrison pass (the 1 Hz loop; tests call it directly)
++function PostService.Step()
++	local t = now()
++	for _, g in ipairs(gateOrder) do
++		local ok, err = pcall(tickGate :: any, g, t)
++		if not ok then
++			warn("[PostService] gate tick failed at " .. g.Id .. ": " .. tostring(err))
++		end
++	end
++end
++
++local function onNPCDeath(info: any)
++	local id = if typeof(info) == "table" then info.Id else nil
++	if typeof(id) ~= "string" then
++		return
++	end
++	local g = npcGate[id]
++	if g then
++		removeNpc(g, id)
++	end
++end
++
++function PostService.Init(deps: { [string]: any })
++	TerritoryService = deps.TerritoryService
++	CombatService = deps.CombatService
++	SquadOrdersService = deps.SquadOrdersService
++	BaseService = deps.BaseService
++	if not postsOn() or started then
++		return
++	end
++	started = true
++
++	local T = TerritoryConfig.Posts.TownGate
++	local ids: { string } = {}
++	for id, def in pairs(TerritoryConfig.Territories) do
++		if TerritoryConfig.IsPostDef(def) and def.PostKind == "TownGate" then
++			table.insert(ids, id)
++		end
++	end
++	table.sort(ids)
++	for _, id in ipairs(ids) do
++		local def = TerritoryConfig.Territories[id]
++		local g: Gate = {
++			Id = id,
++			Def = def,
++			Name = def.DisplayName,
++			Center = def.Position,
++			Kit = def.Kit or "",
++			State = "armed",
++			Npcs = {},
++			Pending = 0,
++			Zone = {
++				Center = def.Position,
++				Radius = T.TargetZoneStuds,
++				HitBack = {},
++				HitBackSeconds = T.HitBackSeconds,
++				Eligible = function(p: Player): boolean
++					return TerritoryConfig.PostsLiveFor(p.UserId)
++				end,
++			},
++			LastActiveAt = 0,
++			ClearedAt = nil,
++			NeutralSince = nil,
++			WasHeld = false,
++			LoggedFull = false,
++			LoggedOff = false,
++			LoggedCap = false,
++			WakeSpawned = 0,
++			RetryAt = 0,
++		}
++		gates[id] = g
++		table.insert(gateOrder, g)
++	end
++
++	TerritoryCapture.SetArmyPresence(armyPresence)
++	TerritoryCapture.SetPostGate(gateState)
++	if CombatService and CombatService.OnNPCDeath then
++		CombatService.OnNPCDeath(onNPCDeath)
++	end
++
++	task.spawn(function()
++		while true do
++			task.wait(1)
++			PostService.Step()
++		end
++	end)
++
++	print(string.format("[WAR EMPIRE] PostService ready (%d Town Gates, live=%s, garrison ledger %d)", #gateOrder,
++		tostring(TerritoryConfig.Posts.Live), T.Ledger))
++end
++
++return PostService
+diff --git a/src/ServerScriptService/Server/Services/SquadOrdersService.luau b/src/ServerScriptService/Server/Services/SquadOrdersService.luau
+--- a/src/ServerScriptService/Server/Services/SquadOrdersService.luau
++++ b/src/ServerScriptService/Server/Services/SquadOrdersService.luau
+@@ -1564,6 +1564,14 @@
+ 	pushState(player)
+ end
+ 
++--[[ army lane B (read-only accessor, PostService's army presence on checkpoint posts): this owner's unit records
++	(Alive, Humanoid, Root, ...), or nil with no squad. The live list, not a copy: callers only read it (never store,
++	sort or change it) and never call it per frame. ]]
++function SquadOrdersService.UnitsOf(userId: number): { SquadUnit }?
++	local st = squadByUser[userId]
++	return if st then st.Units else nil
++end
++
+ function SquadOrdersService.ApplyResearch(player: Player) -- v69 research: rescale living units' HP, add units
+ 	local st = squadByUser[player.UserId]
+ 	if st then
+diff --git a/src/ServerScriptService/Server/Services/TerritoryService/TerritoryCapture.luau b/src/ServerScriptService/Server/Services/TerritoryService/TerritoryCapture.luau
+--- a/src/ServerScriptService/Server/Services/TerritoryService/TerritoryCapture.luau
++++ b/src/ServerScriptService/Server/Services/TerritoryService/TerritoryCapture.luau
+@@ -92,7 +92,9 @@
+ 	local marker = rt.Marker
+ 	local center = if marker then marker.Position else rt.Def.Position
+ 	local radius = rt.Def.Radius
+-	if marker then
++	-- army lane B: a post row (ExactRadius) counts its visible ring exactly (the ring IS the marker: a flat 32-stud
++	-- Cylinder whose half-diagonal would stretch the count to r 22.6)
++	if marker and rt.Def.ExactRadius ~= true then
+ 		local half = marker.Size.Magnitude * 0.5
+ 		radius = math.max(radius, half)
+ 	end
+@@ -102,11 +104,15 @@
+ 	if onlyUserId == 0 then
+ 		return found -- F10: an OwnerOnly zone whose plot has no owner here: nobody captures or contests it
+ 	end
++	local postRow = TerritoryConfig.IsPostDef(rt.Def) -- army lane B: only live players count on posts (Posts.Live)
+ 
+ 	for _, player in ipairs(Players:GetPlayers()) do
+ 		if onlyUserId ~= nil and player.UserId ~= onlyUserId then
+ 			continue -- F10 OwnerOnly: only the plot owner counts
+ 		end
++		if postRow and not TerritoryConfig.PostsLiveFor(player.UserId) then
++			continue -- army lane B: a non-live player neither captures nor contests a post
++		end
+ 		local character = player.Character
+ 		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+ 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+@@ -121,4 +127,73 @@
+ 	return found
+ end
+ 
++---------------------------------------------------------------------------------------------------------------
++-- army lane B: who counts on a checkpoint post (TerritoryConfig.Posts rows only; every other zone is unchanged)
++---------------------------------------------------------------------------------------------------------------
++
++--[[ Army presence provider, bound by PostService (no require cycle): fn(def, center, radius, maxDy, out) fills
++	out[ownerUserId] = living units of that owner with their root in the ring (flat radius, within maxDy of the ring
++	height), only for owners who are alive and within Posts.OwnerLeashStuds of the post (their own Forward Post: anywhere
++	in their own plot). Tests bind a stub. nil = no army ever counts. ]]
++export type ArmyPresenceFn = (def: any, center: Vector3, radius: number, maxDy: number, out: { [number]: number }) -> ()
++local armyPresence: ArmyPresenceFn? = nil
++
++function TerritoryCapture.SetArmyPresence(fn: ArmyPresenceFn?)
++	armyPresence = fn
++end
++
++--[[ Post gate check, bound by PostService: fn(def) -> "guards" (a garrison NPC of this Town Gate is alive: frozen for
++	everyone, RequireClear), "off" (the gate's post is switched off: an Ops Town.CP_* site owns the kit; nobody counts)
++	or nil. ]]
++export type PostGateFn = (def: any) -> string?
++local postGate: PostGateFn? = nil
++
++function TerritoryCapture.SetPostGate(fn: PostGateFn?)
++	postGate = fn
++end
++
++export type PostPresence = {
++	Players: { Player }, -- strong presence: live players in the ring (PlayersInZone rules)
++	Armies: { [number]: number }, -- weak presence: owner UserId -> units in the ring (>= Posts.ArmyMinUnits, live owners)
++	ArmyOwners: number, -- how many armies count
++	Frozen: string?, -- "guards" | "off" | nil
++}
++
++--[[ One tick's presence on a post. Strong = players (PlayersInZone); weak = armies (the provider), kept only with at
++	least ArmyMinUnits units and a live owner (Posts.Live). "off" drops everyone. Allocates one small table per call
++	(10 posts at the 0.5 s capture tick; server only). ]]
++function TerritoryCapture.PostPresence(rt: any): PostPresence
++	local P = TerritoryConfig.Posts
++	local out: PostPresence = { Players = {}, Armies = {}, ArmyOwners = 0, Frozen = nil }
++	local def = rt.Def
++	if postGate then
++		local ok, state = pcall(postGate :: PostGateFn, def)
++		if ok and (state == "guards" or state == "off") then
++			out.Frozen = state
++		end
++	end
++	if out.Frozen == "off" then
++		return out
++	end
++	out.Players = TerritoryCapture.PlayersInZone(rt)
++	local provider = armyPresence
++	if provider and def.ArmyCounts == true then
++		local marker = rt.Marker
++		local center = if marker then marker.Position else def.Position
++		local raw: { [number]: number } = {}
++		local ok, err = pcall(provider :: any, def, center, def.Radius, P.MaxHeightDelta, raw)
++		if not ok then
++			warn("[TerritoryCapture] army presence failed:", err)
++		end
++		local minUnits = math.max(1, math.floor(tonumber(P.ArmyMinUnits) or 2))
++		for uid, n in pairs(raw) do
++			if typeof(uid) == "number" and typeof(n) == "number" and n >= minUnits and TerritoryConfig.PostsLiveFor(uid) then
++				out.Armies[uid] = n
++				out.ArmyOwners += 1
++			end
++		end
++	end
++	return out
++end
++
+ return TerritoryCapture
+diff --git a/src/ServerScriptService/Server/Services/TerritoryService/TerritoryRadar.luau b/src/ServerScriptService/Server/Services/TerritoryService/TerritoryRadar.luau
+--- a/src/ServerScriptService/Server/Services/TerritoryService/TerritoryRadar.luau
++++ b/src/ServerScriptService/Server/Services/TerritoryService/TerritoryRadar.luau
+@@ -59,4 +59,14 @@
+ 	return viewerPlotId ~= nil and def.PlotId == viewerPlotId
+ end
+ 
++--[[ army lane B: is this zone shown to the viewer with this UserId as far as posts go? true for every zone that is not a
++	checkpoint post; a post (TerritoryConfig.Posts row) only for a live viewer (TerritoryConfig.PostsLiveFor: Posts.Live
++	"owner" = the owner's playtest account, "all" = everyone). Everyone else neither sees nor counts on posts. ]]
++function TerritoryRadar.PostShownTo(def: TerritoryConfig.TerritoryDef?, viewerUserId: number?): boolean
++	if def == nil or not TerritoryConfig.IsPostDef(def) then
++		return true
++	end
++	return TerritoryConfig.PostsLiveFor(viewerUserId)
++end
++
+ return TerritoryRadar
+diff --git a/src/ServerScriptService/Server/Services/TerritoryService/init.luau b/src/ServerScriptService/Server/Services/TerritoryService/init.luau
+--- a/src/ServerScriptService/Server/Services/TerritoryService/init.luau
++++ b/src/ServerScriptService/Server/Services/TerritoryService/init.luau
+@@ -87,6 +87,14 @@
+ 	Standing: { Player }?,
+ 	InsideSig: number?,
+ 	DiscRadius: number?,
++	-- army lane B (TerritoryConfig.Posts rows only; nil on every other zone)
++	CapturingByArmy: boolean?, -- the progress is CapturingUserId's army (Posts.ArmyRate), not the player himself
++	Guarded: boolean?, -- a Town Gate garrison NPC is alive (RequireClear): frozen for everyone
++	Blocked: boolean?, -- two or more armies and no player, none ahead yet (outnumber)
++	OutnumberSince: number?, -- os.clock() since two or more armies stood in the ring
++	HeldSince: number?, -- os.clock() of the capture (MaxHeld releases the oldest)
++	NearAt: number?, -- os.clock() the holder was last within KeepAwayStuds (own Forward Post: inside his plot)
++	AttackToastAt: number?, -- os.clock() of the holder's last "under attack" toast for this post
+ }
+ 
+ local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+@@ -180,6 +188,19 @@
+ 	return TerritoryConfig.IsStarterDef(rt.Def)
+ end
+ 
++-- army lane B: a checkpoint post (TerritoryConfig.Posts row): session-only, player-owned, no Empire Tax / cap / stats
++local function isPostRt(rt: TerritoryRuntime): boolean
++	return TerritoryConfig.IsPostDef(rt.Def)
++end
++
++-- army lane B (cross-lane API): true for a checkpoint post id (only while TerritoryConfig.Posts.Enabled). Never yields.
++function TerritoryService.IsPostId(id: any): boolean
++	if typeof(id) ~= "string" then
++		return false
++	end
++	return TerritoryConfig.IsPostDef(TerritoryConfig.Territories[id])
++end
++
+ -- the runtime of plot plotId's Home Outpost, or nil (Starter off / unknown plot)
+ local function starterRtForPlot(plotId: any): TerritoryRuntime?
+ 	if typeof(plotId) ~= "number" then
+@@ -194,11 +215,11 @@
+ 	return nil
+ end
+ 
+--- F10: personal zones that count toward MaxPersonalTerritories (a Home Outpost never does)
++-- F10: personal zones that count toward MaxPersonalTerritories (a Home Outpost never does; army lane B: nor a post)
+ local function countPersonalNonStarter(userId: number): number
+ 	local n = 0
+ 	for _, rt in pairs(territories) do
+-		if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == userId and not isStarterRt(rt) then
++		if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == userId and not isStarterRt(rt) and not isPostRt(rt) then
+ 			n += 1
+ 		end
+ 	end
+@@ -381,7 +402,8 @@
+ 		profile.Territories[id] = nil
+ 	end
+ 	for id, rt in pairs(territories) do
+-		if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == player.UserId then
++		-- army lane B: posts are session-only: never written to profile.Territories (no Empire Tax, no re-plant)
++		if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == player.UserId and not isPostRt(rt) then
+ 			profile.Territories[id] = true
+ 		end
+ 	end
+@@ -477,7 +499,13 @@
+ 	end
+ 
+ 	local flag = parent:FindFirstChild(tid .. "_Flag")
+-	if flag and flag:IsA("BasePart") then
++	if flag and flag:IsA("BasePart") and isPostRt(rt) then
++		-- army lane B: a post flag keeps its place (the Town Gate one stands on the booth roof) and size; it only takes
++		-- the holder's banner colour. Never a nation flag, no diamond billboard (one label per post: the zone name).
++		if flag.Color ~= color then
++			flag.Color = color
++		end
++	elseif flag and flag:IsA("BasePart") then
+ 		flag.Color = color
+ 		flag.Material = Enum.Material.SmoothPlastic -- v71: painted, not neon (not a light source)
+ 		flag.Transparency = flagTransparency
+@@ -726,6 +754,10 @@
+ 	end
+ 
+ 	for _, rt in pairs(territories) do
++		-- army lane B: a post is listed only to live viewers (TerritoryRadar.PostShownTo; Posts.Live)
++		if not TerritoryRadar.PostShownTo(rt.Def, if player then player.UserId else nil) then
++			continue
++		end
+ 		if not TerritoryRadar.ShownTo(rt.Def, viewerPlotId) then
+ 			continue
+ 		end
+@@ -742,10 +774,13 @@
+ 			BonusValue = rt.Def.BonusValue,
+ 			Contested = rt.Contested,
+ 		})
+-		if player and rt.CapturingUserId == player.UserId and rt.Progress > 0 then
++		-- army lane B: a post his army takes (CapturingByArmy) shows too, but never over a zone he takes himself
++		if player and rt.CapturingUserId == player.UserId and rt.Progress > 0
++			and not (rt.CapturingByArmy == true and localCapture.Capturing and (localCapture :: any).ByArmy ~= true) then
+ 			localCapture.TerritoryId = rt.Id
+ 			localCapture.Progress = math.clamp(rt.Progress / math.max(1, rt.Def.CaptureTimeSeconds), 0, 1)
+ 			localCapture.Capturing = true
++			;(localCapture :: any).ByArmy = if rt.CapturingByArmy == true then true else nil
+ 			localCapture.Contested = rt.Contested == true
+ 			localCapture.Protected = rt.ProtectedUntil > nowUnix()
+ 				and rt.OwnerUserId ~= TerritoryConfig.NeutralOwnerId
+@@ -788,6 +823,20 @@
+ 		end
+ 	end
+ 
++	-- army lane B: a live player standing on a Town Gate whose garrison is alive (RequireClear: nobody gains) is told
++	-- why (the bar reads Posts.Text.GuardsTitle · NAME) instead of a silent ring. Posts only: rt.Guarded is nil elsewhere.
++	if player and localCapture.TerritoryId == nil then
++		for _, rt in pairs(territories) do
++			local inside = rt.Inside
++			if rt.Guarded == true and inside and table.find(inside, player) then
++				localCapture.TerritoryId = rt.Id
++				localCapture.Progress = math.clamp(rt.Progress / math.max(1, rt.Def.CaptureTimeSeconds), 0, 1)
++				;(localCapture :: any).Guarded = true
++				break
++			end
++		end
++	end
++
+ 	table.sort(list, function(a, b)
+ 		return a.Id < b.Id
+ 	end)
+@@ -932,7 +981,38 @@
+ --[[ reason: "captured" (stolen by another player), "max_personal" (evicted by the owner's own new capture),
+ 	"leave" (F3 PersistClaims / F10: the owner is leaving the server: the runtime goes Neutral but the profile is NOT
+ 	touched, so the saved claims survive for the next server), "plot" (F10: a Home Outpost whose plot changed hands). ]]
++--[[ army lane B: a post goes back to Neutral. Session-only: no profile write, no Empire Tax recount, no BaseService push.
++	reason: "captured" (taken by someone else) and "expired" (kept away too long) toast Posts.Text.Lost to the holder;
++	"leave" and "max_held" (his own 4th capture: the capture toast is the one message) are silent. ]]
++local function releasePost(rt: TerritoryRuntime, reason: string)
++	local prevUserId = rt.OwnerUserId
++	local prevType = rt.OwnerType
++	rt.OwnerType = ownerTypes().Neutral
++	rt.OwnerUserId = TerritoryConfig.NeutralOwnerId
++	rt.ClanId = nil
++	rt.ProtectedUntil = 0
++	rt.HeldSince = nil
++	rt.NearAt = nil
++	rt.AttackToastAt = nil
++	pushDirty = true
++	if prevType == ownerTypes().Player and prevUserId > 0 then
++		local prevPlayer = Players:GetPlayerByUserId(prevUserId)
++		if prevPlayer and NotificationService and (reason == "captured" or reason == "expired") then
++			local name = rt.Def.DisplayName
++			NotificationService.Notify(prevPlayer, fmtToast(TerritoryConfig.Posts.Text.Lost, name .. " lost", name), "Warn", 4)
++		end
++		if prevPlayer and AnalyticsService then
++			AnalyticsService.Log(AnalyticsConfig.Events.TERRITORY_LOST, prevUserId, { territory = rt.Id, reason = reason, post = true })
++		end
++	end
++	pruneOwnerCache(prevUserId)
++end
++
+ local function releaseOwnership(rt: TerritoryRuntime, reason: string)
++	if isPostRt(rt) then
++		releasePost(rt, reason) -- army lane B: posts never touch the profile
++		return
++	end
+ 	local prevUserId = rt.OwnerUserId
+ 	local prevType = rt.OwnerType
+ 	rt.OwnerType = ownerTypes().Neutral
+@@ -986,7 +1066,9 @@
+ 		local oldest: TerritoryRuntime? = nil
+ 		local oldestTime = math.huge
+ 		for _, other in pairs(territories) do
+-			if other.Id ~= rt.Id and other.OwnerType == ownerTypes().Player and other.OwnerUserId == player.UserId and not isStarterRt(other) then
++			-- army lane B: a post (isPostRt) is never evicted by MaxPersonalTerritories
++			if other.Id ~= rt.Id and other.OwnerType == ownerTypes().Player and other.OwnerUserId == player.UserId and not isPostRt(other)
++				and not isStarterRt(other) then
+ 				if other.ProtectedUntil < oldestTime then
+ 					oldestTime = other.ProtectedUntil
+ 					oldest = other
+@@ -1098,11 +1180,337 @@
+ 	updateMarkerVisual(rt)
+ end
+ 
++---------------------------------------------------------------------------------------------------------------
++-- army lane B: checkpoint posts (TerritoryConfig.Posts rows). Every other zone keeps tickTerritory / awardCapture.
++---------------------------------------------------------------------------------------------------------------
++
++local PlotFrame = require(Shared.Util.PlotFrame) -- army lane B: "in his own base" (own Forward Post keep-away)
++local BaseLayoutConfig = require(Shared.Configs.BaseLayoutConfig)
++
++local postMissionAt: { [string]: number } = {} -- "<userId>|<postId>" -> os.clock() of the last mission +1 (cooldown)
++local postHp: { [number]: { Hp: number, DropAt: number } } = {} -- a post holder's last health and when it last fell
++
++-- true while `pos` is inside `player`'s own plot square (BaseService.GetOwnedPlotId), and that plot is plotId
++local function inOwnPlot(player: Player, pos: Vector3, plotId: number?): boolean
++	if not (BaseService and BaseService.GetOwnedPlotId) or typeof(plotId) ~= "number" then
++		return false
++	end
++	local ok, own = pcall(BaseService.GetOwnedPlotId, player)
++	if not ok or own ~= plotId then
++		return false
++	end
++	local centre = PlotFrame.PlotPosition(plotId)
++	if centre == nil then
++		return false
++	end
++	local half = (tonumber(BaseLayoutConfig.PlotSize) or 320) * 0.5
++	return math.abs(pos.X - centre.X) <= half and math.abs(pos.Z - centre.Z) <= half
++end
++
++-- the holder lost health within Posts.UnderFireSeconds (sampled every capture tick by tickPostHolds)
++local function holderUnderFire(userId: number, now: number): boolean
++	local s = postHp[userId]
++	return s ~= nil and now - s.DropAt < (tonumber(TerritoryConfig.Posts.UnderFireSeconds) or 3)
++end
++
++--[[ A post is captured (by the player standing on it, or by his army: byArmy). Player-owned (never a clan), session-only
++	(no profile write), protected ProtectionPeriodSeconds like every zone. MaxHeld: a capture beyond it releases his
++	oldest post (silently). No Empire Tax, ClanWar, Stats.TerritoriesCaptured, XP or tutorial event. One toast
++	(Posts.Text.Taken); mission CaptureTerritory +1 at most once per post per player per MissionCooldownSeconds. ]]
++local function awardPost(player: Player, rt: TerritoryRuntime, byArmy: boolean)
++	local P = TerritoryConfig.Posts
++	local ot = ownerTypes()
++	local now = os.clock()
++	local uid = player.UserId
++	local held = 0
++	local oldest: TerritoryRuntime? = nil
++	for _, other in pairs(territories) do
++		if other ~= rt and isPostRt(other) and other.OwnerType == ot.Player and other.OwnerUserId == uid then
++			held += 1
++			if oldest == nil or (other.HeldSince or 0) < ((oldest :: TerritoryRuntime).HeldSince or 0) then
++				oldest = other
++			end
++		end
++	end
++	if held >= (tonumber(P.MaxHeld) or 3) and oldest then
++		releaseOwnership(oldest, "max_held")
++		updateMarkerVisual(oldest)
++	end
++	if rt.OwnerType == ot.Player and rt.OwnerUserId ~= uid and rt.OwnerUserId > 0 then
++		releaseOwnership(rt, "captured") -- the holder's "<name> lost" toast
++	end
++	rt.OwnerType = ot.Player
++	rt.OwnerUserId = uid
++	rt.ClanId = nil -- posts are always the player's, never a clan's
++	rt.Progress = 0
++	rt.CapturingUserId = 0
++	rt.CapturingByArmy = nil
++	rt.Contested = false
++	rt.ContesterA = nil
++	rt.ContesterB = nil
++	rt.OutnumberSince = nil
++	rt.ProtectedUntil = nowUnix() + TerritoryConfig.ProtectionPeriodSeconds
++	rt.HeldSince = now
++	rt.NearAt = now
++	rt.AttackToastAt = nil
++	pushDirty = true
++	if NotificationService then
++		local name = rt.Def.DisplayName
++		NotificationService.Notify(player, fmtToast(P.Text.Taken, name .. " taken", name), "Reward", 4)
++	end
++	if AnalyticsService then
++		AnalyticsService.Log(AnalyticsConfig.Events.TERRITORY_CAPTURED, uid, { territory = rt.Id, post = true, army = byArmy })
++	end
++	local key = tostring(uid) .. "|" .. rt.Id
++	local last = postMissionAt[key]
++	if MissionService and MissionService.TrackProgress and (last == nil or now - last >= (tonumber(P.MissionCooldownSeconds) or 600)) then
++		postMissionAt[key] = now
++		MissionService.TrackProgress(player, "CaptureTerritory", 1)
++	end
++	updateMarkerVisual(rt)
++end
++
++-- "<name> under attack" to the holder when someone else gains on his post: once per post per UnderAttackToastGap,
++-- never while he is being shot (a lost-health sample within UnderFireSeconds)
++local function postUnderAttack(rt: TerritoryRuntime, now: number)
++	if rt.OwnerType ~= ownerTypes().Player or rt.OwnerUserId <= 0 or rt.CapturingUserId == rt.OwnerUserId then
++		return
++	end
++	local gap = tonumber(TerritoryConfig.Posts.UnderAttackToastGap) or 60
++	local lastAt = rt.AttackToastAt
++	if lastAt ~= nil and now - lastAt < gap then
++		return
++	end
++	local holder = Players:GetPlayerByUserId(rt.OwnerUserId)
++	if holder == nil or NotificationService == nil or holderUnderFire(rt.OwnerUserId, now) then
++		return
++	end
++	rt.AttackToastAt = now
++	local name = rt.Def.DisplayName
++	NotificationService.Notify(holder, fmtToast(TerritoryConfig.Posts.Text.UnderAttack, name .. " under attack", name), "Warn", 4)
++end
++
++--[[ One capture tick on a post (SPEC-ARMY-FINAL §5.1). Strong presence = live players (TerritoryCapture.PlayersInZone),
++	weak = armies (the PostService provider). "off" (an Ops site owns the kit): nobody counts.
++	  2+ players: contested (today's rule: frozen, decays x ContestedDecayMult; armies ignored)
++	  1 player: he captures at x1 (armies ignored: a player always beats an army)
++	  0 players, 1 army: its owner captures at x ArmyRate
++	  0 players, 2+ armies: after OutnumberSeconds the army with >= OutnumberMargin more units captures at x ArmyRate;
++	    a tie stays frozen (Blocked)
++	  a live garrison NPC (RequireClear, "guards"): frozen for everyone
++	The holder (or his army) alone on his own post just refreshes it. Protection (x ProtectedCaptureMult) as every zone. ]]
++local function tickPost(rt: TerritoryRuntime, dt: number)
++	local P = TerritoryConfig.Posts
++	local ot = ownerTypes()
++	local now = os.clock()
++	local pres = TerritoryCapture.PostPresence(rt)
++	local inside = pres.Players
++	rt.Inside = inside
++	rt.Standing = inside -- fb4 fix 1 StandingBar reads Standing: a post counts its visible ring exactly (ExactRadius)
++	local sig = #inside
++	for _, p in ipairs(inside) do
++		sig = (sig * 31 + p.UserId) % 2147483647
++	end
++	rt.InsideSig = sig
++	rt.Guarded = pres.Frozen == "guards"
++	rt.Blocked = false
++
++	local unique: { [number]: boolean } = {}
++	local uniqueCount = 0
++	for _, p in ipairs(inside) do
++		if not unique[p.UserId] then
++			unique[p.UserId] = true
++			uniqueCount += 1
++		end
++	end
++
++	if uniqueCount >= 2 then
++		rt.OutnumberSince = nil
++		rt.Contested = true
++		if CombatService and CombatService.IsNoviceShielded and CombatService.EndNoviceShield then
++			for _, p in ipairs(inside) do
++				local okShield, shielded = pcall(CombatService.IsNoviceShielded, p)
++				if okShield and shielded == true then
++					pcall(CombatService.EndNoviceShield, p, "contest")
++				end
++			end
++		end
++		local ids: { number } = {}
++		for uid in pairs(unique) do
++			table.insert(ids, uid)
++		end
++		table.sort(ids)
++		rt.ContesterA = ids[1]
++		rt.ContesterB = ids[2]
++		rt.Progress = math.max(0, rt.Progress - TerritoryConfig.ProgressDecayPerSecond * (TerritoryConfig.ContestedDecayMult or 0.5) * dt)
++		updateMarkerVisual(rt)
++		return
++	end
++	rt.Contested = false
++	rt.ContesterA = nil
++	rt.ContesterB = nil
++
++	local capturerUid: number? = nil
++	local rate = 1
++	local byArmy = false
++	local frozen = pres.Frozen == "guards"
++	if uniqueCount == 1 then
++		capturerUid = inside[1].UserId
++		rt.OutnumberSince = nil
++	elseif pres.ArmyOwners == 1 then
++		for uid in pairs(pres.Armies) do
++			capturerUid = uid
++		end
++		byArmy = true
++		rate = tonumber(P.ArmyRate) or 0.5
++		rt.OutnumberSince = nil
++	elseif pres.ArmyOwners >= 2 then
++		local since: number = rt.OutnumberSince or now
++		if rt.OutnumberSince == nil then
++			rt.OutnumberSince = now
++		end
++		local best: number? = nil
++		local bestN = -1
++		for uid, n in pairs(pres.Armies) do
++			if n > bestN or (n == bestN and best ~= nil and uid < best) then
++				best, bestN = uid, n
++			end
++		end
++		local secondN = 0
++		for uid, n in pairs(pres.Armies) do
++			if uid ~= best and n > secondN then
++				secondN = n
++			end
++		end
++		if now - since >= (tonumber(P.OutnumberSeconds) or 6) and bestN - secondN >= (tonumber(P.OutnumberMargin) or 1) then
++			capturerUid = best
++			byArmy = true
++			rate = tonumber(P.ArmyRate) or 0.5
++		else
++			rt.Blocked = true
++			frozen = true
++		end
++	else
++		rt.OutnumberSince = nil
++	end
++
++	if capturerUid == nil and not rt.Blocked then
++		-- nobody counts (a guarded gate with nobody on it decays like any empty zone)
++		if rt.Progress > 0 then
++			rt.Progress = math.max(0, rt.Progress - TerritoryConfig.ProgressDecayPerSecond * dt)
++		end
++		if rt.Progress <= 0 then
++			rt.CapturingUserId = 0
++			rt.CapturingByArmy = nil
++		end
++		updateMarkerVisual(rt)
++		return
++	end
++	if frozen then
++		-- guards alive (RequireClear): nothing carries over (the bar reads CLEAR GUARDS, never a shrinking CAPTURING);
++		-- armies tied: nobody gains, progress decays as in a contest
++		if pres.Frozen == "guards" then
++			rt.Progress = 0
++		else
++			rt.Progress = math.max(0, rt.Progress - TerritoryConfig.ProgressDecayPerSecond * (TerritoryConfig.ContestedDecayMult or 0.5) * dt)
++		end
++		if rt.Progress <= 0 then
++			rt.CapturingUserId = 0
++			rt.CapturingByArmy = nil
++		end
++		updateMarkerVisual(rt)
++		return
++	end
++	local uid = capturerUid :: number
++	if rt.OwnerType == ot.Player and rt.OwnerUserId == uid then
++		rt.CapturingUserId = 0 -- the holder (or his army) on his own post: presence refresh
++		rt.CapturingByArmy = nil
++		rt.Progress = 0
++		updateMarkerVisual(rt)
++		return
++	end
++	if rt.ProtectedUntil > nowUnix() and rt.OwnerUserId ~= TerritoryConfig.NeutralOwnerId then
++		rate *= TerritoryConfig.ProtectedCaptureMult
++	end
++	rt.CapturingUserId = uid
++	rt.CapturingByArmy = byArmy
++	rt.Progress += dt * rate
++	postUnderAttack(rt, now)
++	if rt.Progress >= rt.Def.CaptureTimeSeconds then
++		local capturer = Players:GetPlayerByUserId(uid)
++		if capturer then
++			awardPost(capturer, rt, byArmy)
++			return
++		end
++	end
++	updateMarkerVisual(rt)
++end
++
++--[[ Every capture tick while posts exist: the holders' health samples (under fire) and the keep-away expiry: a holder
++	not within KeepAwayStuds of his post for KeepAwaySeconds loses it (his own chain, TerritoryConfig.PostChain: his
++	Forward Post and his Town Gate, never while he is inside his own plot: the far corners of a base are 634-652 studs
++	from its Town Gate). A holder with no live character is "away". ]]
++local function tickPostHolds(now: number)
++	local P = TerritoryConfig.Posts
++	if P.Enabled ~= true then
++		return
++	end
++	local ot = ownerTypes()
++	for _, rt in pairs(territories) do
++		if isPostRt(rt) and rt.OwnerType == ot.Player and rt.OwnerUserId > 0 then
++			local uid = rt.OwnerUserId
++			local holder = Players:GetPlayerByUserId(uid)
++			local root = if holder then liveRoot(holder) else nil
++			if holder and root then
++				local hum = (root.Parent :: Instance):FindFirstChildOfClass("Humanoid")
++				local hp = if hum then hum.Health else 0
++				local s = postHp[uid]
++				if s == nil then
++					postHp[uid] = { Hp = hp, DropAt = -math.huge }
++				else
++					if hp < s.Hp - 0.01 then
++						s.DropAt = now
++					end
++					s.Hp = hp
++				end
++				local pos = root.Position
++				local dx, dz = pos.X - rt.Def.Position.X, pos.Z - rt.Def.Position.Z
++				local keep = P.KeepAwayStuds
++				local near = dx * dx + dz * dz <= keep * keep
++				if not near and rt.Def.PostKind == "Forward" and inOwnPlot(holder, pos, rt.Def.PlotId) then
++					near = true
++				elseif not near and rt.Def.PostKind == "TownGate" and BaseService and BaseService.GetOwnedPlotId then
++					-- his own chain's Town Gate: kept while he is in his own base, as his Forward Post
++					local okP, own = pcall(BaseService.GetOwnedPlotId, holder)
++					if okP and typeof(own) == "number" and table.find(TerritoryConfig.PostChain(own), rt.Id) ~= nil
++						and inOwnPlot(holder, pos, own) then
++						near = true
++					end
++				end
++				if near then
++					rt.NearAt = now
++				end
++			end
++			local nearAt = rt.NearAt
++			if nearAt == nil then
++				rt.NearAt = now
++			elseif now - nearAt >= P.KeepAwaySeconds then
++				releaseOwnership(rt, "expired")
++				updateMarkerVisual(rt)
++			end
++		end
++	end
++end
++
+ local function playersInZone(rt: TerritoryRuntime): { Player }
+ 	return TerritoryCapture.PlayersInZone(rt)
+ end
+ 
+ local function tickTerritory(rt: TerritoryRuntime, dt: number)
++	if isPostRt(rt) then
++		tickPost(rt, dt) -- army lane B: the post rules (players beat armies, army rate, outnumber, guards)
++		return
++	end
+ 	local inside = playersInZone(rt)
+ 	local ot = ownerTypes()
+ 	-- fb4 capture lane (StandingBar): remember who counted this tick and who of them stands on the visible disc (the
+@@ -1475,6 +1883,22 @@
+ 		local uid = player.UserId
+ 		firstOutpostLogged[uid] = nil
+ 		lastRadarPushAt[player] = nil
++		-- army lane B: posts are session-only: a leaver's posts go back to Neutral whatever ReleaseOnLeave says
++		postHp[uid] = nil
++		-- mission cooldown stamps past their cooldown go (a rejoin inside it keeps its stamp: no +1 farm by rejoining)
++		local cool = tonumber(TerritoryConfig.Posts.MissionCooldownSeconds) or 600
++		local nowC = os.clock()
++		for key, at in pairs(postMissionAt) do
++			if nowC - at >= cool then
++				postMissionAt[key] = nil
++			end
++		end
++		for _, prt in pairs(territories) do
++			if isPostRt(prt) and prt.OwnerType == ownerTypes().Player and prt.OwnerUserId == uid then
++				releaseOwnership(prt, "leave")
++				updateMarkerVisual(prt)
++			end
++		end
+ 		local persist = persistClaimsOn() or (TerritoryConfig :: any).ReleaseOnLeave == true
+ 		for _, rt in pairs(territories) do
+ 			if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == uid and (persist or isStarterRt(rt)) then
+@@ -1506,6 +1930,7 @@
+ 					anyProgress = true -- fb4 StandingBar: someone stepped in / out: the bar follows at the capture cadence
+ 				end
+ 			end
++			tickPostHolds(os.clock()) -- army lane B: keep-away expiry + holders' under-fire samples (no-op while Posts is off)
+ 			-- Throttle full pushes; skip when idle and recently pushed
+ 			local now = os.clock()
+ 			if anyProgress or pushDirty or (now - lastPushAt >= 2.0) then
+diff --git a/src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau b/src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau
+--- a/src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau
++++ b/src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau
+@@ -549,6 +549,16 @@
+ --[[ F10, pure (exported for the client sim): does the dropdown list this row? Every zone, except Home Outposts: only
+ 	the one on the player's own plot (myPlot); while the plot is not known yet, only one the player holds. ]]
+ function TerritoryController.Lists(entry: Types.TerritoryEntryPayload, myPlot: number?, myUserId: number): boolean
++	-- army lane B: a checkpoint post is listed when he holds it (any chain: a post he can lose to keep-away is one he
++	-- can see) or when it is on his OWN chain (his Forward Post, his Town Gate: TerritoryConfig.PostChain). The server
++	-- lists posts only to live viewers (Posts.Live) anyway.
++	local postDef = TerritoryConfig.Territories[tostring(entry.Id)]
++	if TerritoryConfig.IsPostDef(postDef) then
++		if entry.OwnerType == "Player" and entry.OwnerUserId == myUserId then
++			return true
++		end
++		return myPlot ~= nil and table.find(TerritoryConfig.PostChain(myPlot), tostring(entry.Id)) ~= nil
++	end
+ 	local plot = starterPlotOf(tostring(entry.Id))
+ 	if plot == nil then
+ 		return true
+@@ -997,7 +1007,8 @@
+ 
+ local function applyCapture(localCap: any)
+ 	local p = capture
+-	local show = localCap and localCap.TerritoryId and (localCap.Capturing or standingShown(localCap))
++	-- army lane B: Guarded = standing on a Town Gate whose garrison is alive (nobody gains: "CLEAR GUARDS · NAME")
++	local show = localCap and localCap.TerritoryId and ((localCap.Capturing or standingShown(localCap)) or localCap.Guarded == true)
+ 	local contested = show and localCap.Contested == true
+ 	local held = show and localCap.Held == true and not localCap.Capturing and not contested -- fb4: your own zone
+ 	local id = if show then tostring(localCap.TerritoryId) else ""
+@@ -1035,10 +1046,24 @@
+ 	local name = string.upper(if def then def.DisplayName else id)
+ 	local frac = math.clamp(tonumber(localCap.Progress) or 0, 0, 1)
+ 	local protected = localCap.Protected == true
++	-- army lane B: your army is taking a post (ByArmy), or a garrison freezes the Town Gate you stand on (Guarded)
++	local postText = (TerritoryConfig :: any).Posts and (TerritoryConfig :: any).Posts.Text
++	local byArmy = localCap.ByArmy == true and localCap.Capturing == true and not contested
++	local guarded = localCap.Guarded == true and not localCap.Capturing and not contested and not held
+ 	if p then
+ 		p.Value.Text = ProgressPill.Percent(frac)
+ 		ProgressPill.SetFraction(p, frac)
+-		if contested then
++		if byArmy then
++			local word = if typeof(postText) == "table" and typeof(postText.ArmyTitle) == "string" then postText.ArmyTitle else "ARMY"
++			p.Title.Text = word .. " · " .. name
++			p.Title.TextColor3 = ProgressPill.Colors.Title
++			ProgressPill.ResetStroke(p)
++		elseif guarded then
++			local word = if typeof(postText) == "table" and typeof(postText.GuardsTitle) == "string" then postText.GuardsTitle else "CLEAR GUARDS"
++			p.Title.Text = word .. " · " .. name
++			p.Title.TextColor3 = COL.Contested
++			ProgressPill.AccentStroke(p, COL.Contested)
++		elseif contested then
+ 			p.Title.Text = "CONTESTED · " .. name
+ 			p.Title.TextColor3 = COL.Contested
+ 			ProgressPill.AccentStroke(p, COL.Contested)
+@@ -1120,6 +1145,34 @@
+ 
+ 	buildList(screen)
+ 
++	-- army lane B: a viewer who is not live for checkpoint posts (TerritoryConfig.PostsLiveFor; Posts.Live "owner")
++	-- never sees them: each WE_PostKit model (ring, pole, flag, label) and each Town Gate guard model
++	-- (Posts.TownGate.GuardTag, while the owner has a garrison awake) is removed on THIS client only, from the tag list
++	-- now and from the tag's added signal later (a model streamed back in, a guard spawned later). At most 10 kits and
++	-- 4 guards; no scan, no per-frame work. The server ignores this viewer's hits on a guard (CombatService zoneBars),
++	-- and its rays for him (his shots and claims, NPC shots at him) pass through the guards (addHiddenBodies).
++	local postsCfg = (TerritoryConfig :: any).Posts
++	if typeof(postsCfg) == "table" and postsCfg.Enabled == true and not TerritoryConfig.PostsLiveFor(player.UserId) then
++		local function hideKit(inst: Instance)
++			if inst.Parent ~= nil then
++				inst:Destroy()
++			end
++		end
++		local tags = { "WE_PostKit" }
++		local guardTag = if typeof(postsCfg.TownGate) == "table" then postsCfg.TownGate.GuardTag else nil
++		if typeof(guardTag) == "string" then
++			table.insert(tags, guardTag)
++		end
++		for _, tag in ipairs(tags) do
++			for _, inst in ipairs(CollectionService:GetTagged(tag)) do
++				hideKit(inst)
++			end
++			CollectionService:GetInstanceAddedSignal(tag):Connect(function(inst: Instance)
++				task.defer(hideKit, inst)
++			end)
++		end
++	end
++
+ 	-- F3: the Empire Tax % (server attribute) heads the list and toasts on change
+ 	taxPct = readTaxPct()
+ 	retitle()
+diff --git a/src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau b/src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau
+--- a/src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau
++++ b/src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau
+@@ -380,6 +380,11 @@
+ 				local tid = inst:GetAttribute("TerritoryId")
+ 				local def = if typeof(tid) == "string" then (TerritoryConfig.Territories :: any)[tid] else nil
+ 				local starterPlot = starterPlotOf(tid, def, inst)
++				-- army lane B: a checkpoint post is never the tutorial Outpost (hidden from non-live viewers, and taking
++				-- one fires no tutorial step)
++				if TerritoryConfig.IsPostDef(def) then
++					continue
++				end
+ 				if starterPlot == nil or (plotId ~= nil and starterPlot == plotId) then
+ 					local score = outpostScore(def, starterPlot, inst:GetAttribute("OwnerType"), inst:GetAttribute("OwnerUserId"), userId,
+ 						inst.Position, from)
+@@ -422,7 +427,7 @@
+ 	local bestScore = math.huge
+ 	for tid, def in pairs(TerritoryConfig.Territories :: any) do
+ 		local pos = def.Position
+-		if typeof(tid) == "string" and typeof(pos) == "Vector3" then
++		if typeof(tid) == "string" and typeof(pos) == "Vector3" and not TerritoryConfig.IsPostDef(def) then -- army lane B: never a post
+ 			local part: BasePart? = parts[tid] -- nil while the marker is streamed out
+ 			local starterPlot = starterPlotOf(tid, def, part)
+ 			if starterPlot == nil or (plotId ~= nil and starterPlot == plotId) then
+diff --git a/tools/BuyPathStatic.py b/tools/BuyPathStatic.py
+--- a/tools/BuyPathStatic.py
++++ b/tools/BuyPathStatic.py
+@@ -8435,6 +8435,353 @@
+ _cap_fix1_rules()
+ # ── end fb4 capture lane
+ 
++# ── army lane B (SPEC-ARMY-FINAL §3.4 / §4 / §5 / §9 / §10; owner 2026-09-28: "too much dead space between the base
++#    and the centre ... capture checkpoints along the way and hold onto the checkpoint"): checkpoint posts (a Forward
++#    Post per base + the 4 Town Gates). Ships Posts.Enabled = true with Posts.Live = "owner" (the owner's playtest
++#    account only); every rule reads comment-stripped code, and a missing file / function is a FAIL ──
++AB_TC = "src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau"
++AB_AC = "src/ReplicatedStorage/Shared/Configs/AdminConfig.luau"
++AB_NK = "src/ReplicatedStorage/Shared/Configs/NukeConfig.luau"
++AB_ARMY = "src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau"
++AB_TS = "src/ServerScriptService/Server/Services/TerritoryService/init.luau"
++AB_CAP = "src/ServerScriptService/Server/Services/TerritoryService/TerritoryCapture.luau"
++AB_RAD = "src/ServerScriptService/Server/Services/TerritoryService/TerritoryRadar.luau"
++AB_PS = "src/ServerScriptService/Server/Services/PostService.luau"
++AB_MS = "src/ServerScriptService/Server/Modules/MapSetup.luau"
++AB_WD = "src/ServerScriptService/Server/Modules/WorldDress.luau"
++AB_WH = "src/ServerScriptService/Server/Modules/WorldHygiene.luau"
++AB_EC = "src/ServerScriptService/Server/Services/EconomyService.luau"
++AB_CS = "src/ServerScriptService/Server/Services/CombatService/init.luau"
++AB_NPC = "src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau"
++AB_SQ = "src/ServerScriptService/Server/Services/SquadOrdersService.luau"
++AB_BS = "src/ServerScriptService/Server/Bootstrap.server.luau"
++AB_CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau"
++AB_TUT = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau"
++
++
++def _ab_code(rel: str) -> str | None:
++    """The file with --[[ ]] block comments and -- line comments removed (a comment-only line is dropped); None when missing."""
++    text = read(rel)
++    if text is None:
++        return None
++    text = re.sub(r"--\[(=*)\[.*?\]\1\]", "\x00", text, flags=re.S)
++    out = []
++    for line in text.splitlines():
++        i = line.find("--")
++        kept = (line if i < 0 else line[:i]).replace("\x00", "").rstrip()
++        if kept.strip() == "" and line.strip() != "":
++            continue
++        out.append(kept)
++    return "\n".join(out)
++
++
++def _ab_fn(code: str | None, header: str) -> str | None:
++    """Body of the function whose header line starts with `header` (to its column-0 `end`), or None."""
++    if code is None:
++        return None
++    i = code.find(header)
++    if i < 0:
++        return None
++    j = code.find("\nend\n", i)
++    return code[i:j if j >= 0 else len(code)]
++
++
++def _ab_check(cond: bool, label: str, why: str) -> None:
++    if cond:
++        ok("army B: " + label)
++    else:
++        bad("army B: " + label + " — " + why)
++
++
++def _ab_rules() -> None:
++    global CM_MAX, CM_OVER
++    cc = _ab_code("src/ReplicatedStorage/Shared/Configs/CombatConfig.luau") or ""
++    mx, ov = re.search(r"MaxActiveNPCs = (\d+),", cc), re.search(r"SpecialOverCap = (\d+),", cc)
++    CM_MAX, CM_OVER = (int(mx.group(1)) if mx else 99), (int(ov.group(1)) if ov else 99)
++    tc = _ab_code(AB_TC)
++    posts = re.search(r"^\tPosts = \{\n(.*?)^\t\},\n", tc or "", re.M | re.S)
++    pb = posts.group(1) if posts else ""
++    # 1. rollout + shipping values (one table; a change is a deliberate edit of this pin)
++    _ab_check(bool(posts) and pb.startswith('\t\tEnabled = true,\n\t\tLive = "owner",\n'),
++              'ships Posts.Enabled = true and Posts.Live = "owner" (the owner\'s playtest account only)',
++              "Posts block missing or not Enabled = true / Live = \"owner\" at its head")
++    want = [("MaxHeld", "3"), ("ArmyMinUnits", "2"), ("ArmyRate", "0.5"), ("OwnerLeashStuds", "320"), ("MaxHeightDelta", "14"),
++            ("OutnumberSeconds", "6"), ("OutnumberMargin", "1"), ("KeepAwayStuds", "600"), ("KeepAwaySeconds", "600"),
++            ("MissionCooldownSeconds", "600"), ("UnderAttackToastGap", "60"), ("UnderFireSeconds", "3")]
++    for key, val in want:
++        _ab_check(re.search(r"^\t\t" + key + r" = " + re.escape(val) + r",", pb, re.M) is not None,
++                  f"Posts.{key} = {val}", "value missing or changed")
++    fwd = re.search(r"^\t\tForward = \{\n(.*?)^\t\t\},\n", pb, re.M | re.S)
++    tg = re.search(r"^\t\tTownGate = \{\n(.*?)^\t\t\},\n", pb, re.M | re.S)
++    fb, gb = (fwd.group(1) if fwd else ""), (tg.group(1) if tg else "")
++    for key, val in [("Radius", "16"), ("CaptureTimeSeconds", "8"), ("StipendCash", "1000")]:
++        _ab_check(re.search(r"^\t\t\t" + key + r" = " + val + r",", fb, re.M) is not None, f"Posts.Forward.{key} = {val}", "value missing or changed")
++    for key, val in [("Radius", "18"), ("CaptureTimeSeconds", "12"), ("StipendCash", "2000"), ("RequireClear", "true"), ("Ledger", "4"),
++                     ("WakeStuds", "150"), ("TargetZoneStuds", "60"), ("HitBackSeconds", "10"), ("Leash", "30")]:
++        _ab_check(re.search(r"^\t\t\t" + key + r" = " + val + r",", gb, re.M) is not None, f"Posts.TownGate.{key} = {val}", "value missing or changed")
++    _ab_check(re.search(r'Garrison = \{ \{ Role = "Alarm", Type = "HeavyInfantry" \}, \{ Role = "G1", Type = "Infantry" \}, HitsUnits = false \},', gb) is not None,
++              "a Town Gate garrison is 2 NPCs (HeavyInfantry at Alarm, Infantry at G1) and Garrison.HitsUnits ships false (never shoots units)",
++              "Garrison rows or HitsUnits changed")
++    _ab_check(re.search(r'^\t\t\tGuardTag = "WE_PostGuard",', gb, re.M) is not None, 'Posts.TownGate.GuardTag = "WE_PostGuard"', "GuardTag missing or changed")
++    txt = re.search(r"^\t\tText = \{\n(.*?)^\t\t\},\n", pb, re.M | re.S)
++    words = re.findall(r'= "([^"]*)"', txt.group(1)) if txt else []
++    _ab_check(len(words) == 5 and all(len(w) <= 16 and not re.search(r"click|tap|press|key|\[|\bE\b|\bF\b", w, re.I) for w in words),
++              "post texts are 5 short phone-safe lines (no key name, no click / tap)", f"found {words}")
++    # 2. the live filter: "owner" = AdminConfig.IsPlaytestOwner (470626172 only), "all" only when Live says so
++    live = _ab_fn(tc, "function TerritoryConfig.PostsLiveFor(")
++    _ab_check(live is not None and "if P.Enabled ~= true then\n\t\treturn false" in live
++              and 'if P.Live == "owner" then\n\t\treturn AdminConfig.IsPlaytestOwner(userId) == true' in live
++              and 'if P.Live == "all" then\n\t\treturn true' in live and live.rstrip().endswith("return false"),
++              "PostsLiveFor: off unless Enabled; \"owner\" = AdminConfig.IsPlaytestOwner; anything else is false",
++              "PostsLiveFor missing or widened")
++    ac = _ab_code(AB_AC) or ""
++    _ab_check("local PLAYTEST_OWNER_USER_ID = 470626172" in ac and "AdminPlaytestCash" in (read(AB_AC) or ""),
++              "the playtest owner stays UserId 470626172 (AdminPlaytestCash untouched)", "AdminConfig owner id changed")
++    # 3. the rows: generated only while Enabled; every row a session-only post with an exact ring and no dressing keep-out
++    gen = re.search(r"^if TerritoryConfig\.Posts\.Enabled then\n(.*?)^end\n", tc or "", re.M | re.S)
++    g = gen.group(1) if gen else ""
++    rowkeys = ['BonusType = "Post",', "BonusValue = 0,", "Light = false,", "IsPost = true,", "ExactRadius = true,", "ArmyCounts = true,", "NoDressKeepOut = true,"]
++    _ab_check(bool(gen) and all(g.count(k) == 2 for k in rowkeys) and "Clan" not in g and "Nation" not in g,
++              "post rows (Forward + Town Gate) are IsPost, ExactRadius, NoDressKeepOut, BonusType Post 0, no light, no clan / nation",
++              "row generator missing or a row key changed")
++    # 4. the kits: 3 parts (Forward) / 2 parts (Town Gate), none collidable / queryable / touchable, no light, Neon,
++    #    SurfaceGui, decal or texture (never a nation flag), Atomic, tagged WE_PostKit, one label MaxDistance 40
++    ms = _ab_code(AB_MS)
++    kit = _ab_fn(ms, "local function buildPostKits(")
++    k = kit or ""
++    parts = k.count("part({")
++    _ab_check(kit is not None and parts == 3 and k.count("CanCollide = false,") == 3 and k.count(".CanQuery = false") == 3
++              and k.count(".CanTouch = false") == 3,
++              "post kit parts: 3 builders (ring, pole, flag), all CanCollide / CanQuery / CanTouch false",
++              f"buildPostKits missing or parts {parts}")
++    _ab_check(kit is not None and re.search(r"if isGate and flagPos ~= nil then\n(?:(?!part\(\{).)*?\n\t\telse\n\t\t\tlocal poleH", k, re.S) is not None,
++              "a Town Gate kit has no pole (ring + flag: 2 parts); a Forward Post kit has 3", "the pole is not behind the Town Gate branch")
++    _ab_check(kit is not None and not re.search(r"PointLight|SpotLight|SurfaceLight|SurfaceGui|Neon|Decal|Texture|Nation|AlwaysOnTop|ParticleEmitter", k),
++              "post kits: no light, Neon, SurfaceGui, decal / texture (no nation flag), no AlwaysOnTop", "a forbidden instance or material in buildPostKits")
++    _ab_check(kit is not None and "zone.ModelStreamingMode = Enum.ModelStreamingMode.Atomic" in k and 'CollectionService:AddTag(zone, "WE_PostKit")' in k
++              and "MaxDistance = 40," in k and "if P.Enabled ~= true then\n\t\treturn" in k,
++              "post kits: Atomic model, WE_PostKit tag, label MaxDistance 40, nothing while Posts.Enabled is false", "buildPostKits changed")
++    _ab_check(ms is not None and "+ (if TerritoryConfig.Posts.Enabled then 20 else 0)" in ms and "buildPostKits(territories)" in ms
++              and "if not seen[id] and not TerritoryConfig.IsPostDef(rows[id]) then" in ms,
++              "MapSetup: posts built only by buildPostKits; MAP_GEN +20 only while Posts.Enabled", "MapSetup wiring changed")
++    # 5. dressing: a post is not a WorldDress keep-out and not a WorldHygiene H3 zone
++    _ab_check("if not skip[id] and t.NoDressKeepOut ~= true then" in (_ab_code(AB_WD) or ""), "WorldDress keeps its dressing around posts", "NoDressKeepOut skip missing")
++    _ab_check("if t.NoDressKeepOut == true then\n\t\t\tcontinue" in (_ab_code(AB_WH) or ""), "WorldHygiene H3 skips posts", "NoDressKeepOut skip missing")
++    # 6. capture: exact ring, live players only, armies only through the provider with ArmyMinUnits and a live owner
++    cap = _ab_code(AB_CAP) or ""
++    _ab_check("if marker and rt.Def.ExactRadius ~= true then" in cap, "TerritoryCapture: a post counts its exact ring radius", "ExactRadius gate missing")
++    _ab_check("if postRow and not TerritoryConfig.PostsLiveFor(player.UserId) then\n\t\t\tcontinue" in cap,
++              "TerritoryCapture: a non-live player never counts on a post", "live filter missing")
++    pp = _ab_fn(cap, "function TerritoryCapture.PostPresence(") or ""
++    _ab_check('if out.Frozen == "off" then\n\t\treturn out' in pp and "n >= minUnits and TerritoryConfig.PostsLiveFor(uid)" in pp
++              and "def.ArmyCounts == true" in pp,
++              "PostPresence: Ops \"off\" drops everyone; an army counts only with ArmyMinUnits and a live owner", "PostPresence changed")
++    # 7. the post tick: 2+ players contest, 1 player captures at x1 before any army, an army alone at ArmyRate
++    ts = _ab_code(AB_TS)
++    tp = _ab_fn(ts, "local function tickPost(") or ""
++    i2, i1, ia = tp.find("if uniqueCount >= 2 then"), tp.find("if uniqueCount == 1 then\n\t\tcapturerUid = inside[1].UserId"), tp.find("elseif pres.ArmyOwners == 1 then")
++    _ab_check(0 <= i2 < i1 < ia and "rate = tonumber(P.ArmyRate) or 0.5" in tp[ia:] and 'local frozen = pres.Frozen == "guards"' in tp,
++              "tickPost: players beat armies (contest, then one player at x1, then an army alone at ArmyRate); guards freeze",
++              "tickPost order / army rate / guards changed")
++    _ab_check(ts is not None and "if isPostRt(rt) then\n\t\ttickPost(rt, dt)" in ts, "tickTerritory hands posts to tickPost", "delegation missing")
++    # 8. exclusions: profile, Empire Tax, MaxPersonalTerritories, eviction, ClanWar, stats, XP, nuke
++    t = ts or ""
++    _ab_check("rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == userId and not isStarterRt(rt) and not isPostRt(rt) then" in t,
++              "MaxPersonalTerritories never counts posts", "countPersonalNonStarter change missing")
++    _ab_check("rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == player.UserId and not isPostRt(rt) then" in t,
++              "syncProfileOwnership never writes a post to profile.Territories", "syncProfileOwnership skip missing")
++    _ab_check("and not isPostRt(other)\n\t\t\t\tand not isStarterRt(other) then" in t, "the MaxPersonalTerritories eviction never evicts a post", "eviction skip missing")
++    _ab_check("if isPostRt(rt) then\n\t\treleasePost(rt, reason)\n\t\treturn" in t, "releaseOwnership hands posts to releasePost (no profile write)", "delegation missing")
++    aw = _ab_fn(ts, "local function awardPost(")
++    rp = _ab_fn(ts, "local function releasePost(")
++    forbid = r"profile|DataService|Territories\[|ClanWarService|TerritoriesCaptured|AddCash|AddXP|XPService|EmpireTax|SyncOutpostIncomeStacks|GrantOutpostIncomeStack|TutorialService|MarkDirty"
++    _ab_check(aw is not None and not re.search(forbid, aw) and "rt.ClanId = nil" in aw
++              and 'MissionService.TrackProgress(player, "CaptureTerritory", 1)' in aw and "P.MissionCooldownSeconds" in aw
++              and "releaseOwnership(oldest, \"max_held\")" in aw,
++              "awardPost: session-only, player-owned, no Empire Tax / ClanWar / stats / XP / cash, mission +1 on cooldown, MaxHeld releases the oldest",
++              "awardPost missing or touches a forbidden system")
++    _ab_check(rp is not None and not re.search(forbid, rp), "releasePost: no profile / cash / stats write", "releasePost missing or writes a forbidden system")
++    _ab_check("if not TerritoryRadar.PostShownTo(rt.Def, if player then player.UserId else nil) then\n\t\t\tcontinue" in t,
++              "the payload lists posts only to live viewers (TerritoryRadar.PostShownTo)", "payload filter missing")
++    rad = _ab_fn(_ab_code(AB_RAD), "function TerritoryRadar.PostShownTo(") or ""
++    _ab_check("return TerritoryConfig.PostsLiveFor(viewerUserId)" in rad, "PostShownTo follows PostsLiveFor", "PostShownTo missing")
++    _ab_check("if isPostId(id) then\n\t\t\t\t\towned -= 1" in (_ab_code(AB_EC) or ""), "Empire Tax stacks never count a post id", "EconomyService post skip missing")
++    _ab_check("if def.IsPost == true then\n\t\treturn false" in (_ab_code(AB_NK) or ""), "a post is never a nuke target", "NukeConfig post skip missing")
++    mv = re.search(r'if flag and flag:IsA\("BasePart"\) and isPostRt\(rt\) then\n\t\tif flag\.Color ~= color then\n\t\t\tflag\.Color = color\n\t\tend\n\telseif', t)
++    _ab_check(mv is not None, "a post flag shows the holder's colour only (no nation flag, no decal)", "post flag branch changed")
++    # 9. PostService: no grant, nothing to clients, Ops fail-closed, ledger, garrison spawn opts, off = no-op
++    ps = _ab_code(AB_PS)
++    p = ps or ""
++    _ab_check(ps is not None and not re.search(r"AddCash|AddXP|GiveCash|GiveXP|DataService|GetProfile|FireClient|FireAllClients|RenderStepped|Heartbeat|GetDescendants", p),
++              "PostService grants nothing, sends nothing to clients, no per-frame work", "PostService missing or uses a forbidden call")
++    _ab_check("local okOps, opsOn = pcall(OpsConfig.SiteSwitchedOn, g.Kit)\n\tif okOps and opsOn == true then" in p and 'g.State = "off"' in p,
++              "PostService fails closed: an enabled Ops Town.CP_* site turns its post off", "Ops check missing")
++    lc = _ab_fn(ps, "local function ledgerCap(") or ""
++    _ab_check("local cap = ledgerCap()\n\tif ledgerUsed() + #rows > cap then" in p and "if OpsConfig.Enabled == true then\n\t\treturn tonumber(T.LedgerJobsOn) or 2" in lc
++              and "return tonumber(T.Ledger) or 4" in lc,
++              "the garrison ledger caps live garrison NPCs (Posts.TownGate.Ledger; LedgerJobsOn while the Ops master switch is on)", "ledger check missing")
++    so = re.search(r"pcall\(CombatService\.SpawnNPC, typeId, at, \{\n\t\tNoRespawn = true,\n\t\tOverCap = true,.*?\n\t\tTargetZone = g\.Zone,\n\t\}\)", p, re.S)
++    _ab_check(so is not None, "garrison NPCs: NoRespawn, OverCap (inside 18 + 4), TargetZone", "SpawnNPC opts changed")
++    _ab_check("if not postsOn() or started then\n\t\treturn" in p and "task.wait(1)" in p, "PostService: a no-op while Posts.Enabled is false; 1 Hz loop", "Init guard / loop changed")
++    tg_ = _ab_fn(ps, "local function tickGate(") or ""
++    _ab_check("local woke = livePlayerWithin(g.Center, T.WakeStuds, false) or armyInRing(g)" in tg_,
++              "a Town Gate wakes for any live player within WakeStuds, seated or on foot (a parked driver cannot skip the guards), or an army counting in its ring",
++              "the armed-branch wake changed (seated players / armies in the ring must wake it)")
++    air = _ab_fn(ps, "local function armyInRing(") or ""
++    _ab_check("armyPresence(g.Def, g.Center," in air and "n >= minUnits and TerritoryConfig.PostsLiveFor(uid)" in air,
++              "armyInRing uses the capture tick's own army rule (ArmyMinUnits, live owner in leash)", "armyInRing missing or changed")
++    lpw = _ab_fn(ps, "local function livePlayerWithin(") or ""
++    _ab_check("if TerritoryConfig.PostsLiveFor(p.UserId) then" in lpw, "only live players wake a gate", "livePlayerWithin live filter missing")
++    _ab_check("pcall(CollectionService.AddTag, CollectionService, model, T.GuardTag)" in (_ab_fn(ps, "local function spawnOne(") or ""),
++              "each garrison model is tagged Posts.TownGate.GuardTag (non-live clients hide it)", "guard tag missing")
++    # 10. NPC targeting: a garrison picks only on-foot live players in its zone or its hit-back list
++    npc = _ab_code(AB_NPC)
++    nz = _ab_fn(npc, "local function nearestZoneTarget(") or ""
++    _ab_check("local ok = hitBack ~= nil and hitBack > now" in nz and "if not ok and hum.SeatPart == nil then" in nz
++              and "ok = dx * dx + dz * dz <= r2 and (eligible == nil or eligible(player) == true)" in nz,
++              "a garrison never targets a seated player (a passing driver) or anyone outside its zone who has not hit it", "nearestZoneTarget changed")
++    _ab_check(npc is not None and "if zone ~= nil then\n\t\ttarget, dist = nearestZoneTarget(rec, zone)" in npc
++              and "if rec.TargetZone ~= nil then\n\t\t\t\tthinkStance(rec, now)\n\t\t\telseif rec.Leash == nil and not usesGroup(rec) then" in npc,
++              "CombatNPC routes TargetZone NPCs through the zone pick (LOS + hit chance unchanged)", "routing changed")
++    cs = _ab_code(AB_CS)
++    _ab_check("if attacker and zone and not (fb ~= nil and fb.UnitShot == true) then\n\t\tzone.HitBack[attacker.UserId] = clock() + zone.HitBackSeconds" in (cs or ""),
++              "only a player's own hit puts him on a garrison's hit-back list (server-side, never a client id)", "hurtNPC stamp changed")
++    gc = _ab_fn(cs, "local function aliveGarrisonCount(") or ""
++    sp = _ab_fn(cs, "function CombatService.SpawnNPC(") or ""
++    _ab_check("if rec.Alive and rec.TargetZone ~= nil then" in gc
++              and "if o.TargetZone == nil then\n\t\tcap += aliveGarrisonCount()\n\tend\n\tif aliveNPCCount() >= (if isSpecial then cap + CombatConfig.SpecialOverCap else cap) then" in sp,
++              "only a garrison spawn counts garrison NPCs: the regular 18 and the specials' +4 (bank guards) see today's numbers while a garrison is awake",
++              "a non-garrison spawn counts garrisons again (camp respawns or the bank's +4 headroom lost)")
++    zb = _ab_fn(cs, "local function zoneBars(") or ""
++    hn = _ab_fn(cs, "local function hurtNPC(") or ""
++    um = _ab_fn(cs, "local function unitMayHit(") or ""
++    ap = _ab_fn(cs, "local function assistPick(") or ""
++    _ab_check("local ok, yes = pcall(zone.Eligible :: (Player) -> boolean, player)" in zb and "return not (ok and yes == true)" in zb
++              and "if zoneBars(rec, attacker) then\n\t\treturn 0, false" in hn and "if zoneBars(rec, owner) then\n\t\treturn false" in um
++              and "and not zoneBars(rec, player) then" in ap,
++              "a player who is not live for posts never hurts, farms, provokes or aim-assists onto a garrison (nor does his squad)",
++              "zoneBars missing from hurtNPC / unitMayHit / assistPick")
++    # 11. SquadOrdersService.UnitsOf is a read-only accessor
++    uo = _ab_fn(_ab_code(AB_SQ), "function SquadOrdersService.UnitsOf(")
++    _ab_check(uo is not None and re.sub(r"\s+", " ", uo).strip() == "function SquadOrdersService.UnitsOf(userId: number): { SquadUnit }? local st = squadByUser[userId] return if st then st.Units else nil",
++              "SquadOrdersService.UnitsOf only reads the live list", "UnitsOf missing or does more than read")
++    # 12. Bootstrap: PostService after DataService, CombatService, TerritoryService and SquadOrdersService
++    bs = _ab_code(AB_BS) or ""
++    idx = [bs.find(f'safeInit("{n}"') for n in ("DataService", "CombatService", "TerritoryService", "SquadOrdersService", "PostService")]
++    _ab_check(all(i >= 0 for i in idx) and idx == sorted(idx), "Bootstrap inits PostService after Data / Combat / Territory / SquadOrders", f"order {idx}")
++    # 13. client: own chain only, kits hidden for non-live viewers, titles from config
++    cl = _ab_code(AB_CL) or ""
++    _ab_check("if TerritoryConfig.IsPostDef(postDef) then\n\t\tif entry.OwnerType == \"Player\" and entry.OwnerUserId == myUserId then\n\t\t\treturn true\n\t\tend\n\t\treturn myPlot ~= nil and table.find(TerritoryConfig.PostChain(myPlot), tostring(entry.Id)) ~= nil" in cl,
++              "the territory list shows the viewer's own chain posts and any post he holds (nothing else)", "Lists post rule changed")
++    _ab_check("postsCfg.Enabled == true and not TerritoryConfig.PostsLiveFor(player.UserId) then" in cl and 'local tags = { "WE_PostKit" }' in cl
++              and "local guardTag = if typeof(postsCfg.TownGate) == \"table\" then postsCfg.TownGate.GuardTag else nil" in cl
++              and "table.insert(tags, guardTag)" in cl
++              and "CollectionService:GetInstanceAddedSignal(tag):Connect(function(inst: Instance)" in cl,
++              "a non-live viewer's client removes every post kit and garrison model (also one streamed in or spawned later)", "kit / guard hiding missing")
++    tut = _ab_code(AB_TUT) or ""
++    _ab_check("if TerritoryConfig.IsPostDef(def) then\n\t\t\t\t\tcontinue" in tut
++              and 'if typeof(tid) == "string" and typeof(pos) == "Vector3" and not TerritoryConfig.IsPostDef(def) then' in tut,
++              "the tutorial Outpost beam never points at a post (both resolvers)", "TutorialController post skip missing")
++    ph = _ab_fn(ts, "local function tickPostHolds(") or ""
++    _ab_check('elseif not near and rt.Def.PostKind == "TownGate" and BaseService and BaseService.GetOwnedPlotId then' in ph
++              and "table.find(TerritoryConfig.PostChain(own), rt.Id) ~= nil" in ph and "and inOwnPlot(holder, pos, own) then" in ph,
++              "keep-away never expires the holder's own chain Town Gate while he is in his own base", "own Town Gate exemption missing")
++    _ab_check("local byArmy = localCap.ByArmy == true and localCap.Capturing == true and not contested" in cl
++              and "local guarded = localCap.Guarded == true and not localCap.Capturing and not contested and not held" in cl,
++              "capture bar: ARMY · NAME only while his army captures; CLEAR GUARDS · NAME only when nobody gains", "bar titles changed")
++    # 14. switches that ship off. HitsUnits lives in Posts.TownGate.Garrison (pinned false above, section 1). FightRaiders
++    #     belongs to ArmyConfig.Guard (spec D1, lane D, not built): absent or false in ArmyConfig, whichever lane's file
++    #     is there. Neither may be true anywhere in src/ (comment-stripped).
++    fr = re.findall(r"\bFightRaiders\s*=\s*(true|false)\b", _ab_code(AB_ARMY) or "")
++    _ab_check(all(v == "false" for v in fr), f"ArmyConfig.FightRaiders absent or false ({len(fr)} set)", f"found {fr}")
++    on = []
++    for q in sorted((ROOT / "src").rglob("*.luau")):
++        rel = q.relative_to(ROOT).as_posix()
++        if re.search(r"\b(FightRaiders|HitsUnits)\s*=\s*true\b", _ab_code(rel) or ""):
++            on.append(rel)
++    _ab_check(not on, "FightRaiders / HitsUnits are true nowhere in src/ (gate army vs raiders and garrison fire at units stay off)", f"true in {on}")
++    # 15. fix round 2: garrison tracers only to live players, a cap-refused wake re-arms, guards freeze = no carry-over
++    #     (fix 3: the fanOut call may carry lane A0's two army-bucket args first, as on main 4d26673)
++    fx = _ab_code("src/ServerScriptService/Server/Services/CombatService/CombatFx.luau") or ""
++    al = _ab_fn(fx, "local function allowed(") or ""
++    _ab_check("local ok, yes = pcall(allow, plr)\n\treturn ok and yes == true" in al and "if allow == nil then\n\t\treturn true" in al
++              and "if plr.UserId ~= excludeUid and allowed(allow, plr) then" in fx
++              and re.search(r"fanOut\(payload, if shooterUid ~= 0 then shooterUid else nil, (?:nil, nil, )?allow\)", fx) is not None,
++              "CombatFx.Bullet takes an optional recipient filter (nil = today's fan-out)", "WeaponFx recipient filter missing")
++    cs2 = _ab_code(AB_CS) or ""
++    sp2 = _ab_fn(cs2, "function CombatService.SpawnNPC(") or ""
++    nf = _ab_fn(cs2, "local function noFxRecipient(") or ""
++    _ab_check("if rec.TargetZone ~= nil then\n\t\t\t\tCombatFx.Bullet(rec.Id, 0, \"NPC\", origin, landed, kind, rec.FxAllow or noFxRecipient)" in cs2
++              and "rec.FxAllow = function(plr: Player): boolean\n\t\t\treturn not zoneBars(rec, plr)" in sp2 and nf.rstrip().endswith("return false"),
++              "a garrison's tracers go only to players live for posts (one filter per garrison NPC made at spawn; none = nobody)",
++              "garrison WeaponFx not filtered by the zone's live filter")
++    ps2 = _ab_code(AB_PS) or ""
++    so = _ab_fn(ps2, "local function spawnOne(") or ""
++    tg = _ab_fn(ps2, "local function tickGate(") or ""
++    _ab_check("elseif not g.LoggedCap then" in so and "if g.Pending == 0 and g.WakeSpawned == 0 and #g.Npcs == 0 then" in so
++              and "g.RetryAt = now() + (tonumber(T.CapRetrySeconds) or 5)" in so and "g.Pending += #plan" in ps2
++              and "if woke and t >= g.RetryAt then" in tg and "CapRetrySeconds = 5," in pb,
++              "a wake the NPC cap refuses entirely is logged once and re-arms (retry 5 s), never a silently cleared gate",
++              "cap-refused wake falls through to cleared")
++    tp = _ab_fn(_ab_code(AB_TS), "local function tickPost(") or ""
++    _ab_check('if pres.Frozen == "guards" then\n\t\t\trt.Progress = 0' in tp,
++              "RequireClear: no capture progress carries over while guards stand (bar reads CLEAR GUARDS)", "guards freeze keeps progress")
++    _ab_check("if nowC - at >= cool then\n\t\t\t\tpostMissionAt[key] = nil" in (_ab_code(AB_TS) or ""),
++              "post mission stamps past their cooldown are pruned on leave (bounded map, no rejoin +1 farm)", "postMissionAt never pruned")
++    # 16. fix round 3: a garrison a player cannot see is not in his world on the server either. His shot's exclude list,
++    #     his claim's line of sight and an NPC's shot at him skip the Town Gate guards his client hides (addHiddenBodies:
++    #     only guards whose zone bars him, nothing for a live player or while no garrison exists); a claim naming such a
++    #     guard is refused; the owner still hits his guards and they still cover him (T12G, headless stand-in)
++    ah = _ab_fn(cs2, "local function addHiddenBodies(") or ""
++    _ab_check("if #zoneRecs == 0 or player == nil then\n\t\treturn list" in ah
++              and "elseif rec.Model.Parent ~= nil and zoneBars(rec, player) then\n\t\t\ttable.insert(list, rec.Model)" in ah
++              and "if npcRecords[rec.Id] ~= rec then\n\t\t\ttable.remove(zoneRecs, i)" in ah,
++              "addHiddenBodies adds only the guards whose zone bars this player (none for a live player, none while no garrison lives)",
++              "addHiddenBodies missing or not filtered by zoneBars")
++    dn = _ab_fn(cs2, "local function destroyNPC(") or ""
++    _ab_check("if rec.TargetZone ~= nil then\n\t\trec.FxAllow = function(plr: Player): boolean" in sp2 and "\t\ttable.insert(zoneRecs, rec)\n\tend" in sp2
++              and "table.remove(zoneRecs, zi)" in dn,
++              "the hidden-body list holds every garrison record from SpawnNPC until destroyNPC (its corpse included)", "zoneRecs bookkeeping missing")
++    rf = _ab_fn(cs2, "function CombatService.RequestFire(") or ""
++    _ab_check("local shotFilter = addHiddenBodies(shotFilterFor(character, seatVeh), player)" in rf,
++              "a player's exact ray, projectile and aim-assist sight line pass through the guards his client hides", "shot filter without hidden guards")
++    vc = _ab_fn(cs2, "local function validateClaim(") or ""
++    _ab_check("local hidden = addHiddenBodies({ shooter }, shooterPlayer)" in vc
++              and "if #hidden == 1 or not CombatDamage.LineOfSight(origin, torsoPos, hidden, target, false, CombatFairnessConfig.ClaimLosPastTorsoStuds) then" in vc
++              and rf.count("maxAlong, tchar, torso.Position, player)") == 1 and rf.count("maxAlong, rec.Model, rec.Root.Position, player)") == 1,
++              "a claim blocked only by a guard the shooter's client hides keeps its line of sight (both claim kinds pass the shooter)",
++              "claim LOS still stops on hidden guards")
++    _ab_check('elseif zoneBars(rec, player) then\n\t\t\t\tlogClaimRefusal(player, "hidden guard"' in rf,
++              "a claim naming a guard the shooter's client hides is refused (server never trusts that id)", "hidden-guard claim accepted")
++    nh = _ab_fn(npc, "local function npcHasLos(") or ""
++    _ab_check("local hide = B.hiddenBodies\n\tif hide then\n\t\thide(ignore, target)" in nh and "hiddenBodies = addHiddenBodies," in cs2,
++              "an NPC's shot at a player skips the guards that player's client hides (a hidden guard never shields him)", "npcHasLos without hidden guards")
++    fc = _ab_code("src/ReplicatedStorage/Shared/Configs/CombatFairnessConfig.luau") or ""
++    rd = _ab_fn(cs2, "function CombatService.ApplyRadiusDamage(") or ""
++    _ab_check(re.search(r"^\tUnitLosIgnoreNPCBodies = true,", fc, re.M) is not None and 'local npcs = Workspace:FindFirstChild("WarEmpireNPCs")' in rd,
++              "squad and blast sight lines already skip every NPC body (UnitLosIgnoreNPCBodies = true; splash ignores WarEmpireNPCs), so a hidden guard blocks neither",
++              "a squad / blast sight line now stops on NPC bodies: add addHiddenBodies there first")
++    _ab_check("root:SetNetworkOwner(nil)" in sp2,
++              "garrison NPCs are server-simulated (SetNetworkOwner(nil)): a non-live client that removed them has no guard part to bump", "NPC network owner changed")
++    tg3 = _ab_fn(ps2, "local function tickGate(") or ""
++    _ab_check("if rec == nil or rec.Alive == false then\n\t\t\t\tremoveNpc(g, id)" in tg3
++              and 'elseif typeof(rec.Model) == "Instance" and rec.Model.Parent == nil then' in tg3 and "pcall(CombatService.DespawnNPC, id)" in tg3
++              and "npcRec[rec.Id] = rec" in so,
++              "a guard CombatService no longer runs leaves the ledger on the next tick (no stale id freezes a gate)", "stale garrison ids kept")
++    _ab_check(re.search(r"^\t\t\tLedgerJobsOn = 2,", gb, re.M) is not None
++              and CM_MAX + CM_OVER + 2 <= 24 and int(re.search(r"^\t\t\tLedger = (\d+),", gb, re.M).group(1)) <= CM_OVER,
++              "garrison ledger 4 (<= SpecialOverCap) and 2 while Ops is on: at most 18 + 4 + 2 = 24 NPCs alive (22 with Ops off)",
++              "ledger values changed")
++    nm = re.search(r'^\t\t\tNames = \{ (.*) \},$', fb, re.M)
++    names = re.findall(r'"([^"]*)"', nm.group(1)) if nm else []
++    _ab_check(len(names) == 6 and len(set(names)) == 6 and all(re.fullmatch(r"(North|South|East|West)(east|west)? Post", n) and len(n) <= 16 for n in names)
++              and "DisplayName = fp.Names[n] or fp.DisplayName," in g,
++              "the 6 Forward Posts have 6 distinct compass names (<= 16 chars, no real-world names)", f"names {names}")
++
++
++_ab_rules()
++# ── end army lane B
++
+ parse_gate()
+ 
+ print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
