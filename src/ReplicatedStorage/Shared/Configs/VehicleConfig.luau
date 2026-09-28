@@ -849,6 +849,135 @@ local VehicleConfig = {
 				RefreshSeconds = 300,
 			},
 		},
+
+		--[[ fb4 water rule (owner, phone, 2026-09-28: "I can drive on water which shouldn't happen"). Every WE_Water part
+			spans BottomY 0.3 .. SurfaceY 1.5 over a desert floor at 0.5 and collides with nothing, so a car used to roll on
+			the sand one stud under the see-through sheet. The SERVER decides (Modules/VehicleWaterGuard, called from
+			VehicleService at Hz per vehicle: a flat-rectangle test of the chassis against the tagged WE_Water parts, no
+			scans); the driver's client (VehicleDriveClient) mirrors it only for feel. Geometry: Shared/Util/WaterRule.
+			  * In water = the chassis centre at least EnterDepth studs inside water (the four points EnterDepth away along
+			    +-X / +-Z are water too, so seams between water parts count as water), with the wheel line (chassis Y -
+			    WE_GroundClearance) at most WheelAbove over that water's surface: never on a pier, pontoon, kerb or rig
+			    footing. A driven Car chassis held up to HoverMaxStuds over deep water with nothing solid under it (one ray,
+			    only then; a kerb, pontoon, pier, deck or boat under it holds it up) counts as in the water too, and so does
+			    one whose wheel line is more than WheelBelow under the surface (under the sand: nothing is down there). Out again =
+			    the centre less than ExitDepth inside (a tenth of a stud of hysteresis: a car that ran along the beach less than
+			    EnterDepth in, then into a canal mouth, is out again once it is back where it ran). The sand bank never counts.
+			  * Car-mode vehicles BOG, one way. The WAY OUT is the outward normal of the bank it came over (found on the line
+			    back to where it was at the last check before it went in, looked for up to EntrySearchStuds; a shallow
+			    drift that finds no land on that line takes the bank nearest that last check). A move that would take it
+			    deeper along that normal is not allowed: the throttle is cut and the drive law brakes at BogBrake studs/s²
+			    down to BogAwaySpeed (0). A move that does not (backing out, or turned toward the bank) may go up to
+			    max(BogExitMin, BogExitFrac x its max speed), reverse included. Forward needs the car to face the bank;
+			    reverse is allowed along the bank and while it faces the bank by up to ReverseBand (the heading . the
+			    normal; ~5°), so a turn while backing out never locks it. BackOutSteerLock: while it backs out (stick back)
+			    a sideways thumb never turns its nose past along-the-bank toward it (reverse would stop there; it still
+			    turns the other way). So it can never drive deeper (only back a little deeper, slowly, inside that band),
+			    and never reach the far bank. The ENTRY (where riders go back to) is on
+			    the land it came from, EntryPush studs past the bank.
+			    With no bank known (never for a normal drive-in) it is BogSpeed both ways. Every rider sees Message once (at
+			    most every MessageGapSeconds) and the driver's speed pill shows which way works: PillTag while backing out
+			    works, PillTagForward once it faces the bank by more than ReverseBand (back to PillTag below half of that:
+			    no flicker). No key names anywhere (phones).
+			  * Crossing: a ground vehicle that comes out on another shore (the straight line from its entry to where it
+			    came out runs over CrossDeepStuds of deep water in a row, tested every CrossStep studs, and is at least
+			    CrossMinStuds long) sinks at once and its riders go back to the entry side. One that is out of the water at
+			    two checks in a row on either side of it (a client that jumps the chassis across, or a lag burst round a
+			    water notch) is put back where it was by the validator's correction: no sink, no message. A move the server
+			    makes itself (the validator's correction) is never taken for such a jump. The entry is always on land, so
+			    the crossing test from it always runs (only a point on a kerb, pontoon or pier is exempt).
+			    One that went in on public (or its own) water and reaches another player's DockWater / SeaGateWater (it
+			    slid along toward that base through an open sea gate) sinks at once.
+			  * Still in water GraceSeconds after it stopped going deeper (the grace starts at the bog, and moves on while
+			    it still goes deeper during the first BogSettleSeconds), or once BogSettleSeconds have passed still faster
+			    than its exit cap x Validation.SpeedTolerance + Validation.SpeedSlack (or going deeper faster than
+			    Validation.SpeedSlack) for FastSamples checks (a client that ignores the bog): every rider is put on dry land
+			    (round the entry if it is within ReturnMaxStuds; else the R2.3 exit spot beside it; else the nearest bank
+			    within ShoreSearchStuds with a clear line from the vehicle and never on another player's plot; else, with no
+			    distance cap, the nearest clear dry spot inside PlayArea found on rings out to DitchShoreStuds, never on
+			    another player's plot; a spot on the far side of the water from the entry is never used), facing away from
+			    the water, and the vehicle sinks (collisions off, down at SinkSpeed for SinkSeconds) and is removed. No
+			    charge, no repair lock: the normal spawn cooldown only, so the garage deploys it again. The owner then gets
+			    SinkMessage ("" = none), only once the water line has gone (one message at a time).
+			    Getting out keeps the grace: each time it is ProgressStuds shallower than ever before, at least
+			    ProgressHoldSeconds are left, up to GraceMaxSeconds after the bog (a shallow drift backs out slowly).
+			  * Amphibious ids wade instead: speed held at WadeSpeedFrac x their max speed in public water and in their own
+			    plot's water, no entry; another player's DockWater / SeaGateWater is BogSpeed both ways with
+			    ForeignGraceSeconds (riders go to a bank outside that plot first).
+			  * Plane mode: wheels in water = no cap and no crossing test; the pill shows PlaneTag and the riders see
+			    PlaneMessage. While the pilot is seated and it still rolls at PlaneLiftFrac x its lift-off speed
+			    (WE_TakeoffSpeed) or more, or gains speed (a take-off run), it can still take off, so the grace waits (up to
+			    PlaneLiftMaxSeconds after it touched the water: it never taxis along as a boat). GraceSeconds of braking,
+			    rolling to a stop or standing = ditched: every rider goes to the spot beside it, else the nearest clear dry
+			    spot (no distance cap: rings out to DitchShoreStuds inside PlayArea, never on another player's plot), the
+			    plane sinks and goes back to the garage (no charge). A rider who taps EXIT while it sits on the water goes
+			    ashore the same way. Heli and Boat modes: never (a heli that lands on water floats there until it lifts off).
+			  * An empty vehicle in water sinks after the grace too. Land spawns (pads, plot fallback) never pick a spot
+			    over water (VehicleService firstFreeLand / firstFreePlotLand).
+			Enabled = false: the old behaviour (nothing is checked, nothing is capped). ]]
+		WaterRule = {
+			Enabled = true,
+			Hz = 10, -- server checks per vehicle per second (the client mirror uses the same rate)
+			EnterDepth = 2,
+			ExitDepth = 1.9, -- out again when the centre is less than this far inside (just under EnterDepth: a beach run back
+			-- out of a canal mouth is out; 0.1 stud is still far more than a resting car's jitter, so no flicker)
+			WheelAbove = 0.3, -- water top 1.5 + 0.3: a DockKerb (top 2.0) or a pontoon (2.1) is not water
+			WheelBelow = 8, -- the wheel line at most this far under the surface (deeper = something else, not this water)
+			HoverMaxStuds = 160, -- a driven Car chassis up to this far over deep water with nothing under it is in the water (> Validation.GroundMaxY: any height a car may reach)
+			BogSpeed = 8, -- studs/s both ways when there is no way out known (amphibious in another player's plot water)
+			BogAwaySpeed = 0, -- studs/s deeper along the way out: throttle cut (a car can never carry on across)
+			BogExitFrac = 0.45, -- not deeper (back out, or turned to the bank): up to this x max speed (the normal reverse) ...
+			BogExitMin = 16, -- ... and never less than this, reverse included (slow tanks back out at 16 too)
+			BogBrake = 250, -- studs/s² (the Car LV's ForcePerMass): 82 → 0 in 0.33 s
+			EntryPush = 4, -- the entry: this far onto the land past the bank it came over ...
+			EntrySearchStuds = 160, -- ... looked for this far back along its line (a 1° drift finds it)
+			GraceSeconds = 3, -- from when it stopped going deeper
+			ProgressStuds = 0.1, -- getting out: this much shallower than ever before ...
+			ProgressHoldSeconds = 1, -- ... leaves at least this much grace ...
+			GraceMaxSeconds = 10, -- ... until this long after the bog
+			BogSettleSeconds = 1.5, -- the cheat check starts this long after the bog (covers ~1 s of phone ping)
+			FastSamples = 2,
+			ForeignGraceSeconds = 1,
+			CrossMinStuds = 12, -- a line shorter than this is never a crossing
+			CrossDeepStuds = 16, -- a crossing: this many studs of deep water in a row on the line (channels are 40 wide)
+			CrossStep = 2,
+			Message = "Vehicles can't drive in water",
+			PlaneMessage = "Planes can't land on water", -- the same line for a plane (no key names)
+			MessageGapSeconds = 8,
+			PillTag = "BACK OUT", -- facing the water: backing out works
+			PillTagForward = "DRIVE OUT", -- facing the bank (turned, or it went in backwards): driving out works
+			ReverseBand = 0.09, -- reverse stays allowed while it faces the bank by up to this (heading . normal, ~5°)
+			BackOutSteerLock = true, -- backing out: the thumb never turns the nose past along-the-bank (both Car laws)
+			PlaneTag = "IN WATER",
+			-- a plane on the water whose pilot can still take off: at PlaneLiftFrac x WE_TakeoffSpeed or more, or gaining
+			-- more than PlaneGainStuds studs/s per check (a take-off run); its grace waits, up to PlaneLiftMaxSeconds
+			-- after it touched the water (so it never taxis along as a boat)
+			PlaneLiftFrac = 1,
+			PlaneGainStuds = 0.5,
+			PlaneLiftMaxSeconds = 3,
+			-- after the sink, to the owner only, once the water line has gone (one message at a time; "" = none)
+			SinkMessage = "Vehicle safe in garage",
+			SinkMessageSeconds = 3,
+			SinkSeconds = 1.2,
+			SinkSpeed = 5,
+			ReturnMaxStuds = 80,
+			ShoreSearchStuds = 120,
+			ShoreStep = 4,
+			ShoreMargin = 2, -- a rider's spot stays this far from any water's edge
+			-- nobody is ever left in the water: the last choice (and a ditched plane's first after the spot beside it) is
+			-- the nearest clear dry spot on rings round the vehicle, ShoreStep apart up to ShoreSearchStuds, then
+			-- DitchStep apart up to DitchShoreStuds (the whole map), about DitchArcStuds apart round each ring, at most
+			-- DitchTries full spot checks, inside PlayArea (the dry land inside the ring canal and north of the sea:
+			-- WorldConfig header; never the outer strip or the far shore) and never on another player's plot
+			DitchShoreStuds = 2400,
+			DitchStep = 12,
+			DitchArcStuds = 24,
+			DitchTries = 40,
+			PlayArea = { X = 1760, ZMin = -1760, ZMax = 1490 },
+			PlaceTries = 5, -- a rider still welded to the seat is retried every 0.1 s this many times
+			Amphibious = { AmphibiousAPC = true } :: { [string]: boolean },
+			WadeSpeedFrac = 0.4,
+		},
 	},
 }
 

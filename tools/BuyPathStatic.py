@@ -8254,6 +8254,429 @@ must_contain(DR_MCS, "\t\t\tlocal pc = EconomyConfig.AtmCollectPrompt\n\t\t\tloc
 _ap_rules()
 # ── end atmprompt
 
+# ── fb4water: ground vehicles cannot drive on / through water (owner, phone, 2026-09-28; fix round 3) ──────────────
+# VehicleConfig.Drive.WaterRule + Modules/VehicleWaterGuard (server, the authority) + Shared/Util/WaterRule (pure
+# geometry) + VehicleDriveClient (the driver's mirror, feel only). Every check reads comment-stripped code.
+# Round 1: the ONE-WAY bog (never on across the water), the crossing / jump tests, the hover check, the grace from
+# when it stopped going deeper, riders never put on the far side.
+# Round 2: the one-way bog is judged against the outward NORMAL of the bank it came over (a shallow drift backs out),
+# reverse stays allowed inside ReverseBand, the reverse floor, the grace holds while it gets out, out again below
+# ExitDepth, a jump across between checks is corrected (not sunk), a slide into another player's plot water sinks, the
+# pill says BACK OUT or DRIVE OUT, riders face away from the water.
+# Round 3: a plane on the water keeps its plane while the pilot can still take off (at lift-off speed or gaining, up to
+# PlaneLiftMaxSeconds); a ditched plane's riders (and every rider as a last resort) go to the nearest dry land with no
+# distance cap, inside PlayArea, never on another player's plot; EXIT from a plane on the water = ashore; the server's own
+# correction is never a jump; the crossing test from the entry is never exempt; a chassis under the sand is in the
+# water; "Vehicle safe in garage" to the owner once the water line has gone; backing out never steers the nose past
+# along-the-bank (both Car laws).
+FBW_CFG = "src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau"
+FBW_VS = "src/ServerScriptService/Server/Services/VehicleService.luau"
+FBW_GUARD = "src/ServerScriptService/Server/Modules/VehicleWaterGuard.luau"
+FBW_RULE = "src/ReplicatedStorage/Shared/Util/WaterRule.luau"
+FBW_VDC = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau"
+
+
+def _fbw_code(rel):
+    """the file with Luau comments removed (block comments, then line comments outside strings); None if missing"""
+    import re as _re
+    t = read(rel)
+    if t is None:
+        return None
+    t = _re.sub(r"--\[(=*)\[.*?\]\1\]", "", t, flags=_re.S)
+    out = []
+    for line in t.split("\n"):
+        q, i, cut = None, 0, len(line)
+        while i < len(line):
+            ch = line[i]
+            if q:
+                if ch == "\\":
+                    i += 2
+                    continue
+                if ch == q:
+                    q = None
+            elif ch in ("'", '"'):
+                q = ch
+            elif line.startswith("--", i):
+                cut = i
+                break
+            i += 1
+        out.append(line[:cut])
+    return "\n".join(out)
+
+
+def _fbw_fn(code, head):
+    """the body of the function whose header line starts with `head` (up to the next line that is exactly `end` at
+    the same indentation); None when missing"""
+    if code is None:
+        return None
+    i = code.find(head)
+    if i < 0:
+        return None
+    ls = code.rfind("\n", 0, i) + 1
+    indent = code[ls:i]
+    j = code.find("\n" + indent + "end\n", i)
+    return code[i:j + len(indent) + 5] if j > 0 else None
+
+
+def _fbw_rules():
+    import re as _re
+    cfg = _fbw_code(FBW_CFG) or ""
+    m = _re.search(r"\n\t\tWaterRule = \{(.*?)\n\t\t\},", cfg, _re.S)
+    wr = m.group(1) if m else ""
+
+    def val(key):
+        mm = _re.search(r"\n\t\t\t" + key + r" = ([^\n,]+),", wr)
+        return mm.group(1).strip() if mm else None
+
+    want = {"Enabled": "true", "Hz": "10", "EnterDepth": "2", "WheelAbove": "0.3", "BogSpeed": "8", "GraceSeconds": "3",
+            "ForeignGraceSeconds": "1", "SinkSeconds": "1.2", "WadeSpeedFrac": "0.4", "Message": '"Vehicles can\'t drive in water"',
+            "PillTag": '"BACK OUT"', "PlaneTag": '"IN WATER"', "BogAwaySpeed": "0", "BogExitFrac": "0.45", "BogExitMin": "16",
+            "BogBrake": "250", "EntryPush": "4", "EntrySearchStuds": "160", "CrossMinStuds": "12", "CrossDeepStuds": "16",
+            "CrossStep": "2", "HoverMaxStuds": "160", "BogSettleSeconds": "1.5", "ExitDepth": "1.9", "ProgressStuds": "0.1",
+            "ProgressHoldSeconds": "1", "GraceMaxSeconds": "10", "PillTagForward": '"DRIVE OUT"', "ReverseBand": "0.09",
+            "PlaneMessage": '"Planes can\'t land on water"', "SinkMessage": '"Vehicle safe in garage"', "SinkMessageSeconds": "3",
+            "PlaneLiftFrac": "1", "PlaneGainStuds": "0.5", "PlaneLiftMaxSeconds": "3", "BackOutSteerLock": "true",
+            "DitchShoreStuds": "2400", "DitchStep": "12", "DitchArcStuds": "24", "DitchTries": "40"}
+    wrong = {k: val(k) for k, v in want.items() if val(k) != v}
+    if m and not wrong:
+        ok("fb4water: VehicleConfig.Drive.WaterRule on (10 Hz, in 2 / out 1.9 studs, wheel line +0.3, one-way bog 0 deeper / max(16, 0.45 x max) out, reverse band 0.09 + steer lock, brake 250, bank search 160, grace 3 s from the stop + 1 s per 0.1 stud out up to 10 s, crossing 16 of 12+, hover 160, foreign 1 s, sink 1.2 s, wade 0.4, plane lift gate 1 x / 0.5 / 3 s, shore search to 2400, messages + both tags)")
+    else:
+        bad(f"fb4water: VehicleConfig.Drive.WaterRule missing or changed (table found {bool(m)}; key -> value {wrong})")
+    if _re.search(r"\n\t\t\tAmphibious = \{ AmphibiousAPC = true \}", wr) and _re.search(r'\n\t\tAmphibiousAPC = V\("AmphibiousAPC"', cfg):
+        ok("fb4water: AmphibiousAPC is the one amphibious vehicle (and it exists)")
+    else:
+        bad("fb4water: WaterRule.Amphibious must be { AmphibiousAPC = true } for an existing AmphibiousAPC")
+    if _re.search(r"\n\t\t\tPlayArea = \{ X = 1760, ZMin = -1760, ZMax = 1490 \},", wr):
+        ok("fb4water: riders put ashore with no distance cap stay inside PlayArea (the dry land inside the ring canal, north of the sea)")
+    else:
+        bad("fb4water: WaterRule.PlayArea must be { X = 1760, ZMin = -1760, ZMax = 1490 } (never the outer strip or the far shore)")
+    # phone-visible text: short, no key names, never "click"
+    texts = [t for t in (val("Message"), val("PillTag"), val("PlaneTag"), val("PillTagForward"), val("PlaneMessage"), val("SinkMessage")) if t]
+    keyish = _re.compile(r"(?i)\b(click|press|tap [a-z]\b|key|space|shift|ctrl|[wasdf]\b(?=\s*(to|key)))")
+    badtxt = [t for t in texts if keyish.search(t) or len(t) > 42]
+    if len(texts) == 6 and not badtxt:
+        ok("fb4water: the water / plane / garage lines and pill tags are short and name no key (phones)")
+    else:
+        bad(f"fb4water: water text names a key / 'click' or is long: {badtxt or texts}")
+
+    vs = _fbw_code(FBW_VS) or ""
+    if "VehicleService._WaterGuard = require(script.Parent.Parent.Modules.VehicleWaterGuard)\n" in vs:
+        ok("fb4water: VehicleService requires the guard as a module field (no new module local: 200-register limit)")
+    else:
+        bad("fb4water: VehicleService must require Modules/VehicleWaterGuard as VehicleService._WaterGuard")
+    tick = _fbw_fn(vs, "local function tickRecord(") or ""
+    a, b, c = tick.find('destroyVehicle(rec, "Vehicle lost")'), tick.find("if VehicleService._WaterGuard.Step(rec, t) then\n\t\treturn"), tick.find("if anyOccupied(rec) then")
+    if 0 <= a < b < c and tick.count("_WaterGuard.Step(") == 1:
+        ok("fb4water: tickRecord runs the guard once per tick, after the lost check and before everything else (a sinking vehicle skips the idle law)")
+    else:
+        bad(f"fb4water: tickRecord must call _WaterGuard.Step(rec, t) once, returning, between the lost check and anyOccupied (positions {a}, {b}, {c})")
+    car = _fbw_fn(vs, "local function carStep(") or ""
+    one_way = ("local n = sense.WaterExit", "local exit = sense.WaterExitCap or cap",
+               "local along = n.X * f.X + n.Z * f.Z",
+               "if along > 1e-3 then\n\t\t\t\thi = exit\n\t\t\tend",
+               "if along <= (Drive.WaterRule.ReverseBand or 1e-3) then\n\t\t\t\tlo = -exit\n\t\t\tend",
+               "local b = Drive.WaterRule.BogBrake * dt",
+               "state.Speed = if state.Speed > hi then math.max(hi, math.min(state.Speed, before) - b)",
+               "elseif state.Speed < lo then math.min(lo, math.max(state.Speed, before) + b)",
+               "if sense.WaterExitCap ~= nil and sense.WaterExitCap > rev then\n\t\trev = sense.WaterExitCap",
+               "local dir = if state.Speed < -0.5 or (cap ~= nil and state.Speed <= 0.5 and t < 0) then -1 else 1")
+    if (all(x in car for x in one_way) and 0 <= car.find("local before = state.Speed") < car.find("throttleSpeed(")
+            and 0 <= car.find("rev = sense.WaterExitCap") < car.find("throttleSpeed(")
+            and _re.search(r"local cap = sense\.WaterCap\s*\n", car)
+            and _re.search(r"local cap = sense\.WaterCap\s*\n", car).start() < car.find("local dir = if state.Speed < -0.5")):
+        ok("fb4water: the server Car law (server drive) is the one-way bog along the bank's normal: never deeper forward, reverse inside ReverseBand, reverse at the exit cap at least, BogBrake, steering as it will move, before steering")
+    else:
+        bad("fb4water: carStep must apply the one-way water cap along WaterExit (ReverseBand, reverse floor, speed before the throttle, BogBrake, reverse steering from a stop) before the turn maths")
+    lk = car.find("if cap ~= nil and wn ~= nil and t < 0 and turn ~= 0 and Drive.WaterRule.BackOutSteerLock == true then")
+    if (0 <= car.find("local wn = sense.WaterExit") < lk < car.find("state.Heading -= turn * dir * dt")
+            and "local f0, f1 = fwd(state.Heading), fwd(state.Heading - turn * dir * dt)" in car
+            and "if a1 > 0 and a1 > wn.X * f0.X + wn.Z * f0.Z then\n\t\t\tturn = 0" in car):
+        ok("fb4water: server Car law: backing out, the thumb never turns the nose past along-the-bank (BackOutSteerLock)")
+    else:
+        bad("fb4water: carStep must drop a backing-out turn that takes the nose past along-the-bank (BackOutSteerLock) before the heading update")
+    sense = _fbw_fn(vs, "local function senseFor(") or ""
+    if ('if rec.Mode == "Car" then\n\t\twCap, wOut, wExit = VehicleService._WaterGuard.Cap(rec.Model)' in sense
+            and "WaterCap = wCap," in sense and "WaterExit = wOut," in sense and "WaterExitCap = wExit," in sense):
+        ok("fb4water: senseFor feeds the guard's one-way cap (cap, the way out, exit cap) to the Car law")
+    else:
+        bad("fb4water: senseFor must set WaterCap / WaterExit / WaterExitCap from _WaterGuard.Cap(rec.Model) for Car mode")
+    seat = _fbw_fn(vs, "VehicleService._OnSeatLeft = function(") or ""
+    if "not VehicleService._WaterGuard.Sinking(rec.Model)" in seat:
+        ok("fb4water: the R2.3 exit move stays out of a sinking vehicle (the guard puts its riders ashore)")
+    else:
+        bad("fb4water: _OnSeatLeft must skip a sinking vehicle (_WaterGuard.Sinking)")
+    if 'elseif rec.Mode == "Plane" then\n\t\tVehicleService._WaterGuard.Left(rec, seat, hum)' in seat:
+        ok("fb4water: EXIT from a plane standing on the water goes through the guard (ashore, like the sink)")
+    else:
+        bad("fb4water: _OnSeatLeft must hand a Plane rider to _WaterGuard.Left (EXIT on the water = ashore)")
+    ffl = _fbw_fn(vs, "local function firstFreeLand(") or ""
+    fpl = _fbw_fn(vs, "local function firstFreePlotLand(") or ""
+    if ("not VehicleService._OverAnyWater(ctx, cf)" in ffl and "not overAnyWater(ctx, cf)" in fpl
+            and _re.search(r"\nVehicleService\._OverAnyWater = overAnyWater\s*\n", vs)):
+        ok("fb4water: land spawns (pads, plot fallback) never pick a spot over water")
+    else:
+        bad("fb4water: firstFreeLand / firstFreePlotLand must refuse spots over water (overAnyWater)")
+    init = _fbw_fn(vs, "function VehicleService.Init(") or ""
+    need = ("VehicleService._WaterGuard.Bind({", "WaterParts = getWaterParts,", "Notify = notify,", "Eject = ejectSeat,",
+            'setAuthority(rec, "Server")', "setOwner(rec, nil)", "destroyVehicle(rec, message)", "Service = VehicleService,",
+            "Correct = function(rec: any, cf: CFrame, t: number)", "rec.LastValid = { CFrame = cf, Pos = cf.Position, T = t }",
+            "beginCorrection(rec, t, true)")
+    miss = [n for n in need if n not in init]
+    if not miss:
+        ok("fb4water: VehicleService.Init binds the guard to the real water list, notify, eject, ownership, the normal removal and the quiet correction")
+    else:
+        bad(f"fb4water: VehicleService.Init guard binding incomplete: missing {miss}")
+    bc = _fbw_fn(vs, "local function beginCorrection(") or ""
+    if ("local function beginCorrection(rec: VehicleRec, t: number, quiet: boolean?)" in bc
+            and "if not quiet and t - rec.LastStabilisedAt >= Drive.StabilisedNoticeSeconds then" in bc
+            and "onViolation" not in bc and "Strike" not in bc):
+        ok("fb4water: the water correction is the validator's own (pivot back, hold, hand back), quiet, no strike")
+    else:
+        bad("fb4water: beginCorrection must take quiet (no 'Vehicle stabilised' line) and stay strike-free")
+    cs = _fbw_fn(vs, "local function correctionStep(") or ""
+    mv = "\t\trec.Model:PivotTo(back.CFrame)\n\tend)\n\tVehicleService._WaterGuard.Moved(rec.Model, back.CFrame)"
+    mv2 = "\t\t\t\trec.Model:PivotTo(back.CFrame)\n\t\t\tend)\n\t\t\tVehicleService._WaterGuard.Moved(rec.Model, back.CFrame)"
+    if mv in bc and mv2 in cs:
+        ok("fb4water: both validator PivotTo moves tell the guard (a server move is never taken for a jump across water)")
+    else:
+        bad("fb4water: beginCorrection and correctionStep must call _WaterGuard.Moved(rec.Model, back.CFrame) right after their PivotTo")
+
+    g = _fbw_code(FBW_GUARD)
+    if g is None:
+        bad("fb4water: missing " + FBW_GUARD)
+        return
+    step = _fbw_fn(g, "function VehicleWaterGuard.Step(") or ""
+    if ("if st and t < st.NextAt then\n\t\treturn false\n\tend" in step and "s.NextAt = t + 1 / math.max(1, cfg.Hz)" in step
+            and step.find("if st and t < st.NextAt") < step.find("WaterRule.Probe(")):
+        ok("fb4water: the guard checks each vehicle at most WaterRule.Hz times a second (throttle before the probe)")
+    else:
+        bad("fb4water: VehicleWaterGuard.Step must return before probing until NextAt (Hz throttle)")
+    scans = _re.findall(r"GetDescendants\(|GetTagged\(Constants\.Tags\.Water|GetPartBoundsInRadius|:GetChildren\(\)", g)
+    sinkfn = _fbw_fn(g, "local function sink(") or ""
+    if len(scans) == 1 and sinkfn.count("model:GetDescendants()") == 1 and "GetDescendants" not in step:
+        ok("fb4water: no scans in the guard's tick: one GetDescendants, in the one-off sink; water comes from VehicleService's list")
+    else:
+        bad(f"fb4water: the guard scans the world / model outside the sink ({scans})")
+    if not _re.search(r"OnServerEvent|FireServer|FireClient|SpendCash|AddCash|\.Cash\s*=|Strike\(", g):
+        ok("fb4water: the guard reads no client message, moves no money and strikes nobody (server geometry only)")
+    else:
+        bad("fb4water: the guard must not listen to remotes, move cash or strike (found a remote / cash / strike use)")
+    if ('if cfg.Enabled ~= true' in step or 'cfg.Enabled ~= true' in step) and "WE_Destroyed" in step and 'mode == "Car"' in g and 'mode == "Plane"' in g:
+        ok("fb4water: the guard is off with WaterRule.Enabled = false, skips wrecks, and checks Car / Plane only (Heli, Boat never)")
+    else:
+        bad("fb4water: guard kind / enable / wreck gates missing")
+    place = _fbw_fn(g, "local function shoreSpot(") or ""
+    i1, i2, i3 = place.find("local spot = ringSpot(c, entry.Position,"), place.find("svc._ExitSpot"), place.find("WaterRule.ShorePoints(")
+    if (0 <= i1 < i2 < i3 and "ringSpot(c, Vector3.new(p.X, pos.Y, p.Z), from, true)" in place and "ReturnMaxStuds" in place
+            and "return entrySide(spot)" in place and "local spot = entrySide(ringSpot(c, Vector3.new(p.X, pos.Y, p.Z), from, true))" in place
+            and "return if crossed(e, false, p, false) then nil else spot" in place
+            and "if st.Foreign then\n\t\treturn bankSpot() or exitSpot() or landSpot()\n\tend\n\treturn exitSpot() or bankSpot() or landSpot()" in place):
+        ok("fb4water: riders go back round the entry first, then the R2.3 spot, then the nearest bank (never another player's plot), then the nearest dry land with no cap; never a spot across the water from the entry")
+    else:
+        bad(f"fb4water: rider placement order / entry side changed (entry ring {i1}, R2.3 {i2}, shore {i3}) or the far-side / foreign-plot guard is gone")
+    land = _fbw_fn(place, "local function landSpot(") or ""
+    if ("local nx, _, _, _, d0 = WaterRule.NearestBank(rs, pos.X, pos.Z, maxR)" in land and "local maxR = tonumber(cfg.DitchShoreStuds) or 0" in land
+            and "(ax == nil or math.abs(x) <= ax)" in land and "and (az0 == nil or z >= az0)" in land and "and (az1 == nil or z <= az1)" in land
+            and "and not WaterRule.InAny(rs, x, z, cfg.ShoreMargin)" in land and "and not onForeignPlot(c.Pads, x, z, c.OwnPlot)" in land
+            and "local spot = entrySide(ringSpot(c, Vector3.new(x, pos.Y, z), from, true))" in land and "tries -= 1" in land
+            and 'if st.Kind == "Ditch" then\n\t\tif st.Foreign then\n\t\t\treturn landSpot() or exitSpot()\n\t\tend\n\t\treturn exitSpot() or landSpot()' in place):
+        ok("fb4water: nobody is left at sea: the nearest clear dry spot on rings out to DitchShoreStuds (no practical cap), inside PlayArea, never another player's plot, never across the water from the entry; a ditched plane's riders use it next")
+    else:
+        bad("fb4water: shoreSpot's no-cap landSpot (NearestBank start, PlayArea, dry margin, foreign plot, entry side, tries) or the Ditch order is missing")
+    rs_ = _fbw_fn(g, "local function ringSpot(") or ""
+    if ("local drop = ex.StepUp + ex.MaxDrop + math.max(0, c.WheelY - c.Floor)" in rs_ and "Vector3.new(0, -drop, 0), c.Rays)" in rs_
+            and "floor = math.min(floor, r.Top - 1)" in place):
+        ok("fb4water: a rider's ground ray reaches the lowest bank even from a vehicle held up over the water")
+    else:
+        bad("fb4water: ringSpot must reach down to the lowest bank (Floor) so riders of a held-up vehicle are placed")
+    cr = _fbw_fn(g, "local function crossed(") or ""
+    if ("if aHigh or bHigh then" in cr and "cfg.CrossMinStuds * cfg.CrossMinStuds" in cr
+            and "WaterRule.DeepRun(currentRects(), a.X, a.Z, b.X, b.Z, nil, cfg.EnterDepth" in cr and ">= cfg.CrossDeepStuds" in cr):
+        ok("fb4water: the crossing test is flat (DeepRun with no height, CrossMinStuds / CrossDeepStuds), never from a kerb / pontoon / pier")
+    else:
+        bad("fb4water: VehicleWaterGuard crossed() must be the flat DeepRun test (nil wheel line) with CrossMinStuds / CrossDeepStuds and the structure exemption")
+    xo = step.find('if s.Kind == "Bog" and s.Entry and crossed(s.Entry.Position, false, pos, high) then')
+    if xo >= 0 and "EntryHigh" not in g:
+        ok("fb4water: the crossing test from the entry is never exempt (the entry is on land by construction; only the exit point on a kerb / pontoon / pier is)")
+    else:
+        bad("fb4water: the crossing test must run from the entry with no height exemption (crossed(s.Entry.Position, false, ...), no EntryHigh)")
+    xs = step.find('s.Why = "cross"\n\t\t\t\tsink(rec, s, t)\n\t\t\t\treturn true')
+    xl = step.find("leave(model, s)")
+    jo = step.find('elseif kind == "Ground" and s.Out and crossed(s.Out.Position, s.OutHigh, pos, high) then')
+    js = step.find('s.Jumps += 1\n\t\t\td.Correct(rec, s.Out, t)\n\t\t\treturn false')
+    if 0 <= xo < xs < xl < jo < js and step.find("s.Out = cf") > js and '"jump"' not in step:
+        ok("fb4water: out on another shore (entry → exit over deep water): it sinks at once, riders back to the entry side; jumped across between two checks (a modified client or a lag burst): put back where it was, no sink, no message")
+    else:
+        bad(f"fb4water: VehicleWaterGuard.Step must sink a crossing before leave() and correct (not sink) a between-checks jump before Out moves on (positions {xo} {xs} {xl} {jo} {js})")
+    fo = step.find('if kind == "Ground" and foreign and not s.Foreign then')
+    fw = step.find('s.Why = "foreign"', fo)
+    fs = step.find("sink(rec, s, t)\n\t\treturn true", fw)
+    if fo > step.find('if want == "Wade" then') > 0 and 0 < fw < fs < step.find("local grace = ", fo):
+        ok("fb4water: a ground vehicle that went in on public water and reaches another player's plot water sinks at once (never into a base along the water)")
+    else:
+        bad("fb4water: VehicleWaterGuard.Step must sink a ground vehicle that slides from public water into another player's plot water")
+    dn = step.find("local depthNow = if s.InWater then cfg.ExitDepth or cfg.EnterDepth else cfg.EnterDepth")
+    if (dn >= 0 and "WaterRule.Probe(rs, pos.X, pos.Z, wheelY, depthNow, cfg.WheelAbove, own, cfg.WheelBelow)" in step
+            and "WaterRule.Probe(rs, pos.X, pos.Z, top, depthNow, cfg.WheelAbove, own, cfg.WheelBelow)" in step
+            and "\n\tif not deep then\n" in step):
+        ok("fb4water: in at EnterDepth, out again below ExitDepth (both probes), no centre-dry hysteresis")
+    else:
+        bad("fb4water: the guard's in / out test must be deep at EnterDepth, out below ExitDepth")
+    ent = ("local nx, nz, rx, rz, ex, ez = WaterRule.Bog(rs, pos.X, pos.Z, op.X, op.Z, cfg.EntryPush, cfg.EntrySearchStuds)",
+           'if want == "Bog" and kind == "Ground" then', "s.Exit = Vector3.new(nx, 0, nz)", "s.Ref = Vector3.new(rx, pos.Y, rz)",
+           "s.Entry = CFrame.new(ex, op.Y, ez) * o.Rotation",
+           "s.ExitCap = if s.Exit then math.max(cfg.BogExitMin, cfg.BogExitFrac * maxS) else nil",
+           "s.Cap = if s.Exit then cfg.BogAwaySpeed", "setExit(model, s.Exit)")
+    capfn = _fbw_fn(g, "function VehicleWaterGuard.Cap(") or ""
+    lv = _fbw_fn(g, "local function leave(") or ""
+    if all(x in step for x in ent) and "return st.Cap, st.Exit, st.ExitCap" in capfn and "setExit(model, nil)" in lv and "st.Exit = nil" in lv:
+        ok("fb4water: a ground vehicle's bog is one-way along the outward normal of the bank it came over (WaterRule.Bog), entry on that land, 0 deeper, exit cap out, WE_WaterExit for the client, cleared on leaving")
+    else:
+        bad("fb4water: the one-way bog normal / entry / caps / WE_WaterExit wiring in VehicleWaterGuard is missing or changed")
+    ub = step.find("elseif not centre and top ~= nil and wheelY < top - cfg.WheelBelow then")
+    if (ub > 0 and step.find("centre, deep, foreign = WaterRule.Probe(rs, pos.X, pos.Z, top,", ub) > ub
+            and "local high = top ~= nil and not centre and wheelY > top + cfg.WheelAbove" in step
+            and step.find("local high = ") > ub):
+        ok("fb4water: a chassis more than WheelBelow under the water surface (under the sand) is in the water, never 'high'")
+    else:
+        bad("fb4water: the guard must re-probe a chassis under the water's floor at the surface and count 'high' only above WheelAbove")
+    hov = step.find("and not supported(rec, pos, top + cfg.WheelAbove, top - cfg.WheelBelow)")
+    if (hov > 0 and 'and kind ~= "Plane"' in step and "and wheelY - top <= cfg.HoverMaxStuds" in step and "(rec.Seat :: any).Occupant ~= nil" in step
+            and step.find("centre, deep, foreign = WaterRule.Probe(rs, pos.X, pos.Z, top,") > hov):
+        ok("fb4water: a driven Car chassis held over deep water with nothing under it counts as in the water (one ray, only then)")
+    else:
+        bad("fb4water: the hover check (supported() ray, HoverMaxStuds, occupied Car only, re-probe at the surface) is missing")
+    if ("local depth = (ref - pos):Dot(n)" in step
+            and "if depth > s.Deepest + 0.5 and t - s.Since <= cfg.BogSettleSeconds then\n\t\t\ts.Deepest = depth\n\t\t\ts.Best = depth\n\t\t\ts.GraceFrom = t\n" in step
+            and "local over = t - s.GraceFrom >= grace" in step
+            and "(n ~= nil and deeper > (s.Cap or 0) * val.SpeedTolerance + val.SpeedSlack)" in step
+            and "local deeper = if n then -(vx * n.X + vz * n.Z) else 0" in step):
+        ok("fb4water: the grace counts from when it stopped going deeper (early only); going deeper once settled sinks it")
+    else:
+        bad("fb4water: grace-from-stop / deeper-speed checks missing in VehicleWaterGuard.Step")
+    if ("if depth < s.Best - cfg.ProgressStuds then\n\t\t\ts.Best = depth\n\t\t\tif t - s.Since <= cfg.GraceMaxSeconds then\n\t\t\t\ts.GraceFrom = math.max(s.GraceFrom, t - grace + cfg.ProgressHoldSeconds)" in step):
+        ok("fb4water: getting out keeps the grace (ProgressStuds shallower than ever: ProgressHoldSeconds left), only up to GraceMaxSeconds after the bog")
+    else:
+        bad("fb4water: the progress hold (ProgressStuds / ProgressHoldSeconds / GraceMaxSeconds cap) is missing in VehicleWaterGuard.Step")
+    pg = step.find('if kind == "Plane" then')
+    if (pg > 0 and step.find("(rec.Seat :: any).Occupant ~= nil", pg) > pg
+            and "and t - s.Since < (tonumber(cfg.PlaneLiftMaxSeconds) or 0)" in step
+            and "and (sp >= vto * (tonumber(cfg.PlaneLiftFrac) or 1) or sp > s.Speed + (tonumber(cfg.PlaneGainStuds) or math.huge))" in step
+            and step.find("s.GraceFrom = t", pg) > pg and step.find("s.Speed = sp", pg) > pg
+            and pg < step.find("local over = t - s.GraceFrom >= grace")):
+        ok("fb4water: a plane on the water whose seated pilot can still take off (lift-off speed or gaining) keeps it, up to PlaneLiftMaxSeconds after it touched")
+    else:
+        bad("fb4water: VehicleWaterGuard.Step must hold a plane's grace while its pilot can take off (PlaneLiftFrac / PlaneGainStuds / PlaneLiftMaxSeconds)")
+    ts = _fbw_fn(g, "local function tellSunk(") or ""
+    tl = _fbw_fn(g, "local function tell(") or ""
+    if ("d.Destroy(rec, nil)\n\t\t\ttellSunk(rec, t)" in step and "local owner: Player? = rec.Owner" in ts
+            and "local wait = (toastUntil[owner] or -math.huge) - t" in ts and "task.delay(wait + 0.1, function()" in ts
+            and "toastUntil[player] = t + dur" in tl and 'd.Notify(player, msg, "Warn", dur)' in tl
+            and "cfg.PlaneMessage" in tl):
+        ok("fb4water: after the removal the owner (only) gets SinkMessage once the water line has gone (one message at a time); planes get PlaneMessage")
+    else:
+        bad("fb4water: the sink line must go to rec.Owner only, after the water toast (toastUntil / task.delay), with the removal message-free")
+    mvd = _fbw_fn(g, "function VehicleWaterGuard.Moved(") or ""
+    lft = _fbw_fn(g, "function VehicleWaterGuard.Left(") or ""
+    if ("st.Out = cf" in mvd and "st.OutHigh = false" in mvd
+            and 'if st == nil or not st.InWater or st.Kind ~= "Ditch" or st.Sinking then' in lft
+            and "task.defer(placeRider, rec, st, seat, hum, math.max(1, rule().PlaceTries))" in lft):
+        ok("fb4water: Moved() makes the server's own move the last out-of-water point; Left() puts a rider who leaves a plane on the water ashore")
+    else:
+        bad("fb4water: VehicleWaterGuard.Moved (Out = cf) / Left (Ditch only, deferred placeRider) missing or changed")
+    pr = _fbw_fn(g, "local function placeRider(") or ""
+    fa = pr.find("local away = st.Exit or (spot.Position - rec.Chassis.Position)")
+    fb = pr.find("spot = CFrame.new(spot.Position) * CFrame.lookAt(Vector3.zero, away.Unit).Rotation")
+    fc = pr.find("char:PivotTo(spot)")
+    if 0 <= fa < fb < fc:
+        ok("fb4water: riders put ashore face away from the water (the garage's 'in front of you' is land)")
+    else:
+        bad(f"fb4water: placeRider must face the rider away from the water before PivotTo (positions {fa} {fb} {fc})")
+
+    r = _fbw_code(FBW_RULE)
+    if r is None:
+        bad("fb4water: missing " + FBW_RULE)
+    elif not _re.search(r"GetService|WaitForChild|Instance\.new|require\(|task\.|RunService", r):
+        ok("fb4water: Shared/Util/WaterRule is pure (no services, no waits, no instances)")
+    else:
+        bad("fb4water: Shared/Util/WaterRule must stay pure maths")
+    dr = _fbw_fn(r, "function WaterRule.DeepRun(") or ""
+    wr_ = _fbw_fn(r, "local function wetRect(") or ""
+    ea = _fbw_fn(r, "function WaterRule.ExitAlong(") or ""
+    nb = _fbw_fn(r, "function WaterRule.NearestBank(") or ""
+    bg = _fbw_fn(r, "function WaterRule.Bog(") or ""
+    if ("math.min(400," in dr and "run = 0" in dr and "(wheelY == nil or (wheelY <= r.Top + above and wheelY >= r.Top - below))" in wr_
+            and "for _ = 1, 64 do" in ea and "far = math.max(far, rayExit(r, px, pz, dx, dz))" in ea
+            and "for k = 0, 15 do" in nb and "local d = WaterRule.ExitAlong(rects, x, z, dx, dz, maxDist)" in nb
+            and "local s = WaterRule.ExitAlong(rects, x, z, dx, dz, maxStuds)" in bg
+            and "local nx, nz, bx, bz, d = WaterRule.NearestBank(rects, qx, qz, maxStuds)" in bg
+            and "ex, ez = bx + mx * push, bz + nz * push" in bg):
+        ok("fb4water: WaterRule.DeepRun (bounded), ExitAlong (exact, bounded hops), NearestBank (16 ways) and Bog (the normal of the bank it came over, else the nearest) and the height-free probe are there")
+    else:
+        bad("fb4water: WaterRule.DeepRun / ExitAlong / NearestBank / Bog / height-free wetRect missing or changed")
+
+    c = _fbw_code(FBW_VDC) or ""
+    sc = _fbw_fn(c, "local function stepCar(") or ""
+    one_way_c = ("local n = sense.WaterExit", "local exit = sense.WaterExitCap or cap",
+                 "local along = n.X * f.X + n.Z * f.Z",
+                 "if along > 1e-3 then\n\t\t\t\thi = exit\n\t\t\tend",
+                 "if along <= (sense.WaterBand or 1e-3) then\n\t\t\t\tlo = -exit\n\t\t\tend",
+                 "local b = (sense.WaterBrake or 250) * dt",
+                 "st.Speed = if st.Speed > hi then math.max(hi, math.min(st.Speed, before) - b)",
+                 "elseif st.Speed < lo then math.min(lo, math.max(st.Speed, before) + b)",
+                 "if sense.WaterExitCap ~= nil and sense.WaterExitCap > Rev then\n\t\tRev = sense.WaterExitCap",
+                 "local dir = if st.Speed < -0.5 or (cap ~= nil and st.Speed <= 0.5 and t < 0) then -1 else 1")
+    if (all(x in sc for x in one_way_c) and 0 <= sc.find("local before = st.Speed") < sc.find("speedUpdate(")
+            and 0 <= sc.find("Rev = sense.WaterExitCap") < sc.find("speedUpdate(")
+            and _re.search(r"local cap = sense\.WaterCap\s*\n", sc)
+            and _re.search(r"local cap = sense\.WaterCap\s*\n", sc).start() < sc.find("local dir = if st.Speed < -0.5")):
+        ok("fb4water: the client Car law is the same one-way bog as carStep (normal, band, reverse floor, reverse steering from a stop)")
+    else:
+        bad("fb4water: VehicleDriveClient stepCar must apply the one-way water cap along WaterExit (band, reverse floor) before the turn maths")
+    lkc = sc.find("if cap ~= nil and wn ~= nil and t < 0 and turn ~= 0 and sense.WaterSteerLock == true then")
+    if (0 <= sc.find("local wn = sense.WaterExit") < lkc < sc.find("st.Heading -= turn * dir * dt")
+            and "local f0, f1 = fwd(st.Heading), fwd(st.Heading - turn * dir * dt)" in sc
+            and "if a1 > 0 and a1 > wn.X * f0.X + wn.Z * f0.Z then\n\t\t\tturn = 0" in sc
+            and "sense.WaterSteerLock = rule.BackOutSteerLock == true" in c):
+        ok("fb4water: client Car law: the same backing-out steer lock as carStep, fed from WaterRule.BackOutSteerLock")
+    else:
+        bad("fb4water: VehicleDriveClient stepCar / waterFeel must apply the backing-out steer lock (sense.WaterSteerLock)")
+    mir = _fbw_fn(c, "function Laws.WaterMirror(") or ""
+    if ("if mod == nil or m.Acc < 1 / math.max(1, rule.Hz) then\n\t\treturn" in mir
+            and "local depth = if m.Wet then rule.ExitDepth or rule.EnterDepth else rule.EnterDepth" in mir
+            and "local nx, nz = mod.Bog(rects, pos.X, pos.Z, o.X, o.Z, rule.EntryPush, rule.EntrySearchStuds)" in mir):
+        ok("fb4water: the driver's own check runs at WaterRule.Hz, in / out at EnterDepth / ExitDepth, and takes the same way out as the server (WaterRule.Bog)")
+    else:
+        bad("fb4water: Laws.WaterMirror must be throttled to WaterRule.Hz, use ExitDepth and WaterRule.Bog for the way out")
+    wf = _fbw_fn(c, "local function waterFeel(") or ""
+    ww = wf.find('local way: Vector3? = if d.WaterServer == "Bog" and typeof(d.WaterExitServer) == "Vector3" then d.WaterExitServer')
+    if (ww >= 0 and wf.find("elseif m.Wet then m.Exit", ww) > ww
+            and "Laws.WaterMirror(m, mod, waterMirror.Rects, rule, sense.Position, d.Params.Clearance, dt)" in wf
+            and "waterMirror.Rects = mod.Build(waterParts)" in wf and "if mod and waterMirror.Dirty and" in wf
+            and "sense.WaterExit = if exit ~= nil then way else nil" in wf and "sense.WaterExitCap = exit" in wf
+            and "sense.WaterBand = rule.ReverseBand" in wf and "facing = way.X * f.X + way.Z * f.Z" in wf and "d.WaterTag\n\t)" in wf
+            and not _re.search(r"FireServer|sendDriveInput|GetDescendants|GetTagged", wf)):
+        ok("fb4water: the driver's mirror rebuilds rectangles only after the water list changed, feeds the one-way cap (the server's way out first, its own before it arrives), sends nothing")
+    else:
+        bad("fb4water: VehicleDriveClient waterFeel must prefer WE_WaterExit, feed WaterExit / WaterExitCap / WaterBand / facing, rebuild lazily and never send")
+    wfe = _fbw_fn(c, "function Laws.WaterFeel(") or ""
+    if ("if fwdTag and facing ~= nil and (facing > band or (prevTag == fwdTag and facing > band * 0.5)) then" in wfe
+            and "local band = tonumber(rule.ReverseBand) or 1e-3" in wfe):
+        ok("fb4water: the pill says DRIVE OUT once it faces the bank past ReverseBand (back to BACK OUT below half of it: no flicker)")
+    else:
+        bad("fb4water: Laws.WaterFeel must pick PillTagForward past ReverseBand with hysteresis")
+    sd = _fbw_fn(c, "local function stepDrive(") or ""
+    if ("waterFeel(d, sense, dt)" in sd and "out.Hud.Tag = d.WaterTag" in sd and "\tWE_WaterState = true," in c
+            and "\tWE_WaterExit = true," in c and "d.WaterExitServer = model:GetAttribute(attr)" in c
+            and "RED_TAGS[tostring(waterMirror.Rule.PillTagForward)] = true" in c):
+        ok("fb4water: stepDrive runs the mirror before the law and shows the tag in the SPD pill (red); WE_WaterState / WE_WaterExit never rebuild the params")
+    else:
+        bad("fb4water: stepDrive / NON_PARAM_ATTRS / WE_WaterExit / red tag water hooks missing")
+
+
+_fbw_rules()
+# ── end fb4water
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
