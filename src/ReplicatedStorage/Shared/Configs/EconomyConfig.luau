@@ -96,6 +96,21 @@ local EconomyConfig = {
 		ToastVictim = "ATM RAIDED −10%% by %s (−$%d)",
 		ToastCooldown = "ATM raid cooldown — %ds left",
 	},
+
+	-- atmprompt (ASSUMPTIONS ATM-6): the ATM's "Collect" ProximityPrompt (MoneyCollectorService; these were literals).
+	-- Its keys must differ from the cash plate beside it (ManualDropperConfig.PromptKeyboardKey / PromptGamepadKey:
+	-- F / ButtonB): with one shared key and OnePerButton only the closer prompt showed, on PC and on phones. With distinct
+	-- keys each is the only prompt on its key there, so both pills show side by side and each key triggers only its own
+	-- (BuyPathStatic pins the keys apart). HoldDuration 0 = one tap, as before.
+	AtmCollectPrompt = {
+		ActionText = "Collect",
+		ObjectText = "ATM",
+		HoldDuration = 0,
+		MaxActivationDistance = 14,
+		KeyboardKey = Enum.KeyCode.E,
+		GamepadKey = Enum.KeyCode.ButtonX,
+		Exclusivity = Enum.ProximityPromptExclusivity.OnePerButton,
+	},
 }
 
 return EconomyConfig

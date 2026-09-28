@@ -136,10 +136,12 @@ function CombatFx.NextSerial(): number
 	return serial
 end
 
--- Projectile launch "L" (shooter included)
-function CombatFx.Launch(shooterUid: number, weaponId: string, origin: Vector3, velocity: Vector3, maxSeconds: number, id: number)
+-- Projectile launch "L" (shooter included). `gravityFactor` (aircraft bombs) rides in G for weapon ids the client's
+-- WeaponConfig does not know; nil for every infantry projectile (the client reads their GravityFactor itself).
+function CombatFx.Launch(shooterUid: number, weaponId: string, origin: Vector3, velocity: Vector3, maxSeconds: number, id: number, gravityFactor: number?)
 	stats.Events += 1
-	fanOut({ S = shooterUid, W = weaponId, O = origin, P = origin, K = "L", R = true, I = id, V = velocity, T = maxSeconds }, nil)
+	local g = if typeof(gravityFactor) == "number" and gravityFactor > 0 then gravityFactor else nil
+	fanOut({ S = shooterUid, W = weaponId, O = origin, P = origin, K = "L", R = true, I = id, V = velocity, T = maxSeconds, G = g }, nil)
 end
 
 -- Projectile explosion "X" (shooter included). `origin` is the launch point (recipients near either end get it).

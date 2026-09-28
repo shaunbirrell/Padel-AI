@@ -182,6 +182,7 @@ type FbOpts = {
 	NoAttackerFb: boolean?, -- no per-target attacker feedback (splash sends one aggregate)
 	NoKillMarker: boolean?, -- no per-NPC "Kill" marker (splash)
 	UnitShot: boolean?,
+	NoCredit: boolean?, -- squadfair: no creator tag and no kill payout from this hit (it still provokes the group)
 }
 
 local DataService: any = nil
@@ -834,7 +835,9 @@ local function hurtNPC(attacker: Player?, npcId: string, damage: number, weaponI
 	if not (damage > 0) then
 		return 0, false
 	end
-	if attacker then
+	-- squadfair: a NoCredit hit (an ATTACK squad shot with UnitKillCreditOnAttack off) leaves the creator tag alone
+	local credit = not (fb ~= nil and fb.NoCredit == true)
+	if attacker and credit then
 		tagCreator(rec.Humanoid, attacker, fb and fb.UnitShot)
 	end
 	local before = rec.Humanoid.Health
@@ -865,7 +868,7 @@ local function hurtNPC(attacker: Player?, npcId: string, damage: number, weaponI
 			Assist = if fb and fb.Assist then true else nil,
 		})
 	end
-	if killed and attacker then
+	if killed and attacker and credit then
 		CombatService.OnNPCKilled(attacker, rec, if fb and fb.UnitShot then true else nil, quiet, fb ~= nil and fb.NoKillMarker == true)
 	end
 	return dealt, killed
@@ -1846,6 +1849,83 @@ function CombatService.ApplyBlastDamage(attacker: Player?, humanoid: Humanoid, d
 		end
 	end
 	return 0, false
+end
+
+-- squadfair: does this NPC hold fire right now (a Passive / passive-group NPC whose group is not provoked)? false for an
+-- unknown or dead id. The FOLLOW escort leaves such calm NPCs alone (CombatFairnessConfig.EscortIgnoreCalm).
+function CombatService.NPCHoldsFire(npcId: string): boolean
+	local rec = if typeof(npcId) == "string" then npcRecords[npcId] else nil
+	return rec ~= nil and rec.Alive and CombatNPC.HoldsFire(rec)
+end
+
+--[[ squadfair (provoke by proxy): may this owner's squad hurt this NPC now? A plain NPC (Aggressive, no group: every
+	live camp / bank NPC while Jobs are off): always. A grouped or stance NPC (bank guards, Ops garrisons; any hit on
+	one provokes its group and keeps it fighting): only while the owner's living character is within its AggroRange (or
+	within CombatFairnessConfig.UnitProvokeOwnerStuds when that is above 0), calm or already provoked. A squad never
+	opens a fight its owner is not part of, and never keeps one going after the owner has left (an owner far away cannot
+	wake guards, or keep them awake, onto a bystander). ]]
+local function unitMayHit(owner: Player, rec: NPCRecord): boolean
+	if CombatFairnessConfig.UnitProvokeNeedsOwner ~= true or not (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then
+		return true
+	end
+	local reach = tonumber(CombatFairnessConfig.UnitProvokeOwnerStuds) or 0
+	if not (reach > 0) then
+		reach = rec.Def.AggroRange
+	end
+	local _, hum, root = characterParts(owner)
+	if hum == nil or root == nil or hum.Health <= 0 then
+		return false
+	end
+	return (root.Position - rec.Root.Position).Magnitude <= reach
+end
+
+-- squadfair: unitMayHit for SquadOrdersService's target pick (a squad does not aim at an NPC it may not hurt). true for
+-- an id that is not a live NPC record (ApplyUnitHit refuses those anyway).
+function CombatService.UnitMayHitNPC(owner: Player, npcId: string): boolean
+	local rec = if typeof(npcId) == "string" then npcRecords[npcId] else nil
+	if rec == nil or not rec.Alive or typeof(owner) ~= "Instance" or not owner:IsA("Player") then
+		return true
+	end
+	return unitMayHit(owner, rec)
+end
+
+--[[ squadfair (CLAUDE.md combat fairness): one squad unit's hit. SquadOrdersService has already checked the line of
+	sight and rolled the hit chance. Only a live CombatService NPC record takes it, through hurtNPC like every other NPC
+	hit, so squad fire provokes a grouped / Passive NPC (bank guards, Ops garrisons). Squads never hurt players: a
+	character (a shielded novice, a clan ally, anyone) and anything that is not a live NPC record (a static WE_NPC statue)
+	take nothing. `credit` false (an ATTACK shot with UnitKillCreditOnAttack off): no creator tag and no kill payout, as
+	before; the group is still provoked. A hit on a grouped or stance NPC is refused while the owner is out of its reach
+	(unitMayHit: no provoke by proxy). No per-hit feedback to the owner (NoAttackerFb: no extra remote traffic); a
+	credited kill still toasts "Squad: X down". Returns (dealt, killed). ]]
+function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: number, credit: boolean): (number, boolean)
+	if typeof(owner) ~= "Instance" or not owner:IsA("Player") then
+		return 0, false
+	end
+	if typeof(target) ~= "Instance" or not target:IsA("Humanoid") then
+		return 0, false
+	end
+	if typeof(damage) ~= "number" or not (damage > 0) then
+		return 0, false
+	end
+	local model = target.Parent
+	if model == nil or not model:IsA("Model") or Players:GetPlayerFromCharacter(model) ~= nil then
+		return 0, false -- never a player
+	end
+	if not CollectionService:HasTag(model, Constants.Tags.NPC) then
+		return 0, false
+	end
+	local npcId = model:GetAttribute("NPCId")
+	if typeof(npcId) ~= "string" then
+		return 0, false
+	end
+	local rec = npcRecords[npcId]
+	if rec == nil or rec.Humanoid ~= target then
+		return 0, false
+	end
+	if not unitMayHit(owner, rec) then
+		return 0, false -- squadfair: a grouped / stance NPC whose owner is not near: no provoke by proxy
+	end
+	return hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = true, NoCredit = credit ~= true })
 end
 
 --[[ W2 (contracts §3.7): `fn(victim, killer, info)` after every player death (once per death; after stats, rewards

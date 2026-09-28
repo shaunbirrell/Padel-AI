@@ -48,6 +48,8 @@ local ServerStorage = game:GetService("ServerStorage")
 local Shared = ReplicatedStorage.Shared
 local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
+local RigBuilder = require(script.Parent.Parent.Modules.RigBuilder) -- R-RIG
+local RigConfig = require(Shared.Configs.RigConfig) -- R-RIG
 
 local VisualAssetService = {}
 
@@ -65,6 +67,9 @@ type AssetRef = {
 	Yaw: number?,
 	HideKit: boolean?,
 	KeepVisible: { string }?,
+	BodyScale: number?, -- vscale: the fitted body's scale (1 = Roblox size); nil = as long as the kit chassis
+	BodySeats: { [string]: Vector3 }?, -- vscale: kit seat -> the body's own seat top (unscaled, body box frame)
+	BodyRoofParts: { string }?, -- vscale: kit parts (the Armed 4x4 turret) lifted onto the fitted body's roof
 	OmitParts: { string }?, -- owner list: pack piece parts removed before the part count
 	NoFamilyFallback: boolean?, -- owner list: a vehicle ref at 0 never takes the family body
 	KeepHost: boolean?, -- hooks: props: the host keeps its look (no fade)
@@ -75,6 +80,12 @@ type AssetRef = {
 	KitFamilies: { string }?, -- hooks: VehicleWeapons: allow-listed kit families
 	Vehicles: { string }?, -- hooks: VehicleWeapons: allow-listed vehicle ids
 	HideParts: { string }?, -- hooks: VehicleWeapons: kit parts hidden once the dress attaches
+	Into: string?, -- bizlook: BusinessPieces: the kit role whose box the piece fills (default: the replaced role's own)
+	HideRoles: { string }?, -- bizlook: BusinessPieces: kit roles turned invisible (collision kept) once the piece is on
+	FromLevel: number?, -- bizlook: BusinessPieces: worn from this business level
+	ToLevel: number?, -- bizlook: BusinessPieces: ... up to this level
+	Rig: string?, -- R-RIG: "R6" = an animated rig template (RigBuilder), never a welded statue
+	Headwear: string?, -- R-RIG: "Beret" | "KitHelmet" | "None"
 }
 
 local cache: { [number]: Model } = {} -- template models (parented to nil / folder)
@@ -433,7 +444,39 @@ local function splitPack(assetId: number, pack: Instance)
 end
 
 -- Prepared asset → cache (whole model), or split (pack), or refused (over the part cap / Humanoid left).
+-- R-RIG: ids that a Characters ref with Rig = "R6" names are baked by RigBuilder (joints kept, no Humanoid)
+local function isRigId(assetId: number): boolean
+	for _, ref in pairs(VisualAssetConfig.Characters :: any) do
+		if typeof(ref) == "table" and ref.Rig == "R6" and ref.ModelAssetId == assetId then
+			return true
+		end
+	end
+	return false
+end
+
+-- R-RIG: hosts that asked for a rig while its file was loading or waiting for a retry (weak keys: a host that is
+-- destroyed meanwhile is simply forgotten). They get the rig when the file arrives (flushRigPending).
+local rigPending: { [Model]: string } = setmetatable({} :: any, { __mode = "k" })
+local flushRigPending: (number) -> ()
+
 local function acceptTemplate(assetId: number, model: Model): Model?
+	if isRigId(assetId) then
+		local rig, why = RigBuilder.BakeTemplate(model, assetId)
+		if rig == nil or countParts(rig) > maxParts() or hasHumanoid(rig) then
+			failed[assetId] = true
+			if rig then
+				rig:Destroy()
+			else
+				pcall(model.Destroy, model) -- not an R6 rig (e.g. R15): the inserted model goes, the Part kit stays
+			end
+			warn(string.format("[VisualAssetService] rig %d refused: %s — Part kit look stays", assetId, why or "over the cap / Humanoid"))
+			return nil
+		end
+		rig.Parent = ensureFolder()
+		cache[assetId] = rig
+		task.defer(flushRigPending, assetId) -- R-RIG: hosts that asked while it loaded / cooled get it now
+		return rig
+	end
 	prepareTemplate(assetId, model)
 	if isPack(assetId) then
 		splitPack(assetId, model)
@@ -854,9 +897,28 @@ function VisualAssetService.ResolvePropMeshId(propKey: string): number?
 	return nil
 end
 
+-- wc3 (owner pick 4954987035, the recon plane): the box Roblox DRAWS for a part. A Part with Shape = Cylinder is drawn
+-- Size.X long and min(Size.Y, Size.Z) across (the plane's fuselage is 15.83 x 11.26 x 3.88, drawn 3.88 round), a Ball
+-- min(Size) across; MeshParts, unions, wedges and blocks are their Size. The fit measures this box, so a cylinder-bodied
+-- model stands on its wheels instead of 3.7 studs over them.
+local function drawnSize(p: BasePart): Vector3
+	local size = p.Size
+	if p:IsA("Part") then
+		if p.Shape == Enum.PartType.Cylinder then
+			local d = math.min(size.Y, size.Z)
+			return Vector3.new(size.X, d, d)
+		elseif p.Shape == Enum.PartType.Ball then
+			local d = math.min(size.X, size.Y, size.Z)
+			return Vector3.new(d, d, d)
+		end
+	end
+	return size
+end
+
 -- W3 LOOK: place a vehicle body (authored axis-aligned, front -Z) on the Part kit: one uniform scale so the body is
 -- as long as the kit chassis, centred on the chassis, tyre bottoms on the physics-wheel bottoms, turned by ref.Yaw.
 -- Moves each part (no Model:ScaleTo / pivots), so it does not depend on how the pack set its pivot. Returns the scale.
+-- vscale: ref.BodyScale sets the scale instead (Roblox size: the avatar fits inside); the physics kit is unchanged.
 local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, ref: AssetRef): number?
 	local parts: { BasePart } = {}
 	for _, d in ipairs(clone:GetDescendants()) do
@@ -870,7 +932,7 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 	local lx, ly, lz = math.huge, math.huge, math.huge
 	local hx, hy, hz = -math.huge, -math.huge, -math.huge
 	for _, p in ipairs(parts) do
-		local cf, h = p.CFrame, p.Size * 0.5
+		local cf, h = p.CFrame, drawnSize(p) * 0.5
 		local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
 		local ex = math.abs(r.X) * h.X + math.abs(u.X) * h.Y + math.abs(l.X) * h.Z
 		local ey = math.abs(r.Y) * h.X + math.abs(u.Y) * h.Y + math.abs(l.Y) * h.Z
@@ -885,7 +947,8 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 	if bodyLen <= 0.05 then
 		return nil
 	end
-	local s = math.clamp(primary.Size.Z / bodyLen, 0.05, 4)
+	local fitScale = if typeof(ref.BodyScale) == "number" and ref.BodyScale > 0 then ref.BodyScale else nil
+	local s = math.clamp(fitScale or primary.Size.Z / bodyLen, 0.05, 4)
 	-- lowest physics-wheel point in the chassis frame (else the chassis bottom)
 	local bottom = -primary.Size.Y * 0.5
 	local found = false
@@ -903,7 +966,8 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 	end
 	local anchor = Vector3.new((lx + hx) * 0.5, ly, (lz + hz) * 0.5)
 	local base = primary.CFrame * CFrame.new(0, bottom, 0) * CFrame.Angles(0, math.rad(yawDeg), 0)
-	local shadowMin = primary.Size.Z * (tonumber((VisualAssetConfig :: any).FitShadowShare) or 0.5)
+	-- vscale: FitShadowShare of the FITTED body's length (at BodyScale the chassis is far shorter than the body)
+	local shadowMin = (if fitScale then bodyLen * s else primary.Size.Z) * (tonumber((VisualAssetConfig :: any).FitShadowShare) or 0.5)
 	for _, p in ipairs(parts) do
 		local cf = p.CFrame
 		local size = p.Size * s
@@ -913,6 +977,110 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 		p:SetAttribute("WE_FitShadow", math.max(size.X, size.Y, size.Z) >= shadowMin)
 	end
 	return s
+end
+
+-- vscale: move a kit part welded to the primary (unweld, set CFrame, weld again: a CFrame set on a welded part would
+-- move the whole car).
+local function reweldAt(primary: BasePart, part: BasePart, cf: CFrame)
+	for _, holder in ipairs({ primary :: Instance, part :: Instance }) do
+		for _, w in ipairs(holder:GetChildren()) do
+			if w:IsA("WeldConstraint") and ((w.Part0 == primary and w.Part1 == part) or (w.Part0 == part and w.Part1 == primary)) then
+				w:Destroy()
+			end
+		end
+	end
+	part.CFrame = cf
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = primary
+	w.Part1 = part
+	w.Parent = primary
+end
+
+-- vscale: half height of a part in the chassis frame
+local function halfHeightIn(rel: CFrame, size: Vector3): number
+	local h = size * 0.5
+	return math.abs(rel.RightVector.Y) * h.X + math.abs(rel.UpVector.Y) * h.Y + math.abs(rel.LookVector.Y) * h.Z
+end
+
+-- vscale (option B): after a successful fit at ref.BodyScale the kit seats sit on the body's own seats (CanCollide off,
+-- so the drive footprint stays the kit's), the ref's roof parts stand on the roof and the label is 1 stud over the
+-- higher of the two. A kit whose body did not load keeps its own seats and label. The body frame is measured on the
+-- fitted clone: its lowest point is on the physics-wheel bottom and its box is centred on the chassis (fitBodyToKit).
+-- vscale R2: the fitted body's half length / half width / top in the chassis frame go on the model
+-- (WE_VisualHalfLength / WE_VisualHalfWidth / WE_VisualTop) for VehicleService's spawn spot, exit spot, prompt ranges
+-- and the friendly gate; WE_HalfLength / WE_HalfWidth stay the kit's (driving, splash, collisions).
+local function placeKitOnBody(hostModel: Model, primary: BasePart, clone: Model, ref: AssetRef)
+	local s = math.clamp(ref.BodyScale or 1, 0.05, 4)
+	local bottom, roofY = math.huge, -math.huge
+	local halfX, halfZ = 0, 0
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local rel = primary.CFrame:ToObjectSpace(d.CFrame)
+			local ey = halfHeightIn(rel, drawnSize(d))
+			bottom, roofY = math.min(bottom, rel.Position.Y - ey), math.max(roofY, rel.Position.Y + ey)
+			local h = drawnSize(d) * 0.5
+			local ex = math.abs(rel.RightVector.X) * h.X + math.abs(rel.UpVector.X) * h.Y + math.abs(rel.LookVector.X) * h.Z
+			local ez = math.abs(rel.RightVector.Z) * h.X + math.abs(rel.UpVector.Z) * h.Y + math.abs(rel.LookVector.Z) * h.Z
+			halfX, halfZ = math.max(halfX, math.abs(rel.Position.X) + ex), math.max(halfZ, math.abs(rel.Position.Z) + ez)
+		end
+	end
+	if bottom > roofY then
+		return
+	end
+	local base = primary.CFrame * CFrame.new(0, bottom, 0) * CFrame.Angles(0, math.rad(tonumber(ref.Yaw) or 0), 0)
+	-- vscale R2.1: the kit's collidable half width / length (every CanCollide part but the seats, as WE_HalfWidth /
+	-- WE_HalfLength will be): a moved seat keeps its centre BodySeatKitInset inside it. A seat past the kit's nose or
+	-- tail (the Cargo Van's front row, the Dispatch Car's back seat) sits inside a wall the kit touches, and so does
+	-- its rider.
+	local kx, kz = 0, 0
+	for _, d in ipairs(hostModel:GetDescendants()) do
+		if d:IsA("BasePart") and d.CanCollide and not d:IsA("Seat") and not d:IsA("VehicleSeat") then
+			local rel = primary.CFrame:ToObjectSpace(d.CFrame)
+			local h = d.Size * 0.5
+			kx = math.max(kx, math.abs(rel.Position.X) + math.abs(rel.RightVector.X) * h.X + math.abs(rel.UpVector.X) * h.Y + math.abs(rel.LookVector.X) * h.Z)
+			kz = math.max(kz, math.abs(rel.Position.Z) + math.abs(rel.RightVector.Z) * h.X + math.abs(rel.UpVector.Z) * h.Y + math.abs(rel.LookVector.Z) * h.Z)
+		end
+	end
+	local inset = tonumber((VisualAssetConfig :: any).BodySeatKitInset) or 0
+	local mx, mz = math.max(kx - inset, 0), math.max(kz - inset, 0)
+	for name, top in pairs(ref.BodySeats or {}) do
+		local seat = hostModel:FindFirstChild(name)
+		if seat and seat:IsA("BasePart") and typeof(top) == "Vector3" then
+			local rot = seat.CFrame - seat.CFrame.Position
+			local at = primary.CFrame:PointToObjectSpace((base * CFrame.new(top * s)).Position)
+			at = Vector3.new(math.clamp(at.X, -mx, mx), at.Y, math.clamp(at.Z, -mz, mz))
+			reweldAt(primary, seat, CFrame.new(primary.CFrame:PointToWorldSpace(at)) * rot * CFrame.new(0, -seat.Size.Y * 0.5, 0))
+			seat.CanCollide = false
+		end
+	end
+	local lift: number? = nil
+	local roofParts: { BasePart } = {}
+	for _, name in ipairs(ref.BodyRoofParts or {}) do
+		local p = hostModel:FindFirstChild(name)
+		if p and p:IsA("BasePart") then
+			local rel = primary.CFrame:ToObjectSpace(p.CFrame)
+			lift = math.max(lift or -math.huge, roofY - (rel.Position.Y - halfHeightIn(rel, p.Size)))
+			table.insert(roofParts, p)
+		end
+	end
+	if lift and lift > 0 then
+		for _, p in ipairs(roofParts) do
+			reweldAt(primary, p, p.CFrame + primary.CFrame.UpVector * lift)
+		end
+	end
+	-- vscale R2: the label clears the lifted roof parts too (the Armed 4x4 gun mount stands 0.8 over the roof)
+	local topY = roofY
+	for _, p in ipairs(roofParts) do
+		local rel = primary.CFrame:ToObjectSpace(p.CFrame)
+		topY = math.max(topY, rel.Position.Y + halfHeightIn(rel, p.Size))
+	end
+	-- vscale R2.3: the margin grows with the body's height over the ground (bottom = the physics-wheel bottom)
+	local lm = (VisualAssetConfig :: any).BodyLabelMargin or {}
+	local margin = (tonumber(lm.Base) or 1) + (tonumber(lm.PerStud) or 0) * math.max(0, topY - bottom - (tonumber(lm.EyeHeight) or 0))
+	hostModel:SetAttribute("WE_LabelY", topY + margin)
+	hostModel:SetAttribute("WE_VisualHalfLength", halfZ)
+	hostModel:SetAttribute("WE_VisualHalfWidth", halfX)
+	hostModel:SetAttribute("WE_VisualTop", topY)
 end
 
 -- W3 LOOK: under a fitted body the Part-kit visuals go (Transparency 1). Physics, seats, hit boxes and names stay.
@@ -965,6 +1133,9 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 				d:SetAttribute("WE_FitShadow", nil)
 			end
 		end
+		if typeof(ref.BodyScale) == "number" and ref.BodyScale > 0 then
+			placeKitOnBody(hostModel, primary, clone, ref)
+		end
 	end
 	if not dressLogged[assetId] then
 		dressLogged[assetId] = true
@@ -1001,9 +1172,62 @@ end
 	Optional character visual overlay for NPC Part kits.
 	Attaches non-colliding clone; host HumanoidRootPart stays authoritative.
 ]]
+-- R-RIG: attach the rig to every host that asked while `assetId` was loading or cooling and is still alive in the
+-- world with no rig (a late statue, squad unit, NPC or gate guard gets the same body as the rest). Bounded by the
+-- hosts waiting (at most the figures alive); runs once per template arrival.
+function flushRigPending(assetId: number)
+	local template: Model? = cache[assetId]
+	if template == nil or RigConfig.Enabled ~= true then
+		return
+	end
+	local hosts: { Model } = {}
+	for host in pairs(rigPending) do
+		table.insert(hosts, host)
+	end
+	local n = 0
+	local world = game:GetService("Workspace")
+	for _, host in ipairs(hosts) do
+		local kind = rigPending[host]
+		rigPending[host] = nil
+		local ref = (VisualAssetConfig.Characters :: any)[kind] or VisualAssetConfig.Characters.Soldier
+		-- still in the world and still a Part kit (a dying host is removed by its builder moments later anyway)
+		if typeof(ref) == "table" and ref.Rig == "R6" and refId(ref) == assetId and host:IsDescendantOf(world)
+			and host:FindFirstChild(RigBuilder.RigName) == nil then
+			if RigBuilder.Attach(host, template, { Headwear = ref.Headwear, StaticHoldDeg = RigConfig.Anim.StaticHoldDeg }) then
+				host:SetAttribute("WE_CatalogAssetId", assetId)
+				n += 1
+			end
+		end
+	end
+	if n > 0 then
+		print(string.format("[VisualAssetService] rig %d attached late to %d figure(s)", assetId, n))
+	end
+end
+
 function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: string): boolean
 	-- P0: always attempt character catalog inserts (bypass StudioSkipWorldDressing)
 	local forceChar = true
+	-- R-RIG: a friendly squad soldier has its own look key; a Rig ref gets the animated rig or keeps its Part kit
+	local rigKind = if hostModel:GetAttribute("FriendlySquad") == true and (VisualAssetConfig.Characters :: any).Squad then "Squad" else kind
+	local rigRef = (VisualAssetConfig.Characters :: any)[rigKind] or VisualAssetConfig.Characters.Soldier
+	if typeof(rigRef) == "table" and rigRef.Rig == "R6" then
+		if RigConfig.Enabled ~= true then
+			return false -- R-RIG off: the Part kit stays (no load, never a welded statue)
+		end
+		local rid = refId(rigRef)
+		local rigTemplate = if rid > 0 then loadModel(rid, forceChar) else nil
+		if rigTemplate == nil then
+			if rid > 0 and not failed[rid] then
+				rigPending[hostModel] = rigKind -- loading / retry cooling: the rig comes when the file does
+			end
+			return false -- the Part kit stays (no welded-statue fallback for rig kinds)
+		end
+		local ok = RigBuilder.Attach(hostModel, rigTemplate, { Headwear = rigRef.Headwear, StaticHoldDeg = RigConfig.Anim.StaticHoldDeg })
+		if ok then
+			hostModel:SetAttribute("WE_CatalogAssetId", rid)
+		end
+		return ok
+	end
 	local assetId = VisualAssetService.ResolveCharacterAssetId(kind)
 	if not assetId then
 		return false
@@ -1688,13 +1912,14 @@ end
 
 -- the listed roles still to dress: { index into ReplacesRoles = its built, non-colliding kit part that does not wear
 -- assetId }, and how many built non-colliding roles there are (dressed or not)
-local function bizMissing(model: Model, roles: { string }, assetId: number, bizId: string): ({ [number]: BasePart }, number)
+local function bizMissing(model: Model, roles: { string }, assetId: number, bizId: string, piece: string?): ({ [number]: BasePart }, number)
 	local missing: { [number]: BasePart } = {}
 	local built = 0
 	for i, role in ipairs(roles) do
 		local p = model:FindFirstChild("Kit_" .. role)
 		if p and p:IsA("BasePart") then
-			if p:GetAttribute("WE_CatalogAssetId") == assetId then
+			-- bizlook: a pack piece is "on" only when the part wears that piece (one pack serves several roles / levels)
+			if p:GetAttribute("WE_CatalogAssetId") == assetId and (piece == nil or p:GetAttribute("WE_CatalogPiece") == piece) then
 				built += 1
 			elseif p.CanCollide then
 				-- a dress never takes a wall or a floor away: colliding kit parts are never taken over
@@ -1718,9 +1943,7 @@ end
 	Refused (one warn, the Part kit stays): more model parts than roles, roles with different kit MinLevels (a half-built
 	list), a mesh part on a Belt / Box role; colliding roles are never taken over. Same loader rules as every hook
 	(MaxPartsPerModel, Humanoid stripped, MaxLoadAttempts, StripEffectsAssetIds); anchored, non-colliding; a 0 id is a no-op. ]]
-function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, level: number): boolean
-	local bucket = (VisualAssetConfig :: any).Businesses
-	local ref: AssetRef? = if typeof(bucket) == "table" and typeof(bucket[id]) == "table" then bucket[id] :: AssetRef else nil
+local function attachBusinessRef(model: Model, id: string, level: number, ref: AssetRef?): boolean
 	local assetId = refId(ref)
 	if ref == nil or assetId == 0 or model.Parent == nil or (tonumber(level) or 0) < 1 then
 		return false -- 0 / PendingAssetId (never read here): no load; the Part kit stays
@@ -1738,7 +1961,21 @@ function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, le
 			return false
 		end
 	end
-	local missing, built = bizMissing(model, roles, assetId, id)
+	-- bizlook (BusinessPieces): a piece worn only at some levels, and the box it fills (Into: default the role's own)
+	local lvNow = tonumber(level) or 0
+	if (ref.FromLevel ~= nil and lvNow < ref.FromLevel) or (ref.ToLevel ~= nil and lvNow > ref.ToLevel) then
+		return false
+	end
+	local piece: string? = if typeof(ref.ChildName) == "string" then ref.ChildName else nil
+	local intoPart: BasePart? = nil
+	if ref.Into ~= nil then
+		local ip = model:FindFirstChild("Kit_" .. ref.Into)
+		if ip == nil or not ip:IsA("BasePart") or ip:GetAttribute("WE_CatalogAssetId") ~= nil then
+			return false -- the box to fill is not built (or is itself dressed): the Part kit stays
+		end
+		intoPart = ip
+	end
+	local missing, built = bizMissing(model, roles, assetId, id, piece)
 	if next(missing) == nil then
 		return built > 0 -- every built role already wears it (a re-sync / level-up: nothing to do)
 	end
@@ -1751,9 +1988,12 @@ function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, le
 	if parentNow == nil then
 		return false
 	end
-	missing, built = bizMissing(model, roles, assetId, id)
+	missing, built = bizMissing(model, roles, assetId, id, piece)
 	if next(missing) == nil then
 		return built > 0
+	end
+	if intoPart ~= nil and (intoPart.Parent ~= model or intoPart:GetAttribute("WE_CatalogAssetId") ~= nil) then
+		return false -- the box to fill went during the insert
 	end
 	local clone = cloneAsModel(template)
 	if not clone then
@@ -1784,9 +2024,20 @@ function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, le
 			if roles[i] == "Belt" or ref.Fit == "Box" then
 				p.Size = kp.Size -- the client crates read Kit_Belt's box: keep it exactly
 				p.CFrame = kp.CFrame
+			elseif ref.Fit == "Stretch" then
+				-- bizlook: a building piece (a MeshPart) turned by Yaw, then stretched to fill the Into box exactly: the
+				-- front keeps its proportions when the box does, the depth is squashed (seen from the front on a phone)
+				local box = intoPart or kp
+				local yaw = tonumber(ref.Yaw) or 0
+				local quarter = math.floor(yaw / 90 + 0.5) % 2 == 1
+				p.Size = if quarter then Vector3.new(box.Size.Z, box.Size.Y, box.Size.X) else box.Size
+				p.CFrame = box.CFrame * CFrame.Angles(0, math.rad(yaw), 0)
 			else
 				local frame: CFrame = if typeof(site) == "CFrame" then site else kp.CFrame
 				local lo, hi = aabbIn(frame, { kp })
+				if intoPart ~= nil then
+					lo, hi = aabbIn(frame, { intoPart }) -- bizlook: a piece with Into fills that role's box
+				end
 				if not fitInBox({ p }, frame, lo, hi, true, 0, 1) then
 					continue
 				end
@@ -1800,13 +2051,51 @@ function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, le
 			p.Massless = true
 			p:SetAttribute("WE_BizRole", kp:GetAttribute("WE_BizRole"))
 			p:SetAttribute("WE_CatalogAssetId", assetId)
+			if piece ~= nil then
+				p:SetAttribute("WE_CatalogPiece", piece) -- bizlook: which pack piece (a level swap re-dresses the role)
+			end
+			if ref.Into ~= nil and ref.Fit == "Stretch" then
+				p:SetAttribute("WE_BizFitRole", ref.Into) -- bizlook: BusinessService refits it when that box grows
+			end
 			p.Parent = model
 			kp:Destroy()
 			dressed += 1
 		end
 	end
 	clone:Destroy() -- the wrapper and any part no missing role needed
+	-- bizlook: the collider boxes the piece stands in for turn invisible (their collision, query and name stay);
+	-- BusinessService shows them again when the piece goes (WE_BizHiddenBy = the role the piece replaced)
+	if dressed > 0 and ref.HideRoles ~= nil then
+		for _, hr in ipairs(ref.HideRoles) do
+			local hp = model:FindFirstChild("Kit_" .. hr)
+			if hp and hp:IsA("BasePart") and hp:GetAttribute("WE_CatalogAssetId") == nil then
+				hp.Transparency = 1
+				hp.CastShadow = false
+				hp:SetAttribute("WE_BizHiddenBy", roles[1])
+			end
+		end
+	end
 	return dressed > 0
+end
+
+-- bizlook: the line's own dress (VisualAssetConfig.Businesses[id]) plus the Roblox-made building pieces every line
+-- may wear (VisualAssetConfig.BusinessPieces). The same one-for-one rule for both: a piece takes a non-colliding kit
+-- role's place (PartsPerBusinessL5 holds); a colliding role is never taken over (a piece that stands in for a collider
+-- fills that collider's box, Into, and hides it, HideRoles, keeping its collision); a 0 id is a no-op. true when the
+-- line's own dress is on.
+function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, level: number): boolean
+	local bucket = (VisualAssetConfig :: any).Businesses
+	local ref: AssetRef? = if typeof(bucket) == "table" and typeof(bucket[id]) == "table" then bucket[id] :: AssetRef else nil
+	local dressed = attachBusinessRef(model, id, level, ref)
+	local pieces = (VisualAssetConfig :: any).BusinessPieces
+	if typeof(pieces) == "table" then
+		for _, pref in pairs(pieces) do
+			if typeof(pref) == "table" and model.Parent ~= nil then
+				attachBusinessRef(model, id, level, pref :: AssetRef)
+			end
+		end
+	end
+	return dressed
 end
 
 -- hooks (2026-09-25): is this vehicle on the weapon ref's allow-list (KitFamilies / Vehicles)? No list = nobody.

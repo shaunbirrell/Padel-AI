@@ -485,6 +485,25 @@ function CombatNPC.IsProvoked(rec: any): boolean
 	return g ~= nil and g.Provoked
 end
 
+-- Does a stance NPC hold fire now? A Passive NPC, and a Post in a passive group (a Passive member, or its own
+-- ProvokeRadius), until its group is provoked. One definition for thinkStance and HoldsFire (squadfair).
+local function holdsFire(rec: any, g: Group?): boolean
+	if g ~= nil and g.Provoked then
+		return false
+	end
+	local stance = rec.Stance
+	return stance == "Passive"
+		or (
+			stance == "Post"
+			and (rec.ProvokeRadius ~= nil or (g ~= nil and g.HasPassive) or (rec.GroupId ~= nil and passiveGroupIds[rec.GroupId] == true))
+		)
+end
+
+-- squadfair: true while this NPC holds fire (calm Passive / passive-group NPC); the FOLLOW escort leaves it alone
+function CombatNPC.HoldsFire(rec: any): boolean
+	return holdsFire(rec, groups[groupKey(rec)])
+end
+
 -- A stance NPC's tick (lane N; contract §5.3)
 local function thinkStance(rec: any, now: number)
 	local g = groups[groupKey(rec)]
@@ -495,14 +514,7 @@ local function thinkStance(rec: any, now: number)
 	if target and g and provoked then
 		g.LastContact = now -- contact keeps a provoked group fighting
 	end
-	local held = not provoked
-		and (
-			stance == "Passive"
-			or (
-				stance == "Post"
-				and (rec.ProvokeRadius ~= nil or (g ~= nil and g.HasPassive) or (rec.GroupId ~= nil and passiveGroupIds[rec.GroupId] == true))
-			)
-		)
+	local held = holdsFire(rec, g)
 	if held then
 		-- not provoked: never walks to a target, never fires; the reaction delay starts only once provoked
 		rec.AimTarget = nil

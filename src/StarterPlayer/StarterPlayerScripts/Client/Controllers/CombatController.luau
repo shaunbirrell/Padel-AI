@@ -133,6 +133,7 @@ type FeelState = {
 	HumWait: RBXScriptConnection?, -- streaming2 F16: the character's ChildAdded until its Humanoid arrives
 	HumWaitChar: Instance?, -- the character that wait belongs to
 	HumWaitSerial: number, -- bumped whenever that wait ends (a pending streaming-off give-up checks it)
+	HpStacked: boolean, -- the health bar sits in the top-centre stack (seated, HudConfig.Health.Seated)
 }
 local Feel: FeelState
 do
@@ -177,6 +178,7 @@ do
 		HumWait = nil,
 		HumWaitChar = nil,
 		HumWaitSerial = 0,
+		HpStacked = false,
 	}
 end
 local W2 = {} -- W2 helper functions (defined below, as table fields for the same register reason)
@@ -416,6 +418,7 @@ local function stopFiring()
 end
 
 local function refreshBound()
+	W2.placeHealth() -- seated <-> on foot: the health bar changes place (and rule) first
 	for _, obj in ipairs(bound) do
 		HudLayout.RefreshVisibility(obj)
 	end
@@ -814,6 +817,46 @@ local function healthBottomV(): number
 	return HB.Bottom + math.max(s + HP.GapAboveHotbar, selectedTop + 2)
 end
 
+--[[ bank fix 1: the player's health while seated. On foot (or on an open seat that can shoot) the bar sits above the
+	hotbar under HudConfig.Health (hidden while Driving). In a seat that cannot shoot it moves to the top-centre stack
+	(HudConfig.Health.Seated: order 24.5, right under the vehicle bar, WidthPx x HeightPx real px) with Seated.HideWhen
+	(no "Driving"), the same ShowWhen (Hurt / RecentCombat). Called from refreshBound (seat, WE_DriveMode, Driving)
+	and on LayoutChanged. One bar, one fill: applyHealth is unchanged. ]]
+function W2.placeHealth()
+	local hp = healthPanel
+	if hp == nil then
+		return
+	end
+	local cfg: any = (HP :: any).Seated
+	local want = typeof(cfg) == "table" and cfg.Enabled == true and not seatAllowsFire()
+	if want then
+		hp.Size = UDim2.fromOffset(
+			HudLayout.ToV(tonumber(cfg.WidthPx) or 230),
+			HudLayout.ToV(tonumber(cfg.HeightPx) or 10)
+		)
+		if Feel.HpStacked then
+			return
+		end
+		Feel.HpStacked = true
+		hp.AnchorPoint = Vector2.new(0.5, 0)
+		hp.Position = UDim2.new(0.5, 0, 0, HudConfig.TopStack.Top) -- Y is rewritten by HudLayout's top stack
+		HudLayout.BindVisibility(hp, { ShowWhen = HP.ShowWhen, HideWhen = cfg.HideWhen })
+		HudLayout.RegisterTopStack("PlayerHP", hp, tonumber(cfg.StackOrder) or 24.5, { Space = "Hud" })
+		return
+	end
+	if not Feel.HpStacked then
+		return
+	end
+	Feel.HpStacked = false
+	HudLayout.UnregisterTopStack("PlayerHP")
+	local bar = hotbar
+	local w = if bar then bar.Size.X.Offset else 0
+	hp.AnchorPoint = Vector2.new(0.5, 1)
+	hp.Position = UDim2.new(0.5, 0, 1, -healthBottomV())
+	hp.Size = UDim2.fromOffset(math.max(w, HP.MinWidth), HP.Height)
+	HudLayout.BindVisibility(hp, HP, seatAllowsFire)
+end
+
 local function styleSlot(sl: Slot, selected: boolean)
 	sl.Button.BackgroundTransparency = if selected then HB.SelectedBgTransparency else HB.BgTransparency
 	sl.Stroke.Thickness = if selected then HB.SelectedStrokePx else 1.5
@@ -993,7 +1036,7 @@ refreshHotbar = function()
 		local w = if n > 0 then n * s + (n - 1) * HB.Gap else 0
 		bar.Size = UDim2.fromOffset(w, s)
 		local hp = healthPanel
-		if hp then
+		if hp and not Feel.HpStacked then
 			hp.Size = UDim2.fromOffset(math.max(w, HP.MinWidth), HP.Height)
 		end
 		HudLayout.RefreshVisibility(bar)
@@ -2009,6 +2052,7 @@ local function buildHud(pg: Instance)
 		return #slotIds > 0 and seatAllowsFire()
 	end)
 	HudLayout.BindVisibility(hp, HP, notSeated)
+	W2.placeHealth() -- already seated when the HUD is built: the bar starts in the top stack
 	HudLayout.BindVisibility(ammoPanel :: Frame, AM, function(): boolean
 		return currentWeaponId ~= nil and seatAllowsFire()
 	end)
@@ -2215,6 +2259,7 @@ function CombatController.Init()
 		end
 	end)
 	HudLayout.LayoutChanged:Connect(placeCombatControls)
+	HudLayout.LayoutChanged:Connect(W2.placeHealth) -- the seated bar's size is in real px (UIScale may change)
 
 	player.CharacterAdded:Connect(onCharacter)
 	player.CharacterRemoving:Connect(W2.stopHumanoidWait) -- streaming2 F16

@@ -128,7 +128,22 @@ export type AnchorTemplate = {
 	Probe: boolean?,
 }
 -- W3 step 2: a flat infrastructure strip (the airstrip runway): no cluster, built under POI_<Id>.Infra, exempt from H10
-export type InfraRow = { Id: string, Kit: string, X: number, Z: number, Yaw: number, Length: number, Taxiway: { number }? }
+export type InfraRow = { Id: string, Kit: string, X: number, Z: number, Yaw: number, Length: number, Taxiway: { number }?, Width: number? }
+-- Town buildings (owner feedback 2026-09-27): one Roblox-made mesh piece of a TownHouse style (Kits.TownHouse). Key =
+-- VisualAssetConfig.DesertKit key; Size = the piece at scale 1 (the Part fallback box); Y = its bottom above the floor;
+-- Z = its box centre on the kit's local Z (pieces are aligned on their 17.4-stud wall core, not on their boxes)
+export type TownHousePiece = { Key: string, Size: Vector3, Y: number, Z: number }
+export type TownHouseStyle = {
+	Pieces: { TownHousePiece }, -- bottom to top; the first is the ground floor (the door / shutter side is local -Z)
+	Front: string, -- the fallback's front detail: "door" | "shutter"
+	WallFront: number, -- the ground floor's front wall plane on local Z (a wall lantern hangs 0.4 in front of it)
+	Shadow: boolean, -- the building casts one shadow (its ground floor); off for the one-storey shops (Town <= 60 casters)
+	Core: Vector3, -- the wall core the live collider covers: X across, Z deep (Y unused: the collider is the style's full
+	-- height), measured from the pieces' wall planes, so players and shots meet the brick, not the stoop or the cornice
+	CoreZ: number, -- the core's centre on local Z
+	Color: Color3, -- the fallback boxes (shown only while the meshes have not loaded)
+	Material: Enum.Material,
+}
 -- W3 step 2: one POI's rows in Server/Modules/POILayouts/<POI.Layout> (the Town keeps its rows in WorldConfig.Town)
 export type POILayout = {
 	Board: string?, -- the PoiBoard text (PoiBoard rows leave Text nil; painted within Signs and Budgets.SurfaceGuis)
@@ -613,18 +628,131 @@ local WorldConfig = {
 		HoldPad = { R = 10, MinR = 3, MaxR = 24, Top = 0.13 }, -- 1 flat disc, no collision: top 0.63 world (<= RoadMinTop)
 		Runway = { Width = 40, Top = 0.12, TaxiwayWidth = 20 }, -- infra strips (flat, no collision, top <= 0.62 world)
 		WatchtowerDeckY = 14, -- Watchtower deck top above the floor: anchors with Y = 14 stand on it
+		--[[ Town buildings (owner feedback 2026-09-27: "need to be actual Roblox buildings"). Kit TownHouse, Variant =
+			a style below. Every piece is a Roblox-made Synty City Pack piece (6933556508, creator Roblox, User 1; already
+			loaded live for DesertKit.CarWreck: 0 new load attempts), kept at scale 1 (11-stud storeys, 8-stud doors) with
+			its own texture atlas (windows, brick, stone). The Part fallback is one box per piece + one front detail, so the
+			census counts exactly what the live overlay leaves: 1 invisible box collider + one mesh per piece. The
+			overlay is deferred and all-or-nothing per building (a failed load keeps the Part fallback). Overlays = the
+			building overlays one server may apply (their own cap: MeshOverlays stays with the travel dressing);
+			MeshShadow = the ground-floor mesh of a style with Shadow casts the building's one shadow (as the Part kits:
+			<= 60 casters in the Town). MeshCollide = the placed pieces collide and are queryable (Default collision
+			group, never Touched) so Roblox's Poppercam stops the camera at the brick instead of passing through the
+			invisible wall-core collider; false = the round-0 look-only pieces (the camera then goes through walls). ]]
+		TownHouse = {
+			Overlays = 64,
+			MeshShadow = true,
+			MeshCollide = true,
+			Styles = {
+				-- one-storey shop with a rolled shutter and a side door (264 tris)
+				shop = {
+					Pieces = { { Key = "TownShop", Size = Vector3.new(18, 11, 20.45), Y = 0, Z = 0 } },
+					Front = "shutter",
+					WallFront = -7.4,
+					Shadow = false,
+					Core = Vector3.new(17.2, 0, 17.4),
+					CoreZ = 1.3,
+					Color = Color3.fromRGB(116, 100, 88),
+					Material = Enum.Material.Concrete,
+				},
+				-- two-storey red-brick walk-up: stoop door floor, arched upper floor, flat roof (1,801 tris)
+				walkup = {
+					Pieces = {
+						{ Key = "TownAptDoorA", Size = Vector3.new(17.74, 11, 19.41), Y = 0, Z = -0.9 },
+						{ Key = "TownAptFloorA", Size = Vector3.new(17.99, 11.02, 18.14), Y = 11, Z = -0.1 },
+						{ Key = "TownAptRoofA", Size = Vector3.new(18.48, 2, 20.59), Y = 22.02, Z = 0 },
+					},
+					Front = "door",
+					WallFront = -8.7,
+					Shadow = true,
+					Core = Vector3.new(17.6, 0, 17.4),
+					CoreZ = 0,
+					Color = Color3.fromRGB(150, 74, 58),
+					Material = Enum.Material.Brick,
+				},
+				-- two-storey red-brick walk-up: plain door floor, bay-window upper floor, cornice roof (1,280 tris)
+				walkupB = {
+					Pieces = {
+						{ Key = "TownAptDoorB", Size = Vector3.new(17.8, 11, 17.8), Y = 0, Z = -0.1 },
+						{ Key = "TownAptFloorB", Size = Vector3.new(18.38, 11.02, 19.13), Y = 11, Z = -0.3 },
+						{ Key = "TownAptRoofB", Size = Vector3.new(18.28, 3, 19.1), Y = 22.02, Z = 0 },
+					},
+					Front = "door",
+					WallFront = -8.7,
+					Shadow = true,
+					Core = Vector3.new(17.6, 0, 17.4),
+					CoreZ = 0,
+					Color = Color3.fromRGB(140, 70, 56),
+					Material = Enum.Material.Brick,
+				},
+				-- four-storey brick apartment block (door floor + a 3-floor stack + roof, top 46; 2,129 tris)
+				tower = {
+					Pieces = {
+						{ Key = "TownAptDoorA", Size = Vector3.new(17.74, 11, 19.41), Y = 0, Z = -0.9 },
+						{ Key = "TownAptStack", Size = Vector3.new(17.4, 33, 18.08), Y = 11, Z = -0.3 },
+						{ Key = "TownAptRoofA", Size = Vector3.new(18.48, 2, 20.59), Y = 44, Z = 0 },
+					},
+					Front = "door",
+					WallFront = -8.7,
+					Shadow = true,
+					Core = Vector3.new(17.6, 0, 17.4),
+					CoreZ = 0,
+					Color = Color3.fromRGB(150, 74, 58),
+					Material = Enum.Material.Brick,
+				},
+				towerB = {
+					Pieces = {
+						{ Key = "TownAptDoorB", Size = Vector3.new(17.8, 11, 17.8), Y = 0, Z = -0.1 },
+						{ Key = "TownAptStack", Size = Vector3.new(17.4, 33, 18.08), Y = 11, Z = -0.3 },
+						{ Key = "TownAptRoofB", Size = Vector3.new(18.28, 3, 19.1), Y = 44, Z = 0 },
+					},
+					Front = "door",
+					WallFront = -8.7,
+					Shadow = true,
+					Core = Vector3.new(17.6, 0, 17.4),
+					CoreZ = 0,
+					Color = Color3.fromRGB(140, 70, 56),
+					Material = Enum.Material.Brick,
+				},
+				-- the sandstone hall with arched windows and a pedimented door, 3 storeys (6,638 tris: at most 4 in the Town)
+				office = {
+					Pieces = {
+						{ Key = "TownOfficeBase", Size = Vector3.new(38.06, 21, 38.06), Y = 0, Z = 0 },
+						{ Key = "TownOfficeTop", Size = Vector3.new(38.7, 15, 38.98), Y = 20.81, Z = 0 },
+					},
+					Front = "door",
+					WallFront = -17.4,
+					Shadow = true,
+					Core = Vector3.new(34.8, 0, 34.8),
+					CoreZ = 0,
+					Color = Color3.fromRGB(176, 158, 128),
+					Material = Enum.Material.Sandstone,
+				},
+			} :: { [string]: TownHouseStyle },
+		},
+		-- Town pavements (Kit Sidewalk, an infra strip): Width across, Top above the floor (flat, no collision, top 0.64
+		-- world <= Hygiene.RoadMinTop): the frontage between the road shoulder and the building fronts
+		Sidewalk = { Width = 26, Top = 0.14, MinLength = 40, MaxLength = 400, MinWidth = 6, MaxWidth = 48 },
 	},
 
 	-- ── W3 Crossroads Town (WorldPOI; spec §3.1–§3.2, contracts §4.3). Data, not code: one row per cluster ────────
-	-- Town v2 (densify): 2–4 storey TownBlocks line the plaza ring just outside r 124 and the first ~160 studs of each
-	-- road arm (fronts facing the road, alleys between, a lane for the market), so every front gate sees a town
-	-- skyline: water tower (NW, 43), ruined 6-storey tower block (NE, 45), clock tower (SE, 40), radio mast (SW, 90).
+	-- Town v3 (owner feedback 2026-09-27: "actual Roblox buildings"): Roblox-made brick walk-ups, shutter shops, two
+	-- 4-storey apartment blocks and a sandstone hall (Kit TownHouse, Kits.TownHouse styles) line the plaza ring just
+	-- outside r 124 and each road arm from r 131 out to ~290 (fronts facing the road about 34 off its centre line, a
+	-- 7-9 stud alley between neighbours, a lane for the market), over paved frontages (Town.Infra), so every front gate
+	-- sees a town skyline: water tower (NW, 43), apartment block (NE, 47), clock tower (SE, 40), radio mast (SW, 90).
+	-- Fix round 1 (the pieces' backs and side walls are windowless flat brick): every public space shows fronts. The
+	-- Town Square is closed on all four sides by buildings facing INTO it (the hall S, walk-up pairs W, rows SW_SqN /
+	-- SW_SqE on N and E, their backs to the road rows' backs across a service yard); a walk-up facing the plaza closes
+	-- each yard's mouth (SW_YardE / SW_YardN); the market lane is lined with lane-facing walk-ups up to the road (and
+	-- NW_PlazaN, back to back with NW_Lane_S2, faces the plaza); and the first building of six arm rows is a plaza
+	-- end-cap facing the flag along its road (NW_W1, NE_N1, NE_E1, SW_S1, SW_W1, SE_E1).
 	-- Quadrants (north = -Z): NW market lane + water tower, NE tower block + Bank Street to the Empire Bank (MapSetup),
 	-- SW Town Square arena (event anchor TownSquare) + radio mast, SE clock tower + motor pool (Pool_Town pad).
 	-- Block clusters: disc edge >= RoadClear from both road centre lines and outside the CentralPlaza clear radius.
 	-- Street clusters (checkpoints, lamps, board, the parked wreck): every collidable part >= 13 and every visible part
-	-- >= 9 from the lines. Frontage blocks sit so their disc edge is 30.6 off the road line (WorldPOI skips and warns
-	-- on any row that breaks a keep-out, so a moved row shows up in the Output).
+	-- >= 9 from the lines. Frontage buildings sit so their disc edge is >= 30.4 off the road line (WorldPOI skips and
+	-- warns on any row that breaks a keep-out, so a moved row shows up in the Output).
 	Town = {
 		Id = "Town",
 		Seed = 7021, -- WorldKits.Rng seed for the Town's terrain rubble
@@ -647,48 +775,57 @@ local WorldConfig = {
 			{ Id = "Lamp_5", Block = "Road", Role = "lamp", Tier = 1, X = -15, Z = 165, Yaw = -90, Street = true, Kits = { { Kit = "StreetLamp", X = 0, Z = 0 } } },
 			{ Id = "Lamp_6", Block = "Road", Role = "lamp", Tier = 1, X = 15, Z = 235, Yaw = 90, Street = true, Kits = { { Kit = "StreetLamp", X = 0, Z = 0 } } },
 			{ Id = "Board", Block = "Road", Role = "board", Tier = 1, X = -292, Z = -22, Yaw = 90, Street = true, Kits = { { Kit = "PoiBoard", X = 0, Z = 0 } } }, -- "CROSSROADS" facing arrivals from the west (RoadZ0 carries plots 1, 2, 5, 6)
-			-- Plaza ring: tall blocks facing the flag just outside the capture clear r 124 (SE: the clock tower; SW opens onto the Town Square)
-			{ Id = "NW_Ring", Block = "NW", Role = "block", Tier = 1, X = -109.2, Z = -109.2, Yaw = -135, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop", Width = 34, Depth = 18, Storeys = 4, Roof = "tank", Lantern = true, Color = Color3.fromRGB(185, 150, 105) } } }, -- 4 storeys, lantern over the flag side
-			{ Id = "NE_TowerBlock", Block = "NE", Role = "landmark", Tier = 1, X = 104.7, Z = -104.7, Yaw = 135, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "damaged", Width = 24, Depth = 22, Storeys = 6, Roof = "tank", Color = Color3.fromRGB(148, 144, 132) } } }, -- ruined 6-storey tower block (top 45): the NE skyline marker
+			-- Plaza ring: the two apartment blocks facing the flag just outside the capture clear r 124 (SE: the clock tower; SW opens onto the Town Square)
+			{ Id = "NW_Ring", Block = "NW", Role = "block", Tier = 1, X = -109.2, Z = -109.2, Yaw = -135, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "tower", Lantern = true } } }, -- 4-storey brick apartment block facing the flag, wall lantern
+			{ Id = "NE_TowerBlock", Block = "NE", Role = "landmark", Tier = 1, X = 104.7, Z = -104.7, Yaw = 135, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "towerB" } } }, -- 4-storey brick apartment block (top 47): the NE skyline marker
 			{ Id = "SE_ClockTower", Block = "SE", Role = "tower", Tier = 1, X = 95.5, Z = 95.5, Yaw = 45, Kits = { { Kit = "ClockTower", X = 0, Z = 0 } } }, -- landmark, 40 tall; clock faces toward the plaza and the south-east
 			-- NW: frontage on the north arm (fronts facing east) broken by the market lane (z -175), then the west arm (fronts facing south)
-			{ Id = "NW_N1", Block = "NW", Role = "block", Tier = 1, X = -51.1, Z = -143.4, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop+side+left", Width = 26, Depth = 24, Storeys = 3, Roof = "tank", Color = Color3.fromRGB(204, 176, 132) } } },
-			{ Id = "NW_N2", Block = "NW", Role = "block", Tier = 2, X = -47.4, Z = -196.2, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "side", Width = 24, Depth = 22, Storeys = 2, Color = Color3.fromRGB(190, 138, 104) } } },
-			{ Id = "NW_N3", Block = "NW", Role = "block", Tier = 2, X = -46.7, Z = -227, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 22, Depth = 22, Storeys = 3, Roof = "tank", Color = Color3.fromRGB(185, 150, 105) } } },
-			{ Id = "NW_N4", Block = "NW", Role = "block", Tier = 2, X = -44.3, Z = -254.4, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "damaged", Width = 20, Depth = 18, Storeys = 2, Color = Color3.fromRGB(198, 162, 100) } } },
-			{ Id = "NW_W1", Block = "NW", Role = "block", Tier = 1, X = -143.4, Z = -51.1, Yaw = 180, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop+left", Width = 26, Depth = 24, Storeys = 3, Roof = "mast", Color = Color3.fromRGB(214, 202, 176) } } },
-			{ Id = "NW_W2", Block = "NW", Role = "block", Tier = 2, X = -176.2, Z = -46.8, Yaw = 180, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 24, Depth = 20, Storeys = 2, Roof = "dish", Color = Color3.fromRGB(185, 150, 105) } } },
-			{ Id = "NW_W3", Block = "NW", Role = "block", Tier = 2, X = -211, Z = -49, Yaw = 180, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 28, Depth = 22, Storeys = 3, Roof = "hut", Color = Color3.fromRGB(190, 138, 104) } } },
-			{ Id = "NW_W4", Block = "NW", Role = "block", Tier = 2, X = -241.4, Z = -44.1, Yaw = 180, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "gutted", Width = 20, Depth = 18, Storeys = 2, Color = Color3.fromRGB(185, 150, 105) } } },
-			-- NW market lane: stalls under two lane blocks, the water tower closing the lane, a block behind it
-			{ Id = "NW_Lane_S", Block = "NW", Role = "block", Tier = 1, X = -88, Z = -149, Yaw = 0, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 28, Depth = 20, Storeys = 2, Roof = "tank", Color = Color3.fromRGB(190, 138, 104) } } }, -- south side of the lane
-			{ Id = "NW_Lane_N", Block = "NW", Role = "block", Tier = 2, X = -86, Z = -201, Yaw = 180, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 30, Depth = 22, Storeys = 3, Roof = "tank", Color = Color3.fromRGB(204, 176, 132) } } }, -- north side of the lane
+			{ Id = "NW_N1", Block = "NW", Role = "block", Tier = 1, X = -44, Z = -131.5, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "NW_N2", Block = "NW", Role = "block", Tier = 2, X = -44.7, Z = -200, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },
+			{ Id = "NW_N3", Block = "NW", Role = "block", Tier = 2, X = -44.2, Z = -226, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "NW_N4", Block = "NW", Role = "block", Tier = 2, X = -44.2, Z = -252, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "NW_N5", Block = "NW", Role = "block", Tier = 2, X = -44, Z = -278, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "NW_W1", Block = "NW", Role = "block", Tier = 1, X = -131.5, Z = -44.5, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } }, -- plaza end-cap: faces the flag along the road
+			{ Id = "NW_W2", Block = "NW", Role = "block", Tier = 2, X = -158, Z = -44.2, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "NW_W3", Block = "NW", Role = "block", Tier = 2, X = -184.5, Z = -44, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "NW_W4", Block = "NW", Role = "block", Tier = 2, X = -211, Z = -44.2, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "NW_W5", Block = "NW", Role = "block", Tier = 2, X = -237.5, Z = -44.7, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },
+			-- NW market lane: stalls between two walk-ups, the water tower closing the lane, a walk-up behind it
+			{ Id = "NW_Lane_S", Block = "NW", Role = "block", Tier = 1, X = -88, Z = -147, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } }, -- south side of the market lane, facing it
+			{ Id = "NW_Lane_N", Block = "NW", Role = "block", Tier = 2, X = -86, Z = -202, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } }, -- north side of the market lane
+			{ Id = "NW_Lane_S2", Block = "NW", Role = "block", Tier = 2, X = -66, Z = -147, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } }, -- market lane south side, at the mouth
+			{ Id = "NW_Lane_N2", Block = "NW", Role = "block", Tier = 2, X = -65.5, Z = -202, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } }, -- market lane north side, at the mouth
+			{ Id = "NW_PlazaN", Block = "NW", Role = "block", Tier = 2, X = -66, Z = -126, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } }, -- back to back with NW_Lane_S2, facing the plaza
 			{ Id = "NW_Stall_1", Block = "NW", Role = "stall", Tier = 1, X = -81, Z = -163.8, Yaw = 0, Kits = { { Kit = "MarketStall", X = 0, Z = 0, Color = Color3.fromRGB(160, 70, 55) } } },
 			{ Id = "NW_Stall_2", Block = "NW", Role = "stall", Tier = 1, X = -80, Z = -185.2, Yaw = 180, Kits = { { Kit = "MarketStall", X = 0, Z = 0, Color = Color3.fromRGB(70, 95, 120) } } },
 			{ Id = "NW_Stall_3", Block = "NW", Role = "stall", Tier = 2, X = -95, Z = -163.8, Yaw = 0, Kits = { { Kit = "MarketStall", X = 0, Z = 0, Color = Color3.fromRGB(190, 160, 90) } } },
 			{ Id = "NW_Stall_4", Block = "NW", Role = "stall", Tier = 2, X = -94, Z = -185.2, Yaw = 180, Kits = { { Kit = "MarketStall", X = 0, Z = 0, Color = Color3.fromRGB(160, 70, 55) } } },
 			{ Id = "NW_WaterTower", Block = "NW", Role = "tower", Tier = 1, X = -126, Z = -175, Yaw = 0, Kits = { { Kit = "WaterTower", X = 0, Z = 0 } } }, -- landmark, 43 tall, closing the market lane
-			{ Id = "NW_Back_1", Block = "NW", Role = "block", Tier = 2, X = -157, Z = -175, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 30, Depth = 18, Storeys = 3, Color = Color3.fromRGB(214, 202, 176) } } }, -- faces down the market lane
-			-- NE: frontage on the north arm (fronts facing west) and the east arm (fronts facing south); Bank Street (x 200-240) stays open to the Empire Bank
-			{ Id = "NE_N1", Block = "NE", Role = "block", Tier = 1, X = 51.1, Z = -143.4, Yaw = 90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop+left", Width = 26, Depth = 24, Storeys = 3, Roof = "mast", Color = Color3.fromRGB(190, 138, 104) } } },
-			{ Id = "NE_N2", Block = "NE", Role = "block", Tier = 1, X = 46.8, Z = -176.2, Yaw = 90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 24, Depth = 20, Storeys = 2, Color = Color3.fromRGB(204, 176, 132) } } },
-			{ Id = "NE_N3", Block = "NE", Role = "block", Tier = 2, X = 48.2, Z = -210, Yaw = 90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 26, Depth = 22, Storeys = 3, Roof = "hut", Color = Color3.fromRGB(185, 150, 105) } } },
-			{ Id = "NE_N4", Block = "NE", Role = "block", Tier = 2, X = 44.3, Z = -239.4, Yaw = 90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 20, Depth = 18, Storeys = 2, Roof = "bare", Color = Color3.fromRGB(198, 162, 100) } } },
-			{ Id = "NE_E1", Block = "NE", Role = "block", Tier = 1, X = 143.4, Z = -51.1, Yaw = 180, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop+side", Width = 26, Depth = 24, Storeys = 3, Roof = "tank", Color = Color3.fromRGB(214, 202, 176) } } },
-			{ Id = "NE_E2", Block = "NE", Role = "block", Tier = 2, X = 176.2, Z = -46.8, Yaw = 180, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 24, Depth = 20, Storeys = 2, Color = Color3.fromRGB(185, 150, 105) } } },
-			{ Id = "NE_E3", Block = "NE", Role = "block", Tier = 2, X = 243, Z = -47.4, Yaw = 180, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 24, Depth = 22, Storeys = 3, Color = Color3.fromRGB(190, 138, 104) } } },
-			{ Id = "NE_E4", Block = "NE", Role = "block", Tier = 2, X = 271.4, Z = -44.1, Yaw = 180, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "gutted", Width = 20, Depth = 18, Storeys = 2, Color = Color3.fromRGB(204, 176, 132) } } },
+			{ Id = "NW_Back_1", Block = "NW", Role = "block", Tier = 2, X = -153, Z = -175, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } }, -- faces down the market lane past the water tower
+			-- NE: frontage on the north arm (fronts facing west) and the east arm (fronts facing south); Bank Street (x 200-240) runs down to the Empire Bank between two walk-ups
+			{ Id = "NE_N1", Block = "NE", Role = "block", Tier = 1, X = 44.5, Z = -131.5, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } }, -- plaza end-cap: faces the flag along the road
+			{ Id = "NE_N2", Block = "NE", Role = "block", Tier = 1, X = 44.2, Z = -158, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "NE_N3", Block = "NE", Role = "block", Tier = 2, X = 44, Z = -184.5, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "NE_N4", Block = "NE", Role = "block", Tier = 2, X = 44.2, Z = -211, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "NE_N5", Block = "NE", Role = "block", Tier = 2, X = 44.7, Z = -237.5, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },
+			{ Id = "NE_E1", Block = "NE", Role = "block", Tier = 1, X = 131.5, Z = -43.8, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } }, -- plaza end-cap: faces the flag along the road
+			{ Id = "NE_E2", Block = "NE", Role = "block", Tier = 2, X = 158, Z = -44.7, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },
+			{ Id = "NE_E3", Block = "NE", Role = "block", Tier = 2, X = 252, Z = -44.2, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } }, -- east of Bank Street
+			{ Id = "NE_E4", Block = "NE", Role = "block", Tier = 2, X = 278.5, Z = -44, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
 			{ Id = "NE_Barricade", Block = "NE", Role = "barricade", Tier = 2, X = 16, Z = -132, Yaw = 90, Street = true, Kits = { { Kit = "Jersey", X = -3, Z = 0, Yaw = -10 }, { Kit = "Jersey", X = 3, Z = 0, Yaw = 10 } } }, -- jersey barricade on the north-arm verge at the plaza corner (collidable >= 13 off the line)
-			{ Id = "NE_Bank_W", Block = "NE", Role = "block", Tier = 2, X = 175, Z = -150, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 26, Depth = 20, Storeys = 2, Color = Color3.fromRGB(204, 176, 132) } } }, -- Bank Street, west side
-			-- SW: frontage on the south arm (fronts facing east) and the west arm (fronts facing north); the Town Square (-150, 150) framed by blocks and the radio mast
-			{ Id = "SW_S1", Block = "SW", Role = "block", Tier = 1, X = -51.1, Z = 143.4, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop+left+rear", Width = 26, Depth = 24, Storeys = 3, Roof = "tank", Color = Color3.fromRGB(185, 150, 105) } } },
-			{ Id = "SW_S2", Block = "SW", Role = "block", Tier = 2, X = -46.8, Z = 176.2, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "rear", Width = 24, Depth = 20, Storeys = 2, Color = Color3.fromRGB(214, 202, 176) } } },
-			{ Id = "SW_S3", Block = "SW", Role = "block", Tier = 2, X = -48.2, Z = 210, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 26, Depth = 22, Storeys = 3, Color = Color3.fromRGB(190, 138, 104) } } },
-			{ Id = "SW_S4", Block = "SW", Role = "block", Tier = 2, X = -44.3, Z = 239.4, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "damaged", Width = 20, Depth = 18, Storeys = 2, Color = Color3.fromRGB(204, 176, 132) } } },
-			{ Id = "SW_W1", Block = "SW", Role = "block", Tier = 1, X = -143.4, Z = 51.1, Yaw = 0, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop+side+rear", Width = 26, Depth = 24, Storeys = 3, Roof = "dish", Color = Color3.fromRGB(190, 138, 104) } } },
-			{ Id = "SW_W2", Block = "SW", Role = "block", Tier = 2, X = -176.2, Z = 46.8, Yaw = 0, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "rear", Width = 24, Depth = 20, Storeys = 2, Roof = "tank", Color = Color3.fromRGB(185, 150, 105) } } },
-			{ Id = "SW_W3", Block = "SW", Role = "block", Tier = 2, X = -210, Z = 48.2, Yaw = 0, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 26, Depth = 22, Storeys = 3, Color = Color3.fromRGB(204, 176, 132) } } },
-			{ Id = "SW_W4", Block = "SW", Role = "block", Tier = 2, X = -239.4, Z = 44.1, Yaw = 0, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "gutted", Width = 20, Depth = 18, Storeys = 2, Color = Color3.fromRGB(185, 150, 105) } } },
+			{ Id = "NE_Bank_W", Block = "NE", Role = "block", Tier = 2, X = 189.4, Z = -150, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } }, -- Bank Street, west side (front on x 200)
+			{ Id = "NE_Bank_E", Block = "NE", Role = "block", Tier = 2, X = 249.9, Z = -150, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } }, -- Bank Street, east side (front on x 240)
+			-- SW: frontage on the south arm (fronts facing east) and the west arm (fronts facing north); the Town Square (-150, 150) framed by the sandstone hall, two walk-ups and the radio mast
+			{ Id = "SW_S1", Block = "SW", Role = "block", Tier = 1, X = -44.1, Z = 131.5, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } }, -- plaza end-cap: faces the flag along the road
+			{ Id = "SW_S2", Block = "SW", Role = "block", Tier = 2, X = -44, Z = 158, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "SW_S3", Block = "SW", Role = "block", Tier = 2, X = -44.7, Z = 184.5, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },
+			{ Id = "SW_S4", Block = "SW", Role = "block", Tier = 2, X = -44.2, Z = 211, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "SW_S5", Block = "SW", Role = "block", Tier = 2, X = -44, Z = 237.5, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "SW_W1", Block = "SW", Role = "block", Tier = 1, X = -131.5, Z = 44.5, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } }, -- plaza end-cap: faces the flag along the road
+			{ Id = "SW_W2", Block = "SW", Role = "block", Tier = 2, X = -158, Z = 44.2, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "SW_W3", Block = "SW", Role = "block", Tier = 2, X = -184.5, Z = 44, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "SW_W4", Block = "SW", Role = "block", Tier = 2, X = -211, Z = 44.2, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "SW_W5", Block = "SW", Role = "block", Tier = 2, X = -237.5, Z = 44.7, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },
 			-- SW: the Town Square arena, 90 x 90 paving round the TownSquare event anchor (-150, 150): dry fountain, benches
 			{ Id = "SW_Square_1", Block = "SW", Role = "square", Tier = 1, X = -172.5, Z = 127.5, Yaw = 0, Kits = { { Kit = "PaveTile", X = 0, Z = 0, Color = Color3.fromRGB(176, 160, 132) } } },
 			{ Id = "SW_Square_2", Block = "SW", Role = "square", Tier = 1, X = -127.5, Z = 127.5, Yaw = 0, Kits = { { Kit = "PaveTile", X = 0, Z = 0, Color = Color3.fromRGB(160, 144, 116) } } },
@@ -696,33 +833,63 @@ local WorldConfig = {
 			{ Id = "SW_Square_4", Block = "SW", Role = "square", Tier = 1, X = -127.5, Z = 172.5, Yaw = 0, Kits = { { Kit = "PaveTile", X = 0, Z = 0, Color = Color3.fromRGB(176, 160, 132) } } },
 			{ Id = "SW_Fountain", Block = "SW", Role = "fountain", Tier = 1, X = -150, Z = 120, Yaw = 0, Kits = { { Kit = "Fountain", X = 0, Z = 0 } } }, -- 30 from the anchor: its 20-stud landing circle stays clear
 			{ Id = "SW_Benches_1", Block = "SW", Role = "benches", Tier = 2, X = -188, Z = 150, Yaw = -90, Kits = { { Kit = "Bench", X = -12, Z = 0 }, { Kit = "Bench", X = 12, Z = 0 } } },
-			{ Id = "SW_Square_S", Block = "SW", Role = "block", Tier = 1, X = -150, Z = 216, Yaw = 0, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop", Width = 34, Depth = 18, Storeys = 3, Roof = "tank", Color = Color3.fromRGB(204, 176, 132) } } }, -- closes the square's south side
-			{ Id = "SW_Square_W", Block = "SW", Role = "block", Tier = 2, X = -216, Z = 150, Yaw = -90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 30, Depth = 18, Storeys = 2, Roof = "tank", Color = Color3.fromRGB(190, 138, 104) } } }, -- closes the square's west side
+			{ Id = "SW_Square_S", Block = "SW", Role = "block", Tier = 1, X = -150, Z = 216, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "office" } } }, -- the sandstone hall closing the square's south side
+			{ Id = "SW_Square_W", Block = "SW", Role = "block", Tier = 2, X = -207, Z = 150, Yaw = -90, Kits = { { Kit = "TownHouse", X = -9.6, Z = 0, Variant = "walkup" }, { Kit = "TownHouse", X = 9.6, Z = 0, Variant = "walkupB" } } }, -- two walk-ups closing the square's west side
+			-- fix round 1: the square's north and east sides are walk-ups facing INTO the square (backs to the road rows' backs
+			-- across a 28-stud service yard), and a walk-up closes each yard's mouth facing the plaza, so the square and the
+			-- plaza corner see fronts, not backs
+			{ Id = "SW_SqN1", Block = "SW", Role = "block", Tier = 1, X = -135, Z = 92.3, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } }, -- Town Square north side, facing the square
+			{ Id = "SW_SqN2", Block = "SW", Role = "block", Tier = 1, X = -161.5, Z = 92.3, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },
+			{ Id = "SW_SqN3", Block = "SW", Role = "block", Tier = 1, X = -188, Z = 92.3, Yaw = 180, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "SW_SqE1", Block = "SW", Role = "block", Tier = 1, X = -92.3, Z = 135, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } }, -- Town Square east side, facing the square
+			{ Id = "SW_SqE2", Block = "SW", Role = "block", Tier = 1, X = -92.3, Z = 161.5, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "SW_SqE3", Block = "SW", Role = "block", Tier = 1, X = -92.3, Z = 188, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },
+			{ Id = "SW_YardE", Block = "SW", Role = "block", Tier = 2, X = -68, Z = 121, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } }, -- closes the yard behind the south-arm row, facing the plaza
+			{ Id = "SW_YardN", Block = "SW", Role = "block", Tier = 2, X = -120, Z = 70, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } }, -- closes the yard behind the west-arm row, facing the plaza
 			{ Id = "SW_RadioMast", Block = "SW", Role = "mast", Tier = 1, X = -214, Z = 212, Yaw = 0, Kits = { { Kit = "RadioMast", X = 0, Z = 0 } } }, -- 90-tall lattice mast over the square: the SW skyline marker
 			{ Id = "SW_Nest", Block = "SW", Role = "nest", Tier = 2, X = -95, Z = 95, Yaw = 135, Kits = { { Kit = "SandbagArc", X = 0, Z = 0 } } }, -- sandbag arc on the plaza corner, facing the flag
-			-- SE: frontage on the east arm (fronts facing north) and the south arm past the Pool_Town pad (fronts facing west); motor pool shed
-			{ Id = "SE_E1", Block = "SE", Role = "block", Tier = 1, X = 143.4, Z = 51.1, Yaw = 0, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop+left", Width = 26, Depth = 24, Storeys = 3, Roof = "tank", Lantern = true, Color = Color3.fromRGB(204, 176, 132) } } },
-			{ Id = "SE_E2", Block = "SE", Role = "block", Tier = 2, X = 176.2, Z = 46.8, Yaw = 0, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 24, Depth = 20, Storeys = 2, Color = Color3.fromRGB(190, 138, 104) } } },
-			{ Id = "SE_E3", Block = "SE", Role = "block", Tier = 2, X = 207.6, Z = 47.1, Yaw = 0, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "damaged", Width = 24, Depth = 22, Storeys = 3, Color = Color3.fromRGB(185, 150, 105) } } },
-			{ Id = "SE_E4", Block = "SE", Role = "block", Tier = 2, X = 235.6, Z = 44.3, Yaw = 0, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 20, Depth = 18, Storeys = 2, Roof = "bare+tank", Color = Color3.fromRGB(214, 202, 176) } } },
-			{ Id = "SE_S1", Block = "SE", Role = "block", Tier = 1, X = 49.7, Z = 224.4, Yaw = 90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop", Width = 24, Depth = 22, Storeys = 3, Roof = "tank", Color = Color3.fromRGB(185, 150, 105) } } },
-			{ Id = "SE_S2", Block = "SE", Role = "block", Tier = 2, X = 45.7, Z = 254.8, Yaw = 90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Width = 22, Depth = 20, Storeys = 2, Roof = "bare", Color = Color3.fromRGB(214, 202, 176) } } },
-			{ Id = "SE_S3", Block = "SE", Role = "block", Tier = 2, X = 42.9, Z = 280.8, Yaw = 90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "damaged", Width = 18, Depth = 16, Storeys = 2, Color = Color3.fromRGB(190, 138, 104) } } },
-			{ Id = "SE_MotorShed", Block = "SE", Role = "block", Tier = 2, X = 100, Z = 170, Yaw = 90, Kits = { { Kit = "TownBlock", X = 0, Z = 0, Variant = "shop", Width = 26, Depth = 16, Storeys = 1, Color = Color3.fromRGB(148, 144, 132) } } }, -- motor pool shed facing the Pool_Town pad
+			-- SE: frontage on the east arm (fronts facing north) and the south arm past the Pool_Town pad (fronts facing west); motor pool garages
+			{ Id = "SE_E1", Block = "SE", Role = "block", Tier = 1, X = 131.5, Z = 44.5, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup", Lantern = true } } }, -- plaza end-cap: faces the flag along the road
+			{ Id = "SE_E2", Block = "SE", Role = "block", Tier = 2, X = 158, Z = 44.2, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "SE_E3", Block = "SE", Role = "block", Tier = 2, X = 184.5, Z = 44, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "SE_E4", Block = "SE", Role = "block", Tier = 2, X = 211, Z = 44.2, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "SE_E5", Block = "SE", Role = "block", Tier = 2, X = 237.5, Z = 44.7, Yaw = 0, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },
+			{ Id = "SE_S1", Block = "SE", Role = "block", Tier = 1, X = 44, Z = 212, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkupB" } } },
+			{ Id = "SE_S2", Block = "SE", Role = "block", Tier = 2, X = 44.2, Z = 238.5, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "SE_S3", Block = "SE", Role = "block", Tier = 2, X = 44.7, Z = 265, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },
+			{ Id = "SE_S4", Block = "SE", Role = "block", Tier = 2, X = 44.2, Z = 291.5, Yaw = 90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "shop" } } },
+			{ Id = "SE_MotorShed", Block = "SE", Role = "block", Tier = 2, X = 100, Z = 170, Yaw = 90, Kits = { { Kit = "TownHouse", X = -9.3, Z = 0, Variant = "shop" }, { Kit = "TownHouse", X = 9.3, Z = 0, Variant = "shop" } } }, -- two shutter garages facing the Pool_Town pad
 			{ Id = "SE_MotorPool", Block = "SE", Role = "motorpool", Tier = 2, X = 76, Z = 170, Yaw = 90, Kits = { { Kit = "Jersey", X = -4, Z = 0 }, { Kit = "Jersey", X = 4, Z = 0 }, { Kit = "DrumGroup", X = 0, Z = 3, Count = 2 } } }, -- beside the Pool_Town garage pad (+16 clear)
 			{ Id = "SE_Wreck", Block = "SE", Role = "wreck", Tier = 1, X = 232, Z = 14.5, Yaw = 0, Street = true, Kits = { { Kit = "Wreck", X = 0, Z = 0, Variant = "truck" } } }, -- burnt truck parked on the east-arm verge (collidable >= 13 off the line)
 		} :: { TownCluster },
 		Rocks = {
-			{ Kind = "rubble", X = -68, Z = -262, Radius = 6, Tier = 1 }, -- the damaged north-arm block
-			{ Kind = "rubble", X = -262, Z = -62, Radius = 6, Tier = 1 }, -- the burnt-out west-arm shell
+			{ Kind = "rubble", X = -68, Z = -262, Radius = 6, Tier = 1 }, -- back lot behind the north-arm frontage
+			{ Kind = "rubble", X = -262, Z = -62, Radius = 6, Tier = 1 }, -- back lot at the end of the west-arm frontage
 			{ Kind = "rubble", X = -130, Z = -222, Radius = 6, Tier = 1 }, -- behind the market lane
-			{ Kind = "rubble", X = 85, Z = -125, Radius = 6, Tier = 1 }, -- under the tower block's blown corner
-			{ Kind = "rubble", X = 290, Z = -64, Radius = 5, Tier = 1 }, -- the burnt-out east-arm shell
-			{ Kind = "rubble", X = -66, Z = 262, Radius = 6, Tier = 1 }, -- the damaged south-arm block
-			{ Kind = "rubble", X = 228, Z = 72, Radius = 6, Tier = 1 }, -- the damaged east-arm block
-			{ Kind = "rubble", X = 66, Z = 290, Radius = 6, Tier = 1 }, -- the damaged south-arm block
+			{ Kind = "rubble", X = 78, Z = -130, Radius = 6, Tier = 1 }, -- between the apartment block and the north-arm frontage
+			{ Kind = "rubble", X = 290, Z = -64, Radius = 5, Tier = 1 }, -- back lot at the end of the east-arm frontage
+			{ Kind = "rubble", X = -66, Z = 262, Radius = 6, Tier = 1 }, -- back lot behind the south-arm frontage
+			{ Kind = "rubble", X = 228, Z = 72, Radius = 6, Tier = 1 }, -- back lot behind the east-arm frontage
+			{ Kind = "rubble", X = 66, Z = 290, Radius = 6, Tier = 1 }, -- back lot behind the south-arm frontage
 			{ Kind = "scorch", X = 150, Z = 170, Radius = 9, Tier = 1 }, -- a burnt patch behind the east-arm frontage
 		} :: { TownRock },
+		-- Town pavements (owner feedback 2026-09-27; Kit Sidewalk, one flat non-colliding strip each, under
+		-- POI_Town.Infra, built in Low and Full): each road arm's two frontages from the road shoulder (7.6 off the centre
+		-- line) to the building fronts (33.6), Length along the arm; Bank Street (x 200..240) down to the bank plaza's
+		-- guard ring; the market lane between its two walk-ups. The south arm's east side starts past the Pool_Town pad
+		-- (+16). 10 parts; every strip is sampled through WorldDress.Blocked (capture clear r 124, pads, bank).
+		Infra = {
+			{ Id = "Walk_N_W", Kit = "Sidewalk", X = -20.6, Z = -214.5, Yaw = 90, Length = 171 },
+			{ Id = "Walk_N_E", Kit = "Sidewalk", X = 20.6, Z = -214.5, Yaw = 90, Length = 171 },
+			{ Id = "Walk_S_W", Kit = "Sidewalk", X = -20.6, Z = 214.5, Yaw = 90, Length = 171 },
+			{ Id = "Walk_S_E", Kit = "Sidewalk", X = 20.6, Z = 250.5, Yaw = 90, Length = 99 },
+			{ Id = "Walk_W_N", Kit = "Sidewalk", X = -214.5, Z = -20.6, Yaw = 0, Length = 171 },
+			{ Id = "Walk_W_S", Kit = "Sidewalk", X = -214.5, Z = 20.6, Yaw = 0, Length = 171 },
+			{ Id = "Walk_E_N", Kit = "Sidewalk", X = 214.5, Z = -20.6, Yaw = 0, Length = 171 },
+			{ Id = "Walk_E_S", Kit = "Sidewalk", X = 214.5, Z = 20.6, Yaw = 0, Length = 171 },
+			{ Id = "Walk_Bank", Kit = "Sidewalk", X = 220, Z = -103.8, Yaw = 90, Length = 140.4, Width = 40 },
+			{ Id = "Walk_Market", Kit = "Sidewalk", X = -75.8, Z = -174.95, Yaw = 0, Length = 84.4, Width = 34.3 },
+		} :: { InfraRow },
 		-- W3 step 2 activity anchors (world studs; see the Activity section). WorldPOI stamps each Town row on the first
 		-- part of the cluster it Requires (a Town row always names one) and Activity.CheckpointAnchors on CP_N / CP_E /
 		-- CP_S / CP_W (ids Town.CP_N.Booth …). 0 parts: the Town stays at 368 / 370.
@@ -763,6 +930,9 @@ local WorldConfig = {
 			{ Id = "Pool_Airstrip", X = 740, Z = -1180, Yaw = 180 }, -- faces +Z
 		} :: { Pad },
 		TutorialJeepPad = "Gate_P1", -- the tutorial's jeep step targets the player's own gate pad
+		-- vscale R2: the gate pads' "Garage" sign post and board stand this far behind the pad centre (pad-local +Z, was
+		-- PadSize.Z / 2 + 0.4 = 10.4): a Roblox-size Pickup / Van parked on the pad reaches 13.29 / 13.10 back
+		GarageSignBack = 14.6,
 		-- Invisible anchors (Transparency 1, CanCollide false, 14 x 1.2 x 14 at y 1)
 		AnchorSize = Vector3.new(14, 1.2, 14),
 		NPC = {

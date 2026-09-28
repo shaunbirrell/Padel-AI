@@ -1301,6 +1301,15 @@ function VehicleController.Init()
 	if not okHp then
 		warn("[VehicleController] VehicleCombatClient.Init failed:", errHp)
 	end
+	-- aircraft fire buttons (shown only for the pilot of an armed aircraft while the server says weapons are live)
+	local okAir, errAir = pcall(function(): any
+		local AirWeaponsClient = require(script.Parent.Parent.Modules.AirWeaponsClient)
+		AirWeaponsClient.Init(Remotes.TryGetEvent)
+		return nil
+	end)
+	if not okAir then
+		warn("[VehicleController] AirWeaponsClient.Init failed:", errAir)
+	end
 
 	buildGui()
 

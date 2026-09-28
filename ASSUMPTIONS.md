@@ -5182,3 +5182,2339 @@ Everything below is server-side and can be reverted by config (spec_xp.md §13).
 - the live level distribution, to size the backfill, and how many players rebirth before it is turned on
 
 - XP-X1-INT (integration on v81 9475f8b): the owner playtest grant in DataService (AdminConfig.AdminPlaytestAllVehicles, UserId 470626172 only) writes `(profile :: any).Vehicles = {}` under its own typeof guard; it is added to the pinned whole-table repairs. New scan: every pinned whole-table owned-item write must sit right under its own `if typeof(...) ~= "table" then` guard (round-4 review MEDIUM), shown failing on a mutated guard. X1 drivers on this base: xp 84/0, r3 37/0, r4 29/0, ds 50/0, buy 20/0, rookie 4/0, DataService 24/0, world sim 12/12.
+
+## v82 ATM screen fix (owner report on v81: "I have auto collect but money is still going to the ATM")
+- **ATM-1 Root cause.** The ATM screen painted `MoneyCollectorService.GetRaidableBalance`, which for an AutoCollect owner is PendingCash **plus the last `RaidConfig.Raid.AutoCollectWindowSeconds` (600 s) of income the AutoCollect loop had already paid into the wallet**. That second part is the raid rule "AutoCollect is not raid immunity" (v69). So the screen grew for 10 minutes ($274K after 90 s at +$3,088/s in the stand-in; the owner saw $262K), walking in had nothing to collect (PendingCash was already 0), and the number looked like money stuck in the ATM. The money itself was never lost: in the stand-in the wallet got 100 % of the income for the owner profile (UserId 470626172, Level 100, 52.6M, pass and/or entitlement), a normal AutoCollect owner and a pass-only owner; the loop never errored.
+- **ATM-2 Fix (config first).** New `RaidConfig.Raid.AtmScreenCountsRecentIncome = false`: the screen (RefreshAllBillboards / RefreshForPlayer, via `atmScreenBalance`) shows PendingCash only, i.e. what walking in or the AutoCollect loop pays out. For an AutoCollect owner it reads "ATM · AUTO-COLLECT" over $0, ticking up for at most ~2 s between sweeps. `true` restores the v69-v81 screen.
+- **ATM-3 Raids unchanged (assumption, reversible).** `GetRaidableBalance`, `CanRaid` and `completeRaid` are untouched: a thief still takes 10 % of PendingCash plus the recent auto income (capped at Cash). A thief may therefore see $0 on an AutoCollect owner's ATM and still steal. I assumed "the screen shows what you can collect" matters more than "the screen shows what a thief can take". If the owner wants visitors to see the raid amount, that needs a per-viewer display (client side), not this server-painted screen.
+- **ATM-4 Seen, not changed.** Next to the ATM the manual dropper's "Grab Cash" prompt and the ATM's "Collect" prompt share the same default key and `Exclusivity` (OnePerButton), so only the closer one shows (the owner's screenshot shows only "Grab Cash"). That does not matter for an AutoCollect owner (nothing is waiting), and walk-in collection is automatic for everyone else. It is left for the dropper lane.
+- **ATM-5 Stand-in only.** The headless stand-in is not Roblox. The catalog ATM dress (18220523228) cannot load there. From reading `weldCloneToPrimary`, it welds unanchored, CanTouch=false clone parts to the anchored tagged body and never moves or replaces it. The live screenshot confirms the plot lookup works, because the "AUTO-COLLECT" status needs `findOwnerByPlot` to succeed.
+- **ATM-6 Fixed: the ATM and the cash plate have their own prompt keys (config first).** ATM-4's clash is gone. The ATM "Collect" prompt reads `EconomyConfig.AtmCollectPrompt` (E / gamepad X, hold 0, 14 studs; these were literals in MoneyCollectorService). The plate's "Grab Cash" prompt reads `ManualDropperConfig.PromptKeyboardKey` / `PromptGamepadKey` / `PromptExclusivity` (F / gamepad B). Both stay `OnePerButton`. With different keys each one is the only prompt on its key beside the ATM, so both show and each key triggers only its own prompt. A plate built before this change is brought to F / B by `upgradeLegacyKit` (compare-first). Hold, range, text and every money path are unchanged. Revert: set the two plate keys back to E / ButtonX (or delete the three plate keys and the three service lines).
+- **ATM-7 Where the prompts can meet (stand-in survey, all 6 plots, base levels 0-5).** The only prompt pair a player can stand in range of at once, around either plate or the ATM, is the ATM and its own plate: 7.5 studs apart, with a combined reach of 26. The Training Yard plate's nearest prompt is a console, 33.1 studs away (combined reach 22, so 11.1 studs clear) at every level. The premium pads have no ProximityPrompt: they are walk-over triggers. The flagpole "Change flag" prompt (F, 12 studs) is only made once a nation is chosen, so the stand-in has none. The nearest flag-pole part is 37.1 studs from any plate or ATM prompt on its plot (39.8 at L0), against a combined reach of 24. The client-made "Garage" prompts (E, 12 studs, on the vehicle spawns) were modelled from source: none is in reach. Other clashes the survey sees are between terminals inside the same building and between consoles. They existed before this change, are not changed by it, and are out of scope.
+- **ATM-8 Gamepad B for Grab Cash, not Y.** Y is Reload (`HudConfig.Keys.Gamepad.Reload`). A prompt on Y would swallow Reload next to any plate, including an enemy's during a raid. B, like F on the keyboard, is bound only while seated, for the vehicle exit (VehicleDriveClient, ContextActionService at High priority). F / B is also the pair the game already uses for that exit. Not proven here: which one wins when a seated player sits within 12 studs of a plate and presses F / B, the exit or the prompt. It needs a check on PC and on a gamepad. The pill is hidden while driving either way. Revert: `PromptGamepadKey = Enum.KeyCode.ButtonY`. The BuyPathStatic pin then fails on purpose, because Y is a HUD key.
+- **ATM-9 OnePerButton, not AlwaysShow; phones get two pills side by side.** AlwaysShow would show a prompt even when another prompt on the same key is closer, so one key press could fire two prompts. It is not needed once the keys differ. On a phone the PromptController draws both pills in its action lane (at most 2, 8 v gap), with no key caps on touch. No UIOffset is used: the lane draws custom pills, and UIOffset only moves Roblox's default cards. Assumption, engine behaviour: Roblox groups touch prompts by `KeyboardKeyCode` under OnePerButton, as the owner's screenshot suggests (one pill, "Grab Cash"). The stand-in cannot prove this, so the phone test confirms it. While the plate is Recharging its pill is hidden (ProductionFx `SetSuppressed`). Before this change the hidden plate still held the E slot, so the ATM had no pill at all; now "Collect" stays. The two pills swap sides depending on which prompt came into range first (the lane's newest-right rule). Each pill is labelled, so the order was left as it is.
+- **ATM-10 Known, not changed: the 2-pill lane touches the HUD harness's bottom-right box on the smallest phones.** At 844x390 the 2-pill lane (218x48 real px) reaches 25 px into the harness's conservative "Reserved: vehicle/combat controls" 250x220 box, and 33 px at 800x360 with a notch. main's `droppers_plate` state shows exactly the same (already noted by the droppers lane). It is not a CLAUDE.md reserved zone: thumb zone 0, jump gap 0 and top bar 0 in every snapshot. With the rifle drawn, the lane ends 79 px left of RELOAD at 844x390 (71 px at 800x360 with a notch) and overlaps nothing. What changes is that the 2-pill case now really happens at every ATM. Shrinking the pills would affect every prompt in the game, so that is left for a HUD lane.
+
+## Aircraft weapons (owner request part 2) — reversible assumptions
+
+- **A-AW-1: which aircraft are armed.** Attack-kit helicopters (AttackHelicopter, EscortHeli, NightAttackHeli, StealthHeli) get the nose gun and rockets. GunshipHeli gets the same weapons with a 12-rocket magazine. Fighters (FighterJet, InterceptorJet, LightFighter) get a gun and missiles. Strike jets (StrikeJet, CASJet, StealthStrike) get bombs. Bombers (StrikeBomber, HeavyBomber, StrategicBomber) get a 4-bomb stick. Revert: edit `AircraftWeaponConfig.Aircraft` / `Unarmed`.
+- **A-AW-2: StealthHeli is armed.** It uses the HeliAttack kit and is armed like the attack helicopters. Revert: move it to `Unarmed`.
+- **A-AW-3: "the stealth jet" is StealthStrike, a strike jet, so it gets bombs only.** Revert: give the `Strike` loadout a gun as well (`{ "JetCannon", "StrikeBombs" }`).
+- **A-AW-4: strike jets carry bombs only, no gun.** This follows the owner's words. Adding a gun is a one-line loadout change.
+- **A-AW-5: some JetFighter-kit aircraft stay unarmed.** TrainerJet and ReconPlane are not fighters. LightScoutHeli, UtilityHeli and RescueHeli are not attack helicopters. All five stay unarmed, together with every transport, cargo, medevac, AWACS and tanker aircraft. Revert: move them from `Unarmed` to `Aircraft`.
+- **A-AW-6: PremiumStormwing (Phase 2 premium gunship) is not armed here.** It is not in `VehicleConfig` yet. Its own mounts (`VehicleWeaponConfig` RocketPods / ChinGun / DoorMG) are for the M6 service.
+- **A-AW-7: the fire request reuses the unused v71 `RequestVehicleFire` remote.** The payload keeps the documented shape `{ M = mount id, D = direction }`, plus an optional input class `I`. `M` is an aircraft mount id (`HeliNoseGun`, `JetMissiles`, …). A future ground `VehicleWeaponService` (M6) must ignore mount ids that are not its own, and AirWeaponService already refuses unknown ids (`not_in_loadout`). Revert: give aircraft their own remote name.
+- **A-AW-8: the aim is clamped, never rejected.** It is clamped into each weapon's `ArcDeg` around the nose: helicopter gun 35°, rockets 12°, fighter gun 8°, missiles 10°. A pilot who looks backwards still fires forward. Only a non-finite direction is refused, with one AntiExploit strike (`afire_bad_dir`).
+- **A-AW-9: the pilot must own the aircraft and not be on a free trial.** A player in someone else's DriverSeat is refused (`not_owner`, matching SeatPolicy.Driver = "Owner"). Free-trial aircraft cannot fire (`trial`), so a trial never deals damage.
+- **A-AW-10: gun aim assist uses a wider aircraft class.** It lives in `AimAssistConfig.Aircraft`: Touch 5 studs / 3°, Gamepad 4 / 2.5°, Mouse 2.5 / 1.5°, at most 220 studs. It targets humanoids only, needs line of sight, picks one target per shot and never extends range. The class comes from the fire payload's `I` (Touch / Gamepad / KeyboardAndMouse), so a PC that claims Touch gains at most 2.5 studs / 1.5°. Revert: read only `CombatService.InputClass`.
+- **A-AW-11: missiles lock without any client input.** The server picks the lock: the enemy vehicle, NPC or player closest to the aim inside 30° and 400 studs with line of sight. Clan allies, novices, protected vehicles and players seated in any vehicle are skipped; their vehicle is the candidate instead. With no lock the missile flies straight. There is no lock-on UI yet.
+- **A-AW-12: base shields for aircraft weapons.** The gate and gate guards of a base whose owner is under a raid shield (`profile.Raid.ShieldUntil`), new-player protection (`RaidConfig.Raid.NewPlayerProtectionSeconds`, Studio exception as in MissileStrikeService) or the novice shield take no damage from aircraft weapons. Neither does the base of an owner whose save has not loaded. Players standing in such a base are handled by their own shields only.
+- **A-AW-13: novice-shield rules for aircraft fire.** Firing an aircraft weapon ends the pilot's novice shield (reason "fire"), like any shot. A novice-shielded player's vehicles are never damaged by aircraft weapons, and a still-shielded attacker deals no vehicle, gate or guard splash.
+- **A-AW-14: gates and guards accept aircraft hits from farther away.** `GateDefenseService.ApplyDamage` normally needs the attacker within 120 studs (gate) or 150 studs (guard). For hit ids `V_<aircraft mount>` it accepts the weapon's Range + 60 studs (`AircraftWeaponConfig.GateReachSlack`). Every other weapon keeps the old limits.
+- **A-AW-15: pilots see their own tracers.** Gun tracers go out as WeaponFx bullets with `S = 0` (bucket key `air<UserId>`) so the pilot sees them, since the client only predicts infantry shots. Ordnance serials start at 2,000,000 so they never collide with infantry projectile serials. Bombs carry `G` (gravity factor) in the launch event, and WeaponVisuals uses it only when WeaponConfig has no def for the id.
+- **A-AW-16: fire-button placement and keys.** The buttons sit left of the ▼ button (phones: ▲▼ above the jump button). When the EXIT pill is beside ▼, they sit left of EXIT instead. They are 64 real px on phones and 72 on tablets and desktop, in their own ScreenGui without a UIScale. PC keys: left mouse = button 1, R = button 2. Gamepad: Y / X. Keys and hints show only when PreferredInput is keyboard or gamepad. Revert: `AircraftWeaponConfig.Ui` and `AirWeaponsClient.Layout`.
+- **A-AW-17: combined request cap.** A pilot sends at most 10 fire requests per second across all buttons (`Ui.MaxRequestHz`). With the 10 Hz drive input stream that stays within 20 remote sends per second.
+- **A-AW-18: the v79 vehicle-gun hooks are reused as muzzle points.** Six aircraft refs were added to `VisualAssetConfig.VehicleWeapons` with ModelAssetId 0, so nothing loads. Their `Mount` kit parts are the muzzles and bays: Cockpit, StubWingL (mirrored), Nose, WingL (mirrored), Chassis, Bay. Their allow-lists match the armed aircraft (a test checks this). A future dress id on AirStrikeBombs would be fitted into the Chassis box, so give it HideParts / FitScale first.
+
+## 2026-09-27 — Owner phone feedback: bank guards come back as one group after a real window; Roblox's health bar off the compass slot
+
+Owner: "When you kill the bank guards they respawn super fast, doesn't ever give you a chance to rob the bank", plus the
+screenshot's yellow bar over the top-right compass pill. Live bank = Jobs OFF (BankRaidService + CombatService).
+All numbers below are from the headless stand-in (ownerfb/bank drivers), NOT Roblox.
+
+- **BG-1 What HEAD does.** BankRaidService spawns the five guards with a 2-argument `CombatService.SpawnNPC`, so
+  CombatService brings EACH guard back `CombatConfig.NPCRespawnSeconds` (18 s) after its own death, on its post, whoever
+  stands there. A phone fight of five 200 HP guards takes 16-48 s, so the first guards are back before the last one
+  falls. Stand-in, scripted kills 4 / 8 / 12 s apart: last kill -> first guard back +2.0 s / -14.0 s / -30.0 s (2 and 3
+  guards already back at the last kill); the raider reaches the vault 4.4 s after the last kill, is shot, never gets
+  paid and dies (+17.9 s / +8.4 s / +4.5 s). Realistic phone raids (10 seeds, 3 lives, 45 s back after a death): with a
+  3-unit escort 6/10 robbed, alone 2/10.
+- **BG-2 The fix (config-first, `BankRaidConfig.GuardRespawn`).** Guards spawn with `SpawnNPC(..., { NoRespawn = true })`
+  (their fight is unchanged: Aggressive, no leash, no group) and BankRaidService keeps one slot per post:
+  `DelaySeconds 90` after the LAST bank-guard death (every kill restarts it), a payout brings it to `AfterRaidSeconds
+  30` after the payout, each guard at most `MaxDownSeconds 180` after its own death, never sooner than CombatService's
+  own respawn time after its own death, never while a vault hold runs (`RaidDeferMaxSeconds 60` past due at most), only
+  on a post with no living player within `ClearRadius 25` and none within `SightRadius 150` who can see it, and
+  `ForceAfterSeconds 45` past due anyway, never within `MinSpawnStuds 8` of a player. Checks run at most once per
+  `CheckSeconds 1`, only while a guard is due. Why 90: the measured walk-in + 6 s hold is 10.2 s from the plaza (vault
+  reached +4.4 s); 90 s also covers a death, the 5 s respawn and a ~40 s drive back. Stand-in after the fix: no guard
+  back inside the window at any cadence, paid +10.2 s after the last kill, 0 hits; realistic raids 10/10 with the
+  escort (0.8 deaths per run) and 10/10 alone (1.4). Reversible: config only; `Enabled = false` restores HEAD exactly
+  (the window driver's output with the switch off is byte-identical to HEAD's for TL, FARM, PART and DEFER).
+- **BG-3 "Never in sight / on top" has one exception: the camper rule.** The inside post (G5, by the vault door) is the
+  only post that sees the vault centre, and all five posts are within 25 studs of it, so a player standing on the vault
+  would block every normal respawn for ever and could rob again every 5 minutes (mutant m5 "no forced rule": 2 payouts
+  while AFK). So a guard blocked 45 s past due comes back even in view, never within 8 studs; a post a player stands on
+  moves the guard to the nearest clear spot 8-14 studs away (a straight clear line from the post at knee and chest
+  height, a floor under it). Stand-in: AFK on the vault after the payout -> guards back +75 s, AFK player hit +76 s,
+  dead +81 s, 1 payout; AFK on the inside post -> the out-of-sight front guards come back +30 s and walk in; AFK with a
+  3-unit escort for 900 s -> 1 payout. No spawn in any run came within 8 studs of a player; every near / in-sight spawn
+  was a forced one.
+- **BG-4 MaxDownSeconds 180 per guard.** Without it, killing the one guard nobody can see (G5 comes back "free") every
+  91 s kept the other four away for ever (first cut, stand-in: 14 kills in 900 s, four guards never back). With it, no
+  guard stayed dead longer than 226 s in the 900 s farm (mutant m7 without the cap: 899 s).
+- **BG-5 Kill cash / XP and the farm rules are unchanged.** BankGuard CashReward 150 / XPReward 45, the squad unit
+  shares and `UnitKillCreditOnAttack false` are untouched (pinned). The kill farm only gets slower: a farmer on Bank
+  Street killing every guard 1 s after it appears, 900 s: HEAD 240 kills ($36,000, 16/min), candidate 25 ($3,750,
+  1.7/min), $150 per kill on both.
+- **BG-6 The floor.** A guard is never back sooner than CombatService's own respawn time (`NPCTypes.BankGuard.RespawnSeconds`
+  if set, else `NPCRespawnSeconds` 18) after its own death. With Delay 2 / AfterRaid 1 / ForceAfter 1 the shortest death
+  -> back at the same post was 18.2 s (mutant m3 without the floor: 2.2 s).
+- **BG-7 Jobs ON is untouched.** At the cutover `BankRaidConfig.Enabled = false` (OpsSites refuses two bank jobs), so
+  none of this runs; the Ops bank keeps its own top-up (`OpsConfig.Npc.TopUpDelaySeconds 18`, `TopUpClearRadius 60`,
+  Open state only; no top-up while a heist is Active). The 670bbf6 pins (GuardPosts, Breach 7 s, Crack r 6, 3 bags) all
+  pass on the candidate. Cutover item for CP-9: if the owner likes the group window, mirror it in the Ops top-up.
+- **BG-8 The yellow bar is Roblox's own topbar health bar** (CoreGuiType.Health), shown while hurt. Measured from the
+  owner's 2868x1320 screenshot (@3x = 956x440): a 138x44 pill at y 12 whose right edge is 12 px inside the safe inset,
+  exactly the compass chip's rect (744,12 138x44 in the HUD harness at 956x440). Fix: `CompassController.Init` turns it
+  off (`HudConfig.TopStrip.Compass.HideRobloxHealthBar = true`, pcall, 5 tries 1 s apart). The game's own health bar
+  above the hotbar and the red DamageEdge flash (CombatController) stay; Roblox's red damage vignette goes with its bar.
+  Reversible: set the key false. The stand-in only records the SetCoreGuiEnabled call; the owner confirms on his phone.
+- **BG-9 HUD harness model of that bar:** a core zone at (W - R - 150, 12, 138, 44) on every viewport unless the client
+  called `SetCoreGuiEnabled(Health, false)` (lane copy of run_audit.py; the shared check_hud.py is not edited). HEAD:
+  the compass intrudes at 844x390, 956x440, 800x360, 1180x820 and 1280x720 in every bank snapshot; candidate: none.
+  Other viewports' offsets are assumed from the one measured screenshot.
+- **BG-10 Each bank guard carries a `WE_BankPost` attribute** (its post number): one attribute per guard, used by the
+  tests and handy in the Studio explorer.
+- **BG-11 Stand-in limits.** No pathfinding (MoveTo walks straight and slides along walls, as Roblox's MoveTo does
+  without PathfindingService), no physics, seeded hit rolls; the 45 s trip back after a death is a model. Guards walking
+  in to an AFK player depend on the hall doorway geometry; confirm on a device.
+- **BG-13 (fix round 1) Your own health while driving.** With Roblox's topbar bar off (BG-8), a driver had no health
+  readout at all: our bar hid while `Driving` (HudConfig.Health.HideWhen) and in any seat that cannot shoot, and
+  VehicleCombatClient's bar shows the vehicle's HP. Open-vehicle drivers (WE_Exposed, e.g. the Jeep) still take guard
+  hits to their own Humanoid. Fix, config-first (`HudConfig.Health.Seated`): in a seat that cannot shoot
+  (`not seatAllowsFire()`: a driver, a closed-vehicle passenger), CombatController moves the SAME health bar (one fill,
+  same colours) into the top-centre stack at order 24.5, right under the vehicle bar (24) and above the SPD pill (25),
+  230 x 10 real px like the vehicle bar, with `HideWhen = { "Dead", "Modal" }` and the on-foot ShowWhen (Hurt /
+  RecentCombat, so it hides 3 s after full HP). On foot it goes back above the hotbar with the on-foot rule. Desktop /
+  gamepad use the same top-centre slot (their vehicle bar stays bottom-right). `Seated.Enabled = false` = the round-0
+  behaviour (no player bar while seated). The v70 HUD spec line "health hidden while driving" is superseded for this
+  reason. Stand-in HUD harness, bank_owner `hurt_driving` (own Jeep, VehicleSeat, WE_Exposed, 55 HP, vehicle 210/300):
+  player bar visible at 844x390, 956x440, 800x360, 1180x820 and 1280x720, 0 overlaps; HEAD and the Enabled=false
+  mutant: no player bar. Not checked in Roblox: the owner confirms on his phone.
+- **BG-14 Pre-existing, not this lane (note for the vehicle lane):** at 1180x820 (tablet, large jump button) the seated
+  `VehicleHUD/WE_VehicleControls/Exit` pill (1046,652 111x63) sits on the Roblox jump button (Z-zone intrusion, jump gap
+  -60 px) in both `hurt_driving` and v70_drive, identical on HEAD. VehicleDriveClient is not edited here.
+- **BG-12 Not this lane:** the HUD harness THUMB finding at 844x390 (Hotbar Slot1 at (345,333) with three weapons) is
+  identical on HEAD.
+
+## 2026-09-27 — Owner phone feedback: the gate AutoGuns stand outside the gate (lane ownerfb/gate)
+
+The owner said "The turrets should be outside the gate". His screenshot shows the two orange-camo tripod AutoGuns
+inside the gate, next to his squad. Only `GateDefenseConfig` and `GateDefenseService` change. The guards, the gate
+barrier, the friendly gate, strikes, allies and the novice shield are not touched. Tested in the headless stand-in
+only, NOT in Roblox.
+
+- **OFG-1 Where the guns stand now (config first).** Each nest is the gun, its painted ring and 3 sandbags.
+  - `AutoGunOutside = true` puts one nest on each side of the approach, outside the wall.
+  - `AutoGunOutsideFlankX = 16`: each nest centre is 16 studs from the gate centre, along the wall. The opening is 10
+    wide (±5).
+  - `AutoGunOutsideWallGap = 4.5`: the nest centre is 4.5 studs past the wall's outer face. The service reads the wall
+    thickness from the built `WallGate_L` / `WallGate_R` pieces (3.5 to 6.3 thick by walls level); it is never assumed.
+  - Each gun faces out and turns 15° in toward the approach centre line (`AutoGunYawDeg`, unchanged key).
+  - The sandbags stay behind each gun, between the gun and the wall.
+  - Rollback: `AutoGunOutside = false` puts the guns back on the v69 posts inside the gate
+    (`RaidConfig.Defense.AutoGunInsideStuds`). RaidConfig is not edited because the vscale lane owns it; its comment
+    about "guns at 7.5" now describes only the rollback posts.
+- **OFG-2 Measured placement, all 6 plots × walls L1–L5.** Driver `ownerfb/gate/drv/gp_place.luau`, run on the real map
+  with a real part raycast and the real tripod gun file 114570602. Walls L1–3 have no guns; L4–5 have 2 guns per plot.
+  - **Nothing touched:** the whole nest clears the wall by at least 1.29 studs and stands 3.9+ studs off the plot pad.
+  - **On the ground:** every piece's lowest point is 0.000 above the map `Ground` under it (outside the pad the ground
+    is 0.5 below the pad top; the raycast finds it). The painted ring is 0.06 above it.
+  - **Nothing overlaps:** no nest part is inside any world part (oriented-box test), and nothing else stands under or
+    over a nest's footprint (no road, pump, sign or starter zone).
+  - **The approach stays clear:**
+    - The straight lane: every nest part is 13.93 studs from the centre line. The widest car body, the van at 11.63
+      with mirrors, needs 5.82 + 1 margin.
+    - A 30° approach into the gate centre: 8.7–9.2 studs.
+    - The line from the garage pad to the gate: 12.3–15.4 studs.
+    - The garage pad itself is 54 studs away. The checkpoint booth is inside the walls.
+  - **Clear line of sight:** each gun sees 154/154 approach points in TurretRange (100%) and the gate front. At HEAD the
+    inside guns saw 26/154 (17%) through the opening.
+  - **Cars drive through without touching a gun:** the van, pickup, 4x4 and quad bodies were swept straight through the
+    gate and from the garage pad. On 3b5ac28 the van body passes through 27 gun, ring and sandbag parts at every gate;
+    this is the vscale lane's own note that the van and trucks drive visibly through the sandbags. Now 0.
+  - **Same result merged with vscale:** with the vscale R2.2 files merged in (0 conflicts), placement is still 348/348
+    at L4 and L5.
+- **OFG-3 The guards stay inside (evidence, not preference).**
+  - From their posts inside, the guards see 72/144 sample points around the 6 ATMs. From the same posts mirrored
+    outside they see 0/144.
+  - Guards only chase to points inside the plot (`clampInsidePlot`), and a closed gate barrier collides, so guards
+    posted outside would be locked out.
+  - In the stand-in, the guards alone hit a raider holding the ATM 25 times in 10 s. The guns outside hit him 0 times.
+- **OFG-4 How a gun picks its target (it used to lock on something it cannot see).**
+  - v69 took the top-priority enemy (the raider at the ATM) and fired only if it could see him. From outside the wall,
+    that would freeze both guns while an attacker shoots the gate.
+  - Now a gun takes the first enemy it can SEE, spending at most `TurretLosChecksPerThink = 3` line-of-sight rays per
+    think (5 Hz). If it sees nobody, it neither turns nor fires.
+  - Fix round 1 (review): the order is enemies on the gun's side of the wall first (outside posts: outside the plot
+    pad), then the rest; each side keeps the old priority (raider, near the ATM, nearest). The first 2 rays go to the
+    top of that list. The 3rd ray probes the rest of the list in turn, one enemy per think, and stays on an enemy it
+    can see. So enemies the gun cannot see never use up every ray: before this fix a raider + 2 players at the ATM, or
+    3 intruders just inside the gate, switched both guns off (0 hits on an attacker in the open).
+  - Stand-in, L5 (L4 in brackets), 4 s each: raider at the ATM + attacker outside: 18 (18) gun hits on the attacker, 0
+    on the raider. Raider + 2 at the ATM + attacker 40 out: 16 (16) hits, round 0 had 0. 3 intruders inside the gate +
+    attacker 50 out: 15 (15), round 0 had 0. 3 enemies boxed in cover outside, each nearer both guns (10-41 studs)
+    than an attacker in the open 60 out (55 studs): 14 (15), round 0 had 0. The reviewer's own driver `rv_adv.luau`:
+    R1 20 hits (was 0), R2 18 (was 0).
+  - A player hugging the wall next to a nest while another enemy is nearer is not shot until that one is gone: a gun
+    engages one target at a time (review R5; the ray to him is clear, checked with a debug cast).
+- **OFG-5 Hit chance for AutoGun shots (CLAUDE.md: "NPC shots need line of sight and a hit chance").**
+  - Before, every AutoGun shot with line of sight hit.
+  - Now a shot hits with `TurretHitChanceNear = 0.75` at or inside `TurretHitNearStuds = 20`, falling linearly to
+    `TurretHitChanceFar = 0.30` at the level's TurretRange. These are the CombatFairnessConfig NPC numbers. A miss still
+    spends the shot.
+  - Measured over 600 shots per spot: a hit ratio of 0.663 against 0.655 expected, and 0.422 against 0.423 at L5
+    (L4: 0.645 / 0.637 and 0.350 / 0.360).
+  - The guards are unchanged and still have no hit chance. That gap is older than this lane and is left for the combat
+    spec lane.
+- **OFG-6 Balance change (real line of sight, 10 s, 100-HP target, victim limiter on).** Damage per second at L5, HEAD
+  → this lane (fix round 2 numbers; the gun reach is capped at 100, OFG-13):
+
+  | Where the attacker stands | HEAD | This lane |
+  |---|---|---|
+  | Sieging 25 out, 20 to the side | 120 | 103 |
+  | Gate front, 6 out | 120 | 117 |
+  | Centre line, 60 out | 0 | 106 |
+  | Far flank, 80 out, 50 to the side | 140 | 87 |
+  | Just inside the gate | 120 | 50 |
+  | Holding the ATM | 50 | 50 |
+  | Centre line, 110-124 out (Starter Rifle still hits the gate) | 0 | 0 |
+
+  At L4: 100 → 87, 100 → 98, 0 → 84, 0 → 68, 100 → 45, 45 → 45, and 0 → 0 at 110-124 out.
+  - The guns now cover the front of the base out to about 106 studs on the centre line (reach 100 from the posts at
+    L4 and L5). That includes the plot's own garage pad (about 75 studs out) and its owner-only Home Outpost (about
+    90 studs out). Allies are never hit.
+  - The space inside the gate is now the guards' alone.
+  - Reversible in config: `AutoGunOutsideMaxRange`, `Levels[n].TurretRange` or the hit chance.
+  - Spawn grace and the novice shield still apply first. PlayerSpawn is inside the walls, so the guns cannot see it.
+- **OFG-7 Sandbags in the stand-in are a proxy.** The store file 3525056989 needs a login, so each stand-in bag is one
+  2.2 x 0.8 x 1.3 box. The 4.5-stud wall gap was chosen so that even a full 2.2 x 2.2 bag, at any turn, clears the wall
+  by at least 0.65 (driver check "clears the wall even as a full 2.2 x 2.2 bag"). The real bag's look is unverified.
+- **OFG-8 Plots 3 and 4:** the near-plot oil pumps (pads at x ±7–15, 15.5–23.5 studs out) stand between a player
+  walking up the centre line and the guns, so they partly hide the guns from that camera (render
+  `cand_p3_approach.png`). Their derricks, beams and heads do not collide, so the guns' line of sight is still 100%.
+  This is visual only; nothing is moved.
+- **OFG-9 Suites:**
+  - The v69 G1 check "AutoGuns stand INSIDE" now fails by design: 2 checks each in `hotfix/gate/gate_driver_loaded`
+    (L4, L5), `hooks/gate/gateL5_fake`, `f11/build/C/gate_shield_driver`, `hooks/gate/shield_fake` and
+    `water/verify/strikes_rot/gate_driver`.
+  - The lane copies `ownerfb/gate/drv/gate_loaded_out.luau` and `gateL5_fake_out.luau` change only that check (guards
+    inside, guns outside). They pass 53/53 on this lane and fail exactly the 2 gun checks on 3b5ac28.
+  - Every other failure line is the same as on HEAD and older than this lane: `shield_c` 4, `raid_f2` 1, and 5 in
+    `strikes_rot/gate_driver` (7 there now, the 5 plus the 2 by-design gun checks).
+  - Fix round 1: all 18 suites re-run on the fixed candidate; every summary and every FAIL line is identical to round 0
+    (`runs/suites_fix1cand`). The lane combat driver `gp_combat.luau` now has C7-C11: 22/22 at L5 and 21/21 at L4 on
+    the candidate, 22/22 on the vscale merge; the round-0 candidate fails 8 of them (C7, C8, C9, C9c, C10, 3 x C11).
+  - Fix round 2 (the reach cap, OFG-13): one more failure appears, by design, in the upstream L5 gate suites
+    `gate_loaded5`, `gate_fake5`, `gate_shield` and `gate_shield_fake`: "TurretDamage research 1.5: AutoGun hits 0".
+    That check puts its target 95 studs deep INSIDE the walls. These suites have no raycast, so the outside guns used
+    to "see" him through the wall; on a real map the wall blocks them, and he is now also beyond their reach (about
+    103 studs from each post). The lane copies `gate_loaded_out.luau` / `gateL5_fake_out.luau` move that one target
+    outside, 90 out on the approach (84 from each gun, beyond the guards' ShootRange): 53/53 at L5 and L4 and 53/53
+    fake. Every other summary and FAIL line of the 18 suites is identical to fix round 1 (`runs/suites_fix2cand`,
+    `runs/suites_fix2cand_b`). `gp_combat.luau` now has C12 too: 31/31 at L5 and L4 and on the vscale merge.
+  - Stand-in only, older than this lane: in the non-fake gate suites the procedural fallback gun (used only when the
+    catalog gun 114570602 does not load) drifts to huge coordinates after it turns a few times (HEAD L4: Base at
+    y = -4.9e29; candidate L4/L5 too). The live catalog gun (the fake suite and `gp_combat`) does not drift. This looks
+    like the stand-in's `PivotTo`, not the game; it is not investigated further here.
+- **OFG-10 No client file change.** GateDefenseConfig lives in Shared, but only the server reads it (GateDefenseService,
+  and MissileStrikeService for `AutoGunMinWallsLevel`). The client already draws the AutoGun tracers: they arrive on
+  the existing WeaponFx remote in the same shape as NPC shots (`S = 0`, weapon `"NPC"`, kind `"P"` / `"M"`), which
+  `WeaponVisuals` turns into a tracer beam and the NPC rifle sound. The part count per base is identical at every level
+  (L1 1594 … L5 2568; defense folder 28 / 98; re-run in fix round 1: census identical to HEAD). The NEXT chevrons draw
+  only on the player's own pad, and the guns are now off the pad, so they no longer stand where the chevrons run
+  inside the gate. The Checkpoint.luau comment about keeping jersey barriers clear of the "L4+ gate AutoGun nest" no
+  longer applies; the file is left as is.
+- **OFG-11 Line of sight fails closed past its ray (fix round 1, review).** `hasLos` used to cut the ray at
+  `LosMaxDistance = 110` and call the target visible when nothing was hit in that length. At L5 the guns engage out to
+  115, so a target 110-115 studs out behind cover was shot through it (outside the gate this band is open ground).
+  - Now a target farther than `LosMaxDistance` is NOT in sight, and `LosMaxDistance` is 125, above every level's
+    TurretRange (max 115), AggroRange (max 120) and ShootRange (max 78). Guards only shoot inside ShootRange, so they
+    are unaffected.
+  - Stand-in: a target 112.5 studs from both guns behind an 80 x 30 wall at 117.5 out: 0 hits in 6 s (round 0: 14;
+    reviewer's R3 on round 0: 17). The same spot with no wall: 17 hits (the control).
+  - Fix round 2: with the reach cap (OFG-13) that spot is beyond both outside guns (112.5 > 100), so C9 still reads
+    0 hits and the C9b control is skipped (it only runs when the spot is within reach). The fail-closed ray still
+    matters for the rollback inside posts (TurretRange 115 at L5).
+- **OFG-12 AutoGun shots are visible (fix round 1, review).** Every AutoGun roll, hit or miss, now sends one bullet
+  effect through the existing W2 path `CombatService/CombatFx.Bullet` (UnreliableRemoteEvent `WeaponFx`, per-shooter
+  and per-recipient token buckets, every send pcall'd). Each gun has its own shooter key `gate:<plot>:<slot>`.
+  - A hit lands on the target; a miss lands 2-4 studs beside him (`TurretShotFxMissOffsetMin/Max`). The tracer starts
+    `TurretShotFxMuzzleStuds = 2.5` along the aim from the gun's aim part. `TurretShotFx = false` switches it off.
+  - How it is wired (reversible assumption): GateDefenseService finds the `CombatFx` module next to it with
+    `FindFirstChild` once, lazily, inside a pcall, and requires only that module (it needs only Shared). No
+    WaitForChild, no `deps.CombatService`, no require of CombatService: the join-hotfix pins still pass. CombatService
+    binds the remote in its own Init; before that, or if the module is missing, the effect is dropped and the shot
+    still happens. Chosen over a new Init dep because a dep needs a Bootstrap edit, and over a setter injected from
+    `CombatService/init.luau` because the squad-fairness lane is editing that file.
+  - The tracer is the W2 client beam: 0.09 studs wide, pale yellow, 0.08 s, the same as NPC soldiers' shots. From
+    60-100 studs on a phone it may be hard to see. If the owner reports that, a bolder AutoGun tracer is a client
+    change (`WeaponVisuals`, weapon id) for another lane; this lane does not touch the client.
+  - Traffic: a gun fires at most once per think (5 Hz), so the two guns add at most 10 events/s to a player near the
+    gate (measured: 10.0/s on the target and on a nearby clan-mate), under the CLAUDE.md 20 Hz per-player cap and the
+    W2 per-shooter bucket (20 Hz). The gate guards still fire silently (older than this lane; left for the combat spec
+    lane).
+  - With the victim limiter on (`DamageCooldownGlobal` 0.08 s), when both guns hit in the same tick the second hit's
+    damage is dropped but its tracer still lands on the target. Cosmetic only.
+  - Stand-in, 10 s at L5 (limiter off): 100 shots, 100 events (62 hits on the target, 38 misses all 2-4 studs beside
+    him), every origin at the muzzle, every key `gate:1:1` / `gate:1:2`. Round 0 sent 0 events. The real tracer beam and
+    sound on a phone are NOT verified (the client in the stand-in is not Roblox).
+- **OFG-13 The outside guns stop short of the Starter Rifle's reach (fix round 2, review; option a, config first).**
+  - The problem: the outside posts stand about 7.7 studs out and 16 to the side. With L5's TurretRange 115 the guns hit
+    out to about 122 studs on the centre line. The default Starter Rifle hits the gate from 124 out (WeaponConfig
+    Range 120 + CombatConfig.HitPositionSlopStuds 4; the gate takes no falloff). So a raider with the default loadout had
+    about 2 studs (122-124 out) on the centre line, and none off it, to shoot the gate without being shot. At HEAD the
+    guns stood inside and did not fire anywhere from 40 to 124 out. The guns cannot be damaged, and their tracer is
+    thin, so on a phone that read as dying in about a second with no counterplay.
+  - The fix: `AutoGunOutsideMaxRange = 100`. An outside gun engages, fires and sets its hit-chance falloff within
+    min(Levels[n].TurretRange, AutoGunOutsideMaxRange) of the gun (`turretReach` in GateDefenseService). L4 is
+    unchanged (its TurretRange is already 100); L5 now reaches as far as L4 and still hits harder (28 vs 22 per hit).
+    Inside posts (the `AutoGunOutside = false` rollback) keep TurretRange.
+  - The result (stand-in, real line of sight, fake catalog gun): the default rifle has an 18.3-stud band on the centre
+    line at L5 (106.4 to 124.7 out; 18.6 at L4) where it reaches the gate and neither gun reaches him. Off the axis the
+    band is wider: 0 gun hits at (±40, 112) and (-60, 100). The guns still defend 60 and 100 out (21 and 19 hits in
+    6 s). Reviewer sweep re-run (`runs/fx2_sw_cand{4,5}`): L5 0 dps from 110 out to 124 on the centre line and at
+    (±40, 112) and (-60, 100); 56 dps at 106 out; 51 dps at (-90, 70) (97 from the near gun); L4 identical to before.
+  - Pinned: `gp_combat.luau` C12a (reach <= rifle reach - 15), C12b (band >= 10 studs), C12c (0 gun hits at 6 spots
+    where the rifle reaches the gate), C12d (hits at 60 and 100 out). The fix-round-1 candidate fails 7 of them (C12a,
+    C12b, 5 x C12c: 22, 18, 12, 9, 9 hits); this candidate passes all 10 at L4 and L5 and on the vscale merge.
+    BuyPathStatic: 4 new [fix2] pins, failing on 3b5ac28 and on the fix-round-1 candidate.
+  - Keep `AutoGunOutsideMaxRange` at or below the default rifle's reach minus 15 if WeaponConfig or the posts change.
+    The AR (140), Sniper and RPG out-range the guns by more.
+  - Not verified in Roblox: that a phone player can actually land Starter Rifle hits on the gate barrier from 110-124
+    studs (aim assist, spread 2.5 and camera at that distance). Phone test step 5 checks it.
+
+- **OFG-F3 (integrator, supersedes the band numbers above).** A review found that `GateDefenseService.ApplyDamage` refuses a player's gate hit when their root is more than 120 studs from the barrier part's centre, while the numbers above used the rifle ray's reach (124). The real Starter Rifle siege band at L4/L5 is therefore about 106 to 120 studs out on the centre line (about 13.5 studs, wider off the axis), not 106-124. The 120 now lives in config as `GateDefenseConfig.GateHitMaxDistance` (pinned; aircraft weapons may extend it). The cap `AutoGunOutsideMaxRange = 100` is unchanged and still leaves the band. Revert: set the config back or inline 120. The phone test says "about 105 to 120".
+- **BG-F2 (integrator).** The bank phone test names the starter car by its in-game name "Field 4x4" (not a brand), and describes the guard respawn spot as "away from where you are standing" (the sight test uses the character's eye, so a third-person camera can sometimes see the spot). Reviewer Low notes kept as follow-ups: a behaviour test for a camper standing on a guard post (today pinned as text), the seated health bar has no icon, and a chain of allies arriving one after another can each rob one clearing (bounded by the 90 s cap and the 300 s personal cooldown).
+
+## 2026-09-27 — squadfair v3: squad unit shots follow CLAUDE.md combat fairness (round 3, refix 3.3)
+
+**What this replaces.** The round-2 entry (squadfair/v2/assumptions.md) and the first build's SQF-1..13. Neither was
+merged. This entry is appended to 90cad49's ASSUMPTIONS.md and ships in the same commit as the 5 lane files.
+
+**Base.** Built on 5e021d8, rebased onto 5f38c2e and 3b5ac28, and at refix 3.3 onto 90cad49 (live v81 9475f8b + dropper
+v1a 882faf9 + XP X1 90cad49). `git diff 3b5ac28 90cad49` touches none of the four .luau files, so they carry over as they
+are. `tools/BuyPathStatic.py` is 90cad49's file with the lane block inserted before its final `parse_gate()`; every
+90cad49 line is kept.
+
+**Refix 3.3 (comments + config + pins; no code line changed).**
+- **Give-up rule, stated as built (SQF-3; reviewer-3.3 option (a)).** Refix 3.2 said that leaving a given-up fight
+  starts a fresh approach with no stale timer. That was true only for a target beyond the fire band (46.75 studs).
+    - **The rule.** The give-up does not restart the blocked timer, and neither does a switch to a hostile inside the
+      band. So after a give-up, a walled hostile elsewhere inside the band is given up at its first blocked check, with
+      no approach. This lasts until the timer starts over: a shot, a check with nothing in the band, nothing in reach, a
+      target beyond the band, or a new order. It applies after the usual give-up (nothing in sight for 6 s inside the
+      band); a no-progress give-up beyond the band may leave the timer stopped (SQF-3).
+    - **Why it is kept.** Only two give-up spots are remembered. With a really fresh approach there (the reviewer's
+      prototype), three walled spots took turns forever: 115–120 wall-press goals per 10 s for 60 s.
+    - **Where it is stated.** The comments in `SquadOrdersService` (header, `attackUnit`, the leave branch, the `ChaseHum`
+      field) and in `CombatFairnessConfig` now say this. SQF-3 below and the phone test say it too.
+- **Driver rows (new `w4/sqf33_s.luau`: the reviewer's S1 and S2; 9 of 9 pass on cand7).**
+    - **S1: a new walled Infantry B, units held beside the owner.**
+        - Control (a fresh ATTACK at B, 40 studs away): 80 goals at B, the last at 6.1 s.
+        - After every unit gave up walled A, B at 40 studs: 0 goals whether A is still there or despawned just before.
+          Every unit is back on the owner's trail at 0.3 s.
+        - A gone, then 1.2 s with nothing in reach, then B at 40 studs: 75 goals (a fresh approach).
+        - B at 60 studs (beyond the band), A there or gone: 75 / 75 goals.
+    - **S2: three walled spots 40 studs apart, ATTACK left on for 60 s.** Wall-press goals per 10 s: 75,0,0,0,0,0. Unit
+      rays: 3.75/s per unit (the cap).
+    - **HEAD (head7).** 5 of 9 rows pass. HEAD has no give-up: it shoots through walls.
+- **Pinned in BuyPathStatic.** Two pins cover this: the leave branch's text (its comment says the rule), and a code-only
+  pin (comments ignored). The code pin requires the leave branch to be only `unit.ChaseHum = nil`, and `giveUpFight` to
+  touch no blocked timer. Both pins fail on head7.
+    - **Mutation M24 (the reviewer's proto_fresh: leave branch = `clearChase`).** It fails both pins and driver rows S1b,
+      S1c and S2b: 75 goals at B, and 120,115,120,115,120,115 wall-press goals per 10 s.
+    - **Mutation M25 (a give-up clears `BlockedSince`).** It fails 2 pins and the same 3 rows: 30 goals at B, and the
+      same S2 cycling.
+- **Hit chances 0.98 near / 0.96 far (was 0.96 / 0.92; SQF-5, SQF-18).**
+    - **What it is.** The lead's reversible pick of the middle option for owner decisions A and B, pending the owner's
+      own answer.
+    - **Changing it.** Config only. The numeric pin (0 < Far <= Near <= Max < 1) is unchanged, `UnitMaxHitChance` stays
+      0.98, and a retune inside those bounds passes BuyPathStatic (mutations M1, M1b, M15).
+    - **Numbers** (b32; cand7 runs byte-identical to the refix-3.2 0.98 / 0.96 option runs; SQF-18):
+        - RINGF bank clear 32.0 s (HEAD 27.2, 0.96 / 0.92: 36.6).
+        - Clear before the first guard is back: 132 of 400 runs (HEAD 331, 0.96 / 0.92: 51).
+        - Stand-still escort, survived past 8 s: 111 of 400 (HEAD 136, 0.96 / 0.92: 83).
+- **Suite change from the hit chance (single seed, disclosed).** `adv_squad` went from 5/0 to 4/1. Its "bank is
+  winnable" check fails because the "cover, never peeks, ATTACK" run's loot window is 11.0 s against 11.1 s needed (one
+  0.125 s step), player HP 4. Refix 3.2 gave 11.1 s (a pass with no margin) and HP 28; HEAD gives 11.8 s and HP 40.
+    - **Cause: the hit chance.** The same tree at 0.96 / 0.92 passes 5/0, and at 0.99 / 0.99 it also fails, 4/1, at
+      11.0 s. The window is first death + 18 s − last death. Every run downs the last guard at 7.5 s, so the 0.1 s lost
+      at the higher hit chances comes from the first death.
+    - **The 120-seed line to read.** It is the b32 B_HIDE_ATK bank line, one line per process. There 0.98 / 0.96 is
+      better than 0.96 / 0.92 (below).
+
+**Refix 3.2 (code + config + restated balance).**
+- **Give-up scoped to its fight (SQF-3).** A unit that gives up a blocked chase now gives up that fight only: the
+  hostiles within the new `UnitGiveUpScopeStuds` (30) of where the one it chased stood. Its target is the nearest hostile
+  outside the fights it gave up on (the last two are kept), so ATTACK left on still goes after another group, or after
+  the walled one once it walks out. Round 3.1 kept one give-up for every hostile until a shot or a new order.
+- **Blocked timer on in-band swaps (SQF-3).** A swap of the nearest hostile between two hostiles inside the fire band
+  keeps the blocked timer running (round 3.1 restarted it, so a strafing owner kept units pressed on a wall).
+- **Balance restated (SQF-17).** The bank-ring acceptance now measures the kill time with no guard respawns (the
+  round-3.2 reviewer's RINGN line): the old ring medians passed only in geometries where today's squad already missed the
+  18 s respawn. Two owner-visible trade-offs are disclosed instead of claimed away, and wait for the owner's decision
+  (SQF-18): the ring clear with respawns (about 27 → 37 s) and the stand-still FOLLOW escort (saves a standing player 34 %
+  → 21 % of the time). The hit chances stayed 0.96 / 0.92 at 3.2 (3.3 raised them, above).
+
+**Refix 3.1 (config only).** `UnitNearHitChance` went from 0.94 to 0.96 and `UnitFarHitChance` from 0.90 to 0.92. The
+lone-Infantry acceptance in SQF-17 was restated so that it can't pass on a knife-edge: the median must hold with margin and
+the mean must hold too, both with a fixed and with a random tap phase.
+
+**Files (5, plus this entry in `ASSUMPTIONS.md`).**
+- `src/ReplicatedStorage/Shared/Configs/CombatFairnessConfig.luau`
+- `src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau`
+- `src/ServerScriptService/Server/Services/CombatService/init.luau`
+- `src/ServerScriptService/Server/Services/SquadOrdersService.luau`
+- `tools/BuyPathStatic.py`: 82 squadfair pins appended. They replace refix 3.2's 81: one is restated, one is new (the 3.3
+  code pin), and one is relabelled.
+
+**Reversibility.** Every item can be undone from config or with a small code change.
+
+**Evidence.** Everything below comes from the headless stand-in, which is NOT Roblox. The drivers are in
+`scratchpad/squadfair/w3` (refix 3.2: `w32`; refix 3.3: `w4`). Nothing was measured on a device. The phone checks are
+in `phone_test.md`.
+
+- **SQF-1 Line of sight on every unit shot (ATTACK and FOLLOW escort).**
+    - **The ray.** One ray from the unit's eye (root + `NpcEyeHeight`) to the target root.
+    - **What never blocks it.** The squads folder, the owner's character, the target, and (v3,
+      `UnitLosIgnoreNPCBodies`) any other NPC's body. Non-collidable decor doesn't block either
+      (`NpcLosRespectCanCollide`). Walls, terrain, vehicles and other players do.
+    - **Switches.** `UnitAttackRequireLos` for ATTACK and `EscortRequireLos` for FOLLOW.
+    - **No allocation per ray.** One module-level `RaycastParams` and a reused ignore list. The NPC folder is found by
+      name once and cached.
+    - **Ray cost, measured (squad_fair_v2 V1/V2/X9, default config):**
+        - Clear line: 1 ray per shot, 1.25 rays/s per unit (shot cadence 0.8 s).
+        - Blocked, one walled hostile: 1.25 rays/s per unit.
+        - Blocked, three walled hostiles in range: 3.75 rays/s per unit (`UnitLosRaysPerCheck` = 3 per check).
+        - ATTACK re-sent every 0.5 s for 20 s (the order remote's limit) with three walled hostiles: still 3.75 unit
+          rays/s per unit. Round 2 measured 6.00 under the same spam.
+        - After a give-up the unit walks its owner's trail and the FollowPath probe casts its own rays: 3.60 rays/s per
+          unit blocked (3.50 under the order spam), against 5.00 for FOLLOW at the same spots. ATTACK builds that probe
+          only once a unit has given up: 0 probes while every unit is shooting (round 2 built one per think pass).
+        - All of it is server-side in the 0.4 s think loop, never per frame.
+        - Refix 3.2 adds no ray: the given-up-fight test is a distance check inside the target pick the unit already
+          runs (squad_fair_v2 output identical to refix 3.1).
+- **SQF-2 Visible-target fallback (both orders).**
+    - **ATTACK.** The nearest hostile within `AttackAggroRange` that this squad may hurt (3.2: outside the fights the unit
+      gave up on, SQF-3) is the unit's target. When
+      that one is out of the fire band or walled off, the unit shoots the nearest hostile inside the band that it can
+      see (`pickShot`), at most `UnitLosRaysPerCheck` rays per check including the first. While it shoots a fallback
+      target it closes in only on that one.
+    - **FOLLOW escort.** The candidates are the hostiles near the player, nearest to the player first, within the
+      unit's range; the escort walks toward the one it shoots, inside the same 20-stud leash.
+    - **Measured (X1, every roll forced to hit).** ATTACK: nearest A behind a wall, B in the open at 39 studs: A 0, B
+      1520 (HEAD: 1520 on A through the wall). FOLLOW: B2 in the open took 1000 (HEAD: 0).
+- **SQF-3 A blocked ATTACK chase gives up that fight only.**
+    - **The give-up.** With nothing in sight a unit still closes in (`UnitChaseWithoutLos`), but for at most
+      `UnitBlockedChaseSeconds` (6 s). An approach that gains less than `UnitChaseProgressStuds` (2) in 6 s gives up too
+      (a wall in the way; there is no pathfinding).
+    - **3.2: scoped to its fight.** The unit records where the hostile it gave up on stood; the last two such spots are
+      kept. The hostiles within `UnitGiveUpScopeStuds` (30) of a spot are that fight. The unit's target is the nearest
+      hostile outside those fights. Only when nothing else is in reach does it take the nearest one inside a fight it gave
+      up on; then it walks its owner's trail like FOLLOW and still shoots anything it can see in the fire band.
+    - **What ends a give-up.** A shot into that fight (from where the unit now stands nothing blocks it); a new order
+      (ATTACK again after the 2 s grace); the fight emptying (every hostile in it down or gone, so a group that comes there
+      later is a new fight). The walled one walking more than 30 studs out of its spot makes it a hostile "elsewhere".
+    - **What keeps it.** A second hostile behind the same wall; the owner walking away and coming back while the walled
+      one lives (no walk back to the same wall each time it comes within 120 studs); two walled spots (both are kept, so
+      they never take turns).
+    - **3.3: after a give-up, a walled hostile elsewhere inside the band gets no approach (deliberate).**
+        - **How it works.** The give-up does not restart the blocked timer. Leaving a given-up fight restarts it only
+          when the new target stands beyond the band. So a walled hostile that is not part of the given-up fight but
+          stands inside the band is given up at its first blocked check (within one think, 0.4 s), with no approach.
+          This holds after the usual give-up: nothing in sight for 6 s, with the target inside the band. A give-up for no
+          progress on a target beyond the band can leave the timer stopped, and then the next walled one gets up to a
+          normal approach.
+        - **What restarts the timer.** A shot, a check with nothing in the band (the owner walked on), nothing in reach,
+          a target beyond the band, or a new order. After any of these, the next walled one gets a normal 6 s approach.
+        - **Why.** It stops three or more walled spots from taking turns, since only two spots are remembered.
+        - **Refix 3.2 was wrong about this.** It claimed "a fresh approach with no stale timer" here; that was false
+          inside the band (reviewer-3.3 S1).
+        - **Cost.** A second hidden enemy within about 45 studs of a squad that just gave up is not approached. The
+          squad still shoots it as soon as a unit can see it. HEAD shoots it through the wall.
+    - **Blocked timer (v3, 3.2).** It counts only checks that had something in the band to look at. It starts over when a
+      check finds nothing in the band (the unit is walking in) and when a hostile beyond the band becomes the target (no
+      stale timer: stale driver G2b, walled 5.5 s then a hostile 116 studs away in the open: 280 damage, unchanged). 3.2: a
+      swap of the nearest between two hostiles inside the band keeps it running, since nothing in the band is in sight
+      either way. Round 3.1 restarted it, and the round-3.2 reviewer's X2 (strafing owner, 3 Infantry behind a wall) kept
+      4-5 of 5 units pressed on the wall for 40 s. 3.3: the give-up itself does not restart it either (above).
+    - **Measured (headless stand-in, crude walk; ATTACK given once and never tapped again).**
+
+      | Case (driver) | Refix 3.1 | Refix 3.2 | HEAD |
+      |---|---|---|---|
+      | Walled 9 s, then 3 Aggressive Infantry in the open 75 / 100 studs, or 3 Post guards 70 studs (reviewer X1B) | killed 0/3 in every row; owner lost 540 / 0 / 150 HP | 3/3 in every row, 6.5 / 9.3 / 6.9 s; 50 / 0 / 0 HP | 3/3, 5.7 / 8.5 / 6.1 s |
+      | Walled 9.5 s, one hostile in the open 75 studs, 20 s (reviewer X1: + 60 s idle, 100 studs) | 0 / 0 / 0 damage | 880 / 880 / 800 | 880 / 880 / 800 |
+      | Walled 7 s or 12 s (every unit gave up), then a new group 70 or 100 studs away, ahead or to the side (G1, 8 rows + 9 s / 85 studs / 45°) | 0/3 in all 9 rows; owner lost up to 550 HP | 3/3 in all 9 rows, 5.5–9.3 s | 3/3 in all 9 rows |
+      | Walled one still there (nearest), a group 75 studs behind / beside the owner (G2) | 0/3 at 180° and 90° (nearest-scope prototype: 0/3) | 3/3 at 180° and 90° (walled one 1e6 or 80 HP), walled one untouched | 3/3 at 180°, 0/3 at 90° (shoots the walled one through the wall; 3/3 when it has 80 HP) |
+      | The walled one walks 70 studs out into the open (G3), 20 s | 0 (sticky) | 840 damage | 872 |
+      | A second hostile behind the same wall, 12 studs from the first (G4), 15 s | same as 3.2 | 0 chase goals at the wall; nearest unit stays 27 studs back | shoots through the wall |
+      | Two walled spots 50 studs apart, units held at the wall (G7), 30 s | same as 3.2 | 75 chase goals in the first 14 s, 0 after | — |
+      | Strafing owner, 3 Infantry behind a wall, 40 s (reviewer X2, 5 rows) | 0,0,4,5,4 units still on the wall | 0,0,0,0,0 | 0 (shoots through) |
+      | Nearest swap every 2 s / 5 s between a walled pair (reviewer v3x E5b / E5c) | give-up defeated (275 / 110 wall goals) | give-up holds (0 wall goals) | — |
+      | Camp with one member behind cover, owner 95 studs back (G6, 4 seeds) | same as 3.2 | 3/3 in 14.9–15.6 s | 3/3 in 11.7–12.0 s (through the wall) |
+      | After every unit gave up walled A: a new walled B 40 studs to the side, 12 s (reviewer-3.3 S1; 3.3 rows S1b / S1c) | — | 0 goals at B (A still there, or despawned just before); all units on the owner's trail at 0.3 s. Control (fresh ATTACK at B): 80 goals, 6.1 s | shoots B through the wall |
+      | The same with 1.2 s of nothing in reach first (S1d), or B at 60 studs, beyond the band (S1e / S1f) | — | 75 / 75 / 75 goals (a fresh approach) | — |
+      | Three walled spots 40 studs apart, ATTACK left on 60 s (reviewer-3.3 S2; row S2b) | — | wall-press goals per 10 s 75,0,0,0,0,0 (a fresh in-band approach: 120,115,120,115,120,115) | 0 (shoots through) |
+
+      X1B / X1 / X2 / E5 refix-3.1 numbers are the round-3.2 reviewer's runs; the G rows ran here on a refix-3.1 tree
+      (`w32/cand31`: 4 of the driver's 18 checks pass there, 18 of 18 on 3.2). Outputs: `w32/runs`, `w3/runs/*_32`.
+      The 3.2 column is the refix-3.2 code, which 3.3 keeps. Its rows re-ran on cand7 (90cad49 base, 0.98 / 0.96):
+      g32 18/18, x2 X1 880 / 880 / 880 / 880 / 800 and X2 0,0,0,0,0, x1b 3/3 in every row (after a give-up: 5.7 / 8.5 / 6.9 s), and the
+      new S rows 9/9 (`w4/runs/cand7`).
+    - **Limit (disclosed).** A hostile in the open within 30 studs of a spot where the squad gave up, while the walled one
+      there still lives, counts as that same fight. The squad then stays with its owner until a unit can shoot it from
+      inside the fire band (G5b: 0 damage in 15 s with the owner 64 studs away, 504 once the owner walks up). Today's squad
+      shoots the walled one through the wall instead (0 on the new one in both halves). Once the walled one is down, the
+      fight is forgotten and a newcomer there is attacked (G5a: 648 damage with the owner back).
+    - **Assumption.** 30 studs is about one camp's spread (an outpost group stands within ~25 studs of its centre) and
+      less than the 46.75-stud fire band. `UnitGiveUpScopeStuds = 0` restores the refix-3.1 rule.
+    - The FOLLOW escort has no give-up; its 20-stud leash bounds it, as on HEAD.
+- **SQF-4 Blocked re-checks are throttled; a repeated order changes nothing.**
+    - A check that finds nothing in sight sets `LosCheckAt = now + 1 / AttackFireRate`. A clear shot is throttled by the
+      fire cooldown. Cost: a unit whose line has just cleared may shoot up to one think (0.4 s) later than on HEAD.
+    - **v3.** An order never moves `LosCheckAt` earlier (`max(LosCheckAt, now)`). The same order again within
+      `UnitRepeatOrderGraceSeconds` (2 s) keeps the chase timers and the given-up fights (a double tap or a spammed
+      button). Later, the same order is a fresh order, so tapping ATTACK again sends a squad that gave up once more.
+    - **Measured.** R1: four ATTACK taps 0.5 s apart: the give-up still comes ~6 s after the first tap. R2: ATTACK 10 s
+      later sends the squad again. V2 above: rays under order spam stay at the cap.
+- **SQF-5 The hit chance uses squad values.**
+    - `UnitNearHitChance` 0.98 at or inside `UnitNearStuds` 35, falling linearly to `UnitFarHitChance` 0.96 at
+      `AttackRange` 55, floor `UnitMinHitChance` 0.05, ceiling `UnitMaxHitChance` 0.98. So a unit misses 2 % of its shots
+      up close and 4 % at the edge of its range.
+    - **Refix 3.1.** Round 3 shipped 0.94 / 0.90. That passed the lone-Infantry line only on a knife-edge, so the values
+      went up one notch to 0.96 / 0.92 (SQF-17).
+    - **Refix 3.3 (lead decision, reversible).** 0.98 / 0.96 is the middle of the three options put to the owner for
+      decisions A and B (SQF-18). 0.96 / 0.92 remains the lowest pair that meets every SQF-17 line; 0.98 / 0.96 meets
+      every b32 line with more margin (SQF-17 table). To go back, or to take option 3 (0.99 / 0.99 with
+      `UnitMaxHitChance` 0.99), change the config only.
+    - **v3: a code cap.** The code clamps the chance to `UnitMaxHitChance`, itself never above 0.99, so no config value
+      gives a certain hit. A BuyPathStatic pin parses the numbers and checks 0 < Far <= Near <= Max < 1, so a retune
+      inside those bounds is a config-only change.
+    - There is no fast-target penalty: squad targets are NPCs, and the server does not sample NPC speed.
+    - **Measured hit rates** (squad_fair_v2 on cand7, 2,500 shots each):
+
+      | Distance | Measured | Configured |
+      |---|---|---|
+      | 12 studs | 0.980 | 0.98 |
+      | 30 studs | 0.981 | 0.98 |
+      | 45 studs | 0.962 | 0.97 |
+
+      At 0.96 / 0.92 (refix 3.1) they were 0.958 / 0.960 / 0.934.
+- **SQF-6 A miss spends the fire cooldown.** All-miss and all-hit squads roll at the same cadence.
+- **SQF-7 The hit roll uses a module-level Random, unseeded in production.** The test hook is
+  `SquadOrdersService.SetRandomForTests`; a grep of `src/` finds no production caller.
+- **SQF-8 Hits go through the NPC damage path.** `CombatService.ApplyUnitHit` → `hurtNPC`: creator tag, group
+  provoke, kill credit, OnNPCDeath. The call is pcall'd; an error is warned at most once per
+  `UnitHitErrorLogSeconds` (30) with the count of muted errors (X5: 410 failing calls in 65 s gave 3 warnings, 0
+  damage).
+- **SQF-9 Squads never hurt players.** `ApplyUnitHit` refuses any player character (a shielded novice, a clan ally,
+  anyone). Unchanged.
+- **SQF-10 Squads target CombatService NPCs only** (a WE_NPC model with an `NPCId`); statues are never shot.
+- **SQF-11 `EscortIgnoreCalm = true` (reversible in config).**
+    - The FOLLOW escort never opens fire on a calm Passive / passive-group NPC (bank guards, Ops garrisons before they
+      are provoked). Without it, since squad hits now provoke, the default order started the whole bank fight on the
+      walk in (first build: every H2 FOLLOW raider died before the breach).
+    - `false` = the escort shoots calm guards too, and its first hit provokes the group.
+    - No effect on the live game while Jobs are OFF: today's bank guards are Aggressive and ungrouped.
+- **SQF-12 Kill credit is unchanged.** Escort hits tag the owner and pay `UnitKillCashShare`; ATTACK hits with
+  `UnitKillCreditOnAttack = false` leave no tag and pay nothing (V5: one payout per kill, never two).
+- **SQF-13 No provoke by proxy (Jobs ON only).**
+    - **v3: every hit.** A squad hit on a grouped or stance NPC (bank guards, Ops garrisons: any hit on one provokes
+      its group and keeps it fighting) is refused unless the owner's living character is within that NPC type's
+      `AggroRange` of it (`UnitProvokeOwnerStuds` replaces it when above 0), calm or already provoked. Round 2 gated only
+      calm NPCs, so an owner who came near for one hit could walk away while his ATTACK squad kept the group fighting a
+      bystander (reviewer V4).
+    - **Target picks.** ATTACK and FOLLOW skip such NPCs while the owner is out of reach
+      (`CombatService.UnitMayHitNPC`), so units don't walk at them or roll shots. Plain Aggressive NPCs (every live camp
+      and bank NPC while Jobs are off) are not affected.
+    - **v3: no provoker rule.** Round 2's SQF-14 (a provoked group aims at the first player who hit it) is dropped: it
+      let one player switch a guard group off for a teammate (reviewer V3/V8/V9). Guards take the nearest engageable
+      player, exactly as on HEAD; `CombatNPC.thinkStance` differs from HEAD only by the shared `holdsFire` helper.
+    - **Measured.** X8g: owner near for the first hit (group wakes 3/3), then 250 studs away for 40 s: 0 further squad
+      damage, the group calms (0/3), and a bystander who then stands beside the guards for 20 s takes 0. X8h: no shot at a
+      provoked grouped NPC while the owner is out of reach (0 rolls); a plain Aggressive NPC is still shot with the owner
+      250 studs away. V4: 0 squad damage after the owner leaves. V3a/b/c, V8, V9: the raider beside awake guards is shot
+      at (792 / 840 / 720 / 744 / 1020), as on HEAD.
+- **SQF-14 ATTACK keeps HEAD's fire band (v3).** An ATTACK unit fires only once its target is within 0.85 ×
+  `AttackRange` (46.75 studs), as on HEAD; the fallback candidates are limited to the same band. So ATTACK is never
+  stronger than today's (round 2 fired out to 55 studs; G3: a hostile held at 52 studs takes 0 on HEAD and on v3). The
+  FOLLOW escort keeps firing out to `AttackRange`, as on HEAD.
+- **SQF-15 Another NPC's body never blocks a squad ray (new, `UnitLosIgnoreNPCBodies = true`).**
+    - Found in the round-3 balance runs: in the stand-in, whose NPCs do not collide, two hostiles standing on top of
+      each other each blocked the ray to the other, so the squad stopped shooting and pressed into them. 3 units vs a
+      lone Infantry (plus a respawned one on the same spot) left it alive after 30 s in 7 of 238 seeds.
+    - HEAD's FOLLOW escort has the same blind spot (X10b: 0 damage on HEAD). Roblox NPCs do collide, so a full overlap
+      is rarer there, but one body can still hide another.
+    - Cost: a squad can hit a hostile standing right behind another NPC. `false` restores NPC bodies as cover.
+    - Measured (X10): two overlapping hostiles, 10 s: ATTACK 520 damage and the escort 520 (both 0 with the flag off).
+- **SQF-16 No new remote traffic and no tracers.** No per-hit feedback (`NoAttackerFb`); a credited kill still toasts
+  "Squad: X down (+$N)".
+- **SQF-17 Balance (the two sections below).**
+- **SQF-18 Two owner decisions (refix 3.2; the lead took the middle option at refix 3.3, reversible).** See "Owner
+  decisions" at the end of the live section.
+
+### Live (Jobs OFF) balance
+The squad values in SQF-5 keep the live FOLLOW escort and ATTACK kill times close to today's build on clean-start lines.
+Two moments change more than the 2–4 % of squad damage lost to misses (5–8 % at refix 3.2's 0.96 / 0.92). They are the
+owner's call (SQF-18): the bank clear when guards come back, and a player who stands still next to an outpost group on
+FOLLOW.
+
+**How it was measured.**
+- **Three drivers**, all from the headless stand-in, all placing the squad before any NPC spawns (clean start):
+    - **r31.** The refix-3.1 reviewer's driver (`w31/mk_r31.py`, copied unchanged): lone-Infantry lines with a fixed
+      tap phase (seeds 41001–41600) and a random one (51001–51800), full lines (31001–31200), bank lines (61001–61120).
+    - **mk_bal.** The builder's driver (`w3/bal/mk_bal.py` through `fast.sh`): full lines on seeds 101–160, lone-Infantry
+      lines on 1001–1300.
+    - **b32 (new at 3.2).** The round-3.2 reviewer's driver (`w32/bal/mk_b32.py`, copied unchanged; run by
+      `w32/bal/b32.sh`). Its own seeding (a lowbias32 chain); the squad settles in its real FOLLOW slots; every layout
+      at a random bearing, the tap at a random 0–0.8 s phase. It adds the **faced, random-bearing bank ring** with and
+      without guard respawns (RINGF / RINGN, seeds 93501–93900), the full lines with a random facing (93001–93400),
+      lone-Infantry lines (94001–95000) and bank lines (96001–96200). Its aggregates also report the **stand-still
+      survival past 8 s, paired, with an exact McNemar p** (`w32/bal/agg_extra.py`, `w32/agg_fs_all.py`).
+    - **b32 bank lines one per process (new at 3.2, `w32/bal/b32bank1.sh`).** The chained bank mode (r31 and b32) runs
+      four bank lines in one process; each line draws its bank spot and player id from the `math.random` stream the NPC
+      AI also consumes, so a change in one line moves every later line. The one-line-per-process runs (seeds
+      96001–96120) are the ones to read.
+- **Reproducibility.** My b32 HEAD runs are byte-identical to the reviewer's (ring 400/400, full 400/400, TTK
+  1000/1000, bank 199/200), and so are the 3.1 candidate runs I repeated (ring, full, TTK, and the 0.99 variants).
+- **Refix 3.2 vs 3.1 on these lines.** Every clean-start open-ground line is byte-identical to refix 3.1: b32 ring
+  400/400, full 400/400, TTK 1000/1000; r31 fixed-phase TTK 600/600, random-phase TTK 800/800, full 200/200; mk_bal
+  TTK 298/300. No unit gives up in these fights, so the 3.2 rule never runs there, and every number below that is not a
+  bank-with-cover line is a property of the 0.96 / 0.92 hit chance. mk_bal runs its chained S3 bank-with-cover section
+  before its clean-start lines and that section does change (below), so 2 of its TTK seeds and 50 of its 60 full-line
+  seeds moved through the chain, not through the code.
+- **Refix 3.3 (0.98 / 0.96, on cand7 = 90cad49 + the lane).**
+    - **b32.** Ring, full, TTK and the four bank lines (one per process) ran on cand7 with no override. They are
+      byte-identical, seed for seed, to the refix-3.2 option runs (cand3r with a 0.98 / 0.96 override): ring 400 / 400,
+      full 400 / 400, TTK 1000 / 1000, and the one bank line that had an option run (B_HIDE_ATK) 120 / 120. So the
+      90cad49 base changes none of these lines.
+    - **Base check on HEAD.** head7 (90cad49) gives the same results as head3 (5e021d8): the bank lines 120 / 120 seeds
+      per line, the ring 400 / 400 and the TTK lines 1000 / 1000 (full lines not re-run on head7).
+    - **r31.** The fixed-phase, random-phase and full lines were re-run on cand7.
+    - **Not re-run.** mk_bal, and the r31 / b32 chained bank modes. Their rows below are still the 0.96 / 0.92 values.
+
+**Acceptance (all must hold; restated at refix 3.2).**
+- FOLLOW shoot-back HP within 3 of HEAD, on every driver.
+- **ATTACK kill time without respawns** within +10 % of HEAD's median: the faced, random-bearing bank ring with every
+  respawn moved away (b32 RINGN), and the outpost clear (every clear ends before an 18 s respawn), on every driver that
+  has the line.
+- `0 < Far <= Near <= Max < 1`.
+- **Lone Infantry** (ATTACK; 5 and 3 units; 30 and 45 studs), unchanged from refix 3.1: every line must pass on r31
+  with a fixed and a random tap phase, on mk_bal and (new) on b32:
+    - **(a) Median, with margin.** Within +25 % of HEAD's median, and the upper end of the 95 % CI of the share of runs
+      slower than 1.25 × HEAD's median stays below 50 %.
+    - **(b) Mean.** Within +25 % of HEAD's mean, and so is the upper end of its paired-bootstrap 95 % CI.
+- **Why the ring line was restated.** Rounds 3 and 3.1 accepted the bank-ring clear time *with* guard respawns
+  (r31 and mk_bal medians +4.0 % / +5.8 %). Those two geometries already put today's squad past the first respawn
+  (r31: 0 of 200 HEAD clears under 28 s, median 31.5 s), so the line could not see the respawn threshold. In a faced,
+  random-bearing approach today's squad usually downs every guard before the first one comes back; the candidate
+  usually does not. That is not a kill-time line any more; it is decision A below, disclosed and not claimed as met.
+
+**Lone Infantry, 5 units** (r31; the 3-unit lines pass on every row: medians within +0 % / −11 %, at most 3.1 % of runs
+over the limit).
+
+| Near / Far | Tap phase | 30 studs: median, share over (CI upper), mean (CI upper) | 45 studs: median, share over (CI upper), mean (CI upper) | Verdict |
+|---|---|---|---|---|
+| HEAD 5e021d8 | fixed | 1.500 s | 1.875 s | — |
+| HEAD 5e021d8 | random | 1.375 s (mean 1.411) | 1.875 s (mean 1.925) | — |
+| 0.94 / 0.90 (round 3) | fixed | +0 %, 44.5 % (48.5), +22.3 % (24.3) | **+26.7 %, 52.8 % (56.8)**, +21.6 % (23.3) | **fails (a)** |
+| 0.94 / 0.90 (round 3) | random | +18.2 %, **48.1 % (51.6)**, **+26.7 % (28.7)** | +20.0 %, **49.9 % (53.3)**, +15.7 % (17.2) | **fails (a), (b)** |
+| 0.95 / 0.92 | fixed | +0 %, 38.3 % (42.2), +19.2 % (21.1) | +6.7 %, 44.5 % (48.5), +19.4 % (21.1) | meets |
+| 0.95 / 0.92 | random | +18.2 %, 43.1 % (46.6), +24.0 % (**25.9**) | +13.3 %, 42.8 % (46.2), +13.0 % (14.4) | **fails (b)** at 30 studs |
+| 0.96 / 0.92 (refix 3.1 / 3.2) | fixed | +0 %, 33.3 % (37.1), +16.7 % (18.6) | +6.7 %, 39.8 % (43.8), +17.7 % (19.2) | meets |
+| 0.96 / 0.92 (refix 3.1 / 3.2) | random | +9.1 %, 37.8 % (41.1), +21.0 % (22.9) | +13.3 %, 39.0 % (42.4), +11.7 % (13.1) | meets |
+| 0.96 / 0.93 | fixed | +0 %, 33.3 % (37.1), +16.7 % (18.6) | +6.7 %, 39.0 % (42.9), +17.4 % (19.0) | meets |
+| 0.96 / 0.93 | random | +9.1 %, 37.2 % (40.6), +20.7 % (22.6) | +13.3 %, 38.0 % (41.4), +11.4 % (12.8) | meets |
+| **0.98 / 0.96 (refix 3.3, this build)** | fixed | +0 %, 19.5 % (22.7), +9.7 % (11.3) | +0 %, 24.0 % (27.4), +11.8 % (13.4) | meets |
+| **0.98 / 0.96 (refix 3.3, this build)** | random | +9.1 %, 21.6 % (24.5), +12.0 % (13.6) | +6.7 %, 23.1 % (26.0), +6.1 % (7.2) | meets |
+
+The round-3 rows use the refix-3.1 reviewer's outputs for the same driver and seeds (`v3review_balance_1/out`),
+scored with `w31/ttkacc.py`. Every other row was run at refix 3.1; at refix 3.2 the 0.96 / 0.92 rows were re-run on
+the 3.2 code and came out byte-identical (fixed phase 600 of 600 seeds, random phase 800 of 800). The 0.98 / 0.96 rows
+ran at refix 3.3 on cand7 (`w32/r31out/{fx,ph}_c7`, scored with `w4/r31agg/ttkacc.py`).
+
+**The acceptance lines at 0.98 / 0.96 (this build, refix 3.3; every line meets its limit).**
+
+| Line | Driver | HEAD | Candidate 0.98 / 0.96 | Limit |
+|---|---|---|---|---|
+| FOLLOW shoot-back HP, clean start | b32, 400 seeds | 79.64 | 79.44 (−0.19, CI −0.38..−0.04) | within 3: meets |
+| FOLLOW shoot-back HP, clean start | r31, 200 seeds | 72.29 | 72.29 (+0.00) | within 3: meets |
+| FOLLOW shoot-back HP vs 3 Infantry | r31 | 93.95 | 93.85 (−0.10) | within 3: meets |
+| Bank ring kill time, no respawns (RINGN: faced, random bearing), median | b32, 400 | 27.20 s | 28.00 s (+2.9 %, CI +2.6..+3.3) | +10 %: meets |
+| Outpost clear (ATTACK), median | b32, 400 | 12.40 s | 12.60 s (+1.6 %, CI +0.8..+2.4) | +10 %: meets |
+| Outpost clear (ATTACK), median | r31 | 10.88 s | 11.12 s (+2.2 %, CI +0.5..+4.7) | +10 %: meets |
+| Lone Infantry 5 units, 30 / 45 studs | b32, 1000 seeds, random phase | 1.40 / 2.00 s | medians +0 % / +2.5 %; over 1.25× 16.8 % (Wilson hi 19.2) / 0.0 %; means +9.8 % (CI hi 11.1) / +1.8 % | meets |
+| Lone Infantry 3 units, 30 / 45 studs | b32 | 3.00 / 2.95 s | medians +0 % / +1.7 %; means +0.0 % / +0.6 % | meets |
+| Lone Infantry 5 units, 30 / 45 studs | r31, fixed phase, 600 seeds | 1.500 / 1.875 s | medians +0 % / +0 %; over 1.25× 19.5 % (CI hi 22.7) / 24.0 % (27.4); means +9.7 % (CI hi 11.3) / +11.8 % (13.4) | meets |
+| Lone Infantry 5 units, 30 / 45 studs | r31, random phase, 800 seeds | 1.375 / 1.875 s | medians +9.1 % / +6.7 %; over 1.25× 21.6 % (24.5) / 23.1 % (26.0); means +12.0 % (13.6) / +6.1 % (7.2) | meets |
+| Lone Infantry 3 units, 30 / 45 studs | r31, both phases | 3.125 / 3.500 s (fixed) | medians +0 %; means within −5.7 % .. +0.6 % | meets |
+
+Outputs: `w32/bal/out/{ring,full,ttk}_c7`, `w32/bal/out/b1_*_{c7,h7}`, `w32/r31out/{fx,ph,full}_c7`. Scored with
+`w32/bal/agg32.py`, `aggring.py`, `agg_extra.py`, `w4/agg_bank4.py` and `w4/r31agg/{ttkacc,agg}.py`.
+
+**The acceptance lines at 0.96 / 0.92 (refix 3.2, kept for comparison).**
+
+| Line | Driver | HEAD | Candidate | Limit |
+|---|---|---|---|---|
+| FOLLOW shoot-back HP, clean start | b32, 400 seeds | 79.64 | 79.11 (−0.53, CI −0.82..−0.27) | within 3: meets |
+| FOLLOW shoot-back HP, clean start | r31, 200 seeds | 72.29 | 72.21 (−0.08, CI −0.24..0.00) | within 3: meets |
+| FOLLOW shoot-back HP vs 3 Infantry | r31 | 93.95 | 93.80 (−0.15) | within 3: meets |
+| FOLLOW shoot-back HP, clean start | mk_bal, 60 seeds | 85.07 | 85.27 (+0.2; 3.1: 86.13, chain) | within 3: meets |
+| Bank ring kill time, no respawns (RINGN: faced, random bearing), median | b32, 400 | 27.20 s | 28.70 s (+5.5 %, CI +5.1..+5.9) | +10 %: meets |
+| Outpost clear (ATTACK), median | b32, 400 | 12.40 s | 12.80 s (+3.2 %, CI +2.4..+4.1) | +10 %: meets |
+| Outpost clear (ATTACK), median | r31 | 10.88 s | 11.38 s (+4.6 %, CI +2.2..+7.2) | +10 %: meets |
+| Outpost clear (ATTACK), median | mk_bal | 10.80 s | 11.10 s (+2.8 %) | +10 %: meets |
+| Lone Infantry 5 units, 30 / 45 studs | b32, 1000 seeds, random phase | 1.40 / 2.00 s | medians +3.6 % / +5.0 %; over 1.25× 33.0 % (CI hi 36.0) / 0.4 %; means +19.2 % (CI hi 20.9) / +3.7 % | meets |
+| Lone Infantry 3 units, 30 / 45 studs | b32 | 3.00 / 2.95 s | medians +0 % / +1.7 %; means +0.2 % / +2.1 % | meets |
+| Lone Infantry 5 units, 30 / 45 studs | mk_bal, 300 seeds | 1.50 / 1.88 s | medians +0 % / +0 %; means +15 % / +10 %; extra volley 30 % / 34 % | meets |
+| Lone Infantry 3 units, 30 / 45 studs | mk_bal | 3.12 / 3.50 s | medians +0 % / +0 %; means +0 % / −4 % | meets |
+
+**Why 0.98 / 0.96 (refix 3.3).** 0.96 / 0.92 is still the floor: the lowest Near that meets every lone-Infantry line
+with both tap phases, then the lowest Far. Refix 3.3 goes one step above the floor, to the middle option of owner
+decisions A and B below. A squad unit misses 2 % of its shots up close and 4 % at the edge of its range.
+
+**Owner decisions (SQF-18).** Measured on b32 (faced ring 400 seeds, full lines 400 seeds). Each option is a config-only
+change inside the pinned bounds (`UnitMaxHitChance` rises with option 3). Refix 3.3 applies the middle option. The
+0.98 / 0.96 column was measured on cand3r with a config override at refix 3.2. Refix 3.3's cand7 (90cad49 base, 0.98 /
+0.96 in config) gives byte-identical results: ring 400 / 400 seeds, full 400 / 400, TTK 1000 / 1000, and the B_HIDE_ATK
+bank line (one per process) 120 / 120.
+
+| Line | HEAD | 0.96 / 0.92 (refix 3.2) | **0.98 / 0.96 (this build)** | 0.99 / 0.99 |
+|---|---|---|---|---|
+| **A.** Bank ring clear with respawns, faced (RINGF), median | 27.20 s | 36.60 s (+34.6 %, CI +33.9..+35.3) | 32.00 s (+17.6 %) | 27.90 s (+2.6 %) |
+| A. …the clear comes before the first guard is back (first death + 18 s) | 331 / 400 | 51 / 400 | 132 / 400 | 224 / 400 |
+| A. …runs slower than 1.10 × HEAD's median | — | 349 / 400 | 268 / 400 | 176 / 400 |
+| A. Ring with a random facing (full mode), finite median / under 28 s | 27.00 s / 225 of 280 | 36.40 s / 12 of 280 | 31.85 s / 64 of 280 | 27.90 s / 144 of 281 |
+| A. The same ring without respawns (RINGN, the kill time) | 27.20 s | 28.70 s (+5.5 %) | 28.00 s (+2.9 %) | 27.50 s (+1.1 %) |
+| **B.** Standing still next to an outpost group on FOLLOW: survived past 8 s (the escort cleared the group), paired | 136 / 400 (34 %) | 83 / 400 (21 %); 56 seeds HEAD-only vs 3 cand-only, McNemar p 1.2e-13 | 111 / 400 (28 %); 27 vs 2, p 1.6e-06 | 124 / 400 (31 %); 13 vs 1, p 0.0018 |
+| B. …median time of death / alive at 35 s | 5.00 s / 13 | 4.50 s / 6 | 4.60 s / 6 | 5.00 s / 7 |
+| Lone Infantry 5 units at 30 studs, mean kill time (b32) | 1.376 s | 1.640 s (+19.2 %) | 1.510 s (+9.8 %) | 1.448 s (+5.3 %) |
+
+- **A in words.**
+    - **The clear.** An ATTACK squad sent at the bank guards from outside their range takes about 27 s today, about 37 s
+      at 0.96 / 0.92, and about 32 s at 0.98 / 0.96. Today's squad usually downs every guard before the first one comes
+      back, 18 s after it fell. At 0.98 / 0.96 the squad does so in 132 of 400 runs (0.96 / 0.92: 51; today: 331); in the
+      others it also has to kill a guard that came back.
+    - **Without respawns** the squad is only about 3 % slower (0.96 / 0.92: about 5 %).
+    - **Raising the hit chance** does not remove the threshold; it moves more runs back under it (0.99: 224 of 400).
+      The round-3.3 balance reviewer found option 3's median sensitive to the approach geometry. On that reviewer's own
+      driver it came out 30.5 s, not 27.9, so option 3 should be quoted as about 28–31 s.
+  Damage compensation does not help either (the round-3.2 reviewer measured AttackDamage 8.42: +14.0 %). A change to
+  the guards' respawn is another lane's work (the bank lane is changing group respawn); it would change this line.
+- **B in words.** A player who stands still next to an outpost group on FOLLOW is saved by his escort about 1 time in 4
+  at 0.98 / 0.96 (111 of 400), instead of about 1 time in 3 today (136) and 1 time in 5 at 0.96 / 0.92 (83). He usually
+  goes down in about 5 s on every build. The round-3.3 balance reviewer's own driver gave 110 of 400 at 0.98 / 0.96
+  (HEAD 125). The rest of this paragraph is the 0.96 / 0.92 evidence from refix 3.2. The other drivers agree: r31 40 → 30 of
+  200 (13 vs 3, p 0.021), mk_bal 17 → 12–15 of 60 (8 vs 3, p 0.23 on the 3.1 run; the 3.2 run moved through the bank
+  chain described below). About three quarters of the drop is the hit chance
+  (0.99: 124 of 400). Shooting back is unchanged (FB above).
+- **C. Information, not a setting: a squad partly behind a wall.** When some of the squad stands behind a small wall
+  as ATTACK starts (bank, one line per process), those units have to walk out before they can shoot; today's squad shoots
+  through the wall.
+    - **At 0.98 / 0.96:** player HP 59.6 → 31.0, and the player goes down in 9 of 120 runs (0 today). The guards are down
+      in time to loot in 111 of 120 runs (today 120).
+    - **The other options:** 0.96 / 0.92 gives 26.6 HP and 13 downs; 0.99 / 0.99 gives 35.1 HP and 5 downs.
+    - **Most of it is the "no shooting through walls" rule CLAUDE.md asks for.** With `UnitAttackRequireLos = false` the
+      line is 57.3 HP with 0 downs. The give-up rule adds none of it: the line is identical with no give-up at all.
+- **Refix 3.3 (lead decision, reversible):** 0.98 / 0.96, the middle option. It is recorded here as an assumption until
+  the owner answers A and B himself (C needs no answer); either answer is a two-number config change. Before 3.3 the
+  default was 0.96 / 0.92.
+
+**Stand-still line (corrected at refix 3.2).** Rounds 3 and 3.1 listed "standing still next to the outpost on FOLLOW:
+dead at about 5 s on both" as a line with no measurable difference. That was wrong: it looked only at "alive at 35 s"
+and the median. The survival-past-8-s share differs (decision B above), and the builder's own r31 data showed it too
+(40 → 30 of 200, p 0.021).
+
+**Clean-start lines with no measurable difference** (mk_bal, 60 seeds, at 0.96 / 0.92):
+- **Shooting back on HOLD:** HP 33.2 on HEAD vs 33.4 (refix 3.1: 34.0; the chain below).
+
+**Bank lines (ATTACK / FOLLOW with cover), one line per process** (b32 bank lines, `w32/bal/b32bank1.sh`, seeds
+96001–96120, player 50 studs from a 5-guard ring, 90 s):
+
+| Line (one per process, 120 seeds): player HP / player down / guards down in time to loot | HEAD | Refix 3.1 | Refix 3.2 (0.96 / 0.92) | Refix 3.3 (0.98 / 0.96, cand7) | Reading |
+|---|---|---|---|---|---|
+| Open ground, ATTACK, player shoots | 59.6 / 0 / 120 | — (the first chained line: identical on 3.1 and 3.2) | 57.3 / 0 / 120 (−2.3, CI −3.6..−1.2) | 58.9 / 0 / 120 (−0.7, CI −1.3..−0.1) | Small. |
+| Cover + peek, ATTACK | 81.9 / 0 / 0 | 81.7 / 0 / 0 | 83.9 / 0 / 0 (+2.2 vs 3.1, CI +1.4..+3.1; 98 of 120 seeds unchanged) | 84.0 / 0 / 0 (+2.1, CI +1.3..+2.9) | 3.2 slightly better: a unit that gave up on a guard behind the cover now fights the others. |
+| Cover + peek, FOLLOW | 72.8 / 0 / 0 | 81.8 / 0 / 0 | 81.8 / 0 / 0 (identical on all 120 seeds) | 81.9 / 0 / 0 (+9.1, CI +8.2..+10.0) | Player-favourable; 3.2 and 3.3 do not touch the FOLLOW code. |
+| Beside a 6-stud wall, ATTACK (the driver's "cover, never peeks": the player stands beside the wall and shoots; the wall only blocks squad rays) | 59.6 / 0 / 120 | 26.6 / 13 / 107 | 26.6 / 13 / 107 (identical on all 120 seeds) | 31.0 / 9 / 111 (−28.6, CI −31.5..−25.6) | Worse for the player, from the line-of-sight rule: with `UnitAttackRequireLos = false` it is 57.3 / 0 / 120; with 0.99 hits 35.1 / 5 / 115; with no give-up at all it is identical to 3.2. Units behind the small wall must walk out before they can shoot, where today's squad shoots through it. Decision C (information). |
+
+HEAD columns: head3 (5e021d8); head7 (90cad49) gives identical results on 120 / 120 seeds for every line. Refix 3.3
+outputs: `w32/bal/out/b1_*_{c7,h7}`, scored with `w4/agg_bank4.py` (`w4/agg_bank4.txt`).
+
+**Chained bank lines (r31 seeds 61001–61120, b32 96001–96200, mk_bal's S3 section).** They change between 3.1 and 3.2
+on every line after the first, including the FOLLOW line whose code 3.2 does not touch (r31 cover + peek FOLLOW 87.3 → 76.3
+HP; b32 88.8 → 77.8). In 3.2 the cover + peek ATTACK line now clears the guards, which moves the shared `math.random`
+stream and so the bank spot, the player id and the world clock of every later line in the same process. For the same
+reason mk_bal's clean-start lines (run after its S3 bank section) moved on 50 of 60 seeds, e.g. its stand-still survival
+12 → 15 of 60 with identical FOLLOW code. The chained per-line values are therefore not code effects; the one-line-per-
+process table above is. (For the record, chained r31 on 3.2: open −2.1, cover + peek ATTACK +18.6, cover + peek FOLLOW
++6.1, beside the wall −14.5 HP with 20 vs 4 player downs, against HEAD.)
+
+**Other live lines, not in the acceptance set** (mk_bal and the farm driver at 0.96 / 0.92; not re-run at 0.98 / 0.96).
+
+| Line | HEAD | Candidate (0.96 / 0.92) | Difference (95 % CI) | Reading |
+|---|---|---|---|---|
+| Outpost, harness start (2.5 s escort head start), stands still on FOLLOW: HP / alive (mk_bal, 60) | 25.3 / 56 of 60 | 10.9 / 28 of 60 (3.1: 10.4 / 26) | −14.4 (−20.5 to −8.2) | The head-start artifact the round-2 reviewer found. On a clean start this is decision B. |
+| Outpost, harness start, shoots back on FOLLOW: HP (mk_bal) | 87.9 | 87.9 | 0.0 | Same. |
+| Outpost, harness start, shoots back on HOLD: HP (mk_bal) | 84.4 | 76.9 | −7.5 (−14.6 to −0.3) | The same head-start artifact (the join runs on FOLLOW). On a clean start the line is the same (above). |
+| Escort AFK farm behind a 3-stud wall, 10 min (farm driver, seeds 201–208) | $800 × 8 | $800 × 7, $775 × 1 (identical to refix 3.1) | | The residual AFK farm pays about the same; a missed shot delays one kill. Bank AFK farms: $0 on both. |
+
+**Found on the way (SQF-15).** Before the NPC-body rule, 3 units at 30 studs left the Infantry alive after 30 s in 7 of
+238 TTK seeds (never on HEAD): a second Infantry stood on the same spot and each body hid the other.
+
+### Jobs-ON bank (H2)
+**Setup.**
+- **Test copies.** Jobs-ON TEST copies `w3/head3_on`, `w3/cand3r_on` (round 3), `w31/cand3r_on` (refix 3.1) and
+  `w32/cand3r_on` (refix 3.2; deleted after the run, `w3/mk_on.sh` recreates it), made with the apply_cutover.py flips.
+  They were never shipped and differ only in the four lane files.
+- **Harness.** The w3s2 cutprep H2 harness (`w3/h2_bank_balance_v2.luau`, with a per-seed squad roll via
+  `SetRandomForTests`), 100 seeds per scenario. Outputs are in `w3/h2/` (refix 3.1: `cand31_on_*`; refix 3.2:
+  `cand32_on_*`).
+- **Refixes 3.1 and 3.2 re-ran only the three squad scenarios.** The solo scenarios have no squad, so neither the Unit*
+  hit chances nor the give-up rule play any part in them.
+- **Refix 3.3 did not re-run H2.** Every number below is at 0.96 / 0.92. H2 is Jobs-ON only, and at refix 3.1 two points
+  more hit chance moved squad_follow by one run, inside its noise band. The squad_attack and squad_wait failures come
+  from the wake-up and owner-reach rules, not from the hit chance.
+
+**Reading the numbers.** H2 is not seed-deterministic for the squad scenarios (round 2 and review1 saw reruns move by
+several points), so only differences well outside the 95 % CIs count. The solo scenarios came out identical on all
+four trees (HEAD 5e021d8, v3, HEAD 670bbf6, round 2).
+
+| Scenario | HEAD 5e021d8 | Refix 3.2 | Refix 3.1 (0.96 / 0.92) | Round 3 (0.94 / 0.90) | Round 2 (670bbf6 base) |
+|---|---|---|---|---|---|
+| solo_cover | 31 % (22.8–40.6) | not re-run (no squad) | not re-run (no squad) | 31 % | 31 % |
+| solo_foot | 0 % | not re-run (no squad) | not re-run (no squad) | 0 % | 0 % |
+| squad_attack | 69 % (59.4–77.2) | 0 % (identical to 3.1, run for run) | 0 % (0–3.7) | 0 % (0–3.7) | 0 % |
+| squad_follow | 100 % (96.3–100) | 41 % (31.9–50.8) | 46 % (36.6–55.7) | 47 % (37.5–56.7) | 43 % |
+| squad_wait | 100 % | 0 % (identical to 3.1, run for run) | 0 % (0–3.7) | 0 % (0–3.7) | 0 % |
+
+**What the numbers show.**
+- **squad_attack.** The scripted raider walks up with ATTACK and never shoots before the breach. He is inside the
+  guards' AggroRange, so his squad's hits are allowed and, through the NPC damage path, wake the group. The guards take
+  the nearest player and he dies at about 11 s, before the breach. On HEAD the squad's raw damage never provoked
+  anyone, and ATTACK shot through walls.
+- **squad_wait.** The owner waits outside the guards' reach, so his squad cannot touch them (SQF-13). He walks in alone
+  after 120 s and dies.
+- **squad_follow.** The escort leaves calm guards alone (SQF-11) and fights once the breach provokes them.
+- These are the v3 rules working as designed. The cutprep target (squads win the bank 70 % or more) does not hold on
+  any squad scenario, and the hit chance cannot restore it: at refix 3.1, two points more hit chance moved squad_follow
+  by one run (47 → 46, inside noise). squad_attack is unchanged run for run. In squad_wait, 20 of the 100 runs differ in
+  detail (for example, the squad downs one guard after the owner walks in), but every raider still dies.
+- **Refix 3.2.** squad_attack and squad_wait came out identical to refix 3.1 run for run. squad_follow runs FOLLOW code
+  that 3.2 does not touch, yet 41 of its 100 seeds changed outcome between the 3.1 run and this one (46 → 41 %): H2 is
+  not seed-deterministic, and 41 / 46 / 47 % (3.2 / 3.1 / round 3) are one noise band.
+- The Jobs-ON bank retune (wake-up rules, guard setup or breach timings) stays with the combat lane. Jobs stay OFF on
+  live, so the live game is unaffected.
+
+## 2026-09-27 — Droppers v1b lane L1b (plate server; spec_droppers.md §3.8, OD-4 = A, ECON-1 OK with conditions)
+
+These are the spec's §14 lines that lane L1b's keys carry. Merge them at L4b together with the L3b lines (DR-16 and DR-20 are L3b's).
+- Every line can be reversed in config.
+- Every number is from the headless stand-in (fake clock, signals fired directly), config arithmetic or the Python model. None of it is Roblox.
+
+DR-8 Plate:
+- One tap (`PromptHoldDuration` 0, and the plate's ClickDetector) pays a `BundleAwards` bundle, in ONE `AccruePendingCash(player, amount, "manual_dropper")`.
+  - `BundleAwards = 5` ships: $75 a tap.
+  - OD-4 = A was chosen by the owner on 2026-09-27 (`droppers/OWNER_DECISIONS.md`).
+  - ECON-1 was signed "OK with conditions" (`droppers/econ1/econ1.md`). Conditions C1-C3 are met in L1b:
+    - the exemption pins;
+    - T1 f on the real EconomyService: GetCashMult(manual_dropper) = 1, passive = 5.906;
+    - the economy guard pins.
+  - C4 (re-run `econ1/run_all.sh` on the merged tree) is L4b's.
+- Both buckets must hold `BundleAwards` (no partial bundle).
+- `BundleAwards` is clamped at runtime to 1..MaxAwardsPerMinute; a non-number or NaN pays 1. BuyPathStatic also rejects a config outside that range.
+- AwardAmount 15, cooldown 0.35 s, RateLimit 4/s burst 3, and the budgets of 30 a minute and 600 an hour are unchanged. That means:
+  - at most $450 a burst;
+  - $18,000 in the first hour (measured 1,195 awards; hour 2: 600);
+  - $9,000 an hour after.
+- Reversible, one line each:
+  - `BundleAwards = 1` (option E): today's $15 taps. T1 l shows the pay output is identical to the base, line for line.
+  - `MaxAwardsPerMinute = 15` (option C).
+- The recharge toast is "Cash drop is recharging" (NotificationConfig's Match rule is kept).
+
+DR-9 Plate inset and money-bag model:
+- The plate inset `DropNeon` (name kept) is SmoothPlastic (`PlateNeon = false`): world Neon 306 -> 294 (T4).
+- The MoneyBagFX callers are removed from the plate grab and the ATM collect.
+- The id and `VisualAssetService.PlayMoneyBagFX` stay until v1.1.
+
+DR-10 `DropperFx`:
+- An owner-only UnreliableRemoteEvent with payload (dropPoint, amount, left, eta), one per paid grab, none on a refused grab.
+- The client drops junk (amount 1..10,000, left 0..1,000, eta 0..3,600, within 60 studs).
+- A dropped packet loses an effect, never money.
+- There is no OnServerEvent (BuyPathStatic rule).
+
+DR-11 (v1b part) `Drop.Coin` reuses the Cash.Collect file 9113849492:
+- pitch 1.35, volume 0.3, World bus, 30 studs, MaxSeconds 0.5, cooldown 0.3 s;
+- it is the chirp with the plate's world pop, never with the pill float.
+
+DR-19 Dressed-plate drop point:
+- When the plate carries a hooks dress (a `WE_CatalogProp` Model), the bundle falls onto the dress's world bounding-box top + 0.3, over the plate centre.
+- Otherwise it falls onto the plate kit top.
+- It is cached per plate and keyed by the dress instance, so there is one GetBoundingBox per (re)dress.
+- Studio check at P4 (hooks ask 1c).
+
+ECON-1 (econ lane, 2026-09-27): OD-4 = A signed OK with conditions:
+- `BundleAwards = 5` keeps today's caps ($15 awards, 30/min, 600/h).
+- The plate stays multiplier-exempt (`manual_dropper`), raidable at 10 % 1:1, and pays no XP.
+- Model ceiling for a player who maxes the plate: +18.6 % $/s at 10 min, +35.7 % at 30 min, +11.3 % at 1 h.
+- Reversible: `BundleAwards = 1` (or `MaxAwardsPerMinute = 15`).
+- (Quoted from `droppers/econ1/econ1.md` §7. The econ lane owns this line; it is listed here so L4b merges it with DR-8.)
+
+**Lane L1b's own assumptions** (reversible; recorded because the spec left them open or they deviate slightly)
+
+L1b-1 "Plate top" for the drop point (undressed plate):
+- It is the top face of the plate KIT, that is the inset `DropNeon` top, 0.15 above the plate part's own top.
+- The reason: the bundle then never sinks into the inset.
+- T1 g2 checks it.
+
+L1b-2 `PlateNeon = true` (the revert) needs a Neon enum:
+- The spec asks for both "Material from PlateNeon" and `must_not_contain "Enum.Material.Neon"` in ManualDropperService.
+- So the revert path names the material by string (`(Enum.Material :: any)["Neon"]`).
+- The only way to Neon is a visible edit of the pinned config line `PlateNeon = false,`, and the census (T4) counts Neon.
+
+L1b-3 Extra config keys (config first; the spec listed the others):
+- `PopColor` (80, 255, 120), `PopGlowColor` (8, 36, 14) and `PopGlowThickness` 1.4 hold the HEAD pop look for the client.
+- ◆ The HEAD pin "Manual dropper green $ pop glow" (BuyPathStatic.py:504, `CashPopGlow` in ManualDropperService) is retargeted to `PopGlowColor = Color3.fromRGB(8, 36, 14),` in ManualDropperConfig.
+- Lane L3b adds `CashPopGlow` on ProductionFx (spec §13 ◆).
+
+L1b-4 `WorldLabelConfig.PriorityAttribute` is not in L1b:
+- The spec's §10.1 header says L1b owns every v1b key.
+- But the §11 lane table and the workflow's L1b file list give WorldLabelConfig to L3b.
+- The name is fixed by the spec ("WE_LabelPriority"), so L3b adds it.
+
+L1b-5 `bundleAwards()` accepts only a number:
+- A string, even "5", nil and NaN all give 1; the spec's sketch used `tonumber`.
+- It fails safe toward today's $15 taps. T1 m covers 31 -> 30, 0 / -1 / nil / "five" / NaN -> 1, and 2.7 -> 2.
+
+L1b-6 The plate tag keeps WorldLabel's default 16 px:
+- Spec §6 says "tag and pop 20 px". The pop's 20 px is `PopTextPx`.
+- The tag stays at HEAD's size, so "Recharging" fits its 3 x 1.2-stud box.
+- Both sizes are within 14-20 px.
+
+L1b-7 A pre-v1b plate's tag is updated in place (`WorldLabel.SetText` + `TagBaseLabel`), not destroyed and rebuilt:
+- 0 new instances, and the owner attribute is kept.
+- The inset material and the prompt `HoldDuration` are compare-first too.
+- A second scan changes nothing (T1 k2).
+
+L1b-8 The drop point reads only a Model named `WE_CatalogProp` (VisualAssetService's Model dress path):
+- The MeshPart fallback (`WE_CatalogProp_ManualDropper`) is not configured for the plate (no MeshId).
+- If it ever is, the bundle lands on the plate kit top.
+
+L1b-9 `eta` is measured in seconds from the server's send. The client adds it to its own receipt time. The server stays the judge: an early tap gets the throttled toast.
+
+L1b-10 Base tree: L1b is `droppers/build/L1a` (v1a L1a on 5e021d8), as the workflow asked.
+- HEAD has since moved to 3b5ac28 (C5, server size 6, WE_CHECK v75).
+- Of L1b's files, only tools/BuyPathStatic.py changed there.
+- A forward check of L1a + L1b onto 3b5ac28 gives BuyPathStatic PASS 3488 / FAIL 0 (fix round 1; round 0: 3481). The only merge conflict is the shared append point above `parse_gate()`.
+
+L1b-11 (fix round 1) The L1b pins cover the plate's whole money path, including HEAD code that v1b keeps:
+- `tryAward`'s gates in order (enabled, player present, owner, per-plate cooldown, RateLimitService), `ownsPlot`, `budgetLimits`, `pickAward`'s fixed award, and `bundleAwards`, `refillBudget` and `takeBudget` whole.
+- One rule: ManualDropperService makes exactly one `AccruePendingCash` call once comments are stripped. Its only other mention is the nil guard.
+- The reason: the review showed one-line edits that pay $75 for 1 award of budget, or that pay twice, passing BuyPathStatic.
+- Cost: any later edit to these lines needs a visible pin edit in the same commit.
+- Reversible: delete or loosen the pins in the L1b block (BuyPathStatic only; no game code changed in fix round 1).
+- Not pinned here: EconomyService's `isExempt` line. EconomyService is not an L1b file, and lane X1 edits it. ECON-1 C2 (T1 f on the real EconomyService) and C4 (the L4b re-run) cover it dynamically.
+
+## Fix round 2 (2026-09-27, review rv1b_feedback_2)
+
+**No L1b change.** The one blocking issue (an Auto Collect owner's grab losing its only "+$75" to a kill float) is in
+lane L3b's client ProductionFx, and is fixed there (L3b_out/assumptions.md, "Fix round 2"). Nothing in L1b's server
+code decides which "+$" the player sees: the server pays, sends the one DropperFx packet and, when the ATM collects,
+the Collect notification. Evidence that L1b needs no edit:
+- L1b's 7 files are byte-identical to fix round 1 (md5s in job_md5.txt re-checked; `diff -rq build/L1a build/L1b`:
+  the same 7 files), and the 4 config / remote files in build/L3b are still byte-identical to build/L1b.
+- BuyPathStatic on build/L1b: PASS 3342 / FAIL 0, unchanged (fix2/bps_L1b_fix2.txt).
+- L3b's new client rule relies on one server fact that L1b's MoneyCollectorService keeps from HEAD: `Collect` floats
+  exactly `granted`, which EconomyService.CollectPendingCash returns as the same floored `PendingCash` that pushEconomy
+  writes to `WE_PendingCash`. L3b pins it (`_d3_float_source_rule`, in the L3b block; it passes on build/L1b and on the
+  merge preview v1a_rb + L1b + L3b: BuyPathStatic 3511 / 0). A later change to what `Collect` floats (a collect bonus,
+  a rounding change) must change ProductionFx with it; otherwise the ATM plate would show two "+$" (the L3b server
+  mutant S1: T15 shows 1 pop + 1 float at the walk-in), never zero.
+- T15 runs L1b's frozen ManualDropperService and MoneyCollectorService read-only (overlay): B5 71 / 0, B1 69 / 0, now
+  including the real 2 s Auto Collect loop paying the grab out silently at +0.05 to +0.30 s in cases m1-m4.
+
+## Fix round 3 (2026-09-27, lead decision after reviews rv1b_feedback_3 / rv1b_money_3; revision 3 of the spec)
+
+**Lead decision (reversible; spec §14 DR-16 revised, DR-21 new; spec §21 "Revision 3" V1-V5):** "exactly one +$75" is
+replaced by "at least one, at most two": every paid grab shows the world pop "+$75" with its chirp (lane L3b, client);
+the ATM pill float is unchanged. L1b's part: remove the hold keys, give "Recharging" a reliable server source, fix the
+3600 s budget clear, and add the pins the money review asked for. The money is unchanged (award, bundle, buckets,
+cooldown, rate limit, exemption, no XP; T5: only BundleAwards differs from HEAD among the money keys, as before).
+
+Changes (round-2 copies in fix3/round2; md5s in job_md5.txt):
+- ManualDropperConfig c98961e3 -> d1045a63: `AtmHoldNearStuds`, `AtmPopHoldSeconds`, `AtmFloatLookBackSeconds` removed
+  (pinned absent); `RechargeAttribute = "WE_DropRechargeAt"` added. build/L3b's copy is byte-identical.
+- ManualDropperService 15c25452 -> 2d34cb85:
+  - `stampRecharge(player, now, n)`: while the budget holds no bundle, the Player attribute RechargeAttribute =
+    `Workspace:GetServerTimeNow()` + eta (the seconds until a bundle is back); nil once it holds one. Compare-first (a
+    change under 0.05 s writes nothing). Called by the paid grab (after `sendDropFx`), by a refused tap (the budget
+    branch only, after the cooldown and rate limit passed) and by a join whose kept budget holds no bundle.
+  - the leave token: every leave and join bumps `leaveToken[userId]`; the leave's 3600 s timer clears the budget only
+    if its token is still the latest AND the player is not in the server.
+  - no new remote, no new money path, no per-frame work; the attribute is a look, never money.
+
+DR-21 (server half) "Recharging" from the server: the attribute above. It is state, not an effect, so it is written
+even with `FxEvent = false` (T1 n6). The client reads it at start and on change (lane L3b, DR-21 client half).
+
+**Lane L1b's own assumptions, fix round 3** (reversible)
+L1b-12 The attribute uses the server clock `Workspace:GetServerTimeNow()` (pcall'd), because the client compares it with
+its own `GetServerTimeNow()`. If the server clock cannot be read, nothing is stamped (the packet path stays). The ready
+time does not move while an empty budget refills, so a spammed refused tap rewrites nothing (0 replication traffic).
+Revert: drop `RechargeAttribute` from the config (then `stampRecharge` still writes the default key; to remove it,
+delete the 3 calls).
+L1b-13 Leave token: `leaveToken` holds one number per user seen in this server, cleared together with the budget by the
+last leave's timer. Why: HEAD's timer checked only "not in the server", so a player who left, came back, drained the
+budget and left again briefly just before the FIRST leave's timer fired got a full budget (review rv1b_money_3 X2,
+pre-existing). Now only the last leave's timer clears. The budget still survives a same-server rejoin (HEAD behaviour).
+Revert: the PlayerRemoving block to HEAD's.
+L1b-14 A same-server rejoin keeps the budget (HEAD) and gets RechargeAttribute on the new Player object at once if that
+budget holds no bundle; a rejoin on another server starts full (budgets are per server, as in HEAD; not a v1b change).
+
+**Pins (bps_block_L1b.py 86eedb9b; bps_pins.txt; pin_evidence.txt):** 68 block lines + the ◆ retarget. New: the three
+absent hold keys, `RechargeAttribute`, bumpLeaveToken / stampRecharge / serverNow whole, the token-guarded timer, the two
+stamp call lines, and `_db_fix3_rules` (budget lifetime; one sendDropFx; EconomyService only for the pinned grant;
+ManualDropperConfig is its table, no src file writes a key; CashMultExemptReasons.manual_dropper never overridden after
+its table, in any src file) and the DropperFx listener scan now follows the remote through locals (two-line form,
+pcall, function return, alias, dotted holder). L1b tree 3356 / 0; L1a base + block 3310 / 46 (0 outside the block);
+round-2 L1b files 13 block FAILs; merge preview 3539 / 0.
+Mutants (tools/mutate_fix3.py; fix3/mutants_block.txt, fix3/mutants.txt): 43 rows, all as expected: 30 L1b mutants
+(L1-L6 budget lifetime / leave token, R1-R4 stamp, D1-D3 packet, E1-E3 grant, C1-C5 config override, X1-X4 exemption
+override, F1-F5 listener forms) and 9 L3b mutants FAIL, each with 0 FAILs outside the blocks; 4 controls (K1-K4) PASS.
+Old mutants on the new block: grouped A 17 FAIL, B 4 FAIL (fix3/oldmut/grouped_*.txt), 19 singles as expected
+(fix3/singles_block.txt). Every block line that passes on the L1a base fails on at least one mutant (checked label by
+label).
+
+**Tests (headless stand-in, NOT Roblox):**
+- T1 (t1/t1_plate_driver.luau; new cases n0-n6, o1-o3, p1-p3; shims: `GetServerTimeNow` = the virtual clock, a real
+  `GetPlayerByUserId`, 3600 s timers held and fired by the case): **B5 48 / 0, B1 23 / 0**; PAYSEQ (option-E pay
+  output) B1 identical to L1a. Controls with the same driver: L1a 9 / 28 (B5), 13 / 8 (B1); round-2 service
+  (15c25452) 40 / 8 (n1, n3, n4, n6, o1, p1-p3); mutant "timer without the token" 45 / 3 (p1-p3); mutant "budget
+  cleared on leave" 42 / 6 (o1-o3, p1-p3).
+- T2 ATM trace identical to L1a (49 lines), 0 money-bag instances; T4 census: lights 231, neon 294 (L1a 306), SurfaceGuis
+  1121 (0 with MaxDistance > 80), billboards 57 (0 > 40), 2566 parts / 49 neon per base; T5 as above; world sim 12
+  steps ok; DataService 24 / 0; parse ok; lsp 348 = 348 lines, 0 new vs L1a; rojo builds.
+- ECON-1 run_all.sh on a merged copy (v1a_rb + L1b + L3b + both blocks): head / b1 / b5 / b5x1 / l1b 16 / 0 each,
+  econ_alt.txt identical to revision 2 (L1b_out/fix3/econ1run/run_all.log).
+
+For the owner, on his phone: superseded by the OWNER PHONE TEST in "Refix round 1" below (the "6 fast taps" and
+"leave and rejoin the same server" steps were wrong for a phone).
+
+## Refix round 1 (2026-09-27, reviews rv4_money_1 and rv4_feedback_1; spec "21 (cont.). Revision 3, refix round 1")
+
+The lead decision of revision 3 is unchanged and still recorded as DR-16 (spec §14) and in the spec's revision log:
+"at least one, at most two" "+$" per paid grab; the plate's world pop "+$75" and its chirp on EVERY paid grab (no hold,
+no cancel, no attribution; exempt from the fight / drive / panel mute except when dead); the ATM pill float exactly as
+today when the ATM collects. The hold / cancel code and its three config keys stay removed and pinned absent. The
+LabelGovernor priority for the pop stays.
+
+L1b-15 (review rv4_money_1, Medium) The money pins now cover the whole budget path. No shipped server code changed
+(ManualDropperService is still 2d34cb85); only the L1b block (bps_block_L1b.py) did:
+  - `budgetState`, `sendDropFx` and `cooldownKey` pinned whole (signature to `end`), and `tryAward` checked from
+    `lastAwardAt[key] = now` to its `end` with comments stripped (so no `now +=` / `n =` line can sit between the
+    pinned lines, while a comment line stays harmless: control K5, and the round-1 single control C2);
+  - rule `_db_rfx1_rules` on the comment-stripped file: `refillBudget` defined once and called exactly twice as
+    `refillBudget(userId, now)`; `takeBudget` called once as `takeBudget(player.UserId, now, n)`; `budgetState` twice as
+    `budgetState(player.UserId, now, n)`; `stampRecharge` three times (`(player, now, n)` x2 and
+    `(player, os.clock(), bundleAwards())`); no other mention of those names (no alias); the bucket fields `minute`,
+    `hour`, `at` written only inside `refillBudget` and `takeBudget` (dot, compound, bracket, rawset or table
+    constructor).
+  - Mutants (tools/mutate_fix3.py rows M1-M10; rfx1/mutants.txt): M1 (budgetState refill at now + 60), M2 (budgetState
+    tops up the minute bucket), M3 (sendDropFx reads the budget at now + 10) are the review's own; M4 per-tap cooldown
+    key; M5 a fourth stampRecharge on a future clock; M6 refillBudget through an alias; M7 a bracket write of the hour
+    bucket; M8 `now += 60` inside tryAward; M9 `n = n * 2` after the budget; M10 a second takeBudget. Each fails the
+    block and the full BuyPathStatic, with 0 FAILs outside the block.
+  - T1 (B5) on M1 / M2 / M3 / M8 / M9 (rfx1/logs/t1_money_mutants.txt): M1 25 / 23 (hour1 = 50,000 awards against a
+    cap of 1,200), M2 25 / 23 (the 7th tap at +3 s paid), M3 26 / 22 (hour1 1,795, hour2 900: +50 %), M8 43 / 5 (the
+    rate stays, the same-server rejoin checks o1-o3 break), M9 36 / 12 (each grab pays 10 awards and costs 5).
+  - On the L1a base, 4 of the 5 new checks FAIL; `cooldownKey` passes there by design (HEAD code v1b keeps) and fails on
+    M4.
+
+L1b-16 (config) `PopNearCameraStuds = 24` is added to ManualDropperConfig (lane L1b owns every v1b key; read by the
+client only, never money). ManualDropperConfig d1045a63 -> 1126735715528bda71bac0392b54045d, byte-identical in L3b.
+
+L1b-17 (owner phone test, reviews rv4_feedback_1 items 2 and 3) The "leave and rejoin the same server" step is removed
+(the recharge is over in 5-10 s, before a phone can rejoin; T1 o1-o3 and T15 R0 cover it, and it needs a Studio
+two-client or server-console check), and "6 fast taps" becomes "about twice a second, 6 times" (faster taps are
+refused by the cooldown / rate limit and show nothing, by design). DR-23. The text below is the same, word for word,
+in L3b_out/assumptions.md, the lane report and spec §18 B.
+
+OWNER PHONE TEST (refix 1; SUPERSEDED by the one in "Refix round 2" below: steps 2 and 3 changed):
+1. Tap "Grab Cash" at either plate: a green bundle drops and "+$75" pops over the plate with a chirp. Next to the ATM
+   (without Auto Collect) your cash pill also counts up "+$75": the same money shown twice, as before.
+2. Zoom the camera far out (pinch out as far as it goes) and tap "Grab Cash": "+$75" still pops over the plate, with
+   the chirp.
+3. Tap "Grab Cash" about twice a second, 6 times: every tap pops "+$75"; then the pill disappears and the plate reads
+   "Recharging" for about 8 seconds, then one bundle every 10 seconds. Taps faster than about twice a second are
+   ignored by the plate's short cooldown and show nothing: that is expected, not a missing "+$75".
+4. Tap the Collect pill, then "Grab Cash" right after: "+$75" still pops over the plate.
+5. With a 2x Cash or VIP pass a grab still adds exactly $75 to the ATM, and the XP bar never moves.
+Not a phone test: "Recharging" after leaving and rejoining the same server. It lasts only 5-10 s after a burst (up to
+about 30 s once a long session has used the hour's budget), which is over before a phone can rejoin, and a phone cannot
+pick the same server. T1 o1-o3 and T15 R0 cover it in the stand-in; it needs a Studio two-client test or the server
+console.
+
+Gates (refix round 1; headless stand-in and static checks only, never Roblox or a phone; L1b_out/rfx1/logs/gate_rfx1.txt):
+- Parse (luau-compile --binary) ok on the 6 L1b and 4 L3b files; L3b's ManualDropperConfig == L1b's.
+- luau-lsp: L1a 348 / L1b 348, 0 new; L3b base 348 / L3b 348, 0 new (vs base and vs L1a).
+- BuyPathStatic: L1b 3361 / 0; L1a + L1b block 3311 / 50 (0 outside the block); L3b 3362 / 0; L3b base + L3b block
+  3323 / 39 (0 outside). Merge preview (v1a_rb + L1b + L3b + both blocks) 3549 / 0, lsp 0 new. The review's base
+  (HEAD 3b5ac28 + v1a + L1b + L3b + both blocks, L1b_out/rfx1/fwd3b5): 3630 / 0 (was 3620 / 0), T1 48 / 0 and 23 / 0,
+  T15 225 / 0 and 221 / 0.
+- rojo builds L1b and L3b; world sim 12 steps ok (L1b, L3b, preview); DataService 24 / 0 (L1b, L3b, preview).
+- T1: B5 48 / 0, B1 23 / 0; PAYSEQ B1 identical to L1a; T2 ATM trace identical to L1a (49 lines, 0 money-bag instances);
+  T4 census unchanged (lights 231, neon 294, SurfaceGuis 1121, billboards 57, 2566 parts / 49 neon per base); T5: only
+  BundleAwards differs from HEAD among the money keys; ECON-1 run_all.sh on a merged copy: head / b1 / b5 / b5x1 / l1b
+  16 / 0 each, econ_alt identical to revision 2.
+- T15: B5 225 / 0, B1 221 / 0 (was 151 / 148; new cases FC 27-400 studs, FZ zoom sweep, TR tap rhythm). The round-3
+  ProductionFx against the same driver: B5 187 / 38, B1 183 / 38 (every FC case from 34 studs and every FZ zoom from 25:
+  0 pops, 0 chirps). The review's own driver (rv4_feedback_1/y_driver.luau, copied unchanged): 21 / 0 (was 19 / 2).
+- T16 120 / 0 (L3b); T17 all 7 variants pass, Bootstrap.client identical to HEAD; lane C client sim 60 / 0, identical to
+  L3a; HUD harness 7 viewports x droppers_plate / owner / newplayer / panels: 105 rows, 0 differ from the base (the pop
+  is a world label; the 4 droppers_plate rows with an issue are the pre-existing prompt-lane overlap).
+- Merge preview T16: 126 / 0 in the first full gate and in 14 of 14 reruns (2 on its exact tree path); ONE run (the
+  second full gate, while other jobs loaded the machine) showed 125 / 1: "F3 0 Instance.new after warm-up: Part=5"
+  (L3b_out/rfx1/runs/t16_gate_flake). Not reproduced; the same driver with the round-3 ProductionFx passed 8 / 8. The
+  5 Parts are not a ProductionFx pool (its only Parts are the 2 pooled bundles, made at warm-up; popSpot makes nothing).
+  Recorded as an open stand-in flake for L4b to watch, not claimed as fixed.
+- HEAD moved during this round (not by this lane): 3b5ac28 -> 882faf9, which commits droppers v1a. On 882faf9 the 9 v1b
+  files' bases are exactly the lane bases (ProductionFx = L3a's de2d2062, SoundConfig = L1a's 20185c76, the rest =
+  HEAD), so the lane files drop in unchanged. Forward check (git archive 882faf9 + the 9 files + both blocks,
+  L1b_out/rfx1/fwd882): BuyPathStatic 3642 / 0 (HEAD alone 3521 / 0), T1 48 / 0 and 23 / 0, T15 225 / 0 and 221 / 0,
+  T16 126 / 0, world sim 12 steps ok, DataService 24 / 0.
+
+## Refix round 2 (2026-09-27, reviews rv4_money_2 and rv4_feedback_2; spec "21 (cont.). Revision 3, refix round 2")
+
+The lead decision of revision 3 is unchanged and still recorded as DR-16 (spec §14) and in the spec's revision log
+(now also "21 (cont.). Revision 3, refix round 2"): "at least one, at most two" "+$" per paid grab; the plate's world
+pop "+$75" and its chirp on EVERY paid grab (no hold, no cancel, no attribution; exempt from the fight / drive / panel
+mute except when dead); the ATM pill float exactly as today when the ATM collects. The hold / cancel code and its three
+config keys stay removed and pinned absent. The LabelGovernor priority for the pop stays.
+
+L1b-18 (review rv4_money_2, Medium) The ECON-1 C1 exemption pin read the raw MonetizationConfig, so `--[[ ... ]]` around
+`manual_dropper = true,` (review MB) or a later `manual_dropper = false,` in the same table (MA; Luau keeps the last
+value) passed both static gates while the plate lost its multiplier exemption (T1: 442 per grab for a stacked player,
+about $70k in the first hour instead of $18k). Fixed in the pin block only (ManualDropperService unchanged, 2d34cb85):
+  - the C1 rule runs on `_db_luau_code(read(DR_MON1B))` (comments stripped) and, on the top level of the
+    CashMultExemptReasons table, wants exactly ONE manual_dropper key in either form (`manual_dropper =` /
+    `["manual_dropper"] =`), whose value is `true` (so `true and false` fails too);
+  - mutants in tools/mutate_fix3.py: MA_dupkey_false, MA2_dupkey_bracket_false, MB_blockcomment, MB2_linecomment,
+    MB3_value_expr each FAIL the block and the full BuyPathStatic (3362 / 1, 0 outside); controls K6 (the bracket form),
+    K7 (a commented duplicate) PASS (rfx2/mutants.txt). The review's MA and MB applied to the current HEAD 90cad49 +
+    v1b tree: full BuyPathStatic 3732 / 1 each (was 3724 / 0), the refix-1 block passes both (rfx2/oldblock_vs_new.txt).
+L1b-19 (review rv4_money_2, Low, same class) The economy guard's ManualDropperConfig rows were substring pins, so a later
+duplicate key (MC `AwardAmount = 150,`: $750 a grab; MD `MaxAwardsPerHour = 6000,`) or a block-commented key (MF) passed.
+New rule: on the comment-stripped table's top level, AwardAmount 15, BundleAwards 5, MaxAwardsPerMinute 30,
+MaxAwardsPerHour 600, CooldownSeconds 0.35, RateLimitRate 4 and RateLimitBurst 3 are each assigned exactly once, to that
+value. Mutants MC, MD, ME (a bracket-form duplicate), MF FAIL; control K8 (a nested table's own key) PASSes.
+L1b-20 (review rv4_money_2, Low) One grant per grab at the wiring: rule _db_rfx2_rules wants tryAward named exactly 3
+times (its definition and the MouseClick / Triggered handlers, each only `tryAward(player, pad)`). Mutants N4 (the
+review's `task.delay(0.4, tryAward, player, pad)`) and N4b (an alias) FAIL.
+L1b-21 (reviews rv4_money_2 / rv4_feedback_2, Low; DR-25) SoundConfig["Drop.Coin"]: CooldownSeconds 0.3 -> 0.15 (paid
+grabs are >= 0.35 s apart on the server; 0.03-0.20 s packet jitter could bring two packets under 0.3 s and drop that
+grab's chirp: review Z2, 4-5 chirps for 6 pops), and the stale "the jingle or this, never both" comment now describes
+revision 3. SoundConfig 5241fc0c -> afc4521d8045b78676174976e0428a6f, byte-identical in L3b; L1b_contract.md updated.
+The Drop.Coin shape rule (id reused, World bus, Volume <= 0.3, MaxDistance <= 40) is unchanged and passes.
+L1b-22 (owner phone test; review rv4_feedback_2 Medium, DR-24) Step 3 now starts "Zoom back in to a normal view, stand
+next to either plate" (the tag is drawn only within 30 studs of the camera, and step 2 had just zoomed out), and says
+"the plate itself reads Recharging"; lane L3b makes that true at the ATM plate beside the premium pads (L3b-19). Step 2
+says the chirp may be faint from far out. The refix-1 text above is superseded by this one.
+
+OWNER PHONE TEST (refix 2; this exact text is in both lanes' assumptions files, the report and spec §18 B):
+1. Tap "Grab Cash" at either plate: a green bundle drops and "+$75" pops over the plate with a chirp. Next to the ATM
+   (without Auto Collect) your cash pill also counts up "+$75": the same money shown twice, as before.
+2. Zoom the camera far out (pinch out as far as it goes) and tap "Grab Cash": "+$75" still pops over the plate (from
+   far out its chirp may be faint).
+3. Zoom back in to a normal view, stand next to either plate and tap "Grab Cash" about twice a second, 6 times: every
+   tap pops "+$75"; then the pill disappears and the plate itself reads "Recharging" for about 8 seconds, then one
+   bundle every 10 seconds. Taps faster than about twice a second are ignored by the plate's short cooldown and show
+   nothing: that is expected, not a missing "+$75".
+4. Tap the Collect pill, then "Grab Cash" right after: "+$75" still pops over the plate.
+5. With a 2x Cash or VIP pass a grab still adds exactly $75 to the ATM, and the XP bar never moves.
+Not a phone test: "Recharging" after leaving and rejoining the same server. It lasts only 5-10 s after a burst (up to
+about 30 s once a long session has used the hour's budget), which is over before a phone can rejoin, and a phone cannot
+pick the same server. T1 o1-o3 and T15 R0 cover it in the stand-in; it needs a Studio two-client test or the server
+console.
+
+Gates (refix round 2; headless stand-in and static checks only, never Roblox or a phone; L1b_out/rfx2/logs/gate_rfx2.txt):
+- Parse (luau-compile --binary) ok on the 6 L1b and 5 L3b files; L3b's ManualDropperConfig and SoundConfig == L1b's.
+- luau-lsp: L1a 348 / L1b 348, 0 new; L3b base 348 / L3b 348, 0 new (vs base and vs L1a); HEAD 90cad49 348 / fwd90c
+  348, 0 new.
+- BuyPathStatic: L1b 3363 / 0; L1a + L1b block 3312 / 51 (0 outside the block); L3b 3369 / 0; L3b base + L3b block
+  3323 / 46 (0 outside). Merge preview (v1a_rb + L1b + L3b + both blocks) 3558 / 0, lsp 0 new.
+- Forward check on the CURRENT HEAD 90cad49 (X1 XP rebalance landed; ECON-1 C4 on the X1 tree), L1b_out/rfx2/fwd90c =
+  git archive 90cad49 + the 9 v1b files + both blocks: every v1b file's base there equals the lane base (the files drop
+  in unchanged); BuyPathStatic 3733 / 0 (HEAD alone 3603 / 0); lsp 0 new; T1 B5 48 / 0, B1 23 / 0; T15 241 / 0 and
+  235 / 0; T16 126 / 0; world sim 12 steps ok; DataService 24 / 0; rojo builds.
+- rojo builds L1b, L3b and the preview; world sim 12 steps ok (L1b, L3b, preview, fwd90c); DataService 24 / 0 (all).
+- T1: B5 48 / 0, B1 23 / 0; PAYSEQ B1 identical to L1a; T2 ATM trace identical to L1a (49 lines, 0 money-bag instances);
+  T4 census unchanged (lights 231, neon 294, SurfaceGuis 1121, billboards 57, 2566 parts / 49 neon per base); T5: only
+  BundleAwards differs from HEAD among the money keys; ECON-1 run_all.sh on a merged copy: head / b1 / b5 / b5x1 / l1b
+  16 / 0 each, econ_alt identical to revision 2.
+- T15: B5 241 / 0, B1 235 / 0 on L3b, the preview and fwd90c (was 225 / 221; new cases PD, JC, RO). The refix-1 client
+  files (ProductionFx a82f5240 + SoundConfig 5241fc0c) on the same driver: B5 234 / 7 (PD x3: the tag drawn with the priority on 0
+  of the Recharging frames; JC x3: 4 / 4 / 5 chirps for 6 pops; RO: the pill shown for 7.10 s of 7.20 s), B1 232 / 3 (JC).
+  The review's own drivers copied unchanged (rv4_feedback_2/drv z_driver / z3b_driver) on fwd90c: 42 / 1 (was 37 / 6):
+  Z2 6 / 6 / 6 chirps, Z3 "tag drawn during Recharging true", Z4 0.00 s wrong; the one FAIL left is Z1 (open, below).
+- T16 120 / 0 (L3b), 126 / 0 (fwd90c); T17 all 7 variants pass, Bootstrap.client identical to HEAD; lane C client sim
+  60 / 0, identical to L3a; lane L2 drivers with the real ProductionFx: identical to v1a_rb; HUD harness 7 viewports x
+  droppers_plate / owner / newplayer / panels: 105 rows, 0 differ from the base (the 4 droppers_plate rows with an issue
+  are the pre-existing prompt-lane overlap).
+- The known T16 F3 warm-up flake ("0 Instance.new after warm-up: Part=5") showed once in the merge preview (125 / 1).
+  Reruns on the rebuilt preview tree: 5 of 6 pass with the refix-2 files, and 7 of 8 pass with the refix-1 client files
+  (the same Part=5 line in the failing run), so it is not this round's change; the review traced the 5 Parts to lane
+  L2's BusinessVisuals one-time measure (L3b_out/rfx2/runs/t16_preview_rerun*, t16_preview_rfx1_rerun*). Open for L4b.
+
+Open (Low, not blocking; recorded, not claimed fixed):
+- Review Z1: a pop kept at the plate when the camera is 26-29 studs away can leave its MaxDistance within a few frames
+  if the player walks away at once (5-7 frames drawn); standing players always see it. Possible fix: keep the pop at
+  the plate only with ~6 studs margin (a pinned popSpot change).
+- The far-camera chirp's loudness (24 studs from the listener, InverseTapered): device only; step 2 now says it may be
+  faint.
+- The pre-existing prompt-lane overlap at 844x390 / 800x360 notch (25-33 px into the bottom-right reserved zone).
+- The T16 F3 warm-up flake above (a harness fix: snapshot after BusinessVisuals has measured).
+Still needs a real device: "Recharging" drawn on the ATM plate beside the three premium-pad labels; the pop and
+"Recharging" readability at 20 px; the ATM double "+$"; real unreliable packet loss / reorder and GetServerTimeNow skew;
+frame cost at Graphics Quality 3 on a mid-range Android; a same-server rejoin (Studio two-client).
+
+Forward check 2 (refix round 2): HEAD moved again during this round, not by this lane: 90cad49 -> c1475e9 (27b063d
+the ATM screen shows PendingCash only; 22b63e0 aircraft weapons; c1475e9 bank guards / gate AutoGuns). 8 of the 9 v1b
+files' bases are unchanged there. MoneyCollectorService is NOT: 27b063d edits it (atmScreenBalance, two call sites, one
+comment), so L4b must 3-way merge it, not copy lane L1b's file (a plain copy would revert 27b063d). `git merge-file`
+(ours = L1b's file, base = L1a's, theirs = c1475e9's) merges with 0 conflicts (the hunks do not overlap):
+L1b_out/rfx2/mcs_merged_c14.luau a8593b407c08d71554aa6fd5dfe0ba1e. Tree L1b_out/rfx2/fwdc14 = git archive c1475e9 + the
+8 unchanged-base v1b files + that merged MoneyCollectorService + both blocks: BuyPathStatic 3856 / 0 (HEAD alone
+3726 / 0); lsp 0 new; T1 B5 48 / 0, B1 23 / 0; T2 ATM trace identical to c1475e9 alone (49 lines; 0 money-bag instances,
+HEAD 28); ECON-1 econ1_drv tree5 16 / 0; T15 241 / 0 and 235 / 0; T16 126 / 0; world sim 12 steps ok; DataService
+24 / 0; rojo builds.
+
+## 2026-09-27 — Droppers v1b lane L3b (plate client; spec_droppers.md §3.7, §3.8, §7, §8, §10.3, §21 R1; OD-4 = A, OD-6 yes)
+
+These are the spec's §14 lines that lane L3b's code carries (DR-16 as revised in revision 3, DR-20, the client halves of
+DR-10 / DR-11 / DR-21), plus L3b's own reversible choices. Fix round 3 (revision 3, 2026-09-27) rewrote DR-16 and
+removed L3b-1, L3b-9 and L3b-11 (the hold and the float attribution are gone); the round-1 / round-2 text is kept in
+fix3/round2/assumptions.md. Merge them at L4b together with the L1b lines (DR-8, DR-9, DR-10, DR-11, DR-19, ECON-1).
+- Client only and owner only: ProductionFx reads the server's one DropperFx packet and Player attributes. It sends
+  nothing, writes no money and no server state (only local Enabled / Text writes on the player's own plate tag and
+  prompt pill), and grants nothing.
+- Every number below is from the headless stand-in (one Luau VM for the server and one client, virtual clock, the
+  network as a scheduler delay). None of it is Roblox.
+
+DR-16 (revision 3, lead decision 2026-09-27; replaces "exactly one +$ per grab") At least one, at most two "+$" per plate
+grab:
+- Every paid DropperFx packet that passes the payload checks shows the world pop "+$N" over the drop point and plays
+  `Drop.Coin`, at once (the frame it arrives), on both plates, for every player. Nothing holds, cancels or attributes
+  it: no `HudLayout.CashFloatRequested` watch, no `AtmHoldNearStuds` / `AtmPopHoldSeconds` / `AtmFloatLookBackSeconds`
+  (removed, pinned absent).
+- When the ATM collects the grab at once (walk-in circle, no Auto Collect), its own pill float shows the same money too,
+  with its jingle: HEAD's double signal, the most a grab shows.
+- The plate response ignores `Fx.HideWhen` except `Dead`; the pop keeps `WE_LabelPriority` (DR-20).
+- Why: the round-2 attribution could show ZERO "+$" (review rv1b_feedback_3: a Collect-pill tap or a walk-in income
+  collect just before the grab, an Auto Collect owner's silent payout, the HUD's float rate cap). Zero is a failure;
+  two is today's behaviour.
+- Reversible: `fix3/round2/ProductionFx.luau` (the round-2 file) + the three keys in ManualDropperConfig.
+- Stand-in (T15, real ManualDropperService / MoneyCollectorService / EconomyService / NotificationService server side,
+  the real client boot): every paid grab in cases a-l, m1-m4, d2, d3, the review's X1-X9, a 6-tap burst and a far
+  camera shows exactly one pop at once and one chirp, and at most one grab float: B5 151 / 0, B1 148 / 0.
+
+DR-20 `WorldLabelConfig.PriorityAttribute = "WE_LabelPriority"`:
+- The LabelGovernor ranks a drawable label with this attribute at distance -1, so it is always among the kept
+  `MaxOnScreen` 3; it still counts toward the cap.
+- Only ProductionFx's one pooled plate pop sets it (BuyPathStatic rule). The grabbed plate's own "$75" tag is hidden
+  locally while the pop shows (`WorldLabel.SetShown`), so the pop takes its place.
+- Stand-in (T15 g): with 3 nearer base labels on screen, the pop shows at once and the on-screen count stays <= 3 on
+  every frame.
+
+DR-10 (client half) The client drops a DropperFx packet unless dropPoint is a finite Vector3 within `FxMaxPayloadStuds`
+60 of the character, amount is finite in 1..`FxMaxPayloadAmount` 10,000, left in 0..1,000 and eta in 0..3,600
+(T15: 18 junk payloads, 0 errors). The listener binds in a deferred thread through `Remotes.GetUnreliableEvent`
+(bounded); `ProductionFx.Init` never yields (T17). A remote that appears 10 s late is still bound (T15); none at all:
+the wait gives up quietly after about 210 s (T17 "noremote").
+
+DR-11 (client half) `Drop.Coin` plays with every world pop, positional at the drop point, through AudioController and
+ProductionFx's local 0.3 s key cooldown (below the 0.35 s grab cooldown: a 6-tap burst chirps 6 times in T15 BU); the
+pill float keeps its own Cash.Collect jingle (AudioHooks).
+
+DR-21 (client half, revision 3) "Recharging" also comes from the server's Player attribute
+`ManualDropperConfig.RechargeAttribute` ("WE_DropRechargeAt" = the server time when the next bundle is ready; nil once
+the budget holds one). ProductionFx reads it once in its one deferred start task (pcall'd, before the remote bind) and on
+every change; a time in the future starts a recharge until then, nil ends one. It hides both own pills and writes the
+tags exactly like the packet's `left = 0`. So a lost left = 0 packet (T15 R2) and a same-server rejoin (T15 R0: the
+client starts after the server's join stamp, 0 packets) still show "Recharging", restored at the server's time. The
+client never writes the attribute (BuyPathStatic rule).
+
+**Lane L3b's own assumptions** (reversible; recorded because the spec left them open or the build refines them)
+
+L3b-1 REMOVED in fix round 3 (revision 3: no float attribution). Round-2 text kept for the record:
+The ATM's own float is told apart from any other gain float (a kill reward) by its EXACT
+amount. This refines spec §3.7's "a float counts only if its amount is at least the grab's amount":
+- The server's collect grants floor(PendingCash), writes that same number to `WE_PendingCash` just before it empties
+  it, and floats exactly it (MoneyCollectorService.Collect -> EconomyService.CollectPendingCash / pushEconomy, HEAD code;
+  pinned by the rule `_d3_float_source_rule`).
+- A float counts as the ATM's when it equals the payout the client saw (`WE_PendingCash` falling from > 0 to 0) within
+  `AtmFloatLookBackSeconds`, in either order: a float that comes while the ATM still reads exactly that balance waits
+  up to 0.3 s for the payout. One payout explains one float. A float that comes while the ATM holds cash and is not
+  its balance (the far spot) never touches a grab.
+- With the ATM reading empty and no such payout (the grab was accrued and collected in one server step, so the client
+  never saw it in the ATM: case k), a float may cancel ONE waiting grab of exactly its amount that came after the last
+  payout the client saw. It never becomes look-back credit and never clears the credit an ATM float left (d2).
+- Before judging a float, ProductionFx reads `WE_PendingCash` itself: the attribute's changed signal is deferred, so a
+  float handled in the same frame as a payout would otherwise see an empty ATM with a stale payout time (m4, d3).
+- Why: round 1's rule (any float >= the grab within 0.3 s of a payout, or any float while the ATM reads empty) let a kill
+  reward ("Raider down (+$90)", CashReward 50-250) hide the only "+$" of an Auto Collect owner's grab, whose ATM pays out
+  silently (review rv1b_feedback_2: 6-13 % of such grabs in a fight). Round 1's reasons still hold: T15 j ($20) and l
+  ($100) keep their pops.
+- Cost: a double (never zero) wherever the float and the payout the client saw differ (see Fix round 2 below).
+- Revert: `fix2/round1/ProductionFx.luau` (round 1's rule) or the spec's plain amount rule.
+
+L3b-2 The whole plate response (bundle, pop and chirp) follows the Dead-only gate, not just the pop. The bundle is the
+physical answer to the tap. Under Driving / Modal / RecentCombat the ATM sparkle and the line effects stay quiet (T16 F).
+
+L3b-3 `Fx.Enabled = false` (the first phone lever) removes the bundle fall and the ATM sparkle; the plate pop and chirp
+stay, because they are the grab's only feedback (the server pop is gone in v1b). The server's `FxEvent = false` removes
+the whole plate response.
+
+L3b-4 `GuiService.ReducedMotionEnabled`: no bundle fall and no pop rise (the pop fades in place); the chirp stays.
+
+L3b-5 One pooled pop: a new grab restarts it with that grab's "+$N" (no merged total) at the new drop point; when it
+moves to the other plate, the first plate's tag comes back. HEAD's look is kept: 20 px, (80, 255, 120), UIStroke
+"CashPopGlow" (8, 36, 14) 1.4, starts 1.2 studs over the drop point, rises `PopupRiseStuds` 3.2 over `PopupDuration`
+0.55 s while fading to 0.85, MaxDistance 30, never AlwaysOnTop.
+
+L3b-6 The pooled pop is made when the DropperFx listener binds (right after boot), not on the first grab, so the
+LabelGovernor already tracks it: a label tagged later is held until the governor's next pass, which would delay the
+first pop by a frame. Cost: 5 instances per client (Attachment on Terrain, BillboardGui, 2 TextLabels, UIStroke).
+
+L3b-7 ProductionFx asks the LabelGovernor for a pass (`LabelGovernor.Pass`, lazy pcall'd) when the pop shows and when
+it ends, so the pop appears the same frame and the tag returns at once instead of waiting up to 0.25 s for the 4 Hz
+pass. At most 2 passes per grab (<= about 6 a second during a burst).
+
+L3b-8 "Recharging" (left = 0, or the server's RechargeAttribute, fix round 3):
+- The grabbed plate is the tracked plate (tag "WE_ManualDropper") whose centre is within 2.5 studs (X/Z) of the drop
+  point; both plates with its `PlotId` get `PromptController.SetSuppressed(prompt, true)` and the tag text
+  `RechargeTag`. Without a match the last matched plot is used.
+- The 4 Hz check runs only while a recharge is pending, re-applies to a plate that streamed back in, and lands exactly
+  on eta (T15: restored at +0.000 s). A paid packet (left >= 1) ends a recharge at once. The tag gets back the text it
+  had before (the server's "$75").
+
+L3b-9 REMOVED in fix round 3 (no near-the-ATM rule). Round-2 text: "Near the ATM" used the Player attribute `WE_AtmPos`; when it is missing (the guide off), the plot's tagged ATM
+part if it is streamed in; with neither the pop shows at once (today's double signal at the ATM, never zero).
+
+L3b-10 The bundle: 2 pooled parts (round robin) in a local Workspace folder `WE_ProductionFxLocal`, axis-aligned,
+CanCollide / CanQuery / CanTouch / CastShadow off, hidden by Transparency. Its bottom lands on the drop point. A Tween is
+made again only when the landing point moves (the two plates), else the one Tween is replayed.
+
+L3b-11 REMOVED in fix round 3 (nothing waits). Round-2 text: Waiting grabs lived in a ring of 4 (the shipped cooldown and rate limit allow at most 3 in 0.45 s); if it ever
+overflows, the oldest shows its pop at once rather than being lost.
+
+L3b-12 The ATM sparkle fires on every `WE_PendingCash` drop from > 0 to 0 within `Fx.AtmRadius` 16 of `WE_AtmPos`,
+including the silent Auto Collect loop (every 2 s while income waits) and the walk-in collect, through the HideWhen gates,
+ReducedMotion, low FX (`AtmEmitLow`) and the one 16-per-second token bucket. A raid (a partial drop) never sparkles.
+
+L3b-13 If `WE_Remotes` is not there yet, the bind waits for it with a ChildAdded connection (no WaitForChild, no yield),
+then does the bounded remote wait. HudLayout is required only once the remote is bound. This keeps the lane C client sim
+(no remotes folder there) at its 60/60 HEAD checks.
+
+**Stand-in notes (tests, not the game)**
+- T15 driver: CollectionService added / removed signals fire DEFERRED when a tagged instance enters / leaves the
+  DataModel, as in Roblox (rbxsim fired them at AddTag time only, synchronously; with that, ManualDropperService's own
+  InstanceAdded handler wired the Yard plate before its prompt existed). Server -> client remotes are delivered one
+  60 fps frame later (case d / e change one remote's delivery).
+- HUD harness copy (L3b_out/hx): DropperFx is created as an UnreliableRemoteEvent, as RemoteSetup makes it.
+
+**Pre-existing, not changed by v1b (for the owner / L4b)**
+- With the ATM "Collect" pill and the plate's "Grab Cash" pill both showing (as today at the ATM plate), the prompt lane
+  enters the bottom-right reserved zone (vehicle / combat controls): 25 px at 844x390 and 33 px at 800x360 with notch,
+  identical on the base tree (PromptController, a C5 file). While the plate recharges, v1b hides one pill and the lane is
+  clean. Device check on the owner's phone.
+
+## Fix round 2 (2026-09-27, review rv1b_feedback_2: "Auto Collect owners who grab cash during a fight often see no +$75")
+
+(SUPERSEDED by fix round 3 below: the float attribution this section describes is removed. Kept as the record.)
+
+**Verdict: a real defect, in lane L3b (ProductionFx only).** Reproduced on the round-1 code with the new T15 cases: in a
+fight, an Auto Collect owner's grab at the ATM plate showed ZERO "+$" in all 4 timings (m1-m4), in both modes (B5 "+$75"
+and B1 "+$15"). The reviewer's figures (D2 7/7 zero; 6-13 % zero in its Monte Carlo) are on its own driver.
+
+Why (three paths, all in the float attribution):
+- m1 / m2: round 1 counted ANY gain float >= the grab as the ATM's own when it came within 0.3 s of a payout (either
+  order). An Auto Collect owner's ATM pays out silently (no float of its own), so a kill float ("Raider down (+$90)")
+  near that silent payout cancelled the grab's only signal, the world pop.
+- m3: with the ATM reading empty, round 1 let any float >= the grab cancel any waiting grab.
+- m4 (found here; the reviewer's proof patch still fails it): a float handled in the same frame as a payout whose
+  `WE_PendingCash` changed signal has not run yet (signals are deferred) saw an empty ATM with a stale payout time. In a
+  Monte Carlo of 600 fight grabs on the reviewer's patch, all 4 remaining zeros were this race (fix2/dbg/rv_s*_g*.txt,
+  traces "float 90 pend 0 ... CANCEL ... pending 75 -> 0" in one frame).
+
+The fix (ProductionFx, `atmFloat` / `onPendingCash` / `onCashFloat`; md5 a3798e0b -> 67b53dc5; L3b-1 above is the rule):
+1. A payout records exactly what the ATM paid (`paidAmount = was`), and a float counts as the ATM's only if it equals
+   it (`math.abs(amount - paidAmount) < 0.5`) within `AtmFloatLookBackSeconds`, either order. One payout explains one
+   float (`paidAmount = -1` once matched).
+2. A float that comes while the ATM still holds cash waits for the payout only if it is exactly the ATM's balance, and
+   the payout confirms it only if it pays exactly that.
+3. With the ATM reading empty and no matching payout, a float may cancel ONE waiting grab of exactly its amount that
+   came after the last payout the client saw (the same-step collect, case k). `holdAt` records when each grab came.
+4. Only a confirmed float sets look-back credit; any other float leaves it alone (round 1 cleared it: d2).
+5. `onCashFloat` first calls `onPendingCash()`, so a payout whose deferred signal has not run yet is seen (m4, d3). The
+   later signal then sees no change (no second sparkle).
+No new config key, no new instance, no per-frame work, nothing sent to the server. Parse ok; lsp 348 = 348 lines, 0 new.
+
+Tests (headless stand-in, NOT Roblox; every number below is from it):
+- T15 (lane driver, tools/t15_driver.luau, new cases m1-m4, d2, d3): **B5 PASS 71 / FAIL 0, B1 PASS 69 / FAIL 0**
+  (runs/t15). m1-m4 use the REAL 2 s Auto Collect loop (phase-locked by timing its ticks) and the real kill reroute;
+  measured silent payouts at +0.300 / +0.100 / +0.050 / +0.200 s, the pop at 0.467 s, one chirp, the kill float shown.
+  Controls with the same driver: round-1 ProductionFx B5 66/5, B1 64/5 (m1-m4 ZERO, d3 double; fix2/runs/t15_round1);
+  the reviewer's proof patch B5 68/3, B1 66/3 (m4 ZERO, d2 and d3 double; fix2/runs/t15_reviewer). Base tree control
+  (v1a ProductionFx): B5 35/36 as expected.
+- The reviewer's own driver (rv1b_feedback_2/r2_driver.luau, copied unchanged to fix2/tools) on this tree: B5 35/0,
+  B1 30/0; D2 7 of 7 "one"; J 0/60 zero for both the owner and the non-owner; Monte Carlo 80 grabs at a 3 s and a 5 s
+  mean kill gap: 0/80 zero, 0 double (fix2/runs/r2). Its F case (same-step walk-in collect AND the float 0.1 s before
+  the unreliable packet) stays a DOUBLE, as in round 1 and in its patch (degraded, never zero).
+- J-only Monte Carlo (fix2/tools/dbg_j_driver.luau: full budget, 150 grabs a run, only grabs whose packet arrived,
+  kill floats as a Poisson stream, the real Auto Collect loop): **fix round 2: 0 zero / 0 double in 600 grabs** (seeds
+  1-4, mean gaps 3, 3, 2, 5 s); the reviewer's patch: 1 + 1 + 2 + 0 = 4 zero in 600 (all the same-frame race).
+- Mutants (fix2/mutants.txt): each single undo of the new rule (M1-M8) FAILs at least one BuyPathStatic check; T15 also
+  catches M1, M5, M6 (d3), M7 (d2); M2 / M3 and M4 / M6 guard each other and T15 catches each pair (M2+M3: m1;
+  M4+M6, i.e. the reviewer's patch: m4, d3). M8 (consume once) has no T15 effect (it needs a second unrelated float of
+  the same amount); its pin holds it. Server premise mutants: S1 (Collect floats `granted * 1.1`) FAILs the premise rule
+  and makes T15 show TWO "+$" at the walk-in (c, d, k, d2, d3; never zero); S2 (WE_PendingCash unfloored) FAILs the rule.
+- T16 120/0, T17 all variants pass (normal 12, disabled 12, throw 7, throwreq 7, missing 7, noremote 8, base 5),
+  Bootstrap identical to HEAD. Lane C client sim 60/0, identical to L3a. World sim 12 steps ok; DataService 24/0.
+  rojo builds. HUD harness: 105 state x viewport x snapshot rows, 0 differ from the base tree; the 4 droppers_plate rows
+  with an issue are the pre-existing prompt-lane overlap listed above (identical on the base).
+- BuyPathStatic (final block, fix2/bps_final.txt): L3b tree PASS 3361 / FAIL 0 (base 3314 + 47). Base + the block
+  3318 / 43, 0 FAILs outside the block. HEAD 5e021d8: 46 FAIL (+ the premise rule, HEAD code). Mutant A: 5 FAIL, 0
+  outside. Round-1 ProductionFx FAILs 10 checks, the reviewer's patch 8 (pin_evidence.txt).
+- Merge preview v1a_rb + L1b + L3b (logs/gate_all.txt; BuyPathStatic with the final blocks fix2/preview_bps_final.txt):
+  BuyPathStatic 3511 / 0 (round 1: 3504), lsp 0 new, T15 71/0 + 69/0, T16 126/0, T17 all pass, world sim ok, DS 24/0,
+  rojo ok; lane L2's t7 / t17 drivers with the real ProductionFx identical to v1a_rb (t7's 1 FAIL is v1a_rb's own).
+
+Pins (bps_block_L3b.py; bps_pins.txt; pin_evidence.txt): 4 round-1 pins replaced by 9 exact-line pins, plus the rule
+`_d3_float_rule` (exactly 4 `atmFloat` calls; the 2 confirmed calls in `onCashFloat` guarded only by "no ATM attribute"
+or the exact payout match; the payout read first) and the premise rule `_d3_float_source_rule` (the ATM's Collect float
+is exactly the floored `WE_PendingCash` its collect empties). The block ends with an explicit end marker now;
+tools/apply_block.py replaces an earlier copy up to it (a re-apply of an extended block left a stale tail before).
+
+What is left (degraded to a DOUBLE, never zero; all recorded, none measured on a device):
+- a float later than 0.45 s (a server hitch; case e, unchanged);
+- a same-step walk-in collect whose reliable float overtakes the unreliable packet (the reviewer's F; unchanged);
+- the client missed the ATM's last balance (an income accrue and the collect coalesced in one replication step), so
+  the float and the payout it saw differ;
+- a same-step walk-in collect with income already waiting (the float is grab + income, the payout seen is the income).
+  Estimate, not measured: about 1 in 15 walk-in grabs land in the pass's frame, and income waits in the ATM about 7 %
+  of the time (3 sources every 5 s, collected within 0.25 s), so roughly 0.5 % of walk-in grabs;
+- an ATM float followed by an unrelated float before its payout (the waiting slot keeps the exact balance only).
+Residual ZERO needs an unrelated gain float of EXACTLY the payout amount within 0.3 s (or exactly the grab while its
+accrue is still unseen). Amounts checked in this tree: NPC kill floats 50 / 90 / 120 / 140 / 250 near a base (squad
+share 0.5: 25 / 45 / 60 / 70 / 125); the only 150 (squad 75) is the Bank Guard, at the Empire Bank, away from the plate;
+PvP kill 150; vehicle bounty floor(MaxHP x 0.08) up to 500 (not enumerated). A later lane could remove even this by
+tagging the float's source (HudLayout / NotificationController are not L3b files).
+
+For the owner, on his phone (adds to §18 B1-B3): own Auto Collect, stand at the ATM plate while raiders attack the base,
+tap the plate between kills: every tap shows exactly one "+$75" over the plate with the chirp, even when a kill "+$90"
+floats at the cash pill at the same moment. Without Auto Collect, at the ATM: exactly one "+$75" (the pill float), no
+world pop.
+
+## Fix round 3 (2026-09-27, lead decision after review rv1b_feedback_3; revision 3 of the spec)
+
+**What the review found:** the round-2 rule "hold the plate pop 0.45 s and cancel it if an ATM pill float appears; a
+float up to 0.3 s earlier already showed the grab" could show ZERO "+$75" (the reviewer's X1-X3, X9). **Lead decision:**
+"at least one, at most two" (DR-16 above). **Also fixed here:** "Recharging" from a server-authoritative source that
+survives a lost unreliable packet and a same-server rejoin (DR-21, with lane L1b's server half).
+
+Changes (ProductionFx 67b53dc5 -> see job_md5.txt; ManualDropperConfig = lane L1b's, byte-identical):
+- `onDropperFx`: payload check, Dead check, plate, recharge, bundle, then `showPop` unconditionally. Deleted: the hold
+  ring (`startHold` / `releaseHold`, `HOLD_SLOTS`), `atmFloat`, `onCashFloat`, the credit / payout / candidate state, the
+  `CashFloatRequested` connection and `atmPosFor`. `onPendingCash` keeps only the ATM sparkle.
+- "Recharging": `startRecharge(plot, seconds)` (both sources), `applyRecharge` (packet), `onRechargeAttr` (attribute),
+  `ownPlot()` (the packet's plot, else a tracked plate whose tag's `WE_LabelOwner` is this player), `serverNow()`
+  (`Workspace:GetServerTimeNow()` pcall'd; no clock = the attribute is ignored, the packet path stays).
+- Init still schedules exactly ONE task (`afterInit`: the first attribute read, pcall'd, then the bounded remote bind;
+  T16 A1, T17). One attribute changed-signal connection. No per-frame work, no new instance, nothing sent to the server.
+
+**Lane L3b's own assumptions, fix round 3** (reversible)
+L3b-14 Without a packet (a rejoin), the own plot is found through the plate tag's owner attribute (`WE_LabelOwner`,
+the server keeps it on the plot owner every 2 s). If no plate or tag is streamed in yet, the 4 Hz recharge check keeps
+trying until one is (or the recharge ends).
+L3b-15 The attribute is compared with the client's `Workspace:GetServerTimeNow()`; if that cannot be read, the attribute
+is ignored (never compared with a local clock) and the packet's eta is used as before.
+L3b-16 Both sources can arrive for one grab (packet and attribute, the same server clock); the later one sets the end
+time. The packet's eta is measured from its arrival (a little late on a slow network), the attribute from the server's
+clock (exact); the check lands within one 0.25 s tick either way (T15: restored at +0.000 / +0.017 / +0.033 s).
+
+**Tests (headless stand-in, NOT Roblox):**
+- T15 (tools/t15_driver.luau, rewritten for revision 3; the round-2 driver is fix3/round2/t15_driver.luau): **B5 PASS 151
+  / FAIL 0, B1 PASS 148 / FAIL 0** (fix3/runs/t15). Every paid grab: exactly one pop at once (<= 1 frame after its
+  packet), one chirp, at most one grab float; zero is a failure. Cases: junk, a, b, c (pop + float), d, e, f, g, h (+
+  Dead), i (B1), j / l, k, BU (6 taps: 6 pops, 6 chirps), FC (camera 27 studs: drawn all 33 frames of its 0.55 s life,
+  farthest 27.1 studs; 34 studs recorded: not drawn, beyond MaxDistance 30 as HEAD's pop), m1-m4, d2, d3, X1, X1b, X2, X2b, X3, X4, X5, X6, X7, X8, X9, R0 (rejoin),
+  R1, R2 (lost packet), totals (Pops == Packets - Junk - Dead: 48 == 67 - 18 - 1 in B5).
+- Controls with the same driver: the round-2 ProductionFx B5 107 / 44, B1 106 / 42 (the review's zero cases X1, X2, X3,
+  X5-X9 show 0 pops; a, b, e, j, l, m1-m4 show the pop 0.467 s late; R0 / R2 no Recharging); the round-2 server
+  (ManualDropperService 15c25452) B5 142 / 9, B1 141 / 7 (no attribute: R0, R1's attribute check, R2).
+- T16 120 / 0 (F3: every grab's pop at once; E: <= 2 task.defer sites, <= 4 task.delay sites), T17 all 7 variants pass,
+  Bootstrap identical to HEAD.
+- Other gates (L1b_out/fix3/logs/gate_fix3.txt): parse ok (4 files); lsp 348 = 348 lines, 0 new vs the base and vs
+  L1a; BuyPathStatic L3b 3357 / 0, base + block 3322 / 35 (0 outside); rojo builds; world sim 12 steps ok; DataService
+  24 / 0; lane C client sim 60 / 0, identical to L3a; HUD harness 7 viewports (phone, owner, small, smallnotch, tablet,
+  desktop, fhd) x droppers_plate (plate_pills, plate_float, plate_recharging), owner, newplayer, panels (9 panels with
+  data): 105 rows, 0 differ from the base tree; the 4 droppers_plate rows with an issue (phone and smallnotch,
+  plate_pills and plate_float) are the pre-existing prompt-lane overlap noted above, identical on the base; the
+  plate_recharging rows are clean at every viewport. The panels state (seeded data: cash, level, soldiers, squad) has
+  13 rows with pre-existing issues (fhd overlaps; Base / Garage / Shop off-screen at phone, small, smallnotch, owner),
+  identical on the base tree (no L3b file draws a panel). Tally: fix3/logs/hud_tally.txt.
+- Merge preview (v1a_rb + L1b + L3b, both final blocks; runs/preview): BuyPathStatic 3539 / 0, lsp 0 new, T15 151 / 0
+  and 148 / 0, T16 126 / 0, T17 all pass, world sim ok, DS 24 / 0, rojo ok, lane L2's t7 / t17 drivers with the real
+  ProductionFx identical to v1a_rb (t7's 1 FAIL is v1a_rb's own).
+
+For the owner, on his phone: superseded by the OWNER PHONE TEST in "Refix round 1" below (the "6 fast taps" and
+"leave and rejoin the same server" steps were wrong for a phone).
+
+## Refix round 1 (2026-09-27, reviews rv4_feedback_1 and rv4_money_1; spec "21 (cont.). Revision 3, refix round 1")
+
+The lead decision of revision 3 is unchanged and still recorded as DR-16 (spec §14) and in the spec's revision log:
+"at least one, at most two" "+$" per paid grab; the plate's world pop "+$75" and its chirp on EVERY paid grab (no hold,
+no cancel, no attribution; exempt from the fight / drive / panel mute except when dead); the ATM pill float exactly as
+today when the ATM collects. The hold / cancel code and its config keys stay removed (pinned absent); the
+LabelGovernor priority for the pop stays.
+
+L3b-17 (DR-22; review rv4_feedback_1 item 4, Medium) The far-camera pop. With a zoomed-out camera the round-3 pop
+(MaxDistance 30, the governor's `d <= gui.MaxDistance`) was never drawn: zero "+$75" (and the chirp, MaxDistance 30,
+out of hearing) at the review's zoom 25+ with the player 10 studs from the plate. Now `ProductionFx.popSpot` places the
+pooled pop's anchor:
+  - at the plate (the packet's drop point, HEAD's place) while the pop's whole rise (start and end) stays within
+    MaxDistance - 1 of the camera;
+  - otherwise `ManualDropperConfig.PopNearCameraStuds` (24) studs from the camera on the camera -> pop-start line of
+    sight (capped at MaxDistance - rise - 1 = 25.8), so it lands on the same screen point over the plate, the engine
+    and the LabelGovernor always draw it, and the chirp plays there (`sound(COIN_KEY, spot)`).
+  One camera read per paid grab; no per-frame work, no new instance, no client -> server call. MaxDistance stays 30
+  (under the 40 cap), the pop is still one governed label (cap of 3 holds) and never AlwaysOnTop.
+  Chosen over the review's two options: (a) MaxDistance 40 alone still leaves zero beyond 40 studs (zoom 30+);
+  (b) a pill-float fallback adds into the ATM's own float when the ATM collects at once (HUDController merges floats
+  inside MergeWindow: "+$150" for $75) and needs attribution again. Reversible: `local spot = pos` in showPop.
+  The text is always 20 px (WorldLabel text is fixed px, the box is stud-scaled); drawn nearer, the rise covers more
+  screen. Still needs a device: that it reads as "over the plate" while the camera moves during the 0.55 s pop.
+
+L3b-18 (owner phone test; DR-23) See L1b-17: no same-server rejoin step, and a paid tap rhythm.
+
+OWNER PHONE TEST (refix 1; SUPERSEDED by the one in "Refix round 2" below: steps 2 and 3 changed):
+1. Tap "Grab Cash" at either plate: a green bundle drops and "+$75" pops over the plate with a chirp. Next to the ATM
+   (without Auto Collect) your cash pill also counts up "+$75": the same money shown twice, as before.
+2. Zoom the camera far out (pinch out as far as it goes) and tap "Grab Cash": "+$75" still pops over the plate, with
+   the chirp.
+3. Tap "Grab Cash" about twice a second, 6 times: every tap pops "+$75"; then the pill disappears and the plate reads
+   "Recharging" for about 8 seconds, then one bundle every 10 seconds. Taps faster than about twice a second are
+   ignored by the plate's short cooldown and show nothing: that is expected, not a missing "+$75".
+4. Tap the Collect pill, then "Grab Cash" right after: "+$75" still pops over the plate.
+5. With a 2x Cash or VIP pass a grab still adds exactly $75 to the ATM, and the XP bar never moves.
+Not a phone test: "Recharging" after leaving and rejoining the same server. It lasts only 5-10 s after a burst (up to
+about 30 s once a long session has used the hour's budget), which is over before a phone can rejoin, and a phone cannot
+pick the same server. T1 o1-o3 and T15 R0 cover it in the stand-in; it needs a Studio two-client test or the server
+console.
+
+Gates (refix round 1; headless stand-in and static checks only, never Roblox or a phone; L1b_out/rfx1/logs/gate_rfx1.txt):
+- Parse (luau-compile --binary) ok on the 6 L1b and 4 L3b files; L3b's ManualDropperConfig == L1b's.
+- luau-lsp: L1a 348 / L1b 348, 0 new; L3b base 348 / L3b 348, 0 new (vs base and vs L1a).
+- BuyPathStatic: L1b 3361 / 0; L1a + L1b block 3311 / 50 (0 outside the block); L3b 3362 / 0; L3b base + L3b block
+  3323 / 39 (0 outside). Merge preview (v1a_rb + L1b + L3b + both blocks) 3549 / 0, lsp 0 new. The review's base
+  (HEAD 3b5ac28 + v1a + L1b + L3b + both blocks, L1b_out/rfx1/fwd3b5): 3630 / 0 (was 3620 / 0), T1 48 / 0 and 23 / 0,
+  T15 225 / 0 and 221 / 0.
+- rojo builds L1b and L3b; world sim 12 steps ok (L1b, L3b, preview); DataService 24 / 0 (L1b, L3b, preview).
+- T1: B5 48 / 0, B1 23 / 0; PAYSEQ B1 identical to L1a; T2 ATM trace identical to L1a (49 lines, 0 money-bag instances);
+  T4 census unchanged (lights 231, neon 294, SurfaceGuis 1121, billboards 57, 2566 parts / 49 neon per base); T5: only
+  BundleAwards differs from HEAD among the money keys; ECON-1 run_all.sh on a merged copy: head / b1 / b5 / b5x1 / l1b
+  16 / 0 each, econ_alt identical to revision 2.
+- T15: B5 225 / 0, B1 221 / 0 (was 151 / 148; new cases FC 27-400 studs, FZ zoom sweep, TR tap rhythm). The round-3
+  ProductionFx against the same driver: B5 187 / 38, B1 183 / 38 (every FC case from 34 studs and every FZ zoom from 25:
+  0 pops, 0 chirps). The review's own driver (rv4_feedback_1/y_driver.luau, copied unchanged): 21 / 0 (was 19 / 2).
+- T16 120 / 0 (L3b); T17 all 7 variants pass, Bootstrap.client identical to HEAD; lane C client sim 60 / 0, identical to
+  L3a; HUD harness 7 viewports x droppers_plate / owner / newplayer / panels: 105 rows, 0 differ from the base (the pop
+  is a world label; the 4 droppers_plate rows with an issue are the pre-existing prompt-lane overlap).
+- Merge preview T16: 126 / 0 in the first full gate and in 14 of 14 reruns (2 on its exact tree path); ONE run (the
+  second full gate, while other jobs loaded the machine) showed 125 / 1: "F3 0 Instance.new after warm-up: Part=5"
+  (L3b_out/rfx1/runs/t16_gate_flake). Not reproduced; the same driver with the round-3 ProductionFx passed 8 / 8. The
+  5 Parts are not a ProductionFx pool (its only Parts are the 2 pooled bundles, made at warm-up; popSpot makes nothing).
+  Recorded as an open stand-in flake for L4b to watch, not claimed as fixed.
+- HEAD moved during this round (not by this lane): 3b5ac28 -> 882faf9, which commits droppers v1a. On 882faf9 the 9 v1b
+  files' bases are exactly the lane bases (ProductionFx = L3a's de2d2062, SoundConfig = L1a's 20185c76, the rest =
+  HEAD), so the lane files drop in unchanged. Forward check (git archive 882faf9 + the 9 files + both blocks,
+  L1b_out/rfx1/fwd882): BuyPathStatic 3642 / 0 (HEAD alone 3521 / 0), T1 48 / 0 and 23 / 0, T15 225 / 0 and 221 / 0,
+  T16 126 / 0, world sim 12 steps ok, DataService 24 / 0.
+
+## Refix round 2 (2026-09-27, reviews rv4_feedback_2 and rv4_money_2; spec "21 (cont.). Revision 3, refix round 2")
+
+The lead decision of revision 3 is unchanged and still recorded as DR-16 (spec §14) and in the spec's revision log
+(now also "21 (cont.). Revision 3, refix round 2"): "at least one, at most two" "+$" per paid grab; the plate's world
+pop "+$75" and its chirp on EVERY paid grab (no hold, no cancel, no attribution; exempt from the fight / drive / panel
+mute except when dead); the ATM pill float exactly as today when the ATM collects. The hold / cancel code and its three
+config keys stay removed and pinned absent. The LabelGovernor priority for the pop stays.
+
+L3b-19 (DR-24; review rv4_feedback_2, Medium) Owner step 3 "the plate reads Recharging" failed on a correct build at the
+ATM plate: the plate tag became a governed base label in v1b, and the LabelGovernor kept the three premium-pad labels
+(MapSetup.buildPremiumPads, 5.5 studs over pads at the ATM + (-10,14), (0,16), (10,14), MaxDistance 20) and held the tag
+off at 15-17 % of normal spots; the pill hid with nothing on the plate saying why. Fix (ProductionFx f29940c4):
+  - writeRecharge gives each own plate tag that reads RechargeTag WorldLabelConfig.PriorityAttribute (compare-first;
+    one LabelGovernor pass when it is newly set), endRecharge clears it (and runs one pass). The tag still counts
+    toward the cap of 3; the pop hides the grabbed plate's tag while it shows, so the two never compete; outside a
+    recharge the "$75" tag ranks by distance exactly as before.
+  - LabelGovernor (b68c03f6) and WorldLabelConfig (6209f2b5) changed in comments only (the priority now has two users).
+  - T15 PD (the three pad labels with the review's geometry): the fixture reproduces Z3 (the "$75" tag held at 5 of 32
+    spots); at 3 of those spots a 6-grab burst gives 6 paid, 6 pops, then the tag drawn with priority on every one of
+    the 176 Recharging frames after the last pop; at most 3 base labels on every frame; after the recharge the tag reads
+    "$75", has no priority and is held again. The refix-1 ProductionFx: 0 frames (PD FAILs; the review's Z3 on
+    that build: the tag not drawn at all during Recharging).
+  - The other half of the review's cause (step 2 leaves the camera zoomed out past the tag's MaxDistance 30) is fixed in
+    the text: step 3 now starts "Zoom back in to a normal view, stand next to either plate" (L1b-22).
+L3b-20 (review rv4_feedback_2, Low) applyRecharge no longer ends a recharge on a left >= 1 packet while the server's
+reliable RechargeAttribute is still more than 0.1 s in the future (an older packet delivered late; unreliable packets
+can reorder). If the attribute has not arrived yet, the old behaviour stands and the attribute restarts the recharge
+when it lands. T15 RO: the review's Z4 (the 5th grab's left = 1 packet 0.6 s late) now shows the pill 0.00 s of 7.20 s
+(refix 1: 7.10 s); the pills come back after eta.
+L3b-21 (DR-25) The Drop.Coin cooldown change is lane L1b's (L1b-21); T15 JC (6 grabs 0.36 s apart, jitter 0.03-0.20 s,
+3 seeds) gives 6 pops and 6 chirps each (refix 1: 4 / 4 / 5 chirps).
+L3b-22 (owner phone test) See L1b-22. The refix-1 text above is superseded by this one.
+
+OWNER PHONE TEST (refix 2; this exact text is in both lanes' assumptions files, the report and spec §18 B):
+1. Tap "Grab Cash" at either plate: a green bundle drops and "+$75" pops over the plate with a chirp. Next to the ATM
+   (without Auto Collect) your cash pill also counts up "+$75": the same money shown twice, as before.
+2. Zoom the camera far out (pinch out as far as it goes) and tap "Grab Cash": "+$75" still pops over the plate (from
+   far out its chirp may be faint).
+3. Zoom back in to a normal view, stand next to either plate and tap "Grab Cash" about twice a second, 6 times: every
+   tap pops "+$75"; then the pill disappears and the plate itself reads "Recharging" for about 8 seconds, then one
+   bundle every 10 seconds. Taps faster than about twice a second are ignored by the plate's short cooldown and show
+   nothing: that is expected, not a missing "+$75".
+4. Tap the Collect pill, then "Grab Cash" right after: "+$75" still pops over the plate.
+5. With a 2x Cash or VIP pass a grab still adds exactly $75 to the ATM, and the XP bar never moves.
+Not a phone test: "Recharging" after leaving and rejoining the same server. It lasts only 5-10 s after a burst (up to
+about 30 s once a long session has used the hour's budget), which is over before a phone can rejoin, and a phone cannot
+pick the same server. T1 o1-o3 and T15 R0 cover it in the stand-in; it needs a Studio two-client test or the server
+console.
+
+Gates (refix round 2; headless stand-in and static checks only, never Roblox or a phone; L1b_out/rfx2/logs/gate_rfx2.txt):
+- Parse (luau-compile --binary) ok on the 6 L1b and 5 L3b files; L3b's ManualDropperConfig and SoundConfig == L1b's.
+- luau-lsp: L1a 348 / L1b 348, 0 new; L3b base 348 / L3b 348, 0 new (vs base and vs L1a); HEAD 90cad49 348 / fwd90c
+  348, 0 new.
+- BuyPathStatic: L1b 3363 / 0; L1a + L1b block 3312 / 51 (0 outside the block); L3b 3369 / 0; L3b base + L3b block
+  3323 / 46 (0 outside). Merge preview (v1a_rb + L1b + L3b + both blocks) 3558 / 0, lsp 0 new.
+- Forward check on the CURRENT HEAD 90cad49 (X1 XP rebalance landed; ECON-1 C4 on the X1 tree), L1b_out/rfx2/fwd90c =
+  git archive 90cad49 + the 9 v1b files + both blocks: every v1b file's base there equals the lane base (the files drop
+  in unchanged); BuyPathStatic 3733 / 0 (HEAD alone 3603 / 0); lsp 0 new; T1 B5 48 / 0, B1 23 / 0; T15 241 / 0 and
+  235 / 0; T16 126 / 0; world sim 12 steps ok; DataService 24 / 0; rojo builds.
+- rojo builds L1b, L3b and the preview; world sim 12 steps ok (L1b, L3b, preview, fwd90c); DataService 24 / 0 (all).
+- T1: B5 48 / 0, B1 23 / 0; PAYSEQ B1 identical to L1a; T2 ATM trace identical to L1a (49 lines, 0 money-bag instances);
+  T4 census unchanged (lights 231, neon 294, SurfaceGuis 1121, billboards 57, 2566 parts / 49 neon per base); T5: only
+  BundleAwards differs from HEAD among the money keys; ECON-1 run_all.sh on a merged copy: head / b1 / b5 / b5x1 / l1b
+  16 / 0 each, econ_alt identical to revision 2.
+- T15: B5 241 / 0, B1 235 / 0 on L3b, the preview and fwd90c (was 225 / 221; new cases PD, JC, RO). The refix-1 client
+  files (ProductionFx a82f5240 + SoundConfig 5241fc0c) on the same driver: B5 234 / 7 (PD x3: the tag drawn with the priority on 0
+  of the Recharging frames; JC x3: 4 / 4 / 5 chirps for 6 pops; RO: the pill shown for 7.10 s of 7.20 s), B1 232 / 3 (JC).
+  The review's own drivers copied unchanged (rv4_feedback_2/drv z_driver / z3b_driver) on fwd90c: 42 / 1 (was 37 / 6):
+  Z2 6 / 6 / 6 chirps, Z3 "tag drawn during Recharging true", Z4 0.00 s wrong; the one FAIL left is Z1 (open, below).
+- T16 120 / 0 (L3b), 126 / 0 (fwd90c); T17 all 7 variants pass, Bootstrap.client identical to HEAD; lane C client sim
+  60 / 0, identical to L3a; lane L2 drivers with the real ProductionFx: identical to v1a_rb; HUD harness 7 viewports x
+  droppers_plate / owner / newplayer / panels: 105 rows, 0 differ from the base (the 4 droppers_plate rows with an issue
+  are the pre-existing prompt-lane overlap).
+- The known T16 F3 warm-up flake ("0 Instance.new after warm-up: Part=5") showed once in the merge preview (125 / 1).
+  Reruns on the rebuilt preview tree: 5 of 6 pass with the refix-2 files, and 7 of 8 pass with the refix-1 client files
+  (the same Part=5 line in the failing run), so it is not this round's change; the review traced the 5 Parts to lane
+  L2's BusinessVisuals one-time measure (L3b_out/rfx2/runs/t16_preview_rerun*, t16_preview_rfx1_rerun*). Open for L4b.
+
+Open (Low, not blocking; recorded, not claimed fixed):
+- Review Z1: a pop kept at the plate when the camera is 26-29 studs away can leave its MaxDistance within a few frames
+  if the player walks away at once (5-7 frames drawn); standing players always see it. Possible fix: keep the pop at
+  the plate only with ~6 studs margin (a pinned popSpot change).
+- The far-camera chirp's loudness (24 studs from the listener, InverseTapered): device only; step 2 now says it may be
+  faint.
+- The pre-existing prompt-lane overlap at 844x390 / 800x360 notch (25-33 px into the bottom-right reserved zone).
+- The T16 F3 warm-up flake above (a harness fix: snapshot after BusinessVisuals has measured).
+Still needs a real device: "Recharging" drawn on the ATM plate beside the three premium-pad labels; the pop and
+"Recharging" readability at 20 px; the ATM double "+$"; real unreliable packet loss / reorder and GetServerTimeNow skew;
+frame cost at Graphics Quality 3 on a mid-range Android; a same-server rejoin (Studio two-client).
+
+Forward check 2 (refix round 2): HEAD moved again during this round, not by this lane: 90cad49 -> c1475e9 (27b063d
+the ATM screen shows PendingCash only; 22b63e0 aircraft weapons; c1475e9 bank guards / gate AutoGuns). 8 of the 9 v1b
+files' bases are unchanged there. MoneyCollectorService is NOT: 27b063d edits it (atmScreenBalance, two call sites, one
+comment), so L4b must 3-way merge it, not copy lane L1b's file (a plain copy would revert 27b063d). `git merge-file`
+(ours = L1b's file, base = L1a's, theirs = c1475e9's) merges with 0 conflicts (the hunks do not overlap):
+L1b_out/rfx2/mcs_merged_c14.luau a8593b407c08d71554aa6fd5dfe0ba1e. Tree L1b_out/rfx2/fwdc14 = git archive c1475e9 + the
+8 unchanged-base v1b files + that merged MoneyCollectorService + both blocks: BuyPathStatic 3856 / 0 (HEAD alone
+3726 / 0); lsp 0 new; T1 B5 48 / 0, B1 23 / 0; T2 ATM trace identical to c1475e9 alone (49 lines; 0 money-bag instances,
+HEAD 28); ECON-1 econ1_drv tree5 16 / 0; T15 241 / 0 and 235 / 0; T16 126 / 0; world sim 12 steps ok; DataService
+24 / 0; rojo builds.
+
+## Town v3: Roblox-made buildings in Crossroads Town (owner feedback 2026-09-27; TOWN lane, base 3b5ac28)
+
+Owner: "The buildings in that town are terrible and need to be actual Roblox buildings." Each item below is a reversible
+assumption. The rows go into ASSUMPTIONS.md next to the W3 Town entries.
+
+1. **Pieces.** Every building is stacked from Synty City Pack 6933556508 pieces.
+   - The creator was re-read on the economy API on 2026-09-27 at 21:53 UTC: Roblox, User 1, verified, IsPublicDomain.
+   - The pack already loads live for DesertKit.CarWreck, so this adds 0 load attempts. The wire tool reads the same
+     before and after: 25/56 live ids, 8/24 outage, 25/40 boot.
+   - 10 pieces are used, all glass-free, one MeshPart each. None samples the atlas's text regions (assets.md §2.3).
+   - Revert: set those DesertKit keys to 0. The Part fallback then stays everywhere.
+2. **Scale and texture.** The pieces are kept at scale 1: 11-stud storeys and about 8-stud doors.
+   - The texture atlas is kept (no ClearTexture), so the buildings show red brick and sandstone with real windows, not
+     the old sand palette.
+   - If the owner wants all-sand buildings: set ClearTexture + Color on the 10 keys. This flattens the windows.
+3. **All 40 box buildings are replaced.** This includes the 5 "damaged" and 3 "gutted" ruin boxes, which were part of
+   the look the owner rejected.
+   - The Town now has 48 building rows with 50 buildings. Two rows hold a pair: the square's west side and the motor-pool
+     garages.
+   - 8 rows are new: NW_N5, NW_W5, NE_N5, NE_Bank_E, SW_S5, SW_W5, SE_E5, SE_S4.
+   - War flavour stays through the terrain rubble, moved to the back lots, and the scorch patch.
+4. **Kinds of building:**
+   - 17 one-storey shutter shops;
+   - 15 + 15 two-storey brick walk-ups (two facades);
+   - 2 four-storey apartment blocks: NW_Ring, which keeps its wall lantern, and NE_TowerBlock, which keeps its Id, Role
+     and Tier;
+   - 1 sandstone hall: SW_Square_S, closing the Town Square.
+
+   NE_TowerBlock was the "ruined 6-storey tower block" (top 45.7). It is now an intact 4-storey block (top 47). The
+   pinned row prefix is unchanged.
+5. **Frontage.** Every frontage building faces its road. The pivot sits so the disc edge is at least 30.4 from the road
+   line (RoadClear 30 is unchanged).
+   - Fronts sit about 33.6–35 from the centre line, with 7–9-stud alleys between buildings.
+   - The market lane, Bank Street (now lined on both sides), the Town Square, the Pool_Town pad (+16) and the plaza
+     clear (r 124) are all kept.
+6. **Pavements are new, not asked for.** They are added because the bare sand between the buildings was a large part of
+   the bad look.
+   - There are 10 flat, non-colliding Infra strips (Kit Sidewalk, 10 parts, top 0.64): each arm's two frontages,
+     Bank Street and the market lane.
+   - They are built in Low and Full.
+   - Revert: `Town.Infra = {}`.
+7. **Part count.** The Part fallback is one box per piece plus a door or shutter, so the census counts exactly what the
+   live overlay leaves: 1 invisible collider + 1 mesh per piece (stand-in: 302 → 302 parts, 115 meshes, 50 colliders).
+   - Town Full: 368 → 302 (cap 370).
+   - Town Low: 215 → 160 (cap floor(0.6 × 302) = 181).
+   - Busiest 512 circle, static: 493 → 427 (cap 500, so 73 parts of headroom).
+   - Busiest 1024 circle: 922 → 856 (cap 1,200).
+8. **Fallback look.** When a load fails, a building shows as its storey boxes in brick, sandstone or concrete colour
+   with a door or shutter. There are no painted window stripes.
+   - The overlay is all or nothing per building: if any piece is missing, the building stays Part.
+   - A wall lantern hangs on the mesh wall. While the fallback shows, the lantern sits inside the fallback box and cannot
+     be seen.
+9. **Collider.** The live collider is the style's 17.4-stud wall core (the office's is 34.8), at full height. Players and
+   shots meet the wall. The stoop steps and the cornice overhang are visual only.
+10. **Overlay cap.** Building overlays have their own cap, `Kits.TownHouse.Overlays = 56` (50 are used). The travel
+    dressing keeps its 40 MeshOverlays slots; the stand-in still uses 35 of them.
+11. **Shadows.** One shadow caster per building, the ground floor. The one-storey shops cast none. The Town has 49
+    casters, within the 60 limit.
+12. **Distinct meshes.** The Town uses 10 distinct building meshes; assets.md suggested at most 8. Variety was chosen
+    over 2 draw-call groups, and all 10 share one atlas.
+    - LOD0 triangles are about 61.6k for the whole Town. Within 250 studs of a phone camera the worst case is about
+      16k, and about 48k in view out to 500 studs.
+    - Roblox LODs cut the distant ones.
+    - This needs the device check.
+13. **Other lanes' work is not touched:**
+    - the Empire Bank hall (MapSetup, still TownBlock "hall");
+    - TownBlock itself (17 other places);
+    - the checkpoints, stalls, landmarks and lamps;
+    - the Town anchors: 35, identical.
+14. **W3 Town check driver.** The driver (`w3/densify/drivers/b1_driver.luau` → `ownervis/town/drivers/town_v3.luau`) now
+    skips `POI_Town.Infra` in the cluster check. That model is the platform's WE_Infra strip, exempt from H10 like the
+    airstrip runway. Its parts still go through the road, keep-out and decor checks. Every B1 threshold is unchanged.
+
+## Town v3 fix round 1 (reviewer: public spaces showed backs; the camera went through every building)
+
+15. **Every public space shows fronts.** The Synty pieces have windowless, flat-coloured backs and side walls. So a
+    building next to a public space must face it, even when the space is not a road.
+    - **Town Square:** the north and east sides are new rows facing into the square (SW_SqN1..3, SW_SqE1..3, walk-ups,
+      fronts 4 studs outside the paving). Their backs face the road rows' backs across a 28-stud service yard.
+    - **Plaza corners:** a walk-up facing the plaza closes the mouth of each yard (SW_YardE, SW_YardN).
+    - **Market lane:** a second lane-facing walk-up on each side reaches the road (NW_Lane_S2, NW_Lane_N2). NW_PlazaN
+      stands back to back with NW_Lane_S2 and faces the plaza. NW_N2 and NW_N3 swap styles, so the lane-mouth corner
+      is brick, not the grey shop box.
+    - **Arm ends:** the first building of six arm rows turns to face the flag along its road (NW_W1, NE_N1, NE_E1,
+      SW_S1, SW_W1, SE_E1). From the road it shows its side.
+      - Not NW_N1: its back would then face the market lane.
+      - The WorldPOI disc keep-out holds these end-caps 1.7 studs off the pavement edge, so a thin strip of sand shows.
+    - Revert: the 11 new rows out, and the old row lines back (out/rebased files, cand_r0).
+16. **Measured, not claimed.** `fix1/front_metric.py` classes every visible Roblox-mesh wall pixel as front, side or
+    back, using the triangle normal against the piece's front. The sandstone hall counts as all front: it has windows
+    on four sides. This is the stand-in rasteriser, not Roblox. Numbers are in the report and gates_summary.
+17. **Budgets (all inside the caps):**
+    - Town Full: 302 → 346 (cap 370). Low: 160 → 184 (cap floor(0.6 × 346) = 207).
+    - Busiest 512 circle: 427 → 471 (cap 500). Busiest 1024 circle: 856 → 900 (cap 1,200).
+    - Overlays: 50 → 61 kits. `Kits.TownHouse.Overlays` rises from 56 to 64; it is the Town's own cap.
+    - **Shadow casters: 49 → 60, exactly the TOWN-H9 limit (<= 60), with no headroom left.** The next Town addition
+      needs a caster traded first. Cheapest option: turn SW_YardE / SW_YardN into shops.
+    - Load attempts are unchanged: 0 new ids, census identical to head (same 25 / 33 ids, attempts 18 / 43).
+    - LOD0 triangles: the whole Town goes 61.6k → 78.8k. The worst phone camera within 250 studs is the owner's square
+      spot: 10.3k → 21.3k. It is the heaviest view now and part of phone test D.
+18. **Camera (Poppercam).** Roblox's current PlayerModule Popper was read from the Roblox-Client-Tracker mirror
+    (fetched 2026-09-27; `fix1/Popper.lua`).
+    - With the flag `UserRaycastUpdateAPI2`, it casts `workspace:Raycast` with RaycastParams that have
+      RespectCanCollide = true and the default collision group ("Default"). A hit occludes only when the part's total
+      transparency is < 0.25.
+    - So the reviewer's first option would hide the pieces from the camera ray: a collision group that collides with
+      nothing also does not collide with Default, and the ray skips it.
+    - Chosen fix: the placed pieces stay in Default, with CanCollide and CanQuery on and CanTouch off
+      (`Kits.TownHouse.MeshCollide = true`). The wall-core collider stays, so the part count is unchanged.
+    - Players now also collide with the pieces' own collision shape. The pack serialises no CollisionFidelity, so it
+      is Default. Expected effects:
+      - the doorstep can be stepped on;
+      - the cornice and roof overhang block like the wall;
+      - shots hit the visible stonework.
+    - Needs the device test (phone test C.2 and C.3). Revert: MeshCollide = false.
+19. **Rebase.** Main moved to c1475e9 while this lane ran. Only VisualAssetConfig (aircraft weapons rows) and
+    BuyPathStatic changed under the lane's files. Both were 3-way merged cleanly (`git merge-file`, 0 conflicts);
+    see rebased_c1475e9/. The other 4 files are byte-identical on both bases.
+20. **Drivers.**
+    - `drivers/town_v3.luau` gains TOWN-v3-public: the 21 buildings on the square, the lane, the plaza corners and the
+      arm ends face their space. TOWN-v3-fronts skips the six end-caps.
+    - `drivers/overlay.luau`:
+      - pieces must collide, be queryable and never Touch, in the Default group;
+      - new check OV-camera: every face of every building's wall core, on a 2-stud grid, must be covered by an opaque,
+        collidable, queryable Default-group part;
+      - counts are now 148 meshes and 61 colliders.
+
+# Assumptions: owner-vis yard lane (Training Yard redesign), 2026-09-27
+
+Each assumption can be undone with a config change or a revert. The integrator merges these into `ASSUMPTIONS.md`.
+
+- **YA-1 Layout.** The yard becomes a 3-lane shooting range that runs from the plaza towards the Research Lab (+X):
+  - the firing line is at plot-local x 41, the targets at x 63, and a 6-stud sand berm at x 64..71;
+  - the range floor (still named `YardPad`) is 36 × 22, centred on (54, 30);
+  - beyond the berm, at x 74..84, are a small obstacle course (z 20..31) and a supply corner with a tent and crates (z 34..44).
+
+  I kept the strip behind the firing line (x 30..40) empty. Otherwise the phone camera behind a player standing at the line has crates or a tent between it and the player, which the first draft showed. I also kept the walk to the Research Lab door (z 2..14) and the walk to the business kiosks (z ≥ 46) clear.
+  Undo: edit `TrainingYardConfig.Pieces` / `Figures` / `Decor`.
+- **YA-2 Fewer figures.** The 5 statues (3 stall statues and 2 workers) become 3 soldiers at the firing line, facing downrange. Their kinds are Infantry, HeavyInfantry and Guard, with the old stall colours.
+  - They are built only through MapSetup's `makeSoldierKit` (the R-RIG statue path). R-RIG is not implemented here, and today's Part-kit figure is the fallback.
+  - On the R-RIG v3 tree merged with this change, all 3 are rigged with no change in part count (28).
+  - I did not add an "instructor" figure. The task asked for fewer figures, and his squad of 5 already stands beside him.
+- **YA-3 No sandbags in the yard.** The yard asks for none of the owner-picked Tent (182529039, plus its alt 3133150032), SandBag Wall (15271872710) or Military Crates (2930926216). `WarzoneProps.Sandbag` / `Crate` / `MilitaryCrate` are not touched and still dress the other 11 sandbag hosts per base. Tent and TentAlt now have no caller.
+  - `tools/wire-asset-ids.py` still counts them: its `PROP_KEYS` list is config-based, so status still reads 25/56 and 25/40.
+  - The stand-in census shows the server asks for fewer ids: 16 boot ids instead of 18 when healthy, and 22 instead of 25 in an outage.
+  - I did not edit the tool's registry (another lane's file).
+- **YA-4 Meshes.** The meshes are Roblox-made Synty pieces (creator Roblox, User 1), and every piece comes from a pack that already loads live, so there are 0 new load attempts.
+  - Dungeon pack 6933790012 gives the `YardCrate` (Crate_Wood_04), `YardAmmoCrate` (Crate_Metal_01), `YardRack` (WeaponRack_01, mesh only) and `YardLadder` (Ladder_01, mesh only) pieces.
+  - The hurdles reuse the live `DesertKit.Log` key (Nature 6933438443, texture cleared).
+  - The Dungeon pieces keep their pack texture, which is one shared 1024² atlas; per ownervis/assets.md §3.4 they carry no text or emblem.
+  - I dropped a City-pack traffic cone so phones do not load a second atlas.
+  - Undo: `ClearTexture = true` plus a `Color` on a key gives a flat colour; `TrainingYardConfig.UseMeshes = false` gives the Part look with no loads.
+- **YA-5 Replace, never add.** A mesh is fitted inside its Part piece's box (one uniform scale, standing on the box bottom).
+  - A colliding piece (crates, logs) stays as an invisible collider.
+  - A non-colliding piece is destroyed.
+  - Decor meshes (rack, ladder) have no Part piece.
+  - The census counts every level on all 6 plots: 65 parts for the Part look (HEAD 84) and 76 with every mesh loaded, so ≤ 84 either way.
+  - Meshes go through `VisualAssetService.CloneKitMesh` and are capped at `MaxMeshesPerYard = 16` (11 configured). They are separate from `WorldConfig.Kits.MeshOverlays = 40`, which is WorldKits' world-overlay budget and does not count plot yards.
+- **YA-6 Cash plate.** `YardEarnAnchor` moves to yard-local (-16, 5.5, -9), so ManualDropperService (HEAD and v1b alike, `YardOffset (6, 0, -4)` unchanged) builds `ManualDropper_Yard` at plot-local (36, 17).
+  - That spot is open concrete at the corner of the Research Lab walk, off the range floor. The nearest colliding part is the 0.2-high range floor, 0.8 studs away; at HEAD the plate overlapped the old pad and sat 1.4 studs from a crate host.
+  - It is 22.2 studs from the `YardPad` centre, inside ProducerLabels' 24-stud radius.
+  - The contract is kept: the `TrainingYard` folder, `YardPad`, `YardAnchor`, `YardEarnAnchor`, `TrainingTarget1..3` + `WE_TrainingTarget`.
+- **YA-7 No text in the yard.** The yard has no text. The 3 stall-sign SurfaceGuis go (−3 SurfaceGuis per base), and no billboard or light is added.
+- **YA-8 Code placement.** The yard moves out of MapSetup (3,567 → 3,342 lines) into `Modules/TrainingYardBuilder.luau` (build) and `Configs/TrainingYardConfig.luau` (every position, size and colour, config first). MapSetup passes `makeSoldierKit` in, so figures keep one builder.
+- **YA-9 Pins.** Three BuyPathStatic pins named the old yard code: `SquadStalls`, the worker line and the stall-soldier line. They are replaced in place (bps_pins.txt).
+- **YA-10 Merge risk (for the integrator).** The Town lane may add keys to the same `VisualAssetConfig.DesertKit` table and rows to the same `ASSET_LICENSES.md` Synty rows; both are plain additive merges.
+  - R-RIG v3 (`design3/rig/v3/tree_c`) merges cleanly with this change: `git merge-file` exit 0 on MapSetup, VisualAssetConfig and ASSET_LICENSES.
+  - Dropper v1b (`droppers/build/L1b`) merges cleanly too: 6 files, exit 0. The plate lands at (36, 17) on all 6 plots and the yard's Neon is 0.
+- **YA-11 Ship order (fix round 1).** The squad of 5 (SquadOrdersService followers, not part of the yard) and the 3 shooters are Part-kit block soldiers until R-RIG ships. In the phone_owner camera they fill the lower half of the frame, so on its own this lane changes the range but not the "rows of block soldiers" look (after_live vs after_with_rrig renders).
+  - Recommended: land this lane in the same push as R-RIG v3. The merge is clean and the yard stays at 65 parts with 3 rigged shooters (gates_summary.txt). Then use `out/owner_text_with_rrig`.
+  - If this lane ships first, use `out/owner_text`. Its line 6 says the squad and shooters keep the block look until the soldier update.
+  - The yard lane does not restyle the squad or `makeSoldierKit`; that is R-RIG's scope. Undo: none needed (text only).
+
+- **VIS-INT-1 (integrator, 2026-09-27).** Town and Training Yard lanes landed together by 3-way merge onto 5c8f57e. The textual conflicts were resolved by keeping both lanes' blocks: VisualAssetConfig (Town* and Yard* DesertKit rows) and BuyPathStatic (both pin blocks). ASSET_LICENSES keeps one row per pack: the Town lane's text for City 6933556508 and the Yard lane's text for Dungeon 6933790012. The yard pin that bans Neon in TrainingYardConfig now also bans `Enum.Material.Neon` (review Low). The yard ships before R-RIG (the soldiers keep the block look until the soldier update); the owner text says so.
+
+## bizlook: war businesses look like real company sites (2026-09-27)
+Owner: "The droppers/businesses still look terrible. The dropper should look like a legit high-end business."
+- **BL-1 Same parts at every level.** Each business keeps v1a's count per level (L0 4 / L1 10 / L2 12 / L3 14 / L4 15 / L5 16, console included), so parts per base stay 2,566 at L5 on all 6 plots. The Chimney, Stock, Awning, Hazard, Pallet and GoldTrim parts are gone; Dock, DockFront, Hall, HallFront, Canopy and Fascia take their slots. Reversible: `BusinessConfig.Kit`.
+- **BL-2 The line is untouched.** Belt, BeltFrame, Bin, the Housing box (the ShellPress sits in its +X wall) and the Armor PressRam keep their v1a boxes, so the machines, products, heap, "+$N" pop and pop dodge are unchanged. The canopy stops at x 6 and nothing roofs the bin (T11 adapted: the canopy ends 2 studs before the pop column).
+- **BL-3 Roblox-made building pieces.** The loading unit (L2), the head office (L3-4 two storeys, L5 three storeys) and the belt canopy (L4) are Synty City pieces from Roblox's own pack 6933556508 (creator Roblox, User 1, re-checked on the public economy API 2026-09-27). The pack already loads live for the car wreck, so this adds 0 load attempts (wire-asset-ids status: 25 / 56, outage 8 / 24, same as HEAD). The pack's atlas texture stays; the UV check finds no text region on these four meshes. Each piece takes one non-colliding Part-kit role's place, so part counts hold. If the pack fails to load, or in Studio (StudioSkipWorldDressing), the Part kit shows instead.
+- **BL-4 Stretched meshes.** The unit and office pieces are MeshParts stretched to fill a Part box (Fit = "Stretch"): the front keeps its proportions (x 0.47 / y 0.55 for the unit, x 0.43 / y 0.45 and x 0.52 / y 0.47 for the offices) and the depth is squashed (0.18-0.29). From the front this reads as a normal building, but a sharp side view looks thin. Needs a device check.
+- **BL-5 Colliders stay Parts.** A piece never collides. The Dock and Hall boxes stay in place as the colliders and turn invisible while their piece is on (Transparency 1, CanCollide / CanQuery kept). BusinessService shows them again when the piece goes, and rebuilds and refits a stretched piece when its box grows (the office at L4 / L5, and the L5 piece swap).
+- **BL-6 No rust.** OD-2 (CorrodedMetal Field housing) is replaced by brick at every tier, because the owner now asks for "high-end". Field and Works look the same; Arsenal (L5) still paints the belt frame in the brand colour and gives the cornice a 0.08 sheen. Reversible: `LookTiers` HousingMaterial.
+- **BL-7 Brand colours.** Each business has one brand (Accent) colour: Ammo amber, Arms green, Armor blue, Rocket red. It shows on the workshop cornice (L1), the belt frame (L5) and the office's roof band (L5). The machines turn it at L5 through MachineColors.Arsenal = "Accent". There is no text, logo or insignia.
+- **BL-8 ATM stays visible.** Nothing right of x 4 behind the line rises above 6 studs, so from the Ammo Works kiosk the ATM behind it stays in view (a BuyPathStatic rule). The whole site stays inside x -13..13, z -10..6. At L5 on plot 1 it overlaps no other plot part (stand-in AABB check). This is a stand-in check only; see phone_test.
+- **BL-9 Unlock names.** The BUY line 2 / NEXT chip names are L2 "Loading bay", L3 "Head office", L4 "Belt canopy", L5 "Company HQ". All 35 HUD rows pass at every viewport ("Company HQ" also fits the small-phone chip, which "Arsenal paint" did not).
+- **BL-10 Not used.** The owner's Armor pick 4362642898 (28 parts) cannot fit a business without adding parts, so it stays pending. The Manual Dropper pick 14408455045 is not a business.
+
+### Owner decisions (defaults ship as listed)
+- Keep the four brand colours, or pick others (`BusinessConfig` Palette Accent).
+- Keep brick for the workshop, or go back to the v1a rust at L1-2 (`LookTiers` HousingMaterial).
+- If the stretched office or unit looks wrong on the phone, set that `VisualAssetConfig.BusinessPieces` row to `ModelAssetId = 0` (Part kit) with no other change.
+
+### Needs a real device
+- The pieces show their atlas texture in the live place (the live car wreck clears its texture, so no textured Synty piece has been seen live yet); run owner/WeCheck2.luau.
+- How the stretched office and unit read on a phone, and from the side.
+- Frame rate at Graphics Quality 3 with 4 businesses at L5 per base: about 1.9k extra triangles per business (office 1,527-1,984, unit 264, canopy 122), all on one shared atlas.
+- Walking into the office or unit is still blocked by the hidden box.
+
+## 2026-09-27 — vscale lane, round 2 + refixes 2.1-2.3 (owner: "the cars look tiny under the avatar"): Roblox-size car bodies over the unchanged Part kit (option B)
+
+Refix 2.1 (review round 2.1) changes four of the nine files (VehicleService, VisualAssetService, VehicleConfig, VisualAssetConfig) on top of round 2; see "Round 2.1" below (VS-13 to VS-17, VS-A22 to VS-A29). Statements in the round-2 part that 2.1 changed carry an "(R2.1: ...)" note.
+
+Refix 2.2 (review round 2.2, two blocking issues) changes three files again (VehicleService, VehicleConfig, VisualAssetConfig); see "Round 2.2" below (VS-18, VS-19, VS-A30 to VS-A36). It supersedes VS-17, VS-A25 and VS-A26 for the Quad / Recon Buggy and adds to VS-7.
+
+Refix 2.3 (review round 2.3, two Medium findings and four Lows) is rebased onto **5c8f57e** and changes four files again (VehicleService, VehicleConfig, VisualAssetService, VisualAssetConfig) plus two new ones (VehicleCombatConfig, VehicleCombatClient); see "Round 2.3" below (VS-20, VS-21, VS-A37 to VS-A43). It supersedes VS-A15 and updates the numbers in VS-1, VS-3, VS-6, VS-8, VS-10, VS-19, VS-A24, VS-A35 and "Remaining costs". A number this round did not re-measure keeps its round tag.
+
+**R2.3: rebased onto 5c8f57e.** Each of the nine lane files was 3-way merged with `git merge-file` (base = the file at 5f38c2e, ours = main 5c8f57e, theirs = R2.2's `b2/cand22`): 0 conflicts. Main's changes in those files are kept: v81's playtest-owner gate in VehicleService, the bank / gate AutoGun rework in GateDefenseService (the lane's friendly-gate lines sit unchanged in `updateFriendlyGate`), and the aircraft weapon refs and WE_CHECK notes in VisualAssetConfig. The R2.3 candidate is `r23/cand` = `git archive 5c8f57e` + the eleven files (`files.txt`, `job_md5.txt`). The history below is kept as it was.
+
+Built on 5e021d8, then rebased onto **5f38c2e** (5e021d8 + streaming lane C5). The round-1 changes to VisualAssetConfig and VisualAssetService were merged with diff3 onto 5e021d8: 0 conflicts, and every hooks-lane line (vehicle weapon allow-lists, FitScale, HideParts) is kept. The rebase is a diff3 of the nine files onto `git archive 5f38c2e`: 0 conflicts. Only VehicleDriveClient overlaps with C5, and all 9 C5 lines in it are kept (the bounded `WaitForChild("Shared", 60)` and the `Shared.*` requires). Before the VS-A20 client fix, the vscale delta was the same line set on both bases. That fix (VehicleDriveClient only) was made on cand5f. The R2 final gates ran on `b2/main5f` (git archive 5f38c2e) against `b2/cand5f`; the R2.1 gates run against `b2/cand21` (cand5f + the R2.1 changes), and the same nine files also merge onto 3b5ac28 with 0 conflicts (`r21/rebase3b`). Nine files change (`files.txt`, `job_md5.txt` = cand21, plus the 3b5ac28 md5s):
+- the configs VisualAssetConfig, VehicleConfig, RaidConfig and WorldConfig;
+- VisualAssetService, VehicleService, GateDefenseService and MapSetup;
+- the client module VehicleDriveClient.
+
+Nothing changes in the physics kit, the kit sizes, WE_HalfLength / WE_HalfWidth, driving or the movers. There is no new remote, no DataStore or save change, and the Place and Universe IDs are untouched.
+
+Evidence comes from the headless stand-in only (scratchpad/sim), which is not Roblox. `vscale/b2/r23/out/phone_test.md` (R2.3) lists what the owner checks on his phone.
+
+**Revert:**
+- Delete a ref's `BodyScale` line: that car goes back to the old body squeezed to the chassis, with the kit's own seats and label and no visual extent.
+- Set `Drive.ExitSpot.Enabled = false`: exits go back to Roblox's own jump-out.
+- Set `Drive.Ride.Enabled = false`: no Ride prompt.
+- Set `GarageSignBack = 10.4`: the old sign position.
+- R2.2: `Drive.ExitSpot.HoldSeconds = 0` drops the 1 s hold (the root-part check and the stand box still keep riders apart); `EndSideStep` only moves the two extra end spots; the buggy goes back to R2.1 with `BodyScale = 1` and seat y 2.634 in both Dune Buggy refs (head in the top rails again, VS-19).
+- R2.3: `Drive.Stability.DriveAtComXFamilies = {}` puts WE_DriveAttach back at x = 0. `VisualAssetConfig.BodyLabelMargin = { Base = 1, PerStud = 0, EyeHeight = 4.5 }` restores R2.2's flat 1-stud label. `VehicleCombatConfig.Ui.OverBar.LabelOffset = -0.75` puts the HP bar back under the nameplate.
+- R2.1: `BodySeatKitInset = 0` puts the van's front row and the Dispatch Car's back seat back past the kit end (not advised: see VS-14); `Drive.Spawn.Decor.Enabled = false` turns the decor pass off; `Drive.ExitSpot.RoofFallback = false` turns the roof fallback off; `Drive.Spawn.RingMargin` only moves the pad's second ring.
+
+### What changed
+- **VS-1 Body scale from config (round 1, van changed in R2).** `AssetRef.BodyScale` is used for Vehicles refs with `Fit = "Kit"`:
+  - Light Utility Vehicle 1.0. This is the MilitaryJeep ref; the Armed 4x4, Scout Car and Dispatch Car use it too.
+  - Dune Buggy 0.95 (Utility Quad, Recon Buggy). R2.1: 1.0, with the seats 0.45 higher (VS-17). **R2.2 (current): 1.2**, with the seats 0.25 over the VehicleSeat (VS-19).
+  - **Van 1.0 (R2; it was 0.8)** (Cargo Van).
+  - Pickup 1.0 (Patrol Truck, Escort Truck).
+
+  The body stays centred on the chassis, with its lowest point on the lowest physics-wheel point.
+- **VS-2 Seats on the body's seats (round 1; R2 moves the buggy passenger and the van's cargo seats).** `AssetRef.BodySeats` is applied only inside the fitted branch. Each seat is unwelded, placed, welded again, and set to CanCollide off.
+  - R2: in both buggy refs, PassengerSeat1 sits on the mirror of the VehicleSeat, (1.349, 2.184, 1.223). R2.1: both buggy seats at y 2.634 (VS-17).
+  - R2.1: every moved seat's centre stays 0.25 inside the kit's collidable box (VS-14): the van's front row sits at z -4.43 instead of -5.27, the Dispatch Car's back seat at z 3.15 instead of 3.50.
+  - R2: the van's cargo passengers 2-4 have seat tops 0.95 lower, so their feet reach the cargo floor.
+  - A kit whose body does not load keeps its own seats.
+- **VS-3 Label (R2; R2.3 margin, VS-21).** `WE_LabelY` = max(body roof, top of the lifted roof parts) + a margin. R2 to R2.2 used a flat 1. R2.3 uses `BodyLabelMargin` 1 + 0.4 × (that top's height over the ground − 4.5). Heights above the ground, R2.3 (R2.2 in brackets):
+  - 4x4 10.28 (8.92); Armed 4x4 11.44 (9.74; the gun top is 8.74).
+  - Dispatch Car 10.28 (8.92).
+  - Quad / Buggy 11.00 (9.43; R2 7.67, R2.1 8.02).
+  - Van 12.74 (10.67).
+  - Patrol / Escort 12.70 (10.64).
+  - R2.3: the HP bar is 1.5 over these (`OverBar.LabelOffset`). R2.2 had it 0.75 under.
+- **VS-4 Shadows (round 1).** The `FitShadowShare` threshold is taken from the fitted body length.
+- **VS-5 Armed 4x4 gun on the roof (round 1).** `BodyRoofParts = { "GunMount", "Barrel" }`.
+- **VS-6 Fitted extent on the model (R2).** `placeKitOnBody` sets three attributes, in the chassis frame:
+  - `WE_VisualHalfLength`: 4x4 8.80, buggy 10.05 (R2.2 at 1.2x; R2 7.95, R2.1 8.37), van 13.10, pickup 13.29.
+  - `WE_VisualHalfWidth`: 4.09 / 5.62 (R2.2; R2 4.45, R2.1 4.68) / 5.82 / 5.30. Widths include the mirrors (the van body without them is 10.20).
+  - `WE_VisualTop`.
+- **VS-7 Exit spot (R2, `VehicleConfig.Drive.ExitSpot`).** On every seat's Occupant change to nil (jump or EXIT pill, `ejectSeat`, a wreck, a rejected NPC), the server moves the rider once the SeatWeld is gone.
+  - Where: on that seat's side at max(kit, fitted) half width + Gap 1 + HalfWidth 1, at the seat's Z.
+  - Order of tries: the seat's own side, then the other side, then behind, then in front. Behind and in front are tried only while the car moves toward that end at less than 3 studs/s. R2.1: then both sides again level with the chassis centre, when the seat is more than 1 stud off it. Then the same spots are tried 3 studs further out.
+  - Each spot needs:
+    - a CanCollide ground hit within 2.5 above and 6 below the wheel line;
+    - not terrain water, not a WE_Water part, and no WE_Water over the spot;
+    - an empty 2 × 5.2 × 2 standing box;
+    - a clear line from the seat (R2.1: from inside the kit instead, and out of every other car's body; see VS-13).
+  - The move is `PivotTo` plus zero velocity.
+  - If no spot is clear, Roblox's own jump-out applies, as before. R2.1: except when the seat's rider point is inside or behind a world part; then the rider stands on the kit's roof if that is clear (VS-13).
+  - Car mode only, including the plain Part kit.
+  - Per-seat `Side` is in config (`DriverSeat = "Left"`); any other seat uses the side it is on.
+- **VS-8 Ride (R2, `Drive.Ride`).** There is one `WE_RidePrompt` per car, on the Chassis. Only cars with passenger seats get one; a jeep now has 2 prompts in total (Drive + Ride).
+  - "Ride", held for 0.3 s. Range = 8 + max(kit, fitted) half length: 4x4 16.8 / buggy 18.05 (R2.2; R2 15.95, R2.1 16.37) / van 21.1 / pickup 21.29.
+  - The server turns it on (Enabled + `WE_Open`) while a passenger seat is free and the car is not wrecked.
+  - `VehicleDriveClient` hides it for the owner (his Drive and Ride would share one key), for anyone seated, and on a wreck.
+  - The client listens to each Ride prompt's `Enabled` and `WE_Open` so it can hide it again after a server toggle. It hooks every Ride prompt it finds, including the ones that already existed when it first hooked the vehicles folder (a late joiner). The 5e021d8 build hooked only prompts that arrived later. See VS-A20.
+  - Triggered checks, in order: rate limit 2/s, alive and not seated, range + 4 and height ≤ 6, `SeatPolicy.Passenger`, and a clear line to the chosen seat. Then the server sits the player in the nearest free passenger seat.
+- **VS-9 Spawn sized by the fitted body (R2).** Everything below uses max(kit, fitted body):
+  - `footRadius` (spacing, auto-sit reach, PlayerFront distance);
+  - the `spotFree` box (fitted width, length and roof);
+  - the `Occupied` radius of parked cars.
+
+  PlayerFront also refuses a spot whose box (+ `PlayerClear` 1.5) covers the player's root part. R2.1: a second ring around each pad for a big parked car (VS-15) and a decor pass (VS-16).
+- **VS-10 Drive prompt range (R2).** `Drive.Spawn.DrivePromptRange` 14 + the fitted overhang (WE_VisualHalfLength − WE_HalfLength): 4x4 family 18.55, Dispatch Car 19.40, Quad 21.39 (R2.2; R2 19.29, R2.1 19.71), Buggy 20.43 (R2.2; R2 18.34, R2.1 18.76), van 22.43, Patrol 22.34, Escort 21.79.
+- **VS-11 Friendly gate (R2).** An ally seated in a car with a fitted body opens the gate from GateOpenRadius 12 + the overhang + `RaidConfig.Defense.GateOpenVehicleLead` 1.5. On foot the radius is still 12.
+- **VS-12 Garage sign (R2).** `WorldConfig.Spawns.GarageSignBack` 14.6 (was 10.4): the post and board stand behind the pad, clear of a pickup's tail (13.29) or the van's (13.10).
+
+### Assumptions (reversible)
+- **VS-A1 Field names (round 1).** The fields are `BodyScale` / `BodySeats` / `BodyRoofParts`, because the hooks lane's `FitScale` already means something else for vehicle weapons.
+- **VS-A2 Scales (R2 re-measured with `clip_check.py` / `body_in_dummy.py`, review_visual method).**
+  - Condition 1: a seated blocky R15's head (seat top + 3.7) is at least 0.3 under the body top.
+  - Condition 2: nothing of the seated avatar pokes out through the body skin, and the body is not inside the avatar's head.
+  - LUV 1.0 and Pickup 1.0 are unchanged.
+  - Buggy 0.95: driver and passenger both sit at the VehicleSeat height. SeatFR (which R1 used) is posed for the model's own Passenger_Seated animation, which the game does not play. R1's "passenger head 0.43 under the roll-cage top" was measured against the highest point of the body, and it was wrong: the head went 0.29 into the cage's front bar and light bar.
+  - **R2.1 correction: the buggy at 0.95 did NOT meet condition 2.** Both riders' feet hung 0.45 under the floor (a dark block under the belly from the side), and the outer arm went 0.43 into the cage's lower side tube and showed 0.42 outside the body. R2 did not say so. R2.1 changes the buggy to 1.0 with the seats 0.45 higher (VS-17): feet on the floor, lower arm 0.20 into the side tube and upper arm 0.17 outside the body. Condition 2 is still not met for the arm; see VS-A26.
+  - Van: see VS-A14.
+- **VS-A3 Seats with no body seat.** The van's passengers 2-4 sit in the cargo bay.
+  - The trucks' PassengerSeat4 keeps its kit position between the rows (top 4.77 on the Patrol Truck, 5.27 on the Escort Truck). It is not on a body seat.
+  - R1's "in the 4x4 and trucks they sit on the real seats" was wrong for that seat.
+  - All of these are reached with Ride.
+- **VS-A4 Seat mass kept (round 1).** Moved seats keep their mass.
+- **VS-A5 Seated and standing avatar.** Seated: root part 1.5 over the seat top and head top 3.7 over it (a blocky R15). Standing: root part 2 × 2 × 1 with HipHeight 2, so the root centre is 3 over the ground (R6 is taken as 3 too). Taller avatars sit about 0.5 higher. Not confirmed on a device.
+- **VS-A6 No fitted-body hit box (round 1, unchanged).** It would change who a shot at an open seat hits. Shots at the overhang still miss.
+- **VS-A7 Footprint Top (round 1).** Moved seats do not collide, so the collidable top drops (jeep 2.30 to 2.00).
+- **VS-A8 Disk (round 1).** Heavy runs go in /dev/shm.
+- **VS-A9 The exit move.** A server `PivotTo` of a player's character, one deferred tick after the SeatWeld goes, is the usual Roblox server-side teleport. I assume the owning client takes it even while its own jump is running. Not verified on a device: if the jump shows first, the rider can pop 1-2 frames above the car before landing beside it (phone step 2). Speed is zeroed, so nobody keeps the car's speed and flies off.
+- **VS-A10 Front as the last exit spot.** The brief listed side, other side and behind. "In front" is added last so that a car parked nose-out between two walls with its back to a third can still be left. Both ends are skipped while the car moves toward them faster than 3 studs/s, so a moving car never gets a rider dropped in its path.
+- **VS-A11 Ride and security.** The brief did not ask for a clear line and a height limit, but without them Ride could put a player through a base wall or a closed gate into a car parked inside the base (≤ 21 studs away). The exit spot also needs a clear line from inside the car (R2.1: from the kit, VS-13), so the rider could not then step out inside the base. Both checks are on the server. `SeatPolicy.Passenger` is "Anyone" in the live config, so anyone may ride anyone's car, as touch-to-sit already allowed. "Owner" and "OwnerOrClan" (through `ClanService.GetClanId`) were tested by flipping the config in the stand-in.
+- **VS-A12 Ride visibility.** The server alone decides whether a seat is free (Enabled + `WE_Open`). The client only ever hides the prompt, and it restores it from `WE_Open`. A client without this code would show Ride to the owner; the server still refuses nothing wrong in that case, because the owner may sit as a passenger.
+- **VS-A13 Spawn box.** The fitted box blocks a spot, as the kit box already did. It sees CanCollide parts only. Non-colliding decor is not seen:
+  - the Garage sign;
+  - flag poles at the POI centres;
+  - palm trunks;
+  - reeds.
+
+  So a SPAWN made standing near a pad can still put the visible body through them. This is visual only; see the report, RW2. **R2.1: replaced by VS-16** (a decor pass that sees non-colliding decor; the reviewers counted 161-267 deep hits on R2, 43-71 on main5f).
+- **VS-A14 Van at Roblox size (decided with numbers, `clip_check.py`).** How far a seated avatar pokes out through the van's sides, at each scale:
+  - 0.8 (R1): 0.33 / 0.34 / 0.45 / 0.43 / 0.43.
+  - 0.9: 0.08-0.18.
+  - 0.95: 0.04-0.05, and the front row's feet go 0.15 through the floor.
+  - 1.0: 0 for every seat, the same as Roblox's own van.
+
+  Moving the seats inward at 0.8 would have made the two front riders overlap by about 1.3 instead of 0.38.
+
+  Costs of 1.0:
+  - The van is 26.20 long, so it hangs 3.10 past each end of the 20-stud pad.
+  - It is 11.63 wide with mirrors (10.20 without). At the 10-stud gate, the mirrors reach about 0.8 into each gate post and the body 0.10. This is visual only; the posts do not collide.
+  - The label is 10.68 over the ground.
+- **VS-A15 Lateral centre of mass. Superseded by VS-20 (R2.3) for the WheeledLight family.** R2 to R2.2 accepted it as a cost; the numbers below are history.
+  - R2: `WE_DriveAttach` X = com.X was tried, but the rollover unit pin (5e `X == 0`) failed, so it was withdrawn. R2.3 makes the change for real, and the unit pin now checks X = the centre of mass (VS-20).
+  - R2 / R2.1: the attach point sat 0.11-0.26 (R2.1 Quad 0.28) right of the centre of mass. The yaw couple at force saturation was 6-22 %, the Dispatch Car 33 %, the Quad 67 % (R2.1: 70 %). **R2.2 (the review's M1): the Quad 0.33 → 84 % at saturation, 15 % braking, 7 % accelerating; the Recon Buggy 0.23 → 28 % / 5 % / 3 %.**
+  - **R2.3, driver alone (`vsr_phys_r23` YAWC rows):** 0.00 and 0 % on every WheeledLight car (4x4, Armed 4x4, Scout Car, Dispatch Car, Quad, Recon Buggy). The Cargo Van 0.22 → 20 %, Patrol Truck 0.15 → 11 % and Escort Truck 0.11 → 6 % are unchanged (WheeledTruck is not in the list; see VS-A37).
+  - Heavy-side static stability factor: unchanged by R2.3, because the drive point does not move mass. With the driver alone it is 1.57-1.95 (Quad 1.63, tipping at 58.5° toward the driver's side). With every seat full it is 1.07-1.62 (`vsr` MASS rows, the same as R2.2). The steering demand is 0.61.
+  - Phone steps 4 and 5: full-stick turns both ways, and 3 s at full stick into a wall. The Quad must not spin.
+- **VS-A16 Gate lead 1.5.** The moved seats sit up to 1.1 studs further back than the kit seat. The lead covers that for the kit's own nose too.
+- **VS-A17 Sign at 14.6.** It clears the longest body (pickup 13.29) by 1.1. The new spot clashes with no world part on any of the 6 pads (`vs2_sign`).
+- **VS-A18 4x4 rear riders' feet, as in Roblox's own model.** On the 4x4 body the back seats (SeatRL / SeatRR) are open at foot height, so `clip_check.py` reports the feet 2.01 / 2.10 "out" and 0.74 under the belly.
+  - Roblox's own LUV at scale 1, with the same seats, gives exactly the same numbers (`results/clip_check_native_allseats.txt`).
+  - The side ray at the feet meets no skin until the centre tunnel (x ≈ −0.1), so this is the open back, not a foot through a panel.
+  - `body_in_dummy.py`: no body part inside any seated head on any body. The drivers match Roblox's own LUV and Pickup exactly (`results/body_in_dummy_*.txt`).
+- **VS-A19 Old look pins superseded.** Two older drivers pin the old squeeze-to-chassis fit: `assetwire/integ/drv/jeep_look.luau` K3 "fitted length = chassis" (4x4 family) and `w3/LOOK/t_look_unit.luau` U9 jeep/armed length. They fail on cand by design (head 127/131 → cand 123/131; head 51/57 → cand 49/57); every other line is unchanged. The vscale versions of the same checks (`vs2_jeep_look` 200/200 on R2; R2.1: `vs21_jeep_look` 200/200, see VS-A29, `vs_look_unit` 58/65 with the same 6 stand-in fails as head plus the R1 label pin) cover the new fit. The round-1 driver `vs_jeep_look` keeps 3 R1 pins that R2 changes on purpose (label above the gun, van at 1.0 and its seats).
+
+- **VS-A20 Ride prompt for a late joiner (fixed while rebasing onto 5f38c2e).** The 5e021d8 build hooked the Ride listeners only in `DescendantAdded`. A player who joined while someone else's car was already parked got that car's prompt state once, from the first full pass. After that, the server's `Enabled = true` when a seat freed was not judged on his client again, so Ride could show while he sat in another car. The server still refused him (`NoRider`), so it was only a stray tap target.
+  - The fix is `hookRidePrompt(d)`, called from both `refreshAllPrompts` and `DescendantAdded`. It is idempotent through a local `WE_RideHooked` mark.
+  - The client driver `vs2_client_ride` gains R10 and R11 for this case:
+    - the 5e021d8 cand gives 10/12 (R10 and R11 fail);
+    - cand5f gives 12/12;
+    - main5f gives 6/12, the same R1-R8 misses as HEAD.
+  - A BuyPathStatic pin plus mutation m9 guards it.
+- **VS-A21 The reviewers' gate row RW3 is a formula, not the service.** `vs_rw_world` RW3 computes the open point from a fixed `GateOpenRadius` of 12. It never runs GateDefenseService, so R2's vehicle lead does not show there: it gives the same numbers on cand and cand5f (trucks "0.80 at open").
+  - The R2 gate is measured by `vs2_gate`, which runs the tree's real GateDefenseService with a seated owner.
+  - Visible nose from the gate line when the barrier opens, main5f → cand5f:
+    - 4x4 family 7.50 → 9.70; Dispatch 8.35 → 10.45;
+    - Quad 9.09 → 9.55 (R2.1 at Roblox size: 9.38); Buggy 8.14 → 8.55 (R2.1: 8.38);
+    - Van 9.82 → 13.90 (R2.1, front row 0.84 further back: 12.90); Patrol 9.55 → 10.46; Escort 9.50 → 9.96.
+  - The kit's nose: 7.50-9.82 → 12.89-22.32 (R2.1: 13.14-21.32).
+  - That driver moves the car 0.25 studs per step, so it has no speed. At the cars' 40-68 studs/s, the gate loop's tick and replication use part of the margin. The margin is at least HEAD's for every car, and it is 5-12 studs larger for the collidable kit. Phone step 4 is the real check.
+
+### Corrections to the round-1 docs (false or stale claims the reviewers found)
+- **"The 14 main gate, the 16 inner/fort gates … clear every body": wrong.** There is no 14-stud gate: `BaseLayoutConfig.MainGateWidth` is defined but never read. The only base perimeter gate is StructureKitBuilder `GATE_CLEAR = 10`, measured at 10.00 on all 6 plots. The rest of that table was width arithmetic, not a driven run.
+- **"The visible body hits no world part at any pad": wrong in R1.** That check only covered CanCollide parts. The non-colliding Garage sign post and board stood inside the truck beds and the van's bumper on all 6 home pads. R2 moves the sign and checks every visible part: 0 hits.
+- **"Passenger head 0.43 under the roll-cage top": wrong** (see VS-A2).
+- **"In the 4x4 and trucks they sit on the real seats": wrong** for the trucks' PassengerSeat4 (see VS-A3).
+- **"The 4x4s and pickups are clear" on exit: withdrawn.** The margin was 0.04 and depended on the seat-weld offset. Exits now use VS-7.
+- **"The chase render is the phone camera": withdrawn.** Roblox's VehicleCamera zooms to 3× the car's bounding radius, so the camera starts 23-35 studs back instead of 15. The phone test says so.
+- **R1 said HEAD was 670bbf6.** This round was built on 5e021d8 and rebased onto 5f38c2e.
+
+### Remaining costs (option B keeps the old collision box)
+- **Overhang past the collision box.** The visible body reaches past the kit's collision box at each end, and 1.2-2.6 at the sides:
+
+  | Body | Past the box at each end (studs) |
+  |---|---|
+  | 4x4 family | 4.55 |
+  | Dispatch Car | 5.40 |
+  | Quad | 5.71 (R2: 5.29; R2.2: 7.39) |
+  | Buggy | 4.76 (R2: 4.34; R2.2: 6.44) |
+  | Van | 8.43 |
+  | Patrol | 8.34 |
+  | Escort | 7.79 |
+
+  Noses and tails pass into walls, players and other cars. Shots at the overhang miss.
+- **Tyres.** The visible tyres sit away from the physics wheels, so they float or sink on crests and kerbs. The front tyres of the LUV body float 0.40 on flat ground, as posed in Roblox's own model.
+- **Arm through the door.** A seated arm shows 0.42 through the 4x4's door, as in Roblox's own model.
+- **Arm across the buggy cage (R2.1; R2.2 see VS-A33).** On the Quad and the Recon Buggy the outer lower arm is 0.20 inside the roll cage's lower side tube and the upper arm shows 0.17 outside the body (R2: 0.43 and 0.42). See VS-A26. R2.2 (1.2x): the tube no longer passes into the arm; the forearm shows 0.18 outside the body side, inside the open cage.
+- **Van front row (R2.1).** The two front riders sit 0.84 behind the van's own seats (VS-14): their backs are 0.11-0.13 and heads 0.09 inside the seat backs (`body_in_dummy.py`); nothing shows through the outer skin.
+- **Driving through the own gate.** The visible nose sinks up to 1.7 into the raised PlayerSpawn block behind each plot's gate (0 on head). The world lane's move of that pad fixes it. At walls level 4-5, the van and trucks pass visibly through the sandbags beside the gate guns (non-colliding).
+- **Camera.** The default vehicle camera starts further back in the bigger cars; pinch to zoom in. It follows the driver seat, which sits 1.2-2.25 left of the centreline (the 1.2x Quad / Buggy: 1.62). Only a phone can show whether turning feels lopsided.
+- **Same size.** The Quad and the Recon Buggy look the same size; so do the 4x4, the Scout Car and the Dispatch Car.
+- **Wider than the gate (R2.2 scale, documented in R2.3).** The Quad / Recon Buggy body is 11.23 wide against the 10-stud gate: about 0.6 into each post when centred, and about 3 (reviewer: up to about 4.7) off-centre. Only the look is affected; see VS-A40.
+- **Label height (R2.3).** The nameplate floats 2.4-3.1 over a fitted roof and the HP bar 1.5 above it, so both are seen over the big bodies (VS-21). Right behind the van, or right against it at eye level, the roof can still hide them.
+- **Van and trucks' drive point (R2.3).** It still pushes at x = 0 while the centre of mass is 0.11-0.22 to the driver's side (6-20 % yaw couple at force saturation, the same as R2.2). See VS-A37.
+- **MG dress.** When the vehicle-weapon MG id is promoted, check the hooks lane's FitScale again: it sizes the gun to the 0.8-stud GunMount, which now stands on a much bigger body.
+
+### Round 2.1 (review round 2.1: three reviewers, five blocking issues)
+Built on cand5f (5f38c2e + the nine files); four files change again: VehicleService, VisualAssetService, VehicleConfig, VisualAssetConfig. Still nothing in the physics kit, WE_HalfLength / WE_HalfWidth, driving or the movers; no remote, no save change.
+
+#### What changed
+- **VS-13 Exit line of sight from inside the kit (review issue 1, Major).** R2 started the "clear line" ray at the seat. The Cargo Van's front seats sat 0.59 past the kit's nose (and the Dispatch Car's back seat 0.10 past its tail, which the review did not list). With that end touching a wall, the seat and the ray origin were inside the wall, a ray that starts inside a part does not hit it, and "in front" (or "behind") put the rider inside an enemy base. `_ExitSpot` now:
+  - refuses to move anyone when a world part overlaps a 0.5 probe box at the chassis centre (`AnchorProbe`);
+  - needs a clear line to the spot from the chassis centre, from straight above it at the rider's height (when that point is clear), and from the seat only when the chassis can see the seat's rider point;
+  - adds both side spots level with the chassis centre (z = 0) when the seat is more than HalfWidth off it, so a front-row rider at a wall still gets out at the side;
+  - keeps the stand box out of every other car's body (VS-A27);
+  - `_RoofSpot` (`RoofFallback`): when the seat's rider point is inside or behind a world part and no spot is clear, the rider stands on the kit's collidable top over the chassis centre (an empty standing box and a clear line straight up needed); otherwise Roblox's own jump-out, as before.
+- **VS-14 Every seat inside the kit (review issue 1).** `VisualAssetConfig.BodySeatKitInset` 0.25: `placeKitOnBody` keeps each moved seat's centre that far inside the kit's collidable half width / length (measured like WE_HalfWidth / WE_HalfLength, without the seats). Van front row z −5.27 → −4.43 (0.84 back); Dispatch Car back seat z 3.50 → 3.15. Every other seat was already inside and does not move.
+- **VS-15 Pad second ring (review issue 3, Major).** `aroundOffsets(fp, occupied)`: after the centre and the four spots at 2 × footRadius + OffsetStep, eight more (sides, ends, diagonals) at footRadius + the biggest parked radius + 2 + `Drive.Spawn.RingMargin` 0.5, only when that is further out. Used by the pad chooser, the plot fallback, the heli pads and PlayerFront. R2 sent a small car to another player's pad 569-739 studs away whenever a teammate's van or pickup stood within about 2.5 studs of your pad centre.
+- **VS-16 SPAWN clear of decor first (review issue 4).** Every land spot list is tried with a decor test first, then as in R2, so there are never fewer spawns. PlayerFront tries the player's heading, then a quarter turn, then as R2. The decor test: the spot's box (kit or fitted body, the bigger) may not overlap by more than `Tolerance` 0.25 any indexed part whose top stands more than `MinTop` 2.5 over the spot's ground. The index holds every anchored, visible (Transparency < 0.9), non-colliding BasePart outside the vehicles folder, not water, at most 80 long, on a 32-stud grid. It is built from one `Workspace:GetDescendants()` pass on the first SPAWN and rebuilt at most every `RefreshSeconds` 300, only when a SPAWN asks. Config `Drive.Spawn.Decor`.
+- **VS-17 Quad / Recon Buggy at Roblox size, seats on the floor (review issue 5).** `BodyScale` 0.95 → 1; both seat tops 0.45 over the VehicleSeat (y 2.634). Label 8.02 over the ground; WE_VisualHalfLength 8.37, WE_VisualHalfWidth 4.68; Drive prompt 19.71 (Quad) / 18.76 (Buggy); Ride 16.37.
+
+#### Assumptions (reversible)
+- **VS-A22 Inset 0.25, not the whole root box.** A seated root part is 1 deep, so an inset of 0.5 would keep all of it inside the kit. At 0.5 the van's front riders' heads go 0.32 into the seat backs (0.25: 0.09; `body_in_dummy.py` on trees with inset 0 / 0.25 / 0.5 / 0.75, `r21/results/inset_trials.txt`). At 0.25 the root can reach 0.25 past a kit face that touches a wall; VS-13 never starts a ray there, and Roblox's own jump-out (only when no spot is clear) starts with the root centre inside the kit.
+- **VS-A23 A generic decor index instead of tags.** Tagging needs edits in WorldKits, DesertFlora and MapSetup builders outside this lane, and misses anything added later. The index sees every name the reviewers listed (flag poles, palm trunks, reeds, fort lintels, Garage sign and post, shop tarps, well posts). Cost: one Workspace pass per 300 s at most, only on a SPAWN, server only. On the stand-in's L5 world it indexes 8,741 of 17,224 BaseParts in 1,119 grid cells (`r21/results/decor_count.txt`); the stand-in clock is virtual, so the pass time is not measured. Not measured on a Roblox server; phone step 12 checks for a hitch.
+- **VS-A24 Residual decor contact.** When none of the 13 spots x 2 headings is clear of decor, the spot is taken anyway rather than sending the car to a pad hundreds of studs away. In the reviewers' sampling (13,440 tries per car) that leaves 16 van and 16 Patrol Truck spawns with a visible non-colliding tall prop more than 0.5 deep (fort gate lintels at 2 forts, the Garage sign and post when standing at another player's pad) against 70-71 on main5f and 240-267 on R2; 0 for the 4x4, Quad and Buggy (main5f 30-43, R2 161-176). R2.3: the Quad / Buggy at 1.2x (R2.2) has a bigger box, so near garage pads a SPAWN falls back to the next spot about 0.8 % more often (reviewer's sampling). The decor counts above are R2.1's and were not re-sampled at 1.2x.
+- **VS-A25 Quad stability after the higher seats.** Centre-of-mass height (driver aboard, `vsr_phys_r2`): Quad main5f 1.46, R2 1.20, R2.1 1.33; Recon Buggy 1.41 / 1.18 / 1.27. Tip angle Quad 60.7° / 62.8° / 60.3°; full-seat static stability factor Quad 1.68 → 1.49 (R2 → R2.1), Buggy 1.87 → 1.70. The rollover suite's `t_stability` (rider 14, lift 1.3) gives the Quad SSF 1.48 on main5f and 1.63 on cand21 (tip 61° → 63°), the Buggy 1.59 → 1.77, both ok. Still at least as stable as the live game (main5f). Phone step 5 adds a full-stick corner with a passenger. Trials: `r21/results/quad_trials.txt`.
+- **VS-A26 The buggy's outer arm.** At 1.0 with the seats up, the outer lower arm is 0.20 inside the roll cage's lower side tube and the upper arm 0.17 outside the body; no seat height or scale in the stand-in removes it (0.95 + 0.45: head 0.16 into the cage; 1.0 + 0.30-0.40: feet 0.02-0.12 under the floor and the arm 0.25-0.30 in the tube). The real fix is a seated pose made for the game (arms in), which is not in this lane; it needs the owner's accept (phone_test "Known looks").
+- **VS-A27 Neighbour body = a box.** The other car's body is taken as its fitted (else kit) box from its wheel line to WE_VisualTop, so a spot beside an open pickup bed also counts as inside. Only models in the vehicles folder within `NeighbourRange` 60 are checked.
+- **VS-A28 Roof fallback look.** The kit's top is inside a Roblox-size body (van: kit top 2.29 over the chassis centre, body roof 7.45 over it), so a rider on the roof fallback stands inside the body until he walks off. It only happens when the seat is inside or behind a world part and every other spot is blocked; the R2.1 wall runs never needed it (396 + 990 rows moved to a side or an end).
+- **VS-A29 Old look pins superseded (like VS-A19).** `vs2_jeep_look` K3 / K4 hard-code the buggy at 0.95 with seat y 2.184 and the van's driver at z −5.267; they fail on cand21 by design. `r21/drv/vs21_jeep_look.luau` is the same driver with the R2.1 expectations (buggy 1.0 / y 2.634, seats clamped by BodySeatKitInset).
+
+#### Corrections to the round-2 docs
+- "Condition 2 ... the scales were chosen by" did not hold for the buggy at 0.95 (VS-A2 note above).
+- R2 said the second car on a pad lands 21.6 away and is seated; true only for a car of the same kind. A teammate's van or pickup near the pad centre sent every smaller car 569-739 studs away (review issue 3).
+- R2's exit "never through a wall" held only for seats inside the kit. The van's front row (0.59 past the nose) and the Dispatch Car's back seat (0.10 past the tail) could exit into a base (review issue 1; the Dispatch case is new in R2.1, `r21_world` WF rows).
+- R2's "0.00 inside the body" for exits was measured against the rider's own car only (review issue 2).
+
+### Round 2.2 (review round 2.2: two blocking issues)
+Built on cand21 (5f38c2e + the nine files, R2.1) as `b2/cand22`; the same nine files are in `b2/cand` (on 5e021d8) and merge onto 3b5ac28 (current main) with 0 conflicts (`r22/rebase3b`: only VisualAssetConfig differs, by the wc2 Notes). Three files change: VehicleService, VehicleConfig, VisualAssetConfig. Still nothing in the physics kit, WE_HalfLength / WE_HalfWidth, driving or the movers; no remote, no save change.
+
+#### What changed
+- **VS-18 Riders never land inside each other (review issue 1, Medium).** R2.1 excluded every player's character from the exit queries, so a spot where another player stood counted as empty; riders in the same row (same z), all riders in an alley, and the facing-side riders beside a neighbour car were sent to the same point (reviewer: 28 of 45 multi-rider cases on cand21). Now:
+  - `_ExitSpot(model, chassis, seat, hipAbove, riderChar)`: the standing-box query ignores only the leaving rider's character and this car (`opStand`), so a standing player's collidable parts block the spot. The anchor probes and every ray (ground ray, lines of sight) still ignore all characters: a player is not a wall, and a ground ray must never land on someone's head.
+  - `_ExitTaken(stand, riderChar)`: a spot is taken when the rider's root part (its own size; else 2 x 1) would come closer than `Drive.ExitSpot.RiderGap` 0.25 to another player's root part (any heading, separating-axis test on the ground plane, within StandHeight up or down), or to a spot handed out in the last `HoldSeconds` 1 (`_ExitHeld`). This does not depend on character parts being CanCollide / CanQuery on the server.
+  - `_PlaceExit` passes the character and records its spot (`_ExitHold`); a hold is ignored once its character is gone or seated again.
+  - `_RoofSpot(model, chassis, hipAbove, riderChar)`: the same rules (a rider still seated, or one already on the roof, blocks it). Its standing box now also sees this car's own collidable kit: on a tilted or overturned car the "top" is beside or under the kit, so the roof fallback is refused there (Roblox's own jump-out, as live) instead of placing the rider inside the kit (VS-A36).
+  - Behind and in front each get two more spots `EndSideStep` 2.5 to either side (after all the R2.1 spots of that ring), so a full van in an alley still gets everyone out (5 riders, 12 end spots).
+  - Config: `Drive.ExitSpot.RiderGap = 0.25`, `HoldSeconds = 1`, `EndSideStep = 2.5`.
+- **VS-19 Quad / Recon Buggy at 1.2x Roblox size, seats 0.25 over the VehicleSeat (review issue 2, Medium; supersedes VS-17).** At 1.0 no seat height fits a default-pose blocky R15: feet on the floor put the head in the roll cage's top rails (R2.1: head top 6.33 vs rail tops 6.03-6.85, at or above the rail in 7 of 12 slices). `BodyScale` 1 → 1.2, both seat tops y 2.634 → 2.434 (unscaled; 2.92 over the ground). WE_VisualHalfLength 10.05, WE_VisualHalfWidth 5.62, body 20.1 long x 11.2 wide x 8.43 high (4x4 17.6 x 8.2, van 26.2 x 11.6, pickup 26.6 x 10.6). Label about 9.4 over the ground; Drive prompt 21.39 (Quad) / 20.43 (Buggy); Ride 18.05; friendly gate opens with the chassis 19.25 / 18.25 from the gate.
+  - R2.3: the label is now 11.00 over the ground (VS-21). At 1.2x the body is 11.23 wide, wider than the 10-stud base gate (VS-A40). Near garage pads its bigger spawn box makes a SPAWN fall back to the next spot about 0.8 % more often (reviewer's sampling, VS-A41).
+
+#### Assumptions (reversible)
+- **VS-A30 Holding a spot for 1 s.** After a server `PivotTo` the owning client can still send a few position updates from before the move, so for a moment the server may see the rider back at the seat. The hold keeps his spot taken for `HoldSeconds` 1 so a rider leaving right after him cannot land on it. Cost: if the first rider walks off at once, the second one still uses the next spot for up to 1 s. The hold is not measured on Roblox (stand-in only).
+- **VS-A31 RiderGap 0.25, root parts only.** Humanoids keep arms and legs non-colliding, so root parts (torso) are what collide. With 0.5 the plain 4x4 kit (no body loaded: seats 1.4 apart along the car) sent the front passenger to the other side; 0.25 keeps him on his own side, 0.4 from the driver, never overlapping. Riders of the same car are placed facing the car's heading, so two of them 2 x 1 root parts side by side need 1.0 + 0.25 along the car.
+- **VS-A32 Size 1.2 for the buggy (measured, `r22/tools/buggy_metrics.py` + the reviewer's quad_rail / head_clear / clip_check / body_in_dummy / sit_gap on dumps of the real _Build + fit; stand-in, not Roblox).** Grid: scale 1.0-1.2 x seat y 2.184-2.634 (`r22/results/buggy_grid_lift0.txt`, `_lift05.txt`, the 1.15-1.2 refinement in the report). Wanted: feet not under the belly, head under the top rails in every slice for the default avatar and a 0.5 taller one, arm poke no worse than R2.1, the smallest scale that does it.
+
+  | Scale / seat y | Default head vs top rails | 0.5 taller head | Forearm outside the body | Thighs over the cushion |
+  |---|---|---|---|---|
+  | 1.0 / 2.634 (R2.1) | at or above in 6 of 11 slices, up to +0.31 | 10 of 11 above, up to +0.81 | 0.17 | 0.29 |
+  | 1.10 / 2.584 | under by 0.24 | 8 of 11 above, up to +0.26 | 0.05 | 0.27 |
+  | 1.15 / 2.484 | under by 0.51 | under by 0.01 | 0.39 | 0.17 |
+  | **1.2 / 2.434 (R2.2)** | **under by 0.63 (every slice)** | **under by 0.13** | **0.18** | **0.12** |
+
+  1.05-1.10 (the reviewer's range) leaves a 0.5 taller avatar's head above the rails. 1.2 is the top of the design clamp noted at `VehicleVisualScale` (0.85-1.2).
+- **VS-A33 The buggy's arm and shins (supersedes VS-A26).** At 1.2 / 2.434 the cage's side tube no longer passes into the arm (R2.1: 0.20 into the lower arm); the forearm shows 0.18 outside the body's side skin, inside the open cage (R2.1: upper arm 0.17), and the dash interior is 0.15 into the forearm. The shins are 0.45 into the footwell interior (R2.1: 0.37), hidden inside the body. A seated pose made for the game would still be the real fix; not this lane.
+- **VS-A34 Buggy stability at 1.2 (supersedes VS-A25 for the buggy).** `vsr_phys_r2`, driver aboard: Quad centre-of-mass height 1.39 (main5f 1.46, R2.1 1.33), tip angle toward the driver's side 58.5° (main5f 60.7°, R2.1 60.3°), because the rider sits 1.62 left of the centre (the body's own seat, scaled) where the live kit seat is central; full seats static stability factor 1.41 (main5f 1.25, R2.1 1.49). Recon Buggy: 1.31 (1.41 / 1.27), 61.9° (62.2° / 63.1°), 1.62 (1.40 / 1.70). The rollover suite's symmetric `t_stability`: Quad SSF 1.55 (main5f 1.48, R2.1 1.63), tip 62° (61° / 63°); Buggy 1.71 (1.59 / 1.77); all suites unchanged in pass counts. So: lower centre of mass than live, but a driver alone is 2.2° less stable toward his own side than live. Phone step 5 adds full-stick right-hand corners alone in the Quad.
+- **VS-A35 Stand-in drivers that leave riders standing.** The unchanged `vs2_world` F section keeps every earlier rider standing on his exit spot, so by the last car 30+ characters ring the one pad (a server has 6 players). R2.2 sees them: 20 (fit) / 14 (no fit) "exits on its own side" checks fail, 22 of 24 exits still land clear, and 2 exits plus 1 wreck exit find every spot taken and get Roblox's own jump-out. `r22/drv/vs22_world.luau` is the same driver where the earlier riders walk away and 1.1 s pass before the next exits: 0 fails on cand22 and cand21. R2.3: superseded by VS-A42, where the driver keeps at most 5 other players near the car, as on a 6-player server.
+
+- **VS-A36 Roof fallback only where the roof is clear of the kit.** The reviewers' boxed-in section (rv22_section B: tilted / rolled cars walled in on 4 sides with a beam at the seat) scored 64 rider placements inside the car's own kit on R2.1 (roll ±90°, 180°, pitch 30°: the roof fallback). The stand-in's box query cannot see car parts, so a copy of that driver with every car's collidable parts visible to the queries (as in Roblox, `r22/drv/mock_carparts.luau`) was used: R2.1 64 inside the kit, R2.2 0 (91 of 264 riders moved, the rest get Roblox's own jump-out, as live). With the unchanged mock R2.2 scores 66 (the 1.2x Quad's upside-down rows join the list), because that mock never sees the kit.
+
+#### Corrections to the round-2.1 docs
+- R2.1's phone_test step 1 said "In the Quad your head is under the roll cage"; the report said the head "touches the cage interior by 0.03". In fact the head top was level with or above the top rails in 7 of 12 side-view slices (up to +0.30), and a 0.5 taller avatar's head was clearly out of the cage (reviewer an/quad_rail.txt, crops/quad_head_rows.png). R2.1 also did not say the riders' thighs float 0.29 over the cushion.
+- R2.1's exit claims ("0.00 inside the body", "exits on its own side") were for one rider at a time. With several riders R2.1 put them inside each other (VS-18).
+
+### Round 2.3 (review round 2.3: two Medium findings, four Lows; rebased onto 5c8f57e)
+Built on `git archive 5c8f57e` as `r23/cand`. The nine R2.2 files were 3-way merged onto it with 0 conflicts (see the top of this entry). R2.3 then changes four files again (VehicleService, VehicleConfig, VisualAssetService, VisualAssetConfig) and adds two (VehicleCombatConfig, VehicleCombatClient), so eleven files change in all. As before, nothing changes in the physics kit, WE_HalfLength / WE_HalfWidth or the driving laws. There is no new remote and no save change.
+
+#### What changed
+- **VS-20 The drive point follows the riders sideways (review M1, Medium).** At 1.2x the Quad / Recon Buggy driver sits on the body's own seat at x −1.62. The centre of mass moved left with him, but `WE_DriveLV` still pushed at x = 0 (the rollover fix's `attach.Position = Vector3.new(0, com.Y, com.Z)`). That turned the car: 84 % of `WE_DriveAO` at force saturation (pushing a wall), 15 % braking and 7 % accelerating on the Quad, and 28 % at saturation on the Buggy.
+  - `VehicleConfig.Drive.Stability.DriveAtComXFamilies = { WheeledLight = true }`. For those families, `_Ballast` stores the kit's mass and X moment on `WE_DriveAttach` (`WE_KitMass`, `WE_KitMomentX`). `VehicleService._DriveAttachX(chassis, seats)` then sets `WE_DriveAttach.X` to the centre of mass of the kit plus a `RiderMass` (14) rider on every occupied seat, or on the driver seat when no seat is occupied.
+  - It runs at build, right after the rollover line, which stays as it was: main's BuyPathStatic pin on it still passes. It runs again on every seat's Occupant change, from the same listener that starts the exit move. Y and Z stay where the rollover fix puts them (the nominal driver).
+  - Other families get no attributes and are left alone. That covers the trucks and the van (WheeledTruck, see VS-A37) and the tracked, air and naval kits (rollover unit 5j).
+  - Results (`vsr_phys_r23`, YAWC rows; stand-in masses with Roblox's densities). The offset between the drive point and the centre of mass, R2.2 → R2.3:
+
+    | Car | Driver alone | Driver + passenger | Every seat |
+    |---|---|---|---|
+    | Quad | 0.33 (84 %) → 0 | 0.03 (7 %) → 0 | 0.03 → 0 |
+    | Recon Buggy | 0.23 (28 %) → 0 | 0.02 → 0 | 0.02 → 0 |
+    | 4x4 / Armed 4x4 | 0.12 (12 %) → 0 | 0.01 → 0 | 0.01 → 0 |
+    | Dispatch Car | 0.20 (33 %) → 0 | 0.03 → 0 | 0.16 (26 %) → 0 |
+
+    Main (live) for comparison: the Quad with a passenger is 0.23 (58 %), the Buggy 0.17 (20 %) and the Dispatch Car 0.18 (29 %). The live kit seats sit at the centre, so the passenger pulls the centre of mass sideways. After a full car empties, the drive point returns exactly to its build value (`empty_again`).
+  - In a real spawn, a Ride and the exits (`vs23_world` ATTLIVE rows, the world stand-in's own part masses): at spawn, with every rider aboard and after everyone got out, the drive point equals the centre of mass on all 6 WheeledLight cars (18 checks, 0 fails). The van and the trucks keep x = 0.
+  - Kits without a fitted body (the plain Part kit, a body that did not load): the kit is almost symmetric, so the drive point moves by at most about 0.01 (the plain Quad: x −0.01).
+  - Rollover suites: the unchanged `t_rollover_unit` fails exactly its 5e pin (`X == 0`) on cand, in plain and fit mode (41/42). The R2.3 copy `r23/drv/t_rollover_unit_*_r23.luau` checks X = the centre of mass with the rider and passes 42/42. It fails 41/42 on main, as it should. `t_rollover_server` 20/20, `t_rollover_client` 11/11 and `t_stability` are identical to R2.2 and main: the drive point does not move any mass, so the SSF, tip angle and centre-of-mass height do not change.
+- **VS-21 HP bar and nameplate seen over a tall body (review M2, Medium).** In R2.2 the over-vehicle HP bar was 0.75 under `WE_LabelY` (roof + 1), so it sat 0.08-0.10 over the roof. The car's own opaque roof hid it from a player on foot, and on the Cargo Van it hid the nameplate too. `AlwaysOnTop` stays off.
+  - `VisualAssetConfig.BodyLabelMargin = { Base = 1, PerStud = 0.4, EyeHeight = 4.5 }`. A fitted body's `WE_LabelY` = top + 1 + 0.4 × max(0, the top's height over the ground − 4.5), where the ground is the body's bottom, on the wheel line. The margin comes to 4x4 2.37, Quad 2.57, Armed 4x4 2.70 (over the gun), van 3.07 and pickups 3.06. Label heights are in VS-3.
+  - `VehicleCombatConfig.Ui.OverBar.LabelOffset = 1.5`: the bar's centre sits 1.5 over `WE_LabelY`, above the nameplate. `VehicleCombatClient.labelHeight` reads it. W2 / R2.2 used −0.75. A kit without a fitted body keeps its kit label, and its bar is 1.5 over that too.
+  - Proof (`r23/tools/vis_check.py`, the real fitted meshes as occluders, a stand-in not Roblox). The camera stands 3, 6, 10 or 15 studs outside the body on 12 bearings, at heights 4.5 (a standing avatar's eyes), 6.5 and 8.5 (the default third-person camera). A billboard counts as seen when at least half of its 21 sample points have a clear line. That gives 144 views per car and 1,296 over 9 cars:
+
+    | | HP bar seen | Nameplate seen | Bar and plate overlap on screen |
+    |---|---|---|---|
+    | main 5c8f57e (small squeezed bodies) | 1296 | 1296 | 72-90 per car |
+    | R2.2 rebased | 745 (van 22 / 144, 4x4 79) | 1111 (van 72) | 106-136 per car |
+    | **R2.3** | **1286** (van 138) | **1268** (van 128) | **0** |
+
+    From the third-person heights (6.5 and 8.5, 6-15 studs out), R2.3 sees both on every car in every view but one: the van's nameplate from right behind at 6.5. What is still missed is the van at eye height (4.5): right behind it (bearing 270), and standing right against it (3 studs out), where the roof half hides the plate from every side. That is the bar in 5 of those 48 views and the plate in 14. From 6.5, only right behind at 3 studs. Renders: `r23/renders/hpbar_views.png` (main | R2.2 | R2.3; beside at third person, beside at eye level, rear three-quarter).
+  - The bar is not pulled toward the camera (`StudsOffset` Z). That was tried and rejected, see VS-A39.
+- **Lows.**
+  - VS-A40: the Quad / Buggy body is wider than the base gate.
+  - One line each in VS-19 and VS-A24: the spawn fallback.
+  - VS-A42 (supersedes VS-A35's numbers): the capped `vs23_world` driver.
+  - `phone_test.md` is restructured: a 5-minute core block first, the friend-only cases in an optional Part 2.
+
+#### Assumptions (reversible)
+- **VS-A37 A drive point that follows the riders, WheeledLight only.**
+  - A static com.X taken with the driver alone, as the review's option (a) proposed, would move the error to the two-rider case. The Quad goes from 0.03 to 0.30 with a passenger, because the passenger's seat mirrors the driver's. Updating on every Occupant change keeps it at 0 for every seat case.
+  - The Occupant listener already exists (the exit hook), so this adds one attribute write per sit or stand. There is no per-frame work. The server writes the Attachment, and the owning client's physics picks it up through replication. Not checked on a device.
+  - The review's option (b), capping the driver seat's |x|, was measured on a trial tree with both buggy seats at |x| 1.2 (26 % inward). The Quad was still at 63 % saturation / 11 % braking and the Buggy at 21 %. The rider would sit 0.42 inside the body's seat, and head and arm clearance would need a new study. So it was not taken.
+  - The van and trucks (WheeledTruck: driver alone 0.22 / 0.15 / 0.11 → 20 % / 11 % / 6 %, the same as R2.2) are not in the list, because the brief was about WheeledLight. Adding `WheeledTruck = true` to `DriveAtComXFamilies` would treat them the same way, but it is not measured.
+- **VS-A38 Masses in the world stand-in.** The world stand-in's `GetMass` is its own, not Roblox's densities. `vsr` uses Roblox's. So the ATTLIVE drive points (Quad −1.03 with the driver alone) differ from `vsr`'s (−0.33). Each is checked against the centre of mass computed with the same masses.
+- **VS-A39 A taller label instead of a pull toward the camera.** Pulling both billboards toward the camera by the body's half width was tried. It saw about as much (bar 788-829 of 864 in the trial set), but it enlarges a stud-sized bar close to the camera to 355-419 px wide on a 956-px-wide phone screen, against 124-166 without the pull. So it was dropped.
+  - Cost of the taller label: the nameplate floats 2.4-3.1 studs over the roof and the bar 1.5 higher, up to 14.2 studs over the ground on the van (the bar's centre). On main the bar is 0.7-3.2 over its small bodies.
+  - The bar sits 1.5 over the plate's centre. The plate is 0.4 studs + 20 px high, so they never touch out to about 35 studs (the plate's MaxDistance is 36).
+  - Phone step 3 checks the bar and the name in Part 1, and step 8 does so with a friend in Part 2.
+- **VS-A40 The Quad / Recon Buggy is wider than the base gate (review Low).**
+  - At 1.2x the body is 11.23 wide (`WE_VisualHalfWidth` 5.62) and the perimeter gate is 10 (StructureKitBuilder `GATE_CLEAR`). Driven through the middle, each side of the body passes about 0.6 into a gate post.
+  - Off-centre it goes further in. Driving straight with the kit (`WE_HalfWidth` 2.61, the 1.2x track) brushing a post, the body's side on that post is about 3.0 into it (5 − 2.61 + 5.62 − 5). The reviewer measured up to about 4.7 on angled approaches.
+  - The posts are not hit by the body (it does not collide) and the kit fits, so this is a look, not a block. The gate step in `phone_test.md` (step 9) says so.
+- **VS-A41 Spawn fallback near garage pads (review Low).** At 1.2x, the Quad's bigger spawn box makes a SPAWN fall back to the next pad or ring spot about 0.8 % more often near garage pads (reviewer's sampling). It is still seated on a pad; the fallback order is VS-15.
+- **VS-A42 The capped world driver (supersedes VS-A35's numbers).** `r23/drv/vs23_world.luau` is `vs2_world` unchanged except for one rule: before each spawn and before the exits, at most 5 other players (seated or on foot) stay within 80 studs, like a 6-player server. The oldest ones on foot walk 400 studs away (55 moves over the run). The driver also prints ATTLIVE (VS-20).
+  - Result: 4 "exits on its own side" fails on R2.3 (Quad, Van, Patrol and Escort drivers, whose own side had a bystander on it). R2.2 rebased gives the same 4, and no-fit gives 2. All 24 exits are clear, 0 in a body, and 24 of 24 Rides are OK.
+  - Main (live) fails 27: there is no Ride and no exit spot there.
+  - The unchanged `vs2_world` (30+ bystanders) and `vs22_world` (everyone walks away) are also run.
+
+- **VS-A43 Old label and bar pins superseded (like VS-A19 / VS-A29).** These drivers hard-code R2.2's flat 1-stud label or the bar under the nameplate, so they fail on R2.3 by design, and only in those checks:
+  - `vs22_jeep_look` K4 label: 9 fails, 191/200 (R2.2 200/200). The same driver with the R2.3 margin, `r23/drv/vs23_jeep_look.luau`, gives 200/200; R2.2 rebased 191/200, main 151/200.
+  - `vs_jeep_look` 176/191, `vs2_jeep_look` 186/200 and `vs21_jeep_look` 187/200: their only new fails are the K4 label rows.
+  - `vs_look_unit` U11 jeep label: 57/65 (R2.2 58/65).
+  - `t_vcc_client` C3 ("just under the nameplate"): 41/42. The copy `r23/drv/t_vcc_client_*_r23.luau` expects WE_LabelY + 1.5 and gives 42/42; main gives 41/42 on the copy.
+
+#### Corrections to the round-2.2 docs
+- VS-A15 still carried R2 / R2.1 numbers. At R2.2's 1.2x the Quad's drive point was 0.33 off the centre of mass (84 % at saturation, 15 % braking), not "67-70 %". The Buggy was at 28 % (review M1). R2.3 fixes it (VS-20).
+- VS-1, VS-3, VS-6, VS-8 and VS-10 listed R2 / R2.1 buggy values. They now carry the R2.2 values, and VS-3 carries R2.3's.
+- R2.2's phone step 11 said "the small name and health bar sit just above the roof". On the fitted bodies the roof hid the bar from a player on foot, and on the van it hid the name too (review M2). R2.3 moves both up (VS-21).
+- R2.2's `phone_test.md` did not mention that the 1.2x Quad is wider than the 10-stud gate (VS-A40).
+
+### Follow-up (not this lane): option C, the physics kit sized to the body
+Unchanged from round 1 (see vscale/build/assumptions.md): build the kit per axis from the body, with wheels at the body's tyres, the chassis at the body's footprint, and seats from `BodySeats`. That removes the overhang, floating tyres, shots through the nose and exits through the kit. It changes driving, so it needs the rollover, drive and terrain suites and a phone drive test.
+
+
+## R-RIG: animated Roblox soldier figures and an army that grows on screen (2026-09-28, spec design3/rig v3, owner accepted every default)
+Built on main 2f71347 (spec read at 3b5ac28). Parts A and B ship together: squadfair landed as 7b89b6c, so the SquadOrdersService escort count goes in now. Stand-in numbers are from the headless stand-in, not Roblox and not a phone.
+
+- **R-RIG-1** The Roblox "Soldier" 187790284 (creator Roblox, public domain) loads by id with third-party loading off. This is from the economy API only; the owner's `WE_LIVE` line (docs/ASSET_SHORTLIST.md §5c, now 20 ids) confirms it on a live server. Revert: `RigConfig.Enabled = false`.
+- **R-RIG-2** Animations 182393478, 180435571, 180426354 and 183817498 are Roblox's (User 1) and play in shaunie6's experience. The owner's `WE_RIG` console check confirms this.
+- **R-RIG-3** Every kind uses the same Soldier body (#8 default), coloured from its kit. Squads wear the Soldier's camo cap and every other kind wears its kit helmet.
+- **R-RIG-4** Shirt / Pants draw only on a Humanoid character, so per-row third-party bodies would lose their clothes on this rig. #9's sleeve text cannot appear, so #9 is moot.
+- **R-RIG-5** Phone budget: no phone holds more figure parts than main's 940 (48 squad units x 9 + 22 NPCs x 16 + 12 gate guards x 13). R-RIG leads cost 760, and the 180 freed parts pay for at most 22 escorts per phone (760 + 22 x 8 = 936). This was re-measured on 2f71347: the per-figure numbers and the population (MaxActiveNPCs 18 + SpecialOverCap 4, GuardsPerGate 2, 8 squad units, no FrontConfig) are unchanged since 3b5ac28. The army lane re-derives `Escort.MaxPerClient` when the Front garrison ships.
+- **R-RIG-6** Only each client plays animation. The nearest 24 figures animate, own squad first.
+- **R-RIG-7** Base statues keep a baked hold pose and never load a track.
+- **R-RIG-8** Hit size: the rig Torso is a 1.45-deep queryable box. Side-on hit area equals today's (0 to +1.7 %), front is 0 % and the head is unchanged (stand-in geometry, floor-clipped; re-measured on 2f71347, identical to v3). The kit rifle tip that stuck out 1.2 studs ahead of the chest is no longer a side target. Owner decision R4.
+- **R-RIG-9** `RootJoint.Part0` is the host root, which is outside the rig model. If an Animator ignores such a joint on a device, only the torso twist is lost. Needs a Studio check.
+- **R-RIG-10** A Barracks-0 base counts as squads of 4 for escorts.
+- **R-RIG-11** Escort counts refresh on the next `SyncArmy`, not at the Barracks purchase itself.
+- **R-RIG-12** Live Max Players = 6 (public games API, re-checked 2026-09-27 23:59 UTC, before R-RIG-B). The escort headroom is 180 parts at any player count, because a squad unit costs 9 parts in both builds. Absolute totals grow with players, as they do today.
+- **R-RIG-13** Squad units and gate guards send no shot event, so they never play Aim. This still holds after squadfair 7b89b6c: unit shots go through ApplyUnitHit with no WeaponFx.
+- **R-RIG-14** Closed: the beret texture 28035854 is camouflage only, with no badge or flag.
+- **R-RIG-15** The growing army needs the Roblox Soldier to load. With the kill switch off, or after a permanent load failure, nobody gets escorts and every soldier keeps its Part kit.
+- **R-RIG-16** A figure that spawns while the Soldier file is still loading or waiting for a retry gets the rig when the file arrives (late attach, statues included). A permanent failure leaves everybody on the Part kit, so there is never a mixed look.
+- **R-RIG-17** Host Humanoid: `RequiresNeck = false` and `RigType` untouched. It is unverified whether a Humanoid measures hip height from legs inside the `WE_Rig` sub-model; spec §10 item 2 decides. Fallback: `RigConfig.Host.RigType = "R15"`.
+- **R-RIG-18** Escorts stand ahead of their unit. They are hidden while they would stand between the camera and the player or cover more than 25 % of the screen height. The guard runs at 4 Hz, so a fast camera swing can show one for up to 0.25 s.
+- **R-RIG-19** Only the animated figures (up to 24), the nearest 8 statues and the escorts wear the Roblox body. Everything else shows blocks, with the rifle held forward (a local Right Shoulder turn).
+- **R-RIG-20** Escorts are rigid offsets from their unit, so when a unit turns, its file swings with it.
+- **R-RIG-21** Escorts appear only while `OrdersConfig.FollowSlots` is non-empty; the old centre grid would put them in front of the player.
+- **R-RIG-22** Kit Head / Helmet / Rifle / Pack live inside `WE_Rig`, so game code must look them up recursively (BuyPathStatic R-RIG-H; it passes on 2f71347, including squadfair, aircraft weapons and bank/gate code). Three combat test drivers did not (cc1 and both gate drivers) and are run with recursive lookups. `torsoOf` in CombatService, AirWeaponService and AimTargets looks up `Torso` non-recursively and falls back to HumanoidRootPart, as it does on main for the Part kit, which has no part named `Torso`.
+- **R-RIG-23 (build, YA-11)** The Training Yard's 3 shooters per plot (Infantry, HeavyInfantry, Guard; TrainingYardBuilder -> MapSetup `makeSoldierKit` with the npc type) take the statue path. Measured on 2f71347: 18 of 18 rigged, `WE_RigStatic`, root anchored, 168 = 168 parts. The yard's `owner_text_with_rrig` now applies, and its "block soldiers until the soldier update" note is done.
+- **R-RIG-24 (build, squadfair)** Squad line of sight and hit chance (7b89b6c) do not change with the rig. The unit LOS ray excludes the unit's own model, the squads folder, NPC bodies, the target and the owner, and rig parts are CanCollide false under `NpcLosRespectCanCollide = true`. Measured: the 10 squad-lane drivers (sfv2 ... s33) give the same pass counts on main and candidate, both plain and with rigs really built (15-189 rigs per driver). The only different line is the order of two hit buckets (A0/B1/B2, same 250 total), which the rig hook also causes on main.
+- **R-RIG-25 (build)** Statues on 2f71347: 60, not the spec's 72 (the Training Yard lane, 60d5c73, dropped the 2 worker statues per plot; its 3 shooters per plot, 18 in all, are statues). Numbers: 86 figures rigged in the census (60 statues, 16 NPCs, 8 squad, 2 guards). Statue parts 546 = 546; statue instances 726 -> 1,692. Workspace instances at boot 11,412 -> 12,378. World parts 5,151 = 5,151. LoadAsset calls at UPPER 54 -> 52, BOOT 16 -> 15 ids, capRefused 0.
+- **R-RIG-26 (build, docs)** docs/ASSET_LICENSES.md: rows for 187790284 and the four animations are added to §3.0. The three third-party character ids no config row uses any more (9104381136, 100212659702941; 16134469614 is now only `GateDefense.Guard`) have their "Used by" cells updated, and their rows stay. This is a reversible doc edit.
+## 2026-09-27 — The owner's second check (WE_CHECK2, live place v75), his P4 first check and his answers (call 12 = A): 2 picks not used, 7 held with named blockers, the recon plane and the APC promoted (wc3, on the vscale lane R2.1)
+
+All reversible. Tested in the headless stand-in only (models rebuilt from the owner's WE_CHECK2 lines, not Roblox). Owner
+page: docs/ASSET_WIRING.md §1, §4 (calls 2, 4, 12), §5 and §8. Evidence and scratch: wc3/ (parsed.json, brand/, runs/).
+
+- **AW-C1 Two variants; this is the vscale one.** It sits on the vscale lane (R2.1: `BodyScale` / `BodySeats`, seats kept
+  inside the kit) and promotes the recon plane and the APC. The records-only variant (HEAD 3b5ac28) keeps both on HOLD,
+  because without that lane the body is stretched to the kit's length and the kit seats stay where they are (the pilot
+  would sit on the plane, the APC driver on its roof).
+- **AW-C2 Fuel tanker 5318635087 and rescue / medevac heli 11357157285 are REJECT.** The second check names every part:
+  55 x "Part" (tanker); 49 x "Part" + 29 x "Wedge" (heli). OmitParts works by name, so no trim keeps 40 or fewer
+  parts and the body. `reject 5318635087 11357157285 --we-check` (the first check's lines) removed each PendingAssetId;
+  ModelAssetId stays 0. Loads do not change (a PendingAssetId is never loaded).
+- **AW-C3 The owner's answers are recorded, not assumed:** `OWNER_YES` in the tool (truck call 2, recon plane call 4, jet
+  "look OK" + call 12 = A). Promote takes them in place of `--owner-ok`; the status table stops asking. A yes does not
+  lift a HOLD.
+- **AW-C4 Jet 3553891209 held on its paint (owner decision: keep our jet, or pick another).** Its texture 3553780601 is
+  another artist's signed three-view drawing of a real aircraft concept, with the concept's name written on it (read from
+  Roblox's own thumbnail of the texture; evidence in the lane's scratch, wc3/brand). CLAUDE.md: no real-world vehicle
+  names, never copy other people's assets. The repo names neither the concept nor the artist. Call 12 = A no longer
+  blocks it. Reversible: delete its HOLD line and pin, then promote.
+- **AW-C5 Truck 8546141386 held, not usable as it is (owner decision: keep our truck, or pick another).** Its texture
+  7853120648 (Roblox's own 700 px thumbnail) is a photo-real atlas with stencilled military unit codes on both bumpers and
+  a shield emblem with an animal on the cab door: military markings, which CLAUDE.md keeps out, and a sign the paint was
+  lifted. Its mesh 7853120516 and that texture were uploaded by the user Karcist (Roblox asset details, 2021-10-28), not by
+  the seller LouBrawlerStars (model 2022-01-15), with no credit. Neither answer uses this model; it stays HOLD (not
+  REJECT) only until the owner answers, then `wire-asset-ids.py reject 8546141386`. The recon plane (20 plain
+  Parts, no mesh, no texture) and the APC (meshes 9076145980 / 9076154942 / 9076175497, uploaded by CorzCringe minutes
+  before the model) are the sellers' own work. The truck's cab-forward body would also put the driver behind the cab.
+- **AW-C6 Facing from the second check, not the store picture, where they differ.** Recon plane: propeller blade and ball
+  nose at -X, fin and tail plane at +X: Yaw -90 (as the hint). APC: white lights and the grey plate at -Z, red lights at
+  +Z: Yaw 0 (as the hint). Light helicopter 2474869838: its ThumbnailCamera puts the tail at +Z, so the nose is at -Z and
+  YAW_HINT becomes 0 (was 90). Gunboat: its gun is at +X and its radio mast at -X, so the bow may be +X (the hint says
+  -90): a look before any promote.
+- **AW-C7 Flatbed 8455894899 held (a longer kit).** ChildName "FlatBed Truck" plus 9 OmitParts names (FrontForceField,
+  VehicleSeatBack, ExhaustPipe, 4 brake lights, 2 headlights, 2 bumpers: 11 parts) keeps exactly 40 through the real
+  loader in the stand-in (KEPT 40; one name fewer: REFUSED 41). At full size its cab sits 7.8 studs ahead of the body
+  centre, past the 10.45-stud kit's nose, where R2.1 keeps no seat (BodySeatKitInset): the driver would sit behind the
+  cab. Its grille decal 58264306 (Roblox's "Car Grill2", Roblox R logo) goes with StripDecals.
+- **AW-C8 Gunboat 15838664806 held (scale floor).** The 2,048-stud part is MainHull, the boat itself (about 146x Roblox
+  size); leaving it out leaves no boat, and the fit clamps at x0.05 (still about 100 studs). Needs a code change first.
+- **AW-C9 Dock texture 319943163 is plain nailed wood** ("Wood_Nailed", no logo). The Dock stays recorded only.
+- **AW-C10 Batch P4 first check is on record (`STUDIO_DONE`): 1, 28, 1 and 14 parts; each held on the P4 second check.**
+  The press (28 parts, 3 smoke effects) cannot map onto the 3 kit parts a business dress may replace (model part i
+  replaces kit role i), so its part names decide: one ChildName piece, or new code. The machine gun (one 4.5-long part)
+  and the tank turret (one part, 3.6 x 13.6 x 5.4: probably modelled standing up) need their barrel direction. The
+  dropper needs its neon trim and pose, then the droppers lane. `wc3/owner/WeCheck2_P4.luau` is `tools/WeCheck2.luau`
+  with only the 4 P4 ids (stand-in fixtures: 23 checks, 0 FAIL); the repo copy is unchanged.
+- **AW-C11 Load budget (docs §8).** Recon plane + APC: 25 -> 27 healthy (cap 56), 8 -> 10 first loads after boot (reserve 24); census_fail:
+  LATER 49 -> 51 of 64 attempts, capRefused 0 (re-measured on 2f71347, wc3 r4). Everything still held promoted as well (P4 four, wall, jet, truck, heli,
+  gunboat, flatbed; the press set up as promote needs): tool 37 of 56 and 19 of 24; census_all 33 healthy; census_fail
+  BOOT 41, PLOT 46, LATER 58, capRefused 0 through LATER. With the tanker and the heli out, AW-W12's "free a slot before
+  the last batch" is no longer needed. Stand-in census and the tool's count, not measured in Roblox.
+- **AW-C12 Page counts from `status --json`:** waiting 49, not used 56 (3 registry rows moved: FuelTanker, RescueHeli,
+  MedevacHeli).
+- **AW-C13 BuyPathStatic:** the wc2 pins on the jet's call-12 HOLD line and the eight `"second check` HOLD lines are gone
+  (their texts changed); the wc3 block pins the new texts, the rejects, OWNER_YES, the P4 check and the docs, the promoted refs, the drawn-size fit, and the InfantryCarrier needle the promote tool wrote now matches the multi-line
+  ref. Every new pin fails on the base (vsbase: 41 of 41).
+- **AW-C14 Recon plane at Roblox size (BodyScale 1), pilot seat by eye.** 18 long with a 25.3 wing span; no seat in the
+  model, so DriverSeat = (-1, 1.2, 0), 1.4 behind the wing's trailing edge. The fuselage is a solid round Part (3.88
+  across, top 3.89 over the lowest point) with no cockpit opening, so the pilot sits sunk in it and only the top of the
+  head clears it: seated head top 4.9 (seat top + 3.7, VS-A5), 1.01 over the fuselage top (stand-in VSEAT: seat top
+  2.05, head top 5.75, fuselage top 4.74 in the world); the shoulders, about 1.3 under the head top, stay about 0.2-0.4
+  under it. Fix round 2: the owner's page said "head and shoulders show in the open cockpit"; it now says the top of
+  the head shows over the plane's body. (By the same arithmetic a seat at y 1.8 would put the shoulders about 0.3 over
+  it; not done: it needs a new seat dump and spawn check.) The model has no wheels: the kit's gear and wheels stay
+  visible (KeepVisible), and it stands on them 0.85 over the ground (stand-in).
+  Spawn (stand-in, wc3_pads_drawn, plots 1-6): the runway spot keeps the drawn body clear of every solid, and a second
+  plane spawns clear of the first. The vscale lane's own pads driver measures Size boxes, so a round Part reads as
+  sunk into the ground there (17.76, the fuselage length); that is the driver, not the game.
+- **AW-C15 Drawn-size fit (VisualAssetService `drawnSize`).** Roblox draws a Part Cylinder along X with diameter
+  min(Y, Z) and a Ball with diameter min(X, Y, Z); fitBodyToKit and placeKitOnBody (bottom, roof, half length / width)
+  use that box now. The plane's fuselage is a Cylinder 3.88 round in an 11.26-tall box: with Size the plane floated
+  about 3.7 studs. The kit-side measures (seat inset box, roof parts, label) are unchanged. The eight live Fit = Kit
+  vehicles (Roblox's four car packs, real store geometry from the vscale render cache: no uneven round Part) give
+  identical fit metrics and part dumps before and after (wc3/runs/live_*). Reversible: one helper, three call sites.
+- **AW-C16 APC at 0.55 of Roblox size, every seat under the real roof by eye.** At 1.0 it is 50 x 20 (about six kit
+  lengths); 0.55 gives 27.5 x 11 (antennas to 10.4), about the live Escort Truck's size (26.6 x 10.6). The hull is one
+  mesh with no seats. Its box top (12.43 unscaled, 6.84 at 0.55) is the commander's cupola, not the roof: in the owner's
+  WE_CHECK2 lines the cupola's blue band (P5) starts at 10.12, the antenna Cylinders (P11/P12) at 10.88 and the rear
+  door (P2) ends at 11.07, and Roblox's thumbnails show a flat roof with the band standing on it. The seats are set
+  against the lowest of these, 10.12 (5.57 at 0.55). Seats at x +-2.5, y 2.2, z -4 / 2 / 6 (unscaled): seat top 1.21,
+  seated head (seat top + 3.7, VS-A5) 4.91, 0.66 under that roof; a taller avatar (about 0.5 higher, VS-A5) still
+  clears it by 0.16; the feet (seat top - 1.0) end 0.21 over the ground, inside the closed hull (its lowest point is on
+  the ground). Fix round 1: the first cut (y 4.5) was measured against the box top and put every head 0.1-0.6 through
+  the roof. The real mesh is not in the stand-in: phone check. The four WheeledAPC variants share it. Its 4 small Neon
+  lights stay (whole-model loads keep materials; only pack pieces lose Neon); the hidden kit had 6, so drawn Neon per
+  APC goes 6 -> 4.
+- **AW-C17 The promote journal follows the multi-line refs.** docs/asset_wiring.json holds the text now in the config and
+  BuyPathStatic, so `demote 4954987035 9076240315` still reverts them (without this it refuses: "the promoted text
+  changed since"). A demote then fails only the six wc3 promote pins (ReconPlane + the five APC refs): drop them, and
+  put the HOLD lines back, in the same commit.
+- **AW-C18 The APC overhangs its 20 x 20 garage pad by 3.75** at each end (27.5 long), like the live Escort Truck (3.29).
+  Its body clears every solid on plots 1-6 and a second APC spawns clear of the first (stand-in, wc3_pads_drawn).
+- **AW-C19 Frame rate with 3 APCs needs 3 players.** VehicleService keeps one car out per player (a new spawn destroys
+  the old one), so the owner cannot park 3 alone. His page asks for it only if 2 friends own an APC-family car; otherwise
+  it stays a real-device check for the lead (3 clients on a mid-range Android or at Graphics Quality 3).
+- **AW-C20 Landed on the vscale lane as committed (R2.3, 2f71347), not R2.1 (wc3 r4, 2026-09-28).** The variant-vs patch
+  was 3-way merged onto 2f71347 (base: the tree it was built on); only ASSUMPTIONS.md conflicted (both appended). Main's
+  R2.3 vehicle work, the aircraft weapon rows and the town / business rows are unchanged. Re-checked with R2.3 in place
+  (headless stand-in, not Roblox): every body part and seat is identical to wc3 fix 2 (APC seated head 4.91, 0.66 under
+  the lowest roof evidence 5.57; plane head top 1.01 over the fuselage). Only the label moved: R2.3's BodyLabelMargin puts
+  the nameplate 3.38 over the APC's top (antenna tips included) and 2.41 over the plane's fin (fix 2: 1.0), with the HP
+  bar 1.5 over it. The APC family's drive point stays at x = 0: with Roblox's mass rules it is 0.06-0.09 off the centre of
+  mass with the driver alone (a yaw couple of 2-6 % at force saturation, 0-1 % braking), the Escort Truck's level and under
+  the Cargo Van's 20 % that R2.3 left as is, so `DriveAtComXFamilies` gets no WheeledAPC line. Exits: the multi-rider
+  driver (open ground, alley, walls, nose on a wall, a van alongside; together / 0.3 s / 2 s apart) moves all 651 riders
+  clear, with no overlaps, same as main. At the home pad every APC-family rider lands on clear ground; the driver of 3
+  of the 5 lands behind it, not on his own side, because earlier riders stand there (the R2.3 lane's known "own side"
+  class; main's Part-kit APCs show 4 of the same class). The recon plane is Air mode, where the game places no exit
+  (`Drive.ExitSpot.Modes = { Car = true }`), so getting out is Roblox's own jump-out, as with our plane kit on main; the
+  model is non-colliding: phone check. Load budget re-measured on 2f71347: tool 25 -> 27 healthy, 8 -> 10 after boot;
+  census_all 54 -> 56 attempts of 64, capRefused 0; census_fail LATER 49 -> 51, capRefused 0 (with every held pick also
+  promoted: 58, capRefused 0). The jet 3553891209 and the truck 8546141386 stay HOLD (owner decisions).

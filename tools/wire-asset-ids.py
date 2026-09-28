@@ -26,7 +26,8 @@ Check on record: STUDIO_DONE (below the registry) holds the part counts of the o
 Cloud Luau Execution in the live place, version 75), so status / render stop asking for it. HOLD names what still blocks a
 pick the check did not settle (a second check, a code fix, an owner call): promote refuses an id on HOLD until its HOLD
 line is deleted, in the same commit as the promote. YAW_HINT is the vehicle yaw read from the store pictures (wc2/veh);
-promote uses it when --yaw is not given. Promote still reads the WE_CHECK lines themselves (--we-check FILE).
+promote uses it when --yaw is not given. Promote still reads the WE_CHECK lines themselves (--we-check FILE). OWNER_YES
+holds the owner's yes answers (2026-09-27): promote takes them in place of --owner-ok.
 Global options: --root DIR (default: this repo), --cache DIR (default ~/.cache/war-empire/wire-asset-ids),
                 --now ISO-UTC (tests), --max-age SECONDS (ownership cache age accepted by promote, default 900).
 
@@ -177,7 +178,7 @@ REGISTRY_ROWS = [
     ('TroopTransport', 'VEHICLES', 'PENDING-GET', 8546141386, 8546141386, 'OWNER STUDIO', 'LATER', 'P3', ['Vehicles.TroopTransport'], [], '', '9,937-tri single PBR mesh; reads as a US M35-series 6x6 (unnamed); front/doors unseen; realistic style vs low-poly world'),
     ('RecoveryTruck', 'VEHICLES', 'PENDING-GET', 8546141386, 8546141386, 'OWNER STUDIO', 'LATER', 'P3', ['Vehicles.RecoveryTruck'], [], '', '9,937-tri single PBR mesh; reads as a US M35-series 6x6 (unnamed); front/doors unseen; realistic style vs low-poly world'),
     ('AntiAirTruck', 'VEHICLES', 'PENDING-GET', 8546141386, 8546141386, 'OWNER STUDIO', 'LATER', 'P3', ['Vehicles.AntiAirTruck'], [], '', '9,937-tri single PBR mesh; reads as a US M35-series 6x6 (unnamed); front/doors unseen; realistic style vs low-poly world'),
-    ('FuelTanker', 'VEHICLES', 'PENDING-GET', 5318635087, 5318635087, 'STUDIO', 'LATER', 'P3', ['Vehicles.FuelTanker'], [], '', 'toy-like red/silver tanker, 3,432 tris, Part-built (count unverified)'),
+    ('FuelTanker', 'VEHICLES', 'REJECT', 5318635087, 5318635087, '', '-', '', ['Vehicles.FuelTanker'], [], '', 'owner check (Open Cloud, v75): 55 parts (cap 40); second check: all 55 are named "Part", so OmitParts cannot trim it'),
     ('EngineeringTruck', 'VEHICLES', 'REJECT', 32520888, 32520888, '', '-', '', [], [], '', 'cannot be checked: the only picture shows the inside of a block'),
     ('FlatbedHauler', 'VEHICLES', 'PENDING-GET', 8455894899, 8455894899, 'STUDIO', 'LATER', 'P3', ['Vehicles.FlatbedHauler'], [], '', 'low-poly flatbed, 1,040 tris; 1 decal unseen'),
     ('RadarTruck', 'VEHICLES', 'REJECT', 31538715, 31538715, '', '-', '', ['Vehicles.RadarTruck'], [], '', 'owner check (Open Cloud, v75): 93 parts (cap 40)'),
@@ -218,8 +219,8 @@ REGISTRY_ROWS = [
     ('EscortHeli', 'VEHICLES', 'REJECT', 14652689347, 14652689347, '', '-', '', [], [], '', 'copy of a game-franchise gunship (Half-Life 2)'),
     ('NightAttackHeli', 'VEHICLES', 'REJECT', 14652689347, 14652689347, '', '-', '', [], [], '', 'copy of a game-franchise gunship (Half-Life 2)'),
     ('PremiumStormwing', 'VEHICLES', 'REJECT', 14652689347, 14652689347, '', '-', '', [], [], '', 'copy of a game-franchise gunship (Half-Life 2)'),
-    ('RescueHeli', 'VEHICLES', 'PENDING-GET', 11357157285, 11357157285, 'STUDIO', 'LATER', 'P3', ['Vehicles.RescueHeli'], [], '', 'toy heli, 1,214 tris'),
-    ('MedevacHeli', 'VEHICLES', 'PENDING-GET', 11357398877, 11357157285, 'STUDIO', 'LATER', 'P3', ['Vehicles.MedevacHeli'], [], '', 'same model as the Rescue Heli pick 11357157285 (one load for both)'),
+    ('RescueHeli', 'VEHICLES', 'REJECT', 11357157285, 11357157285, '', '-', '', ['Vehicles.RescueHeli'], [], '', 'owner check (Open Cloud, v75): 78 parts (cap 40); second check: only "Part" (49) and "Wedge" (29) names, so no trim keeps the body'),
+    ('MedevacHeli', 'VEHICLES', 'REJECT', 11357398877, 11357157285, '', '-', '', ['Vehicles.MedevacHeli'], [], '', 'owner check (Open Cloud, v75): 78 parts (cap 40); same model as the Rescue Heli pick 11357157285 (no trim keeps the body)'),
     ('VTOLTransport', 'VEHICLES', 'REJECT', 10551768980, 10551768980, '', '-', '', [], [], '', "the uploader does not claim it ('Unknown Vtol'); looks ripped"),
     ('CargoPlane', 'VEHICLES', 'REJECT', 4631044408, 4631044408, '', '-', '', [], [], '', '47 parts (over 40) and a real cargo-plane look'),
     ('AWACSPlane', 'VEHICLES', 'REJECT', 4631044408, 4631044408, '', '-', '', [], [], '', '47 parts (over 40) and a real cargo-plane look'),
@@ -252,16 +253,17 @@ REGISTRY_ROWS = [
     ('HospitalShip', 'VEHICLES', 'REJECT', 12209928092, 12209928092, '', '-', '', [], [], '', 'red-cross emblems and a copy of a named real ship'),
     ('SupplyShip', 'VEHICLES', 'REJECT', 11756438288, 11756438288, '', '-', '', ['Vehicles.SupplyShip'], [], '', 'owner check (Open Cloud, v75): 174 parts (cap 40)'),
     ('PremiumTidebreaker', 'VEHICLES', 'DEFERRED', 4128350737, 4128350737, 'OWNER STUDIO', '-', '', [], [], '', 'VehicleConfig + VehicleService (streaming2-build): premium vehicle def, then a Studio look'),
-    ('Soldier', 'SOLDIERS / UNITS', 'RIG', 187790284, 187790284, '', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
-    ('Infantry', 'SOLDIERS / UNITS', 'RIG', 187790284, 187790284, '', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
-    ('HeavyInfantry', 'SOLDIERS / UNITS', 'RIG', 4485938042, 4485938042, 'OWNER STUDIO', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
+    ('Soldier', 'SOLDIERS / UNITS', 'LIVE-NOW', 187790284, 187790284, '', 'BOOT', '', ['Characters.Soldier'], [], '', 'Roblox Soldier, animated rig (R-RIG); camo cap; the look every unknown soldier kind falls back to'),
+    ('Infantry', 'SOLDIERS / UNITS', 'LIVE-NOW', 187790284, 187790284, '', 'BOOT', '', ['Characters.Infantry'], [], '', 'Roblox Soldier, animated rig (R-RIG), in the kit colours and kit helmet'),
+    ('Squad', 'SOLDIERS / UNITS', 'LIVE-NOW', 187790284, 187790284, '', 'BOOT', '', ['Characters.Squad'], [], '', 'Roblox Soldier, animated rig (R-RIG), camo cap: friendly squad units (the army escorts copy it on each phone)'),
+    ('HeavyInfantry', 'SOLDIERS / UNITS', 'REJECT', 4485938042, 4485938042, '', '-', '', [], [], '', '#8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants look does not show on an animated rig. Flip to PENDING-GET only if the owner answers #8 per row'),
     ('SpecialForces', 'SOLDIERS / UNITS', 'REJECT', 5551977277, 5551977277, '', '-', '', [], [], '', "wrong item: a beret with a real regiment's badge"),
-    ('Worker', 'SOLDIERS / UNITS', 'RIG', 893013681, 893013681, 'OWNER STUDIO', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
-    ('Guard', 'NPCS / PEOPLE', 'RIG', 181161444, 181161444, 'OWNER STUDIO', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
-    ('GateGuard', 'NPCS / PEOPLE', 'RIG', 76710780, 76710780, 'OWNER STUDIO', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
-    ('OilRigGuard', 'NPCS / PEOPLE', 'RIG', 187790284, 187790284, '', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
-    ('FortGuard', 'NPCS / PEOPLE', 'RIG', 187790284, 187790284, '', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
-    ('BankGuard', 'NPCS / PEOPLE', 'RIG', 1409417554, 1409417554, 'OWNER STUDIO', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
+    ('Worker', 'SOLDIERS / UNITS', 'REJECT', 893013681, 893013681, '', '-', '', [], [], '', '#8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants look does not show on an animated rig. Flip to PENDING-GET only if the owner answers #8 per row'),
+    ('Guard', 'NPCS / PEOPLE', 'REJECT', 181161444, 181161444, '', '-', '', [], [], '', '#8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants look does not show on an animated rig. Flip to PENDING-GET only if the owner answers #8 per row'),
+    ('GateGuard', 'NPCS / PEOPLE', 'REJECT', 76710780, 76710780, '', '-', '', [], [], '', '#8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants look does not show on an animated rig. Flip to PENDING-GET only if the owner answers #8 per row'),
+    ('OilRigGuard', 'NPCS / PEOPLE', 'LIVE-NOW', 187790284, 187790284, '', 'BOOT', '', ['Characters.OilRigGuard'], [], '', 'Roblox Soldier, animated rig (R-RIG), in the kit colours and kit helmet'),
+    ('FortGuard', 'NPCS / PEOPLE', 'LIVE-NOW', 187790284, 187790284, '', 'BOOT', '', ['Characters.FortGuard'], [], '', 'Roblox Soldier, animated rig (R-RIG), in the kit colours and kit helmet'),
+    ('BankGuard', 'NPCS / PEOPLE', 'REJECT', 1409417554, 1409417554, '', '-', '', [], [], '', '#8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants look does not show on an animated rig. Flip to PENDING-GET only if the owner answers #8 per row'),
     ('TownCivilian', 'NPCS / PEOPLE', 'NO-FIELD', 9436861676, 9436861676, 'STUDIO', '-', '', [], [], '', 'needs a town civilian spawner plus the animated-rig job'),
     ('StarterRifle', 'WEAPONS', 'LIVE-NOW', 4842207161, 4842207161, '', 'BOOT', '', [], [], 'WeaponConfig.Weapons.StarterRifle.VisualAssetId', 'Roblox rifle model in hand'),
     ('AssaultRifle', 'WEAPONS', 'LIVE-NOW', 4842207161, 4842207161, '', 'BOOT', '', [], [], 'WeaponConfig.Weapons.AssaultRifle.VisualAssetId', 'Roblox rifle model in hand'),
@@ -487,25 +489,34 @@ STUDIO_DONE: dict[int, int] = {
     31538715: 93, 43773162: 211, 2474869838: 1, 2627182035: 109, 3304171953: 219, 3553891209: 25, 4954987035: 20,
     5177695483: 114, 5318635087: 55, 8455894899: 53, 8546141386: 1, 9076240315: 12, 10069416832: 301, 11357157285: 78,
     11552687660: 321, 11756438288: 174, 15838664806: 3,
+    # batch P4: the owner's first check of 2026-09-27 (same script, Open Cloud, live place version 75, shaunie6)
+    3322196012: 1, 4362642898: 28, 5589684833: 1, 14408455045: 14,
 }
-# Waiting picks the check did not settle (wc2 analysts, 2026-09-25; rebuilt on 5e021d8): id -> what still blocks the promote.
-# Promote refuses an id listed here; delete its line in the same commit as its promote. The status table shows the text.
+# Waiting picks the checks did not settle (wc2, 2026-09-25; second check WE_CHECK2 and batch P4 first check, wc3,
+# 2026-09-27): id -> what still blocks the promote. Promote refuses an id listed here; delete its line in the same commit
+# as its promote. The status table shows the text.
 HOLD: dict[int, str] = {
-    3553891209: "your call 12 (load by id, or bake after each publish)",  # passes every gate; waits on the owner's call
+    3553891209: "your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist's signed three-view drawing of a real aircraft concept",  # call 12 answered A; owner yes on record
     6980242709: "a VisualAssetService wall-fit fix, then the second check",  # its only caller would bury it in the wall
-    2474869838: "second check (which way the nose points)",
-    9076240315: "second check + a driver-seat code fix",  # the driver would sit above the roof (stand-in)
-    15838664806: "second check (the 2,048-stud part) + a scale code fix",
-    8546141386: "second check (which end is the cab)",
-    4954987035: "second check (which end is the nose)",
-    5318635087: "second check (which small parts can go)",
-    8455894899: "second check (which small parts can go)",
-    11357157285: "second check (a smaller part of it)",
+    2474869838: "a look first: its one mesh has no seats (the cabin seats are placed by eye); nose at -Z (yaw 0, from its ThumbnailCamera)",
+    15838664806: "the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05",
+    8546141386: "your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller",  # owner yes on record; not usable as it is
+    8455894899: "a longer kit: trim known (ChildName 'FlatBed Truck', 9 OmitParts names = 40 parts) but its cab sits past the kit's nose",
+    3322196012: "the P4 second check (which way the barrel points; a gun's Yaw is set by hand)",  # 3.6 x 13.6 x 5.4: stood on end?
+    4362642898: "the P4 second check (part names: its bounds box, and one piece for the Signature role; 28 parts > 3 roles)",
+    5589684833: "the P4 second check (which end is the barrel) + a FitScale look on the Roblox-size 4x4",
+    14408455045: "the P4 second check (neon parts, upright pose) + the droppers lane (v1b reads its WE_CatalogProp)",
 }
 # Vehicle yaw read from the store pictures (wc2/veh, calibrated on Roblox's own car packs); promote uses it when --yaw is
 # not given. The second check (WE_CHECK2) may correct it: pass --yaw to override.
 YAW_HINT: dict[int, int] = {
-    3553891209: 90, 2474869838: 90, 9076240315: 0, 8546141386: 180, 4954987035: -90, 15838664806: -90,
+    3553891209: 90, 2474869838: 0, 9076240315: 0, 8546141386: 180, 4954987035: -90, 15838664806: -90,
+}
+# The owner's yes / no answers on record (promote accepts them in place of --owner-ok; the status table stops asking).
+OWNER_YES: dict[int, str] = {
+    8546141386: "2026-09-27 (call 2)",
+    4954987035: "2026-09-27 (call 4)",
+    3553891209: "2026-09-27 (jet look OK; call 12 = A, load by id)",
 }
 
 DECISION_LABEL = {
@@ -952,6 +963,7 @@ CHAR_KINDS = ("Worker", "Infantry", "HeavyInfantry", "Guard", "Soldier", "GateGu
 PROP_KEYS = ("Tent", "Crate", "MilitaryCrate", "Sandbag", "Lantern", "OilBarrel", "ConcreteBarrier", "FuelTanks", "AmmoShed",
              "OilPumpjack", "Flag", "Floodlight", "HomeOutpost", "ManualDropper")
 HOOK_BUCKETS = ("Businesses", "VehicleWeapons")  # hooks (2026-09-25): business line dress (PLOT), turret dress (LATER)
+PIECE_BUCKETS = ("BusinessPieces",)  # bizlook (2026-09-27): shared business building pieces (pack pieces, PLOT)
 PROP_BUCKETS = ("WarzoneProps", "DesertProps", "MapDressing", "IndustrialProps", "Landmarks")
 PROP_ALT = {"Tent": "TentAlt", "OilPumpjack": "OilPumpjackAlt"}
 
@@ -975,7 +987,7 @@ def live_chains(vac: Config, svc: Config | None, families: dict[str, str] | None
     chains.append(("MoneyBagFX", [vac.num("MoneyBagFX"), vac.num("VfxSparkles")]))
     for key in vac.keys("DesertKit"):
         chains.append((f"DesertKit.{key}", [vac.num(f"DesertKit.{key}")]))
-    for bucket in HOOK_BUCKETS:
+    for bucket in HOOK_BUCKETS + PIECE_BUCKETS:
         for key in vac.keys(bucket):
             chains.append((f"{bucket}.{key}", [vac.num(f"{bucket}.{key}")]))
     svc_base = svc.num("Palettes.DefensiveWalls", "MeshAssetId") if svc else 0
@@ -1035,7 +1047,7 @@ def chain_phase(name: str, vac: Config) -> str:
         return "PLOT" if key in PLOT_PROPS else "LATER" if key in LATER_PROPS else "BOOT"
     if head in ("MoneyCollector", "TutorialArrow", "DesertKit"):
         return "BOOT"
-    if head in ("Businesses", "Buildings"):  # business line dress; DefensiveWalls chains
+    if head in ("Businesses", "Buildings", "BusinessPieces"):  # business line dress / pieces; DefensiveWalls chains
         return "PLOT"
     if head == "Vehicles":  # a ChildName piece is preloaded by VisualAssetService.Init
         return "BOOT" if vac.has(name) and vac.raw(name, "ChildName") is not None else "LATER"
@@ -1414,7 +1426,7 @@ def gate_text(r: Row, state: str) -> str:
     if state != "pending":
         return "not in config yet"
     need = []
-    if "OWNER" in r.flags:
+    if "OWNER" in r.flags and r.id not in OWNER_YES:
         need.append("your yes/no")
     done = ""
     if "STUDIO" in r.flags and r.id in STUDIO_DONE:
@@ -1689,7 +1701,7 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
             why = src if det is None else store_problem(aid, det)
         flags = set().union(*(r.flags for r in rows))
         wc = we.get(aid)
-        if not why and "OWNER" in flags and aid not in owner_ok:
+        if not why and "OWNER" in flags and aid not in owner_ok and aid not in OWNER_YES:
             why = "needs the owner's yes (--owner-ok %d)" % aid
         if not why and "STUDIO" in flags:
             if not wc:

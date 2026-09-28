@@ -22,7 +22,12 @@
 	  stay, so PartsPerBusinessL5 holds and the client belt crates still find Kit_Belt); a 0 id is a no-op.
 	  Droppers v1a look tiers: Field (L1-2) / Works (L3-4) / Arsenal (L5) from BusinessConfig.LookTiers on the
 	  LookTierRoles parts (applyLook): property-only, 0 new parts, written only where a value differs, never on a part
-	  that carries WE_CatalogAssetId. Expected extra changes per buy: +6 at L2->L3, +2 at L4->L5, 0 otherwise.
+	  that carries WE_CatalogAssetId.
+	  bizlook growth (BusinessConfig.Kit Grow rows): a kit part's Size / CFrame for the level (applyGrow), written only
+	  when they differ, never on a dressed part; the slab widens at L2 and the head office grows at L4 / L5. A building
+	  piece stretched into a grown box (WE_BizFitRole) is rebuilt as its Part-kit role and the deferred dress fits it
+	  again; the colliders a piece hid (WE_BizHiddenBy) show again whenever that piece goes. Stand-in count (T3b, pieces
+	  on): <= 18 instance changes per buy after the pack's first load, 29 for a 1 -> 5 jump; an idle re-sync writes nothing.
 
 	Money: NONE here (no remote, no grant). Business income is part of BaseService.ComputePassiveIncomePerTick
 	(TycoonMath.BasePassivePerTick) and is paid into the ATM on the existing 5 s passive tick.
@@ -89,7 +94,7 @@ local function newPart(name: string, size: Vector3, cf: CFrame, color: Color3, m
 	p.Color = color
 	p.Material = material
 	if reflectance ~= nil and reflectance ~= 0 then
-		p.Reflectance = reflectance -- droppers v1a look tier (Arsenal Roof), set before parenting
+		p.Reflectance = reflectance -- droppers v1a look tier (Arsenal Roof), set before parenting (bizlook: the window band too)
 	end
 	p.CanCollide = collide
 	p.CanTouch = false
@@ -140,6 +145,66 @@ local function lookFor(def: BusinessConfig.BusinessDef, kp: BusinessConfig.KitPa
 		else shaded(colorFor(def, kp.ColorKey), tier.Shade)
 	local reflectance: number? = if kp.Role == "Roof" then (tier.RoofReflectance or 0) else nil
 	return material, color, reflectance
+end
+
+-- bizlook: the box of kit part kp at level lv (the last Grow row with FromLevel <= lv, else the kit row's own)
+local function geomFor(kp: BusinessConfig.KitPart, lv: number): (Vector3, Vector3)
+	local size, offset = kp.Size, kp.Offset
+	for _, g in ipairs(kp.Grow or {}) do
+		if g.FromLevel <= lv then
+			size, offset = g.Size, g.Offset
+		end
+	end
+	return size, offset
+end
+
+-- bizlook: an existing kit part with Grow rows: write Size / CFrame only when they differ (a level-up grows it, a
+-- level-down or rebirth shrinks it back, an idle re-sync writes nothing); a hooks-dressed part is never moved
+local function applyGrow(p: BasePart, kp: BusinessConfig.KitPart, base: CFrame, lv: number)
+	if kp.Grow == nil or p:GetAttribute("WE_CatalogAssetId") ~= nil then
+		return
+	end
+	local size, offset = geomFor(kp, lv)
+	if (p.Size - size).Magnitude > 0.001 then
+		p.Size = size
+	end
+	local cf = base * CFrame.new(offset)
+	if (p.Position - cf.Position).Magnitude > 0.001 then
+		p.CFrame = cf
+	end
+end
+
+-- bizlook: kit rows by role (the box a stretched building piece fills: VisualAssetConfig.BusinessPieces Into)
+local kitByRole: { [string]: BusinessConfig.KitPart } = {}
+for _, kp in ipairs(BusinessConfig.Kit) do
+	kitByRole[kp.Role] = kp
+end
+
+-- bizlook: a building piece stretched into another role's box (WE_BizFitRole) whose box is not this level's any more
+-- (the office grows at L4 / L5): it must be rebuilt and dressed again at the new size
+local function needsRefit(p: BasePart, lv: number): boolean
+	local r = p:GetAttribute("WE_BizFitRole")
+	if typeof(r) ~= "string" or p:GetAttribute("WE_CatalogAssetId") == nil then
+		return false
+	end
+	local row = kitByRole[r]
+	if row == nil then
+		return false
+	end
+	local size = geomFor(row, lv)
+	local turned = Vector3.new(size.Z, size.Y, size.X)
+	return (p.Size - size).Magnitude > 0.001 and (p.Size - turned).Magnitude > 0.001
+end
+
+-- bizlook: the colliders a building piece hid (WE_BizHiddenBy = the piece's role) show again when the piece goes
+local function showHidden(m: Model, role: string)
+	for _, c in ipairs(m:GetChildren()) do
+		if c:IsA("BasePart") and c:GetAttribute("WE_BizHiddenBy") == role then
+			c.Transparency = 0
+			c.CastShadow = c.CanCollide
+			c:SetAttribute("WE_BizHiddenBy", nil)
+		end
+	end
 end
 
 -- an existing kit part: write only the tier values that differ; skip non-tier roles and hooks-dressed parts
@@ -256,28 +321,45 @@ function BusinessService.SyncBusiness(plotId: number, id: string, level: number,
 	for _, kp in ipairs(BusinessConfig.Kit) do
 		local partName = "Kit_" .. kp.Role
 		local have = m:FindFirstChild(partName)
+		if have and have:IsA("BasePart") and kp.MinLevel <= lv and needsRefit(have, lv) then
+			-- bizlook: its box grew / shrank: the fallback part is rebuilt now, the deferred dress fits the piece again
+			showHidden(m, kp.Role)
+			have:Destroy()
+			have = nil
+		end
 		if kp.MinLevel <= lv then
 			if have == nil then
-				local size, offset, shape = kp.Size, kp.Offset, kp.Shape
+				local size, offset = geomFor(kp, lv) -- bizlook: built at its level's box (0 extra writes)
+				local shape = kp.Shape
+				local rot: Vector3? = nil
+				local sigMaterial: Enum.Material? = nil
 				if kp.Role == "Signature" then
 					local sig = sigs[def.Signature]
 					if sig then
 						size, offset, shape = sig.Size, sig.Offset, sig.Shape
+						rot = sig.Rot -- bizlook: a turned product sign (the Ammo casing stands up)
+						sigMaterial = sig.Material
 					end
 				end
-				local color, material, reflectance = colorFor(def, kp.ColorKey), kp.Material, nil :: number?
+				local color, material, reflectance = colorFor(def, kp.ColorKey), sigMaterial or kp.Material, kp.Reflectance
 				if tierRoles[kp.Role] then
 					material, color, reflectance = lookFor(def, kp, lv) -- droppers v1a: built in its tier look (0 extra writes)
 				end
-				local p = newPart(partName, size, base * CFrame.new(offset), color, material, kp.Collide == true, m, reflectance)
+				local cf = base * CFrame.new(offset)
+				if rot ~= nil then
+					cf *= CFrame.Angles(math.rad(rot.X), math.rad(rot.Y), math.rad(rot.Z))
+				end
+				local p = newPart(partName, size, cf, color, material, kp.Collide == true, m, reflectance)
 				if shape then
 					p.Shape = shape
 				end
 				p:SetAttribute("WE_BizRole", kp.Role)
 			elseif have:IsA("BasePart") then
 				applyLook(have, kp, def, lv) -- droppers v1a: tier change / level-down; writes only what differs
+				applyGrow(have, kp, base, lv) -- bizlook: the level's box; writes only what differs
 			end
 		elseif have then
+			showHidden(m, kp.Role) -- bizlook: a collider this role's piece hid shows again (if it stays)
 			have:Destroy() -- rebirth reset / admin resetbase / level down
 		end
 	end

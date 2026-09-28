@@ -212,16 +212,16 @@ def must_absent(path, needle, label):
         print(f"[BuyPathStatic] PASS {label}")
 
 must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "59524622", "No JeepFallback 59524622 assignment")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Soldier = { ModelAssetId = 100212659702941", "Soldier Design Bot primary")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Infantry = { ModelAssetId = 9104381136", "Infantry Design Bot")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Soldier = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret"', "R-RIG: Soldier = the Roblox Soldier rig (rule 9)")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Infantry = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet"', "R-RIG: Infantry = Soldier rig with the kit helmet")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ArmedJeep = { ModelAssetId = 0", "ArmedJeep tan turreted")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "HeavyInfantry = { ModelAssetId = 0", "HeavyInfantry Design Bot")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'HeavyInfantry = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet"', "R-RIG: HeavyInfantry = Soldier rig (#8 default)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Guard = { ModelAssetId = 16134469614", "Guard Design Bot")
 must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "91299598767068", "No Respawn pack primary assignment")
 # allow REJECT comments mentioning 3924234975; must_absent filters REJECT/DELETED
 must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "3924234975", "No plastic Rthro CharacterAlt assignment")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "SupplyTruck = { ModelAssetId = 0", "SupplyTruck truck mesh")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "InfantryCarrier = { ModelAssetId = 0", "InfantryCarrier APC")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "InfantryCarrier = {\n\t\t\tModelAssetId = 9076240315,", "InfantryCarrier APC [owner pick 9076240315, 2026-09-27; wc3: body scale + seats]")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FloodlightTower = { ModelAssetId = 107381977457431", "FloodlightTower prop")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "CharacterAlt = { ModelAssetId = 0", "CharacterAlt disabled")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "PlotFloorChevrons", "Plot floor chevrons to next pad")
@@ -295,12 +295,12 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ShowroomFlagHost", "Depot flag host")
 must_not_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", 'oilFolder.Name = "OilSpectacle"', "World v2 W1: oil spectacle removed")
 must_not_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", 'lm.Name = "WarzoneLandmarks"', "World v2 W1: landmarks removed")
-must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "SquadStalls", "TrainingYard Tent stalls")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "TrainingYardBuilder.Build(", "owner-vis yard: MapSetup builds the Training Yard through TrainingYardBuilder (was the SquadStalls tents)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "96059329869678", "Palm MapDressing")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "0", "AsphaltDecal")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "MeshId = 0", "DesertRock MeshPart")
 # No-regress P0
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 9104381136", "Worker/Infantry unchanged")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Worker = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet"', "R-RIG: Worker = Soldier body in worker kit colours (#9 moot)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 0", "MilitaryJeep unchanged")
 
 
@@ -501,7 +501,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopCont
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "WE_FlagBillboard", "Capture flag floating billboard")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "FlagStripe", "FlagStripe nation visibility")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "NationColorService", "NationColorService capture color")
-must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau", "CashPopGlow", "Manual dropper green $ pop glow")
+# ◆ droppers v1b: the plate pop is drawn by the client (ProductionFx, lane L3b pins "CashPopGlow" there); the server keeps its colour in config
+must_contain("src/ReplicatedStorage/Shared/Configs/ManualDropperConfig.luau", "PopGlowColor = Color3.fromRGB(8, 36, 14),", "Manual dropper green $ pop glow (v1b: the client pop's CashPopGlow colour, config)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau", 'ArmedJeep = V("ArmedJeep", "Armed 4x4"', "ArmedJeep DisplayName")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", 'id == "ArmedJeep"', "Garage lists ArmedJeep")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", 'id == "ArmedJeep"', "ArmedJeep same WheeledLight kit")
@@ -549,7 +550,7 @@ kit_gen_at_least(32, "KIT_GEN 27")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "armory"', "WeaponsFacility armory kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "3-story weapons inventory", "Armory densify comment")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "compound-scale HQ", "HQ densify comment")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "100212659702941", "Worker distinct Soldier mesh")
+must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", '100212659702941', "R-RIG: the unowned spec-ops soldier id is gone (it never loaded)")
 must_contain("src/ReplicatedStorage/Shared/Configs/SoldierConfig.luau", 'Worker = "Worker"', "Worker VisualKind Worker")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "HeavyInfantry", "Stall HeavyInfantry variety")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "role Part-dress differentiation", "Soldier role dress")
@@ -775,7 +776,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Pat
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FastAttackCraft = { ModelAssetId = 0", "v41 Attack Boat")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'LandingCraft = { ModelAssetId = 0', "v41 LandingCraft=0 reject template")
 must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 13195201090", "v41 no Build-a-Boat template ID")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Worker = { ModelAssetId = 16134469614", "v41 Worker distinct")
+must_contain("src/ServerScriptService/Server/Modules/RigBuilder.luau", 'local torsoColor = colorOf("Vest", rootColor)', "R-RIG: each kind keeps its kit colours on the Soldier body")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "\tSpecialForces = { ModelAssetId = 0", "v41 SpecialForces")
 must_contain("src/ReplicatedStorage/Shared/Configs/SoldierConfig.luau", 'SpecialForces = "SpecialForces"', "v41 SF VisualKind")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "OilPumpjack = { ModelAssetId = 15192621369", "v41 OilPumpjack [owner pick 15192621369, 2026-09-25]")
@@ -816,8 +817,8 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Cru
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'AircraftCarrier = { ModelAssetId = 0', "v42 Carrier Part-kit")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'LandingCraft = { ModelAssetId = 0', "v42 LandingCraft Part-kit")
 must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 13195201090", "v42 no Build-a-Boat template")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Worker = { ModelAssetId = 16134469614", "v42 Worker ≠ Soldier")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Soldier = { ModelAssetId = 100212659702941", "v42 Soldier KEEP")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Squad = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret"', "R-RIG: friendly squads wear the beret, hostile kinds the kit helmet")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'WorkerFallback = { ModelAssetId = 0,', "R-RIG: no third-party fallback body (a failed rig load keeps the Part kit)")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 29", "v42 BuildingDressGen 29")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "local DRESS_GEN = 29", "v42 VAS DRESS_GEN 29")
 kit_gen_at_least(32, "v42 KIT_GEN stays 27")
@@ -1094,8 +1095,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 82)', "v82 WE_Build=82 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 82)', "v82 WE_Build=82 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 83)', "v83 WE_Build=83 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 83)', "v83 WE_Build=83 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1160,7 +1161,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 82)', "v82 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 83)', "v83 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1233,9 +1234,9 @@ must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau
 must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 82)', "v82 WE_Build=82 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 82)', "v82 WE_Build=82 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 82)', "v82 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 83)', "v83 WE_Build=83 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 83)', "v83 WE_Build=83 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 83)', "v83 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1262,9 +1263,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 82)', "v82 WE_Build=82 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 82)', "v82 WE_Build=82 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 82)', "v82 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 83)', "v83 WE_Build=83 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 83)', "v83 WE_Build=83 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 83)', "v83 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1317,9 +1318,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService is nil before BaseService.Init", "v66 Bootstrap warns (no assert) on nil deps.DataService")
 must_not_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "assert(deps.DataService", "v66 Bootstrap has no fatal DataService assert")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 82)', "v82 WE_Build=82 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 82)', "v82 WE_Build=82 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 82)', "v82 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 83)', "v83 WE_Build=83 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 83)', "v83 WE_Build=83 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 83)', "v83 EarlyRemotes WE_Build")
 # Keep v64 hardenings
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")
@@ -2049,6 +2050,63 @@ must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "N
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "SW_RadioMast", Block = "SW", Role = "mast", Tier = 1,', 'W3 Town v2: radio mast landmark (SW, Tier 1)')
 must_not_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 220, Enabled = true, Lights = 6, Signs = 1 },', 'W3 Town v2: the step-1 Town caps are retired')
 
+# --- Town v3 (owner feedback 2026-09-27: "The buildings in that town are terrible and need to be actual Roblox
+# buildings"): every Crossroads Town building is a TownHouse of Roblox-made Synty City pieces (6933556508, creator
+# Roblox, User 1, already live for CarWreck: 0 new load attempts), stacked at scale 1 by a deferred all-or-nothing
+# overlay that never adds a part; the Part fallback stays when a load fails; paved frontages (Town.Infra) ---
+TV3_WK = 'src/ServerScriptService/Server/Modules/WorldKits.luau'
+TV3_WC = 'src/ReplicatedStorage/Shared/Configs/WorldConfig.luau'
+TV3_VAC = 'src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau'
+TV3_POI = 'src/ServerScriptService/Server/Modules/WorldPOI.luau'
+must_contain(TV3_WK, 'TownHouse = spec(2, 5, Vector3.new(18, 11, 20.6), "manmade", true, 1, "Town", { Overlay = "building", Variants = { shop = 2, walkup = 4, walkupB = 4, tower = 4, towerB = 4, office = 3 } }),', 'Town v3: TownHouse catalogue row (fallback parts = pieces + 1 = the live overlay count)')
+must_contain(TV3_WK, 'Builders.TownHouse = function(b: B)', 'Town v3: the TownHouse builder (Part fallback: one box per piece + one front detail)')
+must_contain(TV3_WK, 'table.insert(b.Overlays, { Key = style, Mode = "building", Frame = b.CF, Parts = list })', 'Town v3: every building queues its deferred Roblox-piece overlay (lantern kept out of it)')
+must_contain(TV3_WK, 'm.Parent = cluster -- 1 collider + k meshes replace the k + 1 fallback parts: never adds a part', 'Town v3: the building overlay never adds a part')
+must_contain(TV3_WK, 'if buildingsQueued < KC.TownHouse.Overlays and (isWired == nil or buildingWired(isWired, ov.Key)) then', 'Town v3: building overlays have their own cap and need every piece wired (MeshOverlays stays with the travel dressing)')
+must_contain(TV3_WK, 'biggest.Size = Vector3.new(st.Core.X, size.Y, st.Core.Z)', 'Town v3: the live collider is the building\'s wall core (players and shots meet the wall, not the stoop)')
+must_contain(TV3_WK, 'm.CastShadow = TH.MeshShadow == true and st.Shadow and i == 1', 'Town v3: one shadow caster per building at most (Town <= 60 casters)')
+must_contain(TV3_WK, 'Sidewalk = spec(1, 1, Vector3.new(160, 0.14, 26), "infra", false, 1, "Town"),', 'Town v3: pavement strip catalogue row (flat, no collision, infra)')
+must_contain(TV3_WC, '			Overlays = 64,', 'Town v3: per-server cap on building overlays (59 buildings, 61 kits since fix round 1)')
+must_contain(TV3_WC, '		Sidewalk = { Width = 26, Top = 0.14, MinLength = 40, MaxLength = 400, MinWidth = 6, MaxWidth = 48 },', 'Town v3: pavements stay flat (top 0.64 world <= RoadMinTop)')
+must_not_contain(TV3_WC, 'Kit = "TownBlock"', 'Town v3: no Part-box TownBlock building left in the Crossroads Town')
+must_contain(TV3_POI, 'Infra = T.Infra, Anchors = T.Anchors', 'Town v3: the Town builds its pavement rows (WorldConfig.Town.Infra)')
+must_contain(TV3_POI, 'local plain = spec ~= nil and spec.Mesh == nil and spec.Overlay == nil', 'Town v3: a kit with a deferred overlay never hosts an activity anchor')
+for _k, _piece in (('TownShop', 'Shop_06'), ('TownAptDoorA', 'Apartment_Door_01'), ('TownAptDoorB', 'Apartment_Door_02'),
+                   ('TownAptFloorA', 'Apartment_02'), ('TownAptFloorB', 'Apartment_03'), ('TownAptStack', 'Apartment_Stack_01'),
+                   ('TownAptRoofA', 'Apartment_Roof_01'), ('TownAptRoofB', 'Apartment_Roof_02'),
+                   ('TownOfficeBase', 'OfficeOld_Small_Base_01'), ('TownOfficeTop', 'OfficeOld_Small_Roof_01')):
+    must_contain(TV3_VAC, '%s = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_%s", Note = ' % (_k, _piece), 'Town v3: %s is the Roblox-made City piece %s (live pack, atlas kept)' % (_k, _piece))
+must_not_contain(TV3_VAC, '_glass", Note', 'Town v3: no shop-glass child piece (the loader drops children; glass-free pieces only)')
+# Town v3 fix round 1 (reviewer): (a) the camera stops at the brick. Roblox's Poppercam (PlayerModule Popper) casts
+# workspace:Raycast with RaycastParams that RespectCanCollide and keep the Default collision group, and only a part with
+# transparency < 0.25 occludes; the wall-core collider is invisible, so the placed pieces themselves must collide, be
+# queryable and stay in the Default group (a no-collide collision group would hide them from that ray too)
+must_contain(TV3_WC, '			MeshCollide = true,', 'Town v3 fix1: building pieces collide so the Poppercam stops the camera at the wall')
+must_contain(TV3_WK, '\tlocal solid = TH.MeshCollide == true\n', 'Town v3 fix1: the overlay reads the MeshCollide switch')
+must_contain(TV3_WK, '\t\tm.CanCollide = solid\n\t\tm.CanQuery = solid\n\t\tm.CanTouch = false\n\t\tm.Parent = cluster -- 1 collider + k meshes', 'Town v3 fix1: every placed piece collides and is queryable (Poppercam occluder), never Touched')
+must_not_contain(TV3_WK, 'CollisionGroup', 'Town v3 fix1: no Town piece is moved out of the Default collision group (the Poppercam ray would skip it)')
+# (b) every public space shows fronts: the square's N and E sides face INTO the square, the yard mouths and NW_PlazaN
+# face the plaza, the market lane is lane-facing to the road, and six arm rows start with a plaza end-cap
+for _row in ('{ Id = "SW_SqN1", Block = "SW", Role = "block", Tier = 1, X = -135, Z = 92.3, Yaw = 180,',
+             '{ Id = "SW_SqN2", Block = "SW", Role = "block", Tier = 1, X = -161.5, Z = 92.3, Yaw = 180,',
+             '{ Id = "SW_SqN3", Block = "SW", Role = "block", Tier = 1, X = -188, Z = 92.3, Yaw = 180,',
+             '{ Id = "SW_SqE1", Block = "SW", Role = "block", Tier = 1, X = -92.3, Z = 135, Yaw = 90,',
+             '{ Id = "SW_SqE2", Block = "SW", Role = "block", Tier = 1, X = -92.3, Z = 161.5, Yaw = 90,',
+             '{ Id = "SW_SqE3", Block = "SW", Role = "block", Tier = 1, X = -92.3, Z = 188, Yaw = 90,',
+             '{ Id = "SW_YardE", Block = "SW", Role = "block", Tier = 2, X = -68, Z = 121, Yaw = 0,',
+             '{ Id = "SW_YardN", Block = "SW", Role = "block", Tier = 2, X = -120, Z = 70, Yaw = -90,',
+             '{ Id = "NW_PlazaN", Block = "NW", Role = "block", Tier = 2, X = -66, Z = -126, Yaw = 180,',
+             '{ Id = "NW_Lane_S2", Block = "NW", Role = "block", Tier = 2, X = -66, Z = -147, Yaw = 0,',
+             '{ Id = "NW_Lane_N2", Block = "NW", Role = "block", Tier = 2, X = -65.5, Z = -202, Yaw = 180,',
+             '{ Id = "NW_N2", Block = "NW", Role = "block", Tier = 2, X = -44.7, Z = -200, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },',
+             '{ Id = "NW_W1", Block = "NW", Role = "block", Tier = 1, X = -131.5, Z = -44.5, Yaw = -90,',
+             '{ Id = "NE_N1", Block = "NE", Role = "block", Tier = 1, X = 44.5, Z = -131.5, Yaw = 180,',
+             '{ Id = "NE_E1", Block = "NE", Role = "block", Tier = 1, X = 131.5, Z = -43.8, Yaw = 90,',
+             '{ Id = "SW_S1", Block = "SW", Role = "block", Tier = 1, X = -44.1, Z = 131.5, Yaw = 0,',
+             '{ Id = "SW_W1", Block = "SW", Role = "block", Tier = 1, X = -131.5, Z = 44.5, Yaw = -90,',
+             '{ Id = "SE_E1", Block = "SE", Role = "block", Tier = 1, X = 131.5, Z = 44.5, Yaw = 90,'):
+    must_contain(TV3_WC, _row, 'Town v3 fix1: row faces its public space: ' + _row.split('"')[1])
+
 # --- Rollover fix (owner 2026-09-24: "The quad falls over when driving super easy"): ballast + drive at the centre of
 # mass + roll/pitch assist + speed-sensitive steering + no traction while flipped + gentle flip recovery ---
 RVC = 'src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau'
@@ -2594,8 +2652,8 @@ must_contain(MSD, 'Name = "Helmet",\n\t\tSize = Vector3.new(1.3, 0.75, 1.35),', 
 must_not_contain(MSD, 'Name = "Helmet",\n\t\tSize = Vector3.new(1.2, 0.5, 1.2),', "fb2 old flat box helmet gone")
 must_contain(MSD, "CFrame = torso.CFrame * CFrame.new(-0.5, -2.825, 0.1),", "fb2 BootL bottom = leg bottom (detail on)")
 must_contain(MSD, "CFrame = torso.CFrame * CFrame.new(0.5, -2.825, 0.1),", "fb2 BootR bottom = leg bottom (detail on)")
-must_contain(MSD, "local wLocal = yardShift + Vector3.new(-40 + wi * 20, 2.8, 42)", "fb2 training workers stand on the yard pad (y 2.8)")
-must_contain(MSD, "local soldierCf = F * CFrame.new(sOrigin + Vector3.new(-1.5, 2.7, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)", "fb2 stall soldiers y 2.7, turn kept")
+must_contain("src/ReplicatedStorage/Shared/Configs/TrainingYardConfig.luau", "FigureRootY = 2.3,", "owner-vis yard: the firing-line soldiers stand on the range floor (root 0.5 + 2.3 = 2.8, like the fb2 workers)")
+must_not_contain(MSD, "local soldierCf = F * CFrame.new(sOrigin", "owner-vis yard: the stall statues are gone (3 firing-line soldiers instead of 3 stall statues + 2 workers)")
 must_contain(MSD, 'local paradeFlag = part({ Name = "ParadeFlag", Size = Vector3.new(0.12, 4.4, 7.5),', "fb2 parade flag cloth 0.12 thick")
 must_contain(MSD, 'paradeFlag:SetAttribute("WE_FlagHost", true)', "fb2 parade flag is a nation flag host")
 _IB = "src/ServerScriptService/Server/Modules/Interiors/Barracks.luau"
@@ -4846,13 +4904,11 @@ must_contain(WC2_TOOL, 'STUDIO_CHECK_SOURCE = "owner\'s Open Cloud run in the li
 must_contain(WC2_TOOL, '                why = "needs OmitParts in " + ", ".join(no_omit) + " first (the part the Studio check names, e.g. its bounds box)"\n        if not why and aid in HOLD:\n            why = f"on hold: {HOLD[aid]}', "wc2: promote runs the OMIT gate, then refuses a pick on HOLD")
 must_contain(WC2_TOOL, '    if "OMIT" in r.flags:\n        need.append("OmitParts")\n    if r.id in HOLD:\n        need.append(HOLD[r.id])', "wc2: the status gate text keeps OmitParts and shows the HOLD reason")
 must_contain(WC2_TOOL, "yaw = yaw_override.get(aid, YAW_HINT.get(aid))", "wc2: promote takes a held vehicle's yaw from YAW_HINT unless --yaw is given")
-# held picks: the jet waits on the owner's call 12, the walls on the VisualAssetService fit fix, the rest on the second check.
+# held picks: the walls wait on the VisualAssetService fit fix. (wc3, 2026-09-27: the jet's call-12 pin and the eight
+# "second check" HOLD pins moved to the wc3 block below, with the new HOLD texts.)
 # Each keeps ModelAssetId 0 and its PendingAssetId (no runtime load; the tool refuses a promote while the HOLD line
 # is there). Delete a HOLD line (and its pin here) in the same commit as its promote.
-must_contain(WC2_TOOL, '    3553891209: "your call 12 (load by id, or bake after each publish)",', "wc2: the fighter jet waits on the owner's call 12")
 must_contain(WC2_TOOL, '    6980242709: "a VisualAssetService wall-fit fix, then the second check",', "wc2: the walls pick waits on the VisualAssetService fit fix (its only caller buries it)")
-for _wc2_h in ("2474869838", "9076240315", "15838664806", "8546141386", "4954987035", "5318635087", "8455894899", "11357157285"):
-    must_contain(WC2_TOOL, f'    {_wc2_h}: "second check', f"wc2: {_wc2_h} waits on the second check (HOLD)")
 must_contain(WC2_VAC, 'DefensiveWalls = { ModelAssetId = 0, PendingAssetId = 6980242709, Note = "owner pick Military Wall (SMehmetaga): pending, P2; passed the owner check', "wc2: the walls pick stays pending and its Note records the fit finding")
 # call 12 is a fair choice (load by id, or a post-publish bake inside Roblox), and the owner can run both checks himself
 must_contain(WC2_WIRING, "12. **Store models: load them while the game runs (A), or bake them into the place after every publish (B)?**", "wc2: ASSET_WIRING §4 call 12 offers load-by-id or a post-publish bake")
@@ -4917,7 +4973,7 @@ for _dr_needle, _dr_label in (
     ("ProductsPerTick = { 2, 2, 3, 3, 4 },", "Armor Plate Press k per beat 2/2/3/3/4"),
     ("ProductsPerTick = { 2, 2, 2, 3, 3 },", "Rocket Assembly k per beat 2/2/2/3/3"),
     ("LookTiers = {", "server look tiers in config"),
-    ('LookTierRoles = { "Housing", "Roof", "BeltFrame", "Bin", "Chimney" },', "look tiers touch only Housing / Roof / BeltFrame / Bin / Chimney"),
+    # bizlook (2026-09-27): Chimney -> Hall (the head office); pinned in the bizlook block below
     ("RiseByLevel = { 1.0, 1.2, 1.4, 1.6, 1.8 },", "heap rise 1.0 .. 1.8 (full top 3.15 .. 3.95, under the awning)"),
     ("BeltFx = {\n\t\t\tEnabled = false,", "BeltFx code ships OFF (OD-7: on only after the owner's Studio check)"),
     ("Ghost = { Enabled = false,", "Ghost preview is v1.1 (off in v1a)"),
@@ -4945,8 +5001,7 @@ must_contain(DR_BZS, "if reflectance ~= nil and math.abs(p.Reflectance - reflect
 must_contain(DR_BZS, "\t\tp.Reflectance = reflectance -- droppers v1a look tier (Arsenal Roof), set before parenting", "droppers v1a: a new Arsenal Roof gets its Reflectance before it is parented")
 must_not_contain(DR_BZS, "AddXP", "droppers v1a: BusinessService grants no XP (spec_xp: purchase XP only)")
 # TycoonGuideConfig: BUY line 2 / NEXT chip names for business levels 2-5 (no [1]: it would shorten BUY line 1)
-for _dr_id in ("AmmoWorks", "ArmsCrateLine", "ArmorPlatePress", "RocketAssembly"):
-    must_contain(DR_TGC, f'{_dr_id} = {{ [2] = "Faster belt", [3] = "Clean works", [4] = "Stock pallet", [5] = "Arsenal paint" }},', f"droppers v1a: {_dr_id} BUY line 2 / NEXT chip unlock names")
+# bizlook (2026-09-27): the unlock names now say what each level adds to the building; pinned in the bizlook block below
 # SoundConfig: the two v1a keys reuse ids already in SoundConfig (no new sound id)
 must_contain(DR_SND, '["Biz.Ship"] = { Id = 9113849492,', "droppers v1a: Biz.Ship reuses the Cash.Collect file 9113849492")
 must_contain(DR_SND, '["Biz.FirstLand"] = { Id = 9119915230,', "droppers v1a: Biz.FirstLand reuses the Impact.Metal file 9119915230")
@@ -6430,6 +6485,1774 @@ def _xp_repair_guards():
         ok(f"XP (integration): all {n_g} whole-table owned-item writes are repairs under their own typeof(...) ~= \"table\" guard")
 
 _xp_repair_guards()
+
+# --- v82 ATM fix (owner report on v81: "I have auto collect but money is still going to the ATM"). The ATM screen
+# showed GetRaidableBalance = PendingCash + the last 10 min of AutoCollect income already paid into the wallet, so for
+# an AutoCollect owner it grew for 10 minutes and nothing could be collected. The screen shows PendingCash only; the
+# raid rule (AutoCollect is not raid immunity) is unchanged.
+_ATM_MCS = "src/ServerScriptService/Server/Services/MoneyCollectorService.luau"
+_ATM_RC = "src/ReplicatedStorage/Shared/Configs/RaidConfig.luau"
+must_contain(_ATM_RC, "AtmScreenCountsRecentIncome = false,", "v82 ATM: the screen does not count already-collected AutoCollect income (config)")
+must_contain(_ATM_MCS, "local function atmScreenBalance(owner: Player): number\n\tif RaidConfig.Raid.AtmScreenCountsRecentIncome == true then\n\t\treturn MoneyCollectorService.GetRaidableBalance(owner)\n\tend\n\tlocal profile = profileOf(owner)\n\tif not profile then\n\t\treturn 0\n\tend\n\treturn math.max(0, math.floor(tonumber(profile.PendingCash) or 0))\nend", "v82 ATM: atmScreenBalance = PendingCash (what walking in / AutoCollect pays out)")
+must_contain(_ATM_MCS, "local amount = if owner then atmScreenBalance(owner) else 0\n\t\t\trefreshBillboard(inst, amount, atmTitle(owner, plotId, amount))", "v82 ATM: RefreshAllBillboards paints atmScreenBalance")
+must_contain(_ATM_MCS, "local amount = atmScreenBalance(player)\n\tfor _, inst in ipairs(CollectionService:GetTagged(TAG)) do", "v82 ATM: RefreshForPlayer paints atmScreenBalance")
+must_not_contain(_ATM_MCS, "local amount = if owner then MoneyCollectorService.GetRaidableBalance(owner) else 0", "v82 ATM: no screen paints the raidable balance (RefreshAllBillboards)")
+must_not_contain(_ATM_MCS, "local amount = MoneyCollectorService.GetRaidableBalance(player)", "v82 ATM: no screen paints the raidable balance (RefreshForPlayer)")
+must_contain(_ATM_RC, "AutoCollectCountsRecentIncome = true,", "v82 ATM: raids still count recent AutoCollect income (not raid immunity)")
+must_contain(_ATM_MCS, "balance += math.min(recentAutoSum(victim.UserId), cash)", "v82 ATM: GetRaidableBalance unchanged (recent auto income, capped at Cash)")
+
+# airweapons (owner request part 2): only combat aircraft armed, server-authoritative, dark behind WeaponsLive except for
+# the owner's playtest account; phone fire buttons beside the ▲▼ column
+AW_CFG = "src/ReplicatedStorage/Shared/Configs/AircraftWeaponConfig.luau"
+AW_SVC = "src/ServerScriptService/Server/Services/AirWeaponService.luau"
+AW_ORD = "src/ServerScriptService/Server/Modules/AirOrdnance.luau"
+AW_CLI = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/AirWeaponsClient.luau"
+must_contain(AW_CFG, "\tWeaponsLive = false, -- ship dark", "airweapons: WeaponsLive ships false")
+must_contain(AW_CFG, "\treturn AdminConfig.IsPlaytestOwner(userId) == true\n", "airweapons: live for the owner's playtest account only (AdminConfig.IsPlaytestOwner)")
+for _aw_unarmed in ("TransportHeli", "CargoPlane", "MedevacHeli", "AWACSPlane", "TankerPlane", "HeavyLiftHeli", "VTOLTransport"):
+    must_contain(AW_CFG, f"\t\t{_aw_unarmed} = true,", f"airweapons: {_aw_unarmed} stays unarmed")
+must_contain(AW_CFG, 'AttackHeli = { "HeliNoseGun", "HeliRockets" },', "airweapons: attack helicopters get a nose gun + rockets")
+must_contain(AW_CFG, 'Fighter = { "JetCannon", "JetMissiles" },', "airweapons: fighters get a gun + missiles")
+must_contain(AW_CFG, 'Strike = { "StrikeBombs" },', "airweapons: strike jets get bombs")
+must_contain(AW_CFG, 'Bomber = { "BomberStick" },', "airweapons: bombers get a bomb drop")
+must_contain(AW_CFG, "\t\tButtonPx = 64, -- >= 44 real", "airweapons: fire buttons 64 real px (>= 44)")
+must_contain(AW_SVC, 'RateLimitService.Allow(player, "air_fire", CFG.RemoteRate, CFG.RemoteBurst)', "airweapons: fire requests rate-limited")
+must_contain(AW_SVC, "\tif not CFG.LiveFor(player.UserId) then\n\t\treturn refuse(\"off\")", "airweapons: the server evaluates WeaponsLive / owner override")
+must_contain(AW_SVC, '\tif seat:GetAttribute("WE_SeatRole") ~= "Driver" then\n\t\treturn refuse("not_pilot")', "airweapons: pilot seat only")
+must_contain(AW_SVC, "\tif rec.OwnerUserId ~= player.UserId then\n\t\treturn refuse(\"not_owner\")", "airweapons: the owner's own aircraft only")
+must_contain(AW_SVC, "local dir = clampToArc(d.Unit, chassis.CFrame.LookVector, def.ArcDeg)", "airweapons: the aim is clamped into the weapon arc")
+must_contain(AW_SVC, "CombatDamage.LineOfSight(origin, cd.Part.Position, filter, cd.Model, false, 3)", "airweapons: missile locks need line of sight")
+must_contain(AW_SVC, "pcall(CombatService.ApplyRadiusDamage, attacker, center, radius, def.Damage, {", "airweapons: splash through CombatService.ApplyRadiusDamage")
+must_contain(AW_SVC, "pcall(VehicleHealth.ApplyRadiusDamage, center, radius, def.Damage, attacker, def.Class, {", "airweapons: vehicle splash through VehicleHealth")
+must_contain(AW_SVC, "local ok, res = pcall(CombatService.ApplyHit, attacker, part, amount, opts)", "airweapons: direct hits through CombatService.ApplyHit")
+must_contain(AW_SVC, "if ownerUid == nil or allyUid(attacker, ownerUid) or AirWeaponService.BaseShielded(ownerUid) then", "airweapons: allied / shielded bases never splashed")
+for _aw_bad in ("payload.T", "payload.Target", "TargetUserId", "TargetNpcId", "AddCash", "GiveCash"):
+    must_not_contain(AW_SVC, _aw_bad, f"airweapons: the service never reads `{_aw_bad}`")
+must_contain(AW_ORD, "local res = Workspace:Raycast(rec.Pos, seg, rec.Params)", "airweapons: ordnance is server-stepped with one ray per step")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", 'safeInit("AirWeaponService", AirWeaponService, deps)', "airweapons: Bootstrap inits AirWeaponService")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "local airReach = AircraftWeaponConfig.HitReach(_weaponId)", "airweapons: gates / guards take aircraft hits out to the weapon range")
+must_contain("src/ServerScriptService/Server/Services/CombatService/CombatFx.luau", "I = id, V = velocity, T = maxSeconds, G = g }", "airweapons: WeaponFx launch carries the bomb gravity")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/WeaponVisuals.luau", "math.clamp(tonumber(p.G) or 0, 0, 5)", "airweapons: the client draws falling bombs")
+must_contain("src/ReplicatedStorage/Shared/Configs/AimAssistConfig.luau", "\tAircraft = {\n\t\tClasses = {", "airweapons: aircraft gun assist lives in AimAssistConfig")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'AirNoseGun = { ModelAssetId = 0, Mount = "Cockpit"', "airweapons: aircraft weapons reuse the v79 vehicle-gun hooks (no dress load)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "AirWeaponsClient.Init(Remotes.TryGetEvent)", "airweapons: VehicleController starts the fire buttons")
+must_contain(AW_CLI, 'local GUI_NAME = "WarEmpireVehicleWeapons"', "airweapons: fire buttons in their own vehicle ScreenGui (no UIScale)")
+must_contain(AW_CLI, 'if seat and m and m:IsA("Model") and live and seat:GetAttribute("WE_SeatRole") == "Driver" then', "airweapons: buttons only for the pilot with weapons live")
+must_contain(AW_CLI, "b.Hint.Visible = keys and k ~= nil", "airweapons: key hints only when PreferredInput is keyboard / gamepad")
+for _aw_bad in ("RenderStepped", "Heartbeat", "GetDescendants", 'WaitForChild("WE_Remotes")'):
+    must_not_contain(AW_CLI, _aw_bad, f"airweapons: fire buttons never use `{_aw_bad}`")
+
+# --- ownerfb BANK lane (owner phone 2026-09-27): "the bank guards respawn super fast, never a chance to rob the bank" and
+#     the yellow bar over the compass. Live Jobs-OFF bank: BankRaidService owns the guard respawn (SpawnNPC NoRespawn) and
+#     brings the dead guards back as one group (BankRaidConfig.GuardRespawn); CompassController turns Roblox's own topbar
+#     health bar off (it drew in the compass slot while hurt). Kill cash / XP, CombatService's respawn time and the
+#     Jobs-ON staged values (OpsConfig top-up, 670bbf6) are unchanged. Stand-in drivers: ownerfb/bank (not Roblox). ---
+BG_BRS = 'src/ServerScriptService/Server/Services/BankRaidService.luau'
+BG_BRC = 'src/ReplicatedStorage/Shared/Configs/BankRaidConfig.luau'
+BG_CC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CompassController.luau'
+# the numbers (config-first): a 90 s window after the last kill, 30 s after a payout, each guard back within 180 s of its
+# own death (+45 s forced), a hold defers them 60 s at most, never within 25 studs / in sight (150) unless forced, and
+# never within 8 studs even then
+for _bg in ('\tGuardRespawn = {\n\t\tEnabled = true,', '\t\tDelaySeconds = 90,', '\t\tMaxDownSeconds = 180,', '\t\tAfterRaidSeconds = 30,',
+            '\t\tRaidDeferMaxSeconds = 60,', '\t\tClearRadius = 25,', '\t\tSightRadius = 150,', '\t\tForceAfterSeconds = 45,',
+            '\t\tMinSpawnStuds = 8,', '\t\tCheckSeconds = 1,'):
+    must_contain(BG_BRC, _bg, 'ownerfb bank: BankRaidConfig.GuardRespawn `%s`' % _bg.split('\n')[-1].strip())
+# the guards are NoRespawn in group mode (CombatService no longer brings each back 18 s after its own death); the kill
+# switch keeps the old 2-argument spawn
+must_contain(BG_BRS, 'local GUARD_OPTS = { NoRespawn = true }', 'ownerfb bank: bank guards spawn NoRespawn (BankRaidService owns the respawn)')
+must_contain(BG_BRS, 'local rec = if group then CombatService.SpawnNPC(typeId, cf, GUARD_OPTS) else CombatService.SpawnNPC(typeId, cf)', 'ownerfb bank: GuardRespawn.Enabled = false keeps the old per-guard respawn')
+must_contain(BG_BRS, '\treturn gr ~= nil and gr.Enabled == true', 'ownerfb bank: the group respawn runs only with GuardRespawn.Enabled')
+# the respawn rules: group due, per-guard MaxDown cap, CombatService floor (no faster kill farm), robbery defer, free
+# post (no player near / in sight), forced (never within MinSpawnStuds; an occupied post moves)
+must_contain(BG_BRS, '\tlocal due = last + gr.DelaySeconds', 'ownerfb bank: the group clock is the last guard death + DelaySeconds')
+must_contain(BG_BRS, '\t\tdue = math.min(due, raidEnd + gr.AfterRaidSeconds)', 'ownerfb bank: a payout brings the refill forward to AfterRaidSeconds after it')
+must_contain(BG_BRS, 'local slotDue = if deadAt then math.max(math.min(due, deadAt + gr.MaxDownSeconds), deadAt + floorS) else due', 'ownerfb bank: each guard at most MaxDownSeconds after its own death, never before the CombatService floor')
+must_contain(BG_BRS, '\treturn tonumber(CombatConfig.NPCRespawnSeconds) or 18', 'ownerfb bank: the floor is CombatService\'s own respawn time (no faster kill farm)')
+must_contain(BG_BRS, 'and not (robbing and nowC < slotDue + gr.RaidDeferMaxSeconds)', 'ownerfb bank: nobody walks in on a running vault hold (RaidDeferMaxSeconds cap)')
+must_contain(BG_BRS, '\t\tif d < gr.ClearRadius then\n\t\t\treturn false\n\t\tend\n\t\tif d <= gr.SightRadius and (clearRay(v.Eye, p, params) or clearRay(v.Eye, head, params)) then', 'ownerfb bank: a free post has no player within ClearRadius and none in sight within SightRadius')
+must_contain(BG_BRS, '\t\t\telseif nowC >= slotDue + gr.ForceAfterSeconds then\n\t\t\t\tcf = if farFromAll(slot.Post.Position, vs, gr.MinSpawnStuds) then slot.Post else displacedSpot(slot.Post, vs, params)', 'ownerfb bank: forced after ForceAfterSeconds, never within MinSpawnStuds (an occupied post moves)')
+must_contain(BG_BRS, '\tlastRaidEndAt = os.clock() -- GuardRespawn.AfterRaidSeconds', 'ownerfb bank: a payout is noted for the refill (after AddCash succeeded)')
+must_contain(BG_BRS, '\t\tstepGuards(os.clock()) -- before the vault lookup', 'ownerfb bank: the 4 Hz bank tick steps the guard roster')
+must_contain(BG_BRS, '\tif not anyDown or nowC < nextRespawnCheckAt then\n\t\treturn\n\tend\n\tlocal gr = BankRaidConfig.GuardRespawn\n\tnextRespawnCheckAt = nowC + gr.CheckSeconds', 'ownerfb bank: the post / sight test runs at most once per CheckSeconds and only while a guard is down')
+must_not_contain(BG_BRS, 'WaitForChild("NPCs")', 'ownerfb bank: no unbounded wait for the NPC folder (FindFirstChild only)')
+# unchanged: kill cash / XP per bank guard, CombatService's respawn time, the Jobs-ON top-up (670bbf6)
+must_contain('src/ReplicatedStorage/Shared/Configs/CombatConfig.luau', '\t\t\tCashReward = 150,\n\t\t\tXPReward = 45,\n\t\t\tColor = Color3.fromRGB(55, 65, 120),', 'ownerfb bank: bank-guard kill cash 150 / XP 45 unchanged')
+must_contain('src/ReplicatedStorage/Shared/Configs/CombatConfig.luau', '\tNPCRespawnSeconds = 18,', 'ownerfb bank: CombatConfig.NPCRespawnSeconds unchanged (18)')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', '\t\tTopUpDelaySeconds = 18,', 'ownerfb bank: the Jobs-ON bank top-up delay is unchanged (Jobs OFF; cutover item, ASSUMPTIONS BG-7)')
+# the compass slot: Roblox's topbar health bar is off (our health bar + DamageEdge show health)
+must_contain('src/ReplicatedStorage/Shared/Configs/HudConfig.luau', '\t\tHideRobloxHealthBar = true,', 'ownerfb bank: HudConfig.TopStrip.Compass.HideRobloxHealthBar')
+must_contain(BG_CC, '\t\t\t\tStarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)', 'ownerfb bank: the compass turns Roblox\'s topbar health bar off (it drew in the compass slot)')
+must_contain(BG_CC, 'function CompassController.Init()\n\thideRobloxHealthBar()', 'ownerfb bank: the health bar goes off at compass Init')
+must_contain(BG_CC, '\tif C.HideRobloxHealthBar ~= true then\n\t\treturn\n\tend', 'ownerfb bank: the Roblox health bar switch is config-first')
+# fix round 1: with Roblox's topbar bar off, the player's own health still shows in a seat that cannot shoot (a driver
+# of an open vehicle takes guard hits to his Humanoid): the same bar moves to the top-centre stack under the vehicle bar
+BG_CMB = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau'
+must_contain('src/ReplicatedStorage/Shared/Configs/HudConfig.luau', '\tSeated = {\n\t\tEnabled = true,\n\t\tStackOrder = 24.5,\n\t\tWidthPx = 230, -- = VehicleCombatConfig.Ui.HudBar.Width, so the two bars line up\n\t\tHeightPx = 10, -- = VehicleCombatConfig.Ui.HudBar.Height\n\t\tHideWhen = { "Dead", "Modal" },\n\t},', 'ownerfb bank fix1: HudConfig.Health.Seated (on, order 24.5 under the vehicle bar, no "Driving" in HideWhen)')
+must_contain(BG_CMB, '\tlocal want = typeof(cfg) == "table" and cfg.Enabled == true and not seatAllowsFire()', 'ownerfb bank fix1: the seated health bar is config-first and follows seatAllowsFire')
+must_contain(BG_CMB, '\t\tHudLayout.BindVisibility(hp, { ShowWhen = HP.ShowWhen, HideWhen = cfg.HideWhen })\n\t\tHudLayout.RegisterTopStack("PlayerHP", hp, tonumber(cfg.StackOrder) or 24.5, { Space = "Hud" })', 'ownerfb bank fix1: seated, the health bar joins the top stack with Seated.HideWhen')
+must_contain(BG_CMB, '\tHudLayout.UnregisterTopStack("PlayerHP")', 'ownerfb bank fix1: on foot again, the health bar leaves the top stack')
+must_contain(BG_CMB, '\tHudLayout.BindVisibility(hp, HP, seatAllowsFire)\nend', 'ownerfb bank fix1: on foot again, the on-foot rule is restored')
+must_contain(BG_CMB, 'local function refreshBound()\n\tW2.placeHealth()', 'ownerfb bank fix1: every seat / Driving change re-places the health bar')
+must_contain(BG_CMB, '\t\tif hp and not Feel.HpStacked then\n\t\t\thp.Size = UDim2.fromOffset(math.max(w, HP.MinWidth), HP.Height)', 'ownerfb bank fix1: the hotbar never resizes the seated bar')
+
+# --- ownerfb/gate (owner phone feedback 2026-09-27, "The turrets should be outside the gate"): the AutoGun nests stand
+# OUTSIDE the main gate, one each side of the approach, backs to the wall; the guards stay inside; an AutoGun fires at
+# the first enemy it can SEE (its side of the wall first, the last ray probing the rest in turn), every shot rolls a hit
+# chance and shows a tracer (CLAUDE.md combat fairness), no ray reads "clear" past its length, and an outside gun's
+# reach is capped (AutoGunOutsideMaxRange) so the default Starter Rifle can still siege the gate from beyond it.
+# Headless-verified (NOT Roblox): every pin below PASSES on the ownerfb/gate candidate; each [new], [fix1] or [fix2] pin
+# FAILS on clean 3b5ac28 (28); each [fix2] pin also FAILS on the fix-round-1 candidate (4, and nothing else fails there);
+# the one [guard] pin passes on every tree on purpose (the guards must stay inside). Paste above the final
+# `parse_gate()` call.
+OFG_GDS = "src/ServerScriptService/Server/Services/GateDefenseService.luau"
+OFG_GDC = "src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau"
+must_contain(OFG_GDC, "\tAutoGunOutside = true,", "ownerfb/gate [new]: AutoGun nests stand OUTSIDE the main gate (config switch on; false = the v69 inside posts)")
+must_contain(OFG_GDC, "\tAutoGunOutsideFlankX = 16,", "ownerfb/gate [new]: outside nests 16 studs either side of the gate centre (a 30-degree approach of the widest body passes)")
+must_contain(OFG_GDC, "\tAutoGunOutsideWallGap = 4.5,", "ownerfb/gate [new]: outside nests 4.5 studs past the wall's outer face (a full 2.2-stud sandbag still clears the wall)")
+must_contain(OFG_GDS, 'for _, name in ipairs({ "WallGate_L", "WallGate_R" }) do', "ownerfb/gate [new]: the wall thickness is read from the built gate-face wall, never assumed")
+must_contain(OFG_GDS, "local gunOutZ = if outside then gateWallHalfThickness(plotFolder, posts) + GateDefenseConfig.AutoGunOutsideWallGap else 0", "ownerfb/gate [new]: outside post = wall outer face + AutoGunOutsideWallGap")
+must_contain(OFG_GDS, "then gateCf * CFrame.new(sx, 0, gunOutZ) * CFrame.Angles(0, math.pi + math.rad(yaw), 0)", "ownerfb/gate [new]: outside post on gate-local +Z (away from PlayerSpawn), facing out, toed in by AutoGunYawDeg")
+must_contain(OFG_GDS, "local at = gateCf * CFrame.new(sx, 0, -guardInside)", "ownerfb/gate [guard]: the gate guards stay INSIDE the gate (they chase to the ATM; a closed gate would lock them out)")
+must_contain(OFG_GDS, "for _, c in ipairs(enemiesInAggro(def, fromPos, aggro, aggro)) do", "ownerfb/gate [new]: an AutoGun walks the enemies in priority order")
+must_not_contain(OFG_GDS, "local plr, hum, troot, dist = nearestEnemy(def, fromPos, aggro, aggro)", "ownerfb/gate [new]: an AutoGun no longer locks on a top-priority enemy behind the wall")
+must_contain(OFG_GDS, "\t\tif insidePlot(def, c.Root.Position) ~= t.Outside then\n\t\t\ttable.insert(cands, c)", "ownerfb/gate [fix1]: enemies on the gun's side of the wall are tried first (3 behind the wall no longer switch the outside guns off)")
+must_contain(OFG_GDS, "local head = math.min(n, rays - 1)", "ownerfb/gate [fix1]: all rays but the last go to the top of the list")
+must_contain(OFG_GDS, "local at = idx or (head + 1 + (t.ProbeStep % (n - head)))", "ownerfb/gate [fix1]: the last ray probes the rest of the list in turn (stays on an enemy it sees)")
+must_contain(OFG_GDS, "\t\t\tt.ProbeStep = at - head -- next think: the one after it", "ownerfb/gate [fix1]: an unseen probe moves on next think")
+must_contain(OFG_GDS, "\t\t\tt.Outside = outside\n", "ownerfb/gate [fix1]: each gun knows which side of the wall it stands on")
+must_contain(OFG_GDS, "\tif dir.Magnitude > (GateDefenseConfig.LosMaxDistance or 125) then\n\t\treturn false\n\tend", "ownerfb/gate [fix1]: past the ray length the target is NOT in sight (was cut at 110 and read as clear)")
+must_not_contain(OFG_GDS, "dir = dir.Unit * maxD", "ownerfb/gate [fix1]: the line-of-sight ray is never cut short and read as clear")
+must_contain(OFG_GDC, "\tLosMaxDistance = 125,", "ownerfb/gate [fix1]: LosMaxDistance 125 >= every TurretRange / AggroRange / ShootRange (115 / 120 / 78)")
+must_contain(OFG_GDS, "\t\tlocal hit = turretRng:NextNumber() < turretHitChance(dist, aggro)\n\t\tif hit then\n\t\t\tdealDamage(", "ownerfb/gate [new]: every AutoGun shot rolls the hit chance (CLAUDE.md: NPC shots need line of sight and a hit chance)")
+must_contain(OFG_GDS, "\t\tturretShotFx(def, t, fromPos, troot.Position, hit)", "ownerfb/gate [fix1]: every AutoGun roll, hit or miss, shows a tracer")
+must_contain(OFG_GDS, 'pcall(fx.Bullet, "gate:" .. tostring(def.PlotId) .. ":" .. tostring(t.Slot), 0, "NPC", origin, landed, if hit then "P" else "M")', "ownerfb/gate [fix1]: AutoGun tracers go through the W2 WeaponFx path (CombatFx.Bullet: UnreliableRemoteEvent, per-gun + per-recipient buckets)")
+must_contain(OFG_GDS, 'local fxModule = cs and cs:FindFirstChild("CombatFx")', "ownerfb/gate [fix1]: CombatFx found without WaitForChild and without requiring CombatService")
+must_contain(OFG_GDC, "\tTurretShotFx = true,", "ownerfb/gate [fix1]: AutoGun shot effects on")
+must_contain(OFG_GDC, "\tTurretHitChanceNear = 0.75,", "ownerfb/gate [new]: AutoGun hit chance 0.75 at or inside TurretHitNearStuds")
+must_contain(OFG_GDC, "\tTurretHitChanceFar = 0.30,", "ownerfb/gate [new]: AutoGun hit chance 0.30 at the gun's reach")
+must_contain(OFG_GDC, "\tTurretLosChecksPerThink = 3,", "ownerfb/gate [new]: at most 3 line-of-sight rays per AutoGun per think")
+must_contain(OFG_GDC, "\tAutoGunOutsideMaxRange = 100,", "ownerfb/gate [fix2]: an outside AutoGun reaches at most 100 studs (Starter Rifle reach 124 keeps a ~106-124 band to siege the gate; L5's 115 left ~2)")
+must_contain(OFG_GDS, "\tlocal aggro = turretReach(stats, t.Outside)\n", "ownerfb/gate [fix2]: an AutoGun's engage + hit-chance reach comes from turretReach (outside cap)")
+must_contain(OFG_GDS, "\tif outside and typeof(cap) == \"number\" and cap > 0 then\n\t\tr = math.min(r, cap)\n\tend", "ownerfb/gate [fix2]: outside posts take min(TurretRange, AutoGunOutsideMaxRange); inside (rollback) posts keep TurretRange")
+must_not_contain(OFG_GDS, "local aggro = stats.TurretRange or 100", "ownerfb/gate [fix2]: an AutoGun no longer engages at the raw level TurretRange")
+# results (LUAU_COMPILE=scratchpad/bin/luau-compile, headless; fix round 2): CAND (3b5ac28 + this lane + this block) Done PASS=3418 FAIL=0 (29/29 ownerfb pins PASS);
+# clean 3b5ac28 + this block: Done PASS=3390 FAIL=28 = exactly the 28 [new]/[fix1]/[fix2] pins, 0 other failures; the [guard] pin passes;
+# fix-round-1 candidate + this block: Done PASS=3414 FAIL=4 = exactly the 4 [fix2] pins;
+# CAND + vscale R2.2 files (GateDefenseService 3-way merged, 0 conflicts) + the vscale bps_pins.txt block together: Done PASS=3514 FAIL=0.
+# ownerfb/gate [fix3, integrator]: ApplyDamage's player gate-hit limit lives in config (was a literal 120); the outside-gun
+# cap must leave the Starter Rifle a siege band inside it (cap 100 + ~6 post offset < 120).
+OFG_GDS_F3 = "src/ServerScriptService/Server/Services/GateDefenseService.luau"
+must_contain(OFG_GDC, "\tGateHitMaxDistance = 120,", "ownerfb/gate [fix3]: GateHitMaxDistance 120 in GateDefenseConfig")
+must_contain(OFG_GDS_F3, "else GateDefenseConfig.GateHitMaxDistance", "ownerfb/gate [fix3]: ApplyDamage reads GateDefenseConfig.GateHitMaxDistance")
+must_not_contain(OFG_GDS_F3, "GuardHitMaxDistance else 120", "ownerfb/gate [fix3]: no literal 120 gate-hit limit in ApplyDamage")
+
+# --- squadfair (CLAUDE.md combat fairness for squad units): every unit shot (ATTACK and FOLLOW escort) needs a line of
+# sight and rolls a hit chance (a miss spends the cooldown); hits go through CombatService's NPC damage path
+# (ApplyUnitHit -> hurtNPC: creator tag, provoke, kill credit); squads never hurt players or statues.
+# v2: a walled-off nearest hostile falls back to the nearest visible one in range (at most UnitLosRaysPerCheck rays);
+# an ATTACK chase with nothing in sight gives up after UnitBlockedChaseSeconds (the unit walks its owner's trail);
+# blocked re-checks wait one shot cooldown on a cached RaycastParams; squad hit chances are squad values.
+# v3: no provoker rule (guards take the nearest player, as on HEAD); the owner gate covers EVERY squad hit on a grouped
+# or stance NPC; the blocked timer starts over when nothing is in the band or the chased hostile changes; a repeated
+# order keeps the re-check wait and the give-up; ATTACK keeps HEAD's 0.85 x AttackRange fire band; the hit chances
+# are checked as numbers (a config-only retune inside the bounds passes) and the code caps them at UnitMaxHitChance;
+# another NPC's body never blocks a squad ray (UnitLosIgnoreNPCBodies).
+# 3.2: a give-up holds for the fight where it happened only (the hostiles within UnitGiveUpScopeStuds of the spot; the
+# last two spots are kept): the target is the nearest hostile outside those fights; a shot into one, or a new order,
+# ends them; a nearest swap inside the band keeps the blocked timer.
+# 3.3: the give-up does not restart the blocked timer, and leaving a given-up fight restarts it only for a target beyond
+# the band: after a give-up, a walled hostile elsewhere inside the band is given up at its first blocked check, with no
+# approach (deliberate: two spots are remembered, a fresh approach there lets 3+ walled spots take turns; reviewer S1 /
+# S2, driver w4/sqf33_s.luau). Hit chances 0.98 / 0.96 (owner decision A/B, middle option) sit inside the numeric pin ---
+SQF_CFC = 'src/ReplicatedStorage/Shared/Configs/CombatFairnessConfig.luau'
+SQF_SO = 'src/ServerScriptService/Server/Services/SquadOrdersService.luau'
+SQF_CS = 'src/ServerScriptService/Server/Services/CombatService/init.luau'
+SQF_NPC = 'src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau'
+must_contain(SQF_CFC, '\tUnitAttackRequireLos = true,', 'squadfair: ATTACK unit shots need line of sight (config)')
+must_contain(SQF_CFC, '\tUnitChaseWithoutLos = true,', 'squadfair: an ATTACK unit with nothing in sight closes in (config)')
+must_contain(SQF_CFC, '\tUnitLosIgnoreNPCBodies = true,', 'squadfair v3: another NPC\'s body never blocks a squad ray (config)')
+# v3: the hit chances as numbers, not exact texts: 0 < Far <= Near <= Max < 1, 0 <= Min <= Far, 0 < NearStuds
+_sqf_cfc = read(SQF_CFC) or ''
+def _sqf_num(key):
+    m = re.search(r'^\t' + key + r' = ([0-9]*\.?[0-9]+),', _sqf_cfc, re.M)
+    return float(m.group(1)) if m else None
+_sqf_v = {k: _sqf_num(k) for k in ('UnitNearStuds', 'UnitNearHitChance', 'UnitFarHitChance', 'UnitMinHitChance', 'UnitMaxHitChance')}
+_sqf_missing = [k for k, v in _sqf_v.items() if v is None]
+if _sqf_missing:
+    bad(f'squadfair v3: unit hit chance keys missing or not plain numbers in {SQF_CFC}: {", ".join(_sqf_missing)}')
+else:
+    _n, _f, _lo, _hi, _nd = _sqf_v['UnitNearHitChance'], _sqf_v['UnitFarHitChance'], _sqf_v['UnitMinHitChance'], _sqf_v['UnitMaxHitChance'], _sqf_v['UnitNearStuds']
+    if 0 < _f <= _n <= _hi < 1 and 0 <= _lo <= _f and _nd > 0:
+        ok(f'squadfair v3: unit hit chances are real chances (0 < Far {_f} <= Near {_n} <= Max {_hi} < 1, Min {_lo}, NearStuds {_nd}): a squad shot can always miss')
+    else:
+        bad(f'squadfair v3: unit hit chances out of bounds: Far {_f}, Near {_n}, Max {_hi}, Min {_lo}, NearStuds {_nd} (want 0 < Far <= Near <= Max < 1, 0 <= Min <= Far, NearStuds > 0)')
+must_contain(SQF_CFC, '\tEscortRequireLos = true,', 'squadfair: escort shots keep their line of sight rule')
+must_contain(SQF_CFC, '\tUnitKillCreditOnAttack = false,', 'squadfair: unit kill credit rule unchanged (ATTACK kills pay nothing)')
+must_contain(SQF_CFC, '\tEscortIgnoreCalm = true,', 'squadfair: the FOLLOW escort never opens fire on a calm Passive NPC (config; assumption SQF-11)')
+must_contain(SQF_CFC, '\tUnitLosRaysPerCheck = 3,', 'squadfair v2: at most 3 line-of-sight rays per unit per shot check (config)')
+must_contain(SQF_CFC, '\tUnitBlockedChaseSeconds = 6,', 'squadfair v2: an ATTACK chase with nothing in sight gives up after 6 s (config)')
+must_contain(SQF_CFC, '\tUnitChaseProgressStuds = 2,', 'squadfair v2: an approach that gains no 2 studs in that time gives up too (config)')
+must_contain(SQF_CFC, '\tUnitGiveUpScopeStuds = 30,', 'squadfair 3.2: a give-up holds for hostiles within 30 studs of where it happened (config)')
+must_contain(SQF_CFC, '\tUnitRepeatOrderGraceSeconds = 2,', 'squadfair v3: the same order again within 2 s changes nothing (config)')
+must_contain(SQF_CFC, '\tUnitProvokeNeedsOwner = true,', 'squadfair: no provoke by proxy (config)')
+must_contain(SQF_CFC, '\tUnitProvokeOwnerStuds = 0,', 'squadfair v2: owner reach = the NPC type AggroRange (config)')
+must_contain(SQF_CFC, '\tUnitHitErrorLogSeconds = 30,', 'squadfair v2: a failing ApplyUnitHit is logged at most every 30 s (config)')
+# SquadOrdersService: line of sight, hit roll, damage path
+must_contain(SQF_SO, '\tlocal eye = unit.Root.Position + Vector3.new(0, CombatFairnessConfig.NpcEyeHeight, 0)\n\tlocal delta = troot.Position - eye\n', 'squadfair: unit line of sight = eye ray to the target root')
+must_contain(SQF_SO, '\ttable.insert(losIgnore, unit.Model)\n\ttable.insert(losIgnore, ensureFolder())\n', 'squadfair: the unit and every squad never block its ray')
+must_contain(SQF_SO, '\tif player.Character then\n\t\ttable.insert(losIgnore, player.Character :: Instance)\n\tend\n\tlosParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true\n\tlosParams.FilterDescendantsInstances = losIgnore', 'squadfair v2: the owner never blocks; non-collidable decor per NpcLosRespectCanCollide (NPC rule)')
+must_contain(SQF_SO, '\tlocal blocked = Workspace:Raycast(eye, delta, losParams) ~= nil\n', 'squadfair v2: the unit ray is cast on the one cached RaycastParams')
+must_contain(SQF_SO, '\tif CombatFairnessConfig.UnitLosIgnoreNPCBodies == true then\n\t\tlocal bodies = npcBodies()\n\t\tif bodies then\n\t\t\ttable.insert(losIgnore, bodies)\n\t\tend\n\tend\n', 'squadfair v3 (X10): NPC bodies (CombatService\'s WarEmpireNPCs folder) never hide a hostile from a squad ray; walls still do')
+must_contain(SQF_SO, '\tnpcBodyFolder = Workspace:FindFirstChild("WarEmpireNPCs")\n', 'squadfair v3: the NPC folder is looked up by name and cached (no scan per ray)')
+must_contain(SQF_SO, 'local losParams = RaycastParams.new()\nlosParams.FilterType = Enum.RaycastFilterType.Exclude\nlosParams.IgnoreWater = true\n', 'squadfair v2: one module-level RaycastParams (Exclude, water ignored) for every unit ray')
+must_not_contain(SQF_SO, 'CombatDamage.LineOfSight(', 'squadfair v2: no RaycastParams per unit ray (CombatDamage.LineOfSight allocates one per call)')
+must_contain(SQF_SO, '\tunit.LastFireAt = now -- a miss spends the cooldown like a hit\n\tif rng:NextNumber() >= unitHitChance((troot.Position - unit.Root.Position).Magnitude) then\n\t\treturn false\n\tend', 'squadfair: every unit shot spends the cooldown, then rolls the hit chance')
+must_contain(SQF_SO, '\tlocal nearD = C.UnitNearStuds\n', 'squadfair: unit hit chance reads the Unit* config keys')
+must_contain(SQF_SO, '\tlocal hi = math.min(tonumber(C.UnitMaxHitChance) or 0.95, 0.99)\n\tlocal lo = math.min(tonumber(C.UnitMinHitChance) or 0.05, hi)\n\treturn math.clamp(chance, lo, hi)\n', 'squadfair v3: the code caps the unit hit chance at UnitMaxHitChance (never above 0.99, whatever the config says)')
+must_contain(SQF_SO, 'function SquadOrdersService.SetRandomForTests(seedOrRandom: any)', 'squadfair v2: the unit hit roll is seedable by tests only (SetRandomForTests)')
+must_not_contain(SQF_SO, 'function SquadOrdersService.SetRandom(', 'squadfair v2: no SetRandom (renamed SetRandomForTests)')
+must_contain(SQF_SO, 'local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit)', 'squadfair: a unit hit goes through CombatService.ApplyUnitHit (pcall; research damage kept)')
+must_contain(SQF_SO, '\tif not ok then\n\t\t-- squadfair: never silent (every squad would deal 0 damage), never a log flood (one line per UnitHitErrorLogSeconds)\n\t\tif now - hitErrLogAt >= (tonumber(CombatFairnessConfig.UnitHitErrorLogSeconds) or 30) then\n\t\t\twarn(', 'squadfair v2: an ApplyUnitHit error is warned, rate-limited')
+must_contain(SQF_SO, '\t\t\tand typeof(inst:GetAttribute("NPCId")) == "string"\n', 'squadfair: squads target CombatService NPCs only (no statues)')
+must_not_contain(SQF_SO, 'TakeDamage(', 'squadfair: no raw TakeDamage from a squad unit (the NPC damage path only)')
+must_not_contain(SQF_SO, 'escortHasLos', 'squadfair: one line of sight helper for ATTACK and escort')
+# v2: visible-target fallback (both orders), capped rays, only while blocked
+must_contain(SQF_SO, 'local function pickShot(player: Player, unit: SquadUnit, th: Humanoid, troot: BasePart, range: number, list: CandList, requireLos: boolean): (Humanoid?, BasePart?, number)', 'squadfair v2: pickShot (the nearest hostile if in sight, else the nearest visible one in range)')
+must_contain(SQF_SO, '\tif inRange then\n\t\trays = 1\n\t\tif unitHasLos(player, unit, troot) then\n\t\t\treturn th, troot, rays\n\t\tend\n\tend\n\tfor i = 1, list.N do\n\t\tif rays >= cap then\n\t\t\tbreak\n\t\tend', 'squadfair v2: the fallback runs only when the nearest is blocked or out of range, and stops at UnitLosRaysPerCheck rays')
+must_contain(SQF_SO, '\t\tif h ~= th and h.Health > 0 and r.Parent ~= nil and (r.Position - from).Magnitude <= range then\n\t\t\trays += 1\n\t\t\tif unitHasLos(player, unit, r) then\n\t\t\t\treturn h, r, rays', 'squadfair v2: the fallback takes the nearest hostile within range it can see')
+must_contain(SQF_SO, '\treturn math.clamp(math.floor(tonumber(CombatFairnessConfig.UnitLosRaysPerCheck) or 1), 1, 4)', 'squadfair v2: the ray cap reads UnitLosRaysPerCheck (1-4)')
+# v3: ATTACK keeps HEAD's fire band (0.85 x AttackRange) for its shot, its fallback list and its stop distance
+must_contain(SQF_SO, '\tlocal band = (OrdersConfig.AttackRange or 55) * 0.85 -- HEAD\'s ATTACK fire band: it fires only once this close\n\tlocal scope = giveUpScope()\n\t-- squadfair 3.2: `nh` is the nearest hostile outside the fights this unit gave up on, `zh` the nearest inside one\n\tlocal nh, nroot, dist, zh, zroot, zdist, heldA, heldB = nearestHostile(unit.Root.Position, aggro, false, player, attackCands, band, unit.GiveUpPos, unit.GiveUpPos2, scope)', 'squadfair v3 / 3.2: ATTACK lists fallback hostiles only inside HEAD\'s fire band (0.85 x AttackRange), skips NPCs the owner may not hurt, and targets the nearest hostile outside the fights it gave up on')
+must_contain(SQF_SO, '\t\tlocal th, troot, rays = pickShot(player, unit, nh, nroot, band, attackCands, CombatFairnessConfig.UnitAttackRequireLos == true)\n\t\tif th and troot then\n\t\t\t-- squadfair 3.2: a shot into a fight it gave up on ends those give-ups', 'squadfair v3: an ATTACK shot needs a clear line (pickShot, UnitAttackRequireLos) and fires only inside the band, as HEAD')
+must_not_contain(SQF_SO, 'pickShot(player, unit, nh, nroot, range,', 'squadfair v3: ATTACK never fires out to the full AttackRange (that made ATTACK stronger than HEAD)')
+must_contain(SQF_SO, '\t\tlocal sh, sr, rays = pickShot(player, unit, th, troot, range, escortCands, CombatFairnessConfig.EscortRequireLos == true)\n\t\tif sh and sr then', 'squadfair v2: an escort shot is taken only with a clear line, with the same fallback (pickShot, EscortRequireLos; AttackRange as HEAD)')
+must_contain(SQF_SO, 'escortHum, escortRoot = nearestHostile(proot.Position, r, CombatFairnessConfig.EscortIgnoreCalm == true, player, escortCands, r)', 'squadfair: EscortIgnoreCalm applies to the FOLLOW escort pick only; the escort pick skips NPCs the owner may not hurt')
+must_contain(SQF_SO, '\tlocal holds = if skipCalm == true and CombatService then CombatService.NPCHoldsFire else nil\n', 'squadfair: escort target pick asks CombatService which NPCs hold fire')
+must_contain(SQF_SO, '\t\t\t\t\tif not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(owner, id) == false) then\n', 'squadfair v2: the pick skips calm NPCs (escort) and NPCs this squad may not hurt (UnitMayHitNPC)')
+# v2/v3: blocked re-checks throttled; blocked chase gives up; no stale timer; repeated orders
+must_contain(SQF_SO, '\tunit.LosCheckAt = now + 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)\n\tunit.LosBlocked = true', 'squadfair v2: a check that found nothing in sight waits one shot cooldown (LosCheckAt)')
+must_contain(SQF_SO, '\treturn unitReady(unit, now) and now >= unit.LosCheckAt\n', 'squadfair v2: shot checks honour LosCheckAt')
+must_contain(SQF_SO, '\t\tif since ~= nil and now - since >= giveUpAfter then\n\t\t\tgiveUpFight(unit, nroot.Position) -- nothing in sight for UnitBlockedChaseSeconds', 'squadfair v2 / 3.2: an ATTACK chase with nothing in sight gives up that fight after UnitBlockedChaseSeconds')
+must_contain(SQF_SO, '\t\t\telseif now - unit.ChaseAt >= giveUpAfter then\n\t\t\t\tgiveUpFight(unit, nroot.Position) -- no nearer in UnitBlockedChaseSeconds', 'squadfair v2 / 3.2: an approach that gets no nearer gives up that fight too')
+must_contain(SQF_SO, '\t\telseif rays > 0 then\n\t\t\tlosBlockedFor(unit, now)\n\t\t\tif unit.BlockedSince == nil then\n\t\t\t\tunit.BlockedSince = now\n\t\t\tend\n\t\telse\n\t\t\tunit.BlockedSince = nil -- nothing in the band to check (it is walking in): no stale blocked timer\n', 'squadfair v3 (G2b): a check with nothing in the band to look at starts the blocked timer over (no give-up on a reachable enemy)')
+must_contain(SQF_SO, '\tif unit.ChaseHum ~= nh then\n\t\tif dist > band then\n\t\t\tunit.BlockedSince = nil\n\t\tend\n\t\tunit.ChaseBest = nil\n\t\tunit.ChaseHum = nh\n\tend', 'squadfair v3 / 3.2: another chased hostile: a fresh approach, and a fresh blocked spell when it stands beyond the band (a swap inside the band keeps the timer: nearest swaps along a wall never keep a unit pressed on it)')
+must_contain(SQF_SO, '\t\t\t\t\t\tif inA or inB then\n\t\t\t\t\t\t\tif d < zoneDist then\n', 'squadfair 3.2: a hostile of a fight the unit gave up on is never its first pick (nearestHostile avoid spots)')
+must_contain(SQF_SO, '\tif unit.GiveUpPos2 ~= nil and not heldB then\n\t\tunit.GiveUpPos2 = nil\n\tend\n\tif unit.GiveUpPos ~= nil and not heldA then\n\t\tunit.GiveUpPos = unit.GiveUpPos2\n\t\tunit.GiveUpPos2 = nil\n\tend\n', 'squadfair 3.2: a given-up fight with no hostile left in it is forgotten (a group that walks in later is a new fight)')
+must_contain(SQF_SO, '\tif unit.GiveUp and not givenUp then\n\t\t-- it leaves a given-up fight for a hostile elsewhere. Not a fresh start: beyond the band the ChaseHum change below\n\t\t-- restarts the blocked timer (a fresh approach), but inside the band the timer keeps running from the give-up, so\n\t\t-- a walled newcomer there is given up at its first blocked check, with no approach. Deliberate: a fresh approach\n\t\t-- here would let three walled spots take turns (only two are remembered)\n\t\tunit.ChaseHum = nil\n\tend\n\tunit.GiveUp = givenUp\n', 'squadfair 3.3 (S1): leaving a given-up fight clears only the chased hostile; the blocked timer keeps running unless the new target is beyond the band (an in-band walled newcomer is given up at once, no approach)')
+# 3.3 (S1 / S2), code lines only (comments ignored): leaving a given-up fight clears only ChaseHum, and giveUpFight
+# never touches the blocked timer, so neither restarts it (a restart there lets three walled spots take turns)
+_sqf_so = read(SQF_SO) or ''
+def _sqf_code(body):
+    return [l.split('--', 1)[0].strip() for l in body.split('\n') if l.split('--', 1)[0].strip()]
+_sqf_m1 = re.search(r'\n\tif unit\.GiveUp and not givenUp then\n(.*?)\n\tend\n\tunit\.GiveUp = givenUp\n', _sqf_so, re.S)
+_sqf_m2 = re.search(r'\nlocal function giveUpFight\(unit: SquadUnit, at: Vector3\)\n(.*?)\nend\n', _sqf_so, re.S)
+_sqf_c1 = _sqf_code(_sqf_m1.group(1)) if _sqf_m1 else None
+_sqf_c2 = _sqf_code(_sqf_m2.group(1)) if _sqf_m2 else None
+if _sqf_c1 == ['unit.ChaseHum = nil'] and _sqf_c2 is not None and not any(('BlockedSince' in l or 'Chase(' in l) for l in _sqf_c2):
+    ok('squadfair 3.3 (S1 / S2): neither a give-up nor leaving a given-up fight restarts the blocked timer (code: the leave branch is only `unit.ChaseHum = nil`; giveUpFight has no BlockedSince / clearChase / resetChase)')
+else:
+    bad(f'squadfair 3.3 (S1 / S2): a give-up or leaving a given-up fight restarts the blocked timer (leave branch {_sqf_c1}, giveUpFight {_sqf_c2}): three walled spots would take turns')
+must_contain(SQF_SO, '\tlocal zoneDist = if avoiding then maxRange else 0\n', 'squadfair 3.2: without avoid spots (the FOLLOW escort) the pick is unchanged')
+must_contain(SQF_SO, '\tlocal givenUp = nh == nil and zh ~= nil\n\tif givenUp then\n\t\tnh, nroot, dist = zh, zroot, zdist\n\tend\n', 'squadfair 3.2: a unit stays given up only while nothing outside the fights it gave up on is in reach')
+must_contain(SQF_SO, '\tunit.GiveUp = givenUp\n', 'squadfair 3.2: the give-up state follows what is in reach every think')
+must_contain(SQF_SO, '\t\t\tif nearSpot(troot.Position, unit.GiveUpPos, unit.GiveUpPos2, scope) then\n\t\t\t\tresetChase(unit)\n\t\t\telse\n\t\t\t\tclearChase(unit)\n\t\t\tend\n', 'squadfair 3.2: a shot into a given-up fight ends the give-ups; a shot elsewhere keeps them (no walk back to the old wall)')
+must_contain(SQF_SO, 'local function giveUpFight(unit: SquadUnit, at: Vector3)\n\tunit.GiveUpPos2 = unit.GiveUpPos\n\tunit.GiveUpPos = at\n\tunit.GiveUp = true\nend', 'squadfair 3.2 / 3.3: a give-up records its spot and keeps the one before (two walled spots never take turns); it leaves the blocked timer running (S1)')
+must_contain(SQF_SO, '\tclearChase(unit)\n\tunit.GiveUp = false\n\tunit.GiveUpPos = nil\n\tunit.GiveUpPos2 = nil\nend', 'squadfair 3.2: a new order (resetChase) forgets the given-up fights')
+must_contain(SQF_SO, '\tlocal s = tonumber(CombatFairnessConfig.UnitGiveUpScopeStuds) or 30\n\treturn if s > 0 then s else math.huge\n', 'squadfair 3.2: the give-up scope reads UnitGiveUpScopeStuds (0 = the round-3 rule)')
+must_contain(SQF_SO, '\tif unit.GiveUp then\n\t\t-- squadfair: no pressing on a wall; back to the owner\'s trail until a shot into that fight, a hostile elsewhere\n\t\t-- or a new order\n\t\tunit.AimRoot = nil\n\t\tunit.AimHum = nil\n\t\tif playerRoot then\n\t\t\tfollowMove(st, unit, playerRoot, trail, probe, now)', 'squadfair v2: a unit that gave up walks its owner\'s trail like FOLLOW (followMove)')
+must_contain(SQF_SO, '\tlocal repeatOrder = order == st.Order\n\t\tand st.OrderAt ~= nil\n\t\tand now - (st.OrderAt :: number) < (tonumber(CombatFairnessConfig.UnitRepeatOrderGraceSeconds) or 0)\n', 'squadfair v3: the same order again within UnitRepeatOrderGraceSeconds is a repeat')
+must_contain(SQF_SO, '\t\tu.LosCheckAt = math.max(u.LosCheckAt, now)\n\t\tif not repeatOrder then\n\t\t\tresetChase(u)', 'squadfair v3: no order ever re-checks a blocked line early; a repeat keeps the chase timers and the give-up')
+must_not_contain(SQF_SO, '\t\tu.LosCheckAt = 0\n', 'squadfair v3: an order never zeroes the blocked re-check wait (order spam cost)')
+must_contain(SQF_SO, '\t\t\t\t\tif (st.Order == "Follow" or (st.Order == "Attack" and anyGaveUp(st))) and proot and pathCfg and probe == nil then\n\t\t\t\t\t\tprobe = buildProbe(pathCfg)', 'squadfair v3: ATTACK builds the FollowPath probe only once a unit has given up')
+must_contain(SQF_SO, '\t\tunit.Humanoid:MoveTo(nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up', 'squadfair: an ATTACK unit with nothing in sight closes in (UnitChaseWithoutLos) until the give-up')
+# CombatService: squad hits, provoke by proxy
+must_contain(SQF_CS, 'function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: number, credit: boolean): (number, boolean)', 'squadfair: CombatService.ApplyUnitHit (squad hits)')
+must_contain(SQF_CS, '\tif model == nil or not model:IsA("Model") or Players:GetPlayerFromCharacter(model) ~= nil then\n\t\treturn 0, false -- never a player', 'squadfair: a squad never hurts a player (novice shield, clan ally, anyone)')
+must_contain(SQF_CS, '\tif not unitMayHit(owner, rec) then\n\t\treturn 0, false -- squadfair: a grouped / stance NPC whose owner is not near: no provoke by proxy\n\tend\n\treturn hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = true, NoCredit = credit ~= true })', 'squadfair v3: a squad hit on a grouped / stance NPC is refused while the owner is out of its reach; else hurtNPC (provoke + credit), no per-hit feedback')
+must_contain(SQF_CS, '\tif CombatFairnessConfig.UnitProvokeNeedsOwner ~= true or not (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then\n\t\treturn true\n\tend\n\tlocal reach = tonumber(CombatFairnessConfig.UnitProvokeOwnerStuds) or 0\n\tif not (reach > 0) then\n\t\treach = rec.Def.AggroRange\n\tend', 'squadfair v3: the owner gate covers EVERY hit on a grouped / stance NPC (calm or provoked; the hurtNPC provoke condition); plain Aggressive NPCs are never gated')
+must_contain(SQF_CS, '\treturn (root.Position - rec.Root.Position).Magnitude <= reach\n', 'squadfair v2: the owner\'s own character must be within that reach')
+must_contain(SQF_CS, 'function CombatService.UnitMayHitNPC(owner: Player, npcId: string): boolean', 'squadfair v2: CombatService.UnitMayHitNPC (the squad pick skips NPCs it may not hurt)')
+must_contain(SQF_CS, '\tlocal credit = not (fb ~= nil and fb.NoCredit == true)\n\tif attacker and credit then\n\t\ttagCreator(rec.Humanoid, attacker, fb and fb.UnitShot)', 'squadfair: a NoCredit hit leaves the creator tag alone')
+must_contain(SQF_CS, '\tif killed and attacker and credit then\n\t\tCombatService.OnNPCKilled(', 'squadfair: a NoCredit hit never pays the kill itself')
+must_contain(SQF_CS, '\tif attacker and (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then\n\t\t-- lane N: a player (or their squad unit) hurting a grouped / Passive NPC provokes its whole group', 'squadfair: every attacker hit (credit or not) provokes a grouped / Passive NPC')
+must_contain(SQF_CS, 'function CombatService.NPCHoldsFire(npcId: string): boolean', 'squadfair: CombatService.NPCHoldsFire (calm Passive NPC query)')
+# CombatNPC: one hold-fire rule; v3: no provoker rule (guards take the nearest player, as on HEAD)
+must_contain(SQF_NPC, '\tlocal held = holdsFire(rec, g)\n', 'squadfair: thinkStance and HoldsFire share one hold-fire rule')
+must_contain(SQF_NPC, 'function CombatNPC.HoldsFire(rec: any): boolean\n\treturn holdsFire(rec, groups[groupKey(rec)])', 'squadfair: CombatNPC.HoldsFire')
+must_not_contain(SQF_NPC, 'Provoker', 'squadfair v3 (guard, passes on HEAD): no provoker rule in CombatNPC (it let one player switch a guard group off)')
+must_not_contain(SQF_CS, 'NoteProvoker', 'squadfair v3 (guard, passes on HEAD): hurtNPC names no provoker')
+must_contain(SQF_NPC, '\tlocal target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)\n\tif target and g and provoked then\n\t\tg.LastContact = now -- contact keeps a provoked group fighting', 'squadfair v3 (guard, passes on HEAD): a stance NPC targets the nearest player, as on HEAD')
+
+# --- droppers v1b lane L1b (plate server; spec_droppers.md §13 "New pins, v1b" for the L1b files) ---
+# Paste directly above the final `parse_gate()` call, after the v1a L1a block (`_dr_bz_rules()`). A pin here either
+# fails on the L1a base tree or passes there by design (the must_not_contain pins, the economy guard, HEAD's money-path
+# code that v1b keeps) and was shown failing on a mutated copy of L1b (L1b_out/bps_pins.txt, L1b_out/pin_evidence.txt).
+# The ProductionFx / LabelGovernor / WorldLabelConfig v1b pins of §13 belong to lane L3b (their needles come from its code).
+# Money: the plate still pays only through the server's own prompt / ClickDetector -> tryAward (owner, cooldown, rate
+# limit) -> takeBudget(n) -> ONE AccruePendingCash of pickAward() * n. Fix round 1 pins that whole path (a bundle costs
+# the n awards it pays for, the refill runs on real time only, one grant per grab). DropperFx is server -> owner only
+# (no OnServerEvent). BundleAwards = 5 is OD-4 = A.
+# Fix round 3 (revision 3, lead decision; reviews rv1b_feedback_3 / rv1b_money_3): the ATM hold keys are gone (every
+# grab shows its world pop), "Recharging" has a reliable server source (RechargeAttribute), the 3600 s budget clear is
+# tied to the leave that started it (leave token), and five new scans: the budget's lifetime, the DropperFx listener
+# scan in its multi-line forms, exactly one sendDropFx call, no config override after its table (ManualDropperConfig,
+# MonetizationConfig.CashMultExemptReasons), and EconomyService used only for the one pinned grant. Each is shown
+# failing on a mutated copy (L1b_out/fix3/mutants.txt). The block ends with an explicit end marker.
+# Refix round 1 (review rv4_money_1): the rest of the budget path is pinned. budgetState moves the buckets too (it calls
+# refillBudget), so it is pinned whole, like sendDropFx and cooldownKey, and a scan (_db_rfx1_rules) checks that
+# refillBudget / takeBudget / budgetState / stampRecharge are called only at their pinned sites with the pinned clock,
+# and that the bucket fields are written only inside refillBudget and takeBudget. Each is shown failing on a mutated
+# copy (L1b_out/rfx1/mutants.txt, rows M1-M9).
+# Refix round 2 (review rv4_money_2): the ECON-1 C1 exemption pin reads the comment-stripped MonetizationConfig and wants
+# exactly ONE top-level manual_dropper key in CashMultExemptReasons, = true (a `--[[ ]]` around it or a later duplicate
+# `= false` now fails); the economy guard's ManualDropperConfig money keys are each assigned exactly once, to the pinned
+# value (comments stripped, top level); and `_db_rfx2_rules` pins the tryAward wiring (one tryAward per click / prompt).
+# Each is shown failing on a mutated copy (L1b_out/rfx2/mutants.txt, rows MA-MF and N4).
+DR_MDC = "src/ReplicatedStorage/Shared/Configs/ManualDropperConfig.luau"
+DR_MDS = "src/ServerScriptService/Server/Services/ManualDropperService.luau"
+DR_MCS = "src/ServerScriptService/Server/Services/MoneyCollectorService.luau"
+DR_RS = "src/ServerScriptService/Server/Modules/RemoteSetup.luau"
+DR_CONST = "src/ReplicatedStorage/Shared/Constants.luau"
+DR_SND1B = "src/ReplicatedStorage/Shared/Configs/SoundConfig.luau"
+DR_MON1B = "src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau"
+# ManualDropperConfig: the shipped bundle (OD-4 = A) and the v1b keys; economy guard on the award and the budgets
+for _db_needle, _db_label in (
+    ("BundleAwards = 5,", "one tap pays a 5-award bundle ($75; OD-4 = A; 1 = option E, a visible pin edit)"),
+    ("PromptHoldDuration = 0,", "the plate stays one instant tap (no hold; spec §21 R9)"),
+    ("PlateNeon = false,", "the plate inset is plain SmoothPlastic (OD-6; world Neon 306 -> 294)"),
+    ("FxEvent = true,", "the owner-only DropperFx packet is on"),
+    ('BudgetEmptyToast = "Cash drop is recharging",', "short recharge toast (NotificationConfig Throttle ^Cash drop is recharging)"),
+    ('RechargeTag = "Recharging",', "plate tag while no bundle is left (device-neutral)"),
+    ("DropPointClearance = 0.3,", "bundle lands 0.3 over a dressed plate's model"),
+    ('RechargeAttribute = "WE_DropRechargeAt",', "the server-authoritative Recharging attribute (revision 3; a look only, never money)"),
+    ("FxMaxPayloadAmount = 10000,", "client drops a DropperFx amount above 10,000"),
+    ("FxMaxPayloadStuds = 60,", "client drops a DropperFx point over 60 studs from the character"),
+):
+    must_contain(DR_MDC, _db_needle, f"droppers v1b: ManualDropperConfig {_db_label}")
+# revision 3: the ATM hold / float-attribution keys are gone with the hold (every paid grab shows its world pop)
+for _db_needle in ("AtmPopHoldSeconds", "AtmFloatLookBackSeconds", "AtmHoldNearStuds"):
+    must_not_contain(DR_MDC, _db_needle, f"droppers v1b revision 3: ManualDropperConfig has no `{_db_needle}` (no pop hold, no float attribution)")
+for _db_row in ("AwardAmount = 15,", "MaxAwardsPerMinute = 30,", "MaxAwardsPerHour = 600,", "CooldownSeconds = 0.35,", "RateLimitRate = 4,", "RateLimitBurst = 3,"):
+    must_contain(DR_MDC, _db_row, f"droppers v1b economy guard: ManualDropperConfig keeps `{_db_row}` (the plate's cap on money is unchanged)")
+# ManualDropperService: bundle through the one server-validated award path; owner-only unreliable effect; no server pop
+for _db_needle, _db_label in (
+    ("BundleAwards", "reads BundleAwards"),
+    ("\treturn math.clamp(math.floor(raw), 1, perMinute)", "bundleAwards() clamps to 1..MaxAwardsPerMinute (a bigger bundle could never be paid)"),
+    ("\tif typeof(raw) ~= \"number\" or raw ~= raw then\n\t\treturn 1\n\tend", "a non-number / NaN BundleAwards pays 1 award"),
+    # fix round 1: from the signature, so `take` is pinned to n (a bundle of n costs n awards, as it pays n: ECON-1)
+    ("local function takeBudget(userId: number, now: number, n: number?): boolean\n\tlocal take = n or 1\n\tlocal b = refillBudget(userId, now)\n\tif b.minute < take or b.hour < take then\n\t\treturn false\n\tend\n\tb.minute -= take\n\tb.hour -= take\n\treturn true\nend\n", "takeBudget, whole: a bundle of n costs n awards (take = n) and needs n in BOTH buckets (no partial bundle)"),
+    ("\tlocal n = bundleAwards()\n\tif not takeBudget(player.UserId, now, n) then", "tryAward takes the whole bundle from the budget before paying"),
+    ('\tlocal amount = pickAward() * n -- droppers v1b: one bundle = n awards, one grant (exempt: "manual_dropper")\n\tlocal ok = EconomyService.AccruePendingCash(player, amount, "manual_dropper")\n\tif ok then\n\t\tsendDropFx(player, dropper, amount, n, now)\n', "one AccruePendingCash per bundle, multiplier-exempt reason manual_dropper, then straight to the effect"),
+    ("\t\tsendDropFx(player, dropper, amount, n, now)\n\t\tstampRecharge(player, now, n) -- revision 3: the reliable \"Recharging\" (set when this grab emptied the budget)\n\t\tif TutorialService and TutorialService.Notify then\n\t\t\tTutorialService.Notify(player, \"ManualDrop\")", "the effect packet is sent only after the grant succeeded, then the Recharging stamp and the tutorial Notify"),
+    ("FireClient(player", "DropperFx goes to the grabber only (FireClient, never FireAllClients)"),
+    ("RemoteSetup.GetUnreliable(Constants.RemoteNames.DropperFx):FireClient(player, dropPoint(pad), amount, left, eta)", "DropperFx payload (dropPoint, amount, left, eta) on the UnreliableRemoteEvent"),
+    ("Constants.RemoteNames.DropperFx", "uses the Constants remote name"),
+    ('"WE_CatalogProp"', "dressed-plate drop point from the hooks dress Model WE_CatalogProp"),
+    ("\tif cached and cached.dress == dress then\n\t\treturn cached.point\n\tend", "drop point cached per plate, keyed by the dress instance"),
+    ("BaseLabel = true, -- droppers v1b: counted by the LabelGovernor", "plate tag is a governed base label"),
+    ("\tneon.Material = insetMaterial()", "new plate inset material from PlateNeon"),
+    ("\t\tif inset.Material ~= material then\n\t\t\tinset.Material = material", "a pre-v1b Neon inset is converted once (compare-first)"),
+):
+    must_contain(DR_MDS, _db_needle, f"droppers v1b: ManualDropperService {_db_label}")
+# fix round 1 (review rv1b_money_1): the rest of the money path, whole functions / exact lines from the code, so a
+# one-line edit of what a grab pays, costs or refills is a visible pin edit. Each is shown failing on its own
+# (L1b_out/tools/mutate.py --each).
+for _db_needle, _db_label in (
+    ("local function budgetLimits(): (number, number)\n\tlocal perMinute = math.max(1, math.floor(tonumber(ManualDropperConfig.MaxAwardsPerMinute) or 30))\n\tlocal perHour = math.max(perMinute, math.floor(tonumber(ManualDropperConfig.MaxAwardsPerHour) or 600))\n\treturn perMinute, perHour\nend\n",
+     "budgetLimits, whole: the buckets hold MaxAwardsPerMinute / MaxAwardsPerHour from config"),
+    ("local function bundleAwards(): number\n\tlocal perMinute = budgetLimits()\n\tlocal raw: any = ManualDropperConfig.BundleAwards\n\tif typeof(raw) ~= \"number\" or raw ~= raw then\n\t\treturn 1\n\tend\n\treturn math.clamp(math.floor(raw), 1, perMinute)\nend\n",
+     "bundleAwards, whole: the bundle is ManualDropperConfig.BundleAwards, clamped to 1..MaxAwardsPerMinute"),
+    ("local function refillBudget(userId: number, now: number): Budget\n\tlocal perMinute, perHour = budgetLimits()\n\tlocal b = budgets[userId]\n\tif not b then\n\t\tb = { minute = perMinute, hour = perHour, at = now }\n\t\tbudgets[userId] = b\n\tend\n\tlocal dt = math.max(0, now - b.at)\n\tb.at = now\n\tb.minute = math.min(perMinute, b.minute + dt * perMinute / 60)\n\tb.hour = math.min(perHour, b.hour + dt * perHour / 3600)\n\treturn b\nend\n",
+     "refillBudget, whole: the buckets refill from the real elapsed time only (dt = now - b.at) at MaxAwardsPerMinute a minute and MaxAwardsPerHour an hour"),
+    ("local function pickAward(): number\n\tlocal fixed = ManualDropperConfig.AwardAmount\n\tif typeof(fixed) == \"number\" and fixed > 0 then\n\t\treturn math.floor(fixed)\n\tend\n",
+     "pickAward pays ManualDropperConfig.AwardAmount ($15) per award"),
+    ("local function ownsPlot(player: Player, plotId: any): boolean\n\tif typeof(plotId) ~= \"number\" then\n\t\treturn false\n\tend\n\tlocal profile = DataService and DataService.GetProfile(player)\n\tif not profile then\n\t\treturn false\n\tend\n\treturn profile.BasePlotId == plotId\nend\n",
+     "ownsPlot, whole: only the plot's owner (loaded profile, BasePlotId) can grab"),
+    ("local function tryAward(player: Player, dropper: BasePart)\n\tif not ManualDropperConfig.Enabled then\n\t\treturn\n\tend\n\tif not player or not player.Parent then\n\t\treturn\n\tend\n\tlocal plotId = dropper:GetAttribute(\"PlotId\")\n\tif not ownsPlot(player, plotId) then\n\t\treturn\n\tend\n\n\tlocal key = cooldownKey(player, dropper)\n\tlocal now = os.clock()\n\tlocal cd = ManualDropperConfig.CooldownSeconds or 0.35\n\tlocal last = lastAwardAt[key]\n\tif last and (now - last) < cd then\n\t\treturn\n\tend\n\n\tif RateLimitService and RateLimitService.Allow then\n\t\tlocal rate = ManualDropperConfig.RateLimitRate or 4\n\t\tlocal burst = ManualDropperConfig.RateLimitBurst or 3\n\t\tif not RateLimitService.Allow(player, \"manual_dropper\", rate, burst) then\n\t\t\treturn\n\t\tend\n\tend\n\n\tif not EconomyService or not EconomyService.AccruePendingCash then\n\t\treturn\n\tend\n\tlastAwardAt[key] = now\n",
+     "tryAward gates, in order: enabled, player present, owner, per-plate cooldown, RateLimitService, then the budget"),
+    # revision 3: "Recharging" from the server (a Player attribute; a look only: the budget still pays or refuses every tap)
+    ("local RECHARGE_ATTR: string = ManualDropperConfig.RechargeAttribute or \"WE_DropRechargeAt\"\n", "RechargeAttribute is the config key"),
+    ("local function serverNow(): number?\n\tlocal ok, t = pcall(Workspace.GetServerTimeNow, Workspace)\n\treturn if ok and typeof(t) == \"number\" and t == t then t else nil\nend\n",
+     "serverNow, whole: the synchronized server clock the client compares with (nil: no stamp)"),
+    ("local function stampRecharge(player: Player, now: number, n: number)\n\tlocal left, eta = budgetState(player.UserId, now, n)\n\tlocal want: number? = nil\n\tif left < 1 then\n\t\tlocal t = serverNow()\n\t\tif t == nil then\n\t\t\treturn\n\t\tend\n\t\twant = t + eta\n\tend\n\tlocal have = player:GetAttribute(RECHARGE_ATTR)\n\tif want == nil then\n\t\tif have ~= nil then\n\t\t\tplayer:SetAttribute(RECHARGE_ATTR, nil)\n\t\tend\n\telseif typeof(have) ~= \"number\" or math.abs(have - want) > 0.05 then\n\t\tplayer:SetAttribute(RECHARGE_ATTR, want)\n\tend\nend\n",
+     "stampRecharge, whole: while the budget holds no bundle the attribute is the server time it is ready (nil once it holds one), compare-first"),
+    ("\tif not takeBudget(player.UserId, now, n) then\n\t\tstampRecharge(player, now, n) -- revision 3: the refused tap re-states \"Recharging\" (a lost packet, a rejoin)\n",
+     "a refused tap re-states Recharging (reliable: survives a lost packet)"),
+    # revision 3: the leave token (review rv1b_money_3: an older leave's timer cleared a later visit's budget)
+    ("local leaveToken: { [number]: number } = {}\n\nlocal function bumpLeaveToken(userId: number): number\n\tlocal token = (leaveToken[userId] or 0) + 1\n\tleaveToken[userId] = token\n\treturn token\nend\n",
+     "bumpLeaveToken, whole: every leave and join of a UserId gets a newer token"),
+    ("\t\ttask.defer(syncTagOwners)\n\t\t-- Budget refills fully within an hour; drop it then unless the player came back. Revision 3: only this leave's\n\t\t-- timer may do it (leave token; a later join or leave makes it stale).\n\t\tlocal token = bumpLeaveToken(userId)\n\t\ttask.delay(3600, function()\n\t\t\tif leaveToken[userId] == token and not Players:GetPlayerByUserId(userId) then\n\t\t\t\tbudgets[userId] = nil\n\t\t\t\tleaveToken[userId] = nil\n\t\t\tend\n\t\tend)\n\tend)\n",
+     "PlayerRemoving: the budget is kept for an hour and cleared only by THIS leave's timer (token current, player away)"),
+    ("\tPlayers.PlayerAdded:Connect(function(player)\n\t\tlocal userId = player.UserId\n\t\tbumpLeaveToken(userId)\n\t\tif budgets[userId] ~= nil then\n\t\t\tstampRecharge(player, os.clock(), bundleAwards())\n\t\tend\n\tend)\n",
+     "PlayerAdded: a join makes older leave timers stale and a same-server rejoin gets Recharging at once (the budget is kept, never reset)"),
+):
+    must_contain(DR_MDS, _db_needle, f"droppers v1b: ManualDropperService {_db_label}")
+for _db_needle, _db_label in (
+    ("PlayMoneyBagFX", "no money-bag model on a grab (OD-6)"),
+    ("Enum.Material.Neon", "no Neon material literal (world Neon over its 300 target)"),
+    ('"CashPop"', "no server-built +$ pop (the client draws the world pop)"),
+    ("OnServerEvent", "no client -> server remote (the grab is the server's own prompt / ClickDetector)"),
+    ("AddXP", "grabs pay no XP (spec_xp: purchase XP only)"),
+    ("FireAllClients", "the plate effect never goes to every client"),
+):
+    must_not_contain(DR_MDS, _db_needle, f"droppers v1b: ManualDropperService {_db_label}")
+# ECON-1 condition C1 (droppers/econ1/econ1.md §4): the plate grant keeps its multiplier-exempt reason
+must_contain(DR_MDS, 'EconomyService.AccruePendingCash(player, amount, "manual_dropper")', "droppers v1b ECON-1 C1: the bundle is granted under the exempt reason manual_dropper")
+must_not_contain(DR_MCS, "PlayMoneyBagFX", "droppers v1b: MoneyCollectorService makes no money-bag model on a collect (OD-6; the client sparkles at WE_AtmPos)")
+must_contain(DR_RS, "Constants.RemoteNames.DropperFx,", "droppers v1b: RemoteSetup lists DropperFx")
+must_contain(DR_CONST, 'DropperFx = "DropperFx",', "droppers v1b: Constants.RemoteNames.DropperFx")
+must_contain(DR_SND1B, '["Drop.Coin"] = { Id = 9113849492,', "droppers v1b: Drop.Coin reuses the Cash.Collect file 9113849492")
+
+
+_DB_LONG_OPEN = re.compile(r"\[(=*)\[")
+
+
+def _db_luau_code(src: str) -> str:
+    """Luau source with every comment removed: `-- line` and `--[[ ]]` / `--[==[ ]==]` long comments (the level must
+    match to close). Strings ("", '', ``, [[ ]] / [==[ ]==]) are kept as they are, so `--` inside a string is not a
+    comment. Line breaks are kept."""
+    out, i, n = [], 0, len(src)
+    while i < n:
+        c = src[i]
+        if c == "-" and src.startswith("--", i):
+            m = _DB_LONG_OPEN.match(src, i + 2)
+            if m:
+                close = "]" + m.group(1) + "]"
+                j = src.find(close, m.end())
+                j = n if j < 0 else j + len(close)
+                out.append("\n" * src.count("\n", i, j))
+            else:
+                j = src.find("\n", i)
+                j = n if j < 0 else j
+            i = j
+            continue
+        if c in "\"'`":
+            j = i + 1
+            while j < n and src[j] != c and src[j] != "\n":
+                j += 2 if src[j] == "\\" else 1
+            j = min(n, j + 1)
+            out.append(src[i:j])
+            i = j
+            continue
+        if c == "[":
+            m = _DB_LONG_OPEN.match(src, i)
+            if m:
+                close = "]" + m.group(1) + "]"
+                j = src.find(close, m.end())
+                j = n if j < 0 else j + len(close)
+                out.append(src[i:j])
+                i = j
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def _db_rhs(code: str, i: int) -> str:
+    """The right-hand side of an assignment starting at code[i]: up to the first line break outside (), [], {} and, for a
+    function literal, up to its closing `end` at the statement's indentation."""
+    depth, j, n = 0, i, len(code)
+    first = code[i:].lstrip()
+    if first.startswith("function"):
+        ls = code.rfind("\n", 0, i) + 1
+        ind = re.match(r"[ \t]*", code[ls:]).group(0)
+        m = re.search(r"\n" + re.escape(ind) + r"end\b", code[i:])
+        return code[i:i + m.end()] if m else code[i:]
+    while j < n:
+        c = code[j]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        elif c in "\"'`":
+            k = j + 1
+            while k < n and code[k] != c and code[k] != "\n":
+                k += 2 if code[k] == "\\" else 1
+            j = k
+        elif c == "\n" and depth <= 0:
+            break
+        j += 1
+    return code[i:j]
+
+
+def _db_dropperfx_listeners() -> list:
+    """revision 3 (review rv1b_money_3 / rv1b_feedback_3): DropperFx is server -> client only. In every src .luau file
+    (comments stripped), flag any client -> server use of it: on one line (`...DropperFx...OnServerEvent`), or through a
+    name that holds the remote (or its name, or a function that returns it) and is used on a later line: `local r =
+    RemoteSetup.GetUnreliable(Constants.RemoteNames.DropperFx)` ... `r.OnServerEvent:Connect(...)`; `local ok, remote =
+    pcall(function() return Remotes.GetUnreliableEvent(...DropperFx) end)` ... `remote:FireServer()`; an alias of an
+    alias; a dotted name; `local function get() return ...DropperFx... end` ... `get():FireServer()`.
+    Not a holder: a table constructor that merely lists the name (RemoteSetup's UNRELIABLE list), the ok flag of a pcall,
+    a function that mentions the remote without returning it (the scan has no scopes, so names are kept this narrow)."""
+    hits = []
+    use = r"\s*(?:\([^()\n]*\))?\s*[.:]\s*(?:OnServerEvent|FireServer)\b"
+
+    def mentions(text, tainted):
+        return "DropperFx" in text or any(re.search(r"(?<![\w.])" + re.escape(t) + r"\b", text) for t in tainted)
+
+    def returns(body, tainted):
+        return any(mentions(r, tainted) for r in re.findall(r"(?m)\breturn\b([^\n]*)", body))
+
+    for p in sorted((ROOT / "src").rglob("*.luau")):
+        code = _db_luau_code(p.read_text(encoding="utf-8"))
+        if "DropperFx" not in code:
+            continue
+        rel = str(p.relative_to(ROOT))
+        if re.search(r"DropperFx[^\n]*(OnServerEvent|FireServer)", code):
+            hits.append(rel + " (one line)")
+            continue
+        tainted = set()
+        for _ in range(8):
+            before = len(tainted)
+            for m in re.finditer(r"(?m)^[ \t]*(?:local[ \t]+)?([A-Za-z_][\w.]*(?:[ \t]*:[^=,\n]+)?(?:[ \t]*,[ \t]*[A-Za-z_][\w.]*(?:[ \t]*:[^=,\n]+)?)*)[ \t]*=(?!=)", code):
+                rhs = _db_rhs(code, m.end())
+                body = rhs.strip()
+                if body.startswith("{"):
+                    continue  # a table constructor lists names; it is not the remote
+                if body.startswith("function"):
+                    hit = returns(body, tainted)
+                else:
+                    hit = mentions(rhs, tainted)
+                if hit:
+                    names = [re.match(r"\s*([A-Za-z_][\w.]*)", part).group(1) for part in m.group(1).split(",")]
+                    if body.startswith("pcall(") and len(names) > 1:
+                        names = names[1:]  # `ok, value = pcall(...)`: the flag is not the remote
+                    tainted.update(names)
+            for m in re.finditer(r"(?m)^([ \t]*)(?:local[ \t]+)?function[ \t]+([A-Za-z_][\w.:]*)[ \t]*\(", code):
+                e = re.search(r"\n" + re.escape(m.group(1)) + r"end\b", code[m.end():])
+                fbody = code[m.end():m.end() + e.end()] if e else code[m.end():]
+                if returns(fbody, tainted):
+                    tainted.add(m.group(2).replace(":", "."))
+            if len(tainted) == before:
+                break
+        for t in sorted(tainted):
+            if re.search(r"(?<![\w.])" + re.escape(t) + use, code):
+                hits.append(f"{rel} (via {t})")
+    return hits
+
+
+def _db_table_end(code: str, start: int) -> int:
+    """Index just past the `}` that closes the table literal opened at code[start] == "{" (strings skipped)."""
+    depth, j, n = 0, start, len(code)
+    while j < n:
+        c = code[j]
+        if c in "\"'`":
+            k = j + 1
+            while k < n and code[k] != c and code[k] != "\n":
+                k += 2 if code[k] == "\\" else 1
+            j = k
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return j + 1
+        j += 1
+    return -1
+
+
+def _db_top_level(body: str) -> str:
+    """refix 2: a table constructor's body with everything nested inside it (the contents of (), {} and the strings in
+    them) blanked to spaces, line breaks kept, so a key found in the result is a key of THIS table, not of a nested one
+    or of a call's argument list. Strings at the top level are kept (the `["key"] =` form)."""
+    out, depth, j, n = [], 0, 0, len(body)
+    while j < n:
+        c = body[j]
+        if c in "\"'`":
+            k = j + 1
+            while k < n and body[k] != c and body[k] != "\n":
+                k += 2 if body[k] == "\\" else 1
+            k = min(n, k + 1)
+            piece = body[j:k]
+            out.append(piece if depth == 0 else re.sub(r"[^\n]", " ", piece))
+            j = k
+            continue
+        if c in "({":
+            depth += 1
+            out.append(c if depth == 1 else " ")
+        elif c in ")}":
+            out.append(c if depth == 1 else " ")
+            depth -= 1
+        else:
+            out.append(c if depth == 0 or c == "\n" else " ")
+        j += 1
+    return "".join(out)
+
+
+def _db_key_values(top: str, key: str) -> list:
+    """refix 2: every value assigned to `key` at a table's top level (from _db_top_level), in source order, in both
+    forms `key = v` and `["key"] = v` / `['key'] = v`; each value is the text up to the next `,` / `;` / line break,
+    stripped. A key written twice gives two values (Luau keeps the last one)."""
+    pat = r"(?:(?<![\w.])" + re.escape(key) + r"|\[\s*([\"'])" + re.escape(key) + r"\1\s*\])\s*=(?!=)[ \t]*([^,;\n]*)"
+    return [m.group(2).strip() for m in re.finditer(pat, top)]
+
+
+# refix 2: the economy guard's ManualDropperConfig money keys and their pinned values (ECON-1 / OD-4 = A)
+_DB_ECON_KEYS = (("AwardAmount", "15"), ("BundleAwards", "5"), ("MaxAwardsPerMinute", "30"), ("MaxAwardsPerHour", "600"),
+                 ("CooldownSeconds", "0.35"), ("RateLimitRate", "4"), ("RateLimitBurst", "3"))
+
+
+def _db_plate_rules() -> None:
+    """droppers v1b static rules (T6b, one grant per grab, and the remote / sound shape)."""
+    # fix round 1: ONE AccruePendingCash call in ManualDropperService (comments stripped): the pinned grant in tryAward.
+    # Every other mention of the name must be the nil guard `not EconomyService.AccruePendingCash then`, so a second
+    # call, a bracket-index call (`EconomyService["AccruePendingCash"](`) or a local alias all fail.
+    mds_code = _db_luau_code(read(DR_MDS) or "")
+    calls = len(re.findall(r"AccruePendingCash\s*\(", mds_code))
+    guards = len(re.findall(r"\bnot EconomyService\.AccruePendingCash then\b", mds_code))
+    refs = len(re.findall(r"AccruePendingCash", mds_code))
+    if calls == 1 and refs == calls + guards:
+        ok(f"droppers v1b: ManualDropperService makes exactly one AccruePendingCash call, comments stripped (other mentions: {guards} nil guard)")
+    else:
+        bad(f"droppers v1b: ManualDropperService must make exactly one AccruePendingCash call, comments stripped (calls {calls}, mentions {refs}, nil guards {guards})")
+    mdc = read(DR_MDC) or ""
+    # T6b: 1 <= BundleAwards <= MaxAwardsPerMinute (a bundle above the minute bucket could never be paid)
+    ba = re.search(r"^\s*BundleAwards = ([^,\n]+),", mdc, re.M)
+    mpm = re.search(r"^\s*MaxAwardsPerMinute = (\d+),", mdc, re.M)
+    bav = int(ba.group(1)) if ba and re.fullmatch(r"\d+", ba.group(1).strip()) else None
+    mpv = int(mpm.group(1)) if mpm else None
+    if bav is not None and mpv is not None and 1 <= bav <= mpv:
+        ok(f"droppers v1b: 1 <= BundleAwards ({bav}) <= MaxAwardsPerMinute ({mpv})")
+    else:
+        bad(f"droppers v1b: BundleAwards must be a whole number in 1..MaxAwardsPerMinute (got {ba.group(1) if ba else None} / {mpv})")
+    # ECON-1 C1: manual_dropper = true inside MonetizationConfig.CashMultExemptReasons (not commented out, not false):
+    # passes, VIP, Empire Tax, prestige and season never multiply a $75 bundle.
+    # refix 2 (review rv4_money_2): read on the comment-stripped code (a `--[[ ]]` around the line is no longer "there"),
+    # and the table's top level holds exactly ONE manual_dropper key, in either form (`manual_dropper =` or
+    # `["manual_dropper"] =`), whose value is `true` (a later duplicate `= false` wins in Luau, so a second key fails).
+    mon = _db_luau_code(read(DR_MON1B) or "")
+    ex = re.search(r"\n\tCashMultExemptReasons\s*=\s*\{", mon)
+    ex_end = _db_table_end(mon, ex.end() - 1) if ex else -1
+    ex_top = _db_top_level(mon[ex.end():ex_end - 1]) if ex and ex_end > 0 else ""
+    md_vals = _db_key_values(ex_top, "manual_dropper")
+    if ex and ex_end > 0 and md_vals == ["true"]:
+        ok("droppers v1b ECON-1 C1: exactly one manual_dropper key in CashMultExemptReasons and it is `= true` (comments stripped; the plate is never multiplied)")
+    else:
+        bad(f"droppers v1b ECON-1 C1: MonetizationConfig.CashMultExemptReasons must hold exactly one `manual_dropper = true` (comments stripped; table found {bool(ex and ex_end > 0)}, manual_dropper values {md_vals})")
+    # refix 2 (review rv4_money_2, Low): the economy guard's ManualDropperConfig keys, on the comment-stripped table's top
+    # level: each key is assigned exactly once, to the pinned value (a later duplicate key overrides the pinned line in
+    # Luau, and a block-commented line is not there)
+    mdc_code = _db_luau_code(mdc)
+    mt = re.match(r"\s*local ManualDropperConfig\s*=\s*\{", mdc_code)
+    mt_end = _db_table_end(mdc_code, mt.end() - 1) if mt else -1
+    mdc_top = _db_top_level(mdc_code[mt.end():mt_end - 1]) if mt and mt_end > 0 else ""
+    wrong = {}
+    for key, want in _DB_ECON_KEYS:
+        vals = _db_key_values(mdc_top, key)
+        if vals != [want]:
+            wrong[key] = vals
+    if mt and mt_end > 0 and not wrong:
+        ok("droppers v1b refix 2 economy guard: ManualDropperConfig assigns each money key exactly once, to its pinned value (comments stripped, top level): " + ", ".join(f"{k} = {v}" for k, v in _DB_ECON_KEYS))
+    else:
+        bad(f"droppers v1b refix 2 economy guard: ManualDropperConfig money keys missing, duplicated or changed (comments stripped, top level; table found {bool(mt and mt_end > 0)}; key -> values found {wrong})")
+    # DropperFx: an UnreliableRemoteEvent (RemoteSetup UNRELIABLE list, not EVENTS) with no server listener anywhere
+    rs = read(DR_RS) or ""
+    unrel = re.search(r"\nlocal UNRELIABLE = \{(.*?)\n\}", rs, re.S)
+    events = re.search(r"\nlocal EVENTS = \{(.*?)\n\}", rs, re.S)
+    listeners = _db_dropperfx_listeners()  # revision 3: one-line AND multi-line forms (see the function)
+    if unrel and "RemoteNames.DropperFx" in unrel.group(1) and (events is None or "RemoteNames.DropperFx" not in events.group(1)) and not listeners:
+        ok("droppers v1b: DropperFx is an UNRELIABLE remote only, and no file listens to or fires it from a client")
+    else:
+        bad(f"droppers v1b: DropperFx must be in UNRELIABLE only with no OnServerEvent / FireServer (listeners {listeners})")
+    # Drop.Coin: an id another key already uses (no new sound id), World bus, quiet, short range
+    snd = read(DR_SND1B) or ""
+    body = re.search(r"SoundConfig\.Sounds = \{(.*?)\n\} :: \{ \[string\]: SoundDef \}", snd, re.S)
+    keys = dict(re.findall(r'\["([\w.]+)"\] = \{ Id = (\w+),', body.group(1))) if body else {}
+    m = re.search(r'\["Drop\.Coin"\] = \{([^}]*)\}', body.group(1)) if body else None
+    others = {v for k, v in keys.items() if k != "Drop.Coin"}
+    vol = re.search(r"Volume = (\d+(?:\.\d+)?)", m.group(1)) if m else None
+    md = re.search(r"MaxDistance = (\d+(?:\.\d+)?)", m.group(1)) if m else None
+    if m and keys.get("Drop.Coin") in others and '"World"' in m.group(1) and vol and float(vol.group(1)) <= 0.3 and md and 0 < float(md.group(1)) <= 40:
+        ok("droppers v1b: Drop.Coin reuses an existing sound id, World bus, Volume <= 0.3, MaxDistance <= 40")
+    else:
+        bad(f"droppers v1b: Drop.Coin shape wrong (id {keys.get('Drop.Coin')})")
+
+
+_db_plate_rules()
+
+
+def _db_fix3_rules() -> None:
+    """droppers v1b fix round 3 (revision 3; reviews rv1b_money_3 / rv1b_feedback_3): the budget's lifetime, exactly one
+    effect packet per paid grab, EconomyService used only for the pinned grant, and no config value overridden after its
+    table (ManualDropperConfig; MonetizationConfig.CashMultExemptReasons, ECON-1 C1)."""
+    mds = _db_luau_code(read(DR_MDS) or "")
+    # (1) the budget's lifetime: created in refillBudget, removed only by the leave timer of the LAST leave
+    writes = re.findall(r"\bbudgets\s*\[[^\]\n]*\]\s*=(?!=)[^\n]*", mds)
+    whole = re.findall(r"\bbudgets\s*=(?!=)", mds)
+    tok = re.findall(r"\bleaveToken\s*\[[^\]\n]*\]\s*=(?!=)[^\n]*", mds)
+    bumps = re.findall(r"\bbumpLeaveToken\s*\(", mds)
+    timer = re.search(r"\n\t\ttask\.delay\(3600, function\(\)\n\t\t\tif leaveToken\[userId\] == token and not Players:GetPlayerByUserId\(userId\) then\n\t\t\t\tbudgets\[userId\] = nil\n\t\t\t\tleaveToken\[userId\] = nil\n\t\t\tend\n\t\tend\)\n", mds)
+    other = re.search(r"(?:table\.clear|rawset|setmetatable|table\.remove)\s*\(\s*(?:budgets|leaveToken)\b", mds)
+    if (sorted(w.strip() for w in writes) == ["budgets[userId] = b", "budgets[userId] = nil"] and whole == []
+            and sorted(t.strip() for t in tok) == ["leaveToken[userId] = nil", "leaveToken[userId] = token"]
+            and len(bumps) == 3 and len(re.findall(r"task\.delay\s*\(\s*3600", mds)) == 1 and timer and not other):
+        ok("droppers v1b revision 3: the plate budget is created only in refillBudget and removed only by the timer of the LAST leave (leave token; comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3: the plate budget's lifetime changed (budgets[..] writes {writes}, whole-table writes {len(whole)}, leaveToken writes {tok}, bumpLeaveToken mentions {len(bumps)} (want def + 2 calls), token-guarded 3600 s timer {bool(timer)}, clear/rawset {bool(other)})")
+    # (2) exactly one effect packet per paid grab: sendDropFx defined once and called once (the pinned call after the
+    # grant), one FireClient, one DropperFx remote fetch
+    sdf = re.findall(r"\bsendDropFx\b", mds)
+    calls = re.findall(r"(?<!function )\bsendDropFx\s*\(", mds)
+    fc = re.findall(r"FireClient\s*\(", mds)
+    gu = re.findall(r"GetUnreliable\s*\(", mds)
+    if len(sdf) == 2 and len(calls) == 1 and len(fc) == 1 and len(gu) == 1:
+        ok("droppers v1b revision 3: exactly one sendDropFx call (the pinned one after the grant), one FireClient, one DropperFx fetch in ManualDropperService (comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3: ManualDropperService must send the effect exactly once per paid grab (sendDropFx mentions {len(sdf)} (want 2), calls {len(calls)} (want 1), FireClient {len(fc)}, GetUnreliable {len(gu)})")
+    # (3) EconomyService: only the pinned grant (a second grant through AddCash / AddGold / any other function or an alias fails)
+    allowed = ["local EconomyService: any = nil", "EconomyService = deps.EconomyService",
+               "if not EconomyService or not EconomyService.AccruePendingCash then",
+               'local ok = EconomyService.AccruePendingCash(player, amount, "manual_dropper")']
+    rest, counts = mds, []
+    for a in allowed:
+        counts.append(rest.count(a))
+        rest = rest.replace(a, "")
+    left = re.findall(r"[^\n]*\bEconomyService\b[^\n]*", rest)
+    if counts == [1, 1, 1, 1] and not left:
+        ok("droppers v1b revision 3: ManualDropperService uses EconomyService only for the one pinned AccruePendingCash grant (no AddCash / AddGold / alias; comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3: ManualDropperService uses EconomyService beyond the pinned grant (allowed lines found {counts}, other mentions {[x.strip() for x in left]})")
+    # (4) ManualDropperConfig: the file is its table and `return`, nothing after (no post-table override), and no src
+    # file writes any of its keys at run time (through the name or any local alias)
+    mdc = _db_luau_code(read(DR_MDC) or "")
+    m = re.match(r"\s*local ManualDropperConfig = \{", mdc)
+    end = _db_table_end(mdc, m.end() - 1) if m else -1
+    tail = mdc[end:] if end > 0 else ""
+    shape = bool(m) and end > 0 and re.fullmatch(r"\s*return ManualDropperConfig\s*", tail) is not None
+    meta = re.search(r"\b(?:setmetatable|rawset|getmetatable)\b|__index|__newindex", mdc)
+    writers = []
+    for p in sorted((ROOT / "src").rglob("*.luau")):
+        code = _db_luau_code(p.read_text(encoding="utf-8"))
+        if "ManualDropperConfig" not in code:
+            continue
+        rel = str(p.relative_to(ROOT))
+        names = {"ManualDropperConfig"}
+        for _ in range(4):
+            for a in re.finditer(r"(?m)^[ \t]*local[ \t]+([A-Za-z_]\w*)(?:[ \t]*:[^=\n]+)?[ \t]*=[ \t]*([^\n]*)$", code):
+                rhs = a.group(2)
+                if re.search(r"\brequire\b[^\n]*\bManualDropperConfig\b", rhs) or \
+                   re.fullmatch(r"\s*(?:" + "|".join(map(re.escape, sorted(names))) + r")\s*(?:::[^\n]*)?", rhs):
+                    names.add(a.group(1))
+        for nm in sorted(names):
+            if re.search(r"(?<![\w.])" + re.escape(nm) + r"\s*(?:\.\s*\w+|\[[^\]\n]*\])\s*=(?!=)", code) or \
+               re.search(r"(?:rawset|setmetatable|table\.clear|table\.insert|table\.remove)\s*\(\s*" + re.escape(nm) + r"\b", code):
+                writers.append(f"{rel} (via {nm})")
+    if shape and not meta and not writers:
+        ok("droppers v1b revision 3: ManualDropperConfig is its table and `return` only (no override after the table, no metatable), and no src file writes a ManualDropperConfig key (comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3: ManualDropperConfig can be overridden (table then return only {shape}, metatable {bool(meta)}, writers {writers})")
+    # (5) ECON-1 C1: MonetizationConfig.CashMultExemptReasons is only ever the table literal; no src file writes, clears
+    # or re-assigns it or one of its reasons (manual_dropper) after the table, directly or through an alias
+    offenders = []
+    for p in sorted((ROOT / "src").rglob("*.luau")):
+        raw = _db_luau_code(p.read_text(encoding="utf-8"))
+        if "CashMultExemptReasons" not in raw:
+            continue
+        code = re.sub(r"\[\s*[\"']([A-Za-z_]\w*)[\"']\s*\]", r".\1", raw)  # t["k"] -> t.k
+        rel = str(p.relative_to(ROOT))
+        defs = re.findall(r"(?m)^[ \t]*CashMultExemptReasons\s*=(?!=)", code)
+        if rel != DR_MON1B and defs:
+            offenders.append(f"{rel}: CashMultExemptReasons re-assigned")
+        if rel == DR_MON1B and len(defs) != 1:
+            offenders.append(f"{rel}: {len(defs)} CashMultExemptReasons definitions (want the one in the table)")
+        if re.search(r"CashMultExemptReasons\s*(?:\.\s*\w+|\[[^\]\n]*\])\s*=(?!=)", code) or \
+           re.search(r"\.\s*CashMultExemptReasons\s*=(?!=)", code):
+            offenders.append(f"{rel}: writes CashMultExemptReasons")
+        if re.search(r"(?:rawset|setmetatable|table\.clear|table\.remove|table\.insert)\s*\(\s*[\w.]*CashMultExemptReasons\b", code):
+            offenders.append(f"{rel}: clears / rawsets CashMultExemptReasons")
+        for a in re.finditer(r"(?m)^[ \t]*local[ \t]+([A-Za-z_]\w*)(?:[ \t]*:[^=\n]+)?[ \t]*=[ \t]*[\w.]*CashMultExemptReasons\b[^\n]*$", code):
+            al = a.group(1)
+            if re.search(r"(?<![\w.])" + re.escape(al) + r"\s*(?:\.\s*\w+|\[[^\]\n]*\])\s*=(?!=)", code) or \
+               re.search(r"(?:rawset|setmetatable|table\.clear|table\.remove|table\.insert)\s*\(\s*" + re.escape(al) + r"\b", code):
+                offenders.append(f"{rel}: writes CashMultExemptReasons through the alias {al}")
+    mon = _db_luau_code(read(DR_MON1B) or "")
+    mm = re.search(r"\nlocal MonetizationConfig = \{", mon)
+    mend = _db_table_end(mon, mm.end() - 1) if mm else -1
+    after = mon[mend:] if mend > 0 else ""
+    if mend < 0 or re.search(r"\bmanual_dropper\b|CashMultExemptReasons", after):
+        offenders.append(f"{DR_MON1B}: manual_dropper / CashMultExemptReasons named after the MonetizationConfig table")
+    if not offenders:
+        ok("droppers v1b revision 3 ECON-1 C1: MonetizationConfig.CashMultExemptReasons (manual_dropper) is never overridden after its table, in any src file, directly or through an alias (comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3 ECON-1 C1: CashMultExemptReasons can be overridden: {offenders}")
+
+
+
+_db_fix3_rules()
+# refix round 1 (review rv4_money_1): budgetState is not read-only (it calls refillBudget, which moves the buckets and
+# b.at) and it runs on every paid grab (twice), every refused tap and every same-server rejoin; sendDropFx calls it; the
+# per-plate cooldown key decides which taps reach the budget. Each is pinned whole, from its signature to `end`.
+for _db_needle, _db_label in (
+    ("local function budgetState(userId: number, now: number, n: number): (number, number)\n\tlocal perMinute, perHour = budgetLimits()\n\tlocal b = refillBudget(userId, now)\n\tlocal left = math.floor(math.min(b.minute, b.hour) / n)\n\tif left >= 1 then\n\t\treturn left, 0\n\tend\n\treturn 0, math.max(0, (n - b.minute) / (perMinute / 60), (n - b.hour) / (perHour / 3600))\nend\n",
+     "budgetState, whole: it refills on the caller's clock only (refillBudget(userId, now)) and writes nothing else"),
+    ("local function sendDropFx(player: Player, pad: BasePart, amount: number, n: number, now: number)\n\tif ManualDropperConfig.FxEvent == false then\n\t\treturn\n\tend\n\tlocal left, eta = budgetState(player.UserId, now, n)\n\tlocal ok, err = pcall(function()\n\t\tRemoteSetup.GetUnreliable(Constants.RemoteNames.DropperFx):FireClient(player, dropPoint(pad), amount, left, eta)\n\tend)\n\tif not ok then\n\t\twarn(\"[ManualDropper] DropperFx failed:\", err)\n\tend\nend\n",
+     "sendDropFx, whole: the packet reads the budget on the grab's own clock (budgetState(player.UserId, now, n)) and goes to the grabber only"),
+    ("local function cooldownKey(player: Player, dropper: BasePart): string\n\treturn tostring(player.UserId) .. \"|\" .. dropper:GetFullName()\nend\n",
+     "cooldownKey, whole: one cooldown per player and plate (not per tap)"),
+):
+    must_contain(DR_MDS, _db_needle, f"droppers v1b refix 1: ManualDropperService {_db_label}")
+
+
+_DB_TRYAWARD_TAIL = "\tlastAwardAt[key] = now\n\tlocal n = bundleAwards()\n\tif not takeBudget(player.UserId, now, n) then\n\t\tstampRecharge(player, now, n) -- revision 3: the refused tap re-states \"Recharging\" (a lost packet, a rejoin)\n\t\tif NotificationService and NotificationService.NotifyThrottled then\n\t\t\tNotificationService.NotifyThrottled(\n\t\t\t\tplayer,\n\t\t\t\tManualDropperConfig.BudgetEmptyToast or \"Cash drop is recharging\",\n\t\t\t\t\"Info\",\n\t\t\t\t3,\n\t\t\t\tManualDropperConfig.BudgetEmptyToastCooldown or 20,\n\t\t\t\t\"manual_dropper_budget\"\n\t\t\t)\n\t\tend\n\t\treturn\n\tend\n\tlocal amount = pickAward() * n -- droppers v1b: one bundle = n awards, one grant (exempt: \"manual_dropper\")\n\tlocal ok = EconomyService.AccruePendingCash(player, amount, \"manual_dropper\")\n\tif ok then\n\t\tsendDropFx(player, dropper, amount, n, now)\n\t\tstampRecharge(player, now, n) -- revision 3: the reliable \"Recharging\" (set when this grab emptied the budget)\n\t\tif TutorialService and TutorialService.Notify then\n\t\t\tTutorialService.Notify(player, \"ManualDrop\")\n\t\tend\n\tend\nend\n"
+
+
+def _db_rfx1_rules() -> None:
+    """droppers v1b refix round 1 (review rv4_money_1): the budget buckets move only on the real clock, at the pinned
+    call sites. On the comment-stripped ManualDropperService:
+      * refillBudget: defined once, called exactly twice, both `refillBudget(userId, now)` (takeBudget, budgetState);
+      * takeBudget: called exactly once, `takeBudget(player.UserId, now, n)` (tryAward);
+      * budgetState: called exactly twice, both `budgetState(player.UserId, now, n)` (sendDropFx, stampRecharge);
+      * stampRecharge: called exactly three times: `stampRecharge(player, now, n)` twice (refused tap, paid grab) and
+        `stampRecharge(player, os.clock(), bundleAwards())` once (PlayerAdded);
+      * no other mention of these names (an alias such as `local rb = refillBudget` fails);
+      * the bucket fields (`minute`, `hour`, `at`) are written only inside refillBudget and takeBudget: no `.minute =`,
+        `.hour -=`, `["at"] =`, rawset or table constructor with these keys anywhere else."""
+    mds = _db_luau_code(read(DR_MDS) or "")
+    problems = []
+
+    def body_of(name):
+        m = re.search(r"(?m)^local function " + name + r"\(.*\n(?:[\t ].*\n|\n)*?end\n", mds)
+        return m.group(0) if m else None
+
+    want = {
+        "refillBudget": ["refillBudget(userId, now)"] * 2,
+        "takeBudget": ["takeBudget(player.UserId, now, n)"],
+        "budgetState": ["budgetState(player.UserId, now, n)"] * 2,
+        "stampRecharge": ["stampRecharge(player, now, n)"] * 2 + ["stampRecharge(player, os.clock(), bundleAwards())"],
+    }
+    for name, calls in want.items():
+        defs = re.findall(r"(?m)^local function " + name + r"\(", mds)
+        mentions = re.findall(r"(?<![\w.:])" + name + r"\b", mds)
+        found = [c.group(0) for c in re.finditer(r"(?<![\w.:])(?<!function )" + name + r"\s*\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\)", mds)]
+        if len(defs) != 1:
+            problems.append(f"{name} defined {len(defs)} times (want 1)")
+        if sorted(found) != sorted(calls):
+            problems.append(f"{name} calls {found} (want {calls})")
+        if len(mentions) != 1 + len(calls):
+            problems.append(f"{name} named {len(mentions)} times (want {1 + len(calls)}: the definition and the pinned calls; an alias or a passed reference fails)")
+    rb, tb = body_of("refillBudget"), body_of("takeBudget")
+    if rb is None or tb is None:
+        problems.append("refillBudget / takeBudget body not found")
+    rest = mds
+    for b in (rb, tb):
+        if b:
+            rest = rest.replace(b, "")
+    field = r"(?:minute|hour|at)"
+    w1 = re.findall(r"[^\n]*[.:]\s*" + field + r"\s*(?:[-+*/%^]|\.\.)?=(?!=)[^\n]*", rest)
+    w2 = re.findall(r"[^\n]*\[\s*[\"']" + field + r"[\"']\s*\]\s*(?:[-+*/%^]|\.\.)?=(?!=)[^\n]*", rest)
+    w3 = re.findall(r"[^\n]*rawset\s*\([^\n]*[\"']" + field + r"[\"'][^\n]*", rest)
+    w4 = re.findall(r"[^\n]*\{[^}\n]*\b" + field + r"\s*=(?!=)[^\n]*", rest)
+    for w in w1 + w2 + w3 + w4:
+        problems.append(f"bucket field written outside refillBudget / takeBudget: `{w.strip()}`")
+    # tryAward from `lastAwardAt[key] = now` to its `end`, compared with comments stripped and blank / trailing space
+    # ignored (a comment line is harmless; any code line between the pinned ones is a pin edit)
+    def norm(t):
+        return "\n".join(ln.rstrip() for ln in t.split("\n") if ln.strip())
+    tail = norm(_db_luau_code(_DB_TRYAWARD_TAIL))
+    if tail and tail in norm(mds):
+        ok("droppers v1b refix 1: ManualDropperService tryAward, the rest after the gates up to its `end`: the bundle n and the clock now are taken, paid and stamped with no line between them (no `now +=`, no `n =` after the budget; comments stripped)")
+    else:
+        bad("droppers v1b refix 1: ManualDropperService tryAward, the rest after the gates up to its `end`: the bundle n and the clock now are taken, paid and stamped with no line between them (no `now +=`, no `n =` after the budget; comments stripped) — changed")
+    if not problems:
+        ok("droppers v1b refix 1: the plate budget moves only in refillBudget / takeBudget, on the pinned clock, at the pinned call sites (refillBudget x2, takeBudget x1, budgetState x2, stampRecharge x3; comments stripped)")
+    else:
+        bad(f"droppers v1b refix 1: the plate budget can move off the pinned path: {problems}")
+
+
+_db_rfx1_rules()
+
+
+def _db_rfx2_rules() -> None:
+    """droppers v1b refix round 2 (review rv4_money_2, Low): one grant per grab also at the wiring. On the comment-
+    stripped ManualDropperService, tryAward is named exactly 3 times (its definition and the two handler calls), and each
+    handler (the ClickDetector's MouseClick and the prompt's Triggered) is exactly `tryAward(player, pad)` and nothing else,
+    so a second, delayed tryAward per tap (`task.delay(0.4, tryAward, player, pad)`) or an alias fails."""
+    mds = _db_luau_code(read(DR_MDS) or "")
+    names = re.findall(r"\btryAward\b", mds)
+    defs = re.findall(r"(?m)^local function tryAward\(player: Player, dropper: BasePart\)$", mds)
+    calls = re.findall(r"(?<!function )\btryAward\s*\(([^)\n]*)\)", mds)
+    handlers = re.findall(r"\.(MouseClick|Triggered):Connect\(function\(player: Player\)\n\t\t\ttryAward\(player, pad\)\n\t\tend\)\n", mds)
+    if len(names) == 3 and len(defs) == 1 and calls == ["player, pad", "player, pad"] and sorted(handlers) == ["MouseClick", "Triggered"]:
+        ok("droppers v1b refix 2: tryAward runs once per click / prompt trigger (defined once; called only as the whole body of the MouseClick and Triggered handlers; comments stripped)")
+    else:
+        bad(f"droppers v1b refix 2: tryAward wiring changed (mentions {len(names)} (want 3), definitions {len(defs)}, calls {calls} (want 2 x `player, pad`), handlers {handlers} (want MouseClick + Triggered, each only `tryAward(player, pad)`))")
+
+
+_db_rfx2_rules()
+# --- end of the droppers v1b lane L1b block ---
+
+# --- droppers v1b lane L3b (plate client; spec_droppers.md §13 "New pins, v1b" for ProductionFx, LabelGovernor,
+# WorldLabelConfig) ---
+# Paste directly above the final `parse_gate()` call, after the v1a L3a block (its last line is the ProductionFx
+# WaitForChild rule) and, at L4b, after the L1b block (`_db_plate_rules()`). Every must_contain and rule here fails on the
+# base tree (L3a + L1b's config / remote files: v1a ProductionFx, lane G's LabelGovernor, no PriorityAttribute); the two
+# must_not_contain pins pass there by design and fail on a mutated copy (L3b_out/tools/mutate_l3b.py).
+# The plate response is client-only and owner-only: it reads the server's one DropperFx packet, never sends anything.
+# Fix round 3 (revision 3, lead decision after review rv1b_feedback_3): EVERY paid packet shows one world pop and its
+# chirp, at once; the hold / cancel / float-attribution code and its pins are gone (the hold keys are now forbidden), and
+# "Recharging" also comes from the server's reliable RechargeAttribute. New rule `_d3_fix3_rules` (always the pop; only the
+# server writes the attribute). Each new pin is shown failing on a mutated copy (L3b_out/fix3/mutants.txt).
+# Refix round 1 (review rv4_feedback_1): a zoomed-out camera (the pop's rise beyond its MaxDistance) still gets the pop:
+# popSpot draws it PopNearCameraStuds from the camera on the line of sight to the plate. popSpot is pinned whole, the
+# anchor is placed only from it, and `_d3_rfx1_rules` checks the single placement (L1b_out/rfx1/mutants.txt, rows Q1-Q5).
+# Refix round 2 (review rv4_feedback_2): while a plate tag reads "Recharging" it carries the label priority (the ATM
+# plate's tag was held off by the 3 premium-pad labels), cleared when the recharge ends; and a late left >= 1 packet no
+# longer ends a recharge the server's attribute still stands behind. `_d3_rfx2_rules` checks who sets / clears the
+# priority (L1b_out/rfx2/mutants.txt, rows S1-S8).
+DR3B_MDC = "src/ReplicatedStorage/Shared/Configs/ManualDropperConfig.luau"
+DR3B_PFX = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/ProductionFx.luau"
+DR3B_LG = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/LabelGovernor.luau"
+DR3B_WLC = "src/ReplicatedStorage/Shared/Configs/WorldLabelConfig.luau"
+# spec §13 ProductionFx needles, then the exact lines that carry the v1b rules (spec §3.7 / §3.8 / §7 / §10.3)
+for _d3_needle, _d3_label in (
+    ("CashPopGlow", "the plate pop keeps HEAD's green glow (UIStroke CashPopGlow; the ◆ pin moved here from ManualDropperService)"),
+    ("Remotes.GetUnreliableEvent(Constants.RemoteNames.DropperFx)", "DropperFx through the Remotes helper's bounded wait (no unbounded WaitForChild)"),
+    ("BaseLabel = true", "the plate pop is a governed base label (at most 3 on screen)"),
+    ("PriorityAttribute", "the plate pop carries WorldLabelConfig.PriorityAttribute"),
+    ("\t\ttask.defer(afterInit)", "Init defers its one start task (the first recharge read + the remote wait; Init never yields)"),
+    ("\tremote.OnClientEvent:Connect(onDropperFx)", "the listener is the server -> client packet only"),
+    ("\tif not (finiteIn(amount, 1, MAX_AMOUNT) and finiteIn(left, 0, 1000) and finiteIn(eta, 0, 3600)) then",
+     "payload checks: amount 1..FxMaxPayloadAmount, left 0..1000, eta 0..3600, all finite"),
+    ("\treturn at ~= nil and (at - (dropPoint :: Vector3)).Magnitude <= MAX_STUDS", "payload checks: drop point within FxMaxPayloadStuds of the character"),
+    ('local DEAD_FLAG = "Dead" -- the one Fx.HideWhen flag the plate response obeys', "the plate's answer to a tap ignores Fx.HideWhen except Dead"),
+    # revision 3 (lead decision): every paid packet shows its world pop and chirp at once; nothing holds, cancels or
+    # attributes it (the whole handler, so a hold, a HUD-flag mute or a float check in front of the pop is a pin edit)
+    ("local function onDropperFx(dropPoint: any, amount: any, left: any, eta: any)\n\tplateCount(\"Packets\")\n\tif not validPayload(dropPoint, amount, left, eta) then\n\t\tplateCount(\"Junk\")\n\t\treturn\n\tend\n\tif isDead() then\n\t\tplateCount(\"Dead\") -- no character in prompt or click range: a stray packet shows nothing\n\t\treturn\n\tend\n\tlocal pos = dropPoint :: Vector3\n\tlocal plate = plateAt(pos)\n\tlocal plotId = if plate then plotOf(plate) else nil\n\tif plotId ~= nil then\n\t\tlastPlotId = plotId\n\tend\n\tapplyRecharge(plotId or lastPlotId, math.floor(left :: number), eta :: number)\n\tdropBundle(pos)\n",
+     "onDropperFx, whole up to the pop: junk and Dead are the only ways out before the bundle and the pop (revision 3)"),
+    ("\tshowPop(pos, amount :: number, plate)\nend\n", "every valid paid packet ends in the world pop + chirp (revision 3: no hold, no cancel, no float attribution)"),
+    ("\t\tWorldLabel.SetShown(tag, false) -- the pop takes the tag's place (the cap of 3 holds)", "the plate tag hides while its pop shows"),
+    ("\tg:SetAttribute(PRIORITY_ATTR, true)", "the pooled pop is the one label kept first"),
+    ("\tWorldLabel.SetShown(g, false)", "the pooled pop starts hidden"),
+    ("\tsound(COIN_KEY, spot)\n", "the pop plays its Drop.Coin chirp where the pop is drawn (refix 1: a far camera still hears it)"),
+    ("\t\t\t\tif pcall(pc.SetSuppressed, prompt, true) then", "Recharging: the plate pills hide (PromptController.SetSuppressed)"),
+    ("\t\t\t\tWorldLabel.SetText(tag, RECHARGE_TEXT)", "Recharging: the plate tags read RechargeTag"),
+    ("\ttask.delay(math.clamp(rechargeUntil - now, 0.01, RECHARGE_CHECK), rechargeTick)", "the Recharging check runs at 4 Hz only while a recharge is pending, and lands on time"),
+    ('local RECHARGE_CHECK = 0.25 -- s: the "Recharging" check runs at 4 Hz, only while a recharge is pending', "Recharging check period 0.25 s (<= 10 Hz UI refresh)"),
+    # revision 3: "Recharging" from the server's reliable attribute (a lost left = 0 packet, a same-server rejoin)
+    ('local RECHARGE_ATTR: string = if type(MD.RechargeAttribute) == "string" then MD.RechargeAttribute else "WE_DropRechargeAt"', "reads ManualDropperConfig.RechargeAttribute"),
+    ("\tplayer:GetAttributeChangedSignal(RECHARGE_ATTR):Connect(onRechargeAttr)", "watches the server's RechargeAttribute (reliable)"),
+    ("local function afterInit()\n\tpcall(onRechargeAttr)\n\tbindDropperFx()\nend\n", "the start task reads RechargeAttribute once (set before this client started: a rejoin), pcall'd so it never stops the remote bind"),
+    ("local function onRechargeAttr()\n\tlocal at = player:GetAttribute(RECHARGE_ATTR)\n\tif at == nil then\n\t\tif rechargeUntil > 0 then\n\t\t\tendRecharge()\n\t\tend\n\t\treturn\n\tend\n\tlocal now = serverNow()\n\tif typeof(at) ~= \"number\" or at ~= at or now == nil then\n\t\treturn\n\tend\n\tlocal seconds = (at :: number) - now\n\tif seconds > 0 and seconds <= 3600 then\n\t\tplateCount(\"RechargeAttr\")\n\t\tstartRecharge(ownPlot(), seconds)\n\tend\nend\n",
+     "onRechargeAttr, whole: the attribute's server time starts a recharge until then; nil ends it (the server is the judge)"),
+    ("\tif FX.Enabled ~= true or reducedMotion() then", "ReducedMotion / Fx.Enabled = false: no bundle fall"),
+    ('\t\tlocal ctrls = modules and modules.Parent and modules.Parent:FindFirstChild("Controllers")', "PromptController is a lazy, pcall'd lookup (read-only use of a C5 file)"),
+    ('\tnf.Name = "WE_ProductionFxLocal" -- local only: never under a server part', "the bundles live in a local folder (streaming-safe)"),
+    ("\tp.CanQuery = false", "the pooled bundle never blocks a query / click"),
+    ("\tif was > 0 and v <= 0 then\n\t\tlocal atm = player:GetAttribute(\"WE_AtmPos\")", "the ATM payout (WE_PendingCash > 0 -> 0) is observed, never written"),
+    ('\treturn burst("Atm", atmPos + ATM_LIFT, if ProductionFx.IsLowFx() then FX.AtmEmitLow else FX.AtmEmit, false) > 0', "the ATM sparkle: AtmEmit (AtmEmitLow on low FX) through the one token bucket"),
+):
+    must_contain(DR3B_PFX, _d3_needle, f"droppers v1b ProductionFx: {_d3_label}")
+for _d3_needle, _d3_label in (
+    ("AlwaysOnTop = true", "the plate pop is never AlwaysOnTop"),
+    ("TextScaled = true", "fixed 14-20 px world text (never TextScaled)"),
+    # revision 3: the hold and the float attribution are gone for good
+    ("CashFloatRequested", "no pill-float watch (revision 3: the pop never waits for, or is cancelled by, a float)"),
+    ("AtmPopHoldSeconds", "no pop hold (revision 3)"),
+    ("AtmFloatLookBackSeconds", "no float look-back (revision 3)"),
+    ("AtmHoldNearStuds", "no near-the-ATM special case (revision 3)"),
+):
+    must_not_contain(DR3B_PFX, _d3_needle, f"droppers v1b ProductionFx: {_d3_label}")
+# LabelGovernor: the priority read (one attribute read per drawable label per pass, no allocation)
+must_contain(DR3B_LG, "local PRIORITY_ATTR = WorldLabelConfig.PriorityAttribute", "droppers v1b LabelGovernor: reads WorldLabelConfig.PriorityAttribute")
+must_contain(DR3B_LG, "\t\t\t\tif gui:GetAttribute(PRIORITY_ATTR) == true then\n\t\t\t\t\td = -1", "droppers v1b LabelGovernor: a priority label ranks as distance -1 (kept first, still counted in MaxOnScreen)")
+# WorldLabelConfig
+must_contain(DR3B_WLC, 'PriorityAttribute = "WE_LabelPriority",', "droppers v1b WorldLabelConfig: PriorityAttribute = \"WE_LabelPriority\" (DR-20)")
+
+
+def _d3_plate_rules() -> None:
+    """droppers v1b L3b static rules: where the priority sits in the governor pass, and who may use it."""
+    lg = read(DR3B_LG) or ""
+    # the priority is applied only to a label that can draw (inside the MaxDistance test), before it is ranked
+    m = re.search(r"if d <= gui\.MaxDistance and d < HUGE then\n(.*?)\n\t\t\t\tif kept < cap then", lg, re.S)
+    if m and "GetAttribute(PRIORITY_ATTR) == true" in m.group(1):
+        ok("droppers v1b LabelGovernor: the priority applies only to a drawable label (inside the MaxDistance test), before ranking")
+    else:
+        bad("droppers v1b LabelGovernor: the priority read must sit inside `if d <= gui.MaxDistance and d < HUGE then`, before the ranking")
+    # only the pooled plate pop sets the priority attribute; the key string lives in WorldLabelConfig alone
+    setters, keyed = [], []
+    for p in sorted((ROOT / "src").rglob("*.luau")):
+        body = p.read_text(encoding="utf-8")
+        rel = str(p.relative_to(ROOT))
+        if "SetAttribute(PRIORITY_ATTR" in body or re.search(r"SetAttribute\([^,\n]*PriorityAttribute", body):
+            setters.append(rel)
+        if "WE_LabelPriority" in body:
+            keyed.append(rel)
+    if setters == [DR3B_PFX] and keyed == [DR3B_WLC]:
+        ok("droppers v1b: only ProductionFx sets the label priority (the pooled plate pop; refix 2: the own plate tag while Recharging); the key string is only in WorldLabelConfig")
+    else:
+        bad(f"droppers v1b: label priority setters {setters} / key string in {keyed} (want only ProductionFx / WorldLabelConfig)")
+    # the plate response never talks back: no line names DropperFx together with a client -> server call
+    pfx = read(DR3B_PFX) or ""
+    if pfx and not re.search(r"(FireServer|InvokeServer|OnServerEvent)", pfx):
+        ok("droppers v1b ProductionFx: no client -> server call (the grab is the server's own prompt / ClickDetector)")
+    else:
+        bad("droppers v1b ProductionFx: FireServer / InvokeServer / OnServerEvent found (or file missing)")
+
+
+_d3_plate_rules()
+
+
+def _d3_fix3_rules() -> None:
+    """droppers v1b L3b fix round 3 (revision 3): every valid paid packet shows the world pop (the pop is called from the
+    packet handler only, once, unconditionally at its end), and only the server writes the RechargeAttribute."""
+    pfx = _db_code3(read(DR3B_PFX) or "")
+    m = re.search(r"\nlocal function onDropperFx\(dropPoint: any, amount: any, left: any, eta: any\)\n(.*?)\nend\n", pfx, re.S)
+    body = m.group(1) if m else ""
+    calls = re.findall(r"(?<!function )\bshowPop\s*\(", pfx)
+    last = [ln for ln in body.split("\n") if ln.strip()][-1:] if body else []
+    rets = re.findall(r"\breturn\b", body)
+    gated = re.search(r"(?m)^\t(?:if|elseif|while|for|repeat)\b(?![^\n]*(?:validPayload|isDead\(\)|plotId ~= nil))", body)
+    if m and len(calls) == 1 and last == ["\tshowPop(pos, amount :: number, plate)"] and len(rets) == 2 and not gated:
+        ok("droppers v1b revision 3 ProductionFx: every valid paid packet ends in the one world pop (showPop called once, unconditionally, at the end of onDropperFx; junk and Dead the only early returns; comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3 ProductionFx: the pop is no longer shown for every paid packet (onDropperFx found {bool(m)}, showPop calls {len(calls)} (want 1), last statement {last}, returns {len(rets)} (want 2), other gate {gated.group(0).strip() if gated else None})")
+    writers = []
+    for p in sorted((ROOT / "src/StarterPlayer").rglob("*.luau")):
+        code = _db_code3(p.read_text(encoding="utf-8"))
+        if re.search(r"SetAttribute\s*\(\s*(?:RECHARGE_ATTR|[\w.]*RechargeAttribute|[\"']WE_DropRechargeAt[\"'])", code):
+            writers.append(str(p.relative_to(ROOT)))
+    if not writers:
+        ok("droppers v1b revision 3: no client file writes RechargeAttribute (the server is its only writer; the client reads it)")
+    else:
+        bad(f"droppers v1b revision 3: client files write RechargeAttribute: {writers}")
+
+
+def _db_code3(src: str) -> str:
+    """Luau source with -- line and --[[ ]] / --[==[ ]==] comments removed (strings kept). Same rules as the L1b block's
+    _db_luau_code, repeated here so this block also runs without the L1b block (the L3b tree alone)."""
+    out, i, n = [], 0, len(src)
+    long_open = re.compile(r"\[(=*)\[")
+    while i < n:
+        c = src[i]
+        if c == "-" and src.startswith("--", i):
+            mm = long_open.match(src, i + 2)
+            if mm:
+                close = "]" + mm.group(1) + "]"
+                j = src.find(close, mm.end())
+                j = n if j < 0 else j + len(close)
+                out.append("\n" * src.count("\n", i, j))
+            else:
+                j = src.find("\n", i)
+                j = n if j < 0 else j
+            i = j
+            continue
+        if c in "\"'`":
+            j = i + 1
+            while j < n and src[j] != c and src[j] != "\n":
+                j += 2 if src[j] == "\\" else 1
+            j = min(n, j + 1)
+            out.append(src[i:j])
+            i = j
+            continue
+        if c == "[":
+            mm = long_open.match(src, i)
+            if mm:
+                close = "]" + mm.group(1) + "]"
+                j = src.find(close, mm.end())
+                j = n if j < 0 else j + len(close)
+                out.append(src[i:j])
+                i = j
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+_d3_fix3_rules()
+# refix round 1 (review rv4_feedback_1): the pop is drawn at any camera distance
+for _d3_needle, _d3_label in (
+    ("local POP_NEAR_CAMERA = math.max(4, cfgNum(MD.PopNearCameraStuds, 24))", "reads ManualDropperConfig.PopNearCameraStuds"),
+    ("local function popSpot(pos: Vector3, maxDist: number): Vector3\n\tlocal cam = Workspace.CurrentCamera\n\tif cam == nil then\n\t\treturn pos\n\tend\n\tlocal ok, camPos = pcall(function(): Vector3\n\t\treturn cam.CFrame.Position\n\tend)\n\tif not ok or typeof(camPos) ~= \"Vector3\" or not finitePos(camPos) then\n\t\treturn pos\n\tend\n\tlocal start = pos + POP_START\n\tlocal far = math.max((start - camPos).Magnitude, (pos + POP_END - camPos).Magnitude)\n\tif far <= maxDist - 1 then\n\t\treturn pos\n\tend\n\tlocal rise = (POP_END - POP_START).Magnitude\n\tlocal near = math.min(POP_NEAR_CAMERA, math.max(4, maxDist - rise - 1))\n\tlocal ray = start - camPos\n\tif ray.Magnitude < 1e-3 then\n\t\treturn pos\n\tend\n\tplateCount(\"PopNear\")\n\treturn camPos + ray.Unit * near - POP_START\nend\n",
+     "popSpot, whole: at the plate while the pop's rise stays within MaxDistance - 1 of the camera, else PopNearCameraStuds from the camera on the line of sight to the plate (always drawn, over the plate on screen)"),
+    ("\tlocal spot = popSpot(pos, gui.MaxDistance) -- refix 1: a far camera still gets the pop (and hears the chirp)\n\tanchor.WorldPosition = spot\n",
+     "showPop places the pooled pop only through popSpot, with the pop's own MaxDistance"),
+):
+    must_contain(DR3B_PFX, _d3_needle, f"droppers v1b refix 1 ProductionFx: {_d3_label}")
+must_contain(DR3B_MDC, "\tPopNearCameraStuds = 24,", "droppers v1b refix 1 ManualDropperConfig: PopNearCameraStuds = 24 (a far camera's pop is drawn 24 studs from it)")
+
+
+def _d3_rfx1_rules() -> None:
+    """droppers v1b L3b refix round 1: the pooled pop's anchor is moved in exactly one place (`anchor.WorldPosition = spot`,
+    spot from the one popSpot call), so no path can put the pop back at the plate for a far camera; comments stripped."""
+    pfx = _db_code3(read(DR3B_PFX) or "")
+    places = re.findall(r"[^\n]*\b(?:anchor|popAnchor|a)\s*\.\s*WorldPosition\s*=(?!=)[^\n]*", pfx)
+    spots = re.findall(r"(?<!function )\bpopSpot\s*\(", pfx)
+    named = re.findall(r"\bpopSpot\b", pfx)
+    if [x.strip() for x in places] == ["anchor.WorldPosition = spot"] and len(spots) == 1 and len(named) == 2:
+        ok("droppers v1b refix 1 ProductionFx: the pop's anchor is placed once, from the one popSpot call (comments stripped)")
+    else:
+        bad(f"droppers v1b refix 1 ProductionFx: the pop's anchor placement changed (placements {[x.strip() for x in places]}, popSpot calls {len(spots)} (want 1), mentions {len(named)} (want 2))")
+
+
+_d3_rfx1_rules()
+# refix round 2 (review rv4_feedback_2): "Recharging" is kept first by the LabelGovernor, and a late packet cannot end it
+for _d3_needle, _d3_label in (
+    ("\t\t\t\tif tag:GetAttribute(PRIORITY_ATTR) ~= true then\n\t\t\t\t\ttag:SetAttribute(PRIORITY_ATTR, true)\n\t\t\t\t\tranked = true\n\t\t\t\tend\n\t\t\t\tpriorityTags[tag] = true\n",
+     "Recharging: the tag that reads RechargeTag carries the label priority (kept first, within the cap of 3; compare-first)"),
+    ("\tif ranked then\n\t\tgovernorPass() -- decide at once", "Recharging: the LabelGovernor decides at once when a tag gains the priority"),
+    ("\tfor tag in pairs(priorityTags) do\n\t\tif tag.Parent ~= nil then\n\t\t\ttag:SetAttribute(PRIORITY_ATTR, nil) -- refix 2: back to a plain governed label (\"$75\" ranks by distance)\n\t\tend\n\tend\n\ttable.clear(priorityTags)\n\tgovernorPass()\n",
+     "the recharge's end clears the tags' priority (the \"$75\" tag ranks by distance again) and re-runs the governor"),
+    ("local function attrSaysEmpty(): boolean\n\tlocal at = player:GetAttribute(RECHARGE_ATTR)\n\tlocal now = serverNow()\n\treturn typeof(at) == \"number\" and at == at and now ~= nil and (at :: number) - now > REORDER_SLACK\nend\n",
+     "attrSaysEmpty, whole: the server's attribute still says the budget is empty (more than REORDER_SLACK s ahead)"),
+    ("\tif left >= 1 then\n\t\tif rechargeUntil > 0 and not attrSaysEmpty() then\n\t\t\tendRecharge() -- a paid grab: the budget holds bundles again\n",
+     "a late left >= 1 packet does not end a recharge the server's attribute still stands behind (unreliable packets can reorder)"),
+    ("local REORDER_SLACK = 0.1\n", "the reorder slack is 0.1 s"),
+):
+    must_contain(DR3B_PFX, _d3_needle, f"droppers v1b refix 2 ProductionFx: {_d3_label}")
+
+
+def _d3_rfx2_rules() -> None:
+    """droppers v1b L3b refix round 2: in ProductionFx (comments stripped) the label priority is written in exactly three
+    places: the pooled pop (`g:SetAttribute(PRIORITY_ATTR, true)`, in ensurePop), the Recharging tag (`= true`, in
+    writeRecharge) and its clear (`= nil`, in endRecharge); priorityTags is filled only in writeRecharge and emptied only
+    in endRecharge. So no other label (a pad, the producer label) can take a first place, and the tag's priority cannot
+    outlive the recharge."""
+    pfx = _db_code3(read(DR3B_PFX) or "")
+
+    def body(name):
+        m = re.search(r"\nlocal function " + name + r"\([^\n]*\n(.*?)\nend\n", pfx, re.S)
+        return m.group(1) if m else None
+
+    sets = [x.strip() for x in re.findall(r"[^\n]*SetAttribute\s*\(\s*PRIORITY_ATTR[^\n]*", pfx)]
+    other = re.findall(r"[^\n]*\bPRIORITY_ATTR\b[^\n]*", pfx)
+    ep, wr, er = body("ensurePop"), body("writeRecharge"), body("endRecharge")
+    placed = (ep is not None and "g:SetAttribute(PRIORITY_ATTR, true)" in ep
+              and wr is not None and "tag:SetAttribute(PRIORITY_ATTR, true)" in wr
+              and er is not None and "tag:SetAttribute(PRIORITY_ATTR, nil)" in er)
+    fills = re.findall(r"priorityTags\s*\[[^\]\n]*\]\s*=(?!=)[^\n]*", pfx)
+    clears = re.findall(r"table\.clear\s*\(\s*priorityTags\s*\)", pfx)
+    mentions = re.findall(r"\bpriorityTags\b", pfx)
+    tidy = (len(fills) == 1 and wr is not None and "priorityTags[tag] = true" in wr and len(clears) == 1
+            and er is not None and "table.clear(priorityTags)" in er and len(mentions) == 4)
+    if sorted(sets) == sorted(["g:SetAttribute(PRIORITY_ATTR, true)", "tag:SetAttribute(PRIORITY_ATTR, true)", "tag:SetAttribute(PRIORITY_ATTR, nil)"]) \
+            and len(other) == 5 and placed and tidy:
+        ok("droppers v1b refix 2 ProductionFx: the label priority is set only on the pooled pop (ensurePop) and on a Recharging tag (writeRecharge), cleared in endRecharge, and priorityTags is filled / emptied only there (comments stripped)")
+    else:
+        bad(f"droppers v1b refix 2 ProductionFx: the label priority's writers changed (SetAttribute(PRIORITY_ATTR ...) lines {sets}, PRIORITY_ATTR lines {len(other)} (want 5: the local, the pop, the tag's read, set and clear), in their functions {placed}, priorityTags fills {len(fills)} / clears {len(clears)} / mentions {len(mentions)} (want 1 / 1 / 4))")
+
+
+_d3_rfx2_rules()
+# --- end of the droppers v1b lane L3b block ---
+
+# --- owner-vis yard lane (owner feedback 2026-09-27: "the soldier training area is terrible"). Training Yard rebuilt as
+# a 3-lane range + obstacle course + supply corner from TrainingYardConfig (TrainingYardBuilder); each pin shown failing
+# on HEAD 3b5ac28 (ownervis/yard/out/bps_pins.txt).
+TYB = "src/ServerScriptService/Server/Modules/TrainingYardBuilder.luau"
+TYC = "src/ReplicatedStorage/Shared/Configs/TrainingYardConfig.luau"
+TY_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+must_contain(MSD, "local TrainingYardBuilder = require(script.Parent.TrainingYardBuilder)", "owner-vis yard: MapSetup requires TrainingYardBuilder (no unbounded wait)")
+must_contain(MSD, "\t\t\tif BaseLayout.Enabled() then BaseLayout.Config().Courtyard.TrainingYard else nil,\n\t\t\tmakeSoldierKit\n", "owner-vis yard: the yard sits at Courtyard.TrainingYard and its figures are MapSetup's makeSoldierKit statues")
+for _ty_gone in ('TryAttachPropVisual(tentHost, "Tent")', 'TryAttachPropVisual(sandHost, "Sandbag")', 'Name = "StallSign"', 'Name = "TentHost"'):
+    must_not_contain(MSD, _ty_gone, f"owner-vis yard: MapSetup no longer builds `{_ty_gone}` (grey tent boxes / beige stepped SandBag Wall / stall sign SurfaceGuis)")
+# the contract other code reads: folder, YardPad, anchors, targets
+must_contain(TYB, 'folder.Name = "TrainingYard"\n\tfolder.Parent = plotFolder', "owner-vis yard: Plot<n>.TrainingYard folder (ManualDropperService / SoldierService / ProducerLabels)")
+must_contain(TYC, '{ Name = "YardPad", Shape = "Block",', "owner-vis yard: the range floor is still the YardPad part (ProducerLabels yard label anchor)")
+must_contain(TYB, 'invisibleAnchor(folder, "YardAnchor",', "owner-vis yard: YardAnchor kept")
+must_contain(TYB, 'invisibleAnchor(folder, "YardEarnAnchor",', "owner-vis yard: YardEarnAnchor kept (the yard cash plate is built from it)")
+must_contain(TYC, "YardEarnAnchor = { X = -16, Y = 5.5, Z = -9 },", "owner-vis yard: the cash plate lands on open ground at yard-local (-10, -13), off the range floor, <= 24 studs from YardPad")
+must_contain(TYB, 'p:SetAttribute("WE_TrainingTarget", true)', "owner-vis yard: TrainingTarget boards keep WE_TrainingTarget + PlotId")
+must_contain(TYC, 'table.insert(pieces, { Name = "TrainingTarget" .. i,', "owner-vis yard: targets keep the TrainingTarget1..3 names")
+# figures: R-RIG statue path (makeSoldierKit with the npc type), today's Part-kit look the fallback
+must_contain(TYB, "makeSoldierKit(folder, fig.Name, cf, fig.Body, nil, fig.Accent, TrainingYardConfig.FigureHealth, fig.Kind, nil)", "owner-vis yard: figures only through makeSoldierKit (R-RIG turns them into Roblox's Soldier)")
+must_contain(TYC, '{ Name = "YardShooter1", Kind = "Infantry", X = -7, Z = LANES[1], Yaw = -90,', "owner-vis yard: 3 soldiers at the firing line facing downrange (was 5 statues)")
+# meshes: Roblox-made Synty pieces of live packs, deferred, replace-never-add, capped, Part look complete on its own
+must_contain(TYB, "local ok, res = pcall(vas.CloneKitMesh, key)", "owner-vis yard: meshes only through VisualAssetService.CloneKitMesh (Roblox-owned DesertKit pieces)")
+must_contain(TYB, "\tif TrainingYardConfig.UseMeshes then\n\t\ttask.defer(function()", "owner-vis yard: the mesh dress is deferred (CloneKitMesh may yield on a pack's first load)")
+must_contain(TYB, "host.Transparency = 1 -- stays the collider under the mesh", "owner-vis yard: a colliding host stays as an invisible collider under its mesh")
+must_contain(TYB, "\t\t\t\telse\n\t\t\t\t\thost:Destroy()\n", "owner-vis yard: a non-colliding host is replaced by its mesh (replace, never add)")
+must_contain(TYB, "local k = math.min(hs.X / ext.X, hs.Y / ext.Y, hs.Z / ext.Z)", "owner-vis yard: a mesh is fitted inside its host box (one uniform scale)")
+must_contain(TYC, "MaxMeshesPerYard = 16,", "owner-vis yard: at most 16 mesh pieces per yard")
+must_contain(TYB, "if placed >= cap then\n\t\t\treturn placed", "owner-vis yard: the per-yard mesh cap is enforced")
+for _ty_key, _ty_ref in (
+    ("YardCrate", 'YardCrate = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Crate_Wood_04",'),
+    ("YardAmmoCrate", 'YardAmmoCrate = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Crate_Metal_01",'),
+    ("YardRack", 'YardRack = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_WeaponRack_01",'),
+    ("YardLadder", 'YardLadder = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Ladder_01",'),
+):
+    must_contain(TY_VAC, _ty_ref, f"owner-vis yard: DesertKit.{_ty_key} is a Roblox-made Synty piece of a pack that already loads live (0 new ids)")
+# phone budget: no lights, Neon, SurfaceGuis, billboards, unbounded waits or third-party store keys in the yard
+for _ty_bad in ("PointLight", "SpotLight", "SurfaceLight", "Enum.Material.Neon", "SurfaceGui", "BillboardGui", "WaitForChild", "TryAttachPropVisual"):
+    must_not_contain(TYB, _ty_bad, f"owner-vis yard: TrainingYardBuilder has no `{_ty_bad}`")
+for _ty_bad in ("M.Neon", "Enum.Material.Neon", "Sandbag", "15271872710", "182529039", "2930926216"):
+    must_not_contain(TYC, _ty_bad, f"owner-vis yard: TrainingYardConfig has no `{_ty_bad}` (no Neon; the owner-picked SandBag Wall / Tent / Military Crates stay off the yard)")
+# --- bizlook (2026-09-27, owner: "The dropper should look like a legit high-end business"): the four war businesses
+# rebuilt as small branded company sites at the same part count per level (L0 4 / L1 10 / L2 12 / L3 14 / L4 15 /
+# L5 16), with Roblox-made Synty City building pieces (already live: 0 new load attempts) standing in for Part-kit roles
+# one for one. Every pin here fails on HEAD 90cad49 except 7 that hold there by design and fail on mutated copies
+# (bizlook/out/bps_pins.txt); the v1a line geometry (Belt / BeltFrame / Bin / Housing wall / PressRam) is pinned so the
+# machines, products, heap and pop keep their boxes.
+BL_BZC = "src/ReplicatedStorage/Shared/Configs/BusinessConfig.luau"
+BL_BZS = "src/ServerScriptService/Server/Services/BusinessService.luau"
+BL_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+BL_VAS = "src/ServerScriptService/Server/Services/VisualAssetService.luau"
+BL_TGC = "src/ReplicatedStorage/Shared/Configs/TycoonGuideConfig.luau"
+BL_TOOL = "tools/wire-asset-ids.py"
+BL_LIC = "docs/ASSET_LICENSES.md"
+for _bl_needle, _bl_label in (
+    ('{ Role = "Housing", MinLevel = 1, Size = Vector3.new(7, 7, 8), Offset = Vector3.new(-6.5, 3.5, 0), Material = Enum.Material.Brick, ColorKey = "Body", Collide = true },', "the workshop keeps the v1a Housing box (the ShellPress sits in its +X wall), brick"),
+    ('{ Role = "Belt", MinLevel = 1, Size = Vector3.new(9, 0.4, 2.6), Offset = Vector3.new(2, 2.4, 0), Material = Enum.Material.Fabric, ColorKey = "Belt" },', "the belt keeps its v1a box (products, machines, the belt dress)"),
+    ('{ Role = "BeltFrame", MinLevel = 1, Size = Vector3.new(9, 2.2, 2.2), Offset = Vector3.new(2, 1.1, 0), Material = Enum.Material.Metal, ColorKey = "Frame", Collide = true },', "the belt frame keeps its v1a box"),
+    ('{ Role = "Bin", MinLevel = 1, Size = Vector3.new(4, 2.2, 5), Offset = Vector3.new(8.5, 1.1, 0), Material = Enum.Material.Metal, ColorKey = "Dark", Collide = true },', "the bin keeps its v1a box (heap, pop, Ship FX)"),
+    ('{ Role = "Dock", MinLevel = 2, Size = Vector3.new(8.5, 6, 5.5), Offset = Vector3.new(8.25, 3, -6.75), Material = Enum.Material.Brick, ColorKey = "Body", Collide = true },', "L2 loading unit collider behind the bin: 6 studs high (the ATM behind Ammo Works stays in sight)"),
+    ('{ Role = "DockFront", MinLevel = 2, Size = Vector3.new(4.4, 4.6, 0.3), Offset = Vector3.new(8.5, 2.3, -3.9), Material = Enum.Material.Metal, ColorKey = "Shutter" },', "L2 loading unit front (Part-kit shutter; the roller-shutter piece takes its place)"),
+    ('{ Role = "Hall", MinLevel = 3, Size = Vector3.new(16, 9, 6), Offset = Vector3.new(-4, 4.5, -7), Material = Enum.Material.Metal, ColorKey = "Hall", Collide = true, Grow = {', "L3 head office collider behind the belt start (x -12 .. 4), grows at L4 / L5"),
+    ('{ FromLevel = 5, Size = Vector3.new(16, 14, 6), Offset = Vector3.new(-4, 7, -7) } } },', "the L5 office box is 16 x 14 x 6"),
+    ('{ Role = "HallFront", MinLevel = 3, Size = Vector3.new(16.3, 2, 6.3), Offset = Vector3.new(-4, 6.2, -7), Material = Enum.Material.Glass, ColorKey = "Glass", Reflectance = 0.25, Grow = {', "L3 office front (Part-kit window band; the office piece takes its place)"),
+    ('{ Role = "Canopy", MinLevel = 4, Size = Vector3.new(9.4, 0.4, 6.2), Offset = Vector3.new(1.3, 6.4, -1), Material = Enum.Material.Metal, ColorKey = "Canopy" },', "L4 canopy over the belt, x -3.4 .. 6: the bin and the pop stay open to the sky"),
+    ('{ Role = "Fascia", MinLevel = 5, Size = Vector3.new(16.4, 1.4, 6.4), Offset = Vector3.new(-4, 14.5, -7), Material = Enum.Material.SmoothPlastic, ColorKey = "Accent" },', "L5 brand band round the office top"),
+    ('LookTierRoles = { "Housing", "Roof", "BeltFrame", "Bin", "Hall" },', "look tiers: Hall takes the Chimney's slot"),
+    ('{ FromLevel = 1, Name = "Field", Material = Enum.Material.Metal, HousingMaterial = Enum.Material.Brick, Shade = 1, RoofReflectance = 0 },', "no rust tier: the Field workshop is brick"),
+    ("export type KitGrow = { FromLevel: number, Size: Vector3, Offset: Vector3 }", "KitGrow rows (a kit box per level)"),
+    ("Hopper = { Size = Vector3.new(3.4, 2.2, 2.2), Offset = Vector3.new(-6.5, 9.4, -0.5), Shape = Enum.PartType.Cylinder, Rot = Vector3.new(0, 0, 90) },", "Ammo Works' product sign: a brass casing standing on the workshop roof"),
+    ("PressRam = { Size = Vector3.new(3, 1.6, 3), Offset = Vector3.new(2, 4.4, 0) },", "the Armor press ram keeps its v1a box (the stamp rests inside it)"),
+):
+    must_contain(BL_BZC, _bl_needle, f"bizlook: BusinessConfig {_bl_label}")
+for _bl_row in (
+    'Palette = { Body = Color3.fromRGB(150, 88, 66), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(226, 160, 40) }, -- bizlook brand: amber',
+    'Palette = { Body = Color3.fromRGB(138, 92, 72), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(58, 150, 84) }, -- bizlook brand: green',
+    'Palette = { Body = Color3.fromRGB(126, 96, 84), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(46, 112, 196) }, -- bizlook brand: blue',
+    'Palette = { Body = Color3.fromRGB(156, 100, 76), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(204, 58, 48) }, -- bizlook brand: red',
+):
+    must_contain(BL_BZC, _bl_row, "bizlook: brand colour per business (amber / green / blue / red)")
+# BusinessService: growth written only when it differs, never on a dressed part; stretched pieces refitted; colliders
+# a piece hid shown again when it goes
+for _bl_needle, _bl_label in (
+    ("local function geomFor(kp: BusinessConfig.KitPart, lv: number): (Vector3, Vector3)", "one rule for a kit box at a level (Grow rows)"),
+    ("\tif kp.Grow == nil or p:GetAttribute(\"WE_CatalogAssetId\") ~= nil then\n\t\treturn\n\tend", "growth never moves a dressed part"),
+    ("\tif (p.Size - size).Magnitude > 0.001 then\n\t\tp.Size = size\n\tend", "growth writes Size only when it differs (idle re-sync = 0 writes)"),
+    ("\tif (p.Position - cf.Position).Magnitude > 0.001 then\n\t\tp.CFrame = cf\n\tend", "growth writes CFrame only when it differs"),
+    ("local size, offset = geomFor(kp, lv) -- bizlook: built at its level's box (0 extra writes)", "a new kit part is built at its level's box"),
+    ("applyGrow(have, kp, base, lv) -- bizlook: the level's box; writes only what differs", "an existing kit part gets its level's box"),
+    ("if have and have:IsA(\"BasePart\") and kp.MinLevel <= lv and needsRefit(have, lv) then", "a stretched piece whose box changed is rebuilt (the deferred dress fits it again)"),
+    ("\t\tif c:IsA(\"BasePart\") and c:GetAttribute(\"WE_BizHiddenBy\") == role then\n\t\t\tc.Transparency = 0", "a collider a piece hid shows again when the piece goes"),
+    ("showHidden(m, kp.Role) -- bizlook: a collider this role's piece hid shows again (if it stays)", "level-down / rebirth: hidden colliders come back"),
+):
+    must_contain(BL_BZS, _bl_needle, f"bizlook: BusinessService {_bl_label}")
+# VisualAssetConfig: the pieces (Roblox Synty City, already live) and their typed fields
+for _bl_needle, _bl_label in (
+    ('DockFront = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Shop_06", ReplacesRoles = { "DockFront" }, Into = "Dock", Fit = "Stretch", Yaw = 180, HideRoles = { "Dock" },', "L2 loading unit = Roblox Synty roller-shutter unit, stretched into the Dock box, Dock hidden (collision kept)"),
+    ('HallFront = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Station_03", ReplacesRoles = { "HallFront" }, Into = "Hall", Fit = "Stretch", Yaw = 180, HideRoles = { "Hall" }, ToLevel = 4,', "L3-4 office = Roblox Synty two-storey office in the Hall box"),
+    ('HallFrontL5 = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Station_02", ReplacesRoles = { "HallFront" }, Into = "Hall", Fit = "Stretch", Yaw = 180, HideRoles = { "Hall" }, FromLevel = 5,', "L5 office = Roblox Synty three-storey glass-front office in the taller Hall box"),
+    ('Canopy = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Shop_Cover_03", ReplacesRoles = { "Canopy" },', "L4 canopy = Roblox Synty corrugated canopy, fitted uniformly"),
+    ("Into: string?, -- BusinessPieces:", "AssetRef.Into is typed"),
+    ("HideRoles: { string }?, -- BusinessPieces:", "AssetRef.HideRoles is typed"),
+):
+    must_contain(BL_VAC, _bl_needle, f"bizlook: VisualAssetConfig {_bl_label}")
+# VisualAssetService: the piece path
+for _bl_needle, _bl_label in (
+    ("local pieces = (VisualAssetConfig :: any).BusinessPieces", "TryAttachBusinessVisual also dresses the shared BusinessPieces"),
+    ("if (ref.FromLevel ~= nil and lvNow < ref.FromLevel) or (ref.ToLevel ~= nil and lvNow > ref.ToLevel) then\n\t\treturn false", "a piece is worn only in its level range"),
+    ("if p:GetAttribute(\"WE_CatalogAssetId\") == assetId and (piece == nil or p:GetAttribute(\"WE_CatalogPiece\") == piece) then", "a pack piece counts as on only when the part wears that piece (the L5 office swap)"),
+    ("\t\t\t\tp.Size = if quarter then Vector3.new(box.Size.Z, box.Size.Y, box.Size.X) else box.Size\n\t\t\t\tp.CFrame = box.CFrame * CFrame.Angles(0, math.rad(yaw), 0)", "Fit = Stretch fills the Into box exactly (turned by Yaw)"),
+    ("\t\t\t\thp.Transparency = 1\n\t\t\t\thp.CastShadow = false\n\t\t\t\thp:SetAttribute(\"WE_BizHiddenBy\", roles[1])", "HideRoles only hides (the collider keeps CanCollide / CanQuery)"),
+    ("p:SetAttribute(\"WE_BizFitRole\", ref.Into) -- bizlook: BusinessService refits it when that box grows", "a stretched piece records the box it fills"),
+):
+    must_contain(BL_VAS, _bl_needle, f"bizlook: VisualAssetService {_bl_label}")
+must_not_contain(BL_VAS, "hp.CanCollide = false", "bizlook: a hidden collider is never made non-colliding")
+for _bl_id in ("AmmoWorks", "ArmsCrateLine", "ArmorPlatePress", "RocketAssembly"):
+    must_contain(BL_TGC, f'{_bl_id} = {{ [2] = "Loading bay", [3] = "Head office", [4] = "Belt canopy", [5] = "Company HQ" }},', f"bizlook: {_bl_id} BUY line 2 / NEXT chip names say what each level adds")
+must_contain(BL_TOOL, 'PIECE_BUCKETS = ("BusinessPieces",)', "bizlook: the promote tool's load budget counts the business pieces")
+must_contain(BL_TOOL, "for bucket in HOOK_BUCKETS + PIECE_BUCKETS:", "bizlook: ... in its live chains")
+must_contain(BL_LIC, "`BusinessPieces.DockFront`, `.HallFront`, `.HallFrontL5`, `.Canopy`", "bizlook: the pieces are on the Synty City licence row")
+
+
+def _bl_rules() -> None:
+    """bizlook static rules: part count per level; BusinessPieces replace known non-colliding roles, fill known
+    colliding boxes they hide, add no load id, and change piece only where the box changes; the site stays clear of
+    the pop, the ATM sight line and the neighbours."""
+    bz = read(BL_BZC) or ""
+    vac = read(BL_VAC) or ""
+    kitm = re.search(r"\n\tKit = \{(.*?)\n\t\} :: \{ KitPart \},", bz, re.S)
+    if not kitm:
+        bad("bizlook: BusinessConfig.Kit not found")
+        return
+    V = r"Vector3\.new\(([-\d.]+), ([-\d.]+), ([-\d.]+)\)"
+    kit = {}
+    for m in re.finditer(r'\{ Role = "(\w+)", MinLevel = (\d+), Size = ' + V + r", Offset = " + V + r"([^\n]*)", kitm.group(1)):
+        grows = [(int(g.group(1)), tuple(float(x) for x in g.group(2, 3, 4)), tuple(float(x) for x in g.group(5, 6, 7)))
+                 for g in re.finditer(r"\{ FromLevel = (\d+), Size = " + V + r", Offset = " + V + r" \}", m.group(9))]
+        kit[m.group(1)] = dict(min=int(m.group(2)), size=tuple(float(x) for x in m.group(3, 4, 5)),
+                               off=tuple(float(x) for x in m.group(6, 7, 8)), collide="Collide = true" in m.group(9), grow=grows)
+    counts = [3 + sum(1 for k in kit.values() if k["min"] <= lv) for lv in range(6)]
+    if counts == [4, 10, 12, 14, 15, 16]:
+        ok(f"bizlook: parts per business by level {counts} = v1a (console 3 included): nothing added at any level")
+    else:
+        bad(f"bizlook: parts per business by level {counts} (v1a: [4, 10, 12, 14, 15, 16])")
+
+    def box(role: str, lv: int):
+        k = kit[role]; s, o = k["size"], k["off"]
+        for fl, gs, go in k["grow"]:
+            if fl <= lv:
+                s, o = gs, go
+        return [o[i] - s[i] / 2 for i in range(3)], [o[i] + s[i] / 2 for i in range(3)]
+    probs = []
+    # the pop column (bin centre + (1, 5.5, 0), 3 x 3 studs, rise 1.5) and its low anchor stay outside every kit box
+    for lv in range(1, 6):
+        for role, k in kit.items():
+            if k["min"] > lv:
+                continue
+            lo, hi = box(role, lv)
+            if lo[0] < 11 and hi[0] > 8 and lo[1] < 8.1 and hi[1] > 6 and lo[2] < 1.5 and hi[2] > -1.5:
+                probs.append(f"L{lv} {role} box meets the pop column")
+    # ATM sight line (Ammo Works kiosk -> ATM passes x ~7 at the building line): tall boxes stand at x <= 4 (trims 4.25), and
+    # anything right of x 4 behind the line is <= 6 studs high; the whole site stays in x -13 .. 13, z -10.5 .. 6.1
+    for lv in range(1, 6):
+        for role, k in kit.items():
+            if k["min"] > lv:
+                continue
+            lo, hi = box(role, lv)
+            if hi[2] <= -3.5 and hi[0] > 4.25 and hi[1] > 6.01:
+                probs.append(f"L{lv} {role} is over 6 studs high right of x 4.25 behind the line")
+            if lo[0] < -13.01 or hi[0] > 13.01 or lo[2] < -10.51 or hi[2] > 6.11:
+                probs.append(f"L{lv} {role} leaves the site envelope")
+    if probs:
+        bad("bizlook: site geometry: " + "; ".join(probs))
+    else:
+        ok("bizlook: at L1-L5 no kit box meets the pop column, nothing right of x 4.25 behind the line is over 6 studs (ATM sight line), all inside x +-13 / z -10.5 .. 6.1")
+    # BusinessPieces
+    i = vac.find("\tBusinessPieces = {")
+    j = vac.find("} :: { [string]: AssetRef },", i)
+    if i < 0 or j < 0:
+        bad("bizlook: VisualAssetConfig.BusinessPieces not found")
+        return
+    body = vac[i:j]
+    other = vac[:i] + vac[j:]
+    live_other = {int(x) for x in re.findall(r"ModelAssetId = (\d+)", other) if int(x) > 0}
+    rows = re.findall(r"^\t\t(\w+) = \{([^\n]*)\} :: AssetRef,", body, re.M)
+    pprobs = []
+    for key, rb in rows:
+        mid = int((re.search(r"ModelAssetId = (\d+)", rb) or re.search("()", "0")).group(1) or 0)
+        roles = re.findall(r'"(\w+)"', (re.search(r"ReplacesRoles = \{([^}]*)\}", rb) or re.search("()", "")).group(1) or "")
+        into = (re.search(r'Into = "(\w+)"', rb) or re.search("()", "")).group(1) or None
+        hide = re.findall(r'"(\w+)"', (re.search(r"HideRoles = \{([^}]*)\}", rb) or re.search("()", "")).group(1) or "")
+        tolv = re.search(r"ToLevel = (\d+)", rb)
+        if mid and mid not in live_other:
+            pprobs.append(f"{key}: {mid} is a new load id")
+        if len(roles) != 1 or roles[0] not in kit or kit[roles[0]]["collide"]:
+            pprobs.append(f"{key}: ReplacesRoles {roles} must be one known non-colliding kit role")
+        if into is not None:
+            if into not in kit or not kit[into]["collide"] or hide != [into] or 'Fit = "Stretch"' not in rb:
+                pprobs.append(f"{key}: Into {into} must be a known colliding role, hidden (HideRoles = {{ Into }}), Fit Stretch")
+            elif roles and roles[0] in kit and kit[roles[0]]["min"] != kit[into]["min"]:
+                pprobs.append(f"{key}: {roles[0]} and {into} must appear at the same level")
+            if tolv:
+                t = int(tolv.group(1))
+                if box(into, t) == box(into, t + 1):
+                    pprobs.append(f"{key}: ToLevel {t} but the {into} box does not change at L{t + 1} (the piece swap needs a refit)")
+    if rows and not pprobs:
+        ok(f"bizlook: {len(rows)} BusinessPieces replace one non-colliding role each, fill a hidden collider's box where set, add no load id, swap only where the box changes")
+    else:
+        bad("bizlook: BusinessPieces: " + ("; ".join(pprobs) or "no rows"))
+
+
+_bl_rules()
+
+# --- vscale lane, round 2 (owner: the avatar sits above the buggy / pokes through the jeep roof): option B. Fitted Roblox
+# bodies at a config scale (BodyScale) over the UNCHANGED Part kit, kit seats on the body's seats, label over the roof.
+# Round 2 adds: a clear exit spot beside the car after ANY seat is left, one touch "Ride" prompt per car (server-side
+# SeatPolicy + line of sight), spawn checks / prompt range / friendly gate sized by the fitted body, the garage sign
+# moved out of the body, the buggy passenger on the VehicleSeat mirror, the van at Roblox size. Paste above the final
+# `parse_gate()` call. R2.1 (review round 2.1): the exit's line of sight starts inside the kit, every seat stays inside the
+# kit's collidable box, exits keep out of other cars' bodies, a pad's second ring clears a big parked car, SPAWN tries spots
+# clear of tall non-colliding decor first, the Quad / Recon Buggy at Roblox size with the seats on the floor.
+# R2.2 (review round 2.2): an exit spot never lands a rider inside another player (the stand box sees other characters,
+# spots near another root part or handed out in the last second are taken, two more spots at each end); the Quad / Recon
+# Buggy at 1.2 x Roblox size with the seats 0.25 over the VehicleSeat (head under the roll cage's top rails).
+# R2.3 (review round 2.3): WE_DriveAttach.X follows the centre of mass with the seated riders (WheeledLight), the label
+# margin grows with the body's height and the over-vehicle HP bar sits over the nameplate (seen over a tall roof).
+# Verified headless (NOT Roblox) on git archive 5c8f57e + the eleven vscale files: FAIL=0;
+# on clean 5c8f57e every pin below marked [new] FAILS; the pins marked [guard] pass on both trees on purpose (the physics kit, the
+# kit's WE_HalfLength / WE_HalfWidth and the fit signature stay as they are; nothing re-adds the rejected hit box or the
+# old buggy passenger seat).
+VS_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+VS_VAS = "src/ServerScriptService/Server/Services/VisualAssetService.luau"
+VS_VS = "src/ServerScriptService/Server/Services/VehicleService.luau"
+VS_VC = "src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau"
+VS_GDS = "src/ServerScriptService/Server/Services/GateDefenseService.luau"
+VS_RC = "src/ReplicatedStorage/Shared/Configs/RaidConfig.luau"
+VS_MS = "src/ServerScriptService/Server/Modules/MapSetup.luau"
+VS_WC = "src/ReplicatedStorage/Shared/Configs/WorldConfig.luau"
+VS_VDC = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau"
+VS_VCC = "src/ReplicatedStorage/Shared/Configs/VehicleCombatConfig.luau"
+VS_VCCL = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleCombatClient.luau"
+
+# [new] config: per-ref scale + seat map (body seat tops measured from the real store files, vscale/geo/native.json)
+must_contain(VS_VAC, "\tBodyScale: number?, -- Fit: body scale (1 = Roblox size); nil = as long as the kit chassis. The kit still drives", "vscale: AssetRef.BodyScale")
+must_contain(VS_VAC, "\tBodySeats: { [string]: Vector3 }?, -- BodyScale: kit seat -> body seat top", "vscale: AssetRef.BodySeats")
+must_contain(VS_VAC, "\tBodyRoofParts: { string }?, -- BodyScale: kit parts lifted onto the body roof", "vscale: AssetRef.BodyRoofParts")
+must_contain(VS_VAC, "\t\t\tBodyScale = 1,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-1.216, 3.387, -0.496), -- VehicleSeat\n", "vscale: Light Utility Vehicle (4x4 family) at Roblox size, driver on the body's VehicleSeat")
+must_contain(VS_VAC, '\t\t\tBodyRoofParts = { "GunMount", "Barrel" },\n', "vscale: the Armed 4x4 Part turret stands on the LUV roof")
+if (read(VS_VAC) or "").count("\t\t\tBodyScale = 1.2,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-1.349, 2.434, 1.223), -- VehicleSeat + 0.25\n\t\t\t\tPassengerSeat1 = Vector3.new(1.349, 2.434, 1.223), -- mirror of the VehicleSeat (right-hand seat) + 0.25\n") == 2:
+    ok("vscale: R2.2 Dune Buggy (UtilityQuad + ReconBuggy) at 1.2 x Roblox size, seats 0.25 over the VehicleSeat (feet on the floor, head under the top rails); passenger on the VehicleSeat mirror")
+else:
+    bad("vscale: R2.2 Dune Buggy (UtilityQuad + ReconBuggy) at 1.2 x Roblox size, seats 0.25 over the VehicleSeat (feet on the floor, head under the top rails); passenger on the VehicleSeat mirror")
+must_not_contain(VS_VAC, "Vector3.new(-1.349, 2.634, 1.223)", "vscale: [guard] R2.2 no buggy seat at the R2.1 height at Roblox size (the head reached the roll cage's top rails)")
+must_not_contain(VS_VAC, "Vector3.new(-1.349, 2.184, 1.223)", "vscale: [guard] R2.1 no buggy seat at the bare VehicleSeat height (at 0.95 the feet hung 0.45 under the floor)")
+must_not_contain(VS_VAC, "PassengerSeat1 = Vector3.new(0.998, 2.676, -0.277)", "vscale: [guard] no buggy passenger on SeatFR (R2: the head went into the roll cage's front bar)")
+must_contain(VS_VAC, "\t\t\tBodyScale = 1,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.247, 4.004, -5.267), -- VehicleSeat\n", "vscale: R2 Van at Roblox size (arms no longer through the doors), driver on the body's VehicleSeat")
+must_contain(VS_VAC, "\t\t\t\tPassengerSeat4 = Vector3.new(2.255, 3.05, 0.6),\n", "vscale: R2 Van passengers 2-4 in the cargo bay, feet on the cargo floor")
+if (read(VS_VAC) or "").count("\t\t\tBodyScale = 1,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-1.708, 5.075, -2.092), -- VehicleSeat\n") == 2:
+    ok("vscale: Pickup (PatrolTruck + EscortTruck) at Roblox size, driver on the body's VehicleSeat")
+else:
+    bad("vscale: Pickup (PatrolTruck + EscortTruck) at Roblox size, driver on the body's VehicleSeat")
+
+# [new] fit: scale from config, shadows from the fitted length, seats / roof parts / label / extents after a successful fit
+must_contain(VS_VAS, "\tlocal s = math.clamp(fitScale or primary.Size.Z / bodyLen, 0.05, 4)", "vscale: body scale = BodyScale, else chassis length / body length")
+must_contain(VS_VAS, "\tlocal shadowMin = (if fitScale then bodyLen * s else primary.Size.Z) * (tonumber((VisualAssetConfig :: any).FitShadowShare) or 0.5)", "vscale: shadow threshold = FitShadowShare of the fitted body length (phones: 2-5 casters)")
+must_contain(VS_VAS, "\tpart.CFrame = cf\n\tlocal w = Instance.new(\"WeldConstraint\")\n\tw.Part0 = primary\n\tw.Part1 = part\n\tw.Parent = primary", "vscale: a moved kit part is welded again to the chassis")
+must_contain(VS_VAS, "\t\t\tat = Vector3.new(math.clamp(at.X, -mx, mx), at.Y, math.clamp(at.Z, -mz, mz))\n\t\t\treweldAt(primary, seat, CFrame.new(primary.CFrame:PointToWorldSpace(at)) * rot * CFrame.new(0, -seat.Size.Y * 0.5, 0))\n\t\t\tseat.CanCollide = false", "vscale: kit seat top on the body seat top, CanCollide off (drive footprint unchanged); R2.1 its centre kept inside the kit's collidable box")
+must_contain(VS_VAS, "\t\tif d:IsA(\"BasePart\") and d.CanCollide and not d:IsA(\"Seat\") and not d:IsA(\"VehicleSeat\") then", "vscale: R2.1 the seat clamp measures the kit's collidable box without the seats (as WE_HalfLength / WE_HalfWidth)")
+must_contain(VS_VAS, "\tlocal inset = tonumber((VisualAssetConfig :: any).BodySeatKitInset) or 0\n", "vscale: R2.1 seat inset from config")
+must_contain(VS_VAC, "\tBodySeatKitInset = 0.25,\n", "vscale: R2.1 no seat (and no seated rider) past the kit's nose or tail (van front row, Dispatch back seat)")
+must_contain(VS_VAS, "\t\ttopY = math.max(topY, rel.Position.Y + halfHeightIn(rel, p.Size))\n\tend\n", "vscale: R2 label over the higher of the roof and the lifted roof parts (Armed 4x4 gun)")
+must_contain(VS_VAS, "\tlocal margin = (tonumber(lm.Base) or 1) + (tonumber(lm.PerStud) or 0) * math.max(0, topY - bottom - (tonumber(lm.EyeHeight) or 0))\n\thostModel:SetAttribute(\"WE_LabelY\", topY + margin)", "vscale: R2.3 label margin over the body top grows with the body's height over the ground (seen over a tall roof)")
+must_contain(VS_VAC, "\tBodyLabelMargin = { Base = 1, PerStud = 0.4, EyeHeight = 4.5 },\n", "vscale: R2.3 config VisualAssetConfig.BodyLabelMargin")
+must_not_contain(VS_VAS, "hostModel:SetAttribute(\"WE_LabelY\", topY + 1)", "vscale: [guard] R2.3 no flat 1-stud label over a fitted roof (the HP bar sat 0.08 over it, hidden by the roof)")
+# [new] R2.3 (review M2): the over-vehicle HP bar over the owner nameplate (config), never AlwaysOnTop
+must_contain(VS_VCC, "MaxShown = 3, LabelOffset = 1.5 },", "vscale: R2.3 config VehicleCombatConfig.Ui.OverBar.LabelOffset (bar over the nameplate)")
+must_contain(VS_VCCL, "\t\treturn math.clamp(ly + OB.LabelOffset, 1, 30) -- vscale R2.3: over the owner nameplate", "vscale: R2.3 over-vehicle HP bar height from config (over the nameplate)")
+must_not_contain(VS_VCCL, "ly - 0.75", "vscale: [guard] R2.3 the HP bar no longer sits under the nameplate, 0.08 over a fitted roof")
+must_contain(VS_VCCL, "\tbb.AlwaysOnTop = false\n", "vscale: [guard] R2.3 the over-vehicle HP bar stays depth-tested (never AlwaysOnTop)")
+must_contain(VS_VAS, "\thostModel:SetAttribute(\"WE_VisualHalfLength\", halfZ)\n\thostModel:SetAttribute(\"WE_VisualHalfWidth\", halfX)\n\thostModel:SetAttribute(\"WE_VisualTop\", topY)", "vscale: R2 the fitted body's extent goes on the model (spawn, exit, prompts, gate)")
+must_contain(VS_VAS, "\t\tif typeof(ref.BodyScale) == \"number\" and ref.BodyScale > 0 then\n\t\t\tplaceKitOnBody(hostModel, primary, clone, ref)\n\t\tend\n\tend", "vscale: seats / label / extents only inside the fitted branch (a Part kit whose body failed keeps its own)")
+must_not_contain(VS_VAS, "WE_FitHitBox", "vscale: [guard] no fitted-body hit box (it would change who a shot at an open seat hits)")
+
+# [new] exit: any seat left -> a clear spot beside the car, outside the visible body (config Drive.ExitSpot)
+must_contain(VS_VC, "\t\tExitSpot = {\n\t\t\tEnabled = true,\n\t\t\tModes = { Car = true } :: { [string]: boolean },\n\t\t\tGap = 1,", "vscale: R2 config Drive.ExitSpot (Car mode, 1 stud outside the body)")
+must_contain(VS_VC, "\t\t\tSide = { DriverSeat = \"Left\" } :: { [string]: string },", "vscale: R2 per-seat ExitSide in config (unlisted seats: the side the seat is on)")
+must_contain(VS_VC, "\t\t\tEndMaxSpeed = 3,", "vscale: R2 behind / in front only when the car is not moving toward that end")
+must_contain(VS_VS, "\t\tlocal spots = { Vector3.new(side * (w + out), 0, sp.Z), Vector3.new(-side * (w + out), 0, sp.Z) }", "vscale: R2 exit order: the seat's side, then the other side, at the seat's Z")
+must_contain(VS_VS, "\tlocal w = math.max(tonumber(model:GetAttribute(\"WE_HalfWidth\")) or chassis.Size.X * 0.5, tonumber(model:GetAttribute(\"WE_VisualHalfWidth\")) or 0)", "vscale: R2 exit spot outside max(kit, fitted body) width (the plain kit uses its own)")
+must_contain(VS_VS, "\t\t\tif hit and hit.Material ~= Enum.Material.Water and not CollectionService:HasTag(hit.Instance, Constants.Tags.Water) then", "vscale: R2 exit needs solid ground in reach, never water or the void")
+must_contain(VS_VS, "\t\t\t\t\tand #Workspace:GetPartBoundsInBox(CFrame.new(p.X, gy + 0.3 + cfg.StandHeight * 0.5, p.Z) * frame.Rotation, boxSize, opStand) == 0\n\t\t\t\t\tand not inOtherBody(Vector3.new(p.X, gy, p.Z), gy + 0.3)\n\t\t\t\t\tand not VehicleService._ExitTaken(stand, riderChar)\n", "vscale: R2 exit spot: empty standing box; R2.1 never inside another car's fitted body; R2.2 never on another player")
+# [new] R2.2 (review): riders who leave together or one after another never land inside each other
+must_contain(VS_VS, "\topStand.FilterDescendantsInstances = if riderChar then { riderChar, model } else { model }\n", "vscale: R2.2 the exit stand box ignores only the rider and the car (a standing player blocks it)")
+must_not_contain(VS_VS, "* frame.Rotation, boxSize, op) == 0", "vscale: [guard] R2.2 the exit stand box never ignores every character")
+must_contain(VS_VS, "\tlocal exclude = characterList()\n\ttable.insert(exclude, model)\n\tlocal rp = rayParams(exclude)\n", "vscale: R2.2 exit rays (ground, lines of sight) still ignore every character (a ground ray never lands on a head)")
+must_contain(VS_VS, "\t\tif r and r:IsA(\"BasePart\") and overlaps(r.CFrame, r.Size.X * 0.5, r.Size.Z * 0.5) then\n\t\t\treturn true", "vscale: R2.2 a spot where the rider's root part would touch another player's is taken")
+must_contain(VS_VS, "\t\tif h.Char ~= riderChar and h.Char.Parent ~= nil and now - h.At < cfg.HoldSeconds and overlaps(h.CF, h.HX, h.HZ) then", "vscale: R2.2 a spot handed out in the last HoldSeconds stays taken")
+must_contain(VS_VS, "\tVehicleService._ExitHold(spot, char) -- R2.2: the next rider (same wreck, or right after) gets another spot\n", "vscale: R2.2 every exit move holds its spot")
+must_contain(VS_VS, "\tlocal ok, spot, seatBlocked = pcall(VehicleService._ExitSpot, rec.Model, rec.Chassis, seat, hip + 0.05, char)\n", "vscale: R2.2 the exit knows which character is leaving")
+must_contain(VS_VS, "\t\tlocal okR, roof = pcall(VehicleService._RoofSpot, rec.Model, rec.Chassis, hip + 0.05, char)\n", "vscale: R2.2 the roof fallback knows which character is leaving")
+must_contain(VS_VS, "\top.FilterDescendantsInstances = if riderChar then { riderChar } else {}\n", "vscale: R2.2 the roof stand box sees riders still seated or already on the roof, and its own kit (a tilted / overturned car: refused, never a rider inside the kit)")
+must_contain(VS_VS, "\t\tand not VehicleService._ExitTaken(stand, riderChar)\n\tthen\n\t\treturn stand", "vscale: R2.2 the roof spot is never another player's")
+must_contain(VS_VS, "\t\tfor _, dx in ipairs({ -cfg.EndSideStep, cfg.EndSideStep }) do\n", "vscale: R2.2 two more spots at each end (a full car in an alley)")
+must_contain(VS_VC, "\t\t\tRiderGap = 0.25,\n\t\t\tHoldSeconds = 1,\n\t\t\tEndSideStep = 2.5,", "vscale: R2.2 config Drive.ExitSpot.RiderGap / HoldSeconds / EndSideStep")
+must_contain(VS_VS, "\tlocal anchor = chassis.Position\n\tif #Workspace:GetPartBoundsInBox(CFrame.new(anchor), probe, op) > 0 then\n\t\treturn nil, true -- the kit itself overlaps a world part: no move\n\tend", "vscale: R2.1 exit line of sight anchored at the chassis centre (inside the collidable kit); no move when the kit overlaps a world part")
+must_contain(VS_VS, "\tlocal anchors = { anchor }\n", "vscale: R2.1 the chassis centre is always an anchor")
+must_contain(VS_VS, "\tlocal seatBlocked = Workspace:Raycast(anchor, rider - anchor, rp) ~= nil or #Workspace:GetPartBoundsInBox(CFrame.new(rider), probe, op) > 0\n\tif not seatBlocked then\n\t\ttable.insert(anchors, rider)\n\tend", "vscale: R2.1 the seat is an anchor only when the kit can see it (a seat inside a wall never starts a ray)")
+must_contain(VS_VS, "\t\t\t\t\tfor _, a in ipairs(anchors) do\n\t\t\t\t\t\tif Workspace:Raycast(a, stand.Position - a, rp) ~= nil then", "vscale: R2.1 every anchor needs a clear line to the spot (never through a wall)")
+must_not_contain(VS_VS, "Workspace:Raycast(from, stand.Position - from, rp)", "vscale: [guard] R2.1 no line of sight from the seat alone (a seat past the kit nose is inside the wall it touches)")
+must_contain(VS_VS, "\tfor _, m in ipairs(ensureFolder():GetChildren()) do\n\t\tlocal och = if m:IsA(\"Model\") and m ~= model then m.PrimaryPart else nil", "vscale: R2.1 the exit sees every other car's fitted body (non-colliding, so not in the box query)")
+must_contain(VS_VS, "\t\tif math.abs(sp.Z) > hw then\n", "vscale: R2.1 both sides again level with the chassis centre (a front-row seat's own z can be at the wall)")
+must_contain(VS_VS, "\tif ok and spot == nil and seatBlocked and Drive.ExitSpot.RoofFallback then", "vscale: R2.1 a seat inside / behind a world part: the roof, never left inside that part")
+must_contain(VS_VC, "\t\t\tAnchorProbe = 0.5,\n\t\t\tNeighbourRange = 60,", "vscale: R2.1 config Drive.ExitSpot.AnchorProbe / NeighbourRange")
+must_contain(VS_VC, "\t\t\tRoofFallback = true,", "vscale: R2.1 config Drive.ExitSpot.RoofFallback")
+must_contain(VS_VS, "\tchar:PivotTo(spot)\n\tzeroVelocity(hrp)", "vscale: R2 the rider is moved there with no speed (no fling)")
+must_contain(VS_VS, "\t\t\t\tif left and left ~= occ then\n\t\t\t\t\tVehicleService._OnSeatLeft(rec, st, left)", "vscale: R2 every seat (driver + passengers) hooks the exit on Occupant -> nil (jump, ejectSeat, wreck)")
+
+# [new] boarding: one Ride prompt per car, server-side SeatPolicy, range + height + line of sight, nearest free seat
+must_contain(VS_VC, "\t\tRide = {\n\t\t\tEnabled = true,\n\t\t\tModes = { Car = true } :: { [string]: boolean },\n\t\t\tRange = 8,", "vscale: R2 config Drive.Ride")
+must_contain(VS_VC, "\t\t\tHoldSeconds = 0.3,", "vscale: R2 Ride is a short hold (works with a finger)")
+must_contain(VS_VS, "\tprompt.Name = \"WE_RidePrompt\"\n\tprompt.ActionText = \"Ride\"", "vscale: R2 the Ride prompt (device-neutral text)")
+must_contain(VS_VS, "\tprompt.HoldDuration = cfg.HoldSeconds\n\tprompt.MaxActivationDistance = cfg.Range + half", "vscale: R2 Ride hold + range from config (+ the fitted body's half length)")
+must_contain(VS_VS, "\t\tprompt.Triggered:Connect(function(who: Player)\n\t\t\tVehicleService._Ride(rec, who)", "vscale: R2 Ride takes only the triggering player (no client-sent seat or target)")
+must_contain(VS_VS, "\tif not VehicleService._SeatAllowed(rec, player, \"Passenger\") then\n\t\treturn false, \"Policy\"", "vscale: R2 Ride follows VehicleCombatConfig.SeatPolicy.Passenger")
+must_contain(VS_VS, "\tif Workspace:Raycast(hrp.Position, seat.Position - hrp.Position, rayParams(exclude)) ~= nil then\n\t\treturn false, \"Blocked\"", "vscale: R2 Ride needs a clear line to the seat (never through a wall / closed gate)")
+must_contain(VS_VS, "\tif rel.Magnitude > range + 4 or math.abs(rel.Y) > cfg.MaxRise then\n\t\treturn false, \"TooFar\"", "vscale: R2 Ride range and height checked on the server")
+must_contain(VS_VS, "\tif RateLimitService and not RateLimitService.Allow(player, \"vehicle_ride\", cfg.RequestRate, cfg.RequestBurst) then", "vscale: R2 Ride is rate-limited")
+must_contain(VS_VS, "\t\tpcall(VehicleService._AddRidePrompt, rec, def) -- vscale R2: passengers board by touch (\"Ride\")", "vscale: R2 SPAWN adds the Ride prompt")
+must_contain(VS_VS, "\t\t\t\tVehicleService._RideSync(rec) -- vscale R2: the Ride prompt shows while a passenger seat is free", "vscale: R2 Ride on only while a passenger seat is free")
+must_contain(VS_VDC, "\t\twant = not mine and not seated and prompt:GetAttribute(\"WE_Open\") == true and model:GetAttribute(\"WE_Destroyed\") ~= true", "vscale: R2 client: Ride never for the owner / anyone seated / a full or wrecked car")
+must_contain(VS_VDC, "\t\trefreshAllPrompts() -- vscale R2: \"Ride\" hides while seated anywhere", "vscale: R2 client: Ride re-evaluated on every sit / stand")
+must_contain(VS_VDC, "\t\tif d.Name == \"WE_DrivePrompt\" or d.Name == \"WE_RidePrompt\" then\n\t\t\thookRidePrompt(d)\n\t\t\trefreshPrompt(d)", "vscale: R2 client: a Ride prompt already there when the folder is hooked (late joiner) gets its Enabled / WE_Open listeners too")
+
+# [new] spawn / Drive prompt / gate / garage sign sized by the fitted body
+must_contain(VS_VS, "\treturn math.max(fp.HalfX, fp.HalfZ, fp.VisHalfX or 0, fp.VisHalfZ or 0)", "vscale: R2 spawn spacing / Occupied / PlayerFront distance use max(kit, fitted body)")
+must_contain(VS_VS, "\t\tlocal half = Vector3.new(math.max(fp.HalfX, fp.VisHalfX or 0), (highY - lowY) * 0.5, math.max(fp.HalfZ, fp.VisHalfZ or 0))", "vscale: R2 spawn box = the fitted body (never into walls / props)")
+must_contain(VS_VS, "\t\t\tif cf and not overPlayer and not overAnyWater(ctx, cf) and inSight(ctx, pp, cf) and openSky(ctx, cf) and spotFree(ctx, cf, decor) then", "vscale: R2 PlayerFront never puts the body over the player")
+# [new] R2.1 pads: a second ring clears the biggest parked car around the same pad
+must_contain(VS_VS, "\tlocal s2 = r + big + 2 + SpawnCfg.RingMargin\n\tif s2 > s + 0.01 then\n", "vscale: R2.1 pad second ring at footRadius + biggest parked radius + 2 + RingMargin (never another player's pad 570-740 away)")
+must_contain(VS_VS, "local function chooseCar(ctx: SpawnCtx): SpawnChoice\n\tlocal fp = ctx.Footprint\n\tlocal offsets = aroundOffsets(fp, ctx.Occupied)", "vscale: R2.1 pads get the parked cars' radii")
+must_contain(VS_VS, "\tlocal offsets = aroundOffsets(ctx.Footprint, ctx.Occupied)\n", "vscale: R2.1 PlayerFront gets the parked cars' radii")
+must_contain(VS_VC, "\t\t\tRingMargin = 0.5,", "vscale: R2.1 config Drive.Spawn.RingMargin")
+# [new] R2.1 SPAWN tries spots clear of tall visible non-colliding decor first (flag poles, palms, reeds, lintels, the sign)
+must_contain(VS_VS, "\t\tif decorFree and not decorFree(box, half, pos.Y - fp.Clearance - SpawnCfg.Clearance) then\n\t\t\treturn false", "vscale: R2.1 spot box clear of indexed decor on the decor pass")
+if (read(VS_VS) or "").count("for _, decor in ipairs(if ctx.DecorFree then { true, false } else { false }) do") == 2:
+    ok("vscale: R2.1 pad / plot spots: clear of decor first, then as R2 (never fewer spawns)")
+else:
+    bad("vscale: R2.1 pad / plot spots: clear of decor first, then as R2 (never fewer spawns)")
+must_contain(VS_VS, "\tlocal decorPass: { boolean } = if ctx.DecorFree then { true, true, false } else { false }\n\tlocal turnPass: { number } = if ctx.DecorFree then { 0, math.pi / 2, 0 } else { 0 }\n", "vscale: R2.1 PlayerFront: clear of decor at the player's heading, then turned a quarter, then as R2")
+must_contain(VS_VS, "\t\tDecorFree = if SpawnCfg.Decor.Enabled\n", "vscale: R2.1 the real spawn ctx carries the decor test")
+must_contain(VS_VS, "\tif cur and now - cur.At < cfg.RefreshSeconds then\n\t\treturn cur.Grid\n\tend", "vscale: R2.1 the decor index is rebuilt at most every RefreshSeconds (no per-SPAWN scan)")
+if (read(VS_VS) or "").count("ipairs(Workspace:GetDescendants())") == 1:
+    ok("vscale: R2.1 exactly one whole-Workspace scan in VehicleService (the throttled decor index)")
+else:
+    bad("vscale: R2.1 exactly one whole-Workspace scan in VehicleService (the throttled decor index)")
+must_contain(VS_VC, "\t\t\tDecor = {\n\t\t\t\tEnabled = true,\n\t\t\t\tMinTop = 2.5,", "vscale: R2.1 config Drive.Spawn.Decor")
+must_contain(VS_VC, "\t\t\t\tRefreshSeconds = 300,", "vscale: R2.1 decor index refresh from config")
+must_contain(VS_VS, "\t\t\ttable.insert(occupied, { Pos = rec.Chassis.Position, Radius = math.max(hx, hz, vx, vz) })", "vscale: R2 a parked body counts at its own size (no second car inside it)")
+must_contain(VS_VS, "\t\t\tprompt.MaxActivationDistance = SpawnCfg.DrivePromptRange + math.max(0, (fp.VisHalfZ or 0) - fp.HalfZ)", "vscale: R2 Drive prompt range from config + the body's overhang")
+must_contain(VS_VC, "\t\t\tDrivePromptRange = 14,", "vscale: R2 config Drive.Spawn.DrivePromptRange")
+must_contain(VS_GDS, "\t\t\t\t\tif over > 0 then\n\t\t\t\t\t\tradius += over + D.GateOpenVehicleLead", "vscale: R2 friendly gate opens earlier by the rider's car overhang + lead")
+must_contain(VS_RC, "\t\tGateOpenVehicleLead = 1.5,", "vscale: R2 config RaidConfig.Defense.GateOpenVehicleLead")
+must_contain(VS_MS, "\t\tlocal back = tonumber(spawnCfg.GarageSignBack) or (spawnCfg.PadSize.Z * 0.5 + 0.4)", "vscale: R2 garage sign offset from config")
+must_contain(VS_WC, "\t\tGarageSignBack = 14.6,", "vscale: R2 garage sign behind a Roblox-size body's tail (13.29)")
+
+# [new] R2.3 (review M1): the drive point follows the centre of mass sideways too (a fitted body seats the driver off
+# the centreline), updated whenever a seat's occupant changes; the rollover fix's Y / Z line stays as it is
+must_contain(VS_VC, "\t\t\tDriveAtComXFamilies = { WheeledLight = true } :: { [string]: boolean },", "vscale: R2.3 config Drive.Stability.DriveAtComXFamilies (WheeledLight)")
+must_contain(VS_VS, "\tif cfg.DriveAtComXFamilies[def.KitFamily or \"\"] == true then\n\t\t-- vscale R2.3: the kit alone (no rider), for _DriveAttachX\n\t\tattach:SetAttribute(\"WE_KitMass\", mass)\n\t\tattach:SetAttribute(\"WE_KitMomentX\", moment.X)", "vscale: R2.3 _Ballast keeps the kit's mass / X moment on WE_DriveAttach (listed families only)")
+must_contain(VS_VS, "\t\tattach.Position = Vector3.new(0, com.Y, com.Z)\n\t\tif seat and seat:IsA(\"BasePart\") then\n\t\t\tVehicleService._DriveAttachX(chassis, { seat })", "vscale: R2.3 at build the drive point's X = the centre of mass with the nominal driver")
+must_contain(VS_VS, "\t\tif s.Parent ~= nil and (s :: any).Occupant ~= nil then\n\t\t\tm += rm\n\t\t\tmx += chassis.CFrame:PointToObjectSpace(s.Position).X * rm", "vscale: R2.3 _DriveAttachX adds a RiderMass rider on every occupied seat")
+must_contain(VS_VS, "\t\tatt.Position = Vector3.new(mx / m, p.Y, p.Z)\n", "vscale: R2.3 _DriveAttachX moves X only (Y / Z stay at the rollover fix's centre of mass)")
+must_contain(VS_VS, "\t\t\t\tVehicleService._DriveAttachX(chassis, allSeats) -- vscale R2.3: the drive point follows the riders' side\n", "vscale: R2.3 every seat's Occupant change re-centres the drive point")
+
+# [guard] the physics kit stays exactly as today (option B; option C = a separate lane with driving tests)
+must_contain(VS_VS, "\t\tbody.Size = Vector3.new(5.2 * s, 1.6 * s, if quad then 6.5 * s else 8.5 * s)", "vscale: [guard] WheeledLight kit chassis unchanged")
+must_contain(VS_VS, "\t\tseatOffset = CFrame.new(0, 1.9 * s, 0.1 * s)", "vscale: [guard] WheeledLight kit seat unchanged (moved only onto a fitted body)")
+must_contain(VS_VS, "\t\tbody.Size = Vector3.new(6.2 * s, 2.4 * s, 11 * s)", "vscale: [guard] WheeledTruck kit chassis unchanged")
+must_contain(VS_VS, "\t\tseatOffset = CFrame.new(0, 2.4 * s, -3.0 * s)", "vscale: [guard] WheeledTruck kit seat unchanged (moved only onto a fitted body)")
+must_contain(VS_VS, "\t\tWE_HalfLength = fp.HalfZ,\n\t\tWE_HalfWidth = fp.HalfX,", "vscale: [guard] WE_HalfLength / WE_HalfWidth stay the kit's (driving, splash)")
+must_contain(VS_VAS, "local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, ref: AssetRef): number?", "vscale: [guard] fitBodyToKit signature unchanged")
+
+
+# --- R-RIG: animated soldier rigs + army escorts (design3/rig/spec_rig.md, v3) ---
+RR_RC = 'src/ReplicatedStorage/Shared/Configs/RigConfig.luau'
+RR_RB = 'src/ServerScriptService/Server/Modules/RigBuilder.luau'
+RR_RA = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/RigAnimator.luau'
+RR_VAS = 'src/ServerScriptService/Server/Services/VisualAssetService.luau'
+RR_SOS = 'src/ServerScriptService/Server/Services/SquadOrdersService.luau'
+RR_BOOT = 'src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau'
+for _n in ('Enabled = true, -- false: VisualAssetService never rigs', 'Tag = "WE_Rig",', 'RigType = "Keep",', 'RequiresNeck = false,',
+           'TorsoDepth = 1.45,', 'TickHz = 4,', 'MaxAnimated = 24,', 'AnimateStatic = false,', 'HoldUntracked = true,',
+           'Hold = 182393478,', 'Idle = 180435571,', 'Walk = 180426354,', 'Aim = 183817498,', 'FarMeshStuds = 120,',
+           'MaxMeshedStatic = 8,', 'SoldiersPerEscort = 4,', 'MaxPerArmy = 12,', 'MaxPerUnit = 3,', 'MaxPerClient = 22,',
+           'MaxScreenFrac = 0.25,', 'FigureStuds = 5.3,', 'MaxPartsPerFigure = 10,', 'PartsPerEscort = 8,',
+           'PhoneFigureParts = 940,', 'LeadFigureParts = 760,', 'TrianglesPerMeshedFigure = 1530,', 'MaxMeshedTriangles = 85000,',
+           'Offsets = { Vector3.new(0, 0, -7), Vector3.new(0, 0, -9.4), Vector3.new(0, 0, -11.8) }'):
+    must_contain(RR_RC, _n, f"R-RIG config: {_n}")
+_rr_rc = read(RR_RC) or ''
+def _rr_num(key):
+    _m = re.search(r'\b' + key + r' = ([0-9.]+),', _rr_rc)
+    return float(_m.group(1)) if _m else None
+_rr_mpc, _rr_ppe, _rr_ppf, _rr_lead = _rr_num('MaxPerClient'), _rr_num('PartsPerEscort'), _rr_num('PhoneFigureParts'), _rr_num('LeadFigureParts')
+if None not in (_rr_mpc, _rr_ppe, _rr_ppf, _rr_lead) and _rr_mpc * _rr_ppe <= _rr_ppf - _rr_lead:
+    ok(f'R-RIG: Escort.MaxPerClient x PartsPerEscort = {_rr_mpc * _rr_ppe:.0f} <= PhoneFigureParts - LeadFigureParts = {_rr_ppf - _rr_lead:.0f} (a phone never holds more figure parts than HEAD)')
+else:
+    bad('R-RIG: escorts per phone exceed Budget.PhoneFigureParts - Budget.LeadFigureParts')
+_rr_ma, _rr_ms, _rr_tri, _rr_tmax = _rr_num('MaxAnimated'), _rr_num('MaxMeshedStatic'), _rr_num('TrianglesPerMeshedFigure'), _rr_num('MaxMeshedTriangles')
+if None not in (_rr_ma, _rr_ms, _rr_mpc, _rr_tri, _rr_tmax) and (_rr_ma + _rr_ms + _rr_mpc) * _rr_tri <= _rr_tmax:
+    ok(f'R-RIG: meshed soldier triangles per phone ({_rr_ma:.0f} + {_rr_ms:.0f} + {_rr_mpc:.0f}) x {_rr_tri:.0f} <= {_rr_tmax:.0f}')
+else:
+    bad('R-RIG: (MaxAnimated + MaxMeshedStatic + MaxPerClient) x TrianglesPerMeshedFigure exceeds MaxMeshedTriangles')
+_rr_u = _rr_num('MaxPerUnit')
+_rr_o = re.search(r'Offsets = \{(.*)\} :: \{ Vector3 \}', _rr_rc)
+_rr_offs = re.findall(r'Vector3\.new\(([-0-9.]+), ([-0-9.]+), ([-0-9.]+)\)', _rr_o.group(1)) if _rr_o else []
+if _rr_u is not None and len(_rr_offs) == int(_rr_u) and all(float(x) == 0 and float(z) < 0 for x, _, z in _rr_offs):
+    ok('R-RIG: one escort offset per allowed escort, every one AHEAD of its unit (X = 0, Z < 0: out of the camera corridor)')
+else:
+    bad(f'R-RIG: Escort.Offsets must be MaxPerUnit entries ahead of the unit (X = 0, Z < 0), got {_rr_offs}')
+must_contain(RR_RB, 'return nil, "no Torso"', "R-RIG: a non-R6 body is refused (Part kit stays)")
+must_contain(RR_RB, 'ac.Name = "AnimationController"', "R-RIG: the template animates through an AnimationController")
+must_not_contain(RR_RB, 'Instance.new("Humanoid")', "R-RIG: no Humanoid is ever made for a rig")
+must_contain(RR_RB, 'hum.BreakJointsOnDeath = false', "R-RIG: a dead figure stays whole until its builder removes it")
+must_contain(RR_RB, 'hum.RequiresNeck = RigConfig.Host.RequiresNeck == true', "R-RIG: the rig Neck can never kill the host")
+must_contain(RR_RB, 'if RigConfig.Host.RigType == "R15" then', "R-RIG: the Studio fallback for the host hip height is a config flip")
+must_contain(RR_RB, 'torso.CanQuery = true', "R-RIG: the rig Torso is the hit box that keeps today's side-on hit area")
+must_contain(RR_RB, 'rig:SetAttribute("WE_RigStatic", true)', "R-RIG: anchored statues are marked static")
+must_contain(RR_RB, 'for k, v in pairs(rootAttrs) do', "R-RIG: the host root's hit attributes go onto every queryable rig part")
+must_not_contain(RR_RB, 'rbxassetid://2711', "R-RIG: no store mesh id is baked into our code (read from the loaded file)")
+for _n in ('RenderStepped', 'Heartbeat', 'FireServer', 'InvokeServer', 'workspace:GetDescendants', 'Workspace:GetDescendants'):
+    must_not_contain(RR_RA, _n, f"R-RIG client: no {_n}")
+_rr_ra = read(RR_RA) or ''
+_rr_gd = re.findall(r'(\w+):GetDescendants\(\)', _rr_ra)
+if _rr_ra and _rr_gd and all(x == 'copy' for x in _rr_gd):
+    ok('R-RIG client: GetDescendants only on one escort body at build (never a tree scan)')
+else:
+    bad(f'R-RIG client: GetDescendants on something other than the escort copy: {sorted(set(_rr_gd))}')
+# no closure is made per pass: applyState (called every pass for every walking figure) defines no function
+_rr_as = re.search(r'\nlocal function applyState\(.*?\nend\n', _rr_ra, re.S)
+if _rr_as and 'function' not in _rr_as.group(0)[len('\nlocal function applyState('):]:
+    ok('R-RIG client: applyState makes no closure per call (playTrack is module level)')
+else:
+    bad('R-RIG client: applyState defines a function (a closure per pass per figure)')
+must_contain(RR_RA, 'local function playTrack(tr: AnimationTrack?, on: boolean)', "R-RIG client: one module-level track helper")
+must_contain(RR_RA, 'CollectionService:RemoveTag(copy, TAG)', "R-RIG: an escort copy never keeps the rig tag")
+must_contain(RR_RA, 'd.CanQuery = false', "R-RIG: escorts can never be hit")
+must_contain(RR_RA, 'copy.Parent = host -- goes with the unit', "R-RIG: escorts are parented under their unit")
+must_contain(RR_RA, 'local period = 1 / math.clamp(tonumber(cfg.TickHz) or 4, 1, 10)', "R-RIG: one LOD loop <= 10 Hz")
+must_contain(RR_RA, 'room -= allow', "R-RIG: the own army's escorts come first inside Escort.MaxPerClient")
+must_contain(RR_RA, 'local keep = if e.Tracks then math.min(#e.Escorts, e.WantEsc, math.max(0, room)) else 0', "R-RIG: other armies keep the escorts they have (no churn in a crowd)")
+must_contain(RR_RA, 'elseif depth < minDepth or dist < playerDist then', "R-RIG: camera guard hides an escort nearer than the player or taller than MaxScreenFrac")
+must_contain(RR_RA, 'if not e.Picked and not e.SPicked and #e.Meshes > 0 then', "R-RIG: only the pick, the nearest statues and escorts wear the Roblox body")
+must_contain(RR_RA, 'setHoldBaked(e, false) -- the Hold track lifts the arm itself', "R-RIG: the rifle-forward turn is undone before Hold plays")
+must_contain(RR_RA, 'setHoldBaked(e, true) -- rifle forward from the first frame this client sees it', "R-RIG: an untracked figure holds its rifle forward")
+must_contain(RR_VAS, 'return false -- R-RIG off: the Part kit stays (no load, never a welded statue)', "R-RIG kill switch")
+must_contain(RR_VAS, 'local rig, why = RigBuilder.BakeTemplate(model, assetId)', "R-RIG: rig ids are baked, not welded")
+must_contain(RR_VAS, 'pcall(model.Destroy, model)', "R-RIG: a refused body is destroyed")
+must_contain(RR_VAS, 'rigPending[hostModel] = rigKind', "R-RIG: a figure that asked while the Soldier file was loading / cooling is remembered")
+must_contain(RR_VAS, 'task.defer(flushRigPending, assetId)', "R-RIG: it gets the rig when the file arrives (no mixed looks after a retry)")
+must_contain(RR_SOS, 'u.Model:SetAttribute("WE_Escorts", RigConfig.EscortShare(escorts, #st.Units, rank))', "R-RIG: escorts per unit from the server")
+must_contain(RR_SOS, 'local escorts = if followSlotList() ~= nil then RigConfig.EscortsFor(soldiers, #st.Units, barracks) else 0', "R-RIG: escorts only with the FollowSlots wings")
+must_contain(RR_BOOT, 'safeInit("RigAnimator", safeRequire("RigAnimator", Modules:WaitForChild("RigAnimator", 5) :: Instance))', "R-RIG: client init guarded, bounded wait")
+_rr_fake = [str(_p) for _p in (ROOT / 'src').rglob('*.luau') if 'SOLDIER_FAKE' in _p.read_text(encoding='utf-8', errors='ignore')]
+if not _rr_fake:
+    ok('R-RIG: the store-derived Soldier fake never enters the repo')
+else:
+    bad(f'R-RIG: store-derived fake found in {_rr_fake}')
+# R-RIG-H: the kit Head / Helmet / Rifle / Pack live INSIDE the WE_Rig sub-model of NPC, squad, gate-guard and statue
+# hosts. A non-recursive lookup of them on anything but a player character (or inside the rig modules, on the rig)
+# silently finds nothing. Allowed receivers: character / char (players), rig (RigBuilder / RigAnimator).
+_rr_hits = []
+for _p in (ROOT / 'src').rglob('*.luau'):
+    _t = _p.read_text(encoding='utf-8', errors='ignore')
+    for _m in re.finditer(r'([\w.]+):(?:FindFirstChild|WaitForChild)\("(Head|Helmet|Rifle|Pack)"(\)|, *[0-9.]+\))', _t):
+        _recv = _m.group(1).split('.')[-1]
+        if _recv in ('character', 'char') or (_recv == 'rig' and _p.name in ('RigBuilder.luau', 'RigAnimator.luau')):
+            continue
+        _rr_hits.append(f'{_p.relative_to(ROOT)}: {_m.group(0)}')
+    for _m in re.finditer(r'\b(?:model|host|hostModel|npc|unit|guard|figure)(?:\.Model)?\.(Head|Helmet|Rifle|Pack)\b', _t):
+        _rr_hits.append(f'{_p.relative_to(ROOT)}: {_m.group(0)}')
+if not _rr_hits:
+    ok('R-RIG-H: no non-recursive Head / Helmet / Rifle / Pack lookup on an NPC, squad, guard or statue host')
+else:
+    bad(f'R-RIG-H: non-recursive kit-part lookup on a rigged host (use FindFirstChild(name, true)): {_rr_hits[:6]}')
+# --- wc3: the owner's second check (WE_CHECK2 through Open Cloud Luau Execution in the live place, version 75, 2026-09-27),
+# his first check of batch P4 and his answers (call 12 = A, load by id; yes to the truck, the recon plane and the jet).
+# Paste above the final `parse_gate()` call. Replaces the wc2 pins on the jet's call-12 HOLD line and on the eight
+# `"second check` HOLD lines (their texts changed), and the InfantryCarrier needle the promote tool rewrote (the ref now
+# spans several lines). Variant vs: on the vscale lane (R2.1), with the recon plane and the APC promoted.
+# Headless-verified (NOT Roblox): every pin below PASSES on the wc3 candidate and FAILS on its base.
+WC3_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+WC3_TOOL = "tools/wire-asset-ids.py"
+WC3_WIRING = "docs/ASSET_WIRING.md"
+WC3_VAS = "src/ServerScriptService/Server/Services/VisualAssetService.luau"
+must_not_contain(WC3_VAC, 'PendingAssetId = 5318635087', 'wc3: the fuel tanker pick 5318635087 is out of the config (55 parts, all named "Part")')
+must_not_contain(WC3_VAC, 'PendingAssetId = 11357157285', 'wc3: the rescue heli pick 11357157285 is out of the config (78 parts, only "Part" / "Wedge")')
+must_contain(WC3_TOOL, "('FuelTanker', 'VEHICLES', 'REJECT', 5318635087, 5318635087, '', '-', '', ['Vehicles.FuelTanker']", 'wc3: the FuelTanker registry row is REJECT with its config target kept')
+must_contain(WC3_TOOL, "('RescueHeli', 'VEHICLES', 'REJECT', 11357157285, 11357157285, '', '-', '', ['Vehicles.RescueHeli']", 'wc3: the RescueHeli registry row is REJECT with its config target kept')
+must_contain(WC3_TOOL, "('MedevacHeli', 'VEHICLES', 'REJECT', 11357398877, 11357157285, '', '-', '', ['Vehicles.MedevacHeli']", 'wc3: the MedevacHeli registry row (same model) is REJECT with its config target kept')
+must_contain(WC3_TOOL, "    # batch P4: the owner's first check of 2026-09-27 (same script, Open Cloud, live place version 75, shaunie6)\n    3322196012: 1, 4362642898: 28, 5589684833: 1, 14408455045: 14,\n}", 'wc3: STUDIO_DONE holds the P4 first check (2026-09-27)')
+must_contain(WC3_TOOL, 'OWNER_YES: dict[int, str] = {\n    8546141386: "2026-09-27 (call 2)",\n    4954987035: "2026-09-27 (call 4)",\n    3553891209: "2026-09-27 (jet look OK; call 12 = A, load by id)",\n}', "wc3: OWNER_YES records the owner's yes to the truck (call 2), the recon plane (call 4) and the jet (call 12 = A)")
+must_contain(WC3_TOOL, 'if not why and "OWNER" in flags and aid not in owner_ok and aid not in OWNER_YES:', 'wc3: promote takes an OWNER_YES answer in place of --owner-ok')
+must_contain(WC3_TOOL, 'if "OWNER" in r.flags and r.id not in OWNER_YES:\n        need.append("your yes/no")', 'wc3: the status table stops asking for an answer on record')
+must_contain(WC3_TOOL, '    3553891209: "your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist\'s signed three-view drawing of a real aircraft concept",', "wc3: the jet waits on the owner's decision about its paint (another artist's drawing of a real aircraft concept)")
+must_contain(WC3_TOOL, '    8546141386: "your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller",', 'wc3: the truck is held, not usable as it is (military unit markings in its paint; mesh and paint uploaded by another user)')
+must_contain(WC3_TOOL, '    2474869838: "a look first: its one mesh has no seats (the cabin seats are placed by eye); nose at -Z (yaw 0, from its ThumbnailCamera)",', 'wc3: the light heli waits on a look (one mesh, no seats; nose at -Z)')
+must_contain(WC3_TOOL, '    15838664806: "the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05",', 'wc3: the gunboat waits on the fit scale floor (MainHull is 2,048 studs)')
+must_contain(WC3_TOOL, '    8455894899: "a longer kit: trim known (ChildName \'FlatBed Truck\', 9 OmitParts names = 40 parts) but its cab sits past the kit\'s nose",', 'wc3: the flatbed waits on a longer kit (trim known, cab past the kit nose)')
+must_contain(WC3_TOOL, '    3322196012: "the P4 second check (which way the barrel points; a gun\'s Yaw is set by hand)",', 'wc3: P4 pick 3322196012 waits on the P4 second check')
+must_contain(WC3_TOOL, '    4362642898: "the P4 second check (part names: its bounds box, and one piece for the Signature role; 28 parts > 3 roles)",', 'wc3: P4 pick 4362642898 waits on the P4 second check')
+must_contain(WC3_TOOL, '    5589684833: "the P4 second check (which end is the barrel) + a FitScale look on the Roblox-size 4x4",', 'wc3: P4 pick 5589684833 waits on the P4 second check')
+must_contain(WC3_TOOL, '    14408455045: "the P4 second check (neon parts, upright pose) + the droppers lane (v1b reads its WE_CatalogProp)",', 'wc3: P4 pick 14408455045 waits on the P4 second check')
+must_contain(WC3_TOOL, '    3553891209: 90, 2474869838: 0, 9076240315: 0, 8546141386: 180, 4954987035: -90, 15838664806: -90,\n}', 'wc3: YAW_HINT gives the light helicopters yaw 0 (their ThumbnailCamera)')
+must_contain(WC3_WIRING, '    - **Answered 2026-09-27: A** (keep loading by id).', 'wc3: ASSET_WIRING §4 records call 12 = A')
+must_contain(WC3_WIRING, '**Second check done, 2026-09-27: thank you**', 'wc3: ASSET_WIRING §5 holds the second-check results')
+must_contain(WC3_WIRING, '| Fuel Tanker | 5318635087 | 55 parts in your check (over 40); all named "Part", so none can be left out |', 'wc3: ASSET_WIRING §6.1 lists the fuel tanker as not used')
+must_contain(WC3_WIRING, '**After the second check (wc3, 2026-09-27).**', 'wc3: ASSET_WIRING §8 has the load budget after the second check')
+must_contain(WC3_WIRING, 'our rules\n  keep military markings out.', "wc3: ASSET_WIRING §5 says what the truck's paint shows")
+must_contain(WC3_VAC, '\t\tReconPlane = {\n\t\t\tModelAssetId = 4954987035,\n\t\t\tFit = "Kit",\n\t\t\tYaw = -90,\n\t\t\tHideKit = true,\n\t\t\tKeepVisible = { "GearF", "WheelF", "GearL", "GearR", "WheelL", "WheelR" },\n\t\t\tBodyScale = 1,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-1, 1.2, 0),', 'wc3: Vehicles.ReconPlane is owner pick 4954987035 at Roblox size (Yaw -90, pilot seat, kit gear visible)')
+must_contain(WC3_VAC, '\t\tAPC = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},', "wc3: Vehicles.APC is owner pick 9076240315 at 0.55 scale, every seat at y 2.2 (seated head 0.66 under the real roof, not the cupola's box top)")
+must_contain(WC3_VAC, '\t\tInfantryCarrier = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},', "wc3: Vehicles.InfantryCarrier is owner pick 9076240315 at 0.55 scale, every seat at y 2.2 (seated head 0.66 under the real roof, not the cupola's box top)")
+must_contain(WC3_VAC, '\t\tCommandVehicle = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},', "wc3: Vehicles.CommandVehicle is owner pick 9076240315 at 0.55 scale, every seat at y 2.2 (seated head 0.66 under the real roof, not the cupola's box top)")
+must_contain(WC3_VAC, '\t\tWheeledIFV = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},', "wc3: Vehicles.WheeledIFV is owner pick 9076240315 at 0.55 scale, every seat at y 2.2 (seated head 0.66 under the real roof, not the cupola's box top)")
+must_contain(WC3_VAC, '\t\tAmphibiousAPC = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},', "wc3: Vehicles.AmphibiousAPC is owner pick 9076240315 at 0.55 scale, every seat at y 2.2 (seated head 0.66 under the real roof, not the cupola's box top)")
+must_contain(WC3_VAS, '\t\tif p.Shape == Enum.PartType.Cylinder then\n\t\t\tlocal d = math.min(size.Y, size.Z)\n\t\t\treturn Vector3.new(size.X, d, d)', "wc3: drawnSize gives a Cylinder part its drawn Y/Z (the recon plane's fuselage)")
+must_contain(WC3_WIRING, '- Only if 2 friends own an APC, Infantry Carrier or Command Vehicle: each of you parks one by your garage', 'wc3: ASSET_WIRING §1 asks for the 3-APC frame-rate check only with 2 friends (one car out per player)')
+must_contain(WC3_WIRING, 'No head pokes through the roof, and no arm or foot shows through the', 'wc3: ASSET_WIRING §1 asks the owner to check the APC roof')
+must_contain(WC3_WIRING, 'two of your picks go live: the Recon Plane at Roblox size,\nand the APC (with its 4 variants) at about half Roblox size, about as big as the Escort Truck.', "wc3: ASSET_WIRING §1 gives each promoted body's size (the plane at Roblox size, the APC family at 0.55)")
+must_contain(WC3_WIRING, "- Sit in it: the top of your head shows over the plane's body, just behind the wing.\n", "wc3: ASSET_WIRING §1 says only the top of the pilot's head shows over the recon plane's body")
+must_contain(WC3_VAS, '\t\t\tlocal d = math.min(size.X, size.Y, size.Z)\n\t\t\treturn Vector3.new(d, d, d)', 'wc3: drawnSize gives a Ball part its drawn size')
+must_contain(WC3_VAS, 'local cf, h = p.CFrame, drawnSize(p) * 0.5', 'wc3: fitBodyToKit sizes the body box by drawn size')
+must_contain(WC3_VAS, 'local ey = halfHeightIn(rel, drawnSize(d))', "wc3: placeKitOnBody measures the body's bottom and roof by drawn size")
+must_contain(WC3_VAS, 'local h = drawnSize(d) * 0.5\n\t\t\tlocal ex =', "wc3: placeKitOnBody measures the body's half length / width by drawn size")
+must_not_contain(WC3_VAS, 'local cf, h = p.CFrame, p.Size * 0.5', 'wc3: fitBodyToKit no longer sizes a round part by its Size box')
+must_contain(WC3_TOOL, '    8455894899: "a longer kit: trim known (ChildName \'FlatBed Truck\', 9 OmitParts names = 40 parts) but its cab sits past the kit\'s nose",\n    3322196012: "the P4 second check (which way the barrel points; a gun\'s Yaw is set by hand)",', 'wc3: the recon plane and the APC are off HOLD (promoted)')
+# ── atmprompt (ASSUMPTIONS ATM-6..ATM-10): the ATM "Collect" prompt and the cash plate "Grab Cash" prompt 7.5 studs from it
+# shared the default key (E / ButtonX) under OnePerButton, so only the closer one showed (PC, gamepad and the phone pill
+# lane) and one key press reached only that one. The keys now live in config and differ: ATM = EconomyConfig.
+# AtmCollectPrompt (E / ButtonX), plate = ManualDropperConfig.PromptKeyboardKey / PromptGamepadKey (F / ButtonB), both
+# OnePerButton, hold 0 as before. These pins read the comment-stripped config tables (each key exactly once, top level),
+# check the keys differ and that the plate's keys are not an on-foot HUD key (HudConfig.Keys; gamepad Y is Reload), and
+# pin the two services to build the prompts from those keys (no key literal left in either). Every pin fails on 2f71347.
+AP_EC = "src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau"
+AP_HUDC = "src/ReplicatedStorage/Shared/Configs/HudConfig.luau"
+
+
+def _ap_table_top(rel: str, opener: str) -> str | None:
+    """Top level of the comment-stripped table literal that starts at the first match of `opener` (a regex ending in
+    `{`), or None when it is not there."""
+    code = _db_luau_code(read(rel) or "")
+    m = re.search(opener, code)
+    if not m:
+        return None
+    end = _db_table_end(code, m.end() - 1)
+    if end < 0:
+        return None
+    return _db_top_level(code[m.end():end - 1])
+
+
+def _ap_rules() -> None:
+    want_atm = (("ActionText", '"Collect"'), ("ObjectText", '"ATM"'), ("HoldDuration", "0"), ("MaxActivationDistance", "14"),
+                ("KeyboardKey", "Enum.KeyCode.E"), ("GamepadKey", "Enum.KeyCode.ButtonX"),
+                ("Exclusivity", "Enum.ProximityPromptExclusivity.OnePerButton"))
+    atm = _ap_table_top(AP_EC, r"\n\tAtmCollectPrompt\s*=\s*\{")
+    wrong = {k: _db_key_values(atm or "", k) for k, v in want_atm if _db_key_values(atm or "", k) != [v]}
+    if atm is not None and not wrong:
+        ok("atmprompt: EconomyConfig.AtmCollectPrompt = Collect / ATM, hold 0, 14 studs, E / ButtonX, OnePerButton (each key once, comments stripped)")
+    else:
+        bad(f"atmprompt: EconomyConfig.AtmCollectPrompt missing or changed (table found {atm is not None}; key -> values {wrong})")
+    want_plate = (("PromptActionText", '"Grab Cash"'), ("PromptHoldDuration", "0"), ("PromptMaxDistance", "12"),
+                  ("PromptKeyboardKey", "Enum.KeyCode.F"), ("PromptGamepadKey", "Enum.KeyCode.ButtonB"),
+                  ("PromptExclusivity", "Enum.ProximityPromptExclusivity.OnePerButton"))
+    mdc = _ap_table_top(DR_MDC, r"local ManualDropperConfig\s*=\s*\{")
+    wrong = {k: _db_key_values(mdc or "", k) for k, v in want_plate if _db_key_values(mdc or "", k) != [v]}
+    if mdc is not None and not wrong:
+        ok("atmprompt: ManualDropperConfig plate prompt = Grab Cash, hold 0, 12 studs, F / ButtonB, OnePerButton (each key once, comments stripped)")
+    else:
+        bad(f"atmprompt: ManualDropperConfig plate prompt keys missing or changed (table found {mdc is not None}; key -> values {wrong})")
+    # the two prompts' keys differ on keyboard AND gamepad (whatever the pinned values above become)
+    a_kb, a_gp = _db_key_values(atm or "", "KeyboardKey"), _db_key_values(atm or "", "GamepadKey")
+    p_kb, p_gp = _db_key_values(mdc or "", "PromptKeyboardKey"), _db_key_values(mdc or "", "PromptGamepadKey")
+    if len(a_kb) == len(a_gp) == len(p_kb) == len(p_gp) == 1 and a_kb != p_kb and a_gp != p_gp:
+        ok(f"atmprompt: the ATM and plate prompts use different keys (keyboard {a_kb[0]} / {p_kb[0]}, gamepad {a_gp[0]} / {p_gp[0]})")
+    else:
+        bad(f"atmprompt: the ATM and plate prompts must use different keyboard and gamepad keys (ATM {a_kb} {a_gp}, plate {p_kb} {p_gp})")
+    # the plate's keys are not an on-foot HUD key (HudConfig.Keys and Keys.Gamepad; the prompt would swallow it there)
+    keys = _ap_table_top(AP_HUDC, r"\nHudConfig\.Keys\s*=\s*\{")
+    hud_code = _db_luau_code(read(AP_HUDC) or "")
+    km = re.search(r"\nHudConfig\.Keys\s*=\s*\{", hud_code)
+    hud_keys = set()
+    if km:
+        kend = _db_table_end(hud_code, km.end() - 1)
+        hud_keys = set(re.findall(r"Enum\.KeyCode\.(\w+)", hud_code[km.end():kend])) if kend > 0 else set()
+    plate_names = {v.rsplit(".", 1)[-1] for v in p_kb + p_gp}
+    clash = plate_names & hud_keys
+    if keys is not None and "ButtonY" in hud_keys and plate_names and not clash:
+        ok(f"atmprompt: the plate's keys {sorted(plate_names)} are no HudConfig.Keys binding ({len(hud_keys)} keys, incl. gamepad Reload ButtonY)")
+    else:
+        bad(f"atmprompt: the plate's prompt keys must not be a HudConfig.Keys binding (plate {sorted(plate_names)}, clash {sorted(clash)}, Keys table found {keys is not None})")
+    # the services build the prompts from those keys; no key literal is left in either (comments stripped)
+    for rel, label in ((DR_MDS, "ManualDropperService"), (DR_MCS, "MoneyCollectorService")):
+        code = _db_luau_code(read(rel) or "")
+        lits = re.findall(r"(?:KeyboardKeyCode|GamepadKeyCode|Exclusivity)\s*=\s*Enum\.", code)
+        if lits:
+            bad(f"atmprompt: {label} sets a prompt key / exclusivity from a literal ({len(lits)}x); it must come from config")
+        else:
+            ok(f"atmprompt: {label} sets no prompt key / exclusivity literal (config only)")
+
+
+must_contain(DR_MDS, "\tprompt.RequiresLineOfSight = false\n\t-- atmprompt: its own keys (F / B), apart from the ATM \"Collect\" beside it (E / X)\n\tprompt.KeyboardKeyCode = ManualDropperConfig.PromptKeyboardKey\n\tprompt.GamepadKeyCode = ManualDropperConfig.PromptGamepadKey\n\tprompt.Exclusivity = ManualDropperConfig.PromptExclusivity\n\tprompt.Parent = pad\n",
+             "atmprompt: a new plate's DropPrompt gets the config keys (F / B) and OnePerButton before it is parented")
+must_contain(DR_MDS, "\tif prompt and prompt:IsA(\"ProximityPrompt\") then\n\t\tif prompt.KeyboardKeyCode ~= ManualDropperConfig.PromptKeyboardKey then\n\t\t\tprompt.KeyboardKeyCode = ManualDropperConfig.PromptKeyboardKey\n\t\tend\n\t\tif prompt.GamepadKeyCode ~= ManualDropperConfig.PromptGamepadKey then\n\t\t\tprompt.GamepadKeyCode = ManualDropperConfig.PromptGamepadKey\n\t\tend\n\t\tif prompt.Exclusivity ~= ManualDropperConfig.PromptExclusivity then\n\t\t\tprompt.Exclusivity = ManualDropperConfig.PromptExclusivity\n\t\tend\n\tend\nend\n",
+             "atmprompt: upgradeLegacyKit brings a pre-split plate (E / X) to the config keys, compare-first")
+must_contain(DR_MCS, "local EconomyConfig = require(Shared.Configs.EconomyConfig) -- atmprompt: the ATM Collect prompt (AtmCollectPrompt)\n",
+             "atmprompt: MoneyCollectorService reads EconomyConfig")
+must_contain(DR_MCS, "\t\t\tlocal pc = EconomyConfig.AtmCollectPrompt\n\t\t\tlocal prompt = Instance.new(\"ProximityPrompt\")\n\t\t\tprompt.Name = \"WE_CollectPrompt\"\n\t\t\tprompt.ActionText = pc.ActionText\n\t\t\tprompt.ObjectText = pc.ObjectText\n\t\t\tprompt.HoldDuration = pc.HoldDuration\n\t\t\tprompt.MaxActivationDistance = pc.MaxActivationDistance\n\t\t\tprompt.RequiresLineOfSight = false\n\t\t\tprompt.KeyboardKeyCode = pc.KeyboardKey\n\t\t\tprompt.GamepadKeyCode = pc.GamepadKey\n\t\t\tprompt.Exclusivity = pc.Exclusivity\n\t\t\tprompt.Style = Enum.ProximityPromptStyle.Default\n\t\t\tprompt.Parent = part\n\t\t\tprompt.Triggered:Connect(function(triggerPlayer: Player)\n\t\t\t\ttryCollectFromPart(triggerPlayer, part, true)\n\t\t\tend)\n",
+             "atmprompt: the ATM WE_CollectPrompt is built from EconomyConfig.AtmCollectPrompt and still collects through tryCollectFromPart(…, true)")
+_ap_rules()
+# ── end atmprompt
 
 parse_gate()
 

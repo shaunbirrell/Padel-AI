@@ -24,6 +24,13 @@
 	damage); the AutoGun marker ring and muzzle are painted, not neon; the gate shows ONE thin stud-scaled HP bar
 	centred over the opening, only while damaged, breached, struck or raided; the owner gets one "BASE UNDER
 	ATTACK!" Warn per plot per minute instead of a toast on every hit.
+
+	Owner phone feedback 2026-09-27 ("The turrets should be outside the gate"): with GateDefenseConfig.AutoGunOutside
+	the AutoGun nests stand OUTSIDE the gate, one each side of the approach (AutoGunOutsideFlankX), backs to the wall
+	(AutoGunOutsideWallGap past the wall's outer face, measured on the built wall), facing out. The guards stay inside.
+	A gun fires at the first enemy in priority order it can see (TurretLosChecksPerThink rays), and every shot rolls
+	the hit chance (TurretHitChanceNear → TurretHitChanceFar over the gun's reach). Fix 2: an outside gun's reach is
+	min(TurretRange, AutoGunOutsideMaxRange), so the default Starter Rifle can still siege the gate from beyond it.
 ]]
 
 local Players = game:GetService("Players")
@@ -40,6 +47,7 @@ local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
 local RaidConfig = require(Shared.Configs.RaidConfig)
 local HudConfig = require(Shared.Configs.HudConfig)
 local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
+local AircraftWeaponConfig = require(Shared.Configs.AircraftWeaponConfig) -- aircraft weapon reach (ApplyDamage)
 
 local GateDefenseService = {}
 
@@ -74,6 +82,9 @@ type TurretUnit = {
 	Slot: number,
 	LastFireAt: number,
 	Offline: boolean, -- v69: missile strike (defenses down)
+	Outside: boolean, -- owner 2026-09-27: posted outside the gate (its side of the wall is outside the plot)
+	ProbeUserId: number?, -- fix 1: the enemy the last line-of-sight ray saw (the probe stays on him)
+	ProbeStep: number, -- fix 1: where the last ray probes next in the rest of the list
 }
 
 type PlotDefense = {
@@ -347,6 +358,28 @@ local function computeGateCFrame(plotFolder: Folder, posts: { BasePart }): CFram
 	local y = math.min(a.Position.Y - a.Size.Y * 0.5, b.Position.Y - b.Size.Y * 0.5) + GATE_POST_LIFT
 	local origin = Vector3.new(mid.X, y, mid.Z)
 	return CFrame.lookAt(origin, origin + outward.Unit)
+end
+
+-- owner 2026-09-27: half the thickness of the main gate's wall (StructureKitBuilder WallGate_L / WallGate_R, 3.5-6.3
+-- thick by walls level), so the outside AutoGun nests stand clear of its outer face at every level. No gate-face wall
+-- piece found: the gate posts' depth.
+local function gateWallHalfThickness(plotFolder: Folder, posts: { BasePart }): number
+	local half = 0
+	local peri = plotFolder:FindFirstChild(PERIMETER_FOLDER)
+	if peri then
+		for _, name in ipairs({ "WallGate_L", "WallGate_R" }) do
+			local w = peri:FindFirstChild(name)
+			if w and w:IsA("BasePart") then
+				half = math.max(half, math.min(w.Size.X, w.Size.Z) * 0.5)
+			end
+		end
+	end
+	if half <= 0 then
+		for _, p in ipairs(posts) do
+			half = math.max(half, math.min(p.Size.X, p.Size.Z) * 0.5)
+		end
+	end
+	return half
 end
 
 local function findCollectorPos(plotId: number): Vector3?
@@ -892,6 +925,8 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 		Slot = slot,
 		LastFireAt = 0,
 		Offline = false,
+		Outside = false,
+		ProbeStep = 0,
 	}
 end
 
@@ -966,9 +1001,10 @@ local function hasLos(fromPos: Vector3, toPos: Vector3, ignore: { Instance }): b
 	-- v69: non-collidable decor (wire, trims, signs, lamp shades) no longer blocks the shot
 	params.RespectCanCollide = RaidConfig.Defense.LosRespectCanCollide
 	local dir = toPos - fromPos
-	local maxD = GateDefenseConfig.LosMaxDistance or 110
-	if dir.Magnitude > maxD then
-		dir = dir.Unit * maxD
+	-- ownerfb/gate fix 1: past the ray length nothing is known, so the target is NOT in sight (the ray used to be cut
+	-- at LosMaxDistance and read as clear: at L5 a target 110-115 studs out was shot through cover)
+	if dir.Magnitude > (GateDefenseConfig.LosMaxDistance or 125) then
+		return false
 	end
 	local hit = Workspace:Raycast(fromPos + Vector3.new(0, 1.5, 0), dir, params)
 	if not hit then
@@ -1092,6 +1128,97 @@ local function nearestEnemy(def: PlotDefense, fromPos: Vector3, aggro: number, m
 		end
 	end
 	return bestPlr, bestHum, bestRoot, bestDist
+end
+
+-- owner 2026-09-27 (AutoGuns outside the gate): every enemy nearestEnemy would consider, in its priority order (raider,
+-- near the ATM, the rest; nearer first; then Players order), so a gun can take the first one it can SEE
+type Candidate = { Player: Player, Humanoid: Humanoid, Root: BasePart, Dist: number, Tier: number, Order: number }
+local function enemiesInAggro(def: PlotDefense, fromPos: Vector3, aggro: number, maxReach: number?): { Candidate }
+	local out: { Candidate } = {}
+	local collectorPos = def.CollectorPos
+	local protectR = GateDefenseConfig.ProtectCollectorRadius or 42
+	local engageInside = RaidConfig.Defense.EngageIntrudersInsideWalls
+	for i, player in ipairs(Players:GetPlayers()) do
+		if isEnemyPlayer(def.OwnerUserId, player) and not inSpawnGrace(player) then
+			local char = player.Character
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			local root = char and char:FindFirstChild("HumanoidRootPart")
+			if hum and root and root:IsA("BasePart") and hum.Health > 0 then
+				local pos = root.Position
+				local d = (pos - fromPos).Magnitude
+				local nearATM = collectorPos ~= nil and (pos - (collectorPos :: Vector3)).Magnitude <= protectR
+				local inAggro = d <= aggro or nearATM or (engageInside and insidePlot(def, pos))
+				if inAggro and (maxReach == nil or d <= (maxReach :: number)) then
+					local tier = if player:GetAttribute("WE_RaidingPlot") == def.PlotId then 0 elseif nearATM then 1 else 2
+					table.insert(out, { Player = player, Humanoid = hum, Root = root, Dist = d, Tier = tier, Order = i })
+				end
+			end
+		end
+	end
+	table.sort(out, function(a: Candidate, b: Candidate): boolean
+		if a.Tier ~= b.Tier then
+			return a.Tier < b.Tier
+		elseif a.Dist ~= b.Dist then
+			return a.Dist < b.Dist
+		end
+		return a.Order < b.Order
+	end)
+	return out
+end
+
+-- CLAUDE.md combat fairness: an AutoGun shot hits with TurretHitChanceNear at or inside TurretHitNearStuds, falling
+-- linearly to TurretHitChanceFar at the gun's reach (turretReach; clamped to 0..1)
+local turretRng = Random.new()
+local function turretHitChance(dist: number, range: number): number
+	local nearD = GateDefenseConfig.TurretHitNearStuds
+	local pNear, pFar = GateDefenseConfig.TurretHitChanceNear, GateDefenseConfig.TurretHitChanceFar
+	local p = pNear
+	if dist > nearD then
+		local k = math.clamp((dist - nearD) / math.max(range - nearD, 1e-3), 0, 1)
+		p = pNear + (pFar - pNear) * k
+	end
+	return math.clamp(p, 0, 1)
+end
+
+--[[ ownerfb/gate fix 1: every AutoGun shot shows a tracer + shot sound on nearby clients through the W2 WeaponFx path
+	(CombatService/CombatFx: UnreliableRemoteEvent, per-shooter + per-recipient token buckets, every send pcall'd;
+	CombatService.Init binds its remote). Loaded once, lazily, by FindFirstChild (no WaitForChild, no CombatService
+	require: CombatFx needs only Shared). Missing module or remote = no effect, never a lost shot. ]]
+local shotFxModule: any = nil
+local shotFxLooked = false
+local shotFxRng = Random.new()
+local function turretShotFx(def: PlotDefense, t: TurretUnit, fromPos: Vector3, targetPos: Vector3, hit: boolean)
+	if GateDefenseConfig.TurretShotFx ~= true then
+		return
+	end
+	if not shotFxLooked then
+		shotFxLooked = true
+		local okLoad, mod = pcall(function(): any
+			local parent = script.Parent
+			local cs = parent and parent:FindFirstChild("CombatService")
+			local fxModule = cs and cs:FindFirstChild("CombatFx")
+			if fxModule and fxModule:IsA("ModuleScript") then
+				return (require :: any)(fxModule)
+			end
+			return nil
+		end)
+		shotFxModule = if okLoad and type(mod) == "table" and type(mod.Bullet) == "function" then mod else nil
+	end
+	local fx = shotFxModule
+	if fx == nil then
+		return
+	end
+	local aim = targetPos - fromPos
+	local origin = if aim.Magnitude > 0.1 then fromPos + aim.Unit * (GateDefenseConfig.TurretShotFxMuzzleStuds or 2.5) else fromPos
+	local landed = targetPos
+	if not hit then
+		-- a miss lands beside the target (horizontal), for the tracer only
+		local a = shotFxRng:NextNumber() * math.pi * 2
+		local r = shotFxRng:NextNumber(GateDefenseConfig.TurretShotFxMissOffsetMin or 2, GateDefenseConfig.TurretShotFxMissOffsetMax or 4)
+		landed = targetPos + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
+	end
+	-- one shooter bucket per gun; S = 0 (not a player), weapon "NPC" (the NPC rifle sound), K = "P" hit / "M" miss
+	pcall(fx.Bullet, "gate:" .. tostring(def.PlotId) .. ":" .. tostring(t.Slot), 0, "NPC", origin, landed, if hit then "P" else "M")
 end
 
 local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceModel: Model, plotId: number?)
@@ -1378,7 +1505,12 @@ function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amo
 	if not hum or hum.Health <= 0 then
 		return false
 	end
-	local maxDist = if isGuardPart then RaidConfig.Defense.GuardHitMaxDistance else 120
+	local maxDist = if isGuardPart then RaidConfig.Defense.GuardHitMaxDistance else GateDefenseConfig.GateHitMaxDistance
+	-- aircraft weapons (AirWeaponService, hit id "V_<mount>"): out to that weapon's Range + GateReachSlack
+	local airReach = AircraftWeaponConfig.HitReach(_weaponId)
+	if airReach ~= nil and airReach > maxDist then
+		maxDist = airReach
+	end
 	if (root.Position - hitPart.Position).Magnitude > maxDist then
 		return false
 	end
@@ -1488,7 +1620,18 @@ local function updateFriendlyGate(def: PlotDefense, tnow: number)
 			local root = char and char:FindFirstChild("HumanoidRootPart")
 			if root and root:IsA("BasePart") then
 				local delta = root.Position - gatePos
-				if Vector3.new(delta.X, 0, delta.Z).Magnitude <= D.GateOpenRadius and math.abs(delta.Y) <= D.GateOpenHeight then
+				-- vscale R2: an ally riding a car with a Roblox-size body opens it earlier by the body's overhang past the
+				-- kit + GateOpenVehicleLead, so the visible nose never reaches the closed barrier
+				local radius = D.GateOpenRadius
+				local hum = (char :: Model):FindFirstChildOfClass("Humanoid")
+				local car = if hum and hum.SeatPart then hum.SeatPart.Parent else nil
+				if car and car:IsA("Model") and car:GetAttribute("VehicleId") ~= nil then
+					local over = (tonumber(car:GetAttribute("WE_VisualHalfLength")) or 0) - (tonumber(car:GetAttribute("WE_HalfLength")) or 0)
+					if over > 0 then
+						radius += over + D.GateOpenVehicleLead
+					end
+				end
+				if Vector3.new(delta.X, 0, delta.Z).Magnitude <= radius and math.abs(delta.Y) <= D.GateOpenHeight then
 					allyNear = true
 					break
 				end
@@ -1755,15 +1898,22 @@ local function syncPlotNow(plotId: number)
 	local turrets: { TurretUnit } = {}
 	local useTurrets = stats.UseTurrets == true and wallsLevel >= (GateDefenseConfig.AutoGunMinWallsLevel or 4)
 	if useTurrets then
-		local gx = GateDefenseConfig.AutoGunFlankX or 7
+		local outside = GateDefenseConfig.AutoGunOutside == true
+		local gx = if outside then GateDefenseConfig.AutoGunOutsideFlankX else GateDefenseConfig.AutoGunFlankX or 7
 		local gunInside = RaidConfig.Defense.AutoGunInsideStuds
+		-- owner 2026-09-27: outside posts sit AutoGunOutsideWallGap past the wall's outer face (gate-local +Z = outside)
+		local gunOutZ = if outside then gateWallHalfThickness(plotFolder, posts) + GateDefenseConfig.AutoGunOutsideWallGap else 0
 		local yawDeg = GateDefenseConfig.AutoGunYawDeg or 15
 		for slot, sx in ipairs({ -gx, gx }) do
 			local yaw = if sx < 0 then yawDeg else -yawDeg
-			-- idle facing the gate (outward), toed in toward the gate centre; thinkTurret re-aims at targets
-			local at = gateCf * CFrame.new(sx, 0, -gunInside) * CFrame.Angles(0, math.pi + math.rad(yaw), 0)
+			-- idle facing out of the gate (inside posts: the gate; outside posts: the approach), toed in toward the
+			-- approach centre line; thinkTurret re-aims at targets
+			local at = if outside
+				then gateCf * CFrame.new(sx, 0, gunOutZ) * CFrame.Angles(0, math.pi + math.rad(yaw), 0)
+				else gateCf * CFrame.new(sx, 0, -gunInside) * CFrame.Angles(0, math.pi + math.rad(yaw), 0)
 			local t = spawnAutoGun(slot, at, folder)
 			if t then
+				t.Outside = outside
 				t.Model:SetAttribute("OwnerUserId", ownerUserId)
 				t.Model:SetAttribute("PlotId", plotId)
 				table.insert(turrets, t)
@@ -1938,13 +2088,86 @@ local function thinkGuard(def: PlotDefense, g: GuardUnit, stats: any, tnow: numb
 	end
 end
 
+--[[ owner 2026-09-27 (AutoGuns outside the gate): the top-priority enemy (the raider at the ATM) is usually behind the
+	wall now, so a gun takes the first enemy it can SEE (at most TurretLosChecksPerThink rays), turns to it and fires;
+	nobody in sight = it holds its aim and does not fire. Every shot rolls turretHitChance (a miss still spends the
+	shot) and shows a tracer (turretShotFx). Fix 1: enemies on the gun's side of the wall are tried first, and the
+	last ray probes the rest of the list in turn, so enemies it cannot see never switch the gun off. ]]
+-- fix 2 (review): an outside gun's reach is capped by AutoGunOutsideMaxRange, so a raider with the default Starter
+-- Rifle (reach 124) keeps a band to shoot the gate from beyond it (L5's TurretRange 115 left about 2 studs); inside
+-- posts (the v69 rollback) keep the level's TurretRange
+local function turretReach(stats: any, outside: boolean): number
+	local r = stats.TurretRange or 100
+	local cap = GateDefenseConfig.AutoGunOutsideMaxRange
+	if outside and typeof(cap) == "number" and cap > 0 then
+		r = math.min(r, cap)
+	end
+	return r
+end
+
 local function thinkTurret(def: PlotDefense, t: TurretUnit, stats: any, tnow: number)
 	if t.Offline or not t.Model.Parent or not t.YawPart.Parent then
 		return
 	end
-	local aggro = stats.TurretRange or 100
+	local aggro = turretReach(stats, t.Outside)
 	local fromPos = t.YawPart.Position
-	local plr, hum, troot, dist = nearestEnemy(def, fromPos, aggro, aggro)
+	local plr: Player?, hum: Humanoid?, troot: BasePart?, dist = nil, nil, nil, 0
+	local rays = math.max(1, math.floor(GateDefenseConfig.TurretLosChecksPerThink or 3))
+	-- fix 1: enemies on the gun's side of the wall first (outside posts: outside the plot), each side in priority order
+	local cands: { Candidate } = {}
+	local farSide: { Candidate } = {}
+	for _, c in ipairs(enemiesInAggro(def, fromPos, aggro, aggro)) do
+		if insidePlot(def, c.Root.Position) ~= t.Outside then
+			table.insert(cands, c)
+		else
+			table.insert(farSide, c)
+		end
+	end
+	for _, c in ipairs(farSide) do
+		table.insert(cands, c)
+	end
+	local function sees(c: Candidate): boolean
+		local ignore: { Instance } = { t.Model, def.Folder, (c.Player.Character :: any) :: Instance }
+		if def.CollectorModel then
+			table.insert(ignore, def.CollectorModel :: Instance)
+		end
+		return hasLos(fromPos, c.Root.Position, ignore)
+	end
+	local pick: Candidate? = nil
+	local n = #cands
+	local head = math.min(n, rays - 1)
+	for i = 1, head do
+		if sees(cands[i]) then
+			pick = cands[i]
+			break
+		end
+	end
+	if pick == nil and n > head then
+		-- fix 1: the last ray probes the rest in turn and stays on an enemy it sees, so unseen enemies cannot use up
+		-- every ray (a clan crowding the ATM, or intruders behind cover, used to switch both guns off)
+		local idx: number? = nil
+		if t.ProbeUserId ~= nil then
+			for i = head + 1, n do
+				if cands[i].Player.UserId == t.ProbeUserId then
+					idx = i
+					break
+				end
+			end
+		end
+		local at = idx or (head + 1 + (t.ProbeStep % (n - head)))
+		local c = cands[at]
+		if sees(c) then
+			pick = c
+			t.ProbeUserId = c.Player.UserId
+		else
+			t.ProbeUserId = nil
+			t.ProbeStep = at - head -- next think: the one after it
+		end
+	end
+	if pick == nil then
+		return
+	end
+	plr, hum, troot, dist = pick.Player, pick.Humanoid, pick.Root, pick.Dist
 	if not (plr and hum and troot) then
 		return
 	end
@@ -1963,14 +2186,13 @@ local function thinkTurret(def: PlotDefense, t: TurretUnit, stats: any, tnow: nu
 	end
 	local interval = 1 / math.max(stats.TurretFireRate or 6, 0.1)
 	if tnow - t.LastFireAt >= interval and dist <= aggro then
-		local ignore: { Instance } = { t.Model, def.Folder, (plr.Character :: any) :: Instance }
-		if def.CollectorModel then
-			table.insert(ignore, def.CollectorModel :: Instance)
-		end
-		if hasLos(fromPos, troot.Position, ignore) then
-			t.LastFireAt = tnow
+		-- line of sight to this target was checked above, this think
+		t.LastFireAt = tnow
+		local hit = turretRng:NextNumber() < turretHitChance(dist, aggro)
+		if hit then
 			dealDamage(plr, hum, (stats.TurretDamage or 22) * researchMult(def.OwnerUserId), t.Model, def.PlotId)
 		end
+		turretShotFx(def, t, fromPos, troot.Position, hit) -- fix 1: every roll shows (a tracer; a miss lands beside him)
 	end
 end
 

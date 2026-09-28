@@ -473,7 +473,7 @@ Every id below was looked up today (name and creator as the store shows them). N
 - **Not Roblox-owned image:** 872910628 "Colored Muzzle Flash" (Guest90260): user image inside the Weapons Kit; 3867967806 "Images/Bullet Tracer Down" (SlartibartfastFjords): user image inside the Weapons Kit; 2463944225 "Images/plasma1" (0xBAADF00D): user image inside the Weapons Kit; 2078626 "bullet_hole_linda_kim_u" (Are92): 2008 user image; 53875997 "scorch" (DarkShadow6): 2011 user image.
 - **Unsupported:** 47637 "Rocket Launcher" (Roblox): Roblox 2007 launcher: 'no longer supported', 4 scripts.
 - **Off-theme:** 4842190633 "Railgun" (Roblox): sci-fi railgun.
-- **Old rig:** 187790284 "Soldier" (Roblox): 2014 R6 soldier; carries a real-world rifle mesh 72012671.
+- **Old rig:** 187790284 "Soldier" (Roblox): 2014 R6 soldier; carries a real-world rifle mesh 72012671. Used since R-RIG as the baked R6 body; its rifle mesh 72012671 is stripped at load (owner rule 9).
 
 Also never use: anything with a price on its store page; listings with emoji or keyword strings in the title; listings that say "not mine", "credits to" or "from game X", or that name a real vehicle, weapon, unit, country or brand; the Weapons Kit `WeaponsSystem` scripts (its server trusts the client's hit list).
 
@@ -571,11 +571,11 @@ Grok does store clicks, Studio checks and a report. **Grok does not edit repo fi
 5c. **Live-server load check** (`WE_LIVE`, added 2026-09-27). Join the **live** game (a PC is easiest), open the
    Developer Console (F9, or type `/console` in chat), switch to **Server**, paste this one line into the command bar and
    wait for `WE_LIVE DONE`. It prints the server's creator and place version and one `WE_LIVE OK <id> parts=N` or
-   `WE_LIVE FAIL <id> <error>` line for each of 19 ids: the 8 third-party picks that already load by id and the 11 of
-   step 5b. It parents nothing, destroys each copy and does not touch the game's own model loads.
+   `WE_LIVE FAIL <id> <error>` line for each of 20 ids: the 8 third-party picks that already load by id, the 11 of
+   step 5b and the Roblox Soldier 187790284 (R-RIG). It parents nothing, destroys each copy and does not touch the game's own model loads.
 
    ```lua
-   local IS,RS=game:GetService("InsertService"),game:GetService("RunService") print("WE_LIVE server studio="..tostring(RS:IsStudio()).." creator="..tostring(game.CreatorType)..":"..tostring(game.CreatorId).." place="..tostring(game.PlaceId).." ver="..tostring(game.PlaceVersion).." job="..tostring(game.JobId)) task.spawn(function() for _,id in ipairs({18220523228,15192621369,15271872710,2766525411,2930926216,182529039,632958370,114570602,3553891209,2474869838,9076240315,8546141386,4954987035,15838664806,6980242709,13183571527,5318635087,8455894899,11357157285}) do local m local ok,err=pcall(function() m=IS:LoadAsset(id) local p=0 for _,d in ipairs(m:GetDescendants()) do if d:IsA("BasePart") then p+=1 end end print("WE_LIVE OK "..id.." parts="..p) end) if m then pcall(function() m:Destroy() end) end if not ok then print("WE_LIVE FAIL "..id.." "..tostring(err)) end end print("WE_LIVE DONE") end)
+   local IS,RS=game:GetService("InsertService"),game:GetService("RunService") print("WE_LIVE server studio="..tostring(RS:IsStudio()).." creator="..tostring(game.CreatorType)..":"..tostring(game.CreatorId).." place="..tostring(game.PlaceId).." ver="..tostring(game.PlaceVersion).." job="..tostring(game.JobId)) task.spawn(function() for _,id in ipairs({18220523228,15192621369,15271872710,2766525411,2930926216,182529039,632958370,114570602,3553891209,2474869838,9076240315,8546141386,4954987035,15838664806,6980242709,13183571527,5318635087,8455894899,11357157285,187790284}) do local m local ok,err=pcall(function() m=IS:LoadAsset(id) local p=0 for _,d in ipairs(m:GetDescendants()) do if d:IsA("BasePart") then p+=1 end end print("WE_LIVE OK "..id.." parts="..p) end) if m then pcall(function() m:Destroy() end) end if not ok then print("WE_LIVE FAIL "..id.." "..tostring(err)) end end print("WE_LIVE DONE") end)
    ```
 
 6. **Studio sound, image and mesh check** (Edit mode is fine). Paste the block and copy every `WE_CONTENT` line. The two `rbxasset://sounds/…wav` lines are expected to say Failure: that confirms the silent-UI finding.

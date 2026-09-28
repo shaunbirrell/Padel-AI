@@ -15,6 +15,11 @@
 	does not count toward the cap and is never held (one held before it became the objective is released). SurfaceGuis
 	(painted signs) are not governed.
 
+	droppers v1b (spec_droppers.md §3.7, DR-20, DR-24): a label whose WorldLabelConfig.PriorityAttribute is true (set
+	only by ProductionFx: the cash plate's own "+$75" pop, and the player's own plate tag while it reads "Recharging")
+	ranks as distance -1 in the pass, so while it can draw it is always among the kept MaxOnScreen. It still counts
+	toward the cap: it takes a place, it never adds one. One attribute read per drawable label per pass, no allocation.
+
 	Phone cost: one Heartbeat accumulator (the per-frame path only adds dt); the pass walks a dense list of tagged
 	labels with scalar maths into preallocated arrays: no whole-tree scan, no table or closure per pass, no yields. Off
 	(Init returns at once) while WorldLabelConfig.BaseLabelGovernor.Enabled is false.
@@ -35,6 +40,7 @@ local CFG = WorldLabelConfig.BaseLabelGovernor
 local TAG = WorldLabelConfig.BaseLabelTag
 local ROLE_ATTR = WorldLabelConfig.RoleAttribute
 local EXEMPT_ROLE = "objective"
+local PRIORITY_ATTR = WorldLabelConfig.PriorityAttribute -- droppers v1b: the plate pop's "keep me first" attribute
 local HUGE = math.huge
 
 local started = false
@@ -115,6 +121,9 @@ local function pass()
 		if not isExempt(gui) and WorldLabel.Wanted(gui) then
 			local d = distanceOf(gui, cx, cy, cz)
 			if d <= gui.MaxDistance and d < HUGE then
+				if gui:GetAttribute(PRIORITY_ATTR) == true then
+					d = -1 -- droppers v1b: the plate's own "+$" pop ranks first (it still takes one of the MaxOnScreen)
+				end
 				if kept < cap then
 					kept += 1
 					bestIdx[kept] = i

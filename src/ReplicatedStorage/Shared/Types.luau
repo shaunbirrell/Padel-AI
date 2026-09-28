@@ -381,6 +381,7 @@ export type WeaponFxPayload = {
 	V: Vector3?, -- "L": initial velocity (client simulates O + V t + 1/2 g t^2, g = Gravity x GravityFactor)
 	T: number?, -- "L": Projectile.MaxSeconds (the client removes the visual at T + 0.5 s if "X" never arrives)
 	D: number?, -- "X": splash radius (explosion size + camera shake range)
+	G: number?, -- "L": gravity factor for ids WeaponConfig does not list (aircraft bombs); nil = the def's own
 }
 
 export type PurchaseUpgradeRequest = {

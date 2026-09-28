@@ -33,6 +33,8 @@ local DevConfig = require(SharedConfigs:WaitForChild("DevConfig"))
 local MonetizationConfig = require(SharedConfigs:WaitForChild("MonetizationConfig"))
 local StructureVisualConfig = require(SharedConfigs:WaitForChild("StructureVisualConfig"))
 local BaseLayout = require(script.Parent:WaitForChild("BaseLayout"))
+-- owner feedback 2026-09-27: the base Training Yard (range, obstacle course, supply corner) from TrainingYardConfig
+local TrainingYardBuilder = require(script.Parent.TrainingYardBuilder)
 -- v70 waterways: plot water, sea gates, naval pads, road ends, rig piers (public water = Modules.Waterways)
 local WaterConfig = require(SharedConfigs:WaitForChild("WaterConfig"))
 -- v70 (HUD spec §5): every floating label goes through the shared helper (stud-scaled, 14-20 px, MaxDistance <= 40)
@@ -2540,245 +2542,18 @@ function MapSetup.Run()
 		end
 		dressPlotPadSandbags(plotFolder, pos)
 
-		-- Training Yard targets (soldiers "train" → server cash; visual only)
-		-- v68: the whole yard group (targets, workers, pad, stalls, anchors) moves to Courtyard.TrainingYard
-		-- v70: yardShift and every offset below are plot-local (placed through F)
-		local yardShift = Vector3.zero
-		if BaseLayout.Enabled() then
-			local ty = BaseLayout.Config().Courtyard.TrainingYard
-			yardShift = Vector3.new(ty.X - -14, 0, ty.Z - 48)
-		end
-		local yardFolder = Instance.new("Folder")
-		yardFolder.Name = "TrainingYard"
-		yardFolder.Parent = plotFolder
-		for ti = 1, 3 do
-			local tLocal = yardShift + Vector3.new(-50 + ti * 18, 3.5, 48)
-			local target = part({
-				Name = "TrainingTarget" .. ti,
-				Size = Vector3.new(4, 6, 0.6),
-				CFrame = F * CFrame.new(tLocal),
-				Color = Color3.fromRGB(200, 60, 60),
-				Material = Enum.Material.Metal,
-				CanCollide = true,
-				Parent = yardFolder,
-			})
-			target:SetAttribute("PlotId", plotId)
-			target:SetAttribute("WE_TrainingTarget", true)
-			part({
-				Name = "TargetStand" .. ti,
-				Size = Vector3.new(1, 4, 1),
-				CFrame = F * CFrame.new(tLocal + Vector3.new(0, -5, 0)),
-				Color = Color3.fromRGB(70, 70, 70),
-				Material = Enum.Material.Metal,
-				CanCollide = true,
-				Parent = yardFolder,
-			})
-			part({
-				Name = "TargetBullseye" .. ti,
-				Size = Vector3.new(1.6, 1.6, 0.35),
-				CFrame = F * CFrame.new(tLocal + Vector3.new(0, 0.5, -0.2)),
-				Color = Color3.fromRGB(240, 220, 60),
-				Material = Enum.Material.SmoothPlastic, -- v70: painted (no decorative Neon)
-				CanCollide = false,
-				Parent = yardFolder,
-			})
-		end
-		-- Training workers (visual only — income is SoldierService tick). v70 (HUD spec §5): no name tag over them
-		for wi = 1, 2 do
-			-- fb2: y = YardPad top (0.7) + 2.1, so the lifted kit's feet stand on the yard pad (was 2.6: 0.2 lower)
-			local wLocal = yardShift + Vector3.new(-40 + wi * 20, 2.8, 42)
-			-- P0: dress as Worker→Infantry mesh (force catalog even in StudioSkipWorldDressing)
-			makeSoldierKit(
-				yardFolder,
-				"TrainingWorker" .. wi,
-				F * CFrame.new(wLocal) * CFrame.Angles(0, math.rad(180), 0),
-				Color3.fromRGB(70, 85, 55),
-				nil,
-				Color3.fromRGB(140, 150, 130), -- muted
-				50,
-				"Worker",
-				nil
-			)
-		end
-		-- Target ring + base plate polish
-		part({
-			Name = "YardPad",
-			Size = Vector3.new(55, 0.6, 18),
-			CFrame = F * CFrame.new(yardShift + Vector3.new(-14, 0.4, 48)),
-			Color = Color3.fromRGB(48, 52, 42),
-			Material = Enum.Material.Concrete,
-			CanCollide = true,
-			Parent = yardFolder,
-		})
-		-- v70 (HUD spec §5): no "+$/tick" earn placeholder billboard on the yard pad
-		-- Design Bot quality wire: 2–3 SquadStall kits (Tent + crates + sandbags + Infantry)
-		do
-			local stallFolder = Instance.new("Folder")
-			stallFolder.Name = "SquadStalls"
-			stallFolder.Parent = yardFolder
-			local stallOffsets = {
-				Vector3.new(-36, 0, 36),
-				Vector3.new(-18, 0, 36),
-				Vector3.new(0, 0, 36),
-			}
-			for si, soff in ipairs(stallOffsets) do
-				local sOrigin = yardShift + soff -- plot-local
-				local stall = Instance.new("Folder")
-				stall.Name = "SquadStall" .. si
-				stall.Parent = stallFolder
-				-- Floor plate
-				part({
-					Name = "StallFloor",
-					Size = Vector3.new(12, 0.4, 10),
-					CFrame = F * CFrame.new(sOrigin + Vector3.new(0, 0.35, 0)),
-					Color = Color3.fromRGB(70, 68, 52),
-					Material = Enum.Material.WoodPlanks,
-					CanCollide = true,
-					Parent = stall,
-				})
-				-- Tent host (catalog Tent via TryAttachPropVisual)
-				local tentHost = part({
-					Name = "TentHost",
-					Size = Vector3.new(8, 4, 6),
-					CFrame = F * CFrame.new(sOrigin + Vector3.new(0, 2.4, -1)),
-					Color = Color3.fromRGB(90, 100, 70),
-					Material = Enum.Material.Fabric,
-					CanCollide = false,
-					Transparency = 0.35,
-					Parent = stall,
-				})
-				-- Crate stack hosts
-				local crateA = part({
-					Name = "CrateHostA",
-					Size = Vector3.new(2.2, 2.0, 2.2),
-					CFrame = F * CFrame.new(sOrigin + Vector3.new(4.5, 1.2, 2)),
-					Color = Color3.fromRGB(95, 80, 55),
-					Material = Enum.Material.Wood,
-					CanCollide = true,
-					Parent = stall,
-				})
-				local crateB = part({
-					Name = "CrateHostB",
-					Size = Vector3.new(2.0, 1.8, 2.0),
-					CFrame = F * CFrame.new(sOrigin + Vector3.new(4.5, 3.0, 2)),
-					Color = Color3.fromRGB(85, 70, 48),
-					Material = Enum.Material.Wood,
-					CanCollide = true,
-					Parent = stall,
-				})
-				local milCrate = part({
-					Name = "MilCrateHost",
-					Size = Vector3.new(2.4, 1.6, 1.8),
-					CFrame = F * CFrame.new(sOrigin + Vector3.new(-4.2, 1.0, 2.2)),
-					Color = Color3.fromRGB(55, 70, 50),
-					Material = Enum.Material.Metal,
-					CanCollide = true,
-					Parent = stall,
-				})
-				-- Sandbags
-				local sandHost = part({
-					Name = "SandbagHost",
-					Size = Vector3.new(6, 1.1, 1.3),
-					CFrame = F * CFrame.new(sOrigin + Vector3.new(0, 0.75, 4.2)),
-					Color = Color3.fromRGB(130, 115, 80),
-					Material = Enum.Material.Sand,
-					CanCollide = true,
-					Parent = stall,
-				})
-				-- Lantern host (v70 light budget: the lantern carries no PointLight)
-				local lanternHost = part({
-					Name = "LanternHost",
-					Size = Vector3.new(0.6, 1.2, 0.6),
-					CFrame = F * CFrame.new(sOrigin + Vector3.new(-3.5, 2.2, -2.5)),
-					Color = Color3.fromRGB(180, 140, 60),
-					Material = Enum.Material.Metal,
-					CanCollide = false,
-					Parent = stall,
-				})
-				-- v34: stall roles use distinct VisualAssetConfig Character IDs + Part dress
-				local stallRoles = {
-					{ Kind = "Infantry", Label = "INFANTRY", Body = Color3.fromRGB(70, 85, 55), Accent = Color3.fromRGB(180, 220, 120) },
-					{ Kind = "HeavyInfantry", Label = "HEAVY", Body = Color3.fromRGB(50, 55, 48), Accent = Color3.fromRGB(230, 160, 50) },
-					{ Kind = "Guard", Label = "GUARD", Body = Color3.fromRGB(45, 55, 70), Accent = Color3.fromRGB(90, 140, 220) },
-				}
-				local roleDef = stallRoles[((si - 1) % #stallRoles) + 1]
-				-- fb2: y = StallFloor top (0.55) + 2.15: feet within 0.05 of the stall floor and of the plaza road under stall 1
-				local soldierCf = F * CFrame.new(sOrigin + Vector3.new(-1.5, 2.7, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)
-				makeSoldierKit(
-					stall,
-					"Stall" .. roleDef.Kind .. si,
-					soldierCf,
-					roleDef.Body,
-					nil,
-					roleDef.Accent,
-					80,
-					roleDef.Kind,
-					nil
-				)
-				-- v70 (HUD spec §5): the stall's role is a painted board on the sandbags facing the yard front (was a
-				-- floating NPCLabel over the soldier)
-				local stallSign = part({
-					Name = "StallSign",
-					Size = Vector3.new(4.4, 1.2, 0.2),
-					CFrame = F * CFrame.new(sOrigin + Vector3.new(0, 1.9, 4.2)),
-					Color = Color3.fromRGB(78, 64, 44),
-					Material = Enum.Material.WoodPlanks,
-					CanCollide = false,
-					Parent = stall,
-				})
-				stallSign.CanQuery = false
-				stallSign.CanTouch = false
-				WorldLabel.Surface(stallSign, Enum.NormalId.Back, roleDef.Label, { Name = "WE_StallSign", Color = roleDef.Accent })
-				-- Optional crouch: Humanoid Sit as lightweight proxy (full crouch AnimationId TBD)
-				pcall(function()
-					local m = stall:FindFirstChild("Stall" .. roleDef.Kind .. si)
-					if m and m:IsA("Model") then
-						local hum = m:FindFirstChildOfClass("Humanoid")
-						if hum then
-							hum.Sit = false
-							hum.WalkSpeed = 0
-							-- Note: T-pose/catalog pose OK — crouch AnimationId not wired this pass
-							m:SetAttribute("WE_PoseNote", "TPose_CrouchAnimPending")
-						end
-					end
-				end)
-				-- Catalog prop dress (pcall — Part kits remain if InsertService fails)
-				task.defer(function()
-					pcall(function()
-						local vas = require(script.Parent.Parent.Services.VisualAssetService)
-						if not vas or not vas.TryAttachPropVisual then
-							return
-						end
-						vas.TryAttachPropVisual(tentHost, "Tent")
-						vas.TryAttachPropVisual(crateA, "Crate")
-						vas.TryAttachPropVisual(crateB, "MilitaryCrate")
-						vas.TryAttachPropVisual(milCrate, "MilitaryCrate")
-						vas.TryAttachPropVisual(sandHost, "Sandbag")
-						vas.TryAttachPropVisual(lanternHost, "Lantern")
-					end)
-				end)
-			end
-		end
-
-		-- Invisible anchors (ManualDropperService / SoldierService place the yard dropper and cash pops from them).
-		-- v70 (HUD spec §5): no yard title billboard and no glowing worker → target beams (the last always-on
-		-- glowing lines in a base).
-		part({
-			Name = "YardAnchor",
-			Size = Vector3.new(1, 1, 1),
-			CFrame = F * CFrame.new(yardShift + Vector3.new(-14, 8, 48)),
-			Transparency = 1,
-			CanCollide = false,
-			Parent = yardFolder,
-		})
-		part({
-			Name = "YardEarnAnchor",
-			Size = Vector3.new(1, 1, 1),
-			CFrame = F * CFrame.new(yardShift + Vector3.new(-14, 6, 42)),
-			Transparency = 1,
-			CanCollide = false,
-			Parent = yardFolder,
-		})
+		-- Training Yard (owner feedback 2026-09-27: "the soldier training area is terrible"): a 3-lane shooting range
+		-- (3 soldiers at the firing line, targets, a sand berm), a small obstacle course and a supply corner, built by
+		-- TrainingYardBuilder from TrainingYardConfig (was 3 tent stalls + 2 workers + 3 flat targets, 84 parts; now 65, 76 once
+		-- its Roblox-made meshes load). The TrainingYard folder, YardPad, YardAnchor / YardEarnAnchor and TrainingTarget1..3
+		-- keep their names (ManualDropperService, SoldierService, ProducerLabels).
+		TrainingYardBuilder.Build(
+			plotFolder,
+			plotId,
+			F,
+			if BaseLayout.Enabled() then BaseLayout.Config().Courtyard.TrainingYard else nil,
+			makeSoldierKit
+		)
 		-- Design densify: 8–12 realistic warzone props per plot (always-on Part kits; pcall catalog)
 		do
 			local okDress, errDress = pcall(function()
@@ -3279,7 +3054,8 @@ function MapSetup.Run()
 			continue
 		end
 		-- 1-post sign on the back edge, the painted face toward the pad front (readable as you walk up to the pad)
-		local back = spawnCfg.PadSize.Z * 0.5 + 0.4
+		-- vscale R2: now GarageSignBack behind the pad centre, clear of a Roblox-size body parked on it (pickup tail 13.29)
+		local back = tonumber(spawnCfg.GarageSignBack) or (spawnCfg.PadSize.Z * 0.5 + 0.4)
 		local topY = spawnCfg.PadSize.Y * 0.5
 		local post = part({
 			Name = "SignPost",

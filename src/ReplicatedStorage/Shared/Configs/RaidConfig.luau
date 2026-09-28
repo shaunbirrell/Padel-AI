@@ -31,6 +31,10 @@ local RaidConfig = {
 		TeleportLockoutSeconds = 15,
 		AutoCollectCountsRecentIncome = true, -- AutoCollect is not raid immunity (see spec §1.5)
 		AutoCollectWindowSeconds = 600,
+		-- v82 ATM fix: the ATM screen shows only the cash waiting to be collected (PendingCash). true = the old v69-v81
+		-- screen (the raidable balance: for AutoCollect owners it also counted the last AutoCollectWindowSeconds of
+		-- income already in the wallet, so the screen kept growing and nothing could be collected). Raids are unchanged.
+		AtmScreenCountsRecentIncome = false,
 		HoldPushInterval = 0.25, -- AtmRaidStateUpdate "Holding" cadence to the thief
 		AlarmPushInterval = 1.0, -- "Alarm" cadence to the victim
 		BlockedPushInterval = 3, -- same "Blocked" reason is re-sent at most this often
@@ -74,6 +78,9 @@ local RaidConfig = {
 		GuardPostInsideStuds = 10,
 		AutoGunInsideStuds = 7.5,
 		GateOpenRadius = 12, -- an ally within this (horizontal) of the gate centre opens the barrier
+		-- vscale R2: an ally seated in a car whose Roblox-size body is longer than its kit opens it from further out:
+		-- + the body's overhang (WE_VisualHalfLength - WE_HalfLength) + this (the moved seats sit up to 1.1 further back)
+		GateOpenVehicleLead = 1.5,
 		GateOpenHeight = 12,
 		GateCloseDelay = 1.0,
 		LosRespectCanCollide = true, -- guard/AutoGun line of sight ignores non-collidable decor

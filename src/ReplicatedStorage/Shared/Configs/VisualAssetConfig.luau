@@ -58,6 +58,10 @@ export type AssetRef = {
 	-- turn the model's barrel onto -Z (turned once in the template at load)
 	HideKit: boolean?, -- Fit: hide the Part-kit visuals under the body (physics, seats and hitboxes unchanged)
 	KeepVisible: { string }?, -- HideKit: kit part names that stay visible (the Armed 4x4 keeps its Part turret)
+	-- vscale (owner: the avatar sat above the buggy / through the jeep roof): Fit bodies at a set scale over the same kit
+	BodyScale: number?, -- Fit: body scale (1 = Roblox size); nil = as long as the kit chassis. The kit still drives
+	BodySeats: { [string]: Vector3 }?, -- BodyScale: kit seat -> body seat top (unscaled studs: x/z from the body box centre, y above its lowest point)
+	BodyRoofParts: { string }?, -- BodyScale: kit parts lifted onto the body roof (the Armed 4x4 keeps its Part turret)
 	-- Owner asset list (2026-09-25)
 	PendingAssetId: number?, -- the owner's third-party pick; NEVER loaded (VisualAssetService ignores it); tools/wire-asset-ids.py promotes it
 	OmitParts: { string }?, -- pack piece: BaseParts with these names are removed before the part count (Pickup Truck tail-light glass)
@@ -72,6 +76,13 @@ export type AssetRef = {
 	KitFamilies: { string }?, -- VehicleWeapons: only vehicles of these VehicleConfig KitFamily values wear it
 	Vehicles: { string }?, -- VehicleWeapons: and / or only these vehicle ids
 	HideParts: { string }?, -- VehicleWeapons: kit parts made invisible once the dress attaches (the kit barrel)
+	-- bizlook (2026-09-27): BusinessPieces (Fit = "Stretch": a building piece turned by Yaw, then stretched to fill a box)
+	Into: string?, -- BusinessPieces: the kit role whose box the piece fills (default: the replaced role's own box)
+	HideRoles: { string }?, -- BusinessPieces: kit roles made invisible once the piece is on (their collision stays)
+	FromLevel: number?, -- BusinessPieces: worn from this business level (nil = from the role's first level)
+	ToLevel: number?, -- BusinessPieces: worn up to this business level (nil = to the top)
+	Rig: string?, -- R-RIG: "R6" = animated rig (RigBuilder); the template holds no Humanoid
+	Headwear: string?, -- R-RIG: "Beret" | "KitHelmet" | "None"
 }
 
 local VisualAssetConfig = {
@@ -119,6 +130,15 @@ local VisualAssetConfig = {
 	-- Press pick (its Smoke goes when it is promoted).
 	StripEffectsAssetIds = { 23153991, 31603741, 4362642898 },
 	FitShadowShare = 0.5, -- fitted vehicle bodies: only parts at least this share of the chassis length cast a shadow
+	-- vscale R2.1: a BodySeats seat's centre stays at least this far inside the kit's collidable box (the Cargo Van's
+	-- front row moves back, the Dispatch Car's back seat forward), so no seat and no seated rider is ever past the kit's
+	-- nose or tail, inside a wall the kit touches. 0 = on the kit's face.
+	BodySeatKitInset = 0.25,
+	-- vscale R2.3 (review M2): a fitted body's label (WE_LabelY: the owner nameplate; the HP bar sits 0.75 under it)
+	-- stands Base + PerStud x (the body top's height over the ground - EyeHeight) over the top, so a player on foot
+	-- beside a tall van or truck sees them over the roof (R2.2's flat 1 left the bar 0.08 over the roof, hidden by it).
+	-- Van / trucks about 3.1, 4x4 2.4, Quad 2.6. { Base = 1, PerStud = 0 } = R2.2.
+	BodyLabelMargin = { Base = 1, PerStud = 0.4, EyeHeight = 4.5 },
 	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)
 	CharacterVisualScale = 1.0,
 	BuildingVisualScale = 1.0, -- ScaleTo uses TargetFootprint; do NOT squash to plinth
@@ -139,6 +159,15 @@ local VisualAssetConfig = {
 			Yaw = 0,
 			HideKit = true,
 			KeepVisible = { "GunMount", "Barrel" },
+			-- vscale: Roblox size (the kit is 8.5 long; a seated avatar's head is 0.5 under the glass). Seats: the body's own.
+			BodyScale = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1.216, 3.387, -0.496), -- VehicleSeat
+				PassengerSeat1 = Vector3.new(1.2, 3.388, -0.496), -- SeatFR
+				PassengerSeat2 = Vector3.new(-1.216, 3.387, 3.504), -- SeatRL
+				PassengerSeat3 = Vector3.new(1.2, 3.388, 3.504), -- SeatRR
+			},
+			BodyRoofParts = { "GunMount", "Barrel" },
 			StripDecals = true,
 			Note = "W3 LOOK: Roblox Light Utility Vehicle body (NO JeepFallback); dress-only, Part kit drives",
 		} :: AssetRef,
@@ -151,6 +180,16 @@ local VisualAssetConfig = {
 			Yaw = 0,
 			HideKit = true,
 			StripDecals = true,
+			-- vscale: 1.2 x Roblox size (R2.2; R2.1 1.0, R2 0.95). Seats: over the body's own VehicleSeat, the passenger
+			-- on its mirror (the model's SeatFR is posed for its own Passenger_Seated animation, which the game does not
+			-- play), both seat tops 0.25 (unscaled) over the VehicleSeat's. At 1.0 no seat height fits a default-pose
+			-- avatar: feet on the floor put the head up in the roll cage's top rails (R2.1). At 1.2 the feet are on the
+			-- floor and the head is 0.6 under the top rails (a 0.5 taller avatar: 0.1 under). buggy_metrics, vscale R2.2.
+			BodyScale = 1.2,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1.349, 2.434, 1.223), -- VehicleSeat + 0.25
+				PassengerSeat1 = Vector3.new(1.349, 2.434, 1.223), -- mirror of the VehicleSeat (right-hand seat) + 0.25
+			},
 			Note = "owner list: Roblox Dune Buggy (beige) Body (23 MeshParts, no decals), fitted to the kit; dress-only, the Part kit drives. 0 = the WheeledLight family body",
 		} :: AssetRef,
 		ScoutCar = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep)" } :: AssetRef,
@@ -162,6 +201,16 @@ local VisualAssetConfig = {
 			Yaw = 0,
 			HideKit = true,
 			StripDecals = true,
+			-- vscale: 1.2 x Roblox size (R2.2; R2.1 1.0, R2 0.95). Seats: over the body's own VehicleSeat, the passenger
+			-- on its mirror (the model's SeatFR is posed for its own Passenger_Seated animation, which the game does not
+			-- play), both seat tops 0.25 (unscaled) over the VehicleSeat's. At 1.0 no seat height fits a default-pose
+			-- avatar: feet on the floor put the head up in the roll cage's top rails (R2.1). At 1.2 the feet are on the
+			-- floor and the head is 0.6 under the top rails (a 0.5 taller avatar: 0.1 under). buggy_metrics, vscale R2.2.
+			BodyScale = 1.2,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1.349, 2.434, 1.223), -- VehicleSeat + 0.25
+				PassengerSeat1 = Vector3.new(1.349, 2.434, 1.223), -- mirror of the VehicleSeat (right-hand seat) + 0.25
+			},
 			Note = "owner list: Roblox Dune Buggy (beige) Body (23 MeshParts, no decals), fitted to the kit; dress-only, the Part kit drives. 0 = the WheeledLight family body",
 		} :: AssetRef,
 		-- Free tank family
@@ -181,7 +230,7 @@ local VisualAssetConfig = {
 		LightScoutHeli = { ModelAssetId = 0, PendingAssetId = 2474869838, Note = "owner pick Low poly helicopter (Azarth): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		GunshipHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
 		HeavyLiftHeli = { ModelAssetId = 0, Note = "owner pick transport helicopter (blokkere) not used: owner check 2026-09-25 (Open Cloud, v75), 109 parts > 40 - family body / Part kit" } :: AssetRef,
-		RescueHeli = { ModelAssetId = 0, PendingAssetId = 11357157285, Note = "owner pick Rescue Helicopter (KiboSprite): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		RescueHeli = { ModelAssetId = 0, Note = "owner pick Rescue Helicopter (KiboSprite) not used: owner check 2026-09-25 (Open Cloud, v75), 78 parts > 40 - family body / Part kit" } :: AssetRef,
 		StealthHeli = { ModelAssetId = 0, Note = "Gunship/stealth heli" } :: AssetRef,
 		-- Classic free pack (trucks / APC fallback)
 		_FallbackWheeled = { ModelAssetId = 0, Note = "Military Vehicle Meshes pack (free)" } :: AssetRef,
@@ -194,16 +243,63 @@ local VisualAssetConfig = {
 			HideKit = true,
 			StripDecals = true,
 			OmitParts = { "light_tail_glass" },
+			-- vscale: Roblox size (a seated avatar's head is 0.4 under the glass). Seats: the body's own.
+			BodyScale = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1.708, 5.075, -2.092), -- VehicleSeat
+				PassengerSeat1 = Vector3.new(1.708, 5.075, -2.091), -- SeatFR
+				PassengerSeat2 = Vector3.new(-1.708, 5.075, 2.158), -- SeatRL
+				PassengerSeat3 = Vector3.new(1.708, 5.075, 2.159), -- SeatRR
+			},
 			Note = "owner list: Roblox Pickup Truck (bronze) Body (41 MeshParts; the overlapping tail-light glass is omitted = 40), fitted to the kit; dress-only, the Part kit drives. 0 = Part kit",
 		} :: AssetRef,
 		ArmoredTruck = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		APC = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		-- wc3 (second check, live place v75): front at -Z (white lights and the grey plate at -Z, red lights at +Z), Yaw 0.
+		-- 0.55 of Roblox size (27.5 long, 11 wide, antennas to 10.4). The hull mesh's box top (12.43) is its cupola, not
+		-- the roof: the flat roof is at or below 10.12, where the cupola's blue band starts (antenna bases 10.88), so 5.57
+		-- at 0.55. The hull is one mesh with no seats, so every seat is placed by eye at y 2.2: a seated head (seat top +
+		-- 3.7) is 4.91, 0.66 under that roof; the feet end 0.21 over the ground, inside the hull. Riders hidden, as in a
+		-- closed APC: phone check. The same body on the four WheeledAPC variants below.
+		APC = {
+			ModelAssetId = 9076240315,
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			BodyScale = 0.55,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)
+				PassengerSeat1 = Vector3.new(2.5, 2.2, -4),
+				PassengerSeat2 = Vector3.new(-2.5, 2.2, 2),
+				PassengerSeat3 = Vector3.new(2.5, 2.2, 2),
+				PassengerSeat4 = Vector3.new(-2.5, 2.2, 6),
+			},
+			StripDecals = true,
+			Note = "owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
 		-- Free jet family (classic + named free fighter)
 		_FallbackJet = { ModelAssetId = 0, Note = "Classic free fighter jet" } :: AssetRef,
 		FighterJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		InterceptorJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		TrainerJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		ReconPlane = { ModelAssetId = 0, PendingAssetId = 4954987035, Note = "owner pick Old propeller plane (Deadex40_Extra): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		-- wc3 (owner yes 2026-09-27; second check, live place v75): nose at -X (propeller blade and ball nose at -X, fin and
+		-- tail plane at +X), so Yaw -90. Roblox size: 18 long, 25.3 wide. The pilot sits just behind the wing, sunk in the
+		-- solid fuselage (the model has no cockpit opening): seat top 1.2 over the lowest point (unscaled), seated head top
+		-- 4.9 against a fuselage top of 3.89, so only the top of the head shows; the shoulders stay about 0.3 under. The
+		-- model has no wheels, so the kit's landing gear stays visible under it. Its fuselage is a Cylinder part:
+		-- VisualAssetService fits the box Roblox draws (3.88 round), not the 11.26-tall Size.
+		ReconPlane = {
+			ModelAssetId = 4954987035,
+			Fit = "Kit",
+			Yaw = -90,
+			HideKit = true,
+			KeepVisible = { "GearF", "WheelF", "GearL", "GearR", "WheelL", "WheelR" },
+			BodyScale = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1, 1.2, 0), -- 1.4 behind the wing's trailing edge; only the head top clears the body
+			},
+			StripDecals = true,
+			Note = "owner pick: Old propeller plane by Deadex40_Extra (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
 		LightFighter = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		StrikeJet = { ModelAssetId = 0, Note = "owner list: pick rejected (real-world aircraft copy) - family body / Part kit" } :: AssetRef,
 		CASJet = { ModelAssetId = 0, Note = "owner list: pick rejected (real-world aircraft copy) - family body / Part kit" } :: AssetRef,
@@ -239,7 +335,7 @@ local VisualAssetConfig = {
 		AttackSub = { ModelAssetId = 0, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		-- Explicit aliases for depth-pass IDs (KitFamilyFallback also covers these)
 		SupplyTruck = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		FuelTanker = { ModelAssetId = 0, PendingAssetId = 5318635087, Note = "owner pick fuel truck (asp307): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		FuelTanker = { ModelAssetId = 0, Note = "owner pick fuel truck (asp307) not used: owner check 2026-09-25 (Open Cloud, v75), 55 parts > 40 - family body / Part kit" } :: AssetRef,
 		EngineeringTruck = { ModelAssetId = 0, Note = "owner list: pick rejected (cannot be checked from the store) - family body / Part kit" } :: AssetRef,
 		FlatbedHauler = { ModelAssetId = 0, PendingAssetId = 8455894899, Note = "owner pick FlatBed Truck (YourBoi_JonnyBoi): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		AmmoCarrier = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
@@ -254,6 +350,20 @@ local VisualAssetConfig = {
 			Yaw = 0,
 			HideKit = true,
 			StripDecals = true,
+			-- vscale: Roblox size (R2: at 0.8 every rider's arms showed 0.33-0.45 through the doors and cargo panels, at 0.95
+			-- 0.04-0.05 and the front row's feet 0.15 through the floor; at 1 nothing, like Roblox's own van). Seats: the
+			-- body's own; head 2.0 under the roof. R2.1: the front row lands 0.84 further back (z -4.43), because
+			-- BodySeatKitInset keeps every seat centre inside the kit's collidable box (the kit nose is at z -4.67).
+			BodyScale = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.247, 4.004, -5.267), -- VehicleSeat
+				PassengerSeat1 = Vector3.new(2.255, 4.004, -5.267), -- SeatFR
+				-- no body seat: the cargo bay behind the cab (the kit seats' heads were 0.5 through the roof), seat tops 1 lower
+				-- than the cab's so the feet reach the cargo floor (2.0 under the cab seat line)
+				PassengerSeat2 = Vector3.new(2.255, 3.05, -1.4),
+				PassengerSeat3 = Vector3.new(-2.247, 3.05, 0.6),
+				PassengerSeat4 = Vector3.new(2.255, 3.05, 0.6),
+			},
 			Note = "owner list: Roblox Van (white) Body (26 MeshParts, no decals), fitted to the kit; dress-only, the Part kit drives. 0 = Part kit",
 		} :: AssetRef,
 		TroopTransport = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
@@ -267,12 +377,80 @@ local VisualAssetConfig = {
 			HideKit = true,
 			StripDecals = true,
 			OmitParts = { "light_tail_glass" },
+			-- vscale: Roblox size (a seated avatar's head is 0.4 under the glass). Seats: the body's own.
+			BodyScale = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1.708, 5.075, -2.092), -- VehicleSeat
+				PassengerSeat1 = Vector3.new(1.708, 5.075, -2.091), -- SeatFR
+				PassengerSeat2 = Vector3.new(-1.708, 5.075, 2.158), -- SeatRL
+				PassengerSeat3 = Vector3.new(1.708, 5.075, 2.159), -- SeatRR
+			},
 			Note = "owner list: Roblox Pickup Truck (bronze) Body (41 MeshParts; the overlapping tail-light glass is omitted = 40), fitted to the kit; dress-only, the Part kit drives. 0 = Part kit",
 		} :: AssetRef,
-		InfantryCarrier = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		CommandVehicle = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		WheeledIFV = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		AmphibiousAPC = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		InfantryCarrier = {
+			ModelAssetId = 9076240315,
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			BodyScale = 0.55,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)
+				PassengerSeat1 = Vector3.new(2.5, 2.2, -4),
+				PassengerSeat2 = Vector3.new(-2.5, 2.2, 2),
+				PassengerSeat3 = Vector3.new(2.5, 2.2, 2),
+				PassengerSeat4 = Vector3.new(-2.5, 2.2, 6),
+			},
+			StripDecals = true,
+			Note = "owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
+		CommandVehicle = {
+			ModelAssetId = 9076240315,
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			BodyScale = 0.55,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)
+				PassengerSeat1 = Vector3.new(2.5, 2.2, -4),
+				PassengerSeat2 = Vector3.new(-2.5, 2.2, 2),
+				PassengerSeat3 = Vector3.new(2.5, 2.2, 2),
+				PassengerSeat4 = Vector3.new(-2.5, 2.2, 6),
+			},
+			StripDecals = true,
+			Note = "owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
+		WheeledIFV = {
+			ModelAssetId = 9076240315,
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			BodyScale = 0.55,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)
+				PassengerSeat1 = Vector3.new(2.5, 2.2, -4),
+				PassengerSeat2 = Vector3.new(-2.5, 2.2, 2),
+				PassengerSeat3 = Vector3.new(2.5, 2.2, 2),
+				PassengerSeat4 = Vector3.new(-2.5, 2.2, 6),
+			},
+			StripDecals = true,
+			Note = "owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
+		AmphibiousAPC = {
+			ModelAssetId = 9076240315,
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			BodyScale = 0.55,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)
+				PassengerSeat1 = Vector3.new(2.5, 2.2, -4),
+				PassengerSeat2 = Vector3.new(-2.5, 2.2, 2),
+				PassengerSeat3 = Vector3.new(2.5, 2.2, 2),
+				PassengerSeat4 = Vector3.new(-2.5, 2.2, 6),
+			},
+			StripDecals = true,
+			Note = "owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
 		CombatIFV = { ModelAssetId = 0, Note = "owner pick Fiction IFV (spookstiy) not used: owner check 2026-09-25 (Open Cloud, v75), 321 parts > 40 - family body / Part kit" } :: AssetRef,
 		AssaultIFV = { ModelAssetId = 0, Note = "owner pick Fiction IFV (spookstiy) not used: owner check 2026-09-25 (Open Cloud, v75), 321 parts > 40 - family body / Part kit" } :: AssetRef,
 		BridgeLayer = { ModelAssetId = 0, NoFamilyFallback = true, Note = "owner list: no good match, keep the current build (Part kit; NoFamilyFallback: never a TrackedIFV family body)" } :: AssetRef,
@@ -290,7 +468,7 @@ local VisualAssetConfig = {
 		RailgunCarrier = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) → TrackedArtillery family body, else Part kit" } :: AssetRef,
 		DispatchCar = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep, fitted to the smaller kit)" } :: AssetRef,
 		UtilityHeli = { ModelAssetId = 0, PendingAssetId = 2474869838, Note = "owner pick Low poly helicopter (Azarth): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		MedevacHeli = { ModelAssetId = 0, PendingAssetId = 11357157285, Note = "owner pick Helicopter (Rescue) (KiboSprite): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		MedevacHeli = { ModelAssetId = 0, Note = "owner pick Rescue Helicopter (KiboSprite) not used: owner check 2026-09-25 (Open Cloud, v75), 78 parts > 40 - family body / Part kit" } :: AssetRef,
 		EscortHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
 		VTOLTransport = { ModelAssetId = 0, Note = "owner list: pick rejected (provenance) - family body / Part kit" } :: AssetRef,
 		HeavyBomber = { ModelAssetId = 0, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
@@ -303,17 +481,19 @@ local VisualAssetConfig = {
 	} :: { [string]: AssetRef },
 
 	Characters = {
-		-- Design Bot 2026-09-20: realistic human mesh. REJECT plastic 3924234975 + Respawn 91299598767068.
-		Soldier = { ModelAssetId = 100212659702941, Note = "Realistic soldier StarterCharacter (gas-mask/spec-ops)" } :: AssetRef,
-		Infantry = { ModelAssetId = 9104381136, Note = "Layered clothing realistic soldier (helmet+MOLLE)" } :: AssetRef,
-		Worker = { ModelAssetId = 16134469614, Note = "v41 distinct Worker (Rigged Soldier NVG)" } :: AssetRef,
-		WorkerFallback = { ModelAssetId = 9104381136, Note = "Worker fallback Infantry mesh if Guard insert fails" } :: AssetRef,
-		HeavyInfantry = { ModelAssetId = 0, Note = "Army of Soldiers Rthro swarm pack" } :: AssetRef,
-		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
-		BankGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
-		OilRigGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
-		FortGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
-		GateGuard = { ModelAssetId = 16134469614, Note = "Gate patrol — Rigged Soldier NVG/balaclava" } :: AssetRef,
+		-- R-RIG: owner rule 9 + decision #8 default: the Roblox "Soldier" 187790284 (creator Roblox) for every soldier kind
+		Soldier = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret", Note = "Roblox Soldier (rule 9)" } :: AssetRef,
+		Squad = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret", Note = "friendly squad units" } :: AssetRef,
+		Infantry = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet", Note = "hostile infantry" } :: AssetRef,
+		Worker = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet", Note = "#9 default: Roblox soldier body" } :: AssetRef,
+		WorkerFallback = { ModelAssetId = 0, Note = "R-RIG: unused (rig kinds keep the Part kit on a failed load)" } :: AssetRef,
+		HeavyInfantry = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		Guard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		BankGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		OilRigGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		FortGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		CampCommander = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		GateGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
 		-- W1 CFG drop (country / real-world weapon in the source): 0 → CharacterAlt (0) → Part kit
 		SpecialForces = { ModelAssetId = 0, Note = "W1 CFG drop (real-world unit) — Part kit" } :: AssetRef,
 		SpecialForcesAlt = { ModelAssetId = 0, Note = "W1 CFG drop (real-world weapon) — unused key" } :: AssetRef,
@@ -380,6 +560,25 @@ local VisualAssetConfig = {
 		RocketAssembly = { ModelAssetId = 31603741, OmitParts = { "Particles" }, ReplacesRoles = { "Signature" }, Note = "owner list: Roblox Rocket as the rocket body (its empty effects part dropped; Fire + Smoke removed, StripEffectsAssetIds)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
+	-- bizlook (2026-09-27, owner: "The dropper should look like a legit high-end business"): Roblox-made building pieces
+	-- every war-business line wears (VisualAssetService.TryAttachBusinessVisual, after the line's own dress). All come
+	-- from Roblox's Synty City pack 6933556508 (creator Roblox, User 1; already loaded for DesertKit.CarWreck, so 0 new
+	-- load attempts), keep the pack's atlas texture (no text on these pieces: UV-checked) and replace a non-colliding kit
+	-- role one for one, so PartsPerBusinessL5 and the per-level counts hold. A piece with Into fills that kit role's box
+	-- (Fit = "Stretch": turned by Yaw, then stretched to the box; the front keeps its proportions, the depth is squashed)
+	-- and hides the HideRoles colliders (their collision stays); FromLevel / ToLevel pick the office piece by level, and
+	-- BusinessService refits a stretched piece when its box grows. 0 = the Part kit (the fallback look).
+	BusinessPieces = {
+		-- L2+: the loading unit behind the bin: a roller-shutter unit (Shop_06, 264 tris) in the 8.5 x 6 x 5.5 Dock box
+		DockFront = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Shop_06", ReplacesRoles = { "DockFront" }, Into = "Dock", Fit = "Stretch", Yaw = 180, HideRoles = { "Dock" }, Note = "Synty City: roller-shutter unit as the loading bay" } :: AssetRef,
+		-- L3-4: the head office behind the belt start: a two-storey stone office (Station_03, 1,984 tris) in the Hall box
+		HallFront = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Station_03", ReplacesRoles = { "HallFront" }, Into = "Hall", Fit = "Stretch", Yaw = 180, HideRoles = { "Hall" }, ToLevel = 4, Note = "Synty City: two-storey office (L3-4)" } :: AssetRef,
+		-- L5: the head office grows into a three-storey glass-front block (Station_02, 1,527 tris) in the taller Hall box
+		HallFrontL5 = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Station_02", ReplacesRoles = { "HallFront" }, Into = "Hall", Fit = "Stretch", Yaw = 180, HideRoles = { "Hall" }, FromLevel = 5, Note = "Synty City: three-storey glass-front office (L5)" } :: AssetRef,
+		-- L4+: a corrugated lean-to canopy with tie rods over the belt (Shop_Cover_03, 122 tris), fitted uniformly
+		Canopy = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Shop_Cover_03", ReplacesRoles = { "Canopy" }, Note = "Synty City: corrugated canopy over the belt" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
 	-- Owner asset list hooks (2026-09-25): turret dress. VehicleService calls VisualAssetService.TryAttachVehicleWeaponVisual
 	-- only for a vehicle on the ref's allow-list (KitFamilies and / or Vehicles) whose kit has the Mount part. Dress only:
 	-- massless, non-colliding, welded to the mount (never anchored); HideParts turns the kit gun invisible once the dress is
@@ -387,6 +586,14 @@ local VisualAssetConfig = {
 	VehicleWeapons = {
 		VehicleMG = { ModelAssetId = 0, PendingAssetId = 5589684833, Mount = "GunMount", FitScale = 3, Vehicles = { "ArmedJeep" }, HideParts = { "Barrel" }, Note = "0 = Part-kit gun; owner pick Mounted Machine Gun (ifyouaremethaniamyou): pending, P4 (Studio check); Armed 4x4 only" } :: AssetRef,
 		VehicleCannon = { ModelAssetId = 0, PendingAssetId = 3322196012, Mount = "Turret", FitScale = 1.6, KitFamilies = { "TrackedMBT" }, HideParts = { "Turret", "Barrel", "Mantlet" }, Note = "0 = Part-kit turret; owner pick Tank Turret (Nierse217): pending, P4 (Studio check; the store page says it may be asymmetrical); battle tanks only" } :: AssetRef,
+		-- aircraft weapons (AircraftWeaponConfig Weapons[].Hook): no dress yet (0 = no load). AirWeaponService uses each
+		-- ref's Mount kit part as the muzzle / bomb bay, and its allow-list must hold every aircraft that carries it.
+		AirNoseGun = { ModelAssetId = 0, Mount = "Cockpit", FitScale = 0.5, KitFamilies = { "HeliAttack" }, Note = "0 = no dress; attack / gunship helicopter chin gun (muzzle under the cockpit)" } :: AssetRef,
+		AirRocketPods = { ModelAssetId = 0, Mount = "StubWingL", FitScale = 0.6, KitFamilies = { "HeliAttack" }, Note = "0 = no dress; helicopter rocket pods (left stub wing, mirrored right)" } :: AssetRef,
+		AirJetCannon = { ModelAssetId = 0, Mount = "Nose", FitScale = 0.5, Vehicles = { "FighterJet", "InterceptorJet", "LightFighter" }, Note = "0 = no dress; fighter nose cannon (trainer / recon jets stay unarmed)" } :: AssetRef,
+		AirMissileRails = { ModelAssetId = 0, Mount = "WingL", FitScale = 0.4, Vehicles = { "FighterJet", "InterceptorJet", "LightFighter" }, Note = "0 = no dress; fighter missile rails (left wing, mirrored right)" } :: AssetRef,
+		AirStrikeBombs = { ModelAssetId = 0, Mount = "Chassis", FitScale = 0.4, KitFamilies = { "JetStrike" }, Note = "0 = no dress; strike jet bombs under the fuselage" } :: AssetRef,
+		AirBombBay = { ModelAssetId = 0, Mount = "Bay", FitScale = 1, KitFamilies = { "JetBomber" }, Note = "0 = no dress; bomber bomb bay" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
@@ -554,6 +761,29 @@ local VisualAssetConfig = {
 		VanWreck = { ModelAssetId = 0, ChildName = "Meshes/PolygonCity_Props_SM_Veh_Car_Van_01", Color = Color3.fromRGB(45, 42, 40), Material = Enum.Material.CorrodedMetal, ClearTexture = true, Note = "Synty City: burnt van (5,665 tris) — no caller" } :: AssetRef,
 		Pebbles = { ModelAssetId = 0, ChildName = "Meshes/PolygonNature_Terrain_Rubble_Pebbles_01", Color = Color3.fromRGB(150, 135, 110), Material = Enum.Material.Ground, ClearTexture = true, Note = "Synty Nature: pebbles (168 tris) — no caller" } :: AssetRef,
 		Skip = { ModelAssetId = 0, ChildName = "Meshes/PolygonCity_Props_SM_Prop_Skip_02", Color = Color3.fromRGB(70, 85, 55), Material = Enum.Material.Metal, ClearTexture = true, Note = "Synty City: skip (1,352 tris) — no caller" } :: AssetRef,
+		--[[ Crossroads Town buildings (owner feedback 2026-09-27: "need to be actual Roblox buildings"). WorldKits
+			TownHouse stacks these pieces per WorldConfig.Kits.TownHouse.Styles, at scale 1. Same Roblox-made pack as
+			CarWreck (6933556508, creator Roblox, User 1): 0 new load attempts. The texture atlas STAYS (no ClearTexture:
+			it draws the windows, brick and stone); these pieces sample none of the atlas's text regions (UV check,
+			ownervis assets.md §2.3). Every piece is one MeshPart with no glass child (the loader drops children). ]]
+		TownShop = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Shop_06", Note = "Synty City: one-storey shop, rolled shutter (264 tris)" } :: AssetRef,
+		TownAptDoorA = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_Door_01", Note = "Synty City: brick ground floor with a stoop door (629 tris)" } :: AssetRef,
+		TownAptDoorB = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_Door_02", Note = "Synty City: brick ground floor, plain door (616 tris)" } :: AssetRef,
+		TownAptFloorA = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_02", Note = "Synty City: brick upper floor, arched windows (1,032 tris)" } :: AssetRef,
+		TownAptFloorB = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_03", Note = "Synty City: brick upper floor, bay window (500 tris)" } :: AssetRef,
+		TownAptStack = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_Stack_01", Note = "Synty City: three brick floors in one piece (1,360 tris)" } :: AssetRef,
+		TownAptRoofA = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_Roof_01", Note = "Synty City: flat roof (140 tris)" } :: AssetRef,
+		TownAptRoofB = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_Roof_02", Note = "Synty City: cornice roof (164 tris)" } :: AssetRef,
+		TownOfficeBase = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_OfficeOld_Small_Base_01", Note = "Synty City: sandstone hall, 2 storeys (4,756 tris)" } :: AssetRef,
+		TownOfficeTop = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_OfficeOld_Small_Roof_01", Note = "Synty City: sandstone hall top storey (1,882 tris)" } :: AssetRef,
+		-- Training Yard (owner feedback 2026-09-27; TrainingYardBuilder, TrainingYardConfig): pieces of the live Dungeon
+		-- pack (0 new load attempts), fitted by the builder, the pack texture KEPT (one shared atlas: planks, metal bands,
+		-- rungs; no text or emblem on these pieces, ownervis/assets.md §3.4). ClearTexture = true + Color turns any of them
+		-- into a flat colour (no atlas on phones). The hurdles reuse the live Log key above.
+		YardCrate = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Crate_Wood_04", Note = "Synty Dungeon: wooden supply crate (598 tris), textured; training-yard crate stack" } :: AssetRef,
+		YardAmmoCrate = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Crate_Metal_01", Note = "Synty Dungeon: metal-bound crate (662 tris), textured; training-yard ammo crate" } :: AssetRef,
+		YardRack = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_WeaponRack_01", Note = "Synty Dungeon: empty wooden rack (213 tris, no weapons modelled), textured; training-yard rifle rack (mesh only)" } :: AssetRef,
+		YardLadder = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Ladder_01", Note = "Synty Dungeon: ladder (268 tris), textured; leans on the training-yard jump wall (mesh only)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- HQ / Barracks interior dress keys (hosts in StructureKitBuilder)

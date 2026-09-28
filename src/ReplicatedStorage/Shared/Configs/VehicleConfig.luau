@@ -476,6 +476,59 @@ local VehicleConfig = {
 		},
 		-- Mobile P1-8: the client-side owner nameplate (never AlwaysOnTop; MaxDistance is capped at 40 in code)
 		Nameplate = { MaxDistance = 36, WidthStuds = 2, HeightStuds = 0.4, HeightPx = 20, MinText = 14, MaxText = 20 },
+		--[[ vscale R2 (owner, phone: the cars looked tiny under the avatar; option B shows Roblox-size bodies over the
+			unchanged Part kit, so a seated rider's torso starts inside the kit's Cabin / Cargo box). After a rider leaves
+			ANY seat (jump / EXIT pill, ejectSeat, a wreck) the server puts the character on a clear spot beside the car:
+			on that seat's side, outside the visible body (max(kit WE_HalfWidth, fitted WE_VisualHalfWidth) + Gap + the
+			character's HalfWidth from the centreline), at the seat's Z; else the other side; else behind the body; else
+			in front of it (those two only while the car moves toward that end slower than EndMaxSpeed); then the same
+			four FarStep further out. A spot needs solid ground within StepUp above / MaxDrop below the car's
+			wheel line (never water, never the void), an empty standing box (CanCollide parts; this car and characters
+			are ignored) and a clear line from the seat. No clear spot = Roblox's own jump-out, as before. Car mode only
+			(boats and aircraft keep Roblox's exit). The plain Part kit (no body) uses its own width. ]]
+		ExitSpot = {
+			Enabled = true,
+			Modes = { Car = true } :: { [string]: boolean },
+			Gap = 1, -- studs between the (visible) body side and the character
+			HalfWidth = 1, -- the standing character's half width / depth (R15 root part 2 x 2 x 1)
+			StandHeight = 5.2, -- open-box height above the ground (a standing blocky R15)
+			StepUp = 2.5, -- the ground under the spot may be at most this above the car's wheel line ...
+			MaxDrop = 6, -- ... and at most this below it (no cliff, no void)
+			FarStep = 3, -- second ring: the same four spots this much further out
+			EndMaxSpeed = 3, -- studs/s: behind / in front only while the car moves toward that end slower than this
+			MaxFromSeat = 12, -- a rider already this far from the seat (teleported, respawned) is left alone
+			-- vscale R2.1: the line of sight to a spot starts inside the kit (chassis centre, above it at the rider's
+			-- height, and the seat only when the kit can see it); a world part inside this probe box at the chassis
+			-- centre means no move
+			AnchorProbe = 0.5,
+			NeighbourRange = 60, -- R2.1: other cars within this (chassis to chassis) keep the spot out of their body
+			RoofFallback = true, -- R2.1: a seat inside / behind a world part and no clear spot: stand on the kit's roof
+			-- R2.2: a spot where the rider's root part would come closer than RiderGap (flat) to another player's root
+			-- part, or to a spot handed out in the last HoldSeconds, is taken: riders who leave together (a wreck) or
+			-- one after another never land inside each other. Behind / in front also get a spot EndSideStep to either
+			-- side (a full car in an alley: two root parts 2 wide + RiderGap).
+			RiderGap = 0.25,
+			HoldSeconds = 1,
+			EndSideStep = 2.5,
+			-- per seat: "Left" / "Right" = the car's own left / right (it faces -Z); a seat not listed exits on the side
+			-- its centre is on (x < 0 = left; the kit's centred DriverSeat and the bodies' driver seats = left)
+			Side = { DriverSeat = "Left" } :: { [string]: string },
+		},
+		--[[ vscale R2: passengers board by touch (the moved seats sit inside the kit's Cabin / Cargo, where touch-to-sit
+			cannot reach them). One "Ride" ProximityPrompt per car (WE_RidePrompt, on the Chassis): the server enables it
+			while a passenger seat is free (WE_Open); VehicleDriveClient hides it from the owner (who drives) and from
+			anyone already seated. Triggered seats the player in the nearest free passenger seat after
+			VehicleCombatConfig.SeatPolicy.Passenger, only with a clear line from the player to that seat (never through a
+			wall or a closed gate). Range = Range + max(kit, fitted body) half length (from the centre). ]]
+		Ride = {
+			Enabled = true,
+			Modes = { Car = true } :: { [string]: boolean },
+			Range = 8,
+			MaxRise = 6, -- the rider's root part at most this far above / below the Chassis centre (no boarding from a tower)
+			HoldSeconds = 0.3, -- a short hold: works with a finger, no accidental boarding
+			RequestRate = 2, -- RateLimitService "vehicle_ride" tokens/s
+			RequestBurst = 2,
+		},
 
 		--[[ Rollover fix (owner, phone, 2026-09-24: "The quad falls over when driving super easy"). Built once per
 			vehicle by VehicleService (createMovers), Car mode only, for the KitFamilies listed in Families:
@@ -505,6 +558,11 @@ local VehicleConfig = {
 				WheeledAPC = { Ballast = 0.4, UprightFrac = 0.6 },
 			} :: { [string]: { Ballast: number, UprightFrac: number } },
 			TrackScale = { UtilityQuad = 1.2, ReconBuggy = 1.1, DispatchCar = 1.1 } :: { [string]: number },
+			-- vscale R2.3 (review M1): for these families WE_DriveAttach.X also follows the centre of mass, with a
+			-- RiderMass rider on every occupied seat (the driver seat when empty). A fitted body seats the driver off
+			-- the centreline (Quad / Recon Buggy 1.62 left), and a drive force at x = 0 then turns the car.
+			-- {} = the drive point at x = 0 as before (Y / Z at the centre of mass either way).
+			DriveAtComXFamilies = { WheeledLight = true } :: { [string]: boolean },
 		},
 
 		-- Speed resync (every mode): actual forward speed this far below the commanded speed for
@@ -769,6 +827,27 @@ local VehicleConfig = {
 			-- returns or times out. Read only while Workspace.StreamingEnabled is true.
 			AutoSitPrefetchTimeout = 3,
 			DamageLockSeconds = 5, -- SPAWN refused this long after the player's character took damage
+			-- the Drive prompt's MaxActivationDistance from the driver seat; vscale R2: a fitted body longer than the kit
+			-- adds its overhang (WE_VisualHalfLength - WE_HalfLength), so "Drive" still shows at a Roblox-size tailgate.
+			-- The spawn spot checks (Occupied, BoxFree, aroundOffsets, PlayerFront) use max(kit, fitted body) too.
+			DrivePromptRange = 14,
+			PlayerClear = 1.5, -- vscale R2: PlayerFront never puts the car (kit or fitted body) within this of the player's root part
+			-- vscale R2.1: a pad's second ring (after the centre + 4 spots) sits footRadius + the biggest parked car's
+			-- radius + 2 + this from the pad centre, so a Roblox-size van / pickup parked there never sends a smaller car
+			-- to another player's pad
+			RingMargin = 0.5,
+			-- vscale R2.1: SPAWN tries spots clear of tall visible non-colliding decor first (flag poles, palms, reeds,
+			-- lintels, the Garage sign: CanQuery false, so an index built from one Workspace pass, refreshed at most every
+			-- RefreshSeconds and only when a SPAWN asks), then as before. Enabled = false: R2 behaviour.
+			Decor = {
+				Enabled = true,
+				MinTop = 2.5, -- only decor whose top stands more than this over the spot's ground (not grass, kerbs, decals)
+				Tolerance = 0.25, -- overlap depth (studs) that counts
+				MaxTransparency = 0.9,
+				MaxSize = 80, -- longer parts (ground sheets, zone discs) are not indexed
+				Cell = 32,
+				RefreshSeconds = 300,
+			},
 		},
 	},
 }

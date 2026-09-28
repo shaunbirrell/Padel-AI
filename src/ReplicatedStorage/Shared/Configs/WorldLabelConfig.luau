@@ -41,6 +41,11 @@ local WorldLabelConfig = {
 		MaxOnScreen = 3,
 		Hz = 4,
 	},
+	-- droppers v1b (spec_droppers.md §3.7, DR-20, DR-24): a governed base label with this attribute set to true is kept
+	-- first by the LabelGovernor (it still counts toward MaxOnScreen, so the cap of 3 holds). Only
+	-- Client/Modules/ProductionFx sets it, on the plate's own "+$75" pop and on the player's own plate tag while it
+	-- reads "Recharging" (cleared when the recharge ends): both answer the player's own tap, so they are never held off.
+	PriorityAttribute = "WE_LabelPriority",
 	-- Billboard text, real px (world GUIs are not under the HUD UIScale). Fixed TextSize, never TextScaled.
 	TextSize = 16,
 	SubTextSize = 14,

@@ -140,6 +140,10 @@ Constants.RemoteNames = {
 	OpsState = "OpsState", -- RemoteEvent, per player: OpsStatePayload (Full on join + every 60 s, deltas <= 2 Hz)
 	OpsProgress = "OpsProgress", -- RemoteEvent, per player: OpsProgressPayload (4 Hz, only inside a job zone)
 	OpsPing = "OpsPing", -- UnreliableRemoteEvent (RemoteSetup UNRELIABLE list): OpsPingPayload, every 10 s per carrier
+	-- droppers v1b: UnreliableRemoteEvent (RemoteSetup UNRELIABLE list), server -> the grabber only, one packet per
+	-- paid plate grab: (dropPoint: Vector3, amount: number, left: number, eta: number). Cosmetic: a lost packet loses
+	-- the effect, never money. Nobody listens on the server (no OnServerEvent).
+	DropperFx = "DropperFx",
 }
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v2" -- v55: intentional bump; fresh CreateDefault + StartingCash (kills stuck $0 v1 saves)

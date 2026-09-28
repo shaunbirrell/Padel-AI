@@ -1652,8 +1652,10 @@ local function vehicleModelOf(inst: Instance): Model?
 	return nil
 end
 
+-- vscale R2: ... and "Ride" (WE_RidePrompt: a passenger seat is free, WE_Open) only for other players who are not in a
+-- seat: never for the owner (the driver; his "Drive" and "Ride" would share one key), never while seated anywhere
 local function refreshPrompt(prompt: Instance)
-	if not prompt:IsA("ProximityPrompt") or prompt.Name ~= "WE_DrivePrompt" then
+	if not prompt:IsA("ProximityPrompt") or (prompt.Name ~= "WE_DrivePrompt" and prompt.Name ~= "WE_RidePrompt") then
 		return
 	end
 	local model = vehicleModelOf(prompt)
@@ -1661,11 +1663,35 @@ local function refreshPrompt(prompt: Instance)
 		return
 	end
 	local mine = model:GetAttribute("OwnerUserId") == localPlayer().UserId
-	local driving = active ~= nil and (active :: Drive).Model == model
-	local want = mine and not driving
+	local want: boolean
+	if prompt.Name == "WE_RidePrompt" then
+		local ch = localPlayer().Character
+		local hum = if ch then ch:FindFirstChildOfClass("Humanoid") else nil
+		local seated = active ~= nil or (hum ~= nil and hum.SeatPart ~= nil)
+		want = not mine and not seated and prompt:GetAttribute("WE_Open") == true and model:GetAttribute("WE_Destroyed") ~= true
+	else
+		local driving = active ~= nil and (active :: Drive).Model == model
+		want = mine and not driving
+	end
 	if prompt.Enabled ~= want then
 		prompt.Enabled = want
 	end
+end
+
+-- vscale R2: the server toggles a Ride prompt's Enabled / WE_Open as seats fill and empty; re-apply this client's rule
+-- each time. One pair of listeners per prompt instance (a streamed-out prompt comes back as a new instance), hooked
+-- both for prompts that arrive later and for the ones already there when the folder is first hooked (a late joiner).
+local function hookRidePrompt(d: Instance)
+	if d.Name ~= "WE_RidePrompt" or not d:IsA("ProximityPrompt") or d:GetAttribute("WE_RideHooked") == true then
+		return
+	end
+	d:SetAttribute("WE_RideHooked", true)
+	d:GetPropertyChangedSignal("Enabled"):Connect(function()
+		refreshPrompt(d)
+	end)
+	d:GetAttributeChangedSignal("WE_Open"):Connect(function()
+		refreshPrompt(d)
+	end)
 end
 
 local function corner(parent: Instance, r: number)
@@ -1688,7 +1714,8 @@ local function refreshAllPrompts()
 		return
 	end
 	for _, d in ipairs(folder:GetDescendants()) do
-		if d.Name == "WE_DrivePrompt" then
+		if d.Name == "WE_DrivePrompt" or d.Name == "WE_RidePrompt" then
+			hookRidePrompt(d)
 			refreshPrompt(d)
 		elseif d.Name == "VehicleLabel" then
 			suppressServerLabel(d)
@@ -1938,6 +1965,9 @@ local function hookVehicleFolder()
 	end
 	promptFolderConn = folder.DescendantAdded:Connect(function(d: Instance)
 		if d.Name == "WE_DrivePrompt" then
+			refreshPrompt(d)
+		elseif d.Name == "WE_RidePrompt" then
+			hookRidePrompt(d) -- vscale R2
 			refreshPrompt(d)
 		elseif d.Name == "VehicleLabel" then
 			suppressServerLabel(d)
@@ -3233,6 +3263,7 @@ local function bindHumanoid(hum: Humanoid)
 			end
 		end
 		refreshPlates() -- P1-8: nameplates hide while seated anywhere
+		refreshAllPrompts() -- vscale R2: "Ride" hides while seated anywhere (one folder pass per sit / stand, not per frame)
 		-- jeep F9: any vehicle seat (driver or passenger) hushes the world's prompts; getting up restores them
 		setPromptHush(isSeated and seatIsVehicle(seatPart) and hum.Health > 0)
 	end)
