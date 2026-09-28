@@ -129,6 +129,7 @@ export type Params = {
 	SoftBound: number,
 	AutoTakeoff: boolean,
 	AirBox: AirBox?,
+	TailGuard: { number }?, -- air2 fix1: WE_TailGuard parsed (Laws.TailGuard): { MinPitch, reach, LeadSeconds, x1, y1, z1, ... }
 	C: { [string]: number },
 }
 
@@ -530,6 +531,83 @@ function Laws.AirBoxParams(drive: any): AirBox?
 	}
 end
 
+-- air2 fix1: WE_TailGuard (AirBodyRig, a fitted store aircraft body) "MinPitch,LeadSeconds;x,y,z;..." -> { MinPitch,
+-- reach, LeadSeconds, x, y, z, ... } (reach = the farthest corner from the chassis centre: higher than that nothing can
+-- touch the ground); nil when absent or malformed (the law is then exactly as before)
+local function parseTailGuard(v: any): { number }?
+	if typeof(v) ~= "string" then
+		return nil
+	end
+	local g: { number } = {}
+	local reach = 0
+	for field in string.gmatch(v, "[^;]+") do
+		if #g == 0 then
+			local sm, sl = string.match(field, "^([^,]+),([^,]+)$")
+			local m, l = tonumber(sm), tonumber(sl)
+			if m == nil or l == nil then
+				return nil
+			end
+			g[1], g[2], g[3] = m, 0, math.clamp(l, 0, 1)
+		else
+			local sx, sy, sz = string.match(field, "^([^,]+),([^,]+),([^,]+)$")
+			local x, y, z = tonumber(sx), tonumber(sy), tonumber(sz)
+			if x == nil or y == nil or z == nil then
+				return nil
+			end
+			table.insert(g, x)
+			table.insert(g, y)
+			table.insert(g, z)
+			reach = math.max(reach, math.sqrt(x * x + y * y + z * z))
+		end
+	end
+	if #g < 6 then
+		return nil
+	end
+	g[2] = reach
+	return g
+end
+
+-- air2 fix1: the lowest corner of g (Laws.TailGuard) under orient(pitch, h, bank), relative to the chassis centre
+local function guardLowest(g: { number }, pitchDeg: number, bankDeg: number): number
+	local rp, rb = math.rad(pitchDeg), math.rad(bankDeg)
+	local sp, cp, sb, cb = math.sin(rp), math.cos(rp), math.sin(rb), math.cos(rb)
+	local low = math.huge
+	for i = 4, #g - 2, 3 do
+		-- orient: Rx(pitch) * Rz(-bank); the world height of chassis point (x, y, z)
+		local h = (g[i + 1] * cb - g[i] * sb) * cp - g[i + 2] * sp
+		if h < low then
+			low = h
+		end
+	end
+	return low
+end
+
+--[[ air2 fix1: a fitted store aircraft body far longer than its kit (the owner's 44-stud jet on a 12-stud kit) never dips
+	into the ground. g = parsed WE_TailGuard; height = the chassis centre over the ground (Clearance + AGL). When a corner
+	would go under the ground at (pitch, bank), the pitch (tail down or nose down) and the bank are eased back toward
+	level together (10 bisection steps) until every corner clears (level always clears: the parked body stands over its
+	gear); a nose-up pitch never drops below min(pitch, MinPitch), so a lift-off stays a climb over the touchdown line.
+	Returns (pitch, bank). ]]
+function Laws.TailGuard(g: { number }, pitchDeg: number, bankDeg: number, height: number): (number, number)
+	if not (height < g[2]) or guardLowest(g, pitchDeg, bankDeg) >= -height then
+		return pitchDeg, bankDeg
+	end
+	local lo, hi = 0, 1
+	for _ = 1, 10 do
+		local k = (lo + hi) * 0.5
+		if guardLowest(g, pitchDeg * k, bankDeg * k) >= -height then
+			lo = k
+		else
+			hi = k
+		end
+	end
+	local pitch = pitchDeg * lo
+	if pitchDeg > 0 then
+		pitch = math.max(pitch, math.min(pitchDeg, g[1]))
+	end
+	return pitch, bankDeg * lo
+end
+
 --[[ Params from the vehicle model's attributes (spec 6.2) + VehicleConfig.Drive (or DEFAULTS). ]]
 function Laws.BuildParams(mode: string, attrs: { [string]: any }, drive: any?): Params
 	local function a(key: string): number?
@@ -577,6 +655,7 @@ function Laws.BuildParams(mode: string, attrs: { [string]: any }, drive: any?): 
 		SoftBound = softBound,
 		AutoTakeoff = autoTakeoff,
 		AirBox = if mode == "Heli" or mode == "Plane" then Laws.AirBoxParams(drive) else nil,
+		TailGuard = if mode == "Plane" then parseTailGuard(attrs.WE_TailGuard) else nil,
 		C = C,
 	}
 end
@@ -996,6 +1075,13 @@ local function stepPlane(st: State, P: Params, input: Input, sense: Sense, dt: n
 	end
 	st.Pitch = approach(st.Pitch, pitchT, C.PitchRate, dt)
 	st.Bank = approach(st.Bank, s * C.MaxBank, C.BankRate, dt)
+	-- air2 fix1: a long store body's tail, nose and wing tips stay out of the ground (WE_TailGuard; kit planes have none).
+	-- The height looks LeadSeconds ahead while sinking (the step's own drop, the AlignOrientation lag).
+	local guard = P.TailGuard
+	if guard ~= nil then
+		local height = P.Clearance + agl + math.min(0, sense.Velocity.Y) * guard[3]
+		st.Pitch, st.Bank = Laws.TailGuard(guard, st.Pitch, st.Bank, height)
+	end
 	st.Heading -= (st.Bank / C.MaxBank) * P.TurnRate * math.clamp(st.Airspeed / Vto, 0.5, 1) * dt
 	local sink = if st.Stalled then C.StallSinkMax * math.max(0, 1 - st.Airspeed / Vstall) else 0
 	local vel = lookVector(st.Pitch, st.Heading) * st.Airspeed - Vector3.new(0, sink, 0)

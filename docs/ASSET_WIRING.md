@@ -12,9 +12,9 @@ lead's spec (assetwire, 2026-09-25).
 | What happened | Items |
 |---|---|
 | Wired now: Roblox's own models, no Get Model needed | 31 |
-| Your Get Model picks, waiting for the promote step | 49 |
+| Your Get Model picks, waiting for the promote step | 43 |
 | Kept our own build | 21 |
-| Not used (wrong item, real-world copy, too heavy …) | 56 |
+| Not used (wrong item, real-world copy, too heavy …) | 58 |
 | Needs new game code first | 48 |
 | Waits on a file another job is editing | 3 |
 | Soldiers and guards: need moving (animated) figures first | 9 |
@@ -79,6 +79,26 @@ or our Part build if it fails to load. One check per line:
 - Only if 2 friends own an APC, Infantry Carrier or Command Vehicle: each of you parks one by your garage, and the
   frame rate feels the same. (One player can have only one car out at a time, so this needs 3 players.)
 - Fuel Tanker and Rescue / Medevac Heli: they look as before (those picks cannot be trimmed, section 5).
+
+**Your raw v83 lines (2026-09-28): your jet goes live; the rescue helicopter cannot.** The Fighter Jet, Interceptor Jet,
+Trainer Jet and Light Fighter show your pick 14589101870 at 2.5 times its size (about 44 studs long), or our Part jet if
+it fails to load. One check per line:
+- Airfield 3: a black and grey jet, nose forward, about 9 of you long, standing on three black wheels on grey legs.
+- Sit in it: you are inside, hidden under the canopy. Nothing of you shows on top.
+- Stay seated while a friend walks all the way round it and looks from the side and from low down by the nose, then
+  sends you a screenshot: nothing of you shows.
+- The camera sits behind the whole jet, not inside the tail.
+- Park and jump out: you land on the ground beside a wing tip, not on top of the jet or inside it.
+- Walk into it: only the middle of the jet is solid; you can walk through the wings and the tail.
+- Take off: the tail never goes into the runway. Fly low and turn: no wing tip goes into the ground.
+- Fly and land: it flies nose first and never sideways.
+- Fire the gun: the shots start at the nose. Fire a missile: it leaves a wing tip.
+- A friend shoots your parked jet in the tail and in a wing tip: it takes damage both times.
+- Trainer Jet: your friend walks up to it, holds Ride and sits behind you. Get out and walk round it: nothing of your
+  friend shows.
+- Strike Jet, Close Air Support Jet and Stealth Strike: they keep our small jet (your pick replaced the old fighter
+  pick, which never covered them). Say if they should wear your jet too.
+- Rescue and Medevac Heli: they look as before (section 5).
 
 ## 2. Wired now (31)
 
@@ -202,8 +222,8 @@ Owning a model only makes it loadable. Nothing below shows in the game until the
 | SPAAG, Mobile SAM [WEAK] | [10069416832](https://create.roblox.com/store/asset/10069416832) | anti aircraft Tank | XCX1001 | yes | not used: 301 parts in your check (over 40) |
 | Light Scout Heli, Utility Heli | [2474869838](https://create.roblox.com/store/asset/2474869838) | Low poly helicopter | Azarth | yes | second check: nose at -Z (from its thumbnail camera, not 90 degrees); one mesh with no seats, so a look first |
 | Transport Heli, Heavy Lift Heli, Light Transport Heli | [2627182035](https://create.roblox.com/store/asset/2627182035) | transport helicopter | blokkere | yes | not used: 109 parts in your check (over 40) |
-| Rescue Heli, Medevac Heli | [11357157285](https://create.roblox.com/store/asset/11357157285) (your 11357398877 is the same model; one load for both) | Rescue Helicopter | KiboSprite | yes | not used: 78 parts, named only "Part" and "Wedge", so no trim keeps the body (second check) |
-| Fighter Jet, Interceptor Jet, Trainer Jet, Light Fighter | [3553891209](https://create.roblox.com/store/asset/3553891209) | Fighter Jet concept | PlanesFun56 | yes | your yes is on record (call 12 = A); held: its paint is another artist's signed drawing of a real aircraft concept. Keep our jet, or pick another? (section 5) |
+| Rescue Heli, Medevac Heli | [11357157285](https://create.roblox.com/store/asset/11357157285) (your 11357398877 is the same model; one load for both) | Rescue Helicopter | KiboSprite | yes | not used: 78 parts, named only "Part" and "Wedge", so no trim keeps the body (second check); your new pick 9120014090 is not used either: another creator made its rotor meshes (section 5) |
+| Fighter Jet, Interceptor Jet, Trainer Jet, Light Fighter | [3553891209](https://create.roblox.com/store/asset/3553891209) | Fighter Jet concept | PlanesFun56 | yes | not used: you picked another (2026-09-28); its paint is another artist's signed drawing of a real aircraft concept. Your new pick 14589101870 is live (section 5) |
 | Recon Plane | [4954987035](https://create.roblox.com/store/asset/4954987035) | Old propeller plane | Deadex40_Extra | yes | promoted 2026-09-27 (your yes, call 4): nose at -X (Yaw -90), Roblox size (section 1) |
 | Patrol Boat, Fast Attack Craft, Coast Cutter, Torpedo Boat | [5177695483](https://create.roblox.com/store/asset/5177695483) | Patrol Boat | pirateparty1234 | yes | not used: 114 parts in your check (over 40) |
 | Gunboat, Missile Boat, Mine Layer, Coastal Monitor | [15838664806](https://create.roblox.com/store/asset/15838664806) | Basic Gunboat | Confused Giants Studio (group) | yes | second check: the 2,048-stud part is the hull itself (MainHull); the game cannot shrink it that far yet (a code change) |
@@ -340,9 +360,23 @@ Execution in the live place (version 75) as your own account, and all 24 models 
 ids. Run it the same way and send back every `WE_CHECK2` line. It names the press's parts (its see-through box), and
 shows which way the two guns point and the dropper's glowing trim.
 
+**Your replacement picks, air (picture one, 2026-09-28): your raw v83 lines arrived; the jet goes live.** Thank you:
+your lines gave every part's box, so nothing was guessed. Every mesh and paint id in them was looked up on Roblox's store
+(who uploaded it).
+
+| Item | Your pick | Your bot's backup | Also in your picture | Result |
+|---|---|---|---|---|
+| Fighter Jet, Interceptor Jet, Trainer Jet, Light Fighter | [14589101870](https://create.roblox.com/store/asset/14589101870) Basic Fighter jet (Alecose1) | none under 40 parts | [15024427757](https://create.roblox.com/store/asset/15024427757) Jet Fighter and [16967628140](https://create.roblox.com/store/asset/16967628140) Oceaniet Stealth Fighter (BSPMC2271): not used, 107 and 254 parts in your check (over 40) | **Live (promoted 2026-09-28).** 8 parts, all 8 meshes uploaded by the seller himself, no paint images, no scripts, 11,460 triangles (under the 20,000 phone cap). Nose along +Z in your lines, so it is turned to face forward. At 2.5 times its size: 44 long, 29 wide, 12 tall, on drawn landing gear. The pilot sits inside, under the canopy; the gun fires from the nose and missiles leave the wing-tip missiles; shots hit the whole jet you see. Its outline is close to a well-known real single-engine fighter. We turned down an earlier Strike Jet pick (14451400891) as a copy of a real jet; that one was a detailed, painted replica, while this one is a plain low-poly black jet with no names, marks or paint. Say if you would rather not use it |
+| Rescue Heli, Medevac Heli | [9120014090](https://create.roblox.com/store/asset/9120014090) Medical Helicopter (TripleTripleTwinTips) | [10077899617](https://create.roblox.com/store/asset/10077899617) War's Helicopter (SarahNeedle_mouse): cannot be used either: none of its 13 mesh and paint files were uploaded by the seller (four other creators made them), and its store text says it is another version of someone else's model | [1577255368](https://create.roblox.com/store/asset/1577255368) Search and rescue helicopter (KiloOfficial): your bot rejected it (a copy of a real helicopter) | **Not used.** All 7 of its rotor parts use meshes and paint uploaded by another creator (JaimeEsP, March 2020), five months before the seller's account was made, and that creator never put them on the store. So the model is not the seller's own work (the same rule that dropped the truck). It was also heavy for phones (65,837 triangles, over 3 times the cap). Our helicopter stays. **We need a new pick from you:** a helicopter made by its uploader, 35 parts or fewer |
+
+The old jet 3553891209 and the old rescue helicopter 11357157285 are dropped for good; neither was ever shown in the
+game. Your bot's backup 10077899617 and the picture's 1577255368 stay unused: both fail the same rule. The Strike Jet,
+Close Air Support Jet and Stealth Strike keep our small jet: your jet pick took the old fighter pick's place, and that
+pick never covered them. Say if they should wear your jet too.
+
 ## 6. Not wired, and why
 
-### 6.1 Not used (56)
+### 6.1 Not used (58)
 
 You own several of these now; owning them does nothing until an id is wired, and these never will be.
 
@@ -404,6 +438,8 @@ You own several of these now; owning them does nothing until an id is wired, and
 | Fuel Tanker | 5318635087 | 55 parts in your check (over 40); all named "Part", so none can be left out |
 | Rescue Heli | 11357157285 | 78 parts in your check (over 40); only "Part" and "Wedge" names, no trim keeps the body |
 | Medevac Heli | 11357157285 | the same model as the Rescue Heli (78 parts) |
+| Rescue Heli (new pick) | 9120014090 | origin: its rotor meshes and their paint were uploaded by another creator, before the seller's account existed |
+| Medevac Heli (new pick) | 9120014090 | the same model as the Rescue Heli pick |
 
 ### 6.2 Kept our own build (21)
 
@@ -775,17 +811,23 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Night Attack Heli | rejected | – | – | yes | copy of a game-franchise gunship (Half-Life 2) |
 | Premium Stormwing | rejected | – | – | yes | copy of a game-franchise gunship (Half-Life 2) |
 | Rescue Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 78 parts (cap 40); second check: only "Part" (49) and "W… |
+| Rescue Heli V2 | rejected | 0 | – | yes | your replacement pick (2026-09-28), not used: the origin check failed. Its 7 rotor Mesh… |
 | Medevac Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 78 parts (cap 40); same model as the Rescue Heli pick 11… |
+| Medevac Heli V2 | rejected | 0 | – | yes | your replacement pick (2026-09-28), not used: the origin check failed. Its 7 rotor Mesh… |
 | VTOL Transport | rejected | – | – | yes | the uploader does not claim it ('Unknown Vtol'); looks ripped |
 | Cargo Plane | rejected | – | – | yes | 47 parts (over 40) and a real cargo-plane look |
 | AWACS Plane | rejected | – | – | yes | 47 parts (over 40) and a real cargo-plane look |
 | Tanker Plane | rejected | – | – | yes | 47 parts (over 40) and a real cargo-plane look |
 | Strike Jet | rejected | – | – | yes | copy of a real jet (F-16) |
 | CAS Jet | rejected | – | – | yes | copy of a real jet (F-16) |
-| Fighter Jet | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist's signed three-view drawing of a real aircraft concept, batch P3 |
-| Interceptor Jet | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist's signed three-view drawing of a real aircraft concept, batch P3 |
-| Trainer Jet | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist's signed three-view drawing of a real aircraft concept, batch P3 |
-| Light Fighter | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist's signed three-view drawing of a real aircraft concept, batch P3 |
+| Fighter Jet | rejected | 14589101870 | – | yes | replaced by your pick 14589101870 (2026-09-28); its paint was another artist's drawing |
+| Fighter Jet V2 | owner pick, waits for promote | 14589101870 | – | yes | promoted (live) |
+| Interceptor Jet | rejected | 14589101870 | – | yes | replaced by your pick 14589101870 (2026-09-28); its paint was another artist's drawing |
+| Interceptor Jet V2 | owner pick, waits for promote | 14589101870 | – | yes | promoted (live) |
+| Trainer Jet | rejected | 14589101870 | – | yes | replaced by your pick 14589101870 (2026-09-28); its paint was another artist's drawing |
+| Trainer Jet V2 | owner pick, waits for promote | 14589101870 | – | yes | promoted (live) |
+| Light Fighter | rejected | 14589101870 | – | yes | replaced by your pick 14589101870 (2026-09-28); its paint was another artist's drawing |
+| Light Fighter V2 | owner pick, waits for promote | 14589101870 | – | yes | promoted (live) |
 | Strike Bomber | rejected | – | – | yes | national-style roundel on the wing; made by someone else |
 | Recon Plane | owner pick, waits for promote | 4954987035 | – | yes | promoted (live) |
 | Patrol Boat | rejected | 0 | – | yes | owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long |

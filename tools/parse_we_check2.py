@@ -10,6 +10,13 @@ read in order. Output: JSON on stdout (or -o FILE).
 --strict exits 1 when a WE_CHECK2 line is not understood, an id's END count disagrees with its lines, the DONE
 line is missing, or a --we-check part count disagrees. --summary prints one line per id to stderr.
 
+Several runs in one log: each ENV line starts a run. Only the last run needs a DONE line. A run without DONE is
+accepted when the next run asks for as many ids as it did not finish (the owner stopped it, or it hit the log
+limit, and re-ran the rest). This is a count check: ENV carries only ids=N, not the id list, so a next run that asks
+for the same number of other ids is not caught here; an id printed twice with an END each, or a total that is not
+run 1's ids=N, is. Every id still needs its own END line with the right count. An id cut half-way and printed
+again in a later run keeps the later copy. All runs must share creator, place, server and studio.
+
 Line grammar: "WE_CHECK2 <id> <TYPE> [positional] key=value ..." (id 0 for ENV and DONE). Values: numbers,
 comma vectors "x,y,z", bare tokens, or "quoted" text with \" and \\ escapes. Positions (at=) are studs from the
 centre of the box of the parts the game's loader keeps (world axes); top= is height above that box's bottom.
@@ -164,8 +171,9 @@ def new_model(mid):
 
 
 def parse(lines):
-    doc = {"format": FORMAT_VERSION, "env": None, "done": None, "order": [], "models": {}, "counts": {}, "unparsed": [],
-           "problems": []}
+    doc = {"format": FORMAT_VERSION, "env": None, "done": None, "runs": [], "order": [], "models": {}, "counts": {},
+           "unparsed": [], "problems": []}
+    run = None
     for raw in lines:
         at = raw.find(PREFIX)
         line = raw[at:].rstrip("\r\n")
@@ -182,17 +190,36 @@ def parse(lines):
         doc["counts"][kind] = doc["counts"].get(kind, 0) + 1
         if mid == "0":
             if kind == "ENV":
-                doc["env"] = rec
+                # every ENV starts a run: a log can hold several runs pasted one after another (a run the owner stopped
+                # or that hit the log limit, then a run of the ids that were left)
+                run = {"env": rec, "done": None, "ids": [], "ended": []}
+                doc["runs"].append(run)
+                if doc["env"] is None:
+                    doc["env"] = rec
             elif kind == "DONE":
                 doc["done"] = rec
+                if run is not None:
+                    run["done"] = rec
             else:
                 doc["unparsed"].append(line)
             continue
+        if run is None:  # id lines before any ENV line: one run without an ENV (check_doc reports the missing ENV)
+            run = {"env": None, "done": None, "ids": [], "ended": []}
+            doc["runs"].append(run)
         md = doc["models"].get(mid)
+        if md is not None and mid not in run["ids"]:
+            # the same id again in a later run: a re-run of an id that was cut replaces it, a second full copy is an error
+            if md["end"] is None:
+                md = None
+            else:
+                doc["problems"].append("%s: printed again in run %d after a complete copy" % (mid, len(doc["runs"])))
         if md is None:
             md = new_model(mid)
             doc["models"][mid] = md
-            doc["order"].append(mid)
+            if mid not in doc["order"]:
+                doc["order"].append(mid)
+        if mid not in run["ids"]:
+            run["ids"].append(mid)
         if kind != "END":
             md["line_count"] += 1
         if kind == "HEAD":
@@ -222,6 +249,7 @@ def parse(lines):
             md["status"] = "ERR" if md["status"] != "OK" else "OK+ERR"
         elif kind == "END":
             md["end"] = rec
+            run["ended"].append(mid)
     for mid in doc["order"]:
         derive(doc["models"][mid])
     check_doc(doc)
@@ -355,12 +383,35 @@ def trim(md, longest, cut):
 
 def check_doc(doc):
     probs = doc["problems"]
-    if doc["env"] is None:
+    runs = doc.get("runs") or []
+    if doc["env"] is None or any(r["env"] is None for r in runs):
         probs.append("no ENV line")
-    elif doc["env"].get("v") != FORMAT_VERSION:
-        probs.append("script format v=%s, parser v=%d" % (doc["env"].get("v"), FORMAT_VERSION))
-    if doc["done"] is None:
+    for k, r in enumerate(runs):
+        env = r["env"] or {}
+        if env and env.get("v") != FORMAT_VERSION:
+            probs.append("run %d: script format v=%s, parser v=%d" % (k + 1, env.get("v"), FORMAT_VERSION))
+        if env and doc["env"] and k > 0:
+            for key in ("creator", "place", "server", "studio"):
+                if env.get(key) != doc["env"].get(key):
+                    probs.append("run %d: %s=%s but run 1 has %s=%s" % (k + 1, key, env.get(key), key,
+                                                                       doc["env"].get(key)))
+    if not runs or runs[-1]["done"] is None:
         probs.append("no DONE line: the log is cut or the run stopped")
+    for k, r in enumerate(runs):
+        env, done = r["env"] or {}, r["done"]
+        if done is not None:
+            if env and done.get("ids") != env.get("ids"):
+                probs.append("run %d: DONE ids=%s but ENV ids=%s" % (k + 1, done.get("ids"), env.get("ids")))
+            if len(r["ids"]) != done.get("ids"):
+                probs.append("run %d: DONE ids=%s but the run has %d ids" % (k + 1, done.get("ids"), len(r["ids"])))
+        elif k + 1 < len(runs):
+            # a stopped run is only accepted when the next run asks for as many ids as it did not finish (a count
+            # check: ENV has ids=N, not the id list)
+            nxt = runs[k + 1]["env"] or {}
+            if not (isinstance(env.get("ids"), int) and isinstance(nxt.get("ids"), int)
+                    and env["ids"] == len(r["ended"]) + nxt["ids"]):
+                probs.append("run %d: stopped after %d of %s ids and run %d asks %s: ids are missing" % (
+                    k + 1, len(r["ended"]), env.get("ids"), k + 2, nxt.get("ids")))
     for l in doc["unparsed"]:
         probs.append("not understood: " + l[:120])
     for mid in doc["order"]:
@@ -378,11 +429,9 @@ def check_doc(doc):
             md["problems"].append("more P lines than parts=")
         for p in md["problems"]:
             probs.append(mid + ": " + p)
-    done = doc["done"] or {}
-    if done and doc["env"] and done.get("ids") != doc["env"].get("ids"):
-        probs.append("DONE ids=%s but ENV ids=%s" % (done.get("ids"), doc["env"].get("ids")))
-    if done and len(doc["order"]) != done.get("ids"):
-        probs.append("DONE ids=%s but the log has %d ids" % (done.get("ids"), len(doc["order"])))
+    first = (runs[0]["env"] or {}) if runs else {}
+    if len(runs) > 1 and isinstance(first.get("ids"), int) and len(doc["order"]) != first["ids"]:
+        probs.append("run 1 asks %s ids but the runs printed %d" % (first.get("ids"), len(doc["order"])))
 
 
 def we_check_parts(path):
