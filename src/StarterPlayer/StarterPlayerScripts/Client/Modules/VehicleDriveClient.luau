@@ -3293,7 +3293,7 @@ local function waterFeel(d: Drive, sense: Sense, dt: number)
 	local cap, tag, exit = Laws.WaterFeel(
 		rule,
 		d.Mode,
-		typeof(amph) == "table" and amph[d.VehicleId] == true,
+		(typeof(amph) == "table" and amph[d.VehicleId] == true) or d.WaterServer == "Wade", -- v90: a rollout wader (Bridge Layer) follows the server
 		m.Wet,
 		d.WaterServer,
 		d.Params.MaxSpeed,

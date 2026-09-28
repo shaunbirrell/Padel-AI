@@ -1183,8 +1183,17 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 	if typeof(ref.BodyColor) == "Color3" then
 		local col: Color3 = ref.BodyColor :: any
 		local mat: any = ref.BodyMaterial
+		-- v90: BodyColorParts = only the parts with these names take the colour (a jet's panels; trim and glass keep theirs)
+		local only: { [string]: boolean }? = nil
+		if typeof(ref.BodyColorParts) == "table" then
+			local set: { [string]: boolean } = {}
+			for _, n in ipairs(ref.BodyColorParts :: { string }) do
+				set[n] = true
+			end
+			only = set
+		end
 		for _, d in ipairs(clone:GetDescendants()) do
-			if d:IsA("BasePart") then
+			if d:IsA("BasePart") and (only == nil or only[d.Name] == true) then
 				d.Color = col
 				if typeof(mat) == "EnumItem" then
 					d.Material = mat

@@ -7,8 +7,10 @@ _cb88_map = {
     "BODY_VTOL": ("80886282228822", ("VTOLTransport",)),
     "BODY_ATTACK_HELI": ("11240665977", ("AttackHelicopter", "GunshipHeli", "EscortHeli", "NightAttackHeli")),
     "BODY_STEALTH_HELI": ("11240665977", ("StealthHeli",)),
-    "BODY_STRIKE_JET": ("3553891209", ("StrikeJet", "CASJet")),
-    "BODY_STEALTH_STRIKE": ("7976374439", ("StealthStrike", "StealthStrikeJet")),
+    # v90 (Code Bot): StrikeJet / CASJet / StealthStrike / StealthStrikeJet moved to the jet 14589101870 (owner answer 1,
+    # pinned in codebot_v90.py); the two v88 tables stay defined (unused) for an easy revert
+    "BODY_STRIKE_JET": ("3553891209", ()),
+    "BODY_STEALTH_STRIKE": ("7976374439", ()),
     "BODY_BARGE": ("12235335847", ("LandingCraft", "AssaultLanding")),
     "BODY_SUPPORT_SHIP": ("2625253037", ("HospitalShip", "SupplyShip")),
     "BODY_HOVER": ("3626114334", ("HoverTransport",)),

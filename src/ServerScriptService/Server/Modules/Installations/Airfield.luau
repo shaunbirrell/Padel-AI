@@ -14,11 +14,15 @@ return function(ictx: any, api: any)
 	local hullGrey = Color3.fromRGB(128, 134, 138)
 	local wallCol = Color3.fromRGB(150, 150, 140)
 	local roofCol = Color3.fromRGB(92, 96, 90)
+	-- v90: the hangar grows with the foundation (StructureVisualConfig Width 58 = the original size, S = 1)
+	local S = math.clamp((tonumber(ictx.W) or 58) / 58, 1, 1.3)
+	local halfW = (tonumber(ictx.HalfW) or 29)
+	local halfD = (tonumber(ictx.HalfD) or 17)
 
 	-- Hangar shell: 40 wide x 28 deep, 15 to the eaves, gable roof ridge front-to-back
-	local hx, hW, hD, H, t = -2, 40, 28, 15, 0.8
+	local hx, hW, hD, H, t = -2, 40 * S, 28 * S, 15 * S, 0.8
 	local hw, hd = hW * 0.5, hD * 0.5
-	local doorW, doorH = 32, 13
+	local doorW, doorH = 32 * S, 13 * S
 	api.box("HangarBack", Vector3.new(hW, H, t), Vector3.new(hx, y0 + H * 0.5, -hd + t * 0.5), wallCol, Enum.Material.CorrodedMetal)
 	for _, side in ipairs({ -1, 1 }) do
 		api.box("HangarSide", Vector3.new(t, H, hD), Vector3.new(hx + side * (hw - t * 0.5), y0 + H * 0.5, 0), wallCol, Enum.Material.CorrodedMetal)
@@ -79,12 +83,12 @@ return function(ictx: any, api: any)
 	api.terminal("HangarTerminal", Vector3.new(hx + 14, y0, -hd + t + 0.6), 0, "Garage", "Open hangar", "Hangar · Aircraft", { "HANGAR", "AIRCRAFT" })
 
 	-- Windsock
-	api.box("WindsockPole", Vector3.new(0.35, 8, 0.35), Vector3.new(-27, y0 + 4, -15), col.Metal, Enum.Material.Metal, false)
-	api.part("Windsock", Vector3.new(0.9, 0.9, 3), CFrame.new(-27, y0 + 7.6, -13.4) * CFrame.Angles(math.rad(8), 0, 0), Color3.fromRGB(230, 120, 40), Enum.Material.Fabric, false)
+	api.box("WindsockPole", Vector3.new(0.35, 8, 0.35), Vector3.new(-(halfW - 2), y0 + 4, -(halfD - 2)), col.Metal, Enum.Material.Metal, false)
+	api.part("Windsock", Vector3.new(0.9, 0.9, 3), CFrame.new(-(halfW - 2), y0 + 7.6, -(halfD - 3.6)) * CFrame.Angles(math.rad(8), 0, 0), Color3.fromRGB(230, 120, 40), Enum.Material.Fabric, false)
 
 	-- Control tower (L2+) at the runway corner
 	if lv >= 2 then
-		local tx, tz, th = 23.5, 9, 18
+		local tx, tz, th = halfW - 5.5, 9, 18
 		api.box("TowerShaft", Vector3.new(4, th, 4), Vector3.new(tx, y0 + th * 0.5, tz), wallCol, Enum.Material.Concrete)
 		api.box("TowerDeck", Vector3.new(7, 0.5, 7), Vector3.new(tx, y0 + th + 0.25, tz), col.Metal, Enum.Material.Metal)
 		local cab = api.box("TowerCab", Vector3.new(6.2, 3.4, 6.2), Vector3.new(tx, y0 + th + 2.2, tz), col.Glass, Enum.Material.Glass)
@@ -98,7 +102,7 @@ return function(ictx: any, api: any)
 
 	-- Fuel truck + tool carts (L3+)
 	if lv >= 3 then
-		local fx, fz = 23.5, -7
+		local fx, fz = halfW - 5.5, -7
 		api.box("FuelTruckCab", Vector3.new(2.6, 2.6, 2.8), Vector3.new(fx, y0 + 1.9, fz + 4.4), col.Locker, Enum.Material.Metal)
 		api.part("FuelTruckTank", Vector3.new(6.4, 2.6, 2.6), CFrame.new(fx, y0 + 2.2, fz) * CFrame.Angles(0, math.rad(90), 0), col.Locker, Enum.Material.Metal).Shape = Enum.PartType.Cylinder
 		api.box("FuelTruckChassis", Vector3.new(2.4, 0.5, 9.4), Vector3.new(fx, y0 + 0.75, fz + 1.2), col.Dark, Enum.Material.Metal, false)

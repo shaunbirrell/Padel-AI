@@ -59,9 +59,11 @@ local BaseLayoutConfig = {
 		{ Name = "Avenue", X = 0, Z = 80, SizeX = 200, SizeZ = 12 }, -- west row ↔ east row
 		{ Name = "Plaza", X = 0, Z = 8, SizeX = 60, SizeZ = 50 }, -- parade ground in front of CC
 		{ Name = "Taxiway", X = -100, Z = -66, SizeX = 12, SizeZ = 12 }, -- airfield gate → runway
-		{ Name = "Runway", X = -65, Z = -80, SizeX = 170, SizeZ = 24 }, -- under / beside the hangar kit's strip
+		-- v90 (owner 2026-09-28: "make the runway and hangar slightly bigger"): 170 x 24 -> 190 x 29 (+12 % long, the most
+		-- the plot edge (X -160) and the HeliApron (X 34) allow; +21 % wide). Was X -65, SizeX 170, SizeZ 24.
+		{ Name = "Runway", X = -63, Z = -80, SizeX = 190, SizeZ = 29 }, -- under / beside the hangar kit's strip
 		{ Name = "HeliApron", X = 40, Z = -86, SizeX = 12, SizeZ = 50 }, -- helipad gate → pad
-		{ Name = "HangarApron", X = -100, Z = -98.5, SizeX = 34, SizeZ = 13 }, -- runway → hangar doors
+		{ Name = "HangarApron", X = -100, Z = -100, SizeX = 40, SizeZ = 11 }, -- runway → hangar doors (v90: the wider hangar; was Z -98.5, 34 x 13)
 	},
 
 	Courtyard = {
@@ -93,7 +95,8 @@ local BaseLayoutConfig = {
 		DefensiveWalls = { Site = { X = -18, Z = 146 }, Yaw = 0, WalkIn = false, Kiosk = { X = -18, Z = 134 } },
 		Watchtowers = { Site = { X = 18, Z = 146 }, Yaw = 0, WalkIn = false, Kiosk = { X = 18, Z = 134 } },
 		-- Airfield: hangar installation (Installations/Airfield) behind the runway, doors facing it (+Z)
-		Airfield = { Site = { X = -100, Z = -122 }, Yaw = 0, WalkIn = false, Kiosk = { X = -86, Z = -52 }, Gate = "Airfield" },
+		-- v90: Site Z -122 -> -125 so the 17 % bigger hangar (68 x 40) keeps its doors on the apron (Z -145 .. -105)
+		Airfield = { Site = { X = -100, Z = -125 }, Yaw = 0, WalkIn = false, Kiosk = { X = -86, Z = -52 }, Gate = "Airfield" },
 		Helipad = { Site = { X = 40, Z = -125 }, Yaw = 0, WalkIn = false, Kiosk = { X = 54, Z = -52 }, Gate = "Helipad" },
 		-- v70: the dock kit stands on the basin's west shore (was centred IN the basin, where its collidable Body was an
 		-- island in the boats' spawn water); pier along the kerb, parked boat moored in the basin's west edge

@@ -212,7 +212,8 @@ local StructureVisualConfig = {
 		MissileDefense = { Enabled = true, Module = "MissileDefense", Width = 24, Depth = 22 },
 		Watchtowers = { Enabled = true, Module = "Watchtower", Width = 10, Depth = 10, CabinClearHeight = 8.5, HalfWallHeight = 3.4 }, -- v73: cabin fits a 7.5-stud avatar + 1 stud
 		DefensiveWalls = { Enabled = true, Module = "Checkpoint", Width = 6, Depth = 6 }, -- v73: the foundation is the gate flag plinth (was a 20 x 10 grey tray)
-		Airfield = { Enabled = true, Module = "Airfield", Width = 58, Depth = 34 },
+		-- v90 (owner: "hangar slightly bigger"): 58 x 34 -> 68 x 40 (+17 %); Installations/Airfield scales the hangar by Width / 58
+		Airfield = { Enabled = true, Module = "Airfield", Width = 68, Depth = 40 },
 		-- v73 (owner: "the default helicopter on the pad is horrific"): the helipad is an installation (flush ring + H,
 		-- ops hut, floodlight). No parked mock-up: the player's own helicopter lands on VehicleConfig HelipadSpots once
 		-- it is unlocked. With this row StructureKitBuilder's old "helipad" kit (incl. the 9-part ParkedHeli) is skipped.

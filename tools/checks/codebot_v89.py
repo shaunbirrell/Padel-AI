@@ -30,7 +30,7 @@ for _cb89_tb, (_cb89_id, _cb89_yaw, _cb89_s, _cb89_w, _cb89_keys) in _cb89_map.i
     for _cb89_k in _cb89_keys:
         must_contain(_cb89_vac, f"\t\t{_cb89_k} = bodyRef({_cb89_tb}, \"v89 owner pick {_cb89_id} ", f"CODEBOT v89: Vehicles.{_cb89_k} wears {_cb89_tb} ({_cb89_id}), owner-only")
 must_not_contain(_cb89_vac, "ModelAssetId = 17033079003", "CODEBOT v89: the airliner 17033079003 is replaced by the airlifter 10649792198")
-must_contain(_cb89_vac, '\t\tStrikeJet = bodyRef(BODY_STRIKE_JET, "v88 owner pick 3553891209 ', "CODEBOT v89: StrikeJet stays on 3553891209")
+# v90 (Code Bot): retired, superseded in tools/checks/codebot_v90.py: #must_contain(_cb89_vac, '\t\tStrikeJet = bodyRef(BODY_STRIKE_JET, "v88 owner pick 3553891209 ', "CODEBOT v89: StrikeJet stays on 3553891209")
 if "\tBodyMaxScale = 18," in _cb89_table("BODY_MISSILE_CRUISER") and _cb89_src.count("BodyMaxScale = ") == 1:
     ok("CODEBOT v89: only the missile destroyer raises the scale cap (BodyMaxScale 18)")
 else:

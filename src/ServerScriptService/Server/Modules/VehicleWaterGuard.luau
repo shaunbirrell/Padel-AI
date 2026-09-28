@@ -49,6 +49,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
 local VehicleConfig = require(Shared.Configs.VehicleConfig)
+local AdminConfig = require(Shared.Configs.AdminConfig)
 local WaterRule = require(Shared.Util.WaterRule)
 
 export type Deps = {
@@ -127,7 +128,20 @@ local function kindOf(rec: any): string?
 	if mode == "Car" then
 		local amph: any = rule().Amphibious
 		local id = rec.Def and rec.Def.Id
-		return if typeof(amph) == "table" and id ~= nil and amph[id] == true then "Amphibious" else "Ground"
+		if typeof(amph) == "table" and id ~= nil and amph[id] == true then
+			return "Amphibious"
+		end
+		-- v90: a rollout-gated wader (the Bridge Layer, owner-only first), judged by the vehicle's owner on the server
+		local ro: any = rule().AmphibiousRollout
+		local gate = if typeof(ro) == "table" and id ~= nil then ro[id] else nil
+		if gate == "all" then
+			return "Amphibious"
+		end
+		local owner: any = rec.Owner
+		if gate == "owner" and typeof(owner) == "Instance" and owner:IsA("Player") and AdminConfig.IsPlaytestOwner(owner.UserId) == true then
+			return "Amphibious"
+		end
+		return "Ground"
 	elseif mode == "Plane" then
 		return "Plane"
 	end

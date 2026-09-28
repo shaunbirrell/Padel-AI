@@ -125,6 +125,7 @@ export type AssetRef = {
 	BodyColor: Color3?, -- recolour every body part (a plain grey store mesh gets the game's military tone)
 	BodyMaterial: Enum.Material?, -- with BodyColor: the body's material
 	BodyClearTexture: boolean?, -- MeshPart TextureID cleared (a store mesh whose texture path is dead draws its BodyColor)
+	BodyColorParts: { string }?, -- v90: with BodyColor, only the body parts with these names take it (nil = every part)
 	BodyDeck: { AirHitBox }?, -- invisible collidable deck plates (unscaled body boxes, like BodyHitBoxes): players / aircraft stand on the fitted deck
 	BodyKitNoCollide: { string }?, -- kit parts that stop colliding under the body (the carrier's kit deck / island would stand over the fitted deck)
 	KitRotor: KitRotorSpec?, -- helicopters: the kit rotor (kept visible) moved onto the body's mast and stretched to the body's rotor span
@@ -168,6 +169,10 @@ local JET_HIT_BOXES: { AirHitBox } = {
 	{ At = Vector3.new(0.07, 1.47, -6.19), Size = Vector3.new(6.07, 0.5, 5.11) }, -- tailplanes
 	{ At = Vector3.new(0.07, 3.245, -6.19), Size = Vector3.new(0.4, 3.05, 5.11) }, -- fin
 }
+-- v90 (owner 2026-09-28: "every jet gets its own distinct colour"): the jet's grey panels (WE_CHECK2 on live v85: Cube,
+-- Cube.001, Cube.003 SmoothPlastic 99,95,98 and Cylinder.003 82,81,83) take each key's BodyColor; the black fuselage
+-- tube, wings and trim (Cylinder, Cylinder.001, Cube.002) and the Glass canopy (Cylinder.002) keep the approved look.
+local JET_PAINT_PARTS = { "Cube", "Cube.001", "Cube.003", "Cylinder.003" }
 local JET_GEAR: AirGear = {
 	Legs = {
 		{ At = Vector3.new(1.23, 0, 0.7), Wheel = 1.6 }, -- main wheel, under the wing root
@@ -1001,6 +1006,8 @@ local VisualAssetConfig = {
 			BodyGear = JET_GEAR,
 			TailGuard = true,
 			ChaseCamera = true,
+			BodyColor = Color3.fromRGB(118, 126, 136), -- v90: air-superiority grey (one colour per jet)
+			BodyColorParts = JET_PAINT_PARTS,
 			StripDecals = true,
 			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
 		} :: AssetRef,
@@ -1023,6 +1030,8 @@ local VisualAssetConfig = {
 			BodyGear = JET_GEAR,
 			TailGuard = true,
 			ChaseCamera = true,
+			BodyColor = Color3.fromRGB(64, 82, 108), -- v90: navy blue-grey (one colour per jet)
+			BodyColorParts = JET_PAINT_PARTS,
 			StripDecals = true,
 			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
 		} :: AssetRef,
@@ -1047,6 +1056,8 @@ local VisualAssetConfig = {
 			BodyGear = JET_GEAR,
 			TailGuard = true,
 			ChaseCamera = true,
+			BodyColor = Color3.fromRGB(184, 162, 118), -- v90: desert sand (one colour per jet)
+			BodyColorParts = JET_PAINT_PARTS,
 			StripDecals = true,
 			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
 		} :: AssetRef,
@@ -1088,12 +1099,92 @@ local VisualAssetConfig = {
 			BodyGear = JET_GEAR,
 			TailGuard = true,
 			ChaseCamera = true,
+			BodyColor = Color3.fromRGB(96, 104, 66), -- v90: olive drab (one colour per jet)
+			BodyColorParts = JET_PAINT_PARTS,
 			StripDecals = true,
 			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
 		} :: AssetRef,
-		StrikeJet = bodyRef(BODY_STRIKE_JET, "v88 owner pick 3553891209 Fighter Jet concept, texture cleared, dark (wc6), owner-only rollout"),
-		CASJet = bodyRef(BODY_STRIKE_JET, "v88 owner pick 3553891209 Fighter Jet concept, texture cleared, dark (wc6), owner-only rollout"),
-		StealthStrikeJet = bodyRef(BODY_STEALTH_STRIKE, "v88 owner pick 7976374439 stealth (wc6), owner-only rollout"),
+		-- v90 (owner 2026-09-28): the owner's jet 14589101870 replaces the v88 body on this key, pilot inside like the
+		-- other jets (the FighterJet layout); Rollout "Body" keeps it owner-only like the v88 body it replaces.
+		StrikeJet = {
+			ModelAssetId = 14589101870,
+			Rollout = "Body",
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- over the belly block's centre line, head inside the canopy (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyMounts = {
+				Nose = Vector3.new(0.07, 1.49, 8.74), -- gun: the fuselage's nose tip
+				WingL = Vector3.new(5.48, 1.24, 0.18), -- missiles: the front of the wing-tip missile (mirrored right)
+			},
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			BodyColor = Color3.fromRGB(62, 82, 60), -- v90: dark green (one colour per jet)
+			BodyColorParts = JET_PAINT_PARTS,
+			StripDecals = true,
+			Note = "v90 owner pick: Basic Fighter jet by Alecose1 14589101870 (replaces the v88 body), owner-only rollout",
+		} :: AssetRef,
+		-- v90 (owner 2026-09-28): the owner's jet 14589101870 replaces the v88 body on this key, pilot inside like the
+		-- other jets (the FighterJet layout); Rollout "Body" keeps it owner-only like the v88 body it replaces.
+		CASJet = {
+			ModelAssetId = 14589101870,
+			Rollout = "Body",
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- over the belly block's centre line, head inside the canopy (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyMounts = {
+				Nose = Vector3.new(0.07, 1.49, 8.74), -- gun: the fuselage's nose tip
+				WingL = Vector3.new(5.48, 1.24, 0.18), -- missiles: the front of the wing-tip missile (mirrored right)
+			},
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			BodyColor = Color3.fromRGB(126, 100, 72), -- v90: earth brown (one colour per jet)
+			BodyColorParts = JET_PAINT_PARTS,
+			StripDecals = true,
+			Note = "v90 owner pick: Basic Fighter jet by Alecose1 14589101870 (replaces the v88 body), owner-only rollout",
+		} :: AssetRef,
+		-- v90 (owner 2026-09-28): the owner's jet 14589101870 replaces the v88 body on this key, pilot inside like the
+		-- other jets (the FighterJet layout); Rollout "Body" keeps it owner-only like the v88 body it replaces.
+		StealthStrikeJet = {
+			ModelAssetId = 14589101870,
+			Rollout = "Body",
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- over the belly block's centre line, head inside the canopy (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyMounts = {
+				Nose = Vector3.new(0.07, 1.49, 8.74), -- gun: the fuselage's nose tip
+				WingL = Vector3.new(5.48, 1.24, 0.18), -- missiles: the front of the wing-tip missile (mirrored right)
+			},
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			BodyColor = Color3.fromRGB(46, 48, 54), -- v90: charcoal (same as StealthStrike: an alias ref, not a vehicle key) (one colour per jet)
+			BodyColorParts = JET_PAINT_PARTS,
+			StripDecals = true,
+			Note = "v90 owner pick: Basic Fighter jet by Alecose1 14589101870 (replaces the v88 body), owner-only rollout",
+		} :: AssetRef,
 		StrikeBomber = bodyRef(BODY_BOMBER, "v87 owner pick 14669079591 delta-wing bomber (wc5), owner-only rollout"),
 		CargoPlane = bodyRef(BODY_AIRLIFTER, "v89 owner pick 10649792198 4-engine airlifter, dark grey (wc7; replaces 17033079003), owner-only rollout"),
 		AWACSPlane = bodyRef(BODY_AIRLIFTER, "v89 owner pick 10649792198 4-engine airlifter, dark grey (wc7; replaces 17033079003), owner-only rollout"),
@@ -1262,7 +1353,33 @@ local VisualAssetConfig = {
 		EscortHeli = bodyRef(BODY_ATTACK_HELI, "v88 owner pick 11240665977 attack helicopter (wc6), owner-only rollout"),
 		VTOLTransport = bodyRef(BODY_VTOL, "v88 owner pick 80886282228822 ev41 tilt-rotor (wc6), owner-only rollout"),
 		HeavyBomber = bodyRef(BODY_BOMBER, "v87 owner pick 14669079591 delta-wing bomber (wc5), owner-only rollout"),
-		StealthStrike = bodyRef(BODY_STEALTH_STRIKE, "v88 owner pick 7976374439 stealth (wc6), owner-only rollout"),
+		-- v90 (owner 2026-09-28): the owner's jet 14589101870 replaces the v88 body on this key, pilot inside like the
+		-- other jets (the FighterJet layout); Rollout "Body" keeps it owner-only like the v88 body it replaces.
+		StealthStrike = {
+			ModelAssetId = 14589101870,
+			Rollout = "Body",
+			Fit = "Kit",
+			Yaw = 180,
+			HideKit = true,
+			BodyScale = 2.5,
+			BodyLift = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(0.04, 0.72, 2.35), -- over the belly block's centre line, head inside the canopy (air2 fix2)
+			},
+			BodyAnchor = "DriverSeat", -- the body moves back along the kit so the cockpit is over the kit's pilot seat
+			BodyMounts = {
+				Nose = Vector3.new(0.07, 1.49, 8.74), -- gun: the fuselage's nose tip
+				WingL = Vector3.new(5.48, 1.24, 0.18), -- missiles: the front of the wing-tip missile (mirrored right)
+			},
+			BodyHitBoxes = JET_HIT_BOXES,
+			BodyGear = JET_GEAR,
+			TailGuard = true,
+			ChaseCamera = true,
+			BodyColor = Color3.fromRGB(46, 48, 54), -- v90: charcoal (one colour per jet)
+			BodyColorParts = JET_PAINT_PARTS,
+			StripDecals = true,
+			Note = "v90 owner pick: Basic Fighter jet by Alecose1 14589101870 (replaces the v88 body), owner-only rollout",
+		} :: AssetRef,
 		-- Depth-pass capital / bomber IDs previously missing from catalog map
 		Cruiser = bodyRef(BODY_CRUISER, "v89 owner pick 6860896505 Stud Class hull at 0.22, bow +Z (Yaw 180), naval grey (wc7), owner-only rollout"),
 		MissileCruiser = bodyRef(BODY_MISSILE_CRUISER, "v89 owner pick 104820847233642 missile destroyer at 18, naval grey (wc7), owner-only rollout"),

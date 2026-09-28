@@ -986,6 +986,11 @@ local VehicleConfig = {
 			PlayArea = { X = 1760, ZMin = -1760, ZMax = 1490 },
 			PlaceTries = 5, -- a rider still welded to the seat is retried every 0.1 s this many times
 			Amphibious = { AmphibiousAPC = true } :: { [string]: boolean },
+			-- v90 (owner 2026-09-28: "Bridge Layer should be able to cross water"): these ids wade like Amphibious ids, but only
+			-- for the rollout named here ("owner" = the playtest owner's own vehicles, AdminConfig.IsPlaytestOwner; "all" =
+			-- everyone; anything else = nobody). Server-authoritative (VehicleWaterGuard kindOf); the driver's client follows
+			-- the server's WE_WaterState "Wade".
+			AmphibiousRollout = { BridgeLayer = "owner" } :: { [string]: string },
 			WadeSpeedFrac = 0.4,
 		},
 	},
