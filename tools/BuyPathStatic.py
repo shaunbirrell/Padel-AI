@@ -8169,6 +8169,91 @@ must_contain(WC3_VAS, 'local ey = halfHeightIn(rel, drawnSize(d))', "wc3: placeK
 must_contain(WC3_VAS, 'local h = drawnSize(d) * 0.5\n\t\t\tlocal ex =', "wc3: placeKitOnBody measures the body's half length / width by drawn size")
 must_not_contain(WC3_VAS, 'local cf, h = p.CFrame, p.Size * 0.5', 'wc3: fitBodyToKit no longer sizes a round part by its Size box')
 must_contain(WC3_TOOL, '    8455894899: "a longer kit: trim known (ChildName \'FlatBed Truck\', 9 OmitParts names = 40 parts) but its cab sits past the kit\'s nose",\n    3322196012: "the P4 second check (which way the barrel points; a gun\'s Yaw is set by hand)",', 'wc3: the recon plane and the APC are off HOLD (promoted)')
+# ── atmprompt (ASSUMPTIONS ATM-6..ATM-10): the ATM "Collect" prompt and the cash plate "Grab Cash" prompt 7.5 studs from it
+# shared the default key (E / ButtonX) under OnePerButton, so only the closer one showed (PC, gamepad and the phone pill
+# lane) and one key press reached only that one. The keys now live in config and differ: ATM = EconomyConfig.
+# AtmCollectPrompt (E / ButtonX), plate = ManualDropperConfig.PromptKeyboardKey / PromptGamepadKey (F / ButtonB), both
+# OnePerButton, hold 0 as before. These pins read the comment-stripped config tables (each key exactly once, top level),
+# check the keys differ and that the plate's keys are not an on-foot HUD key (HudConfig.Keys; gamepad Y is Reload), and
+# pin the two services to build the prompts from those keys (no key literal left in either). Every pin fails on 2f71347.
+AP_EC = "src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau"
+AP_HUDC = "src/ReplicatedStorage/Shared/Configs/HudConfig.luau"
+
+
+def _ap_table_top(rel: str, opener: str) -> str | None:
+    """Top level of the comment-stripped table literal that starts at the first match of `opener` (a regex ending in
+    `{`), or None when it is not there."""
+    code = _db_luau_code(read(rel) or "")
+    m = re.search(opener, code)
+    if not m:
+        return None
+    end = _db_table_end(code, m.end() - 1)
+    if end < 0:
+        return None
+    return _db_top_level(code[m.end():end - 1])
+
+
+def _ap_rules() -> None:
+    want_atm = (("ActionText", '"Collect"'), ("ObjectText", '"ATM"'), ("HoldDuration", "0"), ("MaxActivationDistance", "14"),
+                ("KeyboardKey", "Enum.KeyCode.E"), ("GamepadKey", "Enum.KeyCode.ButtonX"),
+                ("Exclusivity", "Enum.ProximityPromptExclusivity.OnePerButton"))
+    atm = _ap_table_top(AP_EC, r"\n\tAtmCollectPrompt\s*=\s*\{")
+    wrong = {k: _db_key_values(atm or "", k) for k, v in want_atm if _db_key_values(atm or "", k) != [v]}
+    if atm is not None and not wrong:
+        ok("atmprompt: EconomyConfig.AtmCollectPrompt = Collect / ATM, hold 0, 14 studs, E / ButtonX, OnePerButton (each key once, comments stripped)")
+    else:
+        bad(f"atmprompt: EconomyConfig.AtmCollectPrompt missing or changed (table found {atm is not None}; key -> values {wrong})")
+    want_plate = (("PromptActionText", '"Grab Cash"'), ("PromptHoldDuration", "0"), ("PromptMaxDistance", "12"),
+                  ("PromptKeyboardKey", "Enum.KeyCode.F"), ("PromptGamepadKey", "Enum.KeyCode.ButtonB"),
+                  ("PromptExclusivity", "Enum.ProximityPromptExclusivity.OnePerButton"))
+    mdc = _ap_table_top(DR_MDC, r"local ManualDropperConfig\s*=\s*\{")
+    wrong = {k: _db_key_values(mdc or "", k) for k, v in want_plate if _db_key_values(mdc or "", k) != [v]}
+    if mdc is not None and not wrong:
+        ok("atmprompt: ManualDropperConfig plate prompt = Grab Cash, hold 0, 12 studs, F / ButtonB, OnePerButton (each key once, comments stripped)")
+    else:
+        bad(f"atmprompt: ManualDropperConfig plate prompt keys missing or changed (table found {mdc is not None}; key -> values {wrong})")
+    # the two prompts' keys differ on keyboard AND gamepad (whatever the pinned values above become)
+    a_kb, a_gp = _db_key_values(atm or "", "KeyboardKey"), _db_key_values(atm or "", "GamepadKey")
+    p_kb, p_gp = _db_key_values(mdc or "", "PromptKeyboardKey"), _db_key_values(mdc or "", "PromptGamepadKey")
+    if len(a_kb) == len(a_gp) == len(p_kb) == len(p_gp) == 1 and a_kb != p_kb and a_gp != p_gp:
+        ok(f"atmprompt: the ATM and plate prompts use different keys (keyboard {a_kb[0]} / {p_kb[0]}, gamepad {a_gp[0]} / {p_gp[0]})")
+    else:
+        bad(f"atmprompt: the ATM and plate prompts must use different keyboard and gamepad keys (ATM {a_kb} {a_gp}, plate {p_kb} {p_gp})")
+    # the plate's keys are not an on-foot HUD key (HudConfig.Keys and Keys.Gamepad; the prompt would swallow it there)
+    keys = _ap_table_top(AP_HUDC, r"\nHudConfig\.Keys\s*=\s*\{")
+    hud_code = _db_luau_code(read(AP_HUDC) or "")
+    km = re.search(r"\nHudConfig\.Keys\s*=\s*\{", hud_code)
+    hud_keys = set()
+    if km:
+        kend = _db_table_end(hud_code, km.end() - 1)
+        hud_keys = set(re.findall(r"Enum\.KeyCode\.(\w+)", hud_code[km.end():kend])) if kend > 0 else set()
+    plate_names = {v.rsplit(".", 1)[-1] for v in p_kb + p_gp}
+    clash = plate_names & hud_keys
+    if keys is not None and "ButtonY" in hud_keys and plate_names and not clash:
+        ok(f"atmprompt: the plate's keys {sorted(plate_names)} are no HudConfig.Keys binding ({len(hud_keys)} keys, incl. gamepad Reload ButtonY)")
+    else:
+        bad(f"atmprompt: the plate's prompt keys must not be a HudConfig.Keys binding (plate {sorted(plate_names)}, clash {sorted(clash)}, Keys table found {keys is not None})")
+    # the services build the prompts from those keys; no key literal is left in either (comments stripped)
+    for rel, label in ((DR_MDS, "ManualDropperService"), (DR_MCS, "MoneyCollectorService")):
+        code = _db_luau_code(read(rel) or "")
+        lits = re.findall(r"(?:KeyboardKeyCode|GamepadKeyCode|Exclusivity)\s*=\s*Enum\.", code)
+        if lits:
+            bad(f"atmprompt: {label} sets a prompt key / exclusivity from a literal ({len(lits)}x); it must come from config")
+        else:
+            ok(f"atmprompt: {label} sets no prompt key / exclusivity literal (config only)")
+
+
+must_contain(DR_MDS, "\tprompt.RequiresLineOfSight = false\n\t-- atmprompt: its own keys (F / B), apart from the ATM \"Collect\" beside it (E / X)\n\tprompt.KeyboardKeyCode = ManualDropperConfig.PromptKeyboardKey\n\tprompt.GamepadKeyCode = ManualDropperConfig.PromptGamepadKey\n\tprompt.Exclusivity = ManualDropperConfig.PromptExclusivity\n\tprompt.Parent = pad\n",
+             "atmprompt: a new plate's DropPrompt gets the config keys (F / B) and OnePerButton before it is parented")
+must_contain(DR_MDS, "\tif prompt and prompt:IsA(\"ProximityPrompt\") then\n\t\tif prompt.KeyboardKeyCode ~= ManualDropperConfig.PromptKeyboardKey then\n\t\t\tprompt.KeyboardKeyCode = ManualDropperConfig.PromptKeyboardKey\n\t\tend\n\t\tif prompt.GamepadKeyCode ~= ManualDropperConfig.PromptGamepadKey then\n\t\t\tprompt.GamepadKeyCode = ManualDropperConfig.PromptGamepadKey\n\t\tend\n\t\tif prompt.Exclusivity ~= ManualDropperConfig.PromptExclusivity then\n\t\t\tprompt.Exclusivity = ManualDropperConfig.PromptExclusivity\n\t\tend\n\tend\nend\n",
+             "atmprompt: upgradeLegacyKit brings a pre-split plate (E / X) to the config keys, compare-first")
+must_contain(DR_MCS, "local EconomyConfig = require(Shared.Configs.EconomyConfig) -- atmprompt: the ATM Collect prompt (AtmCollectPrompt)\n",
+             "atmprompt: MoneyCollectorService reads EconomyConfig")
+must_contain(DR_MCS, "\t\t\tlocal pc = EconomyConfig.AtmCollectPrompt\n\t\t\tlocal prompt = Instance.new(\"ProximityPrompt\")\n\t\t\tprompt.Name = \"WE_CollectPrompt\"\n\t\t\tprompt.ActionText = pc.ActionText\n\t\t\tprompt.ObjectText = pc.ObjectText\n\t\t\tprompt.HoldDuration = pc.HoldDuration\n\t\t\tprompt.MaxActivationDistance = pc.MaxActivationDistance\n\t\t\tprompt.RequiresLineOfSight = false\n\t\t\tprompt.KeyboardKeyCode = pc.KeyboardKey\n\t\t\tprompt.GamepadKeyCode = pc.GamepadKey\n\t\t\tprompt.Exclusivity = pc.Exclusivity\n\t\t\tprompt.Style = Enum.ProximityPromptStyle.Default\n\t\t\tprompt.Parent = part\n\t\t\tprompt.Triggered:Connect(function(triggerPlayer: Player)\n\t\t\t\ttryCollectFromPart(triggerPlayer, part, true)\n\t\t\tend)\n",
+             "atmprompt: the ATM WE_CollectPrompt is built from EconomyConfig.AtmCollectPrompt and still collects through tryCollectFromPart(…, true)")
+_ap_rules()
+# ── end atmprompt
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

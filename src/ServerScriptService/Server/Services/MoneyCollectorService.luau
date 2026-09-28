@@ -28,6 +28,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local RaidConfig = require(Shared.Configs.RaidConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig) -- atmprompt: the ATM Collect prompt (AtmCollectPrompt)
 local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P0-6 new-thief protection
 local TycoonMath = require(Shared.Util.TycoonMath) -- F4 ATM screen: ShortCash digits, "+$24/s" rate
 local ServerModules = script.Parent.Parent.Modules
@@ -1226,15 +1227,18 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 			if existing then
 				existing:Destroy()
 			end
+			-- atmprompt: from EconomyConfig.AtmCollectPrompt; its keys differ from the cash plate's (F / B) so both show
+			local pc = EconomyConfig.AtmCollectPrompt
 			local prompt = Instance.new("ProximityPrompt")
 			prompt.Name = "WE_CollectPrompt"
-			prompt.ActionText = "Collect"
-			prompt.ObjectText = "ATM"
-			prompt.HoldDuration = 0
-			prompt.MaxActivationDistance = 14
+			prompt.ActionText = pc.ActionText
+			prompt.ObjectText = pc.ObjectText
+			prompt.HoldDuration = pc.HoldDuration
+			prompt.MaxActivationDistance = pc.MaxActivationDistance
 			prompt.RequiresLineOfSight = false
-			prompt.KeyboardKeyCode = Enum.KeyCode.E
-			prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
+			prompt.KeyboardKeyCode = pc.KeyboardKey
+			prompt.GamepadKeyCode = pc.GamepadKey
+			prompt.Exclusivity = pc.Exclusivity
 			prompt.Style = Enum.ProximityPromptStyle.Default
 			prompt.Parent = part
 			prompt.Triggered:Connect(function(triggerPlayer: Player)

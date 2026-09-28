@@ -53,6 +53,13 @@ local ManualDropperConfig = {
 	PromptObjectText = "Cash Drop",
 	PromptMaxDistance = 12,
 	PromptHoldDuration = 0,
+	-- atmprompt (ASSUMPTIONS ATM-6): the plate's own prompt keys. They differ from the ATM "Collect" prompt 7.5 studs away
+	-- (EconomyConfig.AtmCollectPrompt: E / ButtonX), so under OnePerButton each is the only prompt on its key there: both
+	-- pills show and each key triggers only its own (BuyPathStatic pins them apart). F matches the terminals' second prompt
+	-- key; gamepad B, not Y, because Y is Reload (HudConfig.Keys.Gamepad) and would be swallowed beside any plate.
+	PromptKeyboardKey = Enum.KeyCode.F,
+	PromptGamepadKey = Enum.KeyCode.ButtonB,
+	PromptExclusivity = Enum.ProximityPromptExclusivity.OnePerButton,
 
 	PartSize = Vector3.new(2.4, 1.2, 2.4),
 	PartColor = Color3.fromRGB(40, 140, 70),

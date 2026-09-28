@@ -390,6 +390,10 @@ local function buildDropperKit(parent: Instance, name: string, worldPos: Vector3
 	prompt.HoldDuration = ManualDropperConfig.PromptHoldDuration or 0
 	prompt.MaxActivationDistance = ManualDropperConfig.PromptMaxDistance or 12
 	prompt.RequiresLineOfSight = false
+	-- atmprompt: its own keys (F / B), apart from the ATM "Collect" beside it (E / X)
+	prompt.KeyboardKeyCode = ManualDropperConfig.PromptKeyboardKey
+	prompt.GamepadKeyCode = ManualDropperConfig.PromptGamepadKey
+	prompt.Exclusivity = ManualDropperConfig.PromptExclusivity
 	prompt.Parent = pad
 
 	-- owner asset list hook: the dropper model on the plate (the plate is the kit's only host part; deferred, pcall'd)
@@ -431,6 +435,18 @@ local function upgradeLegacyKit(pad: BasePart)
 	local hold = ManualDropperConfig.PromptHoldDuration or 0
 	if prompt and prompt:IsA("ProximityPrompt") and prompt.HoldDuration ~= hold then
 		prompt.HoldDuration = hold
+	end
+	-- atmprompt: a plate built before the key split still uses E / X (it hid the ATM "Collect"); compare-first
+	if prompt and prompt:IsA("ProximityPrompt") then
+		if prompt.KeyboardKeyCode ~= ManualDropperConfig.PromptKeyboardKey then
+			prompt.KeyboardKeyCode = ManualDropperConfig.PromptKeyboardKey
+		end
+		if prompt.GamepadKeyCode ~= ManualDropperConfig.PromptGamepadKey then
+			prompt.GamepadKeyCode = ManualDropperConfig.PromptGamepadKey
+		end
+		if prompt.Exclusivity ~= ManualDropperConfig.PromptExclusivity then
+			prompt.Exclusivity = ManualDropperConfig.PromptExclusivity
+		end
 	end
 end
 
