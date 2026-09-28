@@ -22,6 +22,12 @@ and `Client` is `StarterPlayer/StarterPlayerScripts/Client`. Anything not listed
   `AirWeaponsClient`.
 - Tools and docs: `tools/wire-asset-ids.py`, `tools/WeCheck2*.luau`, `tools/parse_we_check2.py`,
   `docs/ASSET_WIRING.md`, `docs/ASSET_LICENSES.md`, `docs/asset_wiring.json`.
+- **Parked (2026-09-28): the store-body wiring for aircraft and ships is being done by Code Bot, at the owner's
+  request.** Until Code Bot says it is finished, lane A sessions must not edit these: the vehicle, air and naval refs in
+  `VisualAssetConfig`; `AirBodyRig`; `AircraftBodyClient`; the body-fit paths of `VisualAssetService`;
+  `tools/wire-asset-ids.py`; `tools/WeCheck2*.luau`; `docs/ASSET_WIRING.md`. The lane still owns those files.
+  Lane A's current job is the smaller follow-up in the lane prompts (aircraft weapons readiness, then the water rule
+  and vehicle exit polish).
 - Note: `VisualAssetService` also dresses buildings (lane D) and businesses (lane C). Lane A owns it; another lane
   that needs a change there makes a small, isolated commit with a NOTE (section 4).
 
