@@ -1,5 +1,5 @@
 <!-- Q2-START -->
-## v118 (Code Bot Roblox, 2026-09-29): JOB 24b army PvP + warnings + codes + analytics + crown LIVE — place version TBD
+## v118 (Code Bot Roblox, 2026-09-29): JOB 24b army PvP + warnings + codes + analytics + crown LIVE — place version 116
 - Merged Claude `458f2ed` (JOB 24b: ArmyConfig.ArmyCombat — army ATTACK damages enemy players / other-base gate+tower guards / gates when player behind; live warning quieting; codes WAREMPIRE + ATTACK; AnalyticsService sink; crown "#1 <BOARD> this week"). Merge commit onto phase-7-polish (v117 88b5e80) — not FF (v117 Code Bot commits were ahead of desktop-bud).
 - WE_Build 118 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched.
 - Pins: `tools/checks/claude_bud_job24b.py` + `tools/checks/codebot_v118.py` (WE_Build 118, ArmyCombat, WAREMPIRE/ATTACK, ApplyUnitPlayerHit). Retired WE_Build=117 pins in codebot_v117; bumped v110/v113/BuyPathStatic frozen pins.
