@@ -10,7 +10,7 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
 
 <!-- Q2-END -->
 
-# v106 — 2026-09-29 ~15:05 Dublin (Code Bot, branch phase-7-polish, WE_Build 106) — JOB 14 GAME-FEEL LIVE FOR ALL + JOB 15 REMOTEGATE OBSERVE
+# v106 — 2026-09-29 15:05 Dublin (Code Bot, branch phase-7-polish, WE_Build 106) — JOB 14 GAME-FEEL LIVE FOR ALL + JOB 15 REMOTEGATE OBSERVE
 
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v106) before new work. Do not redo JOB 14 or JOB 15.**
 Merged `origin/claude/desktop-bud` tip `751a86b` (JOB 14 + JOB 15 after rebase on v103) into phase-7-polish, keeping v104
@@ -25,8 +25,8 @@ Merged `origin/claude/desktop-bud` tip `751a86b` (JOB 14 + JOB 15 after rebase o
   RedeemCode schema kept (`string:40`) for the v102 Codes RemoteFunction. Flip Rollout to "all" after quiet observe logs.
 - Kept: v104 Engagement all + invite/friends/comeback/board guards; Discord invite plain text; v105 BUDSQUAD $25k.
 - Pins: `tools/checks/claude_bud_q3.py` + `tools/checks/codebot_v106.py` (+ gamefeel_test / remotegate_test / remote_audit / sound_audit).
-  BuyPathStatic PASS=TBD FAIL=0; rojo build ok. PreferMesh OFF. WE_Building* untouched.
-- **Published:** Open Cloud place version **TBD** (commit TBD).
+  BuyPathStatic PASS=5651 FAIL=0; rojo build ok. PreferMesh OFF. WE_Building* untouched.
+- **Published:** Open Cloud place version **104** (commit 226aa43).
 - **Publish note for Shaun:** "Migrate to Latest Update" (or shut down old servers) so v106 appears.
 
 # v105 — 2026-09-29 14:51 Dublin (Code Bot, branch phase-7-polish, WE_Build 105) — BUDSQUAD LIVE
