@@ -285,4 +285,31 @@ function TutorialConfig.DoneAhead(oldStep: any, fromVersion: number?, steps: { T
 	return ahead
 end
 
+--[[ claude-bud JOB 7 (2026-09-29): the first five minutes, on top of the tutorial above (which already walks claim base,
+	Command Center pad, collect cash, recruit, Barracks, outpost, 4x4, with the gold line, a touch-size two-tap Skip and
+	once per profile through TutorialComplete). Added, owner-only first:
+	  * Welcome: one short line on the first join of a new profile (profile.WelcomeShown), so the first seconds say
+	    what to do; no screen-covering card.
+	  * The first ATTACK: once the tutorial is complete (or skipped), the Army popover opens with ATTACK outlined and a
+	    hint; profile.FirstAttackDone is saved on the server when he first orders ATTACK (never shown again).
+	Rollout "owner" = AdminConfig.IsPlaytestOwner only, "all", anything else = off (the tutorial exactly as before). ]]
+TutorialConfig.FirstMinutes = {
+	Rollout = "owner",
+	WelcomeText = "Welcome, Commander! Follow the gold line to your base.",
+	WelcomeDelaySeconds = 3,
+	AttackHintText = "Tap ATTACK to send your army at enemies",
+	AttackHintDelaySeconds = 6,
+	AttackHintSeconds = 20,
+}
+
+function TutorialConfig.FirstMinutesLiveFor(userId: any): boolean
+	local mode = TutorialConfig.FirstMinutes.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return (require(script.Parent.AdminConfig) :: any).IsPlaytestOwner(userId)
+	end
+	return false
+end
+
 return TutorialConfig

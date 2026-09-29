@@ -1,9 +1,10 @@
 <!-- Q2-START -->
 # WHERE I STOPPED â€” QUEUE 2 (2026-09-29, Claude on Bud, claude/desktop-bud rebased on v97 36c560e)
-Jobs: [x] 6 Extra Garage Slot Â· [ ] 7 first-5-minutes tutorial Â· [ ] 8 mobile perf + streaming audit Â· [ ] 9 old WIP Â· [ ] 10 balance Â· [ ] 11 juice
-- J6: `ExtraGarageSlot` pass (Id 0, 199 R$, owner-only; the playtest owner has it for testing through `GarageSlot.OwnerTest`).
-  Spawning a different vehicle parks the current one; sitting in the parked one's driver seat makes it active again. There's a gold
-  "ROBUX Â· Extra Garage Slot" Shop row (SOON until the Id exists). It's on the Creator Hub list below.
+Jobs: [x] 6 Extra Garage Slot Â· [x] 7 first-5-minutes tutorial Â· [ ] 8 mobile perf + streaming audit Â· [ ] 9 old WIP Â· [ ] 10 balance Â· [ ] 11 juice
+- J6: `ExtraGarageSlot` pass (Id 0, 199 R$, owner-only; the playtest owner has it for testing). Spawning a different vehicle parks
+  the current one; sit in the parked one to drive it again. Gold "ROBUX" Shop row (SOON until the Id exists).
+- J7: a welcome line on the first join, and the first-ATTACK hint after the tutorial (Army popover opens, ATTACK outlined,
+  done for good on the first ATTACK). The existing tutorial covers claim / pad / cash / recruit and is skippable, once per profile.
 
 <!-- Q2-END -->
 

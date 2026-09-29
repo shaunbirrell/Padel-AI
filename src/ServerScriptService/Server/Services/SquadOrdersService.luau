@@ -3118,6 +3118,15 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 		and now - (st.OrderAt :: number) < (tonumber(CombatFairnessConfig.UnitRepeatOrderGraceSeconds) or 0)
 	st.OrderAt = now
 	st.Order = order :: OrderId
+	-- claude-bud JOB 7: the first ATTACK ends the first-minutes hint (TutorialService saves it)
+	do
+		local okT, tut = pcall(function(): any
+			return require(script.Parent.TutorialService)
+		end)
+		if okT and tut and tut.OnArmyOrder then
+			pcall(tut.OnArmyOrder, player, order)
+		end
+	end
 	if order == "Hold" then
 		for _, u in ipairs(st.Units) do
 			if u.Alive then

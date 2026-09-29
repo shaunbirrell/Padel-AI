@@ -187,6 +187,12 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	profile.SoldierRefills = nonNegInt(profile.SoldierRefills) -- claude-bud JOB 5c (ProcessReceipt only; SoldierService spends)
 	profile.AirstrikeCharges = nonNegInt(profile.AirstrikeCharges) -- claude-bud JOB 5c (ProcessReceipt only; PlazaAirstrike spends)
 	profile.PremiumBonusDay = nonNegInt(profile.PremiumBonusDay) -- claude-bud JOB 5e: UTC yyyymmdd of the last Premium bonus
+	if profile.WelcomeShown ~= true then
+		profile.WelcomeShown = nil -- claude-bud JOB 7: the first-join welcome line was shown
+	end
+	if profile.FirstAttackDone ~= true then
+		profile.FirstAttackDone = nil -- claude-bud JOB 7: he has ordered ATTACK once (the hint is done)
+	end
 	if profile.GroupRewardClaimed ~= true then
 		profile.GroupRewardClaimed = nil -- claude-bud JOB 5e: true once the group reward was paid
 	end

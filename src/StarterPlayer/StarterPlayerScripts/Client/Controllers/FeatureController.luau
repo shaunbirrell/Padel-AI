@@ -74,6 +74,45 @@ local function marker(kind: string, data: any)
 	end
 end
 
+-- claude-bud JOB 7: the first-ATTACK hint: open the Army popover and outline its ATTACK button (a pulsing gold stroke)
+-- with one short hint; gone on the first ATTACK (server "HintDone") or after data.Seconds. No per-frame work.
+local hintStroke: UIStroke? = nil
+local function hintDone()
+	if hintStroke then
+		hintStroke:Destroy()
+		hintStroke = nil
+	end
+end
+local function attackHint(data: any)
+	if typeof(data) ~= "table" or data.Kind ~= "Attack" then
+		return
+	end
+	local okO, Orders = pcall(require, script.Parent.OrdersController)
+	if okO and type(Orders) == "table" and (Orders :: any).Open then
+		pcall((Orders :: any).Open)
+	end
+	task.delay(0.3, function()
+		local pg = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		local btn = pg and pg:FindFirstChild("Order_Attack", true)
+		if btn and btn:IsA("GuiObject") and hintStroke == nil then
+			local st = Instance.new("UIStroke")
+			st.Name = "WE_HintStroke"
+			st.Color = Color3.fromRGB(255, 205, 60)
+			st.Thickness = 3
+			st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			st.Parent = btn
+			hintStroke = st
+			local tw = game:GetService("TweenService"):Create(st, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Thickness = 6 })
+			tw:Play()
+		end
+		local okN, NC = pcall(require, script.Parent.NotificationController)
+		if okN and type(NC) == "table" and (NC :: any).Show and typeof(data.Text) == "string" then
+			pcall((NC :: any).Show, data.Text, "Info", 5)
+		end
+		task.delay(tonumber(data.Seconds) or 20, hintDone)
+	end)
+end
+
 -- claude-bud JOB 5d: a server "Offer" (a purchase prompt at a moment) as the standard offer toast; tapping it runs the
 -- Shop's own guarded prompt (nothing is granted here: ProcessReceipt / pass ownership decide)
 local function offerToast(data: any)
@@ -190,6 +229,10 @@ function FeatureController.Init()
 			armyUpgrades(data)
 		elseif kind == "Offer" then
 			offerToast(data)
+		elseif kind == "Hint" then
+			attackHint(data)
+		elseif kind == "HintDone" then
+			hintDone()
 		end
 	end)
 end

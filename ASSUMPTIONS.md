@@ -8939,3 +8939,15 @@ ds_territories.luau T3):
 - The Shop shows gold "ROBUX · ..." rows for Robux features (this pass + the Robux-only vehicles). While an Id is 0 the
   row says SOON (only where the rollout is live) and a tap is the Shop's own "Coming soon" (nothing prompts).
 - VehicleService is at the 200-local limit: the slot lives in module fields (`_Parked`, `_DestroyParked`, `_HasExtraSlot`).
+
+## 2026-09-29 — claude-bud JOB 7: new player first five minutes (TutorialConfig.FirstMinutes, owner-only)
+- **The existing tutorial already does most of the ask.** Claim base → Command Center pad → collect cash → recruit
+  soldiers → Barracks → outpost → 4x4, with a gold line / pointer, a touch-size two-tap Skip, and shown once per profile
+  (TutorialComplete). Inserting a step into its saved order would need an order-version migration for every save, so it was not touched.
+- **Added:**
+  - One welcome line ~3 s after a new profile's first join ("Welcome, Commander! Follow the gold line to your base.";
+    `profile.WelcomeShown`). It's a toast, not a screen-covering card.
+  - **First ATTACK:** 6 s after the tutorial completes or is skipped (and on a later join while it's not done), the Army popover
+    opens, the ATTACK button gets a pulsing gold outline, and a hint says "Tap ATTACK to send your army at enemies". The
+    first ATTACK order (SquadOrdersService.SetOrder → TutorialService.OnArmyOrder) saves `profile.FirstAttackDone` and
+    removes the outline; otherwise it fades after 20 s. The copy never names a key or says click.

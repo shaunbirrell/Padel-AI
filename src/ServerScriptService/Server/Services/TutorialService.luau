@@ -221,6 +221,44 @@ local function endNoviceShield(player: Player)
 	end
 end
 
+-- claude-bud JOB 7: the first-ATTACK hint (TutorialConfig.FirstMinutes), once per profile, after the tutorial ends
+local function firstAttackHint(player: Player, delaySeconds: number)
+	if not TutorialConfig.FirstMinutesLiveFor(player.UserId) then
+		return
+	end
+	task.delay(delaySeconds, function()
+		local profile = DataService and DataService.GetProfile(player)
+		if player.Parent == nil or profile == nil or profile.TutorialComplete ~= true or (profile :: any).FirstAttackDone == true then
+			return
+		end
+		local ev = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.FeaturePush)
+		if ev and ev:IsA("RemoteEvent") then
+			(ev :: RemoteEvent):FireClient(player, "Hint", {
+				Kind = "Attack",
+				Text = TutorialConfig.FirstMinutes.AttackHintText,
+				Seconds = TutorialConfig.FirstMinutes.AttackHintSeconds,
+			})
+		end
+	end)
+end
+
+-- claude-bud JOB 7: SquadOrdersService tells us an ATTACK order; the first one ends the hint for good (saved)
+function TutorialService.OnArmyOrder(player: Player, order: string)
+	if order ~= "Attack" or not TutorialConfig.FirstMinutesLiveFor(player.UserId) then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if profile == nil or (profile :: any).FirstAttackDone == true then
+		return
+	end
+	;(profile :: any).FirstAttackDone = true
+	DataService.MarkDirty(player)
+	local ev = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.FeaturePush)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireClient(player, "HintDone", { Kind = "Attack" })
+	end
+end
+
 local function setStep(player: Player, step: number, complete: boolean?)
 	local profile = DataService.GetProfile(player)
 	if not profile then
@@ -232,6 +270,9 @@ local function setStep(player: Player, step: number, complete: boolean?)
 	end
 	DataService.MarkDirty(player)
 	pushTutorial(player)
+	if complete then
+		firstAttackHint(player, TutorialConfig.FirstMinutes.AttackHintDelaySeconds) -- claude-bud JOB 7
+	end
 	if complete and NotificationService then
 		NotificationService.Notify(player, "Tutorial complete — BUILD. CONQUER. DOMINATE.", "Success")
 	end
@@ -284,6 +325,7 @@ function TutorialService.Complete(player: Player)
 	if NotificationService then
 		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
+	firstAttackHint(player, TutorialConfig.FirstMinutes.AttackHintDelaySeconds) -- claude-bud JOB 7
 	endNoviceShield(player) -- F6: SKIP ends the novice shield too
 	scheduleStarterOffer(player, true) -- v71 money (M1): the Starter Pack offer 3 s after the tutorial
 end
@@ -438,6 +480,21 @@ function TutorialService.Init(deps: { [string]: any })
 		end)
 	end
 	DataService.OnProfileLoaded(function(player: Player, profile: any)
+		-- claude-bud JOB 7: the welcome line on a new profile's first join, and a not-yet-used first ATTACK hint
+		if TutorialConfig.FirstMinutesLiveFor(player.UserId) then
+			if profile.WelcomeShown ~= true and profile.TutorialComplete ~= true then
+				profile.WelcomeShown = true
+				DataService.MarkDirty(player)
+				task.delay(TutorialConfig.FirstMinutes.WelcomeDelaySeconds, function()
+					if player.Parent and NotificationService then
+						NotificationService.Notify(player, TutorialConfig.FirstMinutes.WelcomeText, "Info", 6)
+					end
+				end)
+			end
+			if profile.TutorialComplete == true and profile.FirstAttackDone ~= true then
+				firstAttackHint(player, 20)
+			end
+		end
 		onProfileLoaded(player, profile)
 		-- v71 money (M1): the tutorial is already done at load → the Starter Pack offer 8 s in (the gate decides)
 		if profile.TutorialComplete == true then
