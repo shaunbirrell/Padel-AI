@@ -1,4 +1,25 @@
 <!-- Q2-START -->
+## v121 (Code Bot Roblox, 2026-09-30 ~00:19 Dublin): JOB 26+27 stronger army + player armour + town cull LIVE — place version 119
+- Fast-forward merged Claude `d0ea486` (JOB 26) + `bf799fe` (JOB 27) onto phase-7 tip `54f3aef` (v120). Code Bot bump commit `6ee87c8`. **WE_Build 121**. PreferMesh OFF; WE_Building* untouched.
+- **JOB 26 — stronger army + buyable player armour**
+  - `ArmyConfig.StrongerArmy` (kill switch `Enabled`): HP 150, damage 12, 2.2 shots/s, player cap 50 DPS; owner sees throttled NPC hit markers; denser tracers.
+  - Army menu → ARMY UPGRADES: Firepower / Toughness (existing) + new **Combat Drills** (+8 % fire rate / level).
+  - Army menu → MY ARMOUR (`ArmourConfig` / `ArmourService`): Light Vest → Titan (10–50 % damage cut via bonus MaxHealth); buy next tier only, inside own base, CC level gated; blue HUD armour bar; vest/helmet look (hideable); kept on death and rebirth. `CommanderArmourRobux = false` (no Robux item created).
+- **JOB 27 — city buildings popping**
+  - Root cause: client `QualityGovernor` pivot-point cull with one threshold (StreamingEnabled off; no server rebuild).
+  - Fix: bounding-box distance; buildings by size never culled; LOAD/UNLOAD hysteresis; kill switch `QualityConfig.CullTownBuildings = true` restores old behaviour. Replay model: 0 building-seconds missing at 16–140 studs/s.
+- **Pins:** `tools/checks/claude_bud_job26.py` + `claude_bud_job27.py` + `tools/checks/codebot_v121.py` (WE_Build 121, ArmourConfig/ArmourService, StrongerArmy, CullTownBuildings=false, GetBoundingBox/boxDist). Retired codebot_v120 WE_Build pins; bumped BuyPathStatic / codebot_v110 / codebot_v113 frozen WE_Build pins to 121.
+- **Checks:** BuyPathStatic PASS=6409 FAIL=0; rojo → dist/WarEmpire-PERF.rbxlx (+ WarEmpire.rbxlx copy); Open Cloud HTTP 200 `versionNumber=119`.
+- **Kill switches:** `ArmyConfig.StrongerArmy.Enabled = false`; `ArmourConfig.Enabled = false`; `QualityConfig.CullTownBuildings = true` (old cull back).
+- **Phone tests (owner):**
+  1. ATTACK an outpost — defenders fall faster; hit numbers + tracers visible; army TTK feels harder than v120.
+  2. Army menu → ARMY UPGRADES → buy Combat Drills.
+  3. Army menu → MY ARMOUR inside base → buy Light Vest: toast, blue bar above health, vest on avatar; outside base blocked.
+  4. Die/respawn and rebirth — armour kept. Hide armour look — vest gone, blue bar stays.
+  5. Run / sprint / drive fastest vehicle through town — no building / roof / wall flash-out; note phone FPS in town vs yesterday.
+  6. Follow + AttackSteer + army PvP still feel like v120; Army Soldier body still looks right.
+- **NEXT:** Shaun phone-tests above before claiming "fixed". Claude rebase `claude/desktop-bud` onto phase-7-polish (v121 tip).
+
 ## claude-bud JOB 27 (2026-09-30): city buildings popping in / out (branch `claude/desktop-bud`)
 - **Proven root cause:** Client/Modules/QualityGovernor.cull, case B (our code removes the models).
   - **Streaming ruled out:** `StreamingEnabled` is absent from default.project.json and from the built place (class
