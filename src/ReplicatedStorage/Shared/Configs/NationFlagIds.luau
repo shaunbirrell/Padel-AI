@@ -14,13 +14,13 @@
 
 local NationFlagIds = {
 	Atlas = {
-		Europe = 0,
-		Americas = 0,
-		Asia = 0,
-		Africa = 0,
-		MiddleEast = 0,
-		Oceania = 0,
-		Review = 0,
+		Europe = 117922087338795,
+		Americas = 129834397528036,
+		Asia = 114871762121221,
+		Africa = 132455042605948,
+		MiddleEast = 88221072001528,
+		Oceania = 82459247862229,
+		Review = 98381294373531,
 	} :: { [string]: number },
 	Flags = {
 	} :: { [string]: number },

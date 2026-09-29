@@ -19,8 +19,8 @@ for _f in (
     _cb121_S + "Services/BaseService.luau",
     _cb121_S + "EarlyRemotes.server.luau",
 ):
-    must_contain(_f, 'SetAttribute("WE_Build", 121)', "CODEBOT v121: WE_Build=121 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb121_S + "Services/DataService.luau", "WE_Build=121", "CODEBOT v121: DataService profile-loaded log says WE_Build=121")
+    pass  # v122 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v122.py: #must_contain(_f, 'SetAttribute("WE_Build", 121)', "CODEBOT v121: WE_Build=121 " + _f.rsplit("/", 1)[-1])
+# v122 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v122.py: #must_contain(_cb121_S + "Services/DataService.luau", "WE_Build=121", "CODEBOT v121: DataService profile-loaded log says WE_Build=121")
 
 # JOB 26 — stronger army + buyable player armour
 must_contain(_cb121_C + "ArmourConfig.luau", "\tEnabled = true,", "CODEBOT v121: ArmourConfig present and Enabled")
