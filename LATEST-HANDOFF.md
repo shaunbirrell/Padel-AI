@@ -1,4 +1,9 @@
 <!-- Q2-START -->
+## v111 (Code Bot, 2026-09-29 17:1x) — Grab Cash plate removed
+- Shaun: the $75 Grab Cash plate added nothing. `ManualDropperConfig.Enabled = false` (set true to restore). No plates are built; the tutorial Income step still advances on PassiveIncome.
+- WE_Build 110 → 111; pin `tools/checks/codebot_v111.py`. BuyPathStatic FAIL=0; rojo build ok. PreferMesh OFF; WE_Building* untouched.
+- NEXT for Claude: JOB 22 army follow root-cause fix (prompt given to Shaun) BEFORE JOB 21 plots. Rebase onto v111.
+
 # WHERE I STOPPED — 2026-09-29 (Code Bot shipped v110) — JOB 20 LIVE
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v110) before new work.** Do not redo JOB 14, JOB 15, BOARDS, Flank, JOB 17, JOB 18, JOB 19, or JOB 20.
 Keep v102 Codes / CashBoost, v104 Engagement (all) + Discord invite + exploit guards, v105 BUDSQUAD, v106 GameFeel all + RemoteGate observe, v107 BOARDS, v108 Flank, v109 night/WorldFill2/stands.

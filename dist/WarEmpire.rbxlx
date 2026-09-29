@@ -5305,7 +5305,7 @@ return LootBoxConfig
 ]]
 
 local ManualDropperConfig = {
-	Enabled = true,
+	Enabled = false, -- v111 (Shaun 2026-09-29): cash pile removed, $75 added nothing; true restores it
 
 	-- Award (PendingCash). Prefer AwardAmount; else random [MinAward, MaxAward].
 	MinAward = 10,
@@ -23595,7 +23595,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 110)
+		player:SetAttribute("WE_Build", 111)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -57823,7 +57823,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 110)
+			player:SetAttribute("WE_Build", 111)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -64974,7 +64974,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 110)
+		player:SetAttribute("WE_Build", 111)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -65115,7 +65115,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=110",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=111",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
