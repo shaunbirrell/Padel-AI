@@ -26,7 +26,7 @@ Merged `origin/claude/desktop-bud` tip `f5387ae` (JOB 20 real base guards) into 
 
 **Phone tests (second account / alt):** alt walks into your base → guards turn, chase (never out of plot / past 60 studs), shoot; alt dies → you get the kill (toast, board, feed); you / friend / clan-mate never shot; your own army safe, alt's army shot; alt waits outside 8 s → guards walk back; buy Watchtowers, hire tower guard at corner prompt (owner-only), it shoots alt outside walls (not inside); kill a guard as alt → small reward; new/low-level alt not deleted instantly (damage cap).
 
-**Published:** Open Cloud `versionNumber=PENDING` (commit PENDING). Migrate to Latest Update for real base guards.
+**Published:** Open Cloud `versionNumber=108` (commit b9d441d). Migrate to Latest Update for real base guards.
 
 # v109 — 2026-09-29 ~16:35 Dublin (Code Bot, branch phase-7-polish, WE_Build 109) — JOBS 17–19 LIVE FOR ALL
 
