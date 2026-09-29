@@ -9,6 +9,15 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
 
 - Phone tests (956x440 + a small phone): walk, run and sprint through town with 5+ soldiers — they stay on screen beside you, no vanish / pop-in; stop and turn: no swirl; enter your base: they still wait at the gate. If worse: ArmyConfig.Follow2.Tidy.Formation = "Wedge".
 
+## QUEUE 4 (claude-bud, rebased on v107)
+Jobs: [x] 17 night lighting · [ ] 18 world fill 2 · [ ] 19 purchase stands · [ ] 20 real base guards
+- J17 (live for all, LightingConfig): brighter moonlit night (midnight ambient 90,95,120, Brightness 2.0, blue colour
+  correction), ~50 warm night lights (town roads, plaza ring, Town Square, base gates + hangars, plaza flag), Neon lamp
+  heads / lit windows / runway edge markers only at night. Phone tests (brightness 50 %, 956x440 + a small phone): wait
+  for night (~8 min into a server, or /time if admin): roads, bases and other players clearly visible; streetlights on
+  along the town roads; windows lit; runway edge dots glow; plaza flag lit; drive the town roads at night (nothing in
+  the lane); lower Graphics to 1-3: fewer lights, glow stays; frame rate OK. Revert: LightingConfig.Enabled = false.
+
 <!-- Q2-END -->
 
 # v108 — 2026-09-29 ~15:55 Dublin (Code Bot, branch phase-7-polish, WE_Build 108) — ARMY FLANK FORMATION (place version 106)

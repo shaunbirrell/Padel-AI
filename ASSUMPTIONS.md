@@ -9261,3 +9261,30 @@ ds_territories.luau T3):
   - `"Wedge"` restores the old formation. Hold, attack and the base wait rows are unchanged.
 - **Assumption:** soldiers 3.5 studs beside him may brush him on a sharp turn (turns are rate-limited); widen
   FlankSide if that shows up on the phone.
+
+## 2026-09-29 — claude-bud JOB 17: night readable on phones (LightingConfig + NightLights; live for all)
+- **Night look:** WorldAtmosphere (the live day loop) reads `LightingConfig.Night` while `LightingConfig.Enabled`:
+  - Ambient (80,86,112) and OutdoorAmbient (90,95,120) at midnight (were 40,45,70 / 50,55,85);
+  - Brightness 2.0 (was 1.6);
+  - lighter bluish haze (Density 0.30);
+  - a `WE_NightCC` ColorCorrectionEffect faded in by the night share: Brightness +0.05, Contrast +0.1,
+    Saturation −0.05, tint (214,224,255). It's written only on change, like the Atmosphere.
+  - Night is 20:00–05:00 with 1-hour ramps (~42 % of the 20-minute cycle).
+  - `Enabled = false` restores the old night exactly.
+- **Lights:** Workspace.WE_NightLights sits outside the dressing folders, so the world-hygiene budget of 24 dressing
+  lights (and its cull) is untouched. About 50 lights (cap 120), all Shadows off, Range 40–60, on only at night:
+  - streetlights along the Town's two main roads (14 studs off the centre line, outside the 12-stud corridor);
+  - 6 round the Central Plaza (off the roads) and 3 in the Town Square;
+  - 2 gate + 1 hangar floodlight per base;
+  - a spotlight on the plaza flag.
+  - Nothing collides and nothing casts shadows.
+- **Glow (Neon only at night, plain by day):**
+  - lamp heads;
+  - runway edge markers (both edges, every 19 studs, 6 bases);
+  - the plaza flag (keeps its owner colour);
+  - lit windows: up to 6 per town building, placed by raycast on the real front wall, 60 % lit in a fixed pattern.
+    That's ≤ ~340 window parts and ~200 Neon at night, inside the 986 Neon hard cap; the 300 Neon target is exceeded
+    at night.
+- **Low quality (client QualityGovernor):** every second light (WE_LowOff) stays off; the Neon glow still shows.
+  Lights that stream in after the switch follow at the next dusk / dawn flip.
+- **Not done:** a HUD / device render. Phone brightness at 50 % needs the real phone.

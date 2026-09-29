@@ -608,6 +608,14 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			warn("[MapDressing] WorldFill.Build failed:", errF)
 		end
 	end
+	-- claude-bud JOB 17: the night lights (Workspace.WE_NightLights; outside the dressing folders / light budget above)
+	local nl = getWorldModule("NightLights")
+	if nl then
+		local okN, errN = pcall(nl.Build)
+		if not okN then
+			warn("[MapDressing] NightLights.Build failed:", errN)
+		end
+	end
 
 	-- CastShadow is governed by H9 (WorldKits sets it only on parts >= 8 studs; Enforce clears small casters)
 	local partCount = 0

@@ -82,6 +82,34 @@ local function setLow(on: boolean, Q: any)
 	pcall(function()
 		lp:SetAttribute("WE_LowQuality", if on then true else nil)
 	end)
+	-- claude-bud JOB 17: low quality keeps every second night light off (LightingConfig.LowOffAttribute); the Neon
+	-- glow of lamp heads / windows still shows. The server's dusk / dawn flip is re-applied on each change.
+	pcall(function()
+		local LC = require((ReplicatedStorage :: any).Shared.Configs.LightingConfig) :: any
+		local nl = Workspace:FindFirstChild("WE_NightLights")
+		if nl then
+			for _, d in ipairs(nl:GetDescendants()) do
+				if d:IsA("Light") and d:GetAttribute(LC.LowOffAttribute) == true then
+					if on then
+						d.Enabled = false
+						if not d:GetAttribute("WE_LowHooked") then
+							d:SetAttribute("WE_LowHooked", true)
+							d:GetPropertyChangedSignal("Enabled"):Connect(function()
+								if low and d.Enabled then
+									d.Enabled = false
+								end
+							end)
+						end
+					else
+						-- back to normal quality: on again if it is night now (the server's night share > 0.5)
+						local t = Lighting.ClockTime
+						local C = LC.Cycle
+						d.Enabled = t < (C.NightEnd + C.DawnEnd) / 2 or t > (C.DuskStart + C.NightStart) / 2
+					end
+				end
+			end
+		end
+	end)
 	if Q.ShadowsOffWhenLow then
 		if on then
 			shadowsBefore = Lighting.GlobalShadows
