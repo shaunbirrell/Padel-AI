@@ -109,6 +109,7 @@ local EVENTS = {
 	Constants.RemoteNames.FeaturePush, -- claude-bud JOB 4/5: feature cues, server -> client only
 	Constants.RemoteNames.RequestPlazaAirstrike, -- claude-bud JOB 5c: client -> server, rate-limited (PlazaAirstrike)
 	Constants.RemoteNames.RequestGroupReward, -- claude-bud JOB 5e: client -> server, rate-limited (MonetizationService)
+	Constants.RemoteNames.RequestPremiumWeapon, -- claude-bud PREMIUM: client -> server, rate-limited (PremiumWeaponService)
 }
 
 -- v71 money (M2): UnreliableRemoteEvents (server → client cosmetic Fx; ordering and delivery not guaranteed)
@@ -117,6 +118,7 @@ local UNRELIABLE = {
 	Constants.RemoteNames.WeaponFx, -- W2 Combat Core: bullet tracers / projectile launch + explosion (CombatService)
 	Constants.RemoteNames.OpsPing, -- W3 step 2 Phase B Jobs: a bag carrier's position, every 10 s to non-allies (OpsService)
 	Constants.RemoteNames.DropperFx, -- droppers v1b: the plate grab effect, owner-only (ManualDropperService)
+	Constants.RemoteNames.PremiumWeaponFx, -- claude-bud PREMIUM: premium vehicle gun / missile fx (PremiumWeaponService)
 }
 local UNRELIABLE_SET: { [string]: boolean } = {}
 for _, name in ipairs(UNRELIABLE) do

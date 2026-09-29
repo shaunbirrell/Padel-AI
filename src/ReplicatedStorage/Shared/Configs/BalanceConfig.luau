@@ -14,7 +14,7 @@
 	    building the base IS levelling up;
 	  * sim (tools/progression_sim.py, base income only): base complete ~34 min, level 40 (first rebirth) ~34 min, every
 	    pad pays back within 25 min (was up to 139 h); a finished base earns ~780k/min. Target FirstRebirthMinutes.
-	  * PremiumVehicleMaxEdge: the Robux-only vehicles may be at most this much stronger than their base (claude_bud_money).
+	  * Robux-only vehicles: their numbers live in VehicleConfig.Premium (owner 2026-09-29: clearly overpowered).
 	Businesses keep their own IncomePerTick table (unchanged). Rollout "owner" / "all" / off (off = today's curve).
 ]]
 
@@ -31,7 +31,6 @@ local BalanceConfig = {
 		Per1000 = 25,
 		GrantAtLeast = 25, -- XP is banked and paid in lumps of at least this (fewer level-bar updates)
 	},
-	PremiumVehicleMaxEdge = 1.06,
 	StartingCash = 10000, -- (EconomyConfig.StartingCash; listed here for the whole picture)
 	-- set to true ONLY by the client that the server marked (player attribute WE_Balance2): TycoonMath's labels then use
 	-- this curve. The server never sets it (it pays through BaseService per player).

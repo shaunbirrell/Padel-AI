@@ -151,6 +151,10 @@ Constants.RemoteNames = {
 	RequestPlazaAirstrike = "RequestPlazaAirstrike",
 	-- claude-bud JOB 5e: client -> server, no args: claim the one-time group-join reward (the server checks the group)
 	RequestGroupReward = "RequestGroupReward",
+	-- claude-bud PREMIUM: client -> server (action "Fire" | "Missile", aim: Vector3); PremiumWeaponService checks all
+	RequestPremiumWeapon = "RequestPremiumWeapon",
+	-- claude-bud PREMIUM: UnreliableRemoteEvent (RemoteSetup UNRELIABLE list), server -> all clients: gun / missile / boom fx
+	PremiumWeaponFx = "PremiumWeaponFx",
 }
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v2" -- v55: intentional bump; fresh CreateDefault + StartingCash (kills stuck $0 v1 saves)

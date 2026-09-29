@@ -1014,6 +1014,14 @@ local function driveAttributes(def: VehicleDef, fp: Footprint, bonus: number?, a
 	end
 	a.WE_BaseMaxSpeed = base
 	a.WE_MaxSpeed = base * b
+	-- claude-bud PREMIUM: a Robux-only vehicle drives at its own (unclamped) speed with snappier acceleration / turning
+	local prem: any = (def :: any).Premium
+	if prem ~= nil then
+		a.WE_BaseMaxSpeed = def.Speed
+		a.WE_MaxSpeed = def.Speed * b
+		a.WE_Accel = (tonumber(a.WE_Accel) or 20) * (tonumber(prem.AccelMult) or 1)
+		a.WE_TurnRate = (tonumber(a.WE_TurnRate) or 1) * (tonumber(prem.TurnMult) or 1)
+	end
 	return a
 end
 
@@ -4960,6 +4968,12 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	end
 	activeVehicles[player.UserId] = model
 	lastSpawnAt[player.UserId] = now()
+	-- claude-bud PREMIUM: the gold look + the weapon marker (PremiumWeaponService; server-side weapons)
+	if (def :: any).Premium ~= nil then
+		pcall(function()
+			(require(script.Parent.PremiumWeaponService) :: any).OnSpawn(model, def, player)
+		end)
+	end
 	-- W2: vehicle HP (VehicleHealth). At 0 HP: the wreck look at once, the normal teardown after DebrisSeconds.
 	local okHp, errHp = pcall(VehicleService._VehicleHealth.Register, model, def, player, {
 		Premium = (def :: any).Premium ~= nil,

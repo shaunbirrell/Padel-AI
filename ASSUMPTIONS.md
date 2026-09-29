@@ -9038,3 +9038,40 @@ ds_territories.luau T3):
   - The rebirth banner is in the stack too. Toasts and offers already are.
 - **Not done:** the HUD harness (check_hud.py) is not in this repo, so the full-HUD overlap audit at 800×360 / 844×390 / 956×440 needs
   the harness or the phone.
+
+## 2026-09-29 — claude-bud PREMIUM: the 6 Robux-only vehicles made clearly overpowered (owner-only via RolloutKeys)
+- **Owner decision (supersedes JOB 5a "+5 %" and BalanceConfig's 1.06 cap).** Every number is in `VehicleConfig.Premium`.
+  - "Best cash vehicle of the same type" = the same kit family (JetFighter, HeliAttack, NavalCapital, NavalPatrol, TrackedMBT,
+    WheeledLight), cash only.
+  - Speed = 1.4 x that family's fastest (Skylance 189, Stormwing 105, Leviathan 56, Tidebreaker 81, Warlord 50, Razorfang 95),
+    applied UNclamped (the tracked 36 cap does not apply to them).
+  - HP / armour = 2 x the family's toughest. Acceleration x1.6, turn rate x1.4–1.5.
+  - The rows are computed from the table after the Vehicles literal (no second copy of the numbers).
+- **Weapons** (new `PremiumWeaponService` + `PremiumWeaponsClient`; the premium jet and heli moved to AircraftWeaponConfig.Unarmed,
+  so one system owns all six):
+  - Guns (hitscan from the muzzle; FireRate / Damage / Range / cone off the nose):
+    - Skylance AirCannon 45 x10/s (12° cone)
+    - Stormwing ChinGun 40 x10/s (50°)
+    - Leviathan DeckCannon 170 x2/s (150°, splash 10)
+    - Tidebreaker BowMG 32 x12/s (70°)
+    - Warlord TankCannon 240 x1.25/s (turret 180°, splash 12)
+    - Razorfang HeavyMG 32 x12/s (100°)
+  - Missile (all six): 320 damage + splash 12. The server picks the lock: the nearest enemy player or vehicle inside a 30°
+    cone of the aim, within 250 studs, in sight. It flies at 140 studs/s, turns at most 110°/s (a fast jet or a hard turn
+    dodges it), explodes within 7 studs, and has a 5 s cooldown.
+- **Server-validated:**
+  - Checked on every request: the driver seat of HIS own premium vehicle, the pass / rollout (or the playtest owner),
+    14 requests/s, the fire rate / cooldown per vehicle, and the aim clamped to the cone.
+  - The server raycasts itself (range + line of sight). The client sends only an action and an aim, never a target or damage.
+  - All damage goes through CombatService.ApplyHit / ApplyRadiusDamage (PvP off, spawn / novice shields, vehicle spawn
+    protection, occupants). Friendly fire is off: self, own vehicles and clan allies are skipped (new CombatService.IsClanAlly;
+    splash already spares allies).
+- **Client:**
+  - FIRE (hold) and MISSILE (shows its cooldown) appear only while driving your own premium vehicle.
+  - They're placed by AirWeaponsClient.Layout (clear of jump / EXIT / thumbstick), 64 px (72 on tablets). PC / gamepad:
+    LMB / R2 and R / X, with hints only then.
+  - A gold lock reticle marks the target the server would lock (re-picked at 10 Hz).
+  - Everything is torn down on exit / death / respawn.
+- **Look:** a gold trail and a ROBUX badge (WorldLabel, MaxDistance 40) on every premium vehicle, seen by everyone.
+- Effects: one UnreliableRemoteEvent (PremiumWeaponFx) for tracers and explosions (visual Explosion: no pressure, no joints).
+- **Balance note:** these are pay-to-win by design now (owner's call). The rollout stays owner-only until he flips RolloutKeys to all.
