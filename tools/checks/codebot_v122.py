@@ -17,8 +17,8 @@ for _f in (
     _cb122_S + "Services/BaseService.luau",
     _cb122_S + "EarlyRemotes.server.luau",
 ):
-    must_contain(_f, 'SetAttribute("WE_Build", 122)', "CODEBOT v122: WE_Build=122 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb122_S + "Services/DataService.luau", "WE_Build=122", "CODEBOT v122: DataService profile-loaded log says WE_Build=122")
+    pass  # v123 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v123.py: #must_contain(_f, 'SetAttribute("WE_Build", 122)', "CODEBOT v122: WE_Build=122 " + _f.rsplit("/", 1)[-1])
+# v123 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v123.py: #must_contain(_cb122_S + "Services/DataService.luau", "WE_Build=122", "CODEBOT v122: DataService profile-loaded log says WE_Build=122")
 
 _cb122_ids = "src/ReplicatedStorage/Shared/Configs/NationFlagIds.luau"
 for _k, _v in (

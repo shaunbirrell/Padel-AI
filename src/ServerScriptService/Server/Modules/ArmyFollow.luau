@@ -163,8 +163,17 @@ local function setCharGroup(char: Model)
 		end
 	end)
 end
+local hookNow: () -> ()
 local function hookPlayers()
 	if playersHooked or not (stableOn() or follow3On()) then
+		return
+	end
+	hookNow()
+end
+-- v123 (design rule: soldiers never body-block a player): every player character joins WE_PlayerChars whatever the
+-- Follow2 / Follow3 rollout flags say (hookPlayers above keeps its old gate; ensureGroup calls this one after it)
+hookNow = function()
+	if playersHooked then
 		return
 	end
 	playersHooked = true
@@ -201,6 +210,16 @@ local function ensureGroup()
 		end
 	end)
 	pcall(hookPlayers)
+	-- v123 design rule, independent of every kill switch / rollout flag: an army soldier (ArmyNPCs, any owner's) never
+	-- collides with a player character (WE_PlayerChars). The world (Default) still collides with both.
+	pcall(function()
+		if not PhysicsService:IsCollisionGroupRegistered(ArmyFollow.PlayerGroup) then
+			PhysicsService:RegisterCollisionGroup(ArmyFollow.PlayerGroup)
+		end
+		PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.PlayerGroup, false) -- v123: soldiers never block players
+		PhysicsService:CollisionGroupSetCollidable(ArmyFollow.PlayerGroup, "Default", true)
+	end)
+	pcall(hookNow)
 end
 ArmyFollow.EnsureGroup = ensureGroup
 

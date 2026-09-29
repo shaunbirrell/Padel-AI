@@ -572,6 +572,7 @@ function CombatService.TeleportToBase(player: Player)
 	local cf = CombatService.GetPlotSpawnCFrame(profile.BasePlotId)
 	local character = player.Character
 	if cf and character then
+		require(script.Parent.Parent.Modules.MoveDebug).Note(character, "PivotTo", "CombatService.TeleportToBase") -- v123 tagged
 		if StreamPrefetch.Enabled() then
 			StreamPrefetch.PivotTo(player, cf)
 		else

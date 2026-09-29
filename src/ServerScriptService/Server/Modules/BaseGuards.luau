@@ -330,6 +330,11 @@ local function guardGroup(model: Model)
 				PS:RegisterCollisionGroup(GUARD_GROUP)
 			end
 			PS:CollisionGroupSetCollidable(GUARD_GROUP, GUARD_GROUP, false)
+			-- v123: a friendly base guard never body-blocks a player (WE_PlayerChars, ArmyFollow.PlayerGroup)
+			if not PS:IsCollisionGroupRegistered("WE_PlayerChars") then
+				PS:RegisterCollisionGroup("WE_PlayerChars")
+			end
+			PS:CollisionGroupSetCollidable(GUARD_GROUP, "WE_PlayerChars", false)
 		end)
 	end
 	for _, d in ipairs(model:GetDescendants()) do

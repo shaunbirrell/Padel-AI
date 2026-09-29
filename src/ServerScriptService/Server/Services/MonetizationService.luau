@@ -497,7 +497,8 @@ local function applySpeedBoostToCharacter(player: Player)
 	end
 	local GameConfig = require(Shared.Configs.GameConfig)
 	local base = tonumber(GameConfig.DefaultWalkSpeed) or 16
-	hum.WalkSpeed = base * mult
+	-- v123 /movedebug: the tagged setter (the only server write to a player's WalkSpeed)
+	require(script.Parent.Parent.Modules.MoveDebug).SetWalkSpeed(hum, base * mult, "MonetizationService.SpeedBoost")
 end
 
 function MonetizationService.SetMockGamePassOwned(player: Player, passKey: string, owned: boolean)

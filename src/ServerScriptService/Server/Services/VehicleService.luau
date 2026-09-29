@@ -4446,6 +4446,7 @@ VehicleService._PlaceExit = function(rec: VehicleRec, seat: BasePart, hum: Human
 	if not ok or spot == nil then
 		return nil -- no clear spot: Roblox's own jump-out, as before
 	end
+	require(script.Parent.Parent.Modules.MoveDebug).Note(char, "PivotTo", "VehicleService.ExitSpot") -- v123 tagged
 	char:PivotTo(spot)
 	zeroVelocity(hrp) -- no fling: the character keeps nothing of the car's (or the jump's) speed
 	VehicleService._ExitHold(spot, char) -- R2.2: the next rider (same wreck, or right after) gets another spot

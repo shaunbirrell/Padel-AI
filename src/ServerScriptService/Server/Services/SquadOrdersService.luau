@@ -3613,6 +3613,12 @@ function SquadOrdersService.Init(deps: { [string]: any })
 			return OrdersConfig.UnitWalkSpeed or 14
 		end,
 	})
+	-- v123 /movedebug: player-movement watchers + the per-player sampler (quiet unless WE_MoveDebug)
+	require(script.Parent.Parent.Modules.MoveDebug).Start({
+		Squads = function()
+			return squadByUser
+		end,
+	})
 
 	local orderRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSquadOrder) :: RemoteEvent
 	orderRemote.OnServerEvent:Connect(function(player: Player, orderId: any)

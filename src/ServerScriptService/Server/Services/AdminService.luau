@@ -502,7 +502,8 @@ function AdminService.Init(deps: { [string]: any })
 		local isKeepBaseCmd = cmd == "givekeepbase"
 		local isNationResetCmd = cmd == "nationreset"
 		local isArmyDebugCmd = cmd == "armydebug" -- v115: the owner's army-follow debug overlay (ArmyConfig.Follow3.Debug)
-		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd then
+		local isMoveDebugCmd = cmd == "movedebug" -- v123: the player-movement investigation (Modules/MoveDebug + MoveDebugClient)
+		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -527,6 +528,24 @@ function AdminService.Init(deps: { [string]: any })
 			print(string.format("[ArmyDebug] %s /armydebug -> %s", player.Name, tostring(want)))
 			if deps.NotificationService then
 				deps.NotificationService.Notify(player, "Army debug " .. (if want then "ON" else "OFF"), "Success")
+			end
+			return
+		end
+		-- v123: /movedebug [on|off] toggles the caller's WE_MoveDebug attribute: server samples + tagged-writer log
+		-- (Modules/MoveDebug), client MoveDirection / speed / state / input / [MOVEMENT BLOCK DETECTED] (MoveDebugClient)
+		if isMoveDebugCmd then
+			local want: boolean
+			if rest == "on" or rest == "1" then
+				want = true
+			elseif rest == "off" or rest == "0" then
+				want = false
+			else
+				want = player:GetAttribute("WE_MoveDebug") ~= true
+			end
+			player:SetAttribute("WE_MoveDebug", want)
+			print(string.format("[MoveDebug] %s /movedebug -> %s", player.Name, tostring(want)))
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, "Move debug " .. (if want then "ON" else "OFF"), "Success")
 			end
 			return
 		end
@@ -641,9 +660,9 @@ function AdminService.Init(deps: { [string]: any })
 				end
 			end)
 			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
-			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" } }) do
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" } }) do
 				local c = ensureCommand(spec[1], spec[2], spec[3])
-				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" then
+				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" then
 					-- nations: never offered in chat autocomplete (lead decision 6: nothing of the feature shows for
 					-- non-admins before the flag art is live); the admin still types it
 					local cmdAny: any = c
@@ -679,6 +698,7 @@ function AdminService.Init(deps: { [string]: any })
 					or string.sub(lower, 1, 13) == "/givekeepbase"
 					or string.sub(lower, 1, 12) == "/nationreset"
 					or string.sub(lower, 1, 10) == "/armydebug"
+					or string.sub(lower, 1, 10) == "/movedebug"
 				if not isAdminLine then
 					return
 				end
