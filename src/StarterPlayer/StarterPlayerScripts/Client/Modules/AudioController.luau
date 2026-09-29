@@ -168,7 +168,12 @@ local function masterFor(def: SoundDef): number
 end
 
 local function volumeOf(def: SoundDef): number
-	return math.clamp(def.Volume, 0, 1) * masterFor(def)
+	local v = math.clamp(def.Volume, 0, 1)
+	local band = if (Mix :: any).BandsLive == true then (Mix :: any).Bands[def.Bus or "World"] else nil
+	if band then
+		v = math.clamp(v, band[1], band[2]) -- claude-bud JOB 14 sound pass (SoundConfig.Mix.Bands)
+	end
+	return v * masterFor(def)
 end
 
 local function pitchOf(def: SoundDef): number

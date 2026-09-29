@@ -1540,6 +1540,15 @@ local function vehicleClassFor(weaponId: string, class: string?, mult: number?):
 	return c, m
 end
 
+-- claude-bud JOB 14: a vehicle hit with no hit point still shows the attacker's number (GameFeelConfig.VehicleNumbers)
+function CombatService._VehicleNumberPos(attacker: Player?, veh: Model): Vector3?
+	local ok, GF = pcall(require, script.Parent.GameFeelService)
+	if ok and type(GF) == "table" and (GF :: any).VehicleNumberPos then
+		return (GF :: any).VehicleNumberPos(attacker, veh)
+	end
+	return nil
+end
+
 local function vehicleName(model: Model): string
 	local id = model:GetAttribute("VehicleId")
 	local def = if typeof(id) == "string" then (VehicleConfig.Vehicles :: any)[id] else nil
@@ -1689,7 +1698,7 @@ function CombatService.ApplyHit(attacker: Player?, hit: Instance, amount: number
 				IsHeadshot = false,
 				Target = veh,
 				TargetKind = "Vehicle",
-				Pos = opts.HitPos,
+				Pos = opts.HitPos or CombatService._VehicleNumberPos(attacker, veh), -- claude-bud JOB 14
 				Assist = if opts.Assist then true else nil,
 			})
 		end

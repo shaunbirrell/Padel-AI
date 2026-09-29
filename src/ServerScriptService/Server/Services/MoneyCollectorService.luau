@@ -594,6 +594,9 @@ local function pushAlarm(victim: Player, thief: Player, hold: RaidHold, first: b
 		HoldNeed = need,
 		Text = text,
 	})
+	pcall(function() -- claude-bud JOB 14: the raid report (GameFeelService)
+		require(script.Parent.GameFeelService).NoteRaid(victim.UserId, "Hold", thief)
+	end)
 	if first and NotificationService and NotificationService.NotifyThrottled then
 		NotificationService.NotifyThrottled(victim, text, "Warn", 4, RaidConfig.Raid.VictimAlarmToastCooldown, "atm_alarm")
 	end
@@ -659,6 +662,9 @@ local function cancelHold(thief: Player, reason: string, secs: number?, victim: 
 				Reason = shown,
 				Text = RaidConfig.Text.RaidDefended,
 			})
+			pcall(function() -- claude-bud JOB 14: the raid report (GameFeelService)
+				require(script.Parent.GameFeelService).NoteRaid(owner.UserId, "AtmDefended", thief)
+			end)
 		end
 	end
 end
@@ -834,6 +840,9 @@ local function completeRaid(thief: Player, victim: Player, hold: RaidHold): bool
 		Success = false,
 		Raided = true,
 	})
+	pcall(function() -- claude-bud JOB 14: the raid report (GameFeelService)
+		require(script.Parent.GameFeelService).NoteRaid(victim.UserId, "Robbed", thief, moved)
+	end)
 	MoneyCollectorService.RefreshForPlayer(victim)
 	if AnalyticsService and AnalyticsService.Log then
 		local props = { VictimUserId = victim.UserId, Stolen = moved, Balance = balance, PlotId = hold.PlotId }

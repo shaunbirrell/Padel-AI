@@ -56,6 +56,14 @@ end
 
 local LABELS = { Airdrop = "AIRDROP", Bounty = "BOUNTY" }
 
+-- claude-bud JOB 14: the sound pass (GameFeelClient.Sound is a no-op unless GameFeelConfig's SoundPass is live)
+local function feelSound(cue: string)
+	local ok, GF = pcall(require, script.Parent.Parent.Modules.GameFeelClient)
+	if ok and type(GF) == "table" and (GF :: any).Sound then
+		pcall((GF :: any).Sound, cue)
+	end
+end
+
 local function marker(kind: string, data: any)
 	local label = LABELS[kind]
 	if label == nil or typeof(data) ~= "table" then
@@ -65,6 +73,7 @@ local function marker(kind: string, data: any)
 		local x, y, z = tonumber(data.X), tonumber(data.Y), tonumber(data.Z)
 		if x and y and z then
 			ObjectiveMarker.ShowWith({ Short = label, X = x, Y = y, Z = z }, { TimeoutSeconds = 300 })
+			feelSound("Marker")
 		end
 	else
 		local cur = ObjectiveMarker.Current()
@@ -204,6 +213,7 @@ local function airstrikeButton()
 	corner.CornerRadius = UDim.new(0, 10)
 	corner.Parent = btn
 	btn.Activated:Connect(function()
+		feelSound("Tap")
 		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPlazaAirstrike)
 	end)
 	gui.Parent = lp:WaitForChild("PlayerGui", 30)

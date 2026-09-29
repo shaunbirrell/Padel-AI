@@ -9145,3 +9145,39 @@ ds_territories.luau T3):
 - **Friends:** every 60 s, $500 per friend in the same server (max 3); friendships are cached at join with IsFriendsWithAsync.
 - **Comeback:** DataService keeps `PrevJoinUnix` before stamping LastJoinUnix. Away 3+ days pays $25,000 once on that join.
 - **Not in LaunchSafe yet** (new, unverified on Roblox servers). Flip `EngagementConfig.Rollout` per feature after the phone test.
+
+## 2026-09-29 — claude-bud JOB 14: game-feel polish (GameFeelConfig + GameFeelService + GameFeelClient, owner-only)
+- **Already there, kept:** infantry, NPC and direct vehicle hits already sent hit markers + damage numbers
+  (CombatHitFeedback → CombatController / WeaponVisuals); ATM raids already had Robbed / Defended chips.
+  Job 14 fills the gaps:
+  - **Kill feed:** PvP kills + vehicle kills by a player.
+    - Two lines max, in the HUD top stack (order 47, after the toasts and the event banner) rather than a corner, so
+      it can't overlap controls.
+    - Lines last 4 s. DisplayNames + the weapon's DisplayName only. Blast deaths stay quiet (nuke §15.2).
+    - Server-wide cap of 4 lines/s; extras are dropped, never queued.
+    - Assumption: NPC kills are left out of the feed (they would flood it).
+  - **Vehicle numbers:**
+    - The owner of a damaged vehicle sees red numbers over it, merged per 0.25 s, plus a metal hit sound.
+    - A vehicle hit with no hit point uses the vehicle's position for the attacker's number.
+    - Splash damage on a vehicle now gives the attacker a hit marker.
+    - Billboards: MaxDistance 40, never AlwaysOnTop (CLAUDE.md world-label rule). Assumption: from a jet camera
+      farther than 40 studs the number is not drawn (the sound still plays).
+  - **Premium missile splash:** it now also damages vehicles (VehicleHealth.ApplyRadiusDamage), never your own or a
+    clan mate's. Before, only a direct hit did. This is inside the owner-only premium weapons.
+  - **Raid report:**
+    - Base hits, a breach and ATM holds open a raid. 20 s after the last event the owner gets ONE banner:
+      "YOU WERE RAIDED -$N · name" if the ATM was robbed, else "BASE DEFENDED" ("Gate down · cash safe" after a breach).
+    - Hooks are pcall'd one-liners in GateDefenseService / MoneyCollectorService; for anyone the report isn't live
+      for, NoteRaid returns at once.
+  - **Sound pass:**
+    - `SoundConfig.Mix.Bands` gives one volume band per bus. AudioController clamps into it only while
+      `Mix.BandsLive` (set by GameFeelClient for players the pass is live for). Today only Level.Up (0.9 → 0.8) is
+      outside its band (`tools/sound_audit.py`).
+    - Once-silent actions now make a sound, using existing sound ids only: premium gun, missile launch,
+      airdrop / bounty marker, AIRSTRIKE tap, event banner, raid report, kill feed when you die.
+- **Tests:**
+  - `tools/gamefeel_test.py` runs the real service in the Luau CLI: 18/18.
+  - `tools/sound_audit.py`: every played key exists.
+  - There is no HUD viewport harness in this repo (check_hud.py is not here), so the top-stack placement at
+    800×360 / 844×390 needs the phone test.
+- All four features are owner-only via `GameFeelConfig.Rollout` and not in LaunchSafe yet.

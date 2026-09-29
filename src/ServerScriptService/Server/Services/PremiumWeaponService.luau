@@ -186,6 +186,19 @@ local function splash(player: Player, model: Model, pos: Vector3, radius: number
 		IgnoreModel = model,
 		VsInfantryMult = vsInf,
 	})
+	-- claude-bud JOB 14: the missile's splash hurts vehicles too (never your own or a clan mate's); the splash hit
+	-- marker comes from GameFeelService (VehicleHealth.OnDamage)
+	pcall(function()
+		local VH = require(script.Parent.Parent.Modules.VehicleHealth) :: any
+		VH.ApplyRadiusDamage(pos, radius, amount, player, P.Missile.Class, {
+			WeaponId = weaponId,
+			IgnoreModel = model,
+			SkipOwner = function(uid: number): boolean
+				local o = Players:GetPlayerByUserId(uid)
+				return uid == player.UserId or (o ~= nil and cs.IsClanAlly ~= nil and cs.IsClanAlly(player, o) == true)
+			end,
+		})
+	end)
 end
 
 local function fire(player: Player, aim: any)

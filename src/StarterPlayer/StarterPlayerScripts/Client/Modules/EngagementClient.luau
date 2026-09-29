@@ -129,6 +129,12 @@ function EngagementClient.Init()
 				local ev, t = E.EventAt(os.time())
 				if ev then
 					label.Text = string.format("%s · %s left", ev.Name, fmtLeft(t - os.time()))
+					if not label.Visible then -- claude-bud JOB 14: the banner appearing was silent
+						local okG, GF = pcall(require, script.Parent.GameFeelClient)
+						if okG and type(GF) == "table" then
+							pcall((GF :: any).Sound, "EventStart")
+						end
+					end
 					label.Visible = true
 				else
 					label.Visible = false

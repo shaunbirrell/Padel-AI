@@ -1038,6 +1038,9 @@ local function alertBaseUnderAttack(plotId: number?, ownerUserId: number?, attac
 	if not owner or owner == attacker then
 		return
 	end
+	pcall(function() -- claude-bud JOB 14: the raid report (GameFeelService; owner-only config, nil otherwise)
+		require(script.Parent.GameFeelService).NoteRaid(ownerUserId, "Hit", attacker)
+	end)
 	local now = os.clock()
 	local cd = GateDefenseConfig.BaseUnderAttackCooldown or 60
 	if now - (lastAttackAlertAt[plotId] or -math.huge) < cd then
@@ -1489,6 +1492,9 @@ local function breachGate(def: PlotDefense)
 	if owner and NotificationService then
 		NotificationService.Notify(owner, GateDefenseConfig.GateBreachToast or "Gate breached!", "Warn")
 	end
+	pcall(function() -- claude-bud JOB 14: the raid report
+		require(script.Parent.GameFeelService).NoteRaid(def.OwnerUserId, "Breach", nil)
+	end)
 end
 
 --[[ v69 F3 order: (1) sane amount + attacker alive and close to the hit part, (2) a defense on that plot and the
