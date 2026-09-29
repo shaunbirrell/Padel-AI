@@ -60,6 +60,7 @@ local ClanWarService = safeRequire("ClanWarService", Services.ClanWarService)
 local CodesService = safeRequire("CodesService", Services.CodesService)
 local BuildingTips = safeRequire("BuildingTips", Services.BuildingTips) -- claude-bud JOB 24 §5
 local BaseSignService = safeRequire("BaseSignService", Services.BaseSignService) -- claude-bud JOB 25
+local ArmourService = safeRequire("ArmourService", Services.ArmourService) -- claude-bud JOB 26
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
@@ -567,6 +568,7 @@ safeInit("ClanWarService", ClanWarService, deps)
 safeInit("CodesService", CodesService, deps)
 safeInit("BuildingTips", BuildingTips, deps) -- claude-bud JOB 24 §5: "NEW BUILDING" cards (after BaseService)
 safeInit("BaseSignService", BaseSignService, deps) -- claude-bud JOB 25: "<Name>'s Empire" signs (after BaseService + GateDefenseService)
+safeInit("ArmourService", ArmourService, deps) -- claude-bud JOB 26: personal armour (bonus max health)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)
 safeInit("PremiumWeaponService", PremiumWeaponService, deps) -- claude-bud PREMIUM: Robux-only vehicle weapons (server-validated)

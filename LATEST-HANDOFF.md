@@ -1,4 +1,62 @@
 <!-- Q2-START -->
+## claude-bud JOB 26 (2026-09-29): stronger army + buyable player armour (branch `claude/desktop-bud`)
+- **Before:**
+  - soldier HP 90 (x1.0-1.5 Body Armor), damage 8 (x1.0-1.5 Marksman Training), 1.8 shots/s, range 55 (fire band
+    46.75), hit chance 96-98 % (no spread);
+  - vs players: x0.6, capped at 40 DPS per victim.
+- **After** (`ArmyConfig.StrongerArmy`, kill switch `Enabled`):
+  - HP 150, damage 12, 2.2 shots/s; player cap 50 DPS;
+  - the owner sees hit markers / damage numbers for NPC hits (at most 4/s); tracers every 0.15 s per army (the
+    per-recipient caps stay).
+- **Army upgrades** (Army menu → ARMY UPGRADES opens the Soldiers research track):
+  - Firepower = Marksman Training, Toughness = Body Armor (both existed, not duplicated);
+  - Training = NEW **Combat Drills** (+8 % fire rate per level, 5 levels, $4k → $300k).
+- **Time to kill** (model, config numbers; tools/sim/army_pvp_model.py), before → after:
+
+  | Target | Before | After |
+  |---|---|---|
+  | Player, no armour, 5 soldiers | 2.6 s | 1.6 s |
+  | Player, no armour, 8 soldiers | 2.4 s | 1.4 s |
+  | Player, top armour (-50 %), 5 soldiers | 5.3 s | 4.4 s |
+  | Infantry (80 HP) | 1.1 s | 0.6 s |
+  | Heavy (140 HP) | 2.0 s | 1.1 s |
+  | Fort Guard (170 HP) | 2.5 s | 1.3 s |
+  | Oil Rig Guard (200 HP) | 2.8 s | 1.5 s |
+  | Gate guard, 140 HP | 2.0 s | 1.1 s |
+  | Gate guard, 300 HP | 4.3 s | 2.3 s |
+
+  - Army vs army: armies never target each other (not a game mechanic), so it was not measured.
+- **Player armour** (`ArmourConfig`, kill switch `Enabled`; Army menu → MY ARMOUR):
+
+  | Tier | Damage cut | Price | Needs |
+  |---|---|---|---|
+  | Light Vest | -10 % | $12k | Command Center L1 |
+  | Combat Armour | -20 % | $45k | CC L2 |
+  | Heavy Armour | -30 % | $150k | CC L3 |
+  | Elite Armour | -40 % | $450k | CC L4 |
+  | Titan Armour | -50 % (the cap) | $1.2M | CC L5 |
+
+  - Bought in order, inside his own base only.
+  - Effect = bonus MAX HEALTH (100 / (1 - cut)): 20 % = 125 HP. So it works against every damage source (guns,
+    soldiers, guards, defenders, vehicles, missiles), whatever code hurts him.
+  - HUD: a blue armour bar above the health bar (the bonus, spent first).
+  - Look: a vest (every tier), plus a helmet from Heavy (simple welded parts). "Armour look" in the panel hides it; the
+    stats stay.
+  - Saved as the hidden PersonalArmour research level (paid through ResearchService, so the SpendCash invariant stays
+    at 8 sites). Kept after death AND through rebirth (research is never reset).
+  - Toast on buy: "ARMOUR EQUIPPED - you take 20% less damage."
+  - **Robux suggestion (NOT created, `CommanderArmourRobux = false`):** a cosmetic "Commander Armour" skin, or the
+    Titan tier early at CC L3, for about 199 R$. The owner decides.
+- **Pins retired** (claude-bud notes, replaced in tools/checks/claude_bud_job26.py): the squadfair damage /
+  LosCheckAt / ApplyUnitHit lines and the army A0 UnitShotFx body. The job24b model range is updated.
+- **Checks:** BuyPathStatic PASS=6357 FAIL=0; rojo ok; no new LSP errors.
+- **Test ON HIS PHONE:**
+  1. ATTACK an outpost: defenders fall fast, you see hit numbers, and tracers are visible.
+  2. Army menu → ARMY UPGRADES opens Research (Soldiers): buy Combat Drills.
+  3. Army menu → MY ARMOUR inside your base: buy Light Vest. Check the toast, the blue bar above health, and the vest
+     on your avatar. Try it outside the base ("Buy armour inside your base").
+  4. Die and respawn: the armour is kept. Rebirth: the armour is kept.
+  5. Hide the armour look: the vest goes, the blue bar stays.
 ## v120 (Code Bot Roblox, 2026-09-29 ~23:55 Dublin): Army Soldier body for the army + base/tower guards LIVE — place version 118
 - Owner asked for this as "v119"; Claude-watch shipped v119 (JOB 24c+25, place version 117) at 23:45 while this was in flight, so it went out as **WE_Build 120**, rebased on `a05d034`.
 - **Asset:** "Army Soldier" 7703684779 (@Ca_zr, free, owned by shaunie6 since 2026-09-29, so live LoadAsset works). It is an R6 Humanoid rig with 6 Motor6D (RootJoint, Neck, 2 shoulders, 2 hips) and classic 1x2x1 block limbs. The look is Shirt 1718367929 + Pants 1837155389 (image ids) + a MulticamFAST helmet (mesh 5608666819, 2103 tris at LOD0).

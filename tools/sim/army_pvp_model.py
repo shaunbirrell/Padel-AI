@@ -108,3 +108,46 @@ if __name__ == "__main__":
     print("|---|---|---|---|")
     for n, label, m, hr in rows:
         print(f"| {n} | {label} | {m:.1f} | {hr:.0%} |")
+
+
+# ── claude-bud JOB 26: before (v118 numbers) / after (ArmyConfig.StrongerArmy) and player armour ──────────────────
+def job26_tables():
+    base = load()
+    army = (CFG / "ArmyConfig.luau").read_text(encoding="utf-8")
+    sa = army[army.find("\tStrongerArmy = {"):]
+    sa = sa[:sa.find("\n\t},")]
+    armour = (CFG / "ArmourConfig.luau").read_text(encoding="utf-8")
+    reds = [float(x) for x in re.findall(r"Reduction = ([\d.]+)", armour)]
+    combat = (CFG / "CombatConfig.luau").read_text(encoding="utf-8")
+    npc = {k: float(v) for k, v in re.findall(r"\n\t\t(\w+) = \{\n(?:[^}]*?)Health = (\d+)", combat)}
+    before = dict(base)
+    after = dict(base)
+    after["damage"] = num(sa, "Damage", base["damage"])
+    after["rate"] = num(sa, "FireRate", base["rate"])
+    after["dpsCap"] = num(sa, "PlayerMaxDps", base["dpsCap"])
+    rows = []
+    for label, hp in [("player, no armour", base["playerHp"]), (f"player, top armour (-{int(max(reds) * 100)}%)", base["playerHp"] / (1 - max(reds)))]:
+        for n in (5, 8):
+            b = fight(before, n, hp, before["damage"] * before["pMult"], 36, cap=before["dpsCap"])[0]
+            a = fight(after, n, hp, after["damage"] * after["pMult"], 36, cap=after["dpsCap"])[0]
+            rows.append((label, n, b, a))
+    for t in ("Infantry", "HeavyInfantry", "FortGuard", "OilRigGuard"):
+        if t in npc:
+            b = fight(before, 5, npc[t], before["damage"], 38)[0]
+            a = fight(after, 5, npc[t], after["damage"], 38)[0]
+            rows.append((f"outpost defender {t} ({npc[t]:.0f} HP)", 5, b, a))
+    for gh in (base["guardHp"][0], base["guardHp"][-1]):
+        b = fight(before, 5, gh, before["damage"], 38)[0]
+        a = fight(after, 5, gh, after["damage"], 38)[0]
+        rows.append((f"gate guard {gh:.0f} HP", 5, b, a))
+    return rows, after, before
+
+
+if __name__ == "__main__":
+    rows, after, before = job26_tables()
+    print()
+    print(f"JOB 26: soldier damage {before['damage']:.0f} -> {after['damage']:.0f}, fire rate {before['rate']} -> {after['rate']}, player DPS cap {before['dpsCap']:.0f} -> {after['dpsCap']:.0f}")
+    print("| Target | Soldiers | Time to kill before (s) | after (s) |")
+    print("|---|---|---|---|")
+    for label, n, b, a in rows:
+        print(f"| {label} | {n} | {b:.1f} | {a:.1f} |")

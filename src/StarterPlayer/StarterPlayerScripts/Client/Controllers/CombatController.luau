@@ -271,6 +271,8 @@ type Slot = {
 local hotbar: Frame? = nil
 local healthPanel: Frame? = nil
 local healthFill: Frame? = nil
+local armourFill: Frame? = nil -- claude-bud JOB 26: the blue bar (the armour's bonus health, spent first)
+local armourPanel: Frame? = nil
 local ammoPanel: Frame? = nil
 local ammoName: TextLabel? = nil
 local ammoCount: TextLabel? = nil
@@ -633,8 +635,19 @@ local function applyHealth(h: number, mx: number)
 	health = math.max(0, h)
 	maxHealth = math.max(0, mx)
 	local fill = healthFill
+	-- claude-bud JOB 26: armour = bonus max health above the base (WE_ArmourBaseHP): the blue bar holds the part above
+	-- the base (spent first), the health bar the base part
+	local base = tonumber(game:GetService("Players").LocalPlayer:GetAttribute("WE_ArmourBaseHP")) or maxHealth
+	local bonus = math.max(0, maxHealth - base)
+	local ap, af = armourPanel, armourFill
+	if ap and af then
+		ap.Visible = bonus > 0.5 and (healthPanel == nil or (healthPanel :: Frame).Visible)
+		if bonus > 0.5 then
+			af.Size = UDim2.fromScale(math.clamp((health - base) / bonus, 0, 1), 1)
+		end
+	end
 	if fill and maxHealth > 0 then
-		local ratio = math.clamp(health / maxHealth, 0, 1)
+		local ratio = math.clamp(if bonus > 0.5 then math.min(health, base) / math.max(1, base) else health / maxHealth, 0, 1)
 		fill.Size = UDim2.fromScale(ratio, 1)
 		fill.BackgroundColor3 = if ratio <= 0.25 then HP.Low elseif ratio <= 0.5 then HP.Mid else HP.Fill
 	end
@@ -2056,6 +2069,41 @@ local function buildHud(pg: Instance)
 	round(fill)
 	healthPanel = hp
 	healthFill = fill
+	-- claude-bud JOB 26: the armour bar, a thin blue strip right above the health bar (hidden without armour)
+	local ab = Instance.new("Frame")
+	ab.Name = "ArmourPanel"
+	ab.AnchorPoint = Vector2.new(0, 0)
+	ab.Size = UDim2.fromOffset(HP.MinWidth, math.max(6, math.floor(HP.Height * 0.45)))
+	ab.BackgroundColor3 = HP.Bg
+	ab.BackgroundTransparency = HP.BgTransparency
+	ab.BorderSizePixel = 0
+	ab.ClipsDescendants = true
+	ab.Active = false
+	ab.Visible = false
+	ab.Parent = sg
+	round(ab)
+	local af = Instance.new("Frame")
+	af.Name = "Fill"
+	af.Size = UDim2.fromScale(1, 1)
+	af.BackgroundColor3 = Color3.fromRGB(70, 150, 255)
+	af.BorderSizePixel = 0
+	af.Active = false
+	af.Parent = ab
+	round(af)
+	armourPanel = ab
+	armourFill = af
+	-- it follows the health bar wherever HudLayout puts it (bottom / top stack, width, shown / hidden): no per-frame work
+	local function syncArmour()
+		local h = ab.Size.Y.Offset
+		ab.Position = UDim2.fromOffset(hp.AbsolutePosition.X - sg.AbsolutePosition.X, hp.AbsolutePosition.Y - sg.AbsolutePosition.Y - h - 3)
+		ab.Size = UDim2.fromOffset(hp.AbsoluteSize.X, h)
+		local base = tonumber(game:GetService("Players").LocalPlayer:GetAttribute("WE_ArmourBaseHP")) or maxHealth
+		ab.Visible = hp.Visible and maxHealth - base > 0.5
+	end
+	hp:GetPropertyChangedSignal("AbsolutePosition"):Connect(syncArmour)
+	hp:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncArmour)
+	hp:GetPropertyChangedSignal("Visible"):Connect(syncArmour)
+	task.defer(syncArmour)
 
 	buildAmmo(sg)
 	if isTouch then

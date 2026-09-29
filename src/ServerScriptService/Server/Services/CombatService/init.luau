@@ -1943,6 +1943,7 @@ end
 	before; the group is still provoked. A hit on a grouped or stance NPC is refused while the owner is out of its reach
 	(unitMayHit: no provoke by proxy). No per-hit feedback to the owner (NoAttackerFb: no extra remote traffic); a
 	credited kill still toasts "Squad: X down". Returns (dealt, killed). ]]
+local unitFbAt: { [number]: number } = {} -- claude-bud JOB 26: throttled army hit markers
 function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: number, credit: boolean): (number, boolean)
 	if typeof(owner) ~= "Instance" or not owner:IsA("Player") then
 		return 0, false
@@ -1971,7 +1972,17 @@ function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: num
 	if not unitMayHit(owner, rec) then
 		return 0, false -- squadfair: a grouped / stance NPC whose owner is not near: no provoke by proxy
 	end
-	return hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = true, NoCredit = credit ~= true })
+	-- claude-bud JOB 26: the owner SEES his army hit (a hit marker / damage number) at most NpcHitMarkersPerSecond
+	local sa = (ArmyConfig :: any).StrongerArmy
+	local fb = false
+	if typeof(sa) == "table" and sa.Enabled == true then
+		local now = clock()
+		if now - (unitFbAt[owner.UserId] or -math.huge) >= 1 / math.max(0.5, tonumber(sa.NpcHitMarkersPerSecond) or 4) then
+			unitFbAt[owner.UserId] = now
+			fb = true
+		end
+	end
+	return hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = not fb, NoCredit = credit ~= true })
 end
 
 --[[ claude-bud JOB 24 §2 (ArmyConfig.ArmyCombat): may an ATTACKING army of `owner` shoot player `victim`? The same rules
@@ -2115,7 +2126,10 @@ function CombatService.UnitShotFx(owner: Player, origin: Vector3, landed: Vector
 	if cfg.Enabled ~= true or not ArmyConfig.IsLive("Escort", owner) then
 		return false
 	end
-	local ok, sent = pcall(CombatFx.ArmyBullet, owner.UserId, origin, landed, kind, cfg.PerArmyMinGap, cfg.PerRecipientHz, cfg.PerRecipientBurst)
+	-- claude-bud JOB 26: more visible tracers while StrongerArmy is on (the per-recipient caps stay)
+	local sa = (ArmyConfig :: any).StrongerArmy
+	local gap = if typeof(sa) == "table" and sa.Enabled == true then tonumber(sa.TracerMinGap) or cfg.PerArmyMinGap else cfg.PerArmyMinGap
+	local ok, sent = pcall(CombatFx.ArmyBullet, owner.UserId, origin, landed, kind, gap, cfg.PerRecipientHz, cfg.PerRecipientBurst)
 	return ok and sent == true
 end
 

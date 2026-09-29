@@ -6713,7 +6713,7 @@ must_contain(SQF_SO, '\tlocal nearD = C.UnitNearStuds\n', 'squadfair: unit hit c
 must_contain(SQF_SO, '\tlocal hi = math.min(tonumber(C.UnitMaxHitChance) or 0.95, 0.99)\n\tlocal lo = math.min(tonumber(C.UnitMinHitChance) or 0.05, hi)\n\treturn math.clamp(chance, lo, hi)\n', 'squadfair v3: the code caps the unit hit chance at UnitMaxHitChance (never above 0.99, whatever the config says)')
 must_contain(SQF_SO, 'function SquadOrdersService.SetRandomForTests(seedOrRandom: any)', 'squadfair v2: the unit hit roll is seedable by tests only (SetRandomForTests)')
 must_not_contain(SQF_SO, 'function SquadOrdersService.SetRandom(', 'squadfair v2: no SetRandom (renamed SetRandomForTests)')
-must_contain(SQF_SO, 'local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit)', 'squadfair: a unit hit goes through CombatService.ApplyUnitHit (pcall; research damage kept)')
+# claude-bud JOB 26: retired, superseded in tools/checks/claude_bud_job26.py (StrongerArmy: damage / fire rate from ArmyConfig, throttled army hit markers, denser tracers): #must_contain(SQF_SO, 'local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit)', 'squadfair: a unit hit goes through CombatService.ApplyUnitHit (pcall; research damage kept)')
 must_contain(SQF_SO, '\tif not ok then\n\t\t-- squadfair: never silent (every squad would deal 0 damage), never a log flood (one line per UnitHitErrorLogSeconds)\n\t\tif now - hitErrLogAt >= (tonumber(CombatFairnessConfig.UnitHitErrorLogSeconds) or 30) then\n\t\t\twarn(', 'squadfair v2: an ApplyUnitHit error is warned, rate-limited')
 must_contain(SQF_SO, '\t\t\tand typeof(inst:GetAttribute("NPCId")) == "string"\n', 'squadfair: squads target CombatService NPCs only (no statues)')
 must_not_contain(SQF_SO, 'TakeDamage(', 'squadfair: no raw TakeDamage from a squad unit (the NPC damage path only)')
@@ -6732,7 +6732,7 @@ must_contain(SQF_SO, 'escortHum, escortRoot = nearestHostile(proot.Position, r, 
 must_contain(SQF_SO, '\tlocal holds = if skipCalm == true and CombatService then CombatService.NPCHoldsFire else nil\n', 'squadfair: escort target pick asks CombatService which NPCs hold fire')
 must_contain(SQF_SO, '\t\t\t\t\tif not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(owner, id) == false) then\n', 'squadfair v2: the pick skips calm NPCs (escort) and NPCs this squad may not hurt (UnitMayHitNPC)')
 # v2/v3: blocked re-checks throttled; blocked chase gives up; no stale timer; repeated orders
-must_contain(SQF_SO, '\tunit.LosCheckAt = now + 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)\n\tunit.LosBlocked = true', 'squadfair v2: a check that found nothing in sight waits one shot cooldown (LosCheckAt)')
+# claude-bud JOB 26: retired, superseded in tools/checks/claude_bud_job26.py (StrongerArmy: damage / fire rate from ArmyConfig, throttled army hit markers, denser tracers): #must_contain(SQF_SO, '\tunit.LosCheckAt = now + 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)\n\tunit.LosBlocked = true', 'squadfair v2: a check that found nothing in sight waits one shot cooldown (LosCheckAt)')
 must_contain(SQF_SO, '\treturn unitReady(unit, now) and now >= unit.LosCheckAt\n', 'squadfair v2: shot checks honour LosCheckAt')
 must_contain(SQF_SO, '\t\tif since ~= nil and now - since >= giveUpAfter then\n\t\t\tgiveUpFight(unit, nroot.Position) -- nothing in sight for UnitBlockedChaseSeconds', 'squadfair v2 / 3.2: an ATTACK chase with nothing in sight gives up that fight after UnitBlockedChaseSeconds')
 must_contain(SQF_SO, '\t\t\telseif now - unit.ChaseAt >= giveUpAfter then\n\t\t\t\tgiveUpFight(unit, nroot.Position) -- no nearer in UnitBlockedChaseSeconds', 'squadfair v2 / 3.2: an approach that gets no nearer gives up that fight too')
@@ -6770,7 +6770,7 @@ must_contain(SQF_SO, '\t\t\t\t\tif (st.Order == "Follow" or (st.Order == "Attack
 # CombatService: squad hits, provoke by proxy
 must_contain(SQF_CS, 'function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: number, credit: boolean): (number, boolean)', 'squadfair: CombatService.ApplyUnitHit (squad hits)')
 must_contain(SQF_CS, '\tif model == nil or not model:IsA("Model") or Players:GetPlayerFromCharacter(model) ~= nil then\n\t\treturn 0, false -- never a player', 'squadfair: a squad never hurts a player (novice shield, clan ally, anyone)')
-must_contain(SQF_CS, '\tif not unitMayHit(owner, rec) then\n\t\treturn 0, false -- squadfair: a grouped / stance NPC whose owner is not near: no provoke by proxy\n\tend\n\treturn hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = true, NoCredit = credit ~= true })', 'squadfair v3: a squad hit on a grouped / stance NPC is refused while the owner is out of its reach; else hurtNPC (provoke + credit), no per-hit feedback')
+# claude-bud JOB 26: retired, superseded in tools/checks/claude_bud_job26.py (StrongerArmy: damage / fire rate from ArmyConfig, throttled army hit markers, denser tracers): #must_contain(SQF_CS, '\tif not unitMayHit(owner, rec) then\n\t\treturn 0, false -- squadfair: a grouped / stance NPC whose owner is not near: no provoke by proxy\n\tend\n\treturn hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = true, NoCredit = credit ~= true })', 'squadfair v3: a squad hit on a grouped / stance NPC is refused while the owner is out of its reach; else hurtNPC (provoke + credit), no per-hit feedback')
 must_contain(SQF_CS, '\tif CombatFairnessConfig.UnitProvokeNeedsOwner ~= true or not (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then\n\t\treturn true\n\tend\n\tlocal reach = tonumber(CombatFairnessConfig.UnitProvokeOwnerStuds) or 0\n\tif not (reach > 0) then\n\t\treach = rec.Def.AggroRange\n\tend', 'squadfair v3: the owner gate covers EVERY hit on a grouped / stance NPC (calm or provoked; the hurtNPC provoke condition); plain Aggressive NPCs are never gated')
 must_contain(SQF_CS, '\treturn (root.Position - rec.Root.Position).Magnitude <= reach\n', 'squadfair v2: the owner\'s own character must be within that reach')
 must_contain(SQF_CS, 'function CombatService.UnitMayHitNPC(owner: Player, npcId: string): boolean', 'squadfair v2: CombatService.UnitMayHitNPC (the squad pick skips NPCs it may not hurt)')
@@ -8830,9 +8830,9 @@ def _a0_rules() -> None:
               and not re.search(r"\b(TakeDamage|SetAttribute|Destroy)\b|\bAimTarget\s*=(?!=)|\bLastHitBy\s*=(?!=)", th + ai),
               "NPCThreat / NPCsAimingAt only read the NPC records (AimTarget, LastHitBy)", "NPCThreat / NPCsAimingAt missing or writing")
     uf = _a0_fn(cs, "function CombatService.UnitShotFx(") or ""
-    _a0_check('if cfg.Enabled ~= true or not ArmyConfig.IsLive("Escort", owner) then\n\t\treturn false\n\tend' in uf
-              and "pcall(CombatFx.ArmyBullet, owner.UserId, origin, landed, kind, cfg.PerArmyMinGap, cfg.PerRecipientHz, cfg.PerRecipientBurst)" in uf,
-              "CombatService.UnitShotFx: live owners only, through CombatFx.ArmyBullet with the ShotFx caps (pcall'd)", "UnitShotFx changed or missing")
+    # claude-bud JOB 26: retired, superseded in tools/checks/claude_bud_job26.py (StrongerArmy: damage / fire rate from ArmyConfig, throttled army hit markers, denser tracers): # _a0_check('if cfg.Enabled ~= true or not ArmyConfig.IsLive("Escort", owner) then\n\t\treturn false\n\tend' in uf
+    # and "pcall(CombatFx.ArmyBullet, owner.UserId, origin, landed, kind, cfg.PerArmyMinGap, cfg.PerRecipientHz, cfg.PerRecipientBurst)" in uf,
+    # "CombatService.UnitShotFx: live owners only, through CombatFx.ArmyBullet with the ShotFx caps (pcall'd)", "UnitShotFx changed or missing")
     fx = _a0_code(A0_FX)
     ab = _a0_fn(fx, "function CombatFx.ArmyBullet(") or ""
     fo = _a0_fn(fx, "local function fanOut(") or ""

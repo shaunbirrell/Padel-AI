@@ -228,6 +228,10 @@ end
 
 --[[ Buy the next level of an upgrade. Server-authoritative: id validated, price from ResearchConfig,
 	Lab + track gates re-checked, Cash via EconomyService.SpendCash. Returns (true) or (false, error). ]]
+-- claude-bud JOB 26: set only while PurchaseViaService runs (a ServiceOnly node, e.g. personal armour, is bought
+-- only through its own service's checks; the research remote can never set this)
+local serviceCall = false
+
 function ResearchService.Purchase(player: Player, upgradeId: any): (boolean, string?)
 	-- 1-3: id / def / enabled
 	if not RemoteGuard.IsIdString(upgradeId, 48) then
@@ -239,6 +243,10 @@ function ResearchService.Purchase(player: Player, upgradeId: any): (boolean, str
 		return false, "UnknownUpgrade"
 	end
 	if not def.Enabled then
+		return false, "Disabled"
+	end
+	-- claude-bud JOB 26: a ServiceOnly node (personal armour) is bought only through its own service's checks
+	if (def :: any).ServiceOnly == true and not serviceCall then
 		return false, "Disabled"
 	end
 	-- 4: profile (nil until the real save has loaded)
@@ -334,6 +342,17 @@ function ResearchService.Purchase(player: Player, upgradeId: any): (boolean, str
 	end
 	ResearchService.Push(player)
 	return true, nil
+end
+
+-- claude-bud JOB 26: ArmourService's purchase of a ServiceOnly node (after its own tier / base / Command Center checks)
+function ResearchService.PurchaseViaService(player: Player, upgradeId: string): (boolean, string?)
+	serviceCall = true
+	local ok, a, b = pcall(ResearchService.Purchase, player, upgradeId)
+	serviceCall = false
+	if not ok then
+		return false, "SpendFailed"
+	end
+	return a, b
 end
 
 --[[ Player-facing refusal text (nil = stay silent). ]]

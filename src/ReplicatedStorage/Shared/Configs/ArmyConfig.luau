@@ -558,6 +558,19 @@ local ArmyConfig = {
 	-- or a CombatService NPC; a soldier with no line of sight to a player standing behind a gate shoots the gate. Kills
 	-- are credited to the army owner (players: cash, XP, MOST KILLS; NPCs: as his own kills; guards: the JOB 20 guard
 	-- reward). Enabled = false: the army hits NPCs only, as v116.
+	-- claude-bud JOB 26 (owner: "the attack works but they should be stronger"): the soldier's base numbers (Enabled =
+	-- false: OrdersConfig AttackDamage 8 / AttackFireRate 1.8 / UnitHealth 90 and ArmyCombat.PlayerMaxDps, as v118).
+	-- Research scales them: Marksman Training (SoldierDamage) = Firepower, Combat Drills (SoldierFireRate) = Training,
+	-- Body Armor (SoldierHealth) = Toughness.
+	StrongerArmy = {
+		Enabled = true,
+		Damage = 12, -- per hit (x research), x ArmyCombat.PlayerDamageMult on players
+		FireRate = 2.2, -- shots per second per soldier (x research)
+		Health = 150, -- soldier max HP (x research)
+		PlayerMaxDps = 50, -- per victim per army (a full army kills an unarmoured player in ~2 s, a Titan one in ~4 s)
+		NpcHitMarkersPerSecond = 4, -- the owner sees a hit marker / damage number for his army's NPC hits, this often at most
+		TracerMinGap = 0.15, -- ArmyConfig.ShotFx.PerArmyMinGap while on (more visible tracers; the per-recipient cap stays)
+	},
 	ArmyCombat = {
 		Enabled = true,
 		TargetPlayers = true,

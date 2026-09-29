@@ -87,6 +87,8 @@ Constants.RemoteNames = {
 	BuildingTip = "BuildingTip", -- claude-bud JOB 24 §5: server -> client "NEW BUILDING" card { Id }
 	RequestTipSetting = "RequestTipSetting", -- claude-bud JOB 24 §5: Settings -> TIPS on / off
 	RequestTipsReplay = "RequestTipsReplay", -- claude-bud JOB 24 §5: Settings -> show my building tips again
+	RequestBuyArmour = "RequestBuyArmour", -- claude-bud JOB 26: buy the next armour tier (ArmourService)
+	RequestArmourLook = "RequestArmourLook", -- claude-bud JOB 26: hide / show the armour look
 	CodeStateUpdate = "CodeStateUpdate",
 	-- Code Bot v102: RemoteFunction. Client -> server (code: string) -> { Result = "Success" | "AlreadyUsed" | "Invalid"
 	-- | "Expired" | "RateLimited" | "NotReady", Message: string }. Server validates + rate-limits (CodesService).

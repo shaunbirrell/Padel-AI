@@ -246,6 +246,20 @@ local function ensureFolder(): Folder
 	return f
 end
 
+-- claude-bud JOB 26: ArmyConfig.StrongerArmy (nil when off: the OrdersConfig numbers, as v118)
+local function strongArmy(): any
+	local c = (ArmyConfig :: any).StrongerArmy
+	return if typeof(c) == "table" and c.Enabled == true then c else nil
+end
+local function armyDamageBase(): number
+	local c = strongArmy()
+	return if c then tonumber(c.Damage) or 8 else OrdersConfig.AttackDamage or 8
+end
+local function armyHealthBase(): number
+	local c = strongArmy()
+	return if c then tonumber(c.Health) or 90 else OrdersConfig.UnitHealth or 90
+end
+
 local function researchMult(player: Player?, statId: string): number -- v69 research: ≥1, 1 when absent
 	if player == nil or ResearchService == nil or ResearchService.GetBonus == nil then
 		return 1
@@ -255,6 +269,16 @@ local function researchMult(player: Player?, statId: string): number -- v69 rese
 		return m
 	end
 	return 1
+end
+
+-- claude-bud JOB 26: a soldier's shots per second (StrongerArmy.FireRate x Combat Drills research, else AttackFireRate)
+local function armyFireRate(unit: SquadUnit): number
+	local c = strongArmy()
+	if c == nil then
+		return OrdersConfig.AttackFireRate or 1.8
+	end
+	local owner = Players:GetPlayerByUserId(tonumber(unit.OwnerUserId) or 0)
+	return (tonumber(c.FireRate) or 1.8) * researchMult(owner, "SoldierFireRate")
 end
 
 local function researchAdd(player: Player?, statId: string): number -- v69 research: 0..10, 0 when absent
@@ -827,7 +851,7 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	weldPart("Rifle", Vector3.new(0.26, 0.26, 2.4), CFrame.new(1.15, 0.15, -0.85), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
 
 	local humanoid = Instance.new("Humanoid")
-	humanoid.MaxHealth = math.floor((OrdersConfig.UnitHealth or 90) * researchMult(owner, "SoldierHealth") + 0.5) -- v69 research
+	humanoid.MaxHealth = math.floor(armyHealthBase() * researchMult(owner, "SoldierHealth") + 0.5) -- v69 research
 	humanoid.Health = humanoid.MaxHealth
 	humanoid.WalkSpeed = OrdersConfig.UnitWalkSpeed or 14
 	humanoid.AutoRotate = true
@@ -1298,7 +1322,7 @@ local function faceYaw(root: BasePart, lookAt: Vector3)
 end
 
 local function unitReady(unit: SquadUnit, now: number): boolean
-	return now - unit.LastFireAt >= 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)
+	return now - unit.LastFireAt >= 1 / math.max(armyFireRate(unit), 0.1)
 end
 
 -- squadfair: the unit hit chance at `dist` studs: UnitNearHitChance up to UnitNearStuds, falling linearly to
@@ -1388,7 +1412,7 @@ local function unitShoot(player: Player, unit: SquadUnit, th: Humanoid, now: num
 	if typeof(setShooter) == "function" then
 		setShooter(unit.Model)
 	end
-	local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit) -- v69 research
+	local ok, dealt = pcall(apply, player, th, armyDamageBase() * researchMult(player, "SoldierDamage"), credit) -- v69 research
 	if typeof(setShooter) == "function" then
 		setShooter(nil)
 	end
@@ -1514,7 +1538,7 @@ end
 
 -- squadfair: a check cast rays and found nothing in sight: the next one waits 1 / AttackFireRate
 local function losBlockedFor(unit: SquadUnit, now: number)
-	unit.LosCheckAt = now + 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)
+	unit.LosCheckAt = now + 1 / math.max(armyFireRate(unit), 0.1)
 	unit.LosBlocked = true
 	unit.AimRoot = nil
 	unit.AimHum = nil
@@ -2820,7 +2844,7 @@ local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: Base
 	unit.LastFireAt = now
 	local kind = if part ~= tgt.Root and part:GetAttribute("GateGuardPart") ~= true then "Gate" else tgt.Kind
 	local name = if tgt.Player then tgt.Player.Name elseif kind == "Gate" then "gate" else "guard"
-	local base = (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage")
+	local base = armyDamageBase() * researchMult(player, "SoldierDamage")
 	if rng:NextNumber() >= unitHitChance((part.Position - unit.Root.Position).Magnitude) then
 		hitLog(player, unit, kind, name, 0, 0, "miss")
 		return false
@@ -2833,7 +2857,8 @@ local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: Base
 			w = { At = now, Dealt = 0 }
 			victimDps[key] = w
 		end
-		local room = (tonumber(ac.PlayerMaxDps) or math.huge) - w.Dealt
+		local sa = strongArmy()
+		local room = (tonumber(if sa then sa.PlayerMaxDps else ac.PlayerMaxDps) or math.huge) - w.Dealt
 		if room <= 0 then
 			hitLog(player, unit, kind, name, dmg, 0, "dps_cap")
 			return false
@@ -3540,7 +3565,7 @@ end
 function SquadOrdersService.ApplyResearch(player: Player) -- v69 research: rescale living units' HP, add units
 	local st = squadByUser[player.UserId]
 	if st then
-		local maxHp = math.floor((OrdersConfig.UnitHealth or 90) * researchMult(player, "SoldierHealth") + 0.5)
+		local maxHp = math.floor(armyHealthBase() * researchMult(player, "SoldierHealth") + 0.5)
 		for _, u in ipairs(st.Units) do
 			if u.Alive and u.Humanoid.Health > 0 then
 				local ratio = u.Humanoid.Health / math.max(u.Humanoid.MaxHealth, 1)

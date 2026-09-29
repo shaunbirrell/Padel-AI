@@ -9521,3 +9521,14 @@ ds_territories.luau T3):
 - **Army:** the owner's saved soldier count (profile.Soldiers).
 - **Not done, against the CLAUDE.md nation rules:** leaderboard flags, auto-applied IP country, outpost flags. These
   need the owner's explicit override.
+
+## 2026-09-29 — claude-bud JOB 26: stronger army + armour
+- **Armour = bonus max health**, not a damage multiplier in one function. Player damage has several paths (CombatService
+  hurtPlayer, BaseGuards TakeDamage, blasts, vehicles), so max health is the only mechanism that treats every source
+  the same. The blue bar shows the bonus part.
+- **Paid through a hidden research node** (PersonalArmour, ServiceOnly) to keep the XP SpendCash invariant (8 sites,
+  owned-level tables). The tier is read with ResearchService.GetLevel.
+- **Player DPS cap 50:** a full army kills an unarmoured player in ~1.6 s (the owner wanted "a few seconds"; 35 would
+  give ~2.6 s). It is one config number.
+- **Kept through rebirth:** yes (research is not reset by rebirth). No extra rebirth bonus was added.
+- **Tests:** static pins + the TTK model only; nothing was run in Studio or on a phone.

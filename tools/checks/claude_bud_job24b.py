@@ -71,7 +71,7 @@ try:
     import army_pvp_model as _pvp
     _c, _rows = _pvp.table()
     _p5 = [r for r in _rows if r[0] == 5 and r[1].startswith("stationary")][0]
-    _jb(2.5 <= _p5[2] <= 8, f"5 soldiers kill a standing player in 2.5-8 s (model {_p5[2]:.1f} s, hit rate {_p5[3]:.0%})")
+    _jb(1.2 <= _p5[2] <= 8, f"5 soldiers kill a standing player in 1.2-8 s (JOB 26 StrongerArmy; model {_p5[2]:.1f} s, hit rate {_p5[3]:.0%})")
     _g = [r for r in _rows if r[0] == 5 and "gate guard" in r[1]]
     _jb(all(r[2] <= 10 for r in _g), f"5 soldiers kill a gate guard within 10 s ({[round(r[2], 1) for r in _g]})")
 except Exception as _e:  # noqa: BLE001

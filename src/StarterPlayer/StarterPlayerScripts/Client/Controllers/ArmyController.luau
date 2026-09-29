@@ -552,6 +552,39 @@ function ArmyController.Init()
 			end,
 		},
 	})
+	-- claude-bud JOB 26: army upgrades (Firepower / Training / Toughness = the Soldiers research track) + armour
+	buttonRow({
+		{
+			Label = "ARMY UPGRADES",
+			Gold = true,
+			OnClick = function()
+				local mod = script.Parent:FindFirstChild("ResearchController")
+				if mod and mod:IsA("ModuleScript") then
+					local req: any = require
+					local ok, rc = pcall(req, mod)
+					if ok and typeof(rc) == "table" and typeof(rc.Open) == "function" then
+						setOpen(false)
+						rc.Open("Soldiers")
+					end
+				end
+			end,
+		},
+		{
+			Label = "MY ARMOUR",
+			Gold = true,
+			OnClick = function()
+				local mod = script.Parent:FindFirstChild("ArmourController")
+				if mod and mod:IsA("ModuleScript") then
+					local req: any = require
+					local ok, ac = pcall(req, mod)
+					if ok and typeof(ac) == "table" and typeof(ac.Open) == "function" then
+						setOpen(false)
+						ac.Open()
+					end
+				end
+			end,
+		},
+	})
 
 	-- Keep recruit labels priced
 	local prevRefresh = refreshLabels

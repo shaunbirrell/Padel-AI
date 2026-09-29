@@ -38,6 +38,7 @@ export type UpgradeDef = {
 	Note: string?,
 	Enabled: boolean,
 	RebirthScale: number?, -- claude-bud JOB 20: price x (1 + RebirthScale x rebirths)
+	ServiceOnly: boolean?, -- claude-bud JOB 26: bought only through its own service (ArmourService), never the research remote
 	FlatCosts: boolean?, -- claude-bud JOB 24: every level costs the same (e.g. one tower guard per level)
 }
 
@@ -82,12 +83,22 @@ ResearchConfig.StatIds = {
 	"SquadSize",
 	-- claude-bud JOB 24 §4a (live: "disabling GuardArmor / GuardRoster / TowerGuards: unknown Stat"): the JOB 20 guard stats
 	-- (GuardConfig.HealthStat / CountStat, BaseGuards hiredCount)
+	"SoldierFireRate", -- claude-bud JOB 26: Combat Drills
+	"PlayerArmour", -- claude-bud JOB 26: personal armour tier (ArmourService; the hidden Armour track)
 	"GuardHP",
 	"GuardCount",
 	"TowerGuards",
 }
 
 ResearchConfig.Tracks = {
+	-- claude-bud JOB 26: personal armour (ArmourService only; NOT in TrackOrder, so the Research panel never shows it)
+	Armour = {
+		Id = "Armour",
+		DisplayName = "Armour",
+		Order = 9,
+		Blurb = "Personal armour, bought at your base.",
+		Requires = { StructureId = "CommandCenter", Level = 1, Text = "Needs a Command Center", Short = "NEEDS HQ" },
+	},
 	Weapons = {
 		Id = "Weapons",
 		DisplayName = "Weapons",
@@ -219,6 +230,40 @@ ResearchConfig.Upgrades = {
 		MaxLevel = 5,
 		Costs = { 2500, 10000, 32000, 90000, 240000 },
 		EffectText = "%s squad damage",
+		Enabled = true,
+	},
+	-- claude-bud JOB 26: personal armour. Bought ONLY at the base through ArmourService (tier order, Command Center level,
+	-- inside his own plot); paid and saved here so the Cash path stays the one research purchase (ServiceOnly: the
+	-- research remote refuses it). Costs / reductions mirror ArmourConfig.Tiers. Kept through rebirth like all research.
+	PersonalArmour = {
+		Id = "PersonalArmour",
+		Track = "Armour",
+		Order = 1,
+		DisplayName = "Personal Armour",
+		Badge = "ARM",
+		Stat = "PlayerArmour",
+		Kind = "Add",
+		PerLevel = 1,
+		MaxLevel = 5,
+		Costs = { 12000, 45000, 150000, 450000, 1200000 },
+		LabLevels = { 0, 0, 0, 0, 0 },
+		EffectText = "armour tier %s",
+		ServiceOnly = true,
+		Enabled = true,
+	},
+	-- claude-bud JOB 26: "Training" for the army (fire rate); Firepower / Toughness are Marksman Training / Body Armor
+	CombatDrills = {
+		Id = "CombatDrills",
+		Track = "Soldiers",
+		Order = 4,
+		DisplayName = "Combat Drills",
+		Badge = "ROF",
+		Stat = "SoldierFireRate",
+		Kind = "Mult",
+		PerLevel = 0.08,
+		MaxLevel = 5,
+		Costs = { 4000, 15000, 45000, 120000, 300000 },
+		EffectText = "%s squad fire rate",
 		Enabled = true,
 	},
 	SquadExpansion = {
