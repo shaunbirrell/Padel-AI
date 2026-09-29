@@ -20,7 +20,8 @@ onto v102. Keep Codes / CashBoost; Engagement Double Cash events stack with the 
   invite ($10k/friend, 5/day; friend gets $2.5k once); friends-in-server $500/min (max 3); comeback after 3+ days $25k.
   Not in LaunchSafe yet — phone-test as owner, then flip Rollout per feature.
 - **Cash stack:** v102 `CashBoostMult` + JOB 13 `EngagementService.CashMult` both apply on non-exempt Cash.
-- Pins: `tools/checks/claude_bud_q3.py` + `tools/checks/codebot_v103.py`. BuyPathStatic FAIL=0, rojo build ok. PreferMesh OFF. WE_Building* untouched.
+- Pins: `tools/checks/claude_bud_q3.py` + `tools/checks/codebot_v103.py`. BuyPathStatic PASS=5554 FAIL=0, rojo build ok. PreferMesh OFF. WE_Building* untouched.
+- **Published:** Open Cloud place version **101** (commit 2619db1). BuyPathStatic PASS=5554 FAIL=0.
 - **Publish note for Shaun:** "Migrate to Latest Update" (or shut down old servers) so v103 appears.
 
 
