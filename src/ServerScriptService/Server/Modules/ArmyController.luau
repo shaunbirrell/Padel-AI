@@ -1,20 +1,22 @@
 --!strict
 --[[
-	v114 (Code Bot Roblox, 2026-09-29, docs/ARMY-FOLLOW-ROOTCAUSE-2.md): ArmyController — ONE authoritative movement
+	v115 (Code Bot Roblox, 2026-09-29, docs/ARMY-FOLLOW-ROOTCAUSE-3.md): ArmyController — ONE authoritative movement
 	controller per army (ArmyConfig.Follow3; Enabled false / Rollout off = the v113 ArmyFollow path).
 
-	  * State machine per army: FOLLOW / HOLD / ATTACK / RETREAT (= the squad order). Only the current state issues
-	    destinations: FOLLOW here (every Follow3.UpdateSeconds), the other three in SquadOrdersService (their MoveTo
-	    goes through SoldierController too). In FOLLOW the escort code only shoots and aims.
-	  * Anchor + heading: Shared/Util/FormationController (smoothed position, rate-limited heading with deadband and
-	    hysteresis).
-	  * Slots: FormationController.Assign — PERMANENT per unit, kept across FOLLOW <-> ATTACK / HOLD / RETREAT (an
-	    attacker walks back to its SAME slot, no teleport, no wipe); a roster change only fills holes.
-	  * Per unit: SoldierController.Drive (MoveTo, speed, facing, arrival, stuck, the emergency reposition).
+	  * THE FORMATION FOLLOWS HIM, SOLDIERS FOLLOW SLOTS. FormationController.Plan: a breadcrumb trail of his path; a
+	    block of rows BEHIND him on that trail (row r at FirstRowStuds + r x RowSpacing of path behind him), each row
+	    square to his path there (per-row heading from the trail tangent = his movement direction, rate-limited,
+	    deadband, hysteresis, only while he moves). Columns across (2..ColumnsMax), escorts in the rows directly behind
+	    their unit. No side wings, nothing rotates round him, nothing orbits him. When he stops: nothing re-forms.
+	  * State machine per army: FOLLOW / HOLD / ATTACK / RETREAT (= the squad order). Only FOLLOW is driven here.
+	  * Slots: FormationController.Assign — PERMANENT per unit (FormationSlot attribute), only a death / removal /
+	    roster change touches it (WARN logged). No distance, no nearest-slot, no pairs() ordering.
+	  * Per unit: SoldierController.Drive (MoveTo on a moved target / max interval only, catch-up toward its OWN slot,
+	    arrival deadzone, stuck fallback path, the logged emergency reposition).
 	  * His own base (Follow2.Tidy hold): units wait at their gate cells (ArmyFollow.HoldSpot), never cross his plot.
-	  * Publishes WE_FormYaw (the formation heading, on change only) and WE_EscSide / WE_FormSlot per unit so every
-	    client lays that unit's escort figures out along its formation row (RigAnimator) instead of a rigid file
-	    ahead of the unit that swings with every turn.
+	  * Debug (Follow3.Debug + the player's WE_ArmyDebug attribute; default on for DebugUserIds; /armydebug toggles):
+	    WE_SlotPos per unit (his client draws the slot markers + labels: ArmyDebugClient, visible to him only), a
+	    throttled per-soldier state log, WARN on every slot change and on every reposition (SoldierController).
 	  * Collision audit every AuditSeconds: every part of every unit carries the ArmyNPCs group.
 ]]
 
@@ -29,7 +31,7 @@ local SoldierController = require(script.Parent.SoldierController)
 local ArmyFollow = require(script.Parent.ArmyFollow)
 
 local ArmyController = {}
-ArmyController.Stats = { Ticks = 0, Errors = 0, AuditFixes = 0 }
+ArmyController.Stats = { Ticks = 0, Errors = 0, AuditFixes = 0, SlotChanges = 0 }
 
 local deps: { [string]: any } = {}
 local started = false
@@ -69,6 +71,23 @@ function ArmyController.LiveFor(userId: any): boolean
 	return false
 end
 
+-- debug overlay / logs on for this player: Follow3.Debug and his WE_ArmyDebug attribute (/armydebug toggles it)
+function ArmyController.DebugFor(player: Player): boolean
+	return cfg().Debug == true and player:GetAttribute("WE_ArmyDebug") == true
+end
+
+local function isDebugUser(userId: number): boolean
+	local ids = cfg().DebugUserIds
+	if typeof(ids) == "table" then
+		for _, id in ipairs(ids) do
+			if id == userId then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 local STATE_OF: { [string]: string } = { Follow = "FOLLOW", Hold = "HOLD", Attack = "ATTACK", Retreat = "RETREAT" }
 
 local function army(st: any): any
@@ -76,13 +95,14 @@ local function army(st: any): any
 	if a == nil then
 		a = {
 			State = nil,
-			Anchor = FormationController.NewAnchor(),
-			Assign = FormationController.NewAssignment(),
+			F = FormationController.NewArmy(), -- trail + permanent assignment + per-slot velocity
 			LastPos = nil,
 			LastAt = nil,
-			Yaw = nil,
 			AuditAt = -math.huge,
+			LayoutKey = nil,
+			LogAt = -math.huge,
 		}
+		a.Assign = a.F.Assign
 		st._ac = a
 	end
 	return a
@@ -99,36 +119,85 @@ function ArmyController.SlotOf(st: any, unit: any): number
 	return idx or tonumber(unit.Slot) or 1
 end
 
--- spawn offset (owner frame: x = right, z = behind) of a new unit with SquadSlot `slot`: its future formation cell
+-- spawn offset (owner frame: x = right, z = behind) of a new unit with SquadSlot `slot`: in the block behind him
 function ArmyController.SpawnOffset(slot: number): Vector3
-	local lat, back = FormationController.SlotLocal(slot, cfg())
-	return Vector3.new(lat, 0, back)
+	return FormationController.SpawnOffset(slot, cfg())
 end
 
-local function publish(st: any, a: any)
-	-- per unit: its side / slot (on change only: attributes replicate) and the heading (past YawPublishDeg only)
-	local dir = a.Anchor.Dir
-	local yaw = if dir then math.floor(FormationController.YawDeg(dir) + 0.5) else nil
-	local pub = yaw ~= nil and (a.Yaw == nil or math.abs(((yaw - a.Yaw + 180) % 360) - 180) >= num("YawPublishDeg", 2))
-	if pub then
-		a.Yaw = yaw
+-- escort figures a unit shows (the client draws them in the rows directly behind it)
+local function escOf(u: any): number
+	local m = u.Model
+	if m == nil then
+		return 0
 	end
+	return math.max(0, math.floor(tonumber(m:GetAttribute("WE_Escorts")) or 0))
+end
+
+local function unitName(u: any): string
+	return string.format("S%02d", tonumber(u.Slot) or 0)
+end
+
+-- per unit, on change only (attributes replicate): FormationSlot / WE_FormSlot (its permanent slot), WE_FormYaw (its
+-- row's heading, past YawPublishDeg), WE_FormRow / WE_FormX (its cell), and in debug WE_SlotPos (its world slot)
+local function publish(player: Player, st: any, a: any, plans: { [any]: any }, debugOn: boolean)
+	local yawStep = num("YawPublishDeg", 3)
+	local posStep = num("DebugPublishStuds", 0.5)
 	for _, u in ipairs(st.Units) do
-		if u.Alive and u.Model and u.Model.Parent then
+		local m = u.Model
+		if u.Alive and m and m.Parent then
 			local idx = a.Assign.ByUnit[u]
 			if idx and u._acIdx ~= idx then
+				local old = u._acIdx
 				u._acIdx = idx
-				local side = FormationController.SideRow(idx)
 				pcall(function()
-					u.Model:SetAttribute("WE_FormSlot", idx)
-					u.Model:SetAttribute("WE_EscSide", side)
+					m:SetAttribute("FormationSlot", idx)
+					m:SetAttribute("WE_FormSlot", idx)
 				end)
-				u._acYaw = nil
+				if old == nil then
+					print(string.format("[ArmyDebug] SLOT ASSIGN %s %s -> slot %d (first assignment)", player.Name, unitName(u), idx))
+				else
+					ArmyController.Stats.SlotChanges += 1
+					warn(string.format("[ArmyDebug] SLOT CHANGE %s %s %d -> %d reason=roster change (death / removal / new unit)",
+						player.Name, unitName(u), old, idx))
+				end
 			end
-			if yaw ~= nil and u._acYaw ~= a.Yaw then
-				u._acYaw = a.Yaw
+			local p = plans[u]
+			if p then
+				local yaw = math.floor(FormationController.YawDeg(p.Heading) + 0.5)
+				if u._acYaw == nil or math.abs(((yaw - u._acYaw + 180) % 360) - 180) >= yawStep then
+					u._acYaw = yaw
+					pcall(function()
+						m:SetAttribute("WE_FormYaw", yaw)
+					end)
+				end
+				if u._acRow ~= p.Row then
+					u._acRow = p.Row
+					pcall(function()
+						m:SetAttribute("WE_FormRow", p.Row)
+					end)
+				end
+				if debugOn then
+					if u._acMode ~= u._scState then
+						u._acMode = u._scState
+						pcall(function()
+							m:SetAttribute("WE_MoveState", u._scState)
+						end)
+					end
+					local sp: Vector3 = p.Goal
+					if u._acSlotPos == nil or flatDist(u._acSlotPos, sp) >= posStep then
+						u._acSlotPos = sp
+						pcall(function()
+							m:SetAttribute("WE_SlotPos", sp)
+						end)
+					end
+				end
+			end
+			if not debugOn and (u._acSlotPos ~= nil or u._acMode ~= nil) then
+				u._acSlotPos = nil
+				u._acMode = nil
 				pcall(function()
-					u.Model:SetAttribute("WE_FormYaw", a.Yaw)
+					m:SetAttribute("WE_SlotPos", nil)
+					m:SetAttribute("WE_MoveState", nil)
 				end)
 			end
 		end
@@ -164,12 +233,12 @@ local function outOfView(ownerRoot: BasePart, p: Vector3): boolean
 	return not ArmyFollow.ClearLine(ownerRoot.Position + Vector3.new(0, 1.5, 0), p)
 end
 
--- the emergency reposition spot: its own slot pushed RepositionBehindStuds back (behind the phone camera), then
--- half that, then the slot; on the ground, with a clear line from him (never inside a wall), never near him
-local function repositionSpot(a: any, ownerRoot: BasePart, lat: number, back: number): CFrame?
-	local dir: Vector3 = a.Anchor.Dir or Vector3.new(0, 0, -1)
+-- the emergency reposition spot: its own slot pushed RepositionBehindStuds further back along its row's heading
+-- (behind the phone camera), then half that, then the slot; on the ground, with a clear line from him, never near him
+local function repositionSpot(ownerRoot: BasePart, slot: Vector3, heading: Vector3): CFrame?
+	local dir: Vector3 = if heading.Magnitude > 1e-3 then heading.Unit else Vector3.new(0, 0, -1)
 	local y = ownerRoot.Position.Y
-	local slot = FormationController.SlotWorld(a.Anchor, lat, back, y)
+	slot = Vector3.new(slot.X, y, slot.Z)
 	local behind = num("RepositionBehindStuds", 16)
 	ArmyFollow.RefreshRayFilter(nil)
 	for _, c in ipairs({ slot - dir * behind, slot - dir * behind * 0.5, slot }) do
@@ -183,6 +252,29 @@ local function repositionSpot(a: any, ownerRoot: BasePart, lat: number, back: nu
 	return nil
 end
 
+-- the throttled per-soldier debug line (DebugLogSeconds): id, slot, position, target, distance, WalkSpeed, mode,
+-- time since its last MoveTo, catch-up, recovery stage, pathfinding, stuck timer
+local function debugLog(player: Player, a: any, living: { any }, plans: { [any]: any }, ownerPos: Vector3, now: number)
+	if now - a.LogAt < num("DebugLogSeconds", 2) then
+		return
+	end
+	a.LogAt = now
+	for _, u in ipairs(living) do
+		local p = plans[u]
+		local pos: Vector3 = u.Root.Position
+		local goal: Vector3? = if p then p.Goal else nil
+		local lastMove = u._scLastMoveAt
+		print(string.format(
+			"[ArmyDebug] %s %s slot=%s row=%s pos=(%.1f,%.1f) target=%s dist=%s toPlayer=%.1f ws=%.1f mode=%s sinceMoveTo=%s catchUp=%s recovery=%s path=%s stuck=%.1f",
+			player.Name, unitName(u), tostring(a.Assign.ByUnit[u]), tostring(p and p.Row), pos.X, pos.Z,
+			if goal then string.format("(%.1f,%.1f)", goal.X, goal.Z) else "-",
+			if goal then string.format("%.1f", flatDist(pos, goal)) else "-", flatDist(pos, ownerPos),
+			u.Humanoid.WalkSpeed, tostring(u._scState), if lastMove then string.format("%.1f", now - lastMove) else "-",
+			tostring(u._scState == "CatchingUp"), tostring(u._scStage or 0), tostring(u._scPath ~= nil),
+			if u._scState == "InPosition" then 0 else now - (u._scProgAt or now)))
+	end
+end
+
 local function stepArmy(player: Player, st: any, now: number)
 	local a = army(st)
 	local state = STATE_OF[st.Order] or "FOLLOW"
@@ -194,12 +286,28 @@ local function stepArmy(player: Player, st: any, now: number)
 	end
 	-- permanent slots (only a roster change touches the table; survivors never move)
 	FormationController.Assign(a.Assign, living)
+	-- a unit that left the roster (death / dismiss / despawn) frees its slot: logged, nobody else moves
+	a.Known = a.Known or {}
+	for u, idx in pairs(a.Known) do
+		if a.Assign.ByUnit[u] == nil then
+			a.Known[u] = nil
+			u._acIdx = nil
+			ArmyController.Stats.SlotChanges += 1
+			warn(string.format("[ArmyDebug] SLOT CHANGE %s %s %d -> none reason=%s", player.Name, unitName(u), idx,
+				if u.Alive == false then "death" else "removed"))
+		end
+	end
+	for _, u in ipairs(living) do
+		a.Known[u] = a.Assign.ByUnit[u]
+	end
 	audit(st, a, now)
 	local prevState = a.State
 	a.State = state
+	local debugOn = ArmyController.DebugFor(player)
 	if state ~= "FOLLOW" then
 		-- HOLD / ATTACK / RETREAT: SquadOrdersService issues their goals (through SoldierController); nothing here
 		a.LastPos = nil
+		publish(player, st, a, {}, false)
 		return
 	end
 	local root: BasePart? = deps.CharacterRoot and deps.CharacterRoot(player)
@@ -219,59 +327,69 @@ local function stepArmy(player: Player, st: any, now: number)
 	local dt = if a.LastAt then math.clamp(now - a.LastAt, 0.01, 1) else num("UpdateSeconds", 0.2)
 	local vel = Vector3.zero
 	local jumped = false
-	local fresh = a.LastPos == nil -- first tick after a gap (respawn, order change): the anchor starts on him
+	local fresh = a.LastPos == nil -- first tick after a gap (respawn, order change): the trail restarts behind him
 	local hum = proot.Parent and proot.Parent:FindFirstChildOfClass("Humanoid")
 	local seated = hum ~= nil and (hum.Sit or hum.SeatPart ~= nil)
 	if a.LastPos then
 		vel = flat(pos - a.LastPos) / dt
 		if not seated and vel.Magnitude > num("OwnerJumpSpeed", 80) then
-			jumped = true -- a teleport / respawn: the anchor snaps (no sweep across the map)
+			jumped = true -- a teleport / respawn: the trail restarts (no sweep across the map)
 			vel = Vector3.zero
 		end
 	end
 	a.LastPos = pos
 	a.LastAt = now
-	-- a teleport / respawn, or FOLLOW just (re)started: the anchor starts on him (only the anchor snaps, never a unit)
-	FormationController.Step(a.Anchor, pos, proot.CFrame.LookVector, vel, dt, now, jumped or fresh or prevState ~= "FOLLOW", cfg())
-	publish(st, a)
+	-- his root's velocity NOW (the lane his next second of walking sweeps: rows he walks back into part)
+	local ownerVelNow = flat(proot.AssemblyLinearVelocity)
+	if jumped or seated then
+		ownerVelNow = vel
+	end
+	local snap = jumped or fresh or prevState ~= "FOLLOW"
+	local c = cfg()
+	local plans, _frames, cols, last = FormationController.Plan(a.F, living, pos, proot.CFrame.LookVector, vel, dt, snap, escOf, c, ownerVelNow)
+	local key = tostring(cols) .. "x" .. tostring(last + 1)
+	if a.LayoutKey ~= nil and a.LayoutKey ~= key then
+		warn(string.format("[ArmyDebug] LAYOUT CHANGE %s %s -> %s (columns x rows; roster / escort count changed)", player.Name, a.LayoutKey, key))
+	end
+	a.LayoutKey = key
+	publish(player, st, a, plans, debugOn)
+	local trail = a.F.Trail
 	local inBase, plotId = ArmyFollow.BaseState(st, player, pos, now)
 	local tidy = st._afTidy == true
 	local ownPlot: number? = if tidy then st._afOwnPlot else nil
 	local walkBack = tidy and not inBase and now - (st._afLeftBaseAt or -math.huge) < 8
-	local speedSmooth = a.Anchor.Vel.Magnitude
+	local speedSmooth = trail.Vel.Magnitude
 	local drivingFast = seated and speedSmooth > num("VehicleDeferSpeed", 20)
-	-- his MEASURED (smoothed) pace: a slow phone-joystick walk is not his full WalkSpeed (units would outrun the
-	-- slot and stop-start); falling behind is covered by the per-stud catch-up
-	local pace = speedSmooth
-	if hum and speedSmooth > hum.WalkSpeed * 0.9 then
-		pace = math.max(speedSmooth, hum.WalkSpeed)
-	end
-	if seated then
-		pace = math.max(16, math.min(speedSmooth, num("CatchUpMin", 30)))
-	end
-	local lead = FormationController.MoveLead(a.Anchor, cfg())
 	local base = tonumber((deps.UnitWalkSpeed or function()
 		return 14
 	end)()) or 14
-	local c = cfg()
 	for _, u in ipairs(living) do
 		u._acIdle = false
 		local idx = a.Assign.ByUnit[u] or 1
-		local lat, back = FormationController.SlotLocal(idx, c)
-		local goal = FormationController.SlotWorld(a.Anchor, lat, back, pos.Y)
-		local heading: Vector3 = a.Anchor.Dir or Vector3.new(0, 0, -1)
-		local moving = a.Anchor.Moving
+		local p = plans[u]
+		local goal: Vector3 = if p then p.Goal else pos
+		local heading: Vector3 = if p then p.Heading else flat(proot.CFrame.LookVector)
+		local moving = trail.Moving
+		-- its pace = its OWN slot's speed (a row rounding a corner outside moves faster than him, inside slower)
+		local pace = if p then p.Pace else 0
+		if seated then
+			pace = math.max(16, math.min(math.max(pace, speedSmooth), num("CatchUpMin", 30)))
+		end
+		local lead = if p and moving then p.Lead else Vector3.zero
 		local allow = not drivingFast and not walkBack
 		local noPath = false
 		local clear = num("OwnerClearStuds", 5)
 		local upos = u.Root.Position
+		local vel0 = ownerVelNow
 		if inBase and plotId then
 			-- his base: its gate cell (straight, never through his plot), standing facing out
 			local cell, out = ArmyFollow.HoldSpot(plotId, idx)
 			goal = Vector3.new(cell.X, pos.Y, cell.Z)
 			heading = out
 			moving = false
+			lead = Vector3.zero
 			clear = 0
+			vel0 = Vector3.zero
 			if not ArmyFollow.InPlot(plotId, upos, 0) then
 				goal = ArmyFollow.HoldVia(plotId, upos, goal)
 				noPath = true
@@ -282,11 +400,13 @@ local function stepArmy(player: Player, st: any, now: number)
 			local cell = ArmyFollow.HoldSpot(ownPlot, idx)
 			goal = Vector3.new(cell.X, pos.Y, cell.Z)
 		end
+		local g, h = goal, heading
 		local okU, errU = pcall(SoldierController.Drive, u, {
 			Goal = goal,
 			Heading = heading,
-			Lead = if moving then lead else Vector3.zero,
+			Lead = lead,
 			OwnerPos = pos,
+			OwnerVel = vel0,
 			OwnerMoving = moving,
 			Pace = pace,
 			BaseSpeed = base,
@@ -296,12 +416,11 @@ local function stepArmy(player: Player, st: any, now: number)
 			Jumped = jumped,
 			NoPath = noPath,
 			OwnerClear = clear,
-			Pivot = if inBase then nil else a.Anchor.Pos, -- the wheel pivot (U-turns: round the outside, not through him)
 			Spot = function()
-				return repositionSpot(a, proot, lat, back)
+				return repositionSpot(proot, g, h)
 			end,
-			OutOfView = function(p: Vector3): boolean
-				return outOfView(proot, p)
+			OutOfView = function(q: Vector3): boolean
+				return outOfView(proot, q)
 			end,
 		})
 		if not okU then
@@ -312,6 +431,9 @@ local function stepArmy(player: Player, st: any, now: number)
 				warn("[ArmyController] unit tick error for " .. tostring(player.UserId) .. ": " .. tostring(errU))
 			end
 		end
+	end
+	if debugOn then
+		debugLog(player, a, living, plans, pos, now)
 	end
 end
 ArmyController._StepArmy = stepArmy
@@ -349,7 +471,17 @@ function ArmyController.Start(d: { [string]: any })
 		errAt[p.UserId] = nil
 		errAt[-p.UserId] = nil
 	end)
-	print("[ArmyController] v114 Follow3 controller started (" .. tostring(cfg().Enabled) .. ", " .. tostring(cfg().Rollout) .. ")")
+	-- debug overlay default ON for Follow3.DebugUserIds (the owner); /armydebug (AdminService) toggles WE_ArmyDebug
+	local function debugDefault(p: Player)
+		if cfg().Debug == true and isDebugUser(p.UserId) and p:GetAttribute("WE_ArmyDebug") == nil then
+			p:SetAttribute("WE_ArmyDebug", true)
+		end
+	end
+	Players.PlayerAdded:Connect(debugDefault)
+	for _, p in ipairs(Players:GetPlayers()) do
+		debugDefault(p)
+	end
+	print("[ArmyController] v115 Follow3 TrailBlock controller started (" .. tostring(cfg().Enabled) .. ", " .. tostring(cfg().Rollout) .. ", debug " .. tostring(cfg().Debug) .. ")")
 end
 
 return ArmyController

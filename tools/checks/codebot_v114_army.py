@@ -132,8 +132,8 @@ _keys = ["Enabled", "Rollout", "UpdateSeconds", "VelSmoothSeconds", "AnchorLagSe
          "FaceTurnDegPerSec", "FaceAfterShotSeconds", "StuckProgressStuds", "StuckReissueSeconds", "StuckPathSeconds", "StuckAltSeconds",
          "StuckRepositionSeconds", "StuckRepositionMinStuds", "FarStuds", "FarSeconds", "OwnerJumpSpeed", "RepositionBehindStuds", "AuditSeconds"]
 _miss = [k for k in _keys if not _v114_re.search(r"\n\t\t" + k + r" = ", _f3)]
-_v114_check(_f3 != "" and not _miss, f"ArmyConfig.Follow3 has every tunable (missing {_miss})")
-_v114_check("\t\tEnabled = true," in _f3 and '\t\tRollout = "all",' in _f3 and '\t\tFormation = "Flank",' in _f3, "Follow3 live for all, Flank default (Enabled = false = v113)")
+# v115 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v115_army.py: #_v114_check(_f3 != "" and not _miss, f"ArmyConfig.Follow3 has every tunable (missing {_miss})")
+# v115 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v115_army.py: #_v114_check("\t\tEnabled = true," in _f3 and '\t\tRollout = "all",' in _f3 and '\t\tFormation = "Flank",' in _f3, "Follow3 live for all, Flank default (Enabled = false = v113)")
 
 
 def _v114_n(k, d):
@@ -141,18 +141,18 @@ def _v114_n(k, d):
     return float(m.group(1)) if m else d
 
 
-_v114_check(90 <= _v114_n("HeadingTurnDegPerSec", 0) <= 120 and 15 <= _v114_n("HeadingDeadbandDeg", 0) <= 20, "heading 90-120 deg/s, deadband 15-20 deg")
-_v114_check(5 <= _v114_n("ColSpacing", 0) <= 6 and 5 <= _v114_n("RowSpacing", 0) <= 6 and _v114_n("LateralStuds", 0) >= 5 and _v114_n("OwnerClearStuds", 0) >= 5,
-            "grid 5-6 studs, nothing within 5 studs of him")
+# v115 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v115_army.py: #_v114_check(90 <= _v114_n("HeadingTurnDegPerSec", 0) <= 120 and 15 <= _v114_n("HeadingDeadbandDeg", 0) <= 20, "heading 90-120 deg/s, deadband 15-20 deg")
+# v115 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v115_army.py: #_v114_check(5 <= _v114_n("ColSpacing", 0) <= 6 and 5 <= _v114_n("RowSpacing", 0) <= 6 and _v114_n("LateralStuds", 0) >= 5 and _v114_n("OwnerClearStuds", 0) >= 5,
+# v115 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v115_army.py: #            "grid 5-6 studs, nothing within 5 studs of him")
 _v114_check(0.15 <= _v114_n("UpdateSeconds", 0) <= 0.25 and 2 <= _v114_n("ReissueStuds", 0) <= 3 and 2 <= _v114_n("ArriveStuds", 0) <= 3 < _v114_n("LeaveStuds", 0),
             "tick 0.15-0.25 s, reissue 2-3 studs, arrival 2-3 studs with hysteresis")
 _v114_check(_v114_n("FarStuds", 0) >= 120 and _v114_n("StuckRepositionSeconds", 0) >= 8, "reposition only >= 120 studs / >= 8 s stuck")
 _ra = read(_v114_RA) or ""
-_v114_check('host:GetAttribute("WE_FormYaw")' in _ra and "L.Joint.C0 = CFrame.new(lo) * ROOT_ROT" in _ra, "client escorts laid out in the formation row (no rigid file swinging with unit yaw)")
+# v115 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v115_army.py: #_v114_check('host:GetAttribute("WE_FormYaw")' in _ra and "L.Joint.C0 = CFrame.new(lo) * ROOT_ROT" in _ra, "client escorts laid out in the formation row (no rigid file swinging with unit yaw)")
 _v114_check("PreferMesh = true" not in (read("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau") or ""), "PreferMesh stays OFF")
 for _rel in ("src/ServerScriptService/Server/Services/DataService.luau", "src/ServerScriptService/Server/Services/BaseService.luau", "src/ServerScriptService/Server/EarlyRemotes.server.luau"):
-    _v114_check('SetAttribute("WE_Build", 114)' in (read(_rel) or ""), "WE_Build=114 " + _rel.rsplit("/", 1)[-1])
-_v114_check("WE_Build=114" in (read("src/ServerScriptService/Server/Services/DataService.luau") or ""), "DataService log WE_Build=114")
+    pass  # v115 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v115_army.py: #_v114_check('SetAttribute("WE_Build", 114)' in (read(_rel) or ""), "WE_Build=114 " + _rel.rsplit("/", 1)[-1])
+# v115 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v115_army.py: #_v114_check("WE_Build=114" in (read("src/ServerScriptService/Server/Services/DataService.luau") or ""), "DataService log WE_Build=114")
 
 # 7. FormationController executed in the Luau CLI
 _luau = _v114_os.environ.get("LUAU")
@@ -161,7 +161,7 @@ if not _luau:
         if _v114_os.path.exists(_cand):
             _luau = _cand
             break
-if _luau:
+if False and _luau:  # v115 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v115_army.py: the v114 FormationController (NewAnchor / Step / SlotLocal / Pivot) sim; tools/sim/army_follow_sim.luau replaces it
     _vals = {}
     for _k in _keys:
         _m = _v114_re.search(r"\n\t\t" + _k + r" = (-?[\d.]+|true|false|\"\w+\")", _f3)

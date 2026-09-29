@@ -34,7 +34,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60) :: Instance -- Bootstrap already waited for it; bounded anyway
 local RigConfig = require((Shared :: any).Configs.RigConfig) :: any
--- v114 (Code Bot Roblox): ArmyConfig.Follow3 escort layout (the formation row, not a rigid file ahead of the unit)
+-- v114/v115 (Code Bot Roblox): ArmyConfig.Follow3 escort layout (v115: on the unit's own path behind it)
 local okArmyCfg, ArmyConfigOrErr = pcall(require, (Shared :: any).Configs.ArmyConfig)
 local follow3: any = if okArmyCfg and typeof(ArmyConfigOrErr) == "table" then (ArmyConfigOrErr :: any).Follow3 else nil
 
@@ -489,36 +489,104 @@ local function insertBest(buf: { Entry? }, n: number, cap: number, e: Entry): nu
 	return n
 end
 
---[[ v114 (ArmyConfig.Follow3.EscortLayout): a unit that carries WE_FormYaw / WE_EscSide (the server's formation heading
-	and its side) shows escort e at its formation row cell: e x ColSpacing further out from the owner, in the FORMATION
-	frame, not the unit's own yaw. A turning unit no longer swings a rigid 7-12 stud file through its neighbours and the
-	player, and the files do not all whip round when the units stop. Runs with the camera guard (GuardHz): one RootJoint
-	C0 write per escort only when it moved > 0.05 studs. Without the attributes: the Offsets file ahead (v113). ]]
+--[[ v115 (ArmyConfig.Follow3.EscortTrail, docs/ARMY-FOLLOW-ROOTCAUSE-3.md): escort figures are client-drawn copies of
+	a unit; the server's TrailBlock formation keeps a cell for each of them in the rows DIRECTLY BEHIND their unit (same
+	column, Follow3.RowSpacing apart). Here escort i (its stable escLayout Index, never a pairs() order) stands i x
+	RowSpacing of path behind its unit along the unit's OWN walked path (a per-unit breadcrumb trail, CrumbStep apart,
+	a backtrack pruned), so a turning unit's escorts walk round the corner behind it like the rows do, instead of
+	a rigid file / side row swinging with its yaw (v114: the side-row wings, gone). Past the trail's end they run on
+	straight back (its last direction, else -WE_FormYaw, else the root's back). One RootJoint C0 write per escort only
+	when it moved > 0.05 studs; runs with the camera guard (GuardHz). ]]
+local ESC_CRUMB = 0.4
+local escTrail: { [Instance]: { Vector3 } } = setmetatable({}, { __mode = "k" }) :: any
+
+local function escTrailStep(host: Instance, pos: Vector3, keep: number): { Vector3 }
+	local pts = escTrail[host]
+	if pts == nil then
+		pts = {}
+		escTrail[host] = pts
+	end
+	local p = Vector3.new(pos.X, pos.Y, pos.Z)
+	-- a backtrack (it walks back over its own trail): drop the points now ahead of it
+	while #pts >= 2 do
+		local a, b = pts[#pts - 1], pts[#pts]
+		local seg = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+		local to = Vector3.new(p.X - b.X, 0, p.Z - b.Z)
+		if seg:Dot(to) < 0 and to.Magnitude > 0.05 then
+			table.remove(pts)
+		else
+			break
+		end
+	end
+	local last = pts[#pts]
+	if last == nil or Vector3.new(p.X - last.X, 0, p.Z - last.Z).Magnitude >= ESC_CRUMB then
+		table.insert(pts, p)
+	end
+	-- keep `keep` studs of path
+	local arc, cut = 0, 0
+	for k = #pts, 2, -1 do
+		arc += Vector3.new(pts[k].X - pts[k - 1].X, 0, pts[k].Z - pts[k - 1].Z).Magnitude
+		if arc > keep then
+			cut = k - 2
+			break
+		end
+	end
+	for _ = 1, cut do
+		table.remove(pts, 1)
+	end
+	return pts
+end
+
 local function layoutEscorts(e: Entry)
-	if follow3 == nil or follow3.Enabled ~= true or follow3.EscortLayout ~= true then
+	if follow3 == nil or follow3.Enabled ~= true or follow3.EscortTrail == false then
 		return
 	end
 	local host, root = e.Host, e.Root
 	if host == nil or root == nil or #e.Escorts == 0 then
 		return
 	end
-	local yaw = host:GetAttribute("WE_FormYaw")
-	local side = host:GetAttribute("WE_EscSide")
-	if typeof(yaw) ~= "number" or typeof(side) ~= "number" then
-		return
-	end
-	local r = math.rad(yaw)
-	local dir = Vector3.new(math.sin(r), 0, math.cos(r))
-	local right = Vector3.new(-dir.Z, 0, dir.X)
-	local col = tonumber(follow3.ColSpacing) or 5.5
+	local spacing = tonumber(follow3.RowSpacing) or 4.5
 	local rcf = root.CFrame
+	local pos = rcf.Position
+	local pts = escTrailStep(host, pos, spacing * (#e.Escorts + 1) + 2)
+	-- the run-on direction (backwards) past the trail's end
+	local back: Vector3
+	if #pts >= 2 then
+		local a, b = pts[1], pts[2]
+		back = Vector3.new(a.X - b.X, 0, a.Z - b.Z)
+	else
+		local yaw = host:GetAttribute("WE_FormYaw")
+		if typeof(yaw) == "number" then
+			local r = math.rad(yaw)
+			back = -Vector3.new(math.sin(r), 0, math.cos(r))
+		else
+			back = -Vector3.new(rcf.LookVector.X, 0, rcf.LookVector.Z)
+		end
+	end
+	back = if back.Magnitude > 1e-3 then back.Unit else Vector3.new(0, 0, 1)
 	for _, x in ipairs(e.Escorts) do
 		local L = escLayout[x]
 		if L then
-			local localOff = rcf:VectorToObjectSpace(right * (side * L.Index * col))
-			local lo = Vector3.new(localOff.X, 0, localOff.Z)
-			local prev = L.Off
-			if prev == nil or (prev - lo).Magnitude > 0.05 then
+			-- the point L.Index x spacing of path behind the unit (root -> newest crumb -> older ...)
+			local want = L.Index * spacing
+			local prev = pos
+			local at: Vector3? = nil
+			local s = 0
+			for k = #pts, 1, -1 do
+				local q = pts[k]
+				local seg = Vector3.new(q.X - prev.X, 0, q.Z - prev.Z).Magnitude
+				if s + seg >= want and seg > 1e-4 then
+					at = prev:Lerp(q, (want - s) / seg)
+					break
+				end
+				s += seg
+				prev = q
+			end
+			local pt: Vector3 = at or (prev + back * (want - s))
+			local lo = rcf:PointToObjectSpace(pt)
+			lo = Vector3.new(lo.X, math.clamp(lo.Y, -3, 3), lo.Z)
+			local old = L.Off
+			if old == nil or (old - lo).Magnitude > 0.05 then
 				L.Off = lo
 				L.Joint.C0 = CFrame.new(lo) * ROOT_ROT
 			end
@@ -549,7 +617,7 @@ local function cameraGuard(camCf: CFrame, focus: Vector3?, fovDeg: number?)
 	local nearLift = math.min(-feet * look.Y, (camCfg.FigureStuds - feet) * look.Y)
 	for i = 1, guardN do
 		local e = guard[i] :: Entry
-		layoutEscorts(e) -- v114: escorts in the formation row (before the guard judges where they are)
+		layoutEscorts(e) -- v115: escorts on the unit's own path behind it (before the guard judges where they are)
 		for _, x in ipairs(e.Escorts) do
 			local t = x.Torso
 			if t then

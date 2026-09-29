@@ -143,6 +143,7 @@ safeInit("OpsController", safeRequire("OpsController", Controllers:WaitForChild(
 safeInit("FeatureController", safeRequire("FeatureController", Controllers:WaitForChild("FeatureController", 5) :: Instance)) -- claude-bud JOB 4/5: FeaturePush cues (airdrop / bounty markers)
 safeInit("QualityGovernor", safeRequire("QualityGovernor", Modules:WaitForChild("QualityGovernor", 5) :: Instance)) -- claude-bud JOB 8: automatic low tier (small screen / low FPS)
 safeInit("Juice", safeRequire("Juice", Modules:WaitForChild("Juice", 5) :: Instance)) -- claude-bud JOB 11: purchase burst + rebirth celebration
+safeInit("ArmyDebugClient", safeRequire("ArmyDebugClient", Modules:WaitForChild("ArmyDebugClient", 5) :: Instance)) -- v115: owner-only army slot markers + labels (ArmyConfig.Follow3.Debug + WE_ArmyDebug; /armydebug)
 safeInit("PremiumWeaponsClient", safeRequire("PremiumWeaponsClient", Modules:WaitForChild("PremiumWeaponsClient", 5) :: Instance)) -- claude-bud PREMIUM: FIRE / MISSILE while driving a Robux-only vehicle
 safeInit("EngagementClient", safeRequire("EngagementClient", Modules:WaitForChild("EngagementClient", 5) :: Instance)) -- claude-bud JOB 13: event banner + leaderboard board
 safeInit("GameFeelClient", safeRequire("GameFeelClient", Modules:WaitForChild("GameFeelClient", 5) :: Instance)) -- claude-bud JOB 14: kill feed, vehicle numbers, raid report, sounds

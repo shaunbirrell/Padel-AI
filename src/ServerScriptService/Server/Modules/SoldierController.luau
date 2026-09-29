@@ -1,5 +1,11 @@
 --!strict
 --[[
+	v115 (Code Bot Roblox, 2026-09-29, docs/ARMY-FOLLOW-ROOTCAUSE-3.md): no more "wheel" (v114 sent a unit whose slot
+	had swung round the anchor on an arc round the OUTSIDE: that arc was the orbit / the U round the player). Slots now
+	sit on his breadcrumb trail (FormationController), so a unit only ever walks to its own slot (+ its slot's own
+	velocity lead). Catch-up has hysteresis (CatchUpStartStuds on / CatchUpEndStuds off). Every Reposition (the only
+	PivotTo) is a loud warn with its distance to its slot and to him, the reason and the previous state.
+
 	v114 (Code Bot Roblox, 2026-09-29, docs/ARMY-FOLLOW-ROOTCAUSE-2.md): SoldierController — the ONE writer of an army
 	soldier's movement. Every Humanoid:MoveTo on a squad unit (WE_SquadUnit, Workspace.WarEmpireSquads) goes through
 	SoldierController.Move / Stop (ArmyFollow.Command, the v113 API that SquadOrdersService's HOLD / ATTACK / RETREAT
@@ -80,6 +86,7 @@ function SoldierController.Move(unit: any, goal: Vector3, state: string?)
 		setState(unit, state)
 	end
 	SoldierController.Stats.Moves += 1
+	unit._scLastMoveAt = os.clock()
 	unit.Humanoid:MoveTo(goal)
 end
 
@@ -221,6 +228,13 @@ function SoldierController.Reposition(unit: any, cf: CFrame, why: string, skipCo
 		return false
 	end
 	unit._scRepAt = now + num("RepositionCooldown", 5)
+	-- v115: every reposition is loud (the owner's debug and the logs must show any teleport)
+	local from: Vector3 = unit.Root.Position
+	local dbg = unit._scDbg
+	local toSlot = if dbg and dbg.Goal then flatDist(from, dbg.Goal) else -1
+	local toOwner = if dbg and dbg.Owner then flatDist(from, dbg.Owner) else -1
+	warn(string.format("[ArmyDebug] REPOSITION unit %s slot %s reason=%s prevState=%s distToSlot=%.1f distToPlayer=%.1f jump=%.1f owner=%s",
+		tostring(unit.Id), tostring(unit._acIdx), why, tostring(unit._scState or unit.MoveState), toSlot, toOwner, flatDist(from, cf.Position), tostring(unit.OwnerUserId)))
 	unit.Model:PivotTo(cf)
 	unit.Root.AssemblyLinearVelocity = Vector3.zero
 	unit.Root.AssemblyAngularVelocity = Vector3.zero
@@ -312,12 +326,44 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 	local pos: Vector3 = unit.Root.Position
 	local ownerPos: Vector3 = ctx.OwnerPos
 	local clear = tonumber(ctx.OwnerClear) or 0
-	-- a point is never inside OwnerClear of him (pushed straight out from him)
+	-- v115: his walking lane (OwnerAheadSeconds of his travel ahead of him, LaneHalfStuds each side). The rows he walks
+	-- back into already part (FormationController.Part keeps each half's column order); a unit that is itself IN his
+	-- lane and would have to cross in front of him to reach its goal steps out to its OWN side first and waits there
+	-- until he is past (never across his path, never into him)
+	local ov: Vector3 = flat(ctx.OwnerVel or Vector3.zero)
+	local ospeed = ov.Magnitude
+	local laneDir: Vector3? = if ospeed > num("MovingOnSpeed", 3) and cfg().YieldLane ~= false then ov / ospeed else nil
+	local laneLen = math.min(ospeed * num("OwnerAheadSeconds", 1), num("OwnerAheadMaxStuds", 16))
+	local laneHalf = num("LaneHalfStuds", 3.5)
+	local yielding = false
+	local mySide = 0
+	if laneDir then
+		local ld = laneDir :: Vector3
+		local side = Vector3.new(-ld.Z, 0, ld.X)
+		local me = flat(pos - ownerPos)
+		local myAlong, myLat = me:Dot(ld), me:Dot(side)
+		if myAlong > -1 and myAlong < laneLen and math.abs(myLat) < laneHalf + 1 then
+			mySide = if myLat >= 0 then 1 else -1
+		end
+	end
+	-- a point is never inside OwnerClear of him (pushed straight out from him); for a unit in his lane (above) a point
+	-- across his path or in his lane is moved out to the unit's own side
 	local function clearOf(p: Vector3): Vector3
 		if clear <= 0 then
 			return p
 		end
 		local off = flat(p - ownerPos)
+		if laneDir and mySide ~= 0 then
+			local ld = laneDir :: Vector3
+			local side = Vector3.new(-ld.Z, 0, ld.X)
+			local along = off:Dot(ld)
+			local lat = off:Dot(side)
+			if lat * mySide < laneHalf and along > -clear then
+				p = Vector3.new(ownerPos.X, p.Y, ownerPos.Z) + ld * math.max(along, 0) + side * (mySide * laneHalf)
+				off = flat(p - ownerPos)
+				yielding = true
+			end
+		end
 		if off.Magnitude >= clear then
 			return p
 		end
@@ -327,6 +373,10 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 	end
 	local goal: Vector3 = clearOf(ctx.Goal)
 	local d = flatDist(pos, goal)
+	unit._scDbg = unit._scDbg or {}
+	unit._scDbg.Goal = goal
+	unit._scDbg.Owner = ownerPos
+	unit._scDbg.D = d
 	local moving = ctx.OwnerMoving == true
 
 	-- 0) emergencies: under the map (always), extremely far for FarSeconds (not while he drives fast)
@@ -354,34 +404,44 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 	local state: string
 	if not moving and ((prev == "InPosition" and d <= num("LeaveStuds", 4)) or d <= num("ArriveStuds", 2.5)) then
 		state = "InPosition"
-	elseif d > num("CatchUpStartStuds", 5) then
-		state = "CatchingUp"
+	elseif d > num("CatchUpStartStuds", 6) or (prev == "CatchingUp" and d > num("CatchUpEndStuds", 3)) then
+		state = "CatchingUp" -- hysteresis: on past CatchUpStartStuds, off under CatchUpEndStuds
 	else
 		state = "Following"
 	end
 	unit._scState = state
+
+	-- the walk target: its slot (+ its slot's lead while he moves), never inside OwnerClear of him
+	local target = clearOf(goal + (if moving then (ctx.Lead or Vector3.zero) else Vector3.zero))
+	local yieldTo: Vector3? = nil -- (reserved: a unit in his lane yields via clearOf above)
 
 	-- 2) speed: his pace + per stud from its own slot, capped, rate-limited
 	local base = tonumber(ctx.BaseSpeed) or 14
 	local pace = math.max(if moving then (tonumber(ctx.Pace) or 0) else 0, 0)
 	local want: number
 	local arrive = num("ArriveStuds", 2.5)
+	-- catching up (hysteresis above) raises WalkSpeed toward its OWN slot; in step it only trims
+	local gain = if state == "CatchingUp" then num("CatchUpPerStud", 0.9) else num("TrimPerStud", 0.5)
 	if moving then
+		-- v115: signed along its row's heading (behind its slot: faster, ahead of it: slower; no deadband while he
+		-- moves, so it holds its slot instead of trailing ArriveStuds behind it), + the sideways error
 		local toGoal = flat(goal - pos)
 		local heading: Vector3 = ctx.Heading or Vector3.new(0, 0, -1)
-		local ahead = toGoal:Dot(heading) < -arrive -- it is ahead of its slot: let the slot catch up
-		if ahead then
-			want = pace - num("CatchUpPerStud", 0.9) * (d - arrive)
-		else
-			want = pace + num("CatchUpPerStud", 0.9) * math.max(0, d - arrive)
-		end
+		local e = toGoal:Dot(heading)
+		local lat = (toGoal - heading * e).Magnitude
+		want = pace + gain * e + num("LateralPerStud", 0.5) * lat
 	else
 		want = base + num("CatchUpPerStud", 0.9) * math.max(0, d - arrive)
 	end
 	local cap = math.min(num("MaxSpeed", 40), math.max(pace * num("CatchUpMaxMult", 1.8), num("CatchUpMin", 30)))
 	want = math.clamp(want, num("MinSpeed", 8), cap)
 	local cur = tonumber(unit._scSpeed) or unit.Humanoid.WalkSpeed
-	want = math.clamp(want, cur - num("SpeedDownPerTick", 5), cur + num("SpeedUpPerTick", 6))
+	if yielding then
+		-- he walks at it (an about-turn back down his path): it steps out of his lane at once, quickly
+		want = math.max(want, num("YieldSpeed", 24))
+	else
+		want = math.clamp(want, cur - num("SpeedDownPerTick", 5), cur + num("SpeedUpPerTick", 6))
+	end
 	SoldierController.SetSpeed(unit, want)
 
 	if state == "InPosition" then
@@ -399,11 +459,11 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 	end
 	SoldierController.YawTravel(unit)
 
-	-- 3) the walk target: its slot (+ his lead while he moves), never inside OwnerClear of him
-	local target = clearOf(goal + (if moving then (ctx.Lead or Vector3.zero) else Vector3.zero))
+	-- 3) the walk target: computed above (target / yieldTo)
 
 	-- 4) stuck: progress toward anything over time (formation walking moves > StuckProgressStuds: never stuck)
-	local forceIssue = prev == "InPosition" -- he set off: walk at once (not only once the slot moved ReissueStuds)
+	local forceIssue = prev == "InPosition" or (yielding and not unit._scYielding) -- he set off / walks at it: at once
+	unit._scYielding = yielding
 	local pp: Vector3? = unit._scProgPos
 	if pp == nil or flatDist(pos, pp) >= num("StuckProgressStuds", 1) or d <= arrive + 1 then
 		unit._scProgPos = pos
@@ -448,38 +508,18 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 	setState(unit, if (unit._scStage or 0) > 0 then "StuckRecovery" else state) -- one attribute write per change
 
 	-- 5) where it walks this tick: the side point (stuck 3), a kept path, else straight
-	local walkTo = target
+	local walkTo = yieldTo or target
 	local alt = unit._scAlt
-	if alt then
+	if alt and not yielding then
 		if now < alt.Until and flatDist(pos, alt.P) > 1.5 then
 			walkTo = alt.P
 		else
 			unit._scAlt = nil
 		end
 	end
-	-- wheel, not chord: when the formation has swung round (a U-turn) and its slot lies more than WheelStepDeg round
-	-- the anchor from where the unit stands, it runs round the OUTSIDE (a point WheelStepDeg further round at the
-	-- larger radius) instead of cutting through the middle of the army and past him
-	local pivot: Vector3? = ctx.Pivot
-	if walkTo == target and pivot then
-		local fromP = flat(pos - pivot)
-		local toP = flat(target - pivot)
-		local rU, rG = fromP.Magnitude, toP.Magnitude
-		if rU > 3 and rG > 3 then
-			local a0 = math.atan2(fromP.X, fromP.Z)
-			local a1 = math.atan2(toP.X, toP.Z)
-			local da = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
-			local stepA = math.rad(num("WheelStepDeg", 40))
-			if math.abs(da) > stepA then
-				local r = a0 + (if da > 0 then stepA else -stepA)
-				local rad = math.max(rU, rG)
-				walkTo = Vector3.new(pivot.X, target.Y, pivot.Z) + Vector3.new(math.sin(r), 0, math.cos(r)) * rad
-			end
-		end
-	end
 	-- never THROUGH him: when the straight line to its target passes within OwnerClear of him, walk round him first
 	-- (a point on its own side of him, OwnerClear + 1.5 out); re-evaluated every tick, reissued only past ReissueStuds
-	if clear > 0 then
+	if clear > 0 and not yielding then -- (a yielding unit steps straight out to its own side of his lane)
 		local seg = flat(walkTo - pos)
 		local len = seg.Magnitude
 		if len > 1e-3 then
@@ -495,7 +535,7 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 			end
 		end
 	end
-	if walkTo == target and not ctx.NoPath then -- (a wheel / round-him point is walked straight: short, in the open)
+	if walkTo == target and not ctx.NoPath and not yielding then -- (a round-him / yield point is walked straight: short, in the open)
 		if d > num("PathMinStuds", 8) and not clearLine(pos, target) then
 			unit._scBlocked = (unit._scBlocked or 0) + 1
 			if unit._scBlocked >= num("BlockedPathTicks", 2) and unit._scPath == nil then

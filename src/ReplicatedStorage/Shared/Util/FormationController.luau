@@ -1,42 +1,62 @@
 --!strict
 --[[
-	v114 (Code Bot Roblox, 2026-09-29, docs/ARMY-FOLLOW-ROOTCAUSE-2.md): FormationController — the army formation's pure
-	maths. No instances, no services: Server/Modules/ArmyController steps it every Follow3.UpdateSeconds, the client
-	RigAnimator reads the same grid for the escort figures, tools/checks/codebot_v114_army.py runs it in the Luau CLI.
+	v115 (Code Bot Roblox, 2026-09-29, docs/ARMY-FOLLOW-ROOTCAUSE-3.md): FormationController — the army formation's pure
+	maths. No instances, no services: Server/Modules/ArmyController steps it every Follow3.UpdateSeconds;
+	tools/checks/codebot_v115_army.py runs this same file in the Luau CLI (the acceptance simulation).
 
-	  * Anchor: an exponential follow (AnchorLagSeconds) of his position + a capped lead from his SMOOTHED velocity:
-	    no raw-pose jumps, no raw-velocity lead.
-	  * Heading: his movement direction while he moves (his facing instead when he walks backwards / strafes: the two
-	    disagree by more than FacingAgreeDeg), his facing while he stands (only past StandAlignDeg held
-	    StandAlignSeconds). A turn starts only past HeadingDeadbandDeg held HeadingHoldSeconds (ReverseHoldSeconds past
-	    ReverseDeg) and runs at HeadingTurnDegPerSec at most, until within 3 degrees: hysteresis, never a flip.
-	  * Grid ("Flank"): one row per unit, odd slot index on his left, even on his right; the unit LateralStuds out, its
-	    escort figures ColSpacing further out in the same row; rows RowSpacing deep from FrontBack (negative = ahead).
-	    Nothing within LateralStuds of the anchor; no two cells closer than min(ColSpacing, RowSpacing).
-	  * Assignment: PERMANENT. A unit keeps its slot index for life; a new unit takes its preferred index (its
-	    SquadSlot) when free, else the lowest free one; a gone unit frees its index. Survivors are never renumbered and
-	    no distance is ever used.
-	  * World slot = AnchorCFrame:PointToWorldSpace(Vector3.new(lat, 0, back)).
+	The FORMATION follows the player; soldiers follow slots.
+	  * Trail (breadcrumbs): his position, lightly smoothed (TrailSmoothSeconds, takes the edge off a phone-joystick
+	    zig-zag), dropped as a crumb every CrumbStuds he travels; kept for TrailKeepStuds. Nothing is added while he
+	    stands, so the formation holds still and keeps its heading when he stops or spins on the spot.
+	  * Rows: row r sits on the trail at a FIXED ARC LENGTH behind him (FirstRowStuds + r x RowSpacing, measured along
+	    his path, not in a straight line), and faces the trail's tangent there (his MOVEMENT direction where he walked,
+	    never his look vector). A row turns at most RowTurnDegPerSec, only past RowDeadbandDeg (hysteresis: it stops
+	    turning within 1.5 deg), and only while he moves. So on a corner each row reaches the corner and turns there
+	    like a marching column; on a circle the block follows the circle; on an about-turn the rows walk up his old
+	    path, turn where he turned and follow him back — nothing ever swings round him.
+	  * Block: columns across, rows back, nothing beside him. Columns = an even count (2 or 4 by default, ColumnsMax),
+	    from the figure count (units + escorts), ColSpacing apart with an AisleStuds lane down the middle, filled centre-out (slot 1 inner left, 2 inner right,
+	    3 outer left, 4 outer right; then the next rank). Each unit's escort figures stand in the cells DIRECTLY BEHIND
+	    it (same column), so a rank is 1 + (its most escorts) rows deep. Even columns leave an aisle down his own trail.
+	  * World slot = RowFrame(row):PointToWorldSpace(Vector3.new(x * RowSide(row), 0, 0)); the local offset (x, row) of a
+	    slot index is constant (only a roster change: a unit / escort count added or gone, can move a cell).
+	  * About-turn fold (his path doubles back: a row's path direction swings past FoldDeg from its heading): that row
+	    reverses in place: heading exactly reversed and RowSide flips (x mirrored), so every cell keeps its world spot
+	    and its side of his path; the rows then walk up his old path, turn where he turned (each row in turn, rank order
+	    kept) and follow him back. No 180-degree sweep of the row, no side swap in front of him.
+	  * Assignment: PERMANENT (FormationController.Assign, unchanged from v114). A unit keeps its slot index for life;
+	    a new unit takes its preferred index (its SquadSlot) when free, else the lowest free one; a gone unit frees its
+	    index. Survivors are never renumbered, no distance is ever used, no iteration order matters.
 ]]
 
 local FormationController = {}
-
-export type Anchor = {
-	Pos: Vector3?,
-	Vel: Vector3,
-	Dir: Vector3?,
-	Moving: boolean,
-	Turning: boolean,
-	TurnSince: number?,
-}
 
 export type Assignment = {
 	ByUnit: { [any]: number },
 	Taken: { [number]: any },
 }
 
+export type Trail = {
+	Pts: { Vector3 }, -- crumbs, oldest first
+	Smooth: Vector3?, -- his smoothed position (crumbs are dropped from this)
+	Head: Vector3?, -- his raw position this tick (arc lengths are measured from here)
+	Seed: Vector3, -- direction of travel before the oldest crumb (the trail runs on straight back along it)
+	Vel: Vector3, -- his smoothed flat velocity
+	Moving: boolean,
+	RowDir: { [number]: Vector3 }, -- per row: its current (rate-limited) heading
+	RowTurn: { [number]: boolean }, -- per row: turning (hysteresis)
+	RowFlip: { [number]: number }, -- per row: +1, or -1 after an about-turn fold (its sides keep their world side)
+}
+
+export type Cell = { Row: number, X: number, Esc: number }
+
 local function flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
+end
+
+local function flatDist(a: Vector3, b: Vector3): number
+	local dx, dz = a.X - b.X, a.Z - b.Z
+	return math.sqrt(dx * dx + dz * dz)
 end
 
 local function unitOr(v: Vector3, fallback: Vector3): Vector3
@@ -75,123 +95,189 @@ function FormationController.DirFromYaw(deg: number): Vector3
 	return Vector3.new(math.sin(r), 0, math.cos(r))
 end
 
-function FormationController.NewAnchor(): Anchor
-	return { Pos = nil, Vel = Vector3.zero, Dir = nil, Moving = false, Turning = false, TurnSince = nil }
-end
-
 function FormationController.NewAssignment(): Assignment
 	return { ByUnit = {}, Taken = {} }
 end
 
---[[ One anchor step. ownerPos / ownerLook: his root position and LookVector; vel: his measured flat velocity over this
-	step; snap: a teleport / respawn (no lag, heading = his facing). cfg: ArmyConfig.Follow3. ]]
-function FormationController.Step(a: Anchor, ownerPos: Vector3, ownerLook: Vector3, vel: Vector3, dt: number, now: number, snap: boolean, cfg: any)
+function FormationController.NewTrail(): Trail
+	return { Pts = {}, Smooth = nil, Head = nil, Seed = Vector3.new(0, 0, -1), Vel = Vector3.zero, Moving = false, RowDir = {}, RowTurn = {}, RowFlip = {} }
+end
+
+--[[ One trail step. ownerPos / ownerLook: his root position and LookVector; vel: his measured flat velocity over this
+	step; snap: a teleport / respawn / FOLLOW (re)start (a fresh trail running straight back from him along his facing:
+	the formation starts behind him). cfg: ArmyConfig.Follow3. ]]
+function FormationController.TrailStep(t: Trail, ownerPos: Vector3, ownerLook: Vector3, vel: Vector3, dt: number, snap: boolean, cfg: any)
 	dt = math.clamp(dt, 0, 1)
-	local look = unitOr(flat(ownerLook), Vector3.new(0, 0, -1))
-	if a.Pos == nil or snap then
-		a.Pos = ownerPos
-		a.Vel = flat(vel)
-		a.Dir = look
-		a.Turning = false
-		a.TurnSince = nil
-		a.Moving = a.Vel.Magnitude >= n(cfg, "MovingOnSpeed", 3)
+	if t.Smooth == nil or snap then
+		t.Smooth = ownerPos
+		t.Head = ownerPos
+		t.Pts = { ownerPos }
+		t.Seed = unitOr(flat(ownerLook), Vector3.new(0, 0, -1))
+		t.Vel = Vector3.zero
+		t.Moving = false
+		t.RowDir = {}
+		t.RowTurn = {}
+		t.RowFlip = {}
 		return
 	end
-	-- smoothed velocity, then the anchor follows (his position + the capped smoothed lead) exponentially
-	a.Vel = a.Vel:Lerp(flat(vel), math.clamp(dt / math.max(1e-3, n(cfg, "VelSmoothSeconds", 0.4)), 0, 1))
-	local lead = a.Vel * n(cfg, "AnchorLeadSeconds", 0.3)
-	local cap = n(cfg, "AnchorLeadMaxStuds", 5)
-	if lead.Magnitude > cap then
-		lead = lead.Unit * cap
-	end
-	local target = ownerPos + lead
-	local k = 1 - math.exp(-dt / math.max(1e-3, n(cfg, "AnchorLagSeconds", 0.3)))
-	a.Pos = (a.Pos :: Vector3):Lerp(target, k)
-	-- moving, with hysteresis
-	local speed = a.Vel.Magnitude
-	if a.Moving then
-		a.Moving = speed >= n(cfg, "MovingOffSpeed", 1.5)
+	t.Head = ownerPos
+	t.Vel = t.Vel:Lerp(flat(vel), math.clamp(dt / math.max(1e-3, n(cfg, "VelSmoothSeconds", 0.3)), 0, 1))
+	local speed = t.Vel.Magnitude
+	if t.Moving then
+		t.Moving = speed >= n(cfg, "MovingOffSpeed", 1.5)
 	else
-		a.Moving = speed >= n(cfg, "MovingOnSpeed", 3)
+		t.Moving = speed >= n(cfg, "MovingOnSpeed", 3)
 	end
-	local cur = (a.Dir or look) :: Vector3
-	local want: Vector3
-	local deadband: number
-	local hold: number
-	if a.Moving then
-		local mv = a.Vel.Unit
-		-- walking backwards / strafing (shift-lock): he still faces the old way: keep his facing (no flip)
-		want = if math.abs(FormationController.Angle(look, mv)) <= math.rad(n(cfg, "FacingAgreeDeg", 75)) then mv else look
-		deadband = n(cfg, "HeadingDeadbandDeg", 18)
-		hold = n(cfg, "HeadingHoldSeconds", 0.3)
-	else
-		want = look
-		deadband = n(cfg, "StandAlignDeg", 60)
-		hold = n(cfg, "StandAlignSeconds", 1.2)
+	local k = 1 - math.exp(-dt / math.max(1e-3, n(cfg, "TrailSmoothSeconds", 0.25)))
+	t.Smooth = (t.Smooth :: Vector3):Lerp(ownerPos, k)
+	local sm = t.Smooth :: Vector3
+	local last = t.Pts[#t.Pts]
+	if last == nil or flatDist(sm, last) >= n(cfg, "CrumbStuds", 1) then
+		table.insert(t.Pts, sm)
 	end
-	local ang = math.abs(FormationController.Angle(cur, want))
-	if ang > math.rad(n(cfg, "ReverseDeg", 135)) then
-		hold = math.max(hold, n(cfg, "ReverseHoldSeconds", 1.0))
+	-- keep TrailKeepStuds of path (the oldest crumb's direction becomes the straight run-on)
+	local keep = n(cfg, "TrailKeepStuds", 90)
+	local arc = flatDist(ownerPos, t.Pts[#t.Pts])
+	local cut = 0
+	for i = #t.Pts, 2, -1 do
+		arc += flatDist(t.Pts[i], t.Pts[i - 1])
+		if arc > keep then
+			cut = i - 2
+			break
+		end
 	end
-	if not a.Turning then
-		if ang > math.rad(deadband) then
-			a.TurnSince = a.TurnSince or now
-			if now - (a.TurnSince :: number) >= hold then
-				a.Turning = true
+	if cut > 0 then
+		local a, b = t.Pts[cut], t.Pts[cut + 1]
+		t.Seed = unitOr(flat(b - a), t.Seed)
+		for _ = 1, cut do
+			table.remove(t.Pts, 1)
+		end
+	end
+end
+
+-- the point on his path `s` studs (arc length) behind him; past the oldest crumb it runs on straight back
+function FormationController.TrailPoint(t: Trail, s: number): Vector3
+	local prev = (t.Head or t.Smooth or Vector3.zero) :: Vector3
+	local rem = math.max(0, s)
+	for i = #t.Pts, 1, -1 do
+		local p = t.Pts[i]
+		local seg = flatDist(prev, p)
+		if seg >= rem and seg > 1e-6 then
+			return prev:Lerp(p, rem / seg)
+		end
+		rem -= seg
+		prev = p
+	end
+	return prev - t.Seed * rem
+end
+
+-- the direction of travel along his path at arc `s` (from TangentStuds further back to TangentStuds nearer him)
+function FormationController.Tangent(t: Trail, s: number, cfg: any): Vector3
+	local w = n(cfg, "TangentStuds", 3)
+	local a = FormationController.TrailPoint(t, math.max(0, s - w))
+	local b = FormationController.TrailPoint(t, s + w)
+	return unitOr(flat(a - b), t.Seed)
+end
+
+-- +1, or -1 while row r is reversed after an about-turn fold (its slots' x is mirrored with it)
+function FormationController.RowSide(t: Trail, row: number): number
+	return t.RowFlip[row] or 1
+end
+
+-- the arc length of row r (0 = the front row)
+function FormationController.RowArc(row: number, cfg: any): number
+	return n(cfg, "FirstRowStuds", 7) + row * n(cfg, "RowSpacing", 4.5)
+end
+
+--[[ Row r's frame this tick (-Z = its heading, +X = its right). Call once per row per tick (it advances the row's
+	rate-limited heading by dt): ArmyController steps rows 0..last every tick. ]]
+function FormationController.RowFrame(t: Trail, row: number, dt: number, cfg: any): CFrame
+	local s = FormationController.RowArc(row, cfg)
+	local p = FormationController.TrailPoint(t, s)
+	local want = FormationController.Tangent(t, s, cfg)
+	local cur = t.RowDir[row]
+	if cur == nil then
+		cur = want
+	elseif t.Moving then
+		local ang = math.abs(FormationController.Angle(cur, want))
+		if ang > math.rad(n(cfg, "FoldDeg", 120)) then
+			-- an about-turn fold: the row reverses where it stands (about face): heading exactly reversed and its
+			-- sides mirrored, so every cell keeps its world spot (no 180-degree sweep, no snake, no side swap)
+			cur = -cur
+			t.RowFlip[row] = -(t.RowFlip[row] or 1)
+			ang = math.abs(FormationController.Angle(cur, want))
+		end
+		if not t.RowTurn[row] and ang > math.rad(n(cfg, "RowDeadbandDeg", 8)) then
+			t.RowTurn[row] = true
+		end
+		if t.RowTurn[row] then
+			cur = FormationController.Turn(cur, want, math.rad(n(cfg, "RowTurnDegPerSec", 110)) * math.clamp(dt, 0, 1))
+			if math.abs(FormationController.Angle(cur, want)) < math.rad(1.5) then
+				t.RowTurn[row] = false
 			end
-		else
-			a.TurnSince = nil
 		end
 	end
-	if a.Turning then
-		a.Dir = FormationController.Turn(cur, want, math.rad(n(cfg, "HeadingTurnDegPerSec", 100)) * dt)
-		if math.abs(FormationController.Angle(a.Dir :: Vector3, want)) < math.rad(3) then
-			a.Turning = false
-			a.TurnSince = nil
-		end
-	else
-		a.Dir = cur
+	t.RowDir[row] = cur
+	return CFrame.lookAt(p, p + cur)
+end
+
+-- an even column count: ceil(sqrt(figures)) rounded up to even, 2..ColumnsMax (an aisle down his trail)
+function FormationController.Columns(figures: number, cfg: any): number
+	local c = math.ceil(math.sqrt(math.max(1, figures)))
+	c += c % 2
+	local cap = math.max(2, math.floor(n(cfg, "ColumnsMax", 4)))
+	cap -= cap % 2
+	return math.clamp(c, 2, cap)
+end
+
+-- slot j (0-based) inside a rank: centre-out, left first; the two inner columns AisleStuds apart (his lane)
+function FormationController.ColumnX(j: number, cfg: any): number
+	local k = j // 2
+	local side = if j % 2 == 0 then -1 else 1
+	return side * (n(cfg, "AisleStuds", 7) / 2 + k * n(cfg, "ColSpacing", 5))
+end
+
+--[[ Cells of the block: per unit (by its permanent index) its row and lateral x; its escorts stand in rows Row + 1 ..
+	Row + Esc of the same column. escOf(unit) -> its escort figures (WE_Escorts). Only max / sum over the table: no
+	iteration order matters. Returns cells, the last row used, the column count. ]]
+function FormationController.Layout(s: Assignment, escOf: (any) -> number, cfg: any): ({ [any]: Cell }, number, number)
+	local figures = 0
+	local esc: { [any]: number } = {}
+	for u, _ in pairs(s.ByUnit) do
+		local e = math.max(0, math.floor(tonumber(escOf(u)) or 0))
+		esc[u] = e
+		figures += 1 + e
 	end
-end
-
--- the anchor's frame (-Z = the formation heading, +X = its right)
-function FormationController.AnchorCFrame(a: Anchor): CFrame
-	local p = (a.Pos or Vector3.zero) :: Vector3
-	local dir = (a.Dir or Vector3.new(0, 0, -1)) :: Vector3
-	return CFrame.lookAt(p, p + dir)
-end
-
--- slot index -> side (-1 = his left, +1 = his right) and row (0 = the front row)
-function FormationController.SideRow(index: number): (number, number)
-	local side = if index % 2 == 1 then -1 else 1
-	return side, math.floor((index - 1) / 2)
-end
-
--- slot index -> local offset (lat: +right, back: +behind) of the unit; escort e (1..) sits further out in its row
-function FormationController.SlotLocal(index: number, cfg: any, escort: number?): (number, number)
-	local side, row = FormationController.SideRow(math.max(1, index))
-	local lat = side * (n(cfg, "LateralStuds", 6) + (escort or 0) * n(cfg, "ColSpacing", 5.5))
-	local back = n(cfg, "FrontBack", -1.5) + row * n(cfg, "RowSpacing", 5.5)
-	return lat, back
-end
-
--- the world point of a local offset: AnchorCFrame:PointToWorldSpace (y replaced)
-function FormationController.SlotWorld(a: Anchor, lat: number, back: number, y: number): Vector3
-	local w = FormationController.AnchorCFrame(a):PointToWorldSpace(Vector3.new(lat, 0, back))
-	return Vector3.new(w.X, y, w.Z)
-end
-
--- the MoveTo lead while he moves (smoothed velocity x MoveLeadSeconds, capped): a unit in its slot keeps walking
-function FormationController.MoveLead(a: Anchor, cfg: any): Vector3
-	if not a.Moving then
-		return Vector3.zero
+	local cols = FormationController.Columns(figures, cfg)
+	local depth: { [number]: number } = {}
+	local maxRank = 0
+	for u, idx in pairs(s.ByUnit) do
+		local rank = (idx - 1) // cols
+		depth[rank] = math.max(depth[rank] or 0, 1 + esc[u])
+		maxRank = math.max(maxRank, rank)
 	end
-	local lead = a.Vel * n(cfg, "MoveLeadSeconds", 0.4)
-	local cap = n(cfg, "MoveLeadMaxStuds", 6)
-	if lead.Magnitude > cap then
-		lead = lead.Unit * cap
+	local start: { [number]: number } = { [0] = 0 }
+	for r = 1, maxRank do
+		start[r] = start[r - 1] + (depth[r - 1] or 0)
 	end
-	return lead
+	local cells: { [any]: Cell } = {}
+	local last = 0
+	for u, idx in pairs(s.ByUnit) do
+		local rank = (idx - 1) // cols
+		local row = start[rank]
+		cells[u] = { Row = row, X = FormationController.ColumnX((idx - 1) % cols, cfg), Esc = esc[u] }
+		last = math.max(last, row + esc[u])
+	end
+	return cells, last, cols
+end
+
+-- a new unit's spawn offset (his frame: x = right, z = behind) before it has a trail cell: 4 columns, a full front rank
+function FormationController.SpawnOffset(slot: number, cfg: any): Vector3
+	local cols = math.max(2, math.floor(n(cfg, "ColumnsMax", 4)))
+	local idx = math.max(1, math.floor(slot))
+	local rank = (idx - 1) // cols
+	local row = if rank == 0 then 0 else 4 + (rank - 1)
+	return Vector3.new(FormationController.ColumnX((idx - 1) % cols, cfg), 0, FormationController.RowArc(row, cfg))
 end
 
 --[[ PERMANENT assignment. `units` = the living units now. Gone units free their index; new units take their preferred
@@ -236,6 +322,129 @@ function FormationController.Assign(s: Assignment, units: { any }): boolean
 		changed = true
 	end
 	return changed
+end
+
+export type Army = {
+	Trail: Trail,
+	Assign: Assignment,
+	Prev: { [any]: Vector3 }, -- per unit: its slot last tick (its slot's velocity)
+	SVel: { [any]: Vector3 },
+	LayoutKey: string?,
+}
+
+export type Plan = { Goal: Vector3, Heading: Vector3, Lead: Vector3, Pace: number, Row: number, X: number, Esc: number, Idx: number }
+
+function FormationController.NewArmy(): Army
+	return { Trail = FormationController.NewTrail(), Assign = FormationController.NewAssignment(), Prev = {}, SVel = {}, LayoutKey = nil }
+end
+
+--[[ One FOLLOW planning tick for an army (the whole chain ArmyController runs and the acceptance sim runs):
+	trail step -> block layout -> every row's frame -> per unit: its slot (Goal), its row heading, its MoveTo lead (its
+	OWN slot's smoothed velocity x MoveLeadSeconds, capped) and its pace (its slot's speed). `units` in any order;
+	army.Assign must already hold them (FormationController.Assign). Returns plans, row frames, columns, the last row. ]]
+-- how far the left (x < 0) / right (x > 0) half of row `frame` (its slot x values `xs`, sides already applied) moves
+-- out so his walking lane (his travel ahead of him, LaneHalfStuds each side) runs clear between them: he walks back
+-- into his own block (an about-turn) and the row parts like a door, each half keeping its column order; ramped in as
+-- he comes (never a jump), gone once he is past the row
+function FormationController.Part(frame: CFrame, xs: { number }, ownerPos: Vector3, ownerVel: Vector3, cfg: any): (number, number)
+	local sp = flat(ownerVel).Magnitude
+	if sp < n(cfg, "MovingOnSpeed", 3) or #xs == 0 then
+		return 0, 0
+	end
+	local ld = flat(ownerVel) / sp
+	local near = math.min(sp * n(cfg, "OwnerAheadSeconds", 1), n(cfg, "OwnerAheadMaxStuds", 16))
+	local far = near + n(cfg, "PartRampStuds", 12)
+	local along = flat(frame.Position - ownerPos):Dot(ld)
+	if along <= -2 or along >= far then
+		return 0, 0
+	end
+	local right = flat(frame:PointToWorldSpace(Vector3.new(1, 0, 0)) - frame.Position)
+	if math.abs(right:Dot(ld)) > 0.75 then
+		return 0, 0 -- he walks along this row, not through it
+	end
+	local hx = frame:PointToObjectSpace(Vector3.new(ownerPos.X, frame.Position.Y, ownerPos.Z)).X
+	local half = n(cfg, "LaneHalfStuds", 3.5)
+	local lo, hi = -math.huge, math.huge -- innermost left x, innermost right x
+	for _, x in ipairs(xs) do
+		if x < 0 then
+			lo = math.max(lo, x)
+		else
+			hi = math.min(hi, x)
+		end
+	end
+	local f = math.clamp((far - along) / math.max(1, far - near), 0, 1)
+	local cap = n(cfg, "PartMaxStuds", 5)
+	local dl = if lo > -math.huge then math.min(cap, math.max(0, lo - (hx - half))) else 0
+	local dr = if hi < math.huge then math.min(cap, math.max(0, (hx + half) - hi)) else 0
+	return dl * f, dr * f
+end
+
+function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3, ownerLook: Vector3, vel: Vector3, dt: number, snap: boolean,
+	escOf: (any) -> number, cfg: any, ownerVelNow: Vector3?): ({ [any]: Plan }, { [number]: CFrame }, number, number)
+	local t = army.Trail
+	FormationController.TrailStep(t, ownerPos, ownerLook, vel, dt, snap, cfg)
+	local cells, last, cols = FormationController.Layout(army.Assign, escOf, cfg)
+	local key = tostring(cols) .. ":" .. tostring(last)
+	local relayout = army.LayoutKey ~= nil and army.LayoutKey ~= key
+	army.LayoutKey = key
+	local frames: { [number]: CFrame } = {}
+	for r = 0, last do
+		frames[r] = FormationController.RowFrame(t, r, dt, cfg)
+	end
+	-- the rows he walks back into (an about-turn) part to let him through (ownerVelNow: his root's velocity now)
+	local partL: { [number]: number } = {}
+	local partR: { [number]: number } = {}
+	if ownerVelNow and t.Moving then
+		local xsByRow: { [number]: { number } } = {}
+		for _, u in ipairs(units) do
+			local c = cells[u]
+			if c then
+				xsByRow[c.Row] = xsByRow[c.Row] or {}
+				table.insert(xsByRow[c.Row], c.X * FormationController.RowSide(t, c.Row))
+			end
+		end
+		for r, xs in pairs(xsByRow) do
+			partL[r], partR[r] = FormationController.Part(frames[r], xs, ownerPos, ownerVelNow :: Vector3, cfg)
+		end
+	end
+	local plans: { [any]: Plan } = {}
+	local leadS = n(cfg, "MoveLeadSeconds", 0.4)
+	local leadCap = n(cfg, "MoveLeadMaxStuds", 5)
+	local blend = math.clamp(n(cfg, "SlotVelBlend", 0.5), 0, 1)
+	for _, u in ipairs(units) do
+		local c = cells[u]
+		if c then
+			local x = c.X * FormationController.RowSide(t, c.Row)
+			x = if x < 0 then x - (partL[c.Row] or 0) else x + (partR[c.Row] or 0)
+			local goal = frames[c.Row]:PointToWorldSpace(Vector3.new(x, 0, 0))
+			local prev = army.Prev[u]
+			local sv = Vector3.zero
+			if prev ~= nil and not snap and not relayout and dt > 1e-3 then
+				sv = flat(goal - prev) / dt
+			end
+			local sm = if snap or relayout then sv else (army.SVel[u] or sv):Lerp(sv, blend)
+			army.Prev[u] = goal
+			army.SVel[u] = sm
+			local lead = Vector3.zero
+			local pace = 0
+			if t.Moving then
+				lead = sm * leadS
+				if lead.Magnitude > leadCap then
+					lead = lead.Unit * leadCap
+				end
+				pace = sm.Magnitude
+			end
+			plans[u] = { Goal = goal, Heading = t.RowDir[c.Row] or t.Seed, Lead = lead, Pace = pace, Row = c.Row,
+				X = c.X * FormationController.RowSide(t, c.Row), Esc = c.Esc, Idx = army.Assign.ByUnit[u] }
+		end
+	end
+	for u, _ in pairs(army.Prev) do
+		if cells[u] == nil then
+			army.Prev[u] = nil
+			army.SVel[u] = nil
+		end
+	end
+	return plans, frames, cols, last
 end
 
 return FormationController

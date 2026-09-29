@@ -430,39 +430,50 @@ local ArmyConfig = {
 		Enabled = true,
 		Rollout = "all", -- "all" | "owner" | anything else = off (v113)
 		UpdateSeconds = 0.2, -- the controller tick (MoveTo is never sent more often than this)
-		-- anchor (FormationController.Step)
-		VelSmoothSeconds = 0.4, -- his velocity is smoothed over this
-		AnchorLagSeconds = 0.3, -- the anchor follows (his position + lead) with this time constant
-		AnchorLeadSeconds = 0.3, -- lead from the SMOOTHED velocity (cancels the lag at a steady pace) ...
-		AnchorLeadMaxStuds = 5, -- ... capped
+		-- v115 (docs/ARMY-FOLLOW-ROOTCAUSE-3.md): a BLOCK BEHIND him on his breadcrumb trail (FormationController)
+		Formation = "TrailBlock",
+		VelSmoothSeconds = 0.3, -- his velocity is smoothed over this (moving / standing only)
 		MovingOnSpeed = 3, -- he counts as moving above this smoothed speed ...
-		MovingOffSpeed = 1.5, -- ... until he drops under this
-		-- heading
-		HeadingTurnDegPerSec = 100, -- the formation turns at most this fast
-		HeadingDeadbandDeg = 18, -- moving: turns smaller than this are ignored ...
-		HeadingHoldSeconds = 0.3, -- ... and a bigger one must hold this long before the formation starts turning
-		FacingAgreeDeg = 75, -- his move direction is the heading only while within this of his facing (backing up / strafing: his facing)
-		ReverseDeg = 135, -- a change past this (an about-turn) ...
-		ReverseHoldSeconds = 1.0, -- ... must hold this long first
-		StandAlignDeg = 60, -- standing: re-aim to his facing only past this ...
-		StandAlignSeconds = 1.2, -- ... held this long
-		-- grid (Flank: one row per unit, odd slots on his left, even on his right)
-		Formation = "Flank",
-		LateralStuds = 6, -- a unit stands this far to his side (nothing nearer him)
-		ColSpacing = 5.5, -- its escort figures this much further out, each
-		RowSpacing = 5.5, -- rows this deep
-		FrontBack = -1.5, -- the front row this far behind him (negative = ahead)
-		OwnerClearStuds = 5, -- a goal is never nearer him than this
-		WheelStepDeg = 40, -- a slot more than this round the anchor from its unit: it runs round the outside (U-turn), not through
-		EscortLayout = true, -- clients lay each unit's escorts out along its formation row (WE_FormYaw / WE_EscSide)
+		MovingOffSpeed = 1.5, -- ... until he drops under this (rows only turn while he moves)
+		TrailSmoothSeconds = 0.4, -- crumbs are dropped from his position smoothed this much (joystick zig-zags soften)
+		CrumbStuds = 1, -- a crumb every this many studs he travels (none while he stands)
+		TrailKeepStuds = 90, -- path kept (the oldest crumb's direction runs on straight back past it)
+		TangentStuds = 3, -- a row faces his path's direction measured over +- this many studs at its arc
+		FirstRowStuds = 7, -- the front row sits this far behind him ALONG HIS PATH ...
+		RowSpacing = 4.5, -- ... each next row this much further back along it
+		ColSpacing = 5, -- columns this far apart (an even count) ...
+		AisleStuds = 7, -- ... except the two inner ones: this far apart, a lane down his own trail (an about-turn)
+		ColumnsMax = 4, -- columns = ceil(sqrt(units + escorts)) rounded up to even, 2..this
+		RowTurnDegPerSec = 100, -- a row turns at most this fast ...
+		RowDeadbandDeg = 8, -- ... only once its path direction is this far off (stops within 1.5 deg), only while he moves
+		FoldDeg = 120, -- past this (his path doubled back: an about-turn) a row reverses in place, sides mirrored
+		SlotVelBlend = 0.5, -- a slot's velocity (its MoveTo lead and pace) is smoothed by this per tick
+		OwnerClearStuds = 5, -- a goal is never nearer him than this ...
+		OwnerAheadSeconds = 1, -- ... nor in his walking lane (this much of his travel ahead, LaneHalfStuds each side;
+		OwnerAheadMaxStuds = 16, -- ... at most this long): on an about-turn the units on his old path step aside ...
+		YieldSpeed = 24, -- ... at least this fast
+		LaneHalfStuds = 3.5, -- (= AisleStuds / 2: a unit in his lane steps out to the aisle's edge, not into the next column)
+		PartMaxStuds = 5, -- a row he walks back into parts: each half steps out (column order kept) by at most this ...
+		PartRampStuds = 12, -- ... ramped in over this much of his approach beyond his lane
+		EscortTrail = true, -- clients draw each unit's escorts on the unit's OWN path behind it (RigAnimator), RowSpacing apart
+		-- v115 debug (owner-visible, toggleable): slot markers + labels on his client, per-soldier logs on the server.
+		-- Debug = false: nothing at all. Default on for DebugUserIds; anyone listed toggles it with /armydebug.
+		Debug = true,
+		DebugUserIds = { 470626172 },
+		DebugLogSeconds = 2, -- the per-soldier state line, per army, this often
+		DebugPublishStuds = 0.5, -- WE_SlotPos (the marker) is rewritten only when the slot moved this far
 		-- soldier (SoldierController)
 		ArriveStuds = 2.5, -- in its slot within this (he stands) ...
 		LeaveStuds = 4, -- ... and stays there until this far (hysteresis)
 		ReissueStuds = 2.5, -- a new MoveTo only when the goal moved this far ...
 		RefreshSeconds = 6, -- ... or this long passed (Humanoid.MoveTo gives up after 8 s)
-		MoveLeadSeconds = 0.4, -- while he moves a unit walks toward its slot + his smoothed velocity x this ...
-		MoveLeadMaxStuds = 6, -- ... capped (it never reaches the goal and stops mid-walk)
-		CatchUpPerStud = 0.9, -- WalkSpeed = his pace + this per stud from its slot ...
+		MoveLeadSeconds = 0.25, -- while he moves a unit walks toward its slot + ITS SLOT's smoothed velocity x this ...
+		MoveLeadMaxStuds = 4, -- ... capped (it never reaches the goal and stops mid-walk)
+		CatchUpStartStuds = 6, -- catching up past this far from its OWN slot ...
+		CatchUpEndStuds = 3, -- ... until back within this (hysteresis)
+		TrimPerStud = 0.6, -- in step: WalkSpeed = its slot's pace + this per stud behind its slot (- ahead of it) ...
+		LateralPerStud = 0.5, -- ... + this per stud beside it
+		CatchUpPerStud = 0.9, -- catching up: WalkSpeed = its slot's pace + this per stud from its slot ...
 		CatchUpMaxMult = 1.8, -- ... capped at max(his pace x this, CatchUpMin), never over MaxSpeed
 		CatchUpMin = 30,
 		MaxSpeed = 40,
@@ -497,7 +508,7 @@ local ArmyConfig = {
 		RepositionMinOwnerStuds = 8, -- ... never nearer him than this
 		RepositionCooldown = 5,
 		AuditSeconds = 5, -- collision groups re-checked on every unit part this often
-		YawPublishDeg = 2, -- WE_FormYaw is written only when the heading moved this much
+		YawPublishDeg = 3, -- WE_FormYaw (its row's heading) is written only when it moved this much
 		LogSeconds = 5,
 	},
 

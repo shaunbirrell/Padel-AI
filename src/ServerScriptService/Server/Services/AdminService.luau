@@ -501,7 +501,8 @@ function AdminService.Init(deps: { [string]: any })
 		local isXpCmd = cmd == "xp" or cmd == "givexp"
 		local isKeepBaseCmd = cmd == "givekeepbase"
 		local isNationResetCmd = cmd == "nationreset"
-		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd then
+		local isArmyDebugCmd = cmd == "armydebug" -- v115: the owner's army-follow debug overlay (ArmyConfig.Follow3.Debug)
+		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -511,6 +512,24 @@ function AdminService.Init(deps: { [string]: any })
 			return
 		end
 		lastAdminChat[player.UserId] = { Text = text, At = nowClock }
+		-- v115: /armydebug [on|off] toggles the caller's WE_ArmyDebug attribute: slot markers + labels on his own client
+		-- (ArmyDebugClient), per-soldier server logs (ArmyController). Allowlist only (IsAdmin above).
+		if isArmyDebugCmd then
+			local want: boolean
+			if rest == "on" or rest == "1" then
+				want = true
+			elseif rest == "off" or rest == "0" then
+				want = false
+			else
+				want = player:GetAttribute("WE_ArmyDebug") ~= true
+			end
+			player:SetAttribute("WE_ArmyDebug", want)
+			print(string.format("[ArmyDebug] %s /armydebug -> %s", player.Name, tostring(want)))
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, "Army debug " .. (if want then "ON" else "OFF"), "Success")
+			end
+			return
+		end
 		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
@@ -622,9 +641,9 @@ function AdminService.Init(deps: { [string]: any })
 				end
 			end)
 			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
-			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" } }) do
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" } }) do
 				local c = ensureCommand(spec[1], spec[2], spec[3])
-				if spec[1] == "WE_NationReset" then
+				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" then
 					-- nations: never offered in chat autocomplete (lead decision 6: nothing of the feature shows for
 					-- non-admins before the flag art is live); the admin still types it
 					local cmdAny: any = c
@@ -659,6 +678,7 @@ function AdminService.Init(deps: { [string]: any })
 					or string.sub(lower, 1, 7) == "/givexp"
 					or string.sub(lower, 1, 13) == "/givekeepbase"
 					or string.sub(lower, 1, 12) == "/nationreset"
+					or string.sub(lower, 1, 10) == "/armydebug"
 				if not isAdminLine then
 					return
 				end
