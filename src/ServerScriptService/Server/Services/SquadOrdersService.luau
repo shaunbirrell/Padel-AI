@@ -1882,6 +1882,15 @@ end
 	is given up at its first blocked check, with no approach, until the timer starts over (a shot, a check with nothing
 	in the band, nothing in reach, a target beyond the band, a new order). Only two spots are remembered, so a fresh
 	approach inside the band would let three or more walled spots take turns forever (reviewer S1 / S2). ]]
+-- claude-bud (ATTACK fix, ArmyConfig.Follow2.Tidy): the ArmyFollow module when tidy formations are live for him
+local function attackTidy(player: Player): any?
+	local af = SquadOrdersService._AF
+	if af and af.TidyLive and af.AttackPoint and af.TidyLive(player) then
+		return af
+	end
+	return nil
+end
+
 local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playerRoot: BasePart?, now: number, trail: Trail?, probe: Probe?)
 	local aggro = OrdersConfig.AttackAggroRange or 120
 	local band = (OrdersConfig.AttackRange or 55) * 0.85 -- HEAD's ATTACK fire band: it fires only once this close
@@ -1909,7 +1918,13 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		unit.AimRoot = nil
 		unit.AimHum = nil
 		if playerRoot then
-			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
+			local af = attackTidy(player)
+			if af then
+				-- claude-bud (ATTACK fix): its own march spot by seat, never the one point 12 studs ahead of him
+				unit.Humanoid:MoveTo(af.AttackPoint(st, unit, playerRoot.Position, playerRoot.CFrame.LookVector, "march"))
+			else
+				unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
+			end
 		end
 		return
 	end
@@ -1991,6 +2006,25 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 	end
 	local aimAt = aimPoint(unit, nroot)
 	faceYaw(unit.Root, aimAt)
+	-- claude-bud (ATTACK fix): chasing, each unit closes on its own ring seat round the target (no shared Vector3)
+	local afA = attackTidy(player)
+	if afA then
+		local from = unit.Root.Position
+		local center = if unit.AimRoot ~= nil then aimAt else nroot.Position
+		local ringAt = afA.AttackPoint(st, unit, center, center - (if playerRoot then playerRoot.Position else from), "ring")
+		if unit.AimRoot ~= nil then
+			if (aimAt - from).Magnitude > band then
+				unit.Humanoid:MoveTo(ringAt)
+			else
+				unit.Humanoid:MoveTo(from)
+			end
+		elseif dist > band or (unit.LosBlocked and CombatFairnessConfig.UnitChaseWithoutLos == true) then
+			unit.Humanoid:MoveTo(ringAt)
+		else
+			unit.Humanoid:MoveTo(from)
+		end
+		return
+	end
 	if unit.AimRoot ~= nil then
 		-- squadfair: it shoots a visible hostile (the fallback): it closes in on that one only, never on the walled-off one
 		if (aimAt - unit.Root.Position).Magnitude > band then

@@ -365,6 +365,16 @@ local ArmyConfig = {
 			RowSide = 3,
 			FlipHysteresisStuds = 1.5,
 			LeaveGraceSeconds = 8,
+			-- claude-bud (owner v95 phone test fix): hold cells are raycast / overlap-checked (bad ones skipped outward),
+			-- reached straight with no path and no teleport; arrival within HoldArriveStuds. ATTACK: every unit its own
+			-- spot by its seat (march rows MarchPerRow x MarchSpacing, MarchAhead in front; a ring of AttackRingSpacing
+			-- round the target, at least AttackRingMin), never one shared point.
+			HoldArriveStuds = 1.5,
+			MarchPerRow = 5,
+			MarchSpacing = 3.5,
+			MarchAhead = 10,
+			AttackRingSpacing = 3.5,
+			AttackRingMin = 8,
 		},
 		LogSeconds = 5,
 	},

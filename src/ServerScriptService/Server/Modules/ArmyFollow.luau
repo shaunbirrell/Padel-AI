@@ -272,7 +272,101 @@ local function ownPlotInside(st: any, player: Player?, pos: Vector3): number?
 	return if inside then id else nil
 end
 
+--[[ claude-bud (Tidy): fixed seats for life, UNIQUE per squad (seat -> unit map): a dead / gone unit frees its seat,
+	nobody else moves up, and no two units ever share one (a duplicated or missing seat is re-issued the lowest free
+	number). FOLLOW (wedge), the base hold and ATTACK (march rows / target ring) all place a unit by its seat. ]]
+local function assignSeats(st: any, units: { any })
+	local order = table.clone(units)
+	table.sort(order, function(a, b)
+		return (a.Slot or 0) < (b.Slot or 0)
+	end)
+	local taken: { [number]: any } = {}
+	for _, u in ipairs(order) do
+		local s = u._afSeat
+		if typeof(s) == "number" and s >= 1 and taken[s] == nil then
+			taken[s] = u
+		else
+			u._afSeat = nil
+		end
+	end
+	for _, u in ipairs(order) do
+		if u._afSeat == nil then
+			local s = 1
+			while taken[s] ~= nil do
+				s += 1
+			end
+			u._afSeat = s
+			taken[s] = u
+		end
+	end
+	st._afSeatMap = taken
+	st._afSeatCount = #order
+end
+ArmyFollow.AssignSeats = assignSeats
+
 -- claude-bud: tidy wait spot of seat `rank`: rows on both sides of the gate lane, facing out (plot-local +Z)
+local overlapParams = OverlapParams.new()
+overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+overlapParams.RespectCanCollide = true
+local gridCache: { [number]: { At: number, Cells: { [number]: { Vector3 } }, Need: number } } = {}
+
+-- one hold cell (plot-local x, z) is usable: ground under it (not water, not a roof) and nothing collidable in a
+-- soldier-sized box on it (walls, props, parked vehicles; the squads and characters are excluded)
+local function cellFree(plotId: number, lx: number, lz: number): Vector3?
+	local w = PlotFrame.LocalToWorld(plotId, lx, lz)
+	local c = PlotFrame.PlotPosition(plotId)
+	local refY = if c then c.Y + 0.5 else w.Y
+	local hit = Workspace:Raycast(Vector3.new(w.X, refY + 30, w.Z), Vector3.new(0, -60, 0), rayParams)
+	if hit == nil or hit.Material == Enum.Material.Water or math.abs(hit.Position.Y - refY) > 2.5 then
+		return nil
+	end
+	overlapParams.FilterDescendantsInstances = rayParams.FilterDescendantsInstances
+	local box = CFrame.new(hit.Position + Vector3.new(0, 3.2, 0))
+	local parts = Workspace:GetPartBoundsInBox(box, Vector3.new(3, 4.6, 3), overlapParams)
+	if #parts > 0 then
+		return nil
+	end
+	return hit.Position
+end
+
+-- the hold grid of plot `plotId`: per side (1 = left, 2 = right), the free cells in order (row 0 first, outward),
+-- PerRow per row, ColSpacing apart, RowSpacing deep, never nearer the front edge than WaitOut (always outside the gate
+-- plane). Cached for 30 s (props do not move).
+local function holdCells(plotId: number, need: number): { [number]: { Vector3 } }
+	local now = os.clock()
+	local c = gridCache[plotId]
+	local perSide = math.ceil(need / 2)
+	if c and now - c.At < 30 and c.Need >= need then
+		return c.Cells -- (a side short of free cells is not re-scanned every think: Need, not the cell count)
+	end
+	refreshRayFilter(nil)
+	local half = BaseConfig.PlotSize.X * 0.5
+	local gateHalf = (tonumber(BaseLayoutConfig.MainGateWidth) or 14) * 0.5
+	local perRow = math.max(1, math.floor(tnum("PerRow", 4)))
+	local cells: { [number]: { Vector3 } } = { {}, {} }
+	for sideIdx, side in ipairs({ -1, 1 }) do
+		local list = cells[sideIdx]
+		for row = 0, 40 do
+			if #list >= perSide then
+				break
+			end
+			for col = 0, perRow - 1 do
+				if #list >= perSide then
+					break
+				end
+				local lx = side * (gateHalf + tnum("WaitGap", 5) + col * tnum("ColSpacing", 4))
+				local lz = half + tnum("WaitOut", 14) + row * tnum("RowSpacing", 4)
+				local at = cellFree(plotId, lx, lz)
+				if at then
+					table.insert(list, at)
+				end
+			end
+		end
+	end
+	gridCache[plotId] = { At = now, Cells = cells, Need = math.max(need, 16) }
+	return cells
+end
+
 local function tidyWaitSpot(plotId: number, rank: number): (Vector3, Vector3)
 	local half = BaseConfig.PlotSize.X * 0.5
 	local gateHalf = (tonumber(BaseLayoutConfig.MainGateWidth) or 14) * 0.5
@@ -286,7 +380,42 @@ local function tidyWaitSpot(plotId: number, rank: number): (Vector3, Vector3)
 	local p = PlotFrame.LocalToWorld(plotId, x, z)
 	local out = PlotFrame.LocalToWorld(plotId, x, z + 1) - p
 	out = Vector3.new(out.X, 0, out.Z)
+	-- claude-bud (hold fix): the k-th FREE cell of this side (walls / props / water skipped, moved outward)
+	local cells = holdCells(plotId, rank + 1)
+	local mine = cells[if side < 0 then 1 else 2][j + 1]
+	if mine then
+		p = mine
+	end
 	return p, if out.Magnitude > 1e-3 then out.Unit else Vector3.new(0, 0, 1)
+end
+
+--[[ claude-bud (ATTACK fix): a unit's own attack spot by its seat, never a shared point.
+	"march": rows abreast in front of `center` along `facing` (no target in reach): MarchPerRow per row, MarchSpacing
+	apart, the first row MarchAhead studs ahead. "ring": round a target at `center`, one seat each, AttackRingSpacing
+	studs apart along the ring (radius grows with the squad), the ring turned so the units approach from their side. ]]
+function ArmyFollow.AttackPoint(st: any, unit: any, center: Vector3, facing: Vector3, mode: string): Vector3
+	if unit._afSeat == nil or st._afSeatMap == nil or st._afSeatMap[unit._afSeat] ~= unit then
+		assignSeats(st, st.Units)
+	end
+	local k = unit._afSeat or 1
+	local n = math.max(1, st._afSeatCount or #st.Units)
+	local f = Vector3.new(facing.X, 0, facing.Z)
+	f = if f.Magnitude > 1e-3 then f.Unit else Vector3.new(0, 0, -1)
+	local right = Vector3.new(-f.Z, 0, f.X)
+	if mode == "ring" then
+		local spacing = tnum("AttackRingSpacing", 3.5)
+		local r = math.max(tnum("AttackRingMin", 8), n * spacing / (2 * math.pi))
+		local a = (k - 1) * 2 * math.pi / n
+		local dir = -f * math.cos(a) + right * math.sin(a)
+		return center + dir * r
+	end
+	local perRow = math.max(1, math.floor(tnum("MarchPerRow", 5)))
+	local spacing = tnum("MarchSpacing", 3.5)
+	local row = math.floor((k - 1) / perRow)
+	local col = (k - 1) % perRow
+	local inRow = math.min(perRow, n - row * perRow)
+	local lateral = (col - (inRow - 1) * 0.5) * spacing
+	return center + f * (tnum("MarchAhead", 10) + row * spacing) + right * lateral
 end
 
 local function waitSpot(plotId: number, rank: number): Vector3
@@ -343,28 +472,10 @@ local function plan(st: any, player: Player?, root: BasePart, units: { any }, no
 	end)
 	st._afTidy = tidyLive(player)
 	if st._afTidy then
-		-- claude-bud: fixed seats for life; a dead / gone unit frees its seat, nobody else moves up
-		local taken: { [number]: any } = {}
+		assignSeats(st, order)
 		for _, u in ipairs(order) do
-			local s = u._afSeat
-			if typeof(s) == "number" and taken[s] == nil then
-				taken[s] = u
-			else
-				u._afSeat = nil
-			end
-		end
-		for _, u in ipairs(order) do
-			if u._afSeat == nil then
-				local s = 1
-				while taken[s] ~= nil do
-					s += 1
-				end
-				u._afSeat = s
-				taken[s] = u
-			end
 			u._afRank = u._afSeat
 		end
-		st._afSeatMap = taken
 	else
 		for i, u in ipairs(order) do
 			u._afRank = i
@@ -557,7 +668,10 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	end
 	-- claude-bud (Tidy): just out of his base, they walk back into the wedge (no far / stuck teleport for a grace spell)
 	local walkBack = st._afTidy and not st._afInBase and now - (st._afLeftBaseAt or -math.huge) < tnum("LeaveGraceSeconds", 8)
-	if not seatedFast and not walkBack then
+	-- claude-bud (hold fix): while he is in his base, a unit OUTSIDE his plot walks straight to its hold cell: no
+	-- pathfinding (a path ran through the open gate), no stuck / far teleport correction (void rescue only)
+	local holdOut = st._afTidy and st._afInBase and st._afPlot ~= nil and not inPlot(st._afPlot, pos, 0)
+	if not seatedFast and not walkBack and not holdOut then
 		if st._afJumped and ownerD > num("JumpRegroupStuds", 40) and regroup(st, unit, root, now, "owner-jump") then
 			return
 		end
@@ -589,7 +703,7 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	end
 
 	-- separation: steer away from any squad-mate closer than SeparationStuds
-	local sep = num("SeparationStuds", 3.5)
+	local sep = if st._afTidy and st._afInBase then 0 else num("SeparationStuds", 3.5) -- claude-bud: hold cells are exact
 	local push = Vector3.zero
 	for _, o in ipairs(st.Units) do
 		if o ~= unit and o.Alive and o.Root and o.Root.Parent then
@@ -633,7 +747,7 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	setSpeed(unit, speed)
 
 	-- claude-bud (Tidy): at its gate wait spot it stands still facing out, whatever he does inside
-	if st._afTidy and st._afInBase and st._afPlot and flatDist(pos, goal) <= num("ArriveStuds", 2) then
+	if st._afTidy and st._afInBase and st._afPlot and flatDist(pos, goal) <= tnum("HoldArriveStuds", 1.5) then
 		if not unit._afStand then
 			unit._afStand = true
 			unit.Humanoid:MoveTo(pos)
@@ -658,6 +772,41 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	end
 	unit._afStand = false
 
+	-- claude-bud (hold fix): outside his plot while he is in it: straight to the cell; if that line would clip his plot
+	-- square, first to the nearest outside corner point (the plot is never crossed, no path through the gate)
+	if holdOut and st._afPlot then
+		local lp = plotLocal(st._afPlot, pos)
+		local lg = plotLocal(st._afPlot, goal)
+		local via = goal
+		if lp and lg then
+			local half = BaseConfig.PlotSize.X * 0.5 + tnum("PlotPadStuds", 2) + 4
+			local crosses = false
+			for i = 1, 7 do
+				local t = i / 8
+				local x, z = lp.X + (lg.X - lp.X) * t, lp.Z + (lg.Z - lp.Z) * t
+				if math.abs(x) < half and math.abs(z) < half then
+					crosses = true
+					break
+				end
+			end
+			if crosses then
+				local sx = if lp.X < 0 then -1 else 1
+				local cx, cz
+				if math.abs(lp.X) >= half then
+					cx, cz = sx * half, half -- beside the plot: up that side to its front corner
+				elseif lp.Z < 0 then
+					cx, cz = sx * half, lp.Z -- behind it: straight out sideways to the side line first
+				else
+					cx, cz = lg.X, half -- in front: along the front line
+				end
+				via = PlotFrame.LocalToWorld(st._afPlot, cx, cz)
+				via = Vector3.new(via.X, goal.Y, via.Z)
+			end
+		end
+		unit._afPath = nil
+		moveTo(unit, via, now)
+		return
+	end
 	-- movement: straight while it sees the slot, a throttled path only when blocked
 	if clearLine(pos, goal) then
 		unit._afPath = nil

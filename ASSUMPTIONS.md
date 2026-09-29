@@ -8838,3 +8838,28 @@ ds_territories.luau T3):
   (the WE_Ent_<pass> attribute). The 6 PV passes are no longer HideFromShop, so the Shop pass list shows them once their Ids are pasted.
 - VehicleService is at Luau's 200-local limit, so the new requires there are inline. Weapons on ground and naval
   vehicles still do not exist (the inventory found no ground/naval weapon service); the premium boats and tanks are armour/HP/speed only, like their bases.
+
+## 2026-09-29 — claude-bud: army fix after the owner's v95 phone test (Follow2.Tidy, owner-only; Rollout "off" = v91)
+- **1. Walked inside, then teleported out.** When the straight line to a hold cell was blocked, ArmyFollow asked
+  PathfindingService for a path, and the shortest one ran through his open gate and inside the base. The stuck / far
+  regroup then teleported the soldier out.
+  - Now, while he is in his base, a unit OUTSIDE his plot walks straight to its own cell. If that line would clip the
+    plot square, it goes via an outside corner point first (from the side: that side's front corner; from behind:
+    out sideways; from the front: along the front line).
+  - There is no pathfinding and no stuck / far / owner-jump teleport in that state; the void rescue still runs.
+  - Only a unit already inside may path out.
+  - Goals of outside units are never inside the plot (keepOut, from JOB 2).
+- **2. Crooked clumps.** Hold cells are now validated: a ground raycast (not water, within 2.5 of pad top) plus
+  `GetPartBoundsInBox` (3 x 4.6 x 3; squads and characters excluded) must be empty.
+  - A bad cell is skipped, so that side's next free cell (further out) is used. The grid is cached per plot for 30 s.
+  - Two blocks either side of the gate road, 4 per row, 4 apart, rows 4 deep from 14 out; they face out on arrival (1.5 studs).
+  - There's no separation push while holding (cells are exact).
+- **3. ATTACK stacking.** With no hostile in reach, every unit was sent to ONE point (12 studs ahead of him); chasing,
+  every unit went to the target's exact position.
+  - Now: "march" rows abreast in front of him by seat (5 per row, 3.5 apart, the first row 10 ahead), and a ring
+    round the target by seat (3.5 apart along the ring, radius at least 8), turned so seat 1 faces him.
+- **Seats:** one `assignSeats` makes them unique (a duplicate is dropped and re-issued the lowest free number).
+  FOLLOW, hold and ATTACK all use it.
+- **Check:** `tools/checks/claude_bud_army.py` simulates the cells and the attack spots from the config: unique, at least 3 apart,
+  every hold cell at least edge + pad + 4 outside the gate plane and off the gate lane.
+- Not verified in Roblox (no stand-in here); the owner's phone test decides.
