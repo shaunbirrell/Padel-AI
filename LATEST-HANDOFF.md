@@ -1,4 +1,27 @@
 <!-- Q2-START -->
+## v115 (Code Bot Roblox, 2026-09-29): army follow root cause 3 LIVE, place version 113
+- **What the owner saw on v114:** wings, then a split into two groups, a diagonal train, then an orbit/U, reforming only when he stopped.
+- **Root causes** (`docs/ARMY-FOLLOW-ROOTCAUSE-3.md`):
+  1. The v114 Flank `SlotLocal` put units 6 studs to his SIDE, and client escorts sat 5.5 studs further out (wings).
+  2. The single heading rotated about an anchor ON him, so outer and rear cells swept arcs faster than soldiers can run.
+  3. The SoldierController "wheel" ran units round the outside of him (the orbit).
+- **New "TrailBlock" formation** (`Shared/Util/FormationController`, rewritten): a breadcrumb trail of his path, with rows on that trail 7 + r×4.5 studs of PATH behind him. Each row's heading is the trail tangent, rate-limited to 100°/s, with an 8° deadband, updated only while he moves.
+  - Layout: even columns (≤4, 5 apart, with a 7-stud aisle on his path), escorts in the rows directly behind their unit.
+  - About-turn fold: rows reverse in place and walk back down the old path. Rows he walks into part. Units in his lane step out to their own side.
+  - Slots: permanent `FormationSlot`.
+  - Wheel removed. Catch-up only toward the soldier's own slot (6/3 hysteresis).
+  - Client escorts follow their unit's own path (RigAnimator escort trail; `WE_EscSide` is gone).
+- **Debug** (owner only):
+  - `Follow3.Debug` + `DebugUserIds {470626172}` + his `WE_ArmyDebug` attribute; `/armydebug [on|off]` toggles it.
+  - Client `ArmyDebugClient`: neon slot discs, green/yellow/red lines, and "S07 / Slot 07" labels.
+  - Server logs: WARN on SLOT CHANGE / LAYOUT CHANGE / REPOSITION, plus a per-soldier log every 2 s.
+- **Sim:** `tools/sim/` (the real FC + SC in the Luau CLI, humanoid walkers). All 10 owner tests pass: 154 PASS / 0 FAIL. Plots are in `docs/army-sim/*.png`.
+- **Checks:** `tools/checks/codebot_v115_army.py` (static + the sim). Retired the Flank/heading/WE_Build/sim pins in `codebot_v114_army.py`.
+- **Build:** BuyPathStatic PASS=6119 FAIL=0; rojo ok; WE_Build 115. Commit 2be8d70. Open Cloud versionNumber=113.
+- **Kill switch:** `ArmyConfig.Follow3.Enabled = false` gives v113 behaviour.
+- **NEXT for Claude:** **rebase `claude/desktop-bud` onto phase-7-polish (v115)**.
+  - Soldier movement still only goes through SoldierController.
+  - Slots come from `FormationController.Plan`. The removed APIs (NewAnchor / Step / SlotLocal / SlotWorld / MoveLead / SideRow) must not come back.
 ## v114 (Code Bot Roblox, 2026-09-29) — army follow root cause 2 LIVE — place version 112
 - Owner phone test of v113: despawn fixed (kept) but still slot swapping / crossing, a snap ~8-9 s in, bunching. Root cause written up in `docs/ARMY-FOLLOW-ROOTCAUSE-2.md` (separation push + mid/path target switching + escort close-in/side-step fight vs Flank seats + seat compaction; the "snap" = the face gyro getting full torque back with a stale target on arrival, amplified by the client escort files welded 7-12 studs AHEAD of each unit; Flank rows only ~4 studs apart and 3.6 from him).
 - New: `Shared/Util/FormationController` (smoothed anchor, heading from movement w/ 18° deadband + hold, 100°/s cap, no flip backing up; Flank grid one row per unit 6 studs out, escorts 5.5 further out, rows 5.5 deep; PERMANENT slot assignment), `Server/Modules/SoldierController` (the ONLY Humanoid:MoveTo + the only PivotTo = emergency `Reposition`; arrival 2.5/4 hysteresis, reissue > 2.5 studs, 0.2 s tick, catch-up by WalkSpeed, snap-free gyro, staged stuck, U-turn "wheel" round the outside, never through the owner), `Server/Modules/ArmyController` (one FOLLOW controller per army, FOLLOW/HOLD/ATTACK/RETREAT; base gate hold kept, no PivotTo turn). FOLLOW escort = aim/shoot only. Client RigAnimator lays escorts along the formation row (`WE_FormYaw` / `WE_EscSide`). Collision: ArmyNPCs x ArmyNPCs / WE_PlayerChars false, x Default true, audited every 5 s.
