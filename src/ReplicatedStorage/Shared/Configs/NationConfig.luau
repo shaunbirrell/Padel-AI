@@ -71,7 +71,10 @@ local NationConfig = {
 	ContestMinColorDistance = 0.25, -- RGB distance (0..1.73) below which the contested pulse uses amber
 
 	-- Picker
-	Featured = { "US", "GB", "BR", "PH", "ID", "MX", "CA", "AU", "DE", "FR", "IE" }, -- "For you" tab after the suggestion
+	-- claude-bud JOB 25: the ~60 most common first (the "For you" tab scrolls); search covers all 200
+	Featured = { "US", "GB", "BR", "PH", "ID", "MX", "CA", "AU", "DE", "FR", "IE", "IN", "PK", "NG", "EG", "TR", "SA", "AE", "ES",
+		"IT", "PT", "NL", "BE", "PL", "SE", "NO", "DK", "FI", "RU", "UA", "RO", "GR", "CZ", "HU", "AT", "CH", "AR", "CL", "CO", "PE",
+		"VE", "ZA", "KE", "MA", "DZ", "JP", "KR", "CN", "VN", "TH", "MY", "SG", "NZ", "IL", "IQ", "IR", "BD", "LK", "NP" },
 	RegionOrder = { "Europe", "Americas", "Asia", "Africa", "MiddleEast", "Oceania" } :: { Region },
 	RegionLabel = {
 		Europe = "Europe",

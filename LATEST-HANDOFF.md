@@ -1,4 +1,42 @@
 <!-- Q2-START -->
+## claude-bud JOB 25 (2026-09-29): "<Name>'s Empire" base signs + real flags status (branch `claude/desktop-bud`)
+- **What already existed (nations spec):**
+  - a 200-nation roster (UN + 7), a picker with search, flag art from lipis/flag-icons (MIT) rendered into 7 atlases
+    (`assets/flags/atlas_*.png`, tools/gen_nation_flags.py);
+  - flags on the base ParadeFlag + HQ roof as Textures (Server/Modules/NationFlag);
+  - the IP country is a badged suggestion only (`SuggestPreselect = false`);
+  - `LiveRequiresArt` (the picker opens by itself only once every atlas id is set);
+  - `OutpostFlags = false`;
+  - a player-list "Nation" column.
+- **Why players see colour blocks, not flags:** every id in `NationFlagIds.luau` is 0, because the 7 atlas images
+  were never uploaded.
+  - **OWNER STEP:** upload the 7 PNGs in `assets/flags/` as Images, as the account / group that owns the game. Then
+    run `tools/wire-nation-flag-ids.py` with the image ids.
+  - After that, flags show everywhere and the `LiveRequiresArt` gate opens by itself.
+  - I cannot upload (no Roblox account access / API keys).
+- **New: the base sign** (Shared/Configs/BaseSignConfig, Server/Services/BaseSignService):
+  - Placement: 26 studs above each plot's gate, one per plot.
+  - Content: the owner's headshot, "<DisplayName>'s Empire", "LV · REBIRTH · ARMY".
+  - Flag: a flag plate dressed by NationFlag (Textures; plain green until the art is uploaded).
+  - Empty plots show "UNCLAIMED BASE / walk in to claim".
+  - Size and refresh: fixed 250 x 78 px, MaxDistance 220, refreshed only when something changes (5 s check).
+  - `CustomEmpireNames = false`. Kill switch: `BaseSignConfig.Enabled`.
+- **Picker:** the "For you" tab now lists the 59 most common countries first; search covers all 200.
+- **NOT done (conflicts with CLAUDE.md nation rules; the owner must decide before I change them):**
+  - flags on the leaderboards ("never a real country on … leaderboards");
+  - defaulting to the detected country ("an IP-derived country is only a suggestion … never auto-applied": it stays a
+    badged suggestion);
+  - flags on captured outposts (`OutpostFlags = false`, the nations-spec policy caution);
+  - the sign's MaxDistance 220 is above the CLAUDE.md world-label rule (MaxDistance ≤ 40), because the brief asks for
+    it to be readable from the road. It is one sign per base, never AlwaysOnTop.
+- **Checks:** tools/checks/claude_bud_job25.py. BuyPathStatic PASS=6333 FAIL=0; rojo ok; no new LSP errors.
+- **Test ON HIS PHONE:**
+  1. Join: your sign should show your headshot + "<name>'s Empire", with the level / rebirth / army line updating
+     after a level-up or rebirth.
+  2. Another player's base shows theirs; an empty plot shows UNCLAIMED.
+  3. Change flag at the flagpole: the sign plate follows (a colour until the atlases are uploaded).
+  4. Readability from the road on the phone; nothing clips into buildings.
+  5. With 10 players, all signs are right after join and leave.
 ## claude-bud JOB 24 big pass (2026-09-29, branch `claude/desktop-bud`, on v116 2965b15): 35099a3 + 458f2ed + the JOB 24c commit
 - **§1 ATTACK + §3 debug off:** commit 35099a3 (docs/ARMY-ATTACK-ROOTCAUSE.md).
 - **§2 the army now hurts enemy players:**

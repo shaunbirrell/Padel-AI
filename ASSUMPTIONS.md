@@ -9512,3 +9512,12 @@ ds_territories.luau T3):
   enter it. Economy events are summed per minute to respect Roblox limits.
 - **Tests:** static pins, sims and models only. Nothing was run in Studio or on a phone. The headless world sim and
   the DataService harness are not in the repo.
+
+## 2026-09-29 — claude-bud JOB 25: base name signs
+- **Sign position:** above the main gate, not the plot centre, so it never clips a building and is seen from the road.
+- **Flag:** a physical plate with Textures beside the BillboardGui (CLAUDE.md: flags in the world are Textures, never
+  GUIs). The billboard itself holds only the headshot and text.
+- **Headshot:** an rbxthumb:// URL (no yielding GetUserThumbnailAsync on the server).
+- **Army:** the owner's saved soldier count (profile.Soldiers).
+- **Not done, against the CLAUDE.md nation rules:** leaderboard flags, auto-applied IP country, outpost flags. These
+  need the owner's explicit override.
