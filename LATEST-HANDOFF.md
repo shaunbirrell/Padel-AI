@@ -1,4 +1,18 @@
 <!-- Q2-START -->
+## v123 (Code Bot Roblox, 2026-09-30 ~00:40 Dublin): /movedebug + soldiers never collide with players (flag-free) — place version 121
+- **Bug (Shaun, phone):** stick held forward, he runs, army falls back, he stops dead (RUNNING → IDLE, no obstacle), army catches up, he can move again.
+- **Root cause: NOT YET PROVEN** (needs a phone repro with /movedebug on). Static audit of the whole src tree ruled out, with file evidence:
+  - no army / leash / catch-up code writes to the player (ArmyController, ArmyFollow, SoldierController, FormationController, SquadOrdersService: no WalkSpeed / Anchored / CFrame / PivotTo / ChangeState / Move on the owner — pinned in codebot_v123.py);
+  - AntiExploitService has no movement / speed check at all (payload strikes only) → no rubber-banding;
+  - the only server WalkSpeed write to a player is the Speed Pass (x1.15/x1.25, never lower); no combat slow; FallSafety only below Y 0.15;
+  - no ContextActionService Sink on touch / thumbstick, no GetControls():Disable, no Modal / ModalEnabled; StreamingEnabled false live (GameplayPaused impossible);
+  - soldiers: ArmyNPCs x WE_PlayerChars = false live (Open Cloud probe on v123), rig / kit / v120 body parts CanCollide false + re-audited into ArmyNPCs every 5 s, escorts are client copies CanCollide false.
+  - Candidate still open: v116–v120 QualityGovernor re-parenting WorldKits clusters on the phone by pivot distance (JOB 27, fixed in v121) could put collision round him; the new blocker list names any such part.
+- **Shipped (quiet unless toggled):** `Modules/MoveDebug` (tagged writers for Speed Pass WalkSpeed + every player PivotTo; watchers; 4 Hz sampler: [MOVEMENT OWNER LOST] / [MOVEMENT WELDED] / [MOVEMENT SOLDIER CAN COLLIDE], army distance, within 6, CatchingUp, last writers) + `Client/Modules/MoveDebugClient` ([MOVEMENT BLOCK DETECTED] = |MoveDirection| > 0.5 and speed < 1 for > 0.25 s with a full dump; [MOVEMENT INPUT LOST]; ReceiveAge; Active GUIs under the thumb; collidable blockers ahead; on-screen non-Active label) + `/movedebug [on|off]` (admin allowlist).
+- **Hardening:** ArmyFollow now sets ArmyNPCs x WE_PlayerChars = false and hooks every player into WE_PlayerChars regardless of Follow2/Follow3 rollout flags (was gated); BaseGuards WE_Guards x WE_PlayerChars = false. Follow3.Steer / AttackSteer untouched. **WE_Build 123.** PreferMesh OFF; WE_Building* untouched.
+- **Checks:** BuyPathStatic PASS=6465 FAIL=0; remote_audit OK; rojo → dist/WarEmpire-PERF.rbxlx (+ WarEmpire.rbxlx); Open Cloud HTTP 200 `versionNumber=121`. Code commit `3b01492`.
+- **Phone steps (Shaun):** Migrate to Latest Update → join → chat `/movedebug on` (toast "Move debug ON", black label top centre) → optionally `/armydebug on` (CatchingUp counts) → run the same route, stick held, until it stops → hold the stick 2–3 s → F9 Developer Console: screenshot the **Client** log `[MOVEMENT BLOCK DETECTED]` / `[MOVEMENT INPUT LOST]` lines and the **Server** log `[MoveDebug] S` / `[MOVEMENT ...]` lines around that time → `/movedebug off`.
+
 ## v122 (Code Bot Roblox, 2026-09-30 ~00:30 Dublin): real nation flags wired — place version 120
 - Wired the 7 JOB 25 flag atlases (uploaded by shaunie6 via Creator Hub as IMAGE assets) with `tools/wire-nation-flag-ids.py` into `NationFlagIds.Atlas`: Europe 117922087338795, Americas 129834397528036, Asia 114871762121221, Africa 132455042605948, MiddleEast 88221072001528, Oceania 82459247862229, Review 98381294373531. National flags only (flag-icons). **WE_Build 122**. PreferMesh OFF; WE_Building* untouched.
 - All atlases non-zero → `LiveRequiresArt` lets the nation picker open by itself for everyone after this publish.
