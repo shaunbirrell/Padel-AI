@@ -109,8 +109,8 @@ _v115_check("WE_EscSide" not in _ac5, "no WE_EscSide wings published")
 
 # 6. build pins, never-touch
 for _rel5 in ("src/ServerScriptService/Server/Services/DataService.luau", "src/ServerScriptService/Server/Services/BaseService.luau", "src/ServerScriptService/Server/EarlyRemotes.server.luau"):
-    _v115_check('SetAttribute("WE_Build", 115)' in (read(_rel5) or ""), "WE_Build=115 " + _rel5.rsplit("/", 1)[-1])
-_v115_check("WE_Build=115" in (read("src/ServerScriptService/Server/Services/DataService.luau") or ""), "DataService log WE_Build=115")
+    pass  # v116 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v116.py: #_v115_check('SetAttribute("WE_Build", 115)' in (read(_rel5) or ""), "WE_Build=115 " + _rel5.rsplit("/", 1)[-1])
+# v116 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v116.py: #_v115_check("WE_Build=115" in (read("src/ServerScriptService/Server/Services/DataService.luau") or ""), "DataService log WE_Build=115")
 _v115_check("PreferMesh = true" not in (read("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau") or ""), "PreferMesh stays OFF")
 
 # 7. the acceptance simulation (10 owner tests; thresholds live in the sim; any FAIL line fails the build)

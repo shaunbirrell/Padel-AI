@@ -1115,6 +1115,32 @@ local ArmyConfig = {
 		PartMaxStuds = 5, -- a row he walks back into parts: each half steps out (column order kept) by at most this ...
 		PartRampStuds = 12, -- ... ramped in over this much of his approach beyond his lane
 		EscortTrail = true, -- clients draw each unit's escorts on the unit's OWN path behind it (RigAnimator), RowSpacing apart
+		-- JOB 23 (claude-bud, docs/ARMY-FOLLOW-ROOTCAUSE-4.md): the block is ONE steered body (FormationController.SteerFrames)
+		-- instead of rows riding his trail (their slots turned his corners / hairpins at full speed). Steer = false: v115 rows.
+		Steer = true,
+		FormGain = 3.2, -- its centre closes the gap to its steering point (on his path, behind him) at this per second ...
+		FormAccel = 24, -- ... its velocity speeding up / changing course at most this much per second (it keeps going briefly) ...
+		FormBrake = 60, -- ... slowing down at most this much (he stops: it stops with him; no coasting into his new path) ...
+		FormMaxSpeed = 24, -- ... never faster than this (or FormSpeedMult x his speed in a vehicle), less |turn rate| x radius
+		FormSpeedMult = 1.25,
+		TurnSlowFactor = 1, -- (while turning it travels that much slower: no slot ever moves faster than FormMaxSpeed)
+		BubbleStuds = 3, -- its centre steers no nearer him than its radius + this (no slot swings into him on a corner)
+		WaitAheadStuds = 0, -- he walks back into it (its centre this far ahead of him along his walk): it waits, holding its heading
+		SteerHeadingPath = false, -- its heading steers to his movement direction NOW (true: his path's direction at the block)
+		SlotLateralSpeed = 10, -- turning moves any slot sideways at most this fast: turn rate cap = this / the block's radius
+		TurnGain = 2.5, -- turn rate asked per radian of heading error (its heading = his MOVEMENT direction only) ...
+		TurnAccelSeconds = 0.4, -- ... reached over this (angular inertia); starts past RowDeadbandDeg, ends within 1.5 deg
+		SettleTurnPerSec = 0.8, -- inside RowDeadbandDeg it drifts onto his heading this fast (no standing tilt, no jitter)
+		SteerLeadSeconds = 0.35, -- a soldier walks toward its slot + its slot's velocity x this (capped) ...
+		SteerLeadMaxStuds = 6, -- ... and is re-aimed when it nears that point off its slot (no stop-start inside a turn)
+		SpeedDeadzoneStuds = 1, -- soldier WalkSpeed = its slot's speed + SpeedGain per stud of error past this ...
+		SpeedGain = 0.9,
+		SpeedLatGain = 0.6, -- ... + this per stud beside it (behind: faster, ahead: slower), one continuous law ...
+		SpeedMaxBonus = 14, -- ... at most this over its slot's speed ...
+		SpeedMaxSlow = 8, -- ... at most this under it ...
+		SpeedSmoothSeconds = 0.1, -- ... eased toward it over this (no step at a state change: the states are labels only)
+		SpikeErrStuds = 6, -- debug: a soldier this far from its slot, or a slot faster than a soldier can run, is logged
+		DebugPanelSeconds = 0.5, -- debug: the owner's formation panel refresh
 		-- v115 debug (owner-visible, toggleable): slot markers + labels on his client, per-soldier logs on the server.
 		-- Debug = false: nothing at all. Default on for DebugUserIds; anyone listed toggles it with /armydebug.
 		Debug = true,
@@ -19625,18 +19651,223 @@ function FormationController.Assign(s: Assignment, units: { any }): boolean
 	return changed
 end
 
+-- JOB 23: the steered block (Follow3.Steer). C = its centre (the pivot), V = its velocity, H = its heading, W = its
+-- turn rate (rad/s, + = toward +atan2(X, Z)), Hd = the heading it steers to (his MOVEMENT direction, kept while he stands)
+export type Form = {
+	C: Vector3,
+	V: Vector3,
+	H: Vector3,
+	W: number,
+	Hd: Vector3,
+	Turning: boolean,
+	Radius: number, -- farthest slot from C
+	Omega: number, -- the turn-rate cap now (SlotLateralSpeed / Radius)
+	HalfDepth: number,
+	Err: number, -- heading error (rad) this tick
+	Target: Vector3?, -- its steering point last tick (on his trail)
+	Waiting: boolean?, -- he walks back through it (an about-turn): it holds still and waits
+}
+
 export type Army = {
 	Trail: Trail,
 	Assign: Assignment,
 	Prev: { [any]: Vector3 }, -- per unit: its slot last tick (its slot's velocity)
 	SVel: { [any]: Vector3 },
 	LayoutKey: string?,
+	Form: Form?,
 }
 
-export type Plan = { Goal: Vector3, Heading: Vector3, Lead: Vector3, Pace: number, Row: number, X: number, Esc: number, Idx: number }
+export type Plan = { Goal: Vector3, Heading: Vector3, Lead: Vector3, Pace: number, Row: number, X: number, Esc: number, Idx: number, SlotSpeed: number }
 
 function FormationController.NewArmy(): Army
-	return { Trail = FormationController.NewTrail(), Assign = FormationController.NewAssignment(), Prev = {}, SVel = {}, LayoutKey = nil }
+	return { Trail = FormationController.NewTrail(), Assign = FormationController.NewAssignment(), Prev = {}, SVel = {}, LayoutKey = nil, Form = nil }
+end
+
+local function rotY(v: Vector3, rad: number): Vector3
+	local r = math.atan2(v.X, v.Z) + rad
+	return Vector3.new(math.sin(r), 0, math.cos(r))
+end
+
+--[[ JOB 23 (claude-bud, docs/ARMY-FOLLOW-ROOTCAUSE-4.md): the block as ONE steered body. v115 put every row ON his
+	breadcrumb trail, so a slot turned each of his corners at his full speed (its velocity swung 90 deg in one tick) and,
+	on an about-turn, ran up his old path into the turn point and straight back (a hairpin: its velocity reversed in one
+	tick, a whole rank fell 8-11 studs behind at once in the sim). Now the trail is only the GUIDE the body steers along:
+	  * position: C (the block's centre, its pivot) steers to the point on his trail (his walked path) that puts the
+	    block's nearest slot FirstRowStuds behind him, that point's velocity fed forward, FormGain per stud of gap, its
+	    own velocity changing at most FormAccel per second and capped at FormMaxSpeed: continuous, so on a corner it keeps
+	    going briefly and then comes round along his path (never across the corner into him); while he walks back into
+	    his block it stops going his way and waits (sideways correction only) until he is through;
+	  * heading: H turns toward Hd = his MOVEMENT direction where the block is on his path (the trail tangent; updated
+	    only while he moves, MovingOn / MovingOff hysteresis; never his look vector, so a spin on the spot moves nothing)
+	    past RowDeadbandDeg (a slow drift inside it), with angular inertia (TurnAccelSeconds) and a rate cap of
+	    SlotLateralSpeed / the block's radius: no slot is swung sideways faster than SlotLateralSpeed, a bigger army
+	    turns slower, the pivot is the block's own centre (not him);
+	  * slots: C + H-rotated constant offsets (row frames below): every slot path is smooth and continuous.
+	Returns the row frames (row r's centre, facing H). ]]
+function FormationController.SteerFrames(army: Army, units: { any }, ownerPos: Vector3, cells: { [any]: Cell }, last: number, dt: number,
+	snap: boolean, cfg: any): { [number]: CFrame }
+	local t = army.Trail
+	dt = math.clamp(dt, 0, 1)
+	local rs = n(cfg, "RowSpacing", 4.5)
+	local half = last * rs / 2
+	local first = n(cfg, "FirstRowStuds", 7)
+	-- the farthest slot from the pivot (escort cells included); max only, so no iteration order matters
+	local rad = 4
+	for _, c in pairs(cells) do
+		for k = 0, c.Esc do
+			local z = (c.Row + k) * rs - half
+			rad = math.max(rad, math.sqrt(c.X * c.X + z * z))
+		end
+	end
+	local me = flat(ownerPos)
+	local f = army.Form
+	if f == nil or snap then
+		-- a fresh block: facing from where the army stands toward him (never his look vector), else the old heading;
+		-- the fresh trail runs straight back from him along it
+		local h = if f then f.H else Vector3.new(0, 0, -1)
+		local sum, cnt = Vector3.zero, 0
+		for _, u in ipairs(units) do
+			local r = u.Root
+			if r then
+				sum += flat(r.Position)
+				cnt += 1
+			end
+		end
+		if cnt > 0 then
+			local d = me - sum / cnt
+			if d.Magnitude > 1 then
+				h = d.Unit
+			end
+		end
+		t.Seed = h
+		f = { C = me - h * (first + half), V = Vector3.zero, H = h, W = 0, Hd = h, Turning = false, Radius = rad, Omega = 0, HalfDepth = half, Err = 0 }
+		army.Form = f
+	end
+	local F = f :: Form
+	-- how far the block reaches out from C along a direction, as it is turned NOW (on a corner its width, not its depth,
+	-- is what must stay behind him)
+	local right = Vector3.new(-F.H.Z, 0, F.H.X)
+	local function reach(dir: Vector3): number
+		local r = 0
+		for _, c in pairs(cells) do
+			for k = 0, c.Esc do
+				r = math.max(r, (right * c.X - F.H * ((c.Row + k) * rs - half)):Dot(dir))
+			end
+		end
+		return r
+	end
+	local s = first + reach(F.Hd)
+	-- desired heading: his movement direction there (the trail tangent), only while he moves
+	if t.Moving then
+		F.Hd = if cfg.SteerHeadingPath == true then FormationController.Tangent(t, s, cfg) else unitOr(flat(t.Vel), F.Hd)
+		s = first + reach(F.Hd)
+	end
+	local target = flat(FormationController.TrailPoint(t, s))
+	local mv = flat(t.Vel)
+	if t.Moving and mv.Magnitude > 1e-3 then
+		-- clearance: no slot of the block (as turned now) may sit less than FirstRowStuds behind him along the way he
+		-- walks NOW (a corner: the wide front row would otherwise cross his new path just behind him)
+		local vd = mv.Unit
+		local over = (target - me):Dot(vd) + reach(vd) + first
+		if over > 0 then
+			target -= vd * over
+		end
+	end
+	-- and its centre never nearer him than its radius + BubbleStuds (no slot of it near him, whichever way it faces)
+	local bubble = rad + n(cfg, "BubbleStuds", 3)
+	local off = target - me
+	if off.Magnitude < bubble then
+		target = me + unitOr(off, -F.Hd) * bubble
+	end
+	local ff = Vector3.zero
+	if F.Target ~= nil and t.Moving and dt > 1e-3 then
+		ff = (target - (F.Target :: Vector3)) / dt
+	end
+	F.Target = target
+	-- (C moves by V x dt after this, so it aims at the target less this tick's own travel: it lands ON it, not a tick ahead)
+	local gap = target - ff * dt - F.C
+	local want = ff + gap * n(cfg, "FormGain", 2.5)
+	local waiting = false
+	if t.Moving and mv.Magnitude > 1e-3 then
+		-- he walks back into / through his block (an about-turn, a hairpin of his path): it stops going his way and
+		-- waits (sideways correction only) until he is past its centre; it never charges through him (on a corner, with
+		-- the block beside him, it may back off out of his way)
+		local vd = mv.Unit
+		if (F.C - me):Dot(vd) > n(cfg, "WaitAheadStuds", 0) then
+			waiting = true
+			local along = want:Dot(vd)
+			if along < 0 then
+				want -= vd * along
+			end
+		end
+	end
+	local vmax = math.max(n(cfg, "FormMaxSpeed", 22), t.Vel.Magnitude * n(cfg, "FormSpeedMult", 1.25))
+	-- while it turns its outer slots already move |W| x radius sideways: it travels that much slower, so no slot ever
+	-- moves faster than FormMaxSpeed (what a soldier can hold, with catch-up headroom to spare)
+	vmax = math.max(0, vmax - math.abs(F.W) * rad * n(cfg, "TurnSlowFactor", 1))
+	if want.Magnitude > vmax then
+		want = want.Unit * vmax
+	end
+	local dv = want - F.V
+	-- speeding up / turning its course: FormAccel (it keeps going briefly on a reversal); slowing down along its course:
+	-- FormBrake (it stops with him, and never coasts into his new path on a corner)
+	local acc = math.max(n(cfg, "FormAccel", 24), vmax) * dt
+	local vm = F.V.Magnitude
+	if vm > 1e-3 then
+		local vu = F.V / vm
+		local a = dv:Dot(vu)
+		local side = dv - vu * a
+		a = if a < 0 then math.max(a, -math.max(n(cfg, "FormBrake", 60), vmax) * dt) else math.min(a, acc)
+		if side.Magnitude > acc then
+			side = side.Unit * acc
+		end
+		dv = vu * a + side
+	elseif dv.Magnitude > acc then
+		dv = dv.Unit * acc
+	end
+	F.V += dv
+	if not t.Moving and gap.Magnitude < 0.05 and F.V.Magnitude < 0.5 then
+		F.V = Vector3.zero
+	end
+	F.C += F.V * dt
+	-- heading: toward Hd with angular inertia, the rate capped so no slot swings sideways faster than SlotLateralSpeed
+	local omax = n(cfg, "SlotLateralSpeed", 10) / rad
+	local e = FormationController.Angle(F.H, F.Hd)
+	if not F.Turning and math.abs(e) > math.rad(n(cfg, "RowDeadbandDeg", 8)) then
+		F.Turning = true
+	end
+	if F.Turning then
+		if math.abs(e) > math.rad(170) and math.abs(F.W) > 1e-3 then
+			e = (if F.W > 0 then 1 else -1) * math.abs(e) -- an about-turn: keep coming round the way it already turns
+		end
+		-- (while he walks through it, it holds its heading: its aisle stays on his path; it comes round once he is past)
+		local wt = if waiting then 0 else math.clamp(e * n(cfg, "TurnGain", 2.5), -omax, omax)
+		local aw = omax / math.max(0.05, n(cfg, "TurnAccelSeconds", 0.4)) * dt
+		F.W = math.clamp(F.W + math.clamp(wt - F.W, -aw, aw), -omax, omax)
+		local step = F.W * dt
+		if not waiting and (math.abs(e) < math.rad(1.5) or (e >= 0 and step >= e) or (e <= 0 and step <= e)) then
+			F.H = rotY(F.H, e) -- lands on it (within 1.5 deg, or this step would pass it)
+			F.W = 0
+			F.Turning = false
+		else
+			F.H = rotY(F.H, step)
+		end
+	else
+		F.W = 0
+		if t.Moving then
+			-- inside the deadband: a slow drift onto his heading (no jitter from a wobbling thumbstick, no standing tilt)
+			F.H = rotY(F.H, e * (1 - math.exp(-dt * n(cfg, "SettleTurnPerSec", 0.8))))
+		end
+	end
+	F.Radius, F.Omega, F.HalfDepth, F.Err, F.Waiting = rad, omax, half, e, waiting
+	local frames: { [number]: CFrame } = {}
+	for r = 0, last do
+		local p = F.C - F.H * (r * rs - half)
+		p = Vector3.new(p.X, ownerPos.Y, p.Z)
+		frames[r] = CFrame.lookAt(p, p + F.H)
+		t.RowDir[r] = F.H
+	end
+	return frames
 end
 
 --[[ One FOLLOW planning tick for an army (the whole chain ArmyController runs and the acceptance sim runs):
@@ -19689,8 +19920,12 @@ function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3,
 	local relayout = army.LayoutKey ~= nil and army.LayoutKey ~= key
 	army.LayoutKey = key
 	local frames: { [number]: CFrame } = {}
-	for r = 0, last do
-		frames[r] = FormationController.RowFrame(t, r, dt, cfg)
+	if typeof(cfg) == "table" and cfg.Steer == true then
+		frames = FormationController.SteerFrames(army, units, ownerPos, cells, last, dt, snap, cfg) -- JOB 23: one steered block
+	else
+		for r = 0, last do
+			frames[r] = FormationController.RowFrame(t, r, dt, cfg)
+		end
 	end
 	-- the rows he walks back into (an about-turn) part to let him through (ownerVelNow: his root's velocity now)
 	local partL: { [number]: number } = {}
@@ -19709,8 +19944,10 @@ function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3,
 		end
 	end
 	local plans: { [any]: Plan } = {}
-	local leadS = n(cfg, "MoveLeadSeconds", 0.4)
-	local leadCap = n(cfg, "MoveLeadMaxStuds", 5)
+	local steer = typeof(cfg) == "table" and cfg.Steer == true
+	-- (JOB 23: a steered slot's walk point is further ahead, so a soldier never reaches it and stops between MoveTos)
+	local leadS = if steer then n(cfg, "SteerLeadSeconds", 0.5) else n(cfg, "MoveLeadSeconds", 0.4)
+	local leadCap = if steer then n(cfg, "SteerLeadMaxStuds", 6) else n(cfg, "MoveLeadMaxStuds", 5)
 	local blend = math.clamp(n(cfg, "SlotVelBlend", 0.5), 0, 1)
 	for _, u in ipairs(units) do
 		local c = cells[u]
@@ -19723,12 +19960,13 @@ function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3,
 			if prev ~= nil and not snap and not relayout and dt > 1e-3 then
 				sv = flat(goal - prev) / dt
 			end
-			local sm = if snap or relayout then sv else (army.SVel[u] or sv):Lerp(sv, blend)
+			-- (JOB 23: a steered block's slots are already smooth, so its lead / pace use the slot's velocity NOW, no lag)
+			local sm = if snap or relayout or steer then sv else (army.SVel[u] or sv):Lerp(sv, blend)
 			army.Prev[u] = goal
 			army.SVel[u] = sm
 			local lead = Vector3.zero
 			local pace = 0
-			if t.Moving then
+			if t.Moving or steer then -- (a steered block may still be settling after he stops: its own velocity)
 				lead = sm * leadS
 				if lead.Magnitude > leadCap then
 					lead = lead.Unit * leadCap
@@ -19736,7 +19974,7 @@ function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3,
 				pace = sm.Magnitude
 			end
 			plans[u] = { Goal = goal, Heading = t.RowDir[c.Row] or t.Seed, Lead = lead, Pace = pace, Row = c.Row,
-				X = c.X * FormationController.RowSide(t, c.Row), Esc = c.Esc, Idx = army.Assign.ByUnit[u] }
+				X = c.X * FormationController.RowSide(t, c.Row), Esc = c.Esc, Idx = army.Assign.ByUnit[u], SlotSpeed = sv.Magnitude }
 		end
 	end
 	for u, _ in pairs(army.Prev) do
@@ -24361,7 +24599,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 115)
+		player:SetAttribute("WE_Build", 116)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -25893,6 +26131,58 @@ local function debugLog(player: Player, a: any, living: { any }, plans: { [any]:
 	end
 end
 
+-- claude-bud JOB 23: the owner's formation panel (the WE_ArmyPanel player attribute his ArmyDebugClient shows, every
+-- DebugPanelSeconds) and the SPIKE log (a soldier past SpikeErrStuds from its slot, or a slot faster than a soldier can
+-- run), both only in debug. Player / desired / actual heading: his facing (display only) / his movement direction
+-- (the formation steers to it) / the formation's own heading.
+local function yawOf(v: Vector3?): string
+	if v == nil or v.Magnitude < 1e-3 then
+		return "-"
+	end
+	return string.format("%.0f", FormationController.YawDeg(v))
+end
+
+local function formationDebug(player: Player, a: any, living: { any }, plans: { [any]: any }, proot: BasePart, now: number)
+	local f = a.F.Form
+	local trail = a.F.Trail
+	local mxE, sumE, nC, mxV, worst = 0, 0, 0, 0, nil
+	for _, u in ipairs(living) do
+		local p = plans[u]
+		if p then
+			local d = flatDist(u.Root.Position, p.Goal)
+			sumE += d
+			if d > mxE then
+				mxE = d
+				worst = u
+			end
+			if u._scState == "CatchingUp" then
+				nC += 1
+			end
+			mxV = math.max(mxV, tonumber(p.SlotSpeed) or 0)
+		end
+	end
+	local n = math.max(1, #living)
+	local spd = if f then f.V.Magnitude else trail.Vel.Magnitude
+	local turn = if f then math.deg(math.abs(f.W)) else 0
+	local herr = if f then math.deg(math.abs(f.Err)) else 0
+	local cap = math.min(num("MaxSpeed", 40), math.max(trail.Vel.Magnitude, 14) + num("SpeedMaxBonus", 14))
+	if now - (a.PanelAt or -math.huge) >= num("DebugPanelSeconds", 0.5) then
+		a.PanelAt = now
+		pcall(function()
+			player:SetAttribute("WE_ArmyPanel", string.format(
+				"Formation %.1f  Turn %.0f/s\nHeading err %.0f\nPlayer %s  Want %s  Is %s\nMax slot speed %.1f\nSlot err avg %.1f  max %.1f\nCatching up %d/%d",
+				spd, turn, herr, yawOf(flat(proot.CFrame.LookVector)), yawOf(if f then f.Hd else trail.Vel), yawOf(if f then f.H else nil),
+				mxV, sumE / n, mxE, nC, #living))
+		end)
+	end
+	if (mxE > num("SpikeErrStuds", 6) or mxV > cap) and now - (a.SpikeAt or -math.huge) >= 0.5 then
+		a.SpikeAt = now
+		print(string.format("[ArmyDebug] SPIKE %s maxErr=%.1f (%s) maxSlotV=%.1f cap=%.1f catching=%d/%d formSpd=%.1f turn=%.0f/s hdgErr=%.0f player=%s desired=%s actual=%s waiting=%s",
+			player.Name, mxE, if worst then unitName(worst) else "-", mxV, cap, nC, #living, spd, turn, herr, yawOf(flat(proot.CFrame.LookVector)),
+			yawOf(if f then f.Hd else trail.Vel), yawOf(if f then f.H else nil), tostring(f ~= nil and f.Waiting == true)))
+	end
+end
+
 local function stepArmy(player: Player, st: any, now: number)
 	local a = army(st)
 	local state = STATE_OF[st.Order] or "FOLLOW"
@@ -25993,7 +26283,7 @@ local function stepArmy(player: Player, st: any, now: number)
 		if seated then
 			pace = math.max(16, math.min(math.max(pace, speedSmooth), num("CatchUpMin", 30)))
 		end
-		local lead = if p and moving then p.Lead else Vector3.zero
+		local lead = if p and (moving or c.Steer == true) then p.Lead else Vector3.zero
 		local allow = not drivingFast and not walkBack
 		local noPath = false
 		local clear = num("OwnerClearStuds", 5)
@@ -26052,6 +26342,13 @@ local function stepArmy(player: Player, st: any, now: number)
 	end
 	if debugOn then
 		debugLog(player, a, living, plans, pos, now)
+		formationDebug(player, a, living, plans, proot, now)
+		a.PanelOn = true
+	elseif a.PanelOn then
+		a.PanelOn = nil
+		pcall(function()
+			player:SetAttribute("WE_ArmyPanel", nil)
+		end)
 	end
 end
 ArmyController._StepArmy = stepArmy
@@ -41499,12 +41796,23 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 	unit._scState = state
 
 	-- the walk target: its slot (+ its slot's lead while he moves), never inside OwnerClear of him
-	local target = clearOf(goal + (if moving then (ctx.Lead or Vector3.zero) else Vector3.zero))
+	local leadV: Vector3 = if moving or cfg().Steer == true then (ctx.Lead or Vector3.zero) else Vector3.zero
+	if cfg().Steer == true and clear > 0 then
+		-- JOB 23: the lead is shortened (not pushed sideways) where it would reach into his clear zone: a front-row
+		-- soldier's walk point stays on its own slot's path
+		for _ = 1, 4 do
+			if leadV.Magnitude < 0.2 or flatDist(goal + leadV, ownerPos) >= clear + 1 then
+				break
+			end
+			leadV *= 0.5
+		end
+	end
+	local target = clearOf(goal + leadV)
 	local yieldTo: Vector3? = nil -- (reserved: a unit in his lane yields via clearOf above)
 
 	-- 2) speed: his pace + per stud from its own slot, capped, rate-limited
 	local base = tonumber(ctx.BaseSpeed) or 14
-	local pace = math.max(if moving then (tonumber(ctx.Pace) or 0) else 0, 0)
+	local pace = math.max(if moving or cfg().Steer == true then (tonumber(ctx.Pace) or 0) else 0, 0)
 	local want: number
 	local arrive = num("ArriveStuds", 2.5)
 	-- catching up (hysteresis above) raises WalkSpeed toward its OWN slot; in step it only trims
@@ -41523,10 +41831,37 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 	local cap = math.min(num("MaxSpeed", 40), math.max(pace * num("CatchUpMaxMult", 1.8), num("CatchUpMin", 30)))
 	want = math.clamp(want, num("MinSpeed", 8), cap)
 	local cur = tonumber(unit._scSpeed) or unit.Humanoid.WalkSpeed
+	local steer = cfg().Steer == true
+	if steer then
+		-- JOB 23: ONE continuous law (the state is a label only: no gain step at CatchUpStartStuds). Base = its slot's
+		-- speed (moving) or the unit's walk speed (he stands); + SpeedGain per stud past a deadzone behind its slot (-
+		-- ahead of it) + SpeedLatGain beside it; within [base - SpeedMaxSlow, base + SpeedMaxBonus]; eased over
+		-- SpeedSmoothSeconds. Its destination is always its own slot (above).
+		local dz = num("SpeedDeadzoneStuds", 1)
+		local function dead(x: number): number
+			return if x > dz then x - dz elseif x < -dz then x + dz else 0
+		end
+		local toGoal = flat(goal - pos)
+		local sb = if moving then pace else math.max(pace, base) -- (he stands: its slot may still be settling)
+		local e: number, lat: number
+		if moving or pace > 0.5 then
+			local lead: Vector3 = flat(ctx.Lead or Vector3.zero)
+			local dir: Vector3 = if lead.Magnitude > 0.1 then lead.Unit else flat(ctx.Heading or Vector3.new(0, 0, -1))
+			dir = if dir.Magnitude > 1e-3 then dir.Unit else Vector3.new(0, 0, -1)
+			e = toGoal:Dot(dir)
+			lat = (toGoal - dir * e).Magnitude
+		else
+			e = math.max(0, d - arrive + dz) -- (standing: toward its slot, the arrival deadzone first)
+			lat = 0
+		end
+		want = sb + num("SpeedGain", 0.9) * dead(e) + num("SpeedLatGain", 0.6) * math.max(0, lat - dz)
+		want = math.clamp(want, math.max(num("MinSpeed", 8), sb - num("SpeedMaxSlow", 8)), math.min(num("MaxSpeed", 40), sb + num("SpeedMaxBonus", 14)))
+		want = cur + (want - cur) * (1 - math.exp(-dt / math.max(0.05, num("SpeedSmoothSeconds", 0.3))))
+	end
 	if yielding then
 		-- he walks at it (an about-turn back down his path): it steps out of his lane at once, quickly
 		want = math.max(want, num("YieldSpeed", 24))
-	else
+	elseif not steer then
 		want = math.clamp(want, cur - num("SpeedDownPerTick", 5), cur + num("SpeedUpPerTick", 6))
 	end
 	SoldierController.SetSpeed(unit, want)
@@ -41642,7 +41977,11 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 
 	-- 6) MoveTo only when the goal moved ReissueStuds (or RefreshSeconds passed, or a stuck stage asks)
 	local last: Vector3? = unit._scGoal
-	if forceIssue or last == nil or flatDist(last :: Vector3, walkTo) >= num("ReissueStuds", 2.5) or now - (unit._scGoalAt or 0) >= num("RefreshSeconds", 6) then
+	-- JOB 23 (Steer): a soldier about to reach its MoveTo point while still off its slot is re-aimed (else it stops
+	-- there and waits for its slot to move ReissueStuds: the stop-start on the inside of a turn); still <= 1 per tick
+	local reaim = moving and cfg().Steer == true and last ~= nil and d > num("ArriveStuds", 2.5)
+		and flatDist(pos, last :: Vector3) < math.max(2, (tonumber(unit._scSpeed) or 14) * dt)
+	if forceIssue or reaim or last == nil or flatDist(last :: Vector3, walkTo) >= num("ReissueStuds", 2.5) or now - (unit._scGoalAt or 0) >= num("RefreshSeconds", 6) then
 		SoldierController.Move(unit, walkTo)
 		unit._scGoal = walkTo
 		unit._scGoalAt = now
@@ -59954,7 +60293,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 115)
+			player:SetAttribute("WE_Build", 116)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -67107,7 +67446,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 115)
+		player:SetAttribute("WE_Build", 116)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -67248,7 +67587,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=115",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=116",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -129336,6 +129675,16 @@ return AircraftBodyClient
 	  * a thin line from the soldier to its slot, green (in its slot) / yellow (a few studs off) / red (far off);
 	  * a label over the soldier: "S07 / Slot 07" + its move state (WE_MoveState) + its distance to its slot.
 	Refreshed at RefreshHz; nothing is created while debug is off (all of it is destroyed when it turns off).
+
+	claude-bud JOB 23 (docs/ARMY-FOLLOW-ROOTCAUSE-4.md):
+	  * compact two-line labels: "S01 / Slot 01" and "<state letter> <distance to its slot>" (S = settled / InPosition,
+	    F = Following, C = CatchingUp, R = stuck recovery, else its first letter); the full per-soldier lines stay in the
+	    server console ([ArmyDebug], DebugLogSeconds);
+	  * the formation panel (top right, under the top bar; tap it to fold it to one line): the server's WE_ArmyPanel
+	    player attribute (formation speed, turn rate, heading error, player / desired / actual heading, max slot speed,
+	    average / max slot error, catching up N / total);
+	  * trails: the last TRAIL_SECONDS of the world slot of two opposite outer corners (the lowest and the highest
+	    FormationSlot: cyan / magenta dots), to see a slot's path through a turn.
 ]]
 
 local Players = game:GetService("Players")
@@ -129357,6 +129706,19 @@ type Vis = { Marker: BasePart, Line: BasePart, Gui: BillboardGui, Text: TextLabe
 
 local folder: Folder? = nil
 local vis: { [Model]: Vis } = {}
+
+-- JOB 23: panel + corner-slot trails
+local TRAIL_SECONDS = 1.6
+local TRAIL_DOTS = 8 -- (5 Hz x 1.6 s)
+local CYAN = Color3.fromRGB(60, 220, 255)
+local MAGENTA = Color3.fromRGB(255, 80, 220)
+local panelGui: ScreenGui? = nil
+local panelText: TextButton? = nil
+local panelFolded = false
+type Trail = { Dots: { BasePart }, Hist: { { P: Vector3, At: number } } }
+local trails: { [string]: Trail } = {}
+
+local STATE_LETTER: { [string]: string } = { InPosition = "S", Following = "F", CatchingUp = "C", StuckRecovery = "R" }
 
 local function enabled(player: Player): boolean
 	local f3 = (ArmyConfig :: any).Follow3
@@ -129384,6 +129746,17 @@ local function clearAll()
 		v.Gui:Destroy()
 	end
 	table.clear(vis)
+	for _, tr in pairs(trails) do
+		for _, d in ipairs(tr.Dots) do
+			d:Destroy()
+		end
+	end
+	table.clear(trails)
+	if panelGui then
+		panelGui:Destroy()
+		panelGui = nil
+		panelText = nil
+	end
 	if folder then
 		folder:Destroy()
 		folder = nil
@@ -129410,7 +129783,7 @@ local function ensure(model: Model): Vis
 	line.Transparency = 0.35
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "WE_ArmyDebugLabel"
-	gui.Size = UDim2.fromOffset(120, 34)
+	gui.Size = UDim2.fromOffset(96, 34) -- (two short lines, TextScaled)
 	gui.StudsOffsetWorldSpace = Vector3.new(0, 3.6, 0)
 	gui.AlwaysOnTop = true
 	gui.MaxDistance = 140
@@ -129470,7 +129843,8 @@ local function refresh(player: Player)
 					end
 					v.Line.Color = col
 					v.Gui.Adornee = root
-					v.Text.Text = string.format("S%02d / Slot %02d\n%s %.1f", id, slot, tostring(m:GetAttribute("WE_MoveState") or "?"), d)
+					local st = tostring(m:GetAttribute("WE_MoveState") or "?")
+					v.Text.Text = string.format("S%02d / Slot %02d\n%s %.1f", id, slot, STATE_LETTER[st] or string.sub(st, 1, 1), d)
 					v.Text.TextColor3 = col
 				end
 			end
@@ -129479,6 +129853,122 @@ local function refresh(player: Player)
 	for m, _ in pairs(vis) do
 		if not seen[m] then
 			drop(m)
+		end
+	end
+end
+
+-- JOB 23: the formation panel (top right, below the top bar; a tap folds it to its first line)
+local function panel(player: Player)
+	local txt = player:GetAttribute("WE_ArmyPanel")
+	if typeof(txt) ~= "string" then
+		if panelGui then
+			panelGui.Enabled = false
+		end
+		return
+	end
+	if panelGui == nil or panelGui.Parent == nil then
+		local pg = player:FindFirstChildOfClass("PlayerGui")
+		if pg == nil then
+			return
+		end
+		local g = Instance.new("ScreenGui")
+		g.Name = "WE_ArmyDebugPanel"
+		g.ResetOnSpawn = false
+		g.DisplayOrder = 40
+		local b = Instance.new("TextButton")
+		b.Name = "Panel"
+		b.AnchorPoint = Vector2.new(1, 0)
+		b.Position = UDim2.new(1, -12, 0, 64) -- (under the top-bar pills, clear of the jump button)
+		b.Size = UDim2.fromOffset(250, 150)
+		b.BackgroundColor3 = Color3.new(0, 0, 0)
+		b.BackgroundTransparency = 0.35
+		b.TextColor3 = Color3.new(1, 1, 1)
+		b.TextSize = 14 -- (no UIScale on this gui: 14 px real)
+		b.Font = Enum.Font.GothamMedium
+		b.TextXAlignment = Enum.TextXAlignment.Left
+		b.TextYAlignment = Enum.TextYAlignment.Top
+		b.AutoButtonColor = false
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, 8)
+		pad.PaddingTop = UDim.new(0, 6)
+		pad.Parent = b
+		b.Activated:Connect(function()
+			panelFolded = not panelFolded
+		end)
+		b.Parent = g
+		g.Parent = pg
+		panelGui = g
+		panelText = b
+	end
+	local g = panelGui :: ScreenGui
+	local b = panelText :: TextButton
+	g.Enabled = true
+	if panelFolded then
+		b.Size = UDim2.fromOffset(250, 48) -- (>= 44 px tap target)
+		b.Text = string.split(txt, "\n")[1] .. "  (tap)"
+	else
+		b.Size = UDim2.fromOffset(250, 150)
+		b.Text = txt
+	end
+end
+
+-- JOB 23: the last TRAIL_SECONDS of the world slot of the two opposite outer corners (lowest / highest FormationSlot)
+local function trailStep(player: Player, now: number)
+	local squads = Workspace:FindFirstChild("WarEmpireSquads")
+	local lo, hi = math.huge, -math.huge
+	local loM: Model? = nil
+	local hiM: Model? = nil
+	if squads then
+		for _, m in ipairs(squads:GetChildren()) do
+			if m:IsA("Model") and m:GetAttribute("OwnerUserId") == player.UserId and typeof(m:GetAttribute("WE_SlotPos")) == "Vector3" then
+				local slot = tonumber(m:GetAttribute("FormationSlot")) or 0
+				if slot < lo then
+					lo, loM = slot, m
+				end
+				if slot > hi then
+					hi, hiM = slot, m
+				end
+			end
+		end
+	end
+	local want: { [string]: { M: Model?, C: Color3 } } = { first = { M = loM, C = CYAN }, last = { M = if hi ~= lo then hiM else nil, C = MAGENTA } }
+	for key, w in pairs(want) do
+		local tr = trails[key]
+		if w.M == nil then
+			if tr then
+				for _, d in ipairs(tr.Dots) do
+					d:Destroy()
+				end
+				trails[key] = nil
+			end
+		else
+			if tr == nil then
+				local nt: Trail = { Dots = {}, Hist = {} }
+				for i = 1, TRAIL_DOTS do
+					local d = part("SlotTrail", w.C, folder :: Folder)
+					d.Shape = Enum.PartType.Ball
+					d.Size = Vector3.new(0.6, 0.6, 0.6)
+					d.Transparency = 1
+					nt.Dots[i] = d
+				end
+				trails[key] = nt
+				tr = nt
+			end
+			local t = tr :: Trail
+			local sp = (w.M :: Model):GetAttribute("WE_SlotPos") :: Vector3
+			table.insert(t.Hist, { P = Vector3.new(sp.X, sp.Y - 2.6, sp.Z), At = now })
+			while #t.Hist > TRAIL_DOTS or (#t.Hist > 0 and now - t.Hist[1].At > TRAIL_SECONDS) do
+				table.remove(t.Hist, 1)
+			end
+			for i, d in ipairs(t.Dots) do
+				local h = t.Hist[i]
+				if h then
+					d.CFrame = CFrame.new(h.P)
+					d.Transparency = 0.2 + 0.7 * math.clamp((now - h.At) / TRAIL_SECONDS, 0, 1)
+				else
+					d.Transparency = 1
+				end
+			end
 		end
 	end
 end
@@ -129493,10 +129983,16 @@ function ArmyDebugClient.Init()
 			task.wait(REFRESH)
 			if enabled(player) then
 				local ok, err = pcall(refresh, player)
+				if ok and folder ~= nil then
+					ok, err = pcall(trailStep, player, os.clock())
+				end
+				if ok then
+					ok, err = pcall(panel, player)
+				end
 				if not ok then
 					warn("[ArmyDebugClient] " .. tostring(err))
 				end
-			elseif folder ~= nil then
+			elseif folder ~= nil or panelGui ~= nil then
 				clearAll()
 			end
 		end

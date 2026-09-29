@@ -1,4 +1,13 @@
 <!-- Q2-START -->
+## v116 (Code Bot Roblox, 2026-09-29): JOB 23 army formation Steer LIVE — place version TBD
+- Merged Claude `46fe085` (JOB 23: one steered block Follow3.Steer / FormationController.SteerFrames). Fast-forward from a95c2a8.
+- WE_Build 116 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched.
+- Pins: `tools/checks/claude_bud_armyj23.py` + `tools/checks/codebot_v116.py` (WE_Build 116). Retired WE_Build=115 pins in codebot_v115_army / bumped v110/v113/BuyPathStatic frozen pins.
+- Checks: BuyPathStatic PASS=6185 FAIL=0; rojo build ok; armyj23 pins included.
+- Kill switch: `ArmyConfig.Follow3.Steer = false` = v115 TrailBlock rows; `Follow3.Enabled = false` = v113.
+- **Phone tests (owner, /armydebug, panel open):** (1) sharp 90° — grid stays a grid, no crescent, max slot err under ~6; (2) stand+spin 180° — nothing moves; (3) walk back through army — stop, aisle, arc round, no teleport / whole-row C; (4) big+tight circles — smooth cyan/magenta trails; (5) max army 8 — note `[ArmyDebug] SPIKE` if maxErr>10; (6) sudden stop after turn — settle ~1s; (7) panel under top-bar pills, 14px, tap to fold.
+- **NEXT for Claude:** rebase `claude/desktop-bud` onto phase-7-polish (v116). Await phone verdict before further army movement changes.
+
 ## claude-bud JOB 23 (2026-09-29): army formation turn transitions (branch `claude/desktop-bud`, on v115 a95c2a8)
 - **Root causes** (`docs/ARMY-FOLLOW-ROOTCAUSE-4.md`, the 15 answers with measured data):
   1. v115 slots rode his breadcrumb trail. At every corner their velocity swung 90° in one tick, and the rows turned
