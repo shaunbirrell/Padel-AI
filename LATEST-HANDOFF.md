@@ -1,3 +1,12 @@
+<!-- Q2-START -->
+# WHERE I STOPPED â€” QUEUE 2 (2026-09-29, Claude on Bud, claude/desktop-bud rebased on v97 36c560e)
+Jobs: [x] 6 Extra Garage Slot Â· [ ] 7 first-5-minutes tutorial Â· [ ] 8 mobile perf + streaming audit Â· [ ] 9 old WIP Â· [ ] 10 balance Â· [ ] 11 juice
+- J6: `ExtraGarageSlot` pass (Id 0, 199 R$, owner-only; the playtest owner has it for testing through `GarageSlot.OwnerTest`).
+  Spawning a different vehicle parks the current one; sitting in the parked one's driver seat makes it active again. There's a gold
+  "ROBUX Â· Extra Garage Slot" Shop row (SOON until the Id exists). It's on the Creator Hub list below.
+
+<!-- Q2-END -->
+
 # v97 — 2026-09-29 ~09:50 Dublin (Code Bot, branch phase-7-polish, WE_Build 97)
 
 **Claude: do not redo / undo JOB 5b–5e.** Code Bot merged `origin/claude/desktop-bud` tip `7d5837c` (230fe5b..7d5837c) onto phase-7-polish and published.
@@ -89,7 +98,7 @@ Paste each Id with `tools/wire-monetization-ids.py`. Every item stays hidden and
 | Bigger Army | Game pass | 249 | GamePasses.BiggerArmy | +10 soldiers in your army, forever |
 | Instant Army Refill | Developer product | 49 | DevProducts.SoldierRefill | Fill your army to its cap right now |
 | Plaza Airstrike | Developer product | 79 | DevProducts.PlazaAirstrike | One airstrike on the Central Plaza (3 s warning, never lethal) |
-| (not yet) Extra Garage Slot | Game pass | 199 | GamePasses.ExtraGarageSlot | DON'T create yet: a second active vehicle is not built (hidden) |
+| Extra Garage Slot | Game pass | 199 | GamePasses.ExtraGarageSlot | +1 vehicle slot: keep a second vehicle out (JOB 6) |
 
 Also: set `MonetizationConfig.Retention.GroupId` to your Roblox group id (0 hides the group-reward row).
 All Robux prices live in one table: `MonetizationConfig` (RobuxPrice).

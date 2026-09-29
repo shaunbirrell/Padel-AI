@@ -8927,3 +8927,15 @@ ds_territories.luau T3):
 - **Roblox Premium:** $2,500 once per UTC day (server `MembershipType`, `profile.PremiumBonusDay`), on join and on
   `PlayerMembershipChanged`. It's small on purpose: engagement time from Premium members is what Premium Payouts pay for.
 - All Robux prices stay in the one table, `MonetizationConfig` (RobuxPrice on every pass and product).
+
+## 2026-09-29 — claude-bud JOB 6: Extra Garage Slot (+1 vehicle slot, owner-only)
+- "+1 slot" = one PARKED vehicle besides the active one. A slot owner who spawns a DIFFERENT vehicle keeps the current
+  one in the world (registered, health kept, `VehicleService._Parked`); the older parked one goes. The same id as the
+  parked one replaces it. DESPAWN removes only the active one; leaving removes both. Sitting in the parked vehicle's
+  driver seat swaps it in (the first drive packet from that seat), so the input check still only accepts his active
+  vehicle.
+- Slot = `SkuLiveFor(ExtraGarageSlot)` AND (pass owned per the server's UserOwnsGamePassAsync cache, OR the playtest owner
+  while `GarageSlot.OwnerTest`, so he can test it before the Id exists).
+- The Shop shows gold "ROBUX · ..." rows for Robux features (this pass + the Robux-only vehicles). While an Id is 0 the
+  row says SOON (only where the rollout is live) and a tap is the Shop's own "Coming soon" (nothing prompts).
+- VehicleService is at the 200-local limit: the slot lives in module fields (`_Parked`, `_DestroyParked`, `_HasExtraSlot`).

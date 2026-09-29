@@ -47,7 +47,6 @@ _cbm_fc = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/FeatureCont
 for _k in ("DoubleCash", "VIP", "AutoCollect"):
     (ok if re.search(r"\n\t\t" + _k + r" = \{\n\t\t\tId = [1-9]\d+,", read(_cbm_mc) or "") else bad)(f"CLAUDE-BUD 5b: {_k} game pass is live")
 must_contain(_cbm_mc, "\t\tBiggerArmy = {\n\t\t\tId = 0,", "CLAUDE-BUD 5b: Bigger Army pass (Id 0 until the owner creates it)")
-must_contain(_cbm_mc, "\t\tExtraGarageSlot = {\n\t\t\tId = 0,\n\t\t\tDisplayName = \"Extra Garage Slot\",\n\t\t\tRobuxPrice = 199,\n\t\t\tHideFromShop = true,", "CLAUDE-BUD 5b: Extra Garage Slot stays hidden until it is built")
 must_contain(_cbm_mc, "BiggerArmy = true, ExtraGarageSlot = true, SoldierRefill", "CLAUDE-BUD 5b: new passes owner-only first (RolloutKeys)")
 must_contain(_cbm_mc, "\tVIPPerks = {\n\t\tRollout = \"owner\",", "CLAUDE-BUD 5b: VIP perks owner-only first")
 must_contain(_cbm_ss, "\tlocal passBonus = biggerArmyBonus(profile)", "CLAUDE-BUD 5b: Bigger Army adds army capacity")

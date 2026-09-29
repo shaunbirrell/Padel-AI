@@ -171,14 +171,15 @@ local MonetizationConfig = {
 			ArmyCapBonus = 10,
 			Description = "+10 soldiers in your army, forever",
 		},
-		-- claude-bud JOB 5b: TODO(dev + owner) Extra Garage Slot: a second vehicle out at once. NOT BUILT (VehicleService
-		-- tracks one active vehicle per player); HideFromShop until it is, so nobody can buy a perk that does not exist.
+		-- claude-bud JOB 6: Extra Garage Slot: +1 vehicle slot. Spawning a different vehicle PARKS the one you have out
+		-- (it stays in the world, health kept) instead of removing it; sit in it to drive it again (VehicleService
+		-- _Parked). TODO(owner): create "Extra Garage Slot" (game pass, 199 R$), paste the Id. Owner-only (RolloutKeys);
+		-- GarageSlot.OwnerTest gives the playtest owner the slot before the Id exists.
 		ExtraGarageSlot = {
 			Id = 0,
 			DisplayName = "Extra Garage Slot",
 			RobuxPrice = 199,
-			HideFromShop = true,
-			Description = "Keep a second vehicle out (coming soon)",
+			Description = "+1 vehicle slot: keep a second vehicle out",
 		},
 		PV_Leviathan = {
 			Id = 0,
@@ -439,6 +440,11 @@ local MonetizationConfig = {
 		              and never prompts; default = the offer's own key
 		Pads are 7x7-stud floor triggers (no tap target); each label is stud-scaled, MaxDistance = LabelMaxDistance,
 		never AlwaysOnTop, tagged WorldLabelConfig.BaseLabelTag. The server decides ownership and "coming soon". ]]
+	-- claude-bud JOB 6: the playtest owner has the Extra Garage Slot for testing while its pass Id is 0
+	GarageSlot = {
+		OwnerTest = true,
+	},
+
 	--[[ claude-bud JOB 5e: retention, owner-only first. FREE rows at the top of the Shop's Robux tab: the daily
 		login reward (the existing server claim), the airdrop (tracks the live one), a group-join reward (GroupCash once,
 		checked with IsInGroupAsync on the server; hidden while GroupId is 0 — TODO(owner): paste the group id) and an

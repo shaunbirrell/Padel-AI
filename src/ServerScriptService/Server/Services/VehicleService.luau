@@ -3352,8 +3352,40 @@ local function destroyActive(userId: number)
 	end
 end
 
+--[[ claude-bud JOB 6: the Extra Garage Slot. A module field, not a local (this chunk is at the 200-local limit).
+	_Parked[userId] = the one extra vehicle a slot owner has out besides the active one (registered, health kept). ]]
+VehicleService._Parked = {} :: { [number]: Model }
+
+function VehicleService._DestroyParked(userId: number)
+	local m = VehicleService._Parked[userId]
+	VehicleService._Parked[userId] = nil
+	if m then
+		forgetVehicle(m)
+		pcall(function()
+			m:Destroy()
+		end)
+	end
+end
+
+-- the slot: the pass (live for him and owned; ownership from the server's UserOwnsGamePassAsync cache), or the owner's test
+function VehicleService._HasExtraSlot(player: Player): boolean
+	local MC = require(ReplicatedStorage.Shared.Configs.MonetizationConfig) :: any
+	if not MC.SkuLiveFor(player.UserId, "ExtraGarageSlot") then
+		return false
+	end
+	if MC.GarageSlot and MC.GarageSlot.OwnerTest == true and VehicleService._IsPlaytestOwner(player) then
+		return true
+	end
+	return MonetizationService ~= nil
+		and MonetizationService.PlayerOwnsGamePass ~= nil
+		and MonetizationService.PlayerOwnsGamePass(player, "ExtraGarageSlot") == true
+end
+
 local function destroyVehicle(rec: VehicleRec, message: string?)
 	local uid = rec.OwnerUserId
+	if VehicleService._Parked[uid] == rec.Model then
+		VehicleService._Parked[uid] = nil -- claude-bud JOB 6
+	end
 	if activeVehicles[uid] == rec.Model then
 		destroyActive(uid)
 	else
@@ -3722,6 +3754,9 @@ local function tickRecord(rec: VehicleRec, t: number, dt: number)
 		if activeVehicles[rec.OwnerUserId] == model then
 			activeVehicles[rec.OwnerUserId] = nil
 		end
+		if VehicleService._Parked[rec.OwnerUserId] == model then
+			VehicleService._Parked[rec.OwnerUserId] = nil -- claude-bud JOB 6
+		end
 		forgetVehicle(model)
 		return
 	end
@@ -3897,7 +3932,18 @@ local function handleDriveInput(player: Player, msg: any)
 	local model = activeVehicles[player.UserId]
 	local rec = if model then vehicles[model] else nil
 	if rec == nil or rec.Model:GetAttribute("VehicleId") ~= msg.V then
-		return
+		-- claude-bud JOB 6: he sits in his PARKED vehicle's driver seat: it becomes the active one (the other is parked)
+		local pm = VehicleService._Parked[player.UserId]
+		local prec = if pm then vehicles[pm] else nil
+		if prec == nil or not pm or pm:GetAttribute("VehicleId") ~= msg.V or seatedDriver(prec) ~= player then
+			return
+		end
+		VehicleService._Parked[player.UserId] = model
+		activeVehicles[player.UserId] = pm
+		model, rec = pm, prec
+	end
+	if rec == nil then
+		return -- (narrows the type after the parked swap)
 	end
 	if seatedDriver(rec) ~= player or rec.DriverUserId ~= player.UserId then
 		return
@@ -4880,6 +4926,18 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	end
 
 	-- One active vehicle per player: the old one goes now
+	-- claude-bud JOB 6: with the Extra Garage Slot a DIFFERENT vehicle parks the current one (the older parked one
+	-- goes); the same id as the parked one replaces it
+	local parked = VehicleService._Parked[player.UserId]
+	if parked and parked:GetAttribute("VehicleId") == vehicleId then
+		VehicleService._DestroyParked(player.UserId)
+	end
+	local cur = activeVehicles[player.UserId]
+	if cur and cur.Parent and cur:GetAttribute("VehicleId") ~= vehicleId and VehicleService._HasExtraSlot(player) then
+		VehicleService._DestroyParked(player.UserId)
+		VehicleService._Parked[player.UserId] = cur
+		activeVehicles[player.UserId] = nil
+	end
 	destroyActive(player.UserId)
 
 	-- 4) PivotTo → parent → hand over
@@ -5300,6 +5358,7 @@ function VehicleService.Init(deps: { [string]: any })
 
 	Players.PlayerRemoving:Connect(function(player)
 		destroyActive(player.UserId)
+		VehicleService._DestroyParked(player.UserId) -- claude-bud JOB 6
 		lastSpawnAt[player.UserId] = nil
 		lastDamageAt[player.UserId] = nil
 		brokenTrips[player.UserId] = nil
