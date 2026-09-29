@@ -20,7 +20,8 @@ def _af_code(path):
 
 _A, _S = _af_code(_af_a), _af_code(_af_s)
 # 1. exactly one mover
-(ok if _A.count("Humanoid:MoveTo(") == 1 and "unit.Humanoid:MoveTo(goal)" in _A else bad)(f"CLAUDE-BUD J22: ArmyFollow.Command is the only Humanoid:MoveTo in ArmyFollow ({_A.count('Humanoid:MoveTo(')})")
+# v114 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v114_army.py (every soldier MoveTo is SoldierController.Move, the one PivotTo is SoldierController.Reposition): #(ok if _A.count("Humanoid:MoveTo(") == 1 and "unit.Humanoid:MoveTo(goal)" in _A else bad)(f"CLAUDE-BUD J22: ArmyFollow.Command is the only Humanoid:MoveTo in ArmyFollow ({_A.count('Humanoid:MoveTo(')})")
+(ok if _A.count("Humanoid:MoveTo(") == 0 and "SoldierController.Move(unit, goal, state)" in _A else bad)(f"CLAUDE-BUD J22 (v114): ArmyFollow.Command forwards to SoldierController.Move ({_A.count('Humanoid:MoveTo(')} direct)")
 (ok if _S.count("Humanoid:MoveTo(") == 0 and _S.count("SquadOrdersService._AF.Command(unit, ") >= 30 else bad)(f"CLAUDE-BUD J22: SquadOrdersService never moves a soldier itself ({_S.count('Humanoid:MoveTo(')} direct, {_S.count('SquadOrdersService._AF.Command(unit, ')} via Command)")
 must_contain(_af_a, "function ArmyFollow.Command(unit: any, goal: Vector3, state: string?)", "CLAUDE-BUD J22: the one mover API (with its state)")
 must_contain(_af_s, 'SquadOrdersService._AF.Release(unit, order) -- v99: HOLD / ATTACK / RETREAT drive it now', "CLAUDE-BUD J22: an order takes a unit with its state")
@@ -31,7 +32,8 @@ must_contain(_af_s, "SquadOrdersService._AF.Command(unit, at.Position)", "CLAUDE
 (ok if "resetChase(unit)" in _S else bad)("CLAUDE-BUD J22 (was army fix): chase state reset after a recover")
 # 2. no per-frame loops, no root CFrame writes while humanoid-driven
 (ok if not re.search(r"Heartbeat|RenderStepped|\.Stepped", _A + _S) else bad)("CLAUDE-BUD J22: no per-frame loops in army code")
-(ok if not re.search(r"Root\.CFrame\s*=", _A) and _A.count("PivotTo(") == 2 else bad)(f"CLAUDE-BUD J22: follow never writes the root CFrame; PivotTo only for the regroup and the base-hold turn ({_A.count('PivotTo(')})")
+# v114 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v114_army.py (every soldier MoveTo is SoldierController.Move, the one PivotTo is SoldierController.Reposition): #(ok if not re.search(r"Root\.CFrame\s*=", _A) and _A.count("PivotTo(") == 2 else bad)(f"CLAUDE-BUD J22: follow never writes the root CFrame; PivotTo only for the regroup and the base-hold turn ({_A.count('PivotTo(')})")
+(ok if not re.search(r"Root\.CFrame\s*=", _A) and _A.count("PivotTo(") == 0 else bad)(f"CLAUDE-BUD J22 (v114): ArmyFollow never PivotTos (regroup -> SoldierController.Reposition) ({_A.count('PivotTo(')})")
 # 3. seats: never re-picked per think (no distance in the assignment; compaction only after the size changed)
 _seat = (read(_af_a) or "")
 _i = _seat.find("local function assignSeats(")
@@ -41,7 +43,8 @@ must_contain(_af_a, "\tif st._afSeatN ~= n then", "CLAUDE-BUD J22: seats compact
 must_contain(_af_a, "st._afFlip = nil -- seat sides never swap", "CLAUDE-BUD J22: row sides never swap mid-turn")
 # 4. collision + ownership
 must_contain(_af_a, "PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.Group, false)", "CLAUDE-BUD J22: soldiers never collide with each other")
-must_contain(_af_a, "PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.PlayerGroup, cfg().CollideWithPlayers == true)", "CLAUDE-BUD J22: soldiers never push players")
+# v114 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v114_army.py (every soldier MoveTo is SoldierController.Move, the one PivotTo is SoldierController.Reposition): #must_contain(_af_a, "PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.PlayerGroup, cfg().CollideWithPlayers == true)", "CLAUDE-BUD J22: soldiers never push players")
+must_contain(_af_a, "PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.PlayerGroup, cfg().CollideWithPlayers == true and not follow3On())", "CLAUDE-BUD J22 (v114): soldiers never push players")
 must_contain(_af_cfg, "\t\tCollideWithPlayers = false,", "CLAUDE-BUD J22: CollideWithPlayers off")
 must_contain("src/ServerScriptService/Server/Modules/BaseGuards.luau", "PS:CollisionGroupSetCollidable(GUARD_GROUP, GUARD_GROUP, false)", "CLAUDE-BUD J22: base guards never collide with each other")
 must_contain(_af_s, "SetNetworkOwner(nil)", "CLAUDE-BUD J22: the server owns every soldier root (set at spawn)")

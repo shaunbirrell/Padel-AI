@@ -65,6 +65,11 @@ SquadOrdersService._FixLive = false
 -- think pass (module fields, not locals: this chunk is near the register limit). While it is on, the v85 FollowPace and
 -- the v90 Fix follow / recover paths are off for that owner (ArmyFollow replaces them); shooting stays here.
 SquadOrdersService._AF = require(script.Parent.Parent.Modules.ArmyFollow)
+-- v114 (Code Bot Roblox): ArmyConfig.Follow3 — ONE FOLLOW controller per army (ArmyController), every soldier MoveTo /
+-- PivotTo in SoldierController; in FOLLOW the escort code below only shoots and aims (escortAimOnly)
+SquadOrdersService._AC = require(script.Parent.Parent.Modules.ArmyController)
+SquadOrdersService._SC = require(script.Parent.Parent.Modules.SoldierController)
+local escortAimOnly = false -- v114: set around escortUnit for a Follow3 owner: shoot / face only, never walk
 SquadOrdersService._AFOn = false
 
 local DataService: any = nil
@@ -1609,6 +1614,9 @@ end
 -- a shot check found nothing in sight (the target in range): count it; after SideStepAfterBlocked in a row, probe (at
 -- most once per SideStepMinGap, never while a side-step walk is on)
 local function stepBlocked(player: Player, unit: SquadUnit, playerRoot: BasePart, troot: BasePart, now: number)
+	if escortAimOnly then
+		return -- v114 (Follow3): FOLLOW never side-steps (the formation owns the unit's position)
+	end
 	local E = ArmyCfg.Escort
 	if E.SideStep ~= true then
 		return
@@ -1703,9 +1711,15 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		elseif rays > 0 then
 			losBlockedFor(unit, now)
 			if escortLive and fromPlayer <= leash and not walkForm then
-				stepBlocked(player, unit, playerRoot, troot, now) -- army lane A0: side-step after SideStepAfterBlocked
+				stepBlocked(player, unit, playerRoot, troot, now) -- army lane A0: side-step after SideStepAfterBlocked (v114: a no-op in Follow3 FOLLOW)
 			end
 		end
+	end
+	if escortAimOnly then
+		-- v114 (Follow3): FOLLOW = the formation; the escort shoots from its slot and only aims (the face gyro target;
+		-- SoldierController gives the gyro torque only while the unit stands in its slot). No MoveTo, no side-step.
+		faceYaw(unit.Root, aimPoint(unit, troot))
+		return true
 	end
 	if walkForm then
 		-- army fix (Follow.EscortWalkInFormation): he walks. No stand to fight and no side-step walk: beyond the
@@ -2522,8 +2536,7 @@ local function recoverUnit(player: Player, st: SquadState, unit: SquadUnit, play
 		return false
 	end
 	local okM, errM = pcall(function()
-		unit.Model:PivotTo(at) -- the same unit, moved: never Destroy, never a new model
-		unit.Root.AssemblyLinearVelocity = Vector3.zero
+		SquadOrdersService._SC.Reposition(unit, at, "recover", true) -- the same unit, moved: never Destroy, never a new model (v114: SoldierController)
 		local gyro = unit.Root:FindFirstChild("NPCFaceGyro")
 		if gyro and gyro:IsA("BodyGyro") then
 			gyro.CFrame = at
@@ -2647,6 +2660,16 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 			-- the owner is dead: units hold where they stand; army fix: the stuck window starts over once he is back
 			unit.ProgPos = nil
 			unit.ProgDir = nil
+			return
+		end
+		if SquadOrdersService._AFOn and SquadOrdersService._AC.LiveFor(player.UserId) then
+			-- v114 Follow3: ArmyController moves every FOLLOW unit (0.2 s tick); here the escort only shoots / aims
+			escortAimOnly = true
+			local okE, errE = pcall(escortUnit, player, st, unit, playerRoot, escortHum, escortRoot, now)
+			escortAimOnly = false
+			if not okE then
+				error(errE)
+			end
 			return
 		end
 		if SquadOrdersService._AFOn then
@@ -2841,7 +2864,9 @@ end
 -- inside the Barracks), at the old grid spot behind the player, else on the player's trail, else in the slot as before
 local function spawnCFrame(player: Player, st: SquadState, root: BasePart?, baseCf: CFrame, slot: number): CFrame
 	local lift = Vector3.new(0, 2, 0)
-	local slotCf = baseCf * CFrame.new(unitOffset(st, slot)) + lift
+	-- v114 (Follow3): a new unit spawns in its own formation cell (it does not walk across the formation to it)
+	local off = if SquadOrdersService._AC.LiveFor(player.UserId) then SquadOrdersService._AC.SpawnOffset(slot) else unitOffset(st, slot)
+	local slotCf = baseCf * CFrame.new(off) + lift
 	local cfg = followPathCfg()
 	if root == nil or cfg == nil then
 		return slotCf
@@ -2899,10 +2924,8 @@ function SquadOrdersService._PaceRecover(player: Player, st: SquadState, unit: S
 	end
 	followCtx.TpAt[unit] = now + (tonumber(c.TeleportCooldown) or 4)
 	local cf = spawnCFrame(player, st, proot, proot.CFrame, unit.Slot)
-	unit.Model:PivotTo(cf)
-	unit.Root.AssemblyLinearVelocity = Vector3.zero
+	SquadOrdersService._SC.Reposition(unit, cf, "pace-recover", true) -- v114: the one emergency PivotTo (moves + MoveTo)
 	unit.Crumb = nil
-	SquadOrdersService._AF.Command(unit, cf.Position)
 	return true
 end
 
@@ -3260,6 +3283,15 @@ function SquadOrdersService.Init(deps: { [string]: any })
 	SquadOrdersService._AF.Bind({ -- v91 ArmyFollow
 		Folder = ensureFolder,
 		OwnPlotId = ownPlotId,
+		UnitWalkSpeed = function()
+			return OrdersConfig.UnitWalkSpeed or 14
+		end,
+	})
+	SquadOrdersService._AC.Start({ -- v114 Follow3: the one FOLLOW controller (its own 0.2 s tick)
+		Squads = function()
+			return squadByUser
+		end,
+		CharacterRoot = characterRoot,
 		UnitWalkSpeed = function()
 			return OrdersConfig.UnitWalkSpeed or 14
 		end,

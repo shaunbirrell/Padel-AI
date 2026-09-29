@@ -419,6 +419,88 @@ local ArmyConfig = {
 		LogSeconds = 5,
 	},
 
+	--[[ v114 (Code Bot Roblox, owner phone test of v113; docs/ARMY-FOLLOW-ROOTCAUSE-2.md): ONE authoritative FOLLOW
+		controller per army (Server/Modules/ArmyController + SoldierController + Shared/Util/FormationController).
+		Enabled = false (or Rollout not "all" / "owner" for him) = the v113 behaviour exactly (Follow2 above).
+		Permanent slots, a clean Flank grid (one row per unit, its escorts further out in the row), a smoothed anchor, a
+		rate-limited heading with deadband + hysteresis, MoveTo only every UpdateSeconds and only when the goal moved,
+		arrival deadzone with hysteresis, catch-up by WalkSpeed, staged stuck recovery, reposition (PivotTo) only as the
+		emergency fallback. In FOLLOW the escort code only shoots / aims (no MoveTo). ]]
+	Follow3 = {
+		Enabled = true,
+		Rollout = "all", -- "all" | "owner" | anything else = off (v113)
+		UpdateSeconds = 0.2, -- the controller tick (MoveTo is never sent more often than this)
+		-- anchor (FormationController.Step)
+		VelSmoothSeconds = 0.4, -- his velocity is smoothed over this
+		AnchorLagSeconds = 0.3, -- the anchor follows (his position + lead) with this time constant
+		AnchorLeadSeconds = 0.3, -- lead from the SMOOTHED velocity (cancels the lag at a steady pace) ...
+		AnchorLeadMaxStuds = 5, -- ... capped
+		MovingOnSpeed = 3, -- he counts as moving above this smoothed speed ...
+		MovingOffSpeed = 1.5, -- ... until he drops under this
+		-- heading
+		HeadingTurnDegPerSec = 100, -- the formation turns at most this fast
+		HeadingDeadbandDeg = 18, -- moving: turns smaller than this are ignored ...
+		HeadingHoldSeconds = 0.3, -- ... and a bigger one must hold this long before the formation starts turning
+		FacingAgreeDeg = 75, -- his move direction is the heading only while within this of his facing (backing up / strafing: his facing)
+		ReverseDeg = 135, -- a change past this (an about-turn) ...
+		ReverseHoldSeconds = 1.0, -- ... must hold this long first
+		StandAlignDeg = 60, -- standing: re-aim to his facing only past this ...
+		StandAlignSeconds = 1.2, -- ... held this long
+		-- grid (Flank: one row per unit, odd slots on his left, even on his right)
+		Formation = "Flank",
+		LateralStuds = 6, -- a unit stands this far to his side (nothing nearer him)
+		ColSpacing = 5.5, -- its escort figures this much further out, each
+		RowSpacing = 5.5, -- rows this deep
+		FrontBack = -1.5, -- the front row this far behind him (negative = ahead)
+		OwnerClearStuds = 5, -- a goal is never nearer him than this
+		WheelStepDeg = 40, -- a slot more than this round the anchor from its unit: it runs round the outside (U-turn), not through
+		EscortLayout = true, -- clients lay each unit's escorts out along its formation row (WE_FormYaw / WE_EscSide)
+		-- soldier (SoldierController)
+		ArriveStuds = 2.5, -- in its slot within this (he stands) ...
+		LeaveStuds = 4, -- ... and stays there until this far (hysteresis)
+		ReissueStuds = 2.5, -- a new MoveTo only when the goal moved this far ...
+		RefreshSeconds = 6, -- ... or this long passed (Humanoid.MoveTo gives up after 8 s)
+		MoveLeadSeconds = 0.4, -- while he moves a unit walks toward its slot + his smoothed velocity x this ...
+		MoveLeadMaxStuds = 6, -- ... capped (it never reaches the goal and stops mid-walk)
+		CatchUpPerStud = 0.9, -- WalkSpeed = his pace + this per stud from its slot ...
+		CatchUpMaxMult = 1.8, -- ... capped at max(his pace x this, CatchUpMin), never over MaxSpeed
+		CatchUpMin = 30,
+		MaxSpeed = 40,
+		MinSpeed = 8,
+		SpeedUpPerTick = 6, -- WalkSpeed changes at most this much per tick up ...
+		SpeedDownPerTick = 5, -- ... and down
+		FaceTurnDegPerSec = 240, -- in its slot the unit turns to the heading at most this fast (no gyro snap)
+		FaceAfterShotSeconds = 1.2, -- after a shot it keeps its aim this long
+		-- stuck (progress < StuckProgressStuds while its goal is beyond the deadzone)
+		StuckProgressStuds = 1,
+		StuckReissueSeconds = 2.5, -- 1) re-issue MoveTo (+ a jump)
+		StuckPathSeconds = 5, -- 2) a path (waypoints)
+		StuckAltSeconds = 7.5, -- 3) a reachable point beside it for StuckAltHoldSeconds
+		StuckAltStuds = 6,
+		StuckAltHoldSeconds = 2,
+		StuckRepositionSeconds = 10, -- 4) reposition, only this far from its slot and out of his view
+		StuckRepositionMinStuds = 20,
+		BlockedPathTicks = 2, -- the straight line to its goal blocked this many ticks in a row: a path
+		PathMinStuds = 8,
+		PathKeepSeconds = 2.5,
+		PathKeepStuds = 10,
+		PathCooldown = 1.5,
+		PathBudgetPerSecond = 8,
+		-- emergency reposition (SoldierController.Reposition, the only PivotTo)
+		FarStuds = 120, -- this far from its slot ...
+		FarSeconds = 4, -- ... this long
+		VoidBelowOwner = 60,
+		VoidMargin = 80,
+		OwnerJumpSpeed = 80, -- he moved faster than this on foot in one tick: a teleport / respawn (anchor snaps)
+		VehicleDeferSpeed = 20, -- no reposition while he drives faster than this
+		RepositionBehindStuds = 16, -- the spot: its slot pushed this far back (behind the phone camera) ...
+		RepositionMinOwnerStuds = 8, -- ... never nearer him than this
+		RepositionCooldown = 5,
+		AuditSeconds = 5, -- collision groups re-checked on every unit part this often
+		YawPublishDeg = 2, -- WE_FormYaw is written only when the heading moved this much
+		LogSeconds = 5,
+	},
+
 	Gate = {
 		-- The owner's FOLLOW units within RaidConfig.Defense.GateOpenRadius open his friendly gate, only while he is
 		-- alive within OwnerNearStuds (flat) of it, and units alone (no owner / ally player at the gate) for at most

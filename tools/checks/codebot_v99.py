@@ -80,7 +80,8 @@ for _tidy in (False, True):
 _cb99_check(":Destroy(" not in _cb99_strip(_cb99_A) and ":Clone(" not in _cb99_strip(_cb99_A) and 'Instance.new("Model")' not in _cb99_A,
             "CODEBOT v99: ArmyFollow never destroys / clones / creates a unit")
 _cb99_unit = _cb99_strip(_cb99_fn(_cb99_A, "function ArmyFollow.Unit("))
-_cb99_check("SetPrimaryPartCFrame" not in _cb99_strip(_cb99_A) and _cb99_unit.count("PivotTo(") == 1, "CODEBOT v99: the follow think's only PivotTo is the hold turn-on-the-spot (repositions go through regroup)")
+# v114 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v114_army.py (every soldier MoveTo is SoldierController.Move, the one PivotTo is SoldierController.Reposition): #_cb99_check("SetPrimaryPartCFrame" not in _cb99_strip(_cb99_A) and _cb99_unit.count("PivotTo(") == 1, "CODEBOT v99: the follow think's only PivotTo is the hold turn-on-the-spot (repositions go through regroup)")
+_cb99_check("SetPrimaryPartCFrame" not in _cb99_strip(_cb99_A) and _cb99_unit.count("PivotTo(") == 0, "CODEBOT v99 (v114): the follow think never PivotTos (repositions go through regroup -> SoldierController.Reposition)")
 _cb99_far = _cb99_num(_cb99_f2, "FarStuds", 0)
 _cb99_check(80 <= _cb99_far <= 120 and _cb99_num(_cb99_f2, "FarSeconds", 0) >= 2, f"CODEBOT v99: far reposition only at 80-120 studs (FarStuds {_cb99_far}) for >= 2 s")
 _cb99_sf = _cb99_strip(_cb99_fn(_cb99_A, "local function spotFor("))

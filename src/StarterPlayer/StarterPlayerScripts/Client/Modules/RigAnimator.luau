@@ -34,11 +34,17 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60) :: Instance -- Bootstrap already waited for it; bounded anyway
 local RigConfig = require((Shared :: any).Configs.RigConfig) :: any
+-- v114 (Code Bot Roblox): ArmyConfig.Follow3 escort layout (the formation row, not a rigid file ahead of the unit)
+local okArmyCfg, ArmyConfigOrErr = pcall(require, (Shared :: any).Configs.ArmyConfig)
+local follow3: any = if okArmyCfg and typeof(ArmyConfigOrErr) == "table" then (ArmyConfigOrErr :: any).Follow3 else nil
 
 local RigAnimator = {}
 
 type Tracks = { Hold: AnimationTrack?, Idle: AnimationTrack?, Walk: AnimationTrack?, Aim: AnimationTrack? }
 type Escort = { Model: Model, Tracks: Tracks?, State: string, Torso: BasePart?, Parts: { BasePart }, Decals: { Decal }, Hidden: boolean }
+-- v114: an escort's RootJoint, its index in the unit's row and the last local offset written (weak: goes with the escort)
+type EscLayout = { Joint: Motor6D, Index: number, Off: Vector3? }
+local escLayout: { [any]: EscLayout } = setmetatable({}, { __mode = "k" }) :: any
 type Entry = {
 	Rig: Model,
 	Index: number,
@@ -257,7 +263,7 @@ end
 
 -- a local copy of the unit's body, `offset` from its root (unit frame). Joints are re-linked by part name inside the
 -- copy, so this never depends on how Clone remaps references; the copy loses the WE_Rig tag (Clone keeps tags).
-local function buildEscort(e: Entry, offset: Vector3): Escort?
+local function buildEscort(e: Entry, offset: Vector3, index: number): Escort?
 	local root, host = e.Root, e.Host
 	if root == nil or host == nil then
 		return nil
@@ -273,6 +279,7 @@ local function buildEscort(e: Entry, offset: Vector3): Escort?
 	local byName: { [string]: BasePart } = {}
 	local parts: { BasePart } = {}
 	local decals: { Decal } = {}
+	local joint: Motor6D? = nil
 	for _, d in ipairs(copy:GetDescendants()) do -- one small body (<= 30 instances), once per build, never per frame
 		if d:IsA("Decal") then -- the kit head's face (a Texture is a Decal too)
 			d.LocalTransparencyModifier = 0
@@ -301,6 +308,7 @@ local function buildEscort(e: Entry, offset: Vector3): Escort?
 			if d.Name == "RootJoint" and d:IsA("Motor6D") then
 				d.Part0 = root
 				d.C0 = CFrame.new(offset) * ROOT_ROT
+				joint = d
 			elseif d.Name == "Right Shoulder" and d:IsA("Motor6D") and e.ShoulderC0 then
 				d.C0 = e.ShoulderC0 :: CFrame -- the escort plays Hold itself: never copy a baked hold turn
 			end
@@ -321,7 +329,11 @@ local function buildEscort(e: Entry, offset: Vector3): Escort?
 	stats.Escorts += 1
 	stats.EscortParts += RigConfig.Budget.PartsPerEscort
 	stats.EscortBuilds += 1
-	return { Model = copy, Tracks = loadTracks(animatorOf(copy), true, false), State = "", Torso = torso, Parts = parts, Decals = decals, Hidden = false }
+	local rec: Escort = { Model = copy, Tracks = loadTracks(animatorOf(copy), true, false), State = "", Torso = torso, Parts = parts, Decals = decals, Hidden = false }
+	if joint then
+		escLayout[rec] = { Joint = joint, Index = index, Off = nil }
+	end
+	return rec
 end
 
 -- ── registry ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -477,6 +489,43 @@ local function insertBest(buf: { Entry? }, n: number, cap: number, e: Entry): nu
 	return n
 end
 
+--[[ v114 (ArmyConfig.Follow3.EscortLayout): a unit that carries WE_FormYaw / WE_EscSide (the server's formation heading
+	and its side) shows escort e at its formation row cell: e x ColSpacing further out from the owner, in the FORMATION
+	frame, not the unit's own yaw. A turning unit no longer swings a rigid 7-12 stud file through its neighbours and the
+	player, and the files do not all whip round when the units stop. Runs with the camera guard (GuardHz): one RootJoint
+	C0 write per escort only when it moved > 0.05 studs. Without the attributes: the Offsets file ahead (v113). ]]
+local function layoutEscorts(e: Entry)
+	if follow3 == nil or follow3.Enabled ~= true or follow3.EscortLayout ~= true then
+		return
+	end
+	local host, root = e.Host, e.Root
+	if host == nil or root == nil or #e.Escorts == 0 then
+		return
+	end
+	local yaw = host:GetAttribute("WE_FormYaw")
+	local side = host:GetAttribute("WE_EscSide")
+	if typeof(yaw) ~= "number" or typeof(side) ~= "number" then
+		return
+	end
+	local r = math.rad(yaw)
+	local dir = Vector3.new(math.sin(r), 0, math.cos(r))
+	local right = Vector3.new(-dir.Z, 0, dir.X)
+	local col = tonumber(follow3.ColSpacing) or 5.5
+	local rcf = root.CFrame
+	for _, x in ipairs(e.Escorts) do
+		local L = escLayout[x]
+		if L then
+			local localOff = rcf:VectorToObjectSpace(right * (side * L.Index * col))
+			local lo = Vector3.new(localOff.X, 0, localOff.Z)
+			local prev = L.Off
+			if prev == nil or (prev - lo).Magnitude > 0.05 then
+				L.Off = lo
+				L.Joint.C0 = CFrame.new(lo) * ROOT_ROT
+			end
+		end
+	end
+end
+
 -- camera guard (every pass and, alone, Escort.Camera.GuardHz times a second): no escort between the camera and the
 -- player, none taller than MaxScreenFrac of the screen; no own squad unit between the camera and the player drawn
 -- taller than LeadScreenFrac of it. Only the guard buffer (picked figures with escorts, own units): no tables, no scans.
@@ -500,6 +549,7 @@ local function cameraGuard(camCf: CFrame, focus: Vector3?, fovDeg: number?)
 	local nearLift = math.min(-feet * look.Y, (camCfg.FigureStuds - feet) * look.Y)
 	for i = 1, guardN do
 		local e = guard[i] :: Entry
+		layoutEscorts(e) -- v114: escorts in the formation row (before the guard judges where they are)
 		for _, x in ipairs(e.Escorts) do
 			local t = x.Torso
 			if t then
@@ -653,7 +703,7 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 				dropEscort(e)
 			end
 			while #e.Escorts < allow and builds < esc.MaxBuildsPerTick do
-				local x = buildEscort(e, esc.Offsets[#e.Escorts + 1])
+				local x = buildEscort(e, esc.Offsets[#e.Escorts + 1], #e.Escorts + 1)
 				builds += 1
 				if x == nil then
 					break
@@ -680,7 +730,7 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 		pick[i] = nil
 		if not e.Own and e.Tracks then
 			while #e.Escorts < e.WantEsc and room > 0 and builds < esc.MaxBuildsPerTick do
-				local x = buildEscort(e, esc.Offsets[#e.Escorts + 1])
+				local x = buildEscort(e, esc.Offsets[#e.Escorts + 1], #e.Escorts + 1)
 				builds += 1
 				if x == nil then
 					break

@@ -14,7 +14,8 @@ must_contain(_cba_af, "local unitOutside = ownPlot ~= nil and not inPlot(ownPlot
 (ok if _cba_a.count("keepOut(") >= 4 else bad)("CLAUDE-BUD army: slot goal, path waypoint and trail fallback all pass keepOut")
 must_contain(_cba_af, "local z = half + tnum(\"WaitOut\", 14) + row * tnum(\"RowSpacing\", 4)", "CLAUDE-BUD army: wait rows are outside the front edge")
 must_contain(_cba_af, "local x = side * (gateHalf + tnum(\"WaitGap\", 5) + col * tnum(\"ColSpacing\", 4))", "CLAUDE-BUD army: wait rows leave the gate lane clear")
-must_contain(_cba_af, "unit.Model:PivotTo(CFrame.lookAt(unit.Root.Position, unit.Root.Position + out)) -- turn on the spot only", "CLAUDE-BUD army: soldiers face out at the gate")
+# v114 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v114_army.py (every soldier MoveTo is SoldierController.Move, the one PivotTo is SoldierController.Reposition): #must_contain(_cba_af, "unit.Model:PivotTo(CFrame.lookAt(unit.Root.Position, unit.Root.Position + out)) -- turn on the spot only", "CLAUDE-BUD army: soldiers face out at the gate")
+must_contain(_cba_af, "-- v114: no PivotTo turn (a hard yaw snap); the gyro turns it\n\t\t\tfaceTo(unit, out, now)", "CLAUDE-BUD army (v114): soldiers face out at the gate (gyro, no PivotTo)")
 
 # (b) fixed seats, no crossing, rows wider than the separation radius
 must_contain(_cba_af, "--[[ claude-bud (Tidy): fixed seats for life, UNIQUE per squad", "CLAUDE-BUD army: fixed formation seats")

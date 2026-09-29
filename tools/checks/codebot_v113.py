@@ -20,7 +20,8 @@ _all113 = True
 _all113 &= _must113("\t\tStable = true," in _cfg113, "v113 Follow2.Stable=true")
 _all113 &= _must113(_fm113p.is_file() and "local FormationMath = {}" in _fm113, "v113 FormationMath present")
 _all113 &= _must113("function ArmyFollow.Command(unit: any, goal: Vector3, state: string?)" in _af113, "v113 ArmyFollow.Command sole mover API")
-_all113 &= _must113(_af113.count("Humanoid:MoveTo(") == 1, "v113 ArmyFollow has exactly one Humanoid:MoveTo")
+# v114 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v114_army.py (every soldier MoveTo is SoldierController.Move, the one PivotTo is SoldierController.Reposition): #_all113 &= _must113(_af113.count("Humanoid:MoveTo(") == 1, "v113 ArmyFollow has exactly one Humanoid:MoveTo")
+_all113 &= _must113(_af113.count("Humanoid:MoveTo(") == 0, "v113 (v114): ArmyFollow has no direct Humanoid:MoveTo (SoldierController.Move)")
 _all113 &= _must113("\tEnabled = false," in _drop113, "v113 ManualDropper still off (v111)")
 _all113 &= _must113("MaxPlots = 10," in _base113, "v113 MaxPlots=10 kept (JOB 21)")
 _all113 &= _must113("PreferMesh = true" not in _vis113, "v113 PreferMesh stays OFF")
@@ -29,7 +30,7 @@ for _rel113 in (
     "src/ServerScriptService/Server/Services/BaseService.luau",
     "src/ServerScriptService/Server/EarlyRemotes.server.luau",
 ):
-    _all113 &= _must113('SetAttribute("WE_Build", 113)' in _P113(_rel113).read_text(), "v113 WE_Build=113 " + _rel113.rsplit("/", 1)[-1])
+    _all113 &= _must113('SetAttribute("WE_Build", 114)' in _P113(_rel113).read_text(), "v113 WE_Build=113 " + _rel113.rsplit("/", 1)[-1])
 
 if "ok" not in globals():
     import sys

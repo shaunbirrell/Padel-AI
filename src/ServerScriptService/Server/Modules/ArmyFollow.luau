@@ -76,6 +76,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ArmyConfig = require(Shared.Configs.ArmyConfig)
 local FormationMath = require(Shared.Util.FormationMath) -- claude-bud JOB 22: the stable formation maths
+local SoldierController = require(script.Parent.SoldierController) -- v114: the one writer of a soldier's movement
 local AdminConfig = require(Shared.Configs.AdminConfig)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local BaseLayoutConfig = require(Shared.Configs.BaseLayoutConfig)
@@ -141,6 +142,12 @@ local function stableOn(): boolean
 end
 ArmyFollow.StableOn = stableOn
 
+-- v114: ArmyConfig.Follow3 (ArmyController) is switched on (the players group / hooks are needed for it too)
+local function follow3On(): boolean
+	local f = (ArmyConfig :: any).Follow3
+	return typeof(f) == "table" and f.Enabled == true and (f.Rollout == "all" or f.Rollout == "owner")
+end
+
 -- claude-bud JOB 22: player characters in their own group, so soldiers never push / block players (Follow2.CollideWithPlayers)
 ArmyFollow.PlayerGroup = "WE_PlayerChars"
 local playersHooked = false
@@ -157,7 +164,7 @@ local function setCharGroup(char: Model)
 	end)
 end
 local function hookPlayers()
-	if playersHooked or not stableOn() then
+	if playersHooked or not (stableOn() or follow3On()) then
 		return
 	end
 	playersHooked = true
@@ -184,11 +191,13 @@ local function ensureGroup()
 		end
 		PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.Group, false)
 		PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, "Default", true) -- the world and the players
-		if stableOn() then
+		if stableOn() or follow3On() then
 			if not PhysicsService:IsCollisionGroupRegistered(ArmyFollow.PlayerGroup) then
 				PhysicsService:RegisterCollisionGroup(ArmyFollow.PlayerGroup)
 			end
-			PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.PlayerGroup, cfg().CollideWithPlayers == true)
+			-- v114: with Follow3 soldiers never collide with players (ArmyNPCs / WE_PlayerChars = false)
+			PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.PlayerGroup, cfg().CollideWithPlayers == true and not follow3On())
+			PhysicsService:CollisionGroupSetCollidable(ArmyFollow.PlayerGroup, "Default", true) -- players still stand on the world
 		end
 	end)
 	pcall(hookPlayers)
@@ -206,11 +215,9 @@ local function setState(unit: any, state: string)
 		end)
 	end
 end
+-- v114: forwarded to SoldierController.Move (the only Humanoid:MoveTo on a soldier)
 function ArmyFollow.Command(unit: any, goal: Vector3, state: string?)
-	if state then
-		setState(unit, state)
-	end
-	unit.Humanoid:MoveTo(goal)
+	SoldierController.Move(unit, goal, state)
 end
 
 -- claude-bud JOB 22: one yaw owner. Moving: AutoRotate faces travel and the face gyro has no torque (nothing else can
@@ -307,6 +314,7 @@ local function resetMotion(unit: any)
 end
 
 function ArmyFollow.Release(unit: any, state: string?)
+	SoldierController.Release(unit) -- v114: the Follow3 controller lets go too (gyro re-aimed at its current yaw: no snap)
 	if unit._afCtl then
 		unit._afCtl = false
 		resetMotion(unit)
@@ -316,6 +324,8 @@ function ArmyFollow.Release(unit: any, state: string?)
 		-- claude-bud JOB 22: the face gyro gets its torque back (the order / combat code aims with it)
 		local gyro = unit.Root and unit.Root:FindFirstChild("NPCFaceGyro")
 		if gyro and gyro:IsA("BodyGyro") and unit._afGyroTorque ~= nil then
+			local l = unit.Root.CFrame.LookVector -- v114: aimed at its current yaw first (a stale target snapped it round)
+			gyro.CFrame = CFrame.lookAt(Vector3.zero, Vector3.new(l.X, 0, l.Z))
 			gyro.MaxTorque = unit._afGyroTorque
 		end
 		unit._afYawMoving = nil
@@ -854,10 +864,7 @@ local function regroup(st: any, unit: any, root: BasePart, now: number, why: str
 		logLine("nospot" .. tostring(unit.OwnerUserId), string.format("no clear regroup spot for unit %s (%s): it keeps walking", tostring(unit.Id), why))
 		return false
 	end
-	unit.Model:PivotTo(cf)
-	unit.Root.AssemblyLinearVelocity = Vector3.zero
-	unit.Root.AssemblyAngularVelocity = Vector3.zero
-	ArmyFollow.Command(unit, cf.Position, "StuckRecovery")
+	SoldierController.Reposition(unit, cf, why, true) -- v114: the one emergency PivotTo lives in SoldierController
 	unit._afPath = nil
 	unit._afMoveGoal = cf.Position
 	unit._afMoveAt = now
@@ -944,6 +951,40 @@ local function requestPath(unit: any, from: Vector3, to: Vector3, now: number)
 			unit._afPathFail = os.clock()
 		end
 	end)
+end
+
+-- claude-bud (hold fix), v114 extracted: the point to walk to from `pos` (outside plot `plotId`) toward `goal`: the goal,
+-- or first the nearest outside corner point when the straight line would clip his plot square (never crossed)
+local function holdVia(plotId: number, pos: Vector3, goal: Vector3): Vector3
+	local lp = plotLocal(plotId, pos)
+	local lg = plotLocal(plotId, goal)
+	local via = goal
+	if lp and lg then
+		local half = BaseConfig.PlotSize.X * 0.5 + tnum("PlotPadStuds", 2) + 4
+		local crosses = false
+		for i = 1, 7 do
+			local t = i / 8
+			local x, z = lp.X + (lg.X - lp.X) * t, lp.Z + (lg.Z - lp.Z) * t
+			if math.abs(x) < half and math.abs(z) < half then
+				crosses = true
+				break
+			end
+		end
+		if crosses then
+			local sx = if lp.X < 0 then -1 else 1
+			local cx, cz
+			if math.abs(lp.X) >= half then
+				cx, cz = sx * half, half
+			elseif lp.Z < 0 then
+				cx, cz = sx * half, lp.Z
+			else
+				cx, cz = lg.X, half
+			end
+			via = PlotFrame.LocalToWorld(plotId, cx, cz)
+			via = Vector3.new(via.X, goal.Y, via.Z)
+		end
+	end
+	return via
 end
 
 --[[ one FOLLOW unit, one think. Returns nothing; SquadOrdersService calls it only for a live owner in FOLLOW, on foot
@@ -1114,7 +1155,7 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 			unit._afMoveGoal = pos
 			unit._afMoveAt = now
 			local _, out = tidyWaitSpot(st._afPlot, rank)
-			unit.Model:PivotTo(CFrame.lookAt(unit.Root.Position, unit.Root.Position + out)) -- turn on the spot only
+			-- v114: no PivotTo turn (a hard yaw snap); the gyro turns it
 			faceTo(unit, out, now) -- v99: the gyro holds that facing (it no longer pulls back to a stale yaw)
 		end
 		unit._afPath = nil
@@ -1161,34 +1202,7 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	-- claude-bud (hold fix): outside his plot while he is in it: straight to the cell; if that line would clip his plot
 	-- square, first to the nearest outside corner point (the plot is never crossed, no path through the gate)
 	if holdOut and st._afPlot then
-		local lp = plotLocal(st._afPlot, pos)
-		local lg = plotLocal(st._afPlot, goal)
-		local via = goal
-		if lp and lg then
-			local half = BaseConfig.PlotSize.X * 0.5 + tnum("PlotPadStuds", 2) + 4
-			local crosses = false
-			for i = 1, 7 do
-				local t = i / 8
-				local x, z = lp.X + (lg.X - lp.X) * t, lp.Z + (lg.Z - lp.Z) * t
-				if math.abs(x) < half and math.abs(z) < half then
-					crosses = true
-					break
-				end
-			end
-			if crosses then
-				local sx = if lp.X < 0 then -1 else 1
-				local cx, cz
-				if math.abs(lp.X) >= half then
-					cx, cz = sx * half, half -- beside the plot: up that side to its front corner
-				elseif lp.Z < 0 then
-					cx, cz = sx * half, lp.Z -- behind it: straight out sideways to the side line first
-				else
-					cx, cz = lg.X, half -- in front: along the front line
-				end
-				via = PlotFrame.LocalToWorld(st._afPlot, cx, cz)
-				via = Vector3.new(via.X, goal.Y, via.Z)
-			end
-		end
+		local via = holdVia(st._afPlot, pos, goal)
 		unit._afPath = nil
 		moveTo(unit, via, now)
 		return
@@ -1253,6 +1267,34 @@ end
 function ArmyFollow.HomePoint(player: Player?, st: any, unit: any, root: BasePart, now: number): Vector3
 	plan(st, player, root, st.Units, now)
 	return slotPoint(st, root, unit._afRank or 1)
+end
+
+-- ── v114: helpers ArmyController (Follow3) shares with this module (same plot / hold rules, same rays) ──────────────
+ArmyFollow.Follow3On = follow3On
+ArmyFollow.ClearLine = clearLine
+ArmyFollow.GroundAt = groundAt
+ArmyFollow.RefreshRayFilter = refreshRayFilter
+ArmyFollow.InPlot = inPlot
+ArmyFollow.HoldVia = holdVia
+ArmyFollow.HoldSpot = function(plotId: number, rank: number): (Vector3, Vector3)
+	return tidyWaitSpot(plotId, rank)
+end
+-- his base state for this pass (the Tidy hold: inside / near his own plot square, with hysteresis); sets the same
+-- st._afTidy / _afInBase / _afPlot / _afOwnPlot / _afLeftBaseAt fields plan() does
+function ArmyFollow.BaseState(st: any, player: Player?, pos: Vector3, now: number): (boolean, number?)
+	st._afTidy = tidyLive(player)
+	local plotId = ownPlotInside(st, player, pos)
+	local wasIn = st._afInBase
+	st._afInBase = plotId ~= nil
+	st._afPlot = plotId
+	st._afOwnPlot = ownPlotId(player)
+	if wasIn and not st._afInBase then
+		st._afLeftBaseAt = now
+	end
+	if st._afInBase ~= wasIn and player then
+		logLine("base" .. tostring(player.UserId), string.format("owner %d %s his base: army %s", player.UserId, if plotId then "entered" else "left", if plotId then "waits at the gate" else "follows"))
+	end
+	return st._afInBase == true, plotId
 end
 
 return ArmyFollow
