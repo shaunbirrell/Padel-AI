@@ -11,7 +11,7 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
 
 <!-- Q2-END -->
 
-# v108 — 2026-09-29 ~15:55 Dublin (Code Bot, branch phase-7-polish, WE_Build 108) — ARMY FLANK FORMATION (place version TBD)
+# v108 — 2026-09-29 ~15:55 Dublin (Code Bot, branch phase-7-polish, WE_Build 108) — ARMY FLANK FORMATION (place version 106)
 
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v108) before new work. Do not redo Flank, BOARDS, JOB 14, or JOB 15.**
 Merged `origin/claude/desktop-bud` tip `66cfdd7` (army Flank formation) into phase-7-polish.
@@ -20,7 +20,7 @@ Merged `origin/claude/desktop-bud` tip `66cfdd7` (army Flank formation) into pha
 - Kept: v104 Engagement all + guards; Discord invite; v105 BUDSQUAD; v106 GameFeel all + RemoteGate observe; v107 BOARDS.
 - Pins: `tools/checks/codebot_v108.py` + `claude_bud_army.py` Flank pins. PreferMesh OFF. WE_Building* untouched.
 
-**Published:** Open Cloud `versionNumber=TBD`. Migrate to Latest Update for army Flank.
+**Published:** Open Cloud `versionNumber=106`. Migrate to Latest Update for army Flank.
 
 # v107 — 2026-09-29 ~15:35 Dublin (Code Bot, branch phase-7-polish, WE_Build 107) — BOARDS LIVE FOR ALL (place version 105)
 
