@@ -1,11 +1,12 @@
 <!-- Q2-START -->
 # WHERE I STOPPED â€” QUEUE 2 (2026-09-29, Claude on Bud, claude/desktop-bud rebased on v97 36c560e)
-Jobs: [x] 6 Extra Garage Slot Â· [x] 7 first-5-minutes tutorial Â· [x] 8 mobile perf + streaming audit Â· [x] 9 old WIP Â· [ ] 10 balance (coded, stashed as `job10-wip`, commit next) Â· [ ] 11 juice
+Jobs: [x] 6 Extra Garage Slot Â· [x] 7 first-5-minutes tutorial Â· [x] 8 mobile perf + streaming audit Â· [x] 9 old WIP Â· [x] 10 balance Â· [ ] 11 juice
 - J6: `ExtraGarageSlot` pass (Id 0, 199 R$, owner-only; the playtest owner has it for testing). Spawning a different vehicle parks the current one.
 - J7: a welcome line on the first join, and the first-ATTACK hint after the tutorial (the existing tutorial covers claim / pad / cash / recruit).
 - J8: an automatic LOW tier on phones / low FPS (far decoration hidden, shadows off, cheaper FX), owner-only (`QualityConfig`). The streaming audit is clean.
-- J9: removed the PT-boat (real-world) and HELD gunboat bodies (9 boat keys back to the Part kit), the failed truck picks, the dead lane-C
-  "March" flag and the stale WIP patches 03/04/07/09-12. Finished: fuel tanker (Part kit), water / boats, ATTACK rows (Tidy).
+- J9: removed the PT-boat (real-world) and HELD gunboat bodies, the failed truck picks, the dead lane-C "March" flag and the stale WIP patches.
+- J10: `BalanceConfig` (owner-only): pads pay back in 2/3/6/12/25 min (was up to 139 h) plus 25 XP per $1k of income, giving a sim first
+  rebirth at ~34 min (was: none in 4 h). Robux vehicles are capped at +6 % (they're +3â€“5 %). Tool: `tools/progression_sim.py`.
 
 <!-- Q2-END -->
 

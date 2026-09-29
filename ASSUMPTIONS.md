@@ -9001,3 +9001,25 @@ ds_territories.luau T3):
   - Army lanes A/B patches (03/03b/04/04b: stale, half-tested) are retired.
 - **Fuel tanker:** FINISHED as the Part kit (olive tank body) and the note says so. The rejected store picks are listed; none is wired.
 - All retired patches stay in git history at e791323. handoff/wip/README.md lists them.
+
+## 2026-09-29 — claude-bud JOB 10: balance and progression (BalanceConfig, owner-only)
+- **Measured with `tools/progression_sim.py`.** It reads the live configs; it's a base-income-only floor with no soldiers, oil,
+  missions or drops, and greedy "cheapest pad" buying.
+- **Today's curve:**
+  - The whole base costs $11.2M and earns about $13k/min when complete.
+  - Late pads pay back in 26–139 **hours** (MissileDefense L5 139 h) — dead buys.
+  - Level 40 (the first rebirth) needs 292,371 XP. Every purchase together pays about 18k XP, and no other XP scales with
+    the base, so the sim is at level 11 after 4 h.
+- **New curve (BalanceConfig, one table), owner-only first:**
+  - `PaybackMinutes = { 2, 3, 6, 12, 25 }`: each pad level earns its own price back in that many minutes of passive
+    income (businesses keep their tables).
+  - `IncomeXP.Per1000 = 25`: XP per $1,000 of passive income (reason "income", which never feeds the battle pass),
+    paid in lumps of 25 or more.
+  - Sim: base complete 33.9 min, first rebirth **33.6 min** (target 25–40), worst payback 25 min, and a finished base
+    earns about $780k/min. The real game adds income, so the first rebirth should be a little sooner.
+  - `PremiumVehicleMaxEdge = 1.06`: the Robux vehicles are +3–5 % (checked from this table).
+- The server pays it in BaseService (inline, no whole-table hand-on) and marks the player `WE_Balance2`. His client sets
+  `BalanceConfig.ClientCurve`, so TycoonMath's "+$/s" labels match what he's paid (TycoonMath stays pure).
+- The check runs the sim: the first rebirth must fall inside FirstRebirthMinutes, and no pad may pay back slower than the last PaybackMinutes.
+- **Watch on the phone test:** cash inflation late in a life (vehicle prices feel cheap after the base is done). If so, lengthen the
+  last two PaybackMinutes; the sim and the check follow.

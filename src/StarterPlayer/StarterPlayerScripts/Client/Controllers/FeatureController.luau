@@ -217,6 +217,16 @@ local function airstrikeButton()
 	end)
 end
 function FeatureController.Init()
+	-- claude-bud JOB 10: the server marks a player on the BalanceConfig curve (WE_Balance2); his labels follow it
+	do
+		local lp = game:GetService("Players").LocalPlayer
+		local BalanceConfig = require(Shared.Configs.BalanceConfig) :: any
+		local function sync()
+			BalanceConfig.ClientCurve = lp:GetAttribute("WE_Balance2") == true
+		end
+		sync()
+		lp:GetAttributeChangedSignal("WE_Balance2"):Connect(sync)
+	end
 	task.spawn(airstrikeButton)
 	vipPerks()
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)

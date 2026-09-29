@@ -375,6 +375,7 @@ function XPService.AddXP(player: Player, amount: number, reason: string?, opts: 
 	pushXP(player, profile, nil)
 	if BattlePassService and BattlePassService.AddXP and reason ~= "battlepass"
 		and not XPBalanceConfig.NoBattlePassMirror[reasonKey]
+		and reasonKey ~= "income" -- claude-bud JOB 10: BalanceConfig income XP never feeds the battle pass
 	then
 		-- Mirror a portion of gameplay XP into the battle pass track (never the one-time build / backfill XP)
 		BattlePassService.AddXP(player, amount, reason)

@@ -76,3 +76,24 @@ must_contain("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau", "\t\tTidy =
 import os as _q2_os2
 (ok if not any(_q2_os2.path.exists(_p) for _p in ("handoff/wip/09-vkit-framework_on_e506c9c.patch", "handoff/wip/12-vkit-naval_on_e506c9c.patch", "handoff/wip/04-army-laneA_on_oldFIX+A0.patch")) else bad)("CLAUDE-BUD J9: unfinished WIP patches retired (git history keeps them)")
 must_not_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "no underwater physics yet", "CLAUDE-BUD J9: no stub wording on the surface-only sub")
+
+# ── JOB 10 balance and progression (BalanceConfig; tools/progression_sim.py) ──
+import importlib.util as _q2_il
+_q2_bc = "src/ReplicatedStorage/Shared/Configs/BalanceConfig.luau"
+must_contain(_q2_bc, "local BalanceConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J10: the new curve is owner-only first")
+_q2_spec = _q2_il.spec_from_file_location("q2_progression_sim", "tools/progression_sim.py")
+_q2_ps = _q2_il.module_from_spec(_q2_spec)
+_q2_spec.loader.exec_module(_q2_ps)
+_q2_b = _q2_ps.balance()
+_q2_r = _q2_ps.simulate(20, 90, "balance")
+_q2_lo, _q2_hi = _q2_b.get("FirstRebirthMinutes") or (25, 40)
+(ok if _q2_r["RebirthMin"] is not None and _q2_lo <= _q2_r["RebirthMin"] <= _q2_hi else bad)(
+    f"CLAUDE-BUD J10: sim first rebirth {_q2_r['RebirthMin']} min is inside {_q2_lo}-{_q2_hi} min")
+(ok if _q2_r["WorstPaybackMin"] <= max(_q2_b.get("Payback") or [0]) + 0.05 and not _q2_r["DeadPurchases"] else bad)(
+    f"CLAUDE-BUD J10: no dead pads (worst payback {_q2_r['WorstPaybackMin']} min <= {max(_q2_b.get('Payback') or [0])})")
+_q2_old = _q2_ps.simulate(20, 90, "old")
+(ok if _q2_old["RebirthMin"] is None else bad)(f"CLAUDE-BUD J10: the old curve really had no first rebirth in 90 min (sim {_q2_old['RebirthMin']})")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "\tif player and BalanceConfig.LiveFor(player.UserId) and typeof(profile.BaseUpgrades) == \"table\" then", "CLAUDE-BUD J10: the server pays the curve only where it is live")
+must_contain("src/ServerScriptService/Server/Services/XPService.luau", '\t\tand reasonKey ~= "income" -- claude-bud JOB 10', "CLAUDE-BUD J10: income XP never feeds the battle pass")
+must_contain("src/ReplicatedStorage/Shared/Util/TycoonMath.luau", "if (BalanceConfig :: any).ClientCurve == true then", "CLAUDE-BUD J10: the owner's labels match what he is paid")
+must_not_contain("src/ReplicatedStorage/Shared/Util/TycoonMath.luau", "game:GetService", "CLAUDE-BUD J10: TycoonMath stays pure")

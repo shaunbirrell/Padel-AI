@@ -29,6 +29,7 @@ local TycoonGuideConfig = require(Configs.TycoonGuideConfig)
 local RebirthConfig = require(Configs.RebirthConfig)
 local BaseLayoutConfig = require(Configs.BaseLayoutConfig)
 local StructureVisualConfig = require(Configs.StructureVisualConfig)
+local BalanceConfig = require(Configs.BalanceConfig) -- claude-bud JOB 10: the owner-only income curve (client labels)
 
 local TycoonMath = {}
 
@@ -107,6 +108,14 @@ function TycoonMath.LevelIncomePerTick(id: string, level: number): number
 			return 0
 		end
 		return biz.IncomePerTick[math.clamp(lvl, 1, #biz.IncomePerTick)]
+	end
+	-- claude-bud JOB 10: a client the server marked (WE_Balance2 -> BalanceConfig.ClientCurve, set by FeatureController)
+	-- shows the BalanceConfig curve it is paid on. Never set on the server (the server pays through BaseService).
+	if (BalanceConfig :: any).ClientCurve == true then
+		local s = BalanceConfig.StructureIncomePerTick(id, lvl)
+		if s ~= nil then
+			return s
+		end
 	end
 	local rate = EconomyConfig.PassiveIncome.PerLevelRates[id]
 	return if rate then rate * lvl else 0

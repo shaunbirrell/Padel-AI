@@ -19,6 +19,7 @@ local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local Types = require(Shared.Types)
 local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 local TycoonMath = require(Shared.Util.TycoonMath) -- v72: one passive formula (paid here, shown on the client)
+local BalanceConfig = require(ReplicatedStorage.Shared.Configs.BalanceConfig) -- claude-bud JOB 10
 local BusinessConfig = require(Shared.Configs.BusinessConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local StreamingConfig = require(Shared.Configs.StreamingConfig) -- streaming2 S1
@@ -308,10 +309,53 @@ local function passiveMultAndFlat(profile: Types.PlayerProfile, player: Player?)
 	return mult, flat
 end
 
+-- claude-bud JOB 10: BalanceConfig.IncomeXP: XP for passive income (banked, paid in lumps), and the WE_Balance2 marker
+local incomeXpBank: { [number]: number } = {}
+function BaseService._IncomeXP(player: Player, amount: number)
+	if not BalanceConfig.LiveFor(player.UserId) then
+		return
+	end
+	if player:GetAttribute("WE_Balance2") ~= true then
+		player:SetAttribute("WE_Balance2", true)
+	end
+	local ix = BalanceConfig.IncomeXP
+	if ix.Enabled ~= true then
+		return
+	end
+	local uid = player.UserId
+	local bank = (incomeXpBank[uid] or 0) + amount / 1000 * ix.Per1000
+	if bank >= ix.GrantAtLeast then
+		local give = math.floor(bank)
+		bank -= give
+		local okX, XPS = pcall(function(): any
+			return require(script.Parent.XPService)
+		end)
+		if okX and XPS and XPS.AddXP then
+			pcall(XPS.AddXP, player, give, "income")
+		end
+	end
+	incomeXpBank[uid] = bank
+end
+Players.PlayerRemoving:Connect(function(p)
+	incomeXpBank[p.UserId] = nil
+end)
+
 function BaseService.ComputePassiveIncomePerTick(profile: Types.PlayerProfile, player: Player?): number
 	-- v72: TycoonMath is the one formula (buildings rate x level as before; war businesses their IncomePerTick
 	-- table, only while BusinessConfig.Enabled). Saved levels are clamped there: junk never throws or overpays.
 	local total = TycoonMath.BasePassivePerTick(profile.BaseUpgrades)
+	-- claude-bud JOB 10: the BalanceConfig curve (every pad pays itself back in minutes) for a player it is live for
+	if player and BalanceConfig.LiveFor(player.UserId) and typeof(profile.BaseUpgrades) == "table" then
+		local sum = EconomyConfig.PassiveIncome.BaseCashPerTick
+		for id, lv in pairs(profile.BaseUpgrades) do
+			if typeof(id) == "string" and BaseConfig.Structures[id] ~= nil then
+				local lvl = math.clamp(math.floor(tonumber(lv) or 0), 0, TycoonMath.MaxLevel(id))
+				local s = BalanceConfig.StructureIncomePerTick(id, lvl)
+				sum += if s ~= nil then s else TycoonMath.LevelIncomePerTick(id, lvl)
+			end
+		end
+		total = sum
+	end
 	local mult, flat = passiveMultAndFlat(profile, player)
 	total += flat
 	return math.floor(total * mult)
@@ -352,6 +396,14 @@ function BaseService.PurchaseToastSuffix(player: Player, structureId: string, ne
 		return ""
 	end
 	local gain = TycoonMath.StepGainPerTick(structureId, lv - 1, BaseService.IncomeMult(player))
+	if BalanceConfig.LiveFor(player.UserId) then
+		-- claude-bud JOB 10: the gain on the BalanceConfig curve (the server has no WE_Balance2 client view)
+		local a = BalanceConfig.StructureIncomePerTick(structureId, lv - 1)
+		local b = BalanceConfig.StructureIncomePerTick(structureId, lv)
+		if a ~= nil and b ~= nil then
+			gain = (b - a) * BaseService.IncomeMult(player)
+		end
+	end
 	if gain <= 0 then
 		return ""
 	end
@@ -1964,6 +2016,7 @@ function BaseService.Init(deps: { [string]: any })
 						else
 							EconomyService.AddCash(player, amount, "passive")
 						end
+						BaseService._IncomeXP(player, amount) -- claude-bud JOB 10
 						-- v72: the client's "+$N" business pops key off WE_PassiveTick; WE_IncomeMult scales every
 						-- "+$/s" the client shows (written only when it changes). WE_IncomeMult goes first, so the pop
 						-- fired by this tick's WE_PassiveTick already reads this tick's multiplier.
