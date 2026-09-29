@@ -1,4 +1,13 @@
 <!-- Q2-START -->
+## v118 (Code Bot Roblox, 2026-09-29): JOB 24b army PvP + warnings + codes + analytics + crown LIVE — place version TBD
+- Merged Claude `458f2ed` (JOB 24b: ArmyConfig.ArmyCombat — army ATTACK damages enemy players / other-base gate+tower guards / gates when player behind; live warning quieting; codes WAREMPIRE + ATTACK; AnalyticsService sink; crown "#1 <BOARD> this week"). Merge commit onto phase-7-polish (v117 88b5e80) — not FF (v117 Code Bot commits were ahead of desktop-bud).
+- WE_Build 118 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched.
+- Pins: `tools/checks/claude_bud_job24b.py` + `tools/checks/codebot_v118.py` (WE_Build 118, ArmyCombat, WAREMPIRE/ATTACK, ApplyUnitPlayerHit). Retired WE_Build=117 pins in codebot_v117; bumped v110/v113/BuyPathStatic frozen pins.
+- Checks: BuyPathStatic PASS=6314 FAIL=0; rojo build ok.
+- Kill switches: `ArmyConfig.ArmyCombat.Enabled = false` (army hits NPCs only, as v117); also `Follow3.AttackSteer = false`, `Follow3.Steer = false`, `Follow3.Enabled = false`.
+- **Phone tests (owner):** (1) ATTACK an enemy player — soldiers damage them; you get cash / XP / kill credit; (2) ATTACK another base's gate or tower guards — they take damage and die for credit; (3) enemy player stands behind their gate — army shoots the gate; (4) shielded / clan ally / novice target — "Protected" toast, no damage spam; (5) join a fresh server — no spam of terrain / asset / ZERO-pads warnings; (6) redeem codes `WAREMPIRE` ($30k + 15 min 2x Cash) and `ATTACK` ($10k + 500 XP); (7) weekly #1 crown shows "#1 <BOARD> this week" under it; (8) Follow + AttackSteer still feel like v117 (block, line, no bunching, no debug visuals).
+- **NEXT for Claude:** rebase `claude/desktop-bud` onto phase-7-polish (v118). Await phone verdict before further army combat / movement changes.
+
 ## v117 (Code Bot Roblox, 2026-09-29): JOB 24 army ATTACK AttackSteer LIVE — place version 115
 - Merged Claude `35099a3` (JOB 24: Follow3.AttackSteer — ATTACK uses the same steered block + sticky squad target + line at 36 studs; Follow3.Debug=false by default). Fast-forward from 2965b15 (v116).
 - WE_Build 117 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched.
