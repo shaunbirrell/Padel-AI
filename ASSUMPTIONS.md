@@ -8978,3 +8978,100 @@ ds_territories.luau T3):
   - The earlier streaming2 lane (StreamPrefetch, bounded waits, atomic vehicle models) covers the rest.
   - `tools/checks/claude_bud_q2.py` now fails if client code gains a dot-indexed map path or a chained FindFirstChild.
   - Still needs a device test with the flag on in Studio before it is ever switched.
+
+## 2026-09-29 — claude-bud JOB 9: old WIP finished or removed cleanly
+- **Warship bodies:** 13 owner-only store hulls were live for the owner (BodyRollout "owner"); none has a WE_CHECK2 / ASSET_LICENSES record.
+  - REMOVED the two that break the rules: BODY_PATROL_BOAT 16692908395 (a real-world WW2 PT-boat design,
+    ASSET_LICENSES) and BODY_GUNBOAT 15838664806 (HELD in the owner check). PatrolBoat, FastAttackCraft, RiverBoat,
+    CoastCutter, TorpedoBoat, Gunboat, MissileBoat, MineLayer and CoastalMonitor are back on the Part kit (the premium
+    Tidebreaker, LookId TorpedoBoat, too). Code Bot's v87 pins for those two are retired in place.
+  - The other 11 stay owner-only. **The owner must run WE_CHECK2 on them before BodyRollout "all".**
+  - The VKIT Part-body patches (09-12, 45-48 commits stale, not gated, +661 parts, 11 and 12 half-done) are retired.
+- **Ground vehicle bodies:** the live Roblox-owned bodies (jeep, quad, buggy, trucks, van, APC family) are finished.
+  - REMOVED the two failed truck picks from 7 rows: 8546141386 (stencilled military unit markings: CLAUDE.md bans insignia)
+    and 8455894899 (53 parts > 40). They become plain Part-kit rows. The tool records (wire-asset-ids.py) are unchanged.
+  - VKIT ground (11) and the ground2 records patch (07) are retired.
+- **Water and boats:** live and complete (WaterConfig, Boat drive, WaterRule, harbor kit).
+  - The submarine's "stub" comment is reworded: it is surface-only by design.
+  - Left as a documented limitation: a clan-mate's boat can open the sea gate but the owner-only water rule pulls it back
+    out of the basin (ASSUMPTIONS :801). BridgeLayer wading stays owner-only until a phone test.
+- **ATTACK marching:** the finished owner-only ATTACK rows / target ring (Follow2.Tidy) is the march.
+  - REMOVED the never-built lane C: `ArmyConfig.Rollout.March` (no readers) and its lane-C-only Text entries.
+    The frozen A0 pin is updated in place (claude-bud comment) and a new pin is in claude_bud_q2.py.
+  - Army lanes A/B patches (03/03b/04/04b: stale, half-tested) are retired.
+- **Fuel tanker:** FINISHED as the Part kit (olive tank body) and the note says so. The rejected store picks are listed; none is wired.
+- All retired patches stay in git history at e791323. handoff/wip/README.md lists them.
+
+## 2026-09-29 — claude-bud JOB 10: balance and progression (BalanceConfig, owner-only)
+- **Measured with `tools/progression_sim.py`.** It reads the live configs; it's a base-income-only floor with no soldiers, oil,
+  missions or drops, and greedy "cheapest pad" buying.
+- **Today's curve:**
+  - The whole base costs $11.2M and earns about $13k/min when complete.
+  - Late pads pay back in 26–139 **hours** (MissileDefense L5 139 h) — dead buys.
+  - Level 40 (the first rebirth) needs 292,371 XP. Every purchase together pays about 18k XP, and no other XP scales with
+    the base, so the sim is at level 11 after 4 h.
+- **New curve (BalanceConfig, one table), owner-only first:**
+  - `PaybackMinutes = { 2, 3, 6, 12, 25 }`: each pad level earns its own price back in that many minutes of passive
+    income (businesses keep their tables).
+  - `IncomeXP.Per1000 = 25`: XP per $1,000 of passive income (reason "income", which never feeds the battle pass),
+    paid in lumps of 25 or more.
+  - Sim: base complete 33.9 min, first rebirth **33.6 min** (target 25–40), worst payback 25 min, and a finished base
+    earns about $780k/min. The real game adds income, so the first rebirth should be a little sooner.
+  - `PremiumVehicleMaxEdge = 1.06`: the Robux vehicles are +3–5 % (checked from this table).
+- The server pays it in BaseService (inline, no whole-table hand-on) and marks the player `WE_Balance2`. His client sets
+  `BalanceConfig.ClientCurve`, so TycoonMath's "+$/s" labels match what he's paid (TycoonMath stays pure).
+- The check runs the sim: the first rebirth must fall inside FirstRebirthMinutes, and no pad may pay back slower than the last PaybackMinutes.
+- **Watch on the phone test:** cash inflation late in a life (vehicle prices feel cheap after the base is done). If so, lengthen the
+  last two PaybackMinutes; the sim and the check follow.
+
+## 2026-09-29 — claude-bud JOB 11: juice + mobile HUD (JuiceConfig, owner-only)
+- **Already in the game and kept:** purchase / collect / level-up / capture sounds (SoundConfig.Hooks), HUD "+$N" cash floats
+  (HudLayout.CashFloat on collect and spend), toasts.
+- **Added:**
+  - A gold ring burst (plus a one-shot spark Emit, none on low FX) at the player's feet on every successful base purchase.
+    The client doesn't know its plot id, and the buyer stands at that pad's console, so the burst lands at the building he just bought.
+  - A rebirth celebration: the server's FeaturePush "Rebirth" (after the saved rebirth) → a gold "REBIRTH P3! / Cash earnings +30%"
+    banner in the HUD top stack (under the top bar, never over the controls), a light confetti fall (none on low FX) and the level-up sound, for 3.5 s.
+- **Mobile HUD:** my own touch UI from earlier jobs now uses HudLayout instead of hand-placed positions.
+  - The AIRSTRIKE button is registered in the top stack (order 35), scaled by HudLayout.ApplyScreen and checked with
+    AssertTouchTarget (64 code px = 44+ real).
+  - The rebirth banner is in the stack too. Toasts and offers already are.
+- **Not done:** the HUD harness (check_hud.py) is not in this repo, so the full-HUD overlap audit at 800×360 / 844×390 / 956×440 needs
+  the harness or the phone.
+
+## 2026-09-29 — claude-bud PREMIUM: the 6 Robux-only vehicles made clearly overpowered (owner-only via RolloutKeys)
+- **Owner decision (supersedes JOB 5a "+5 %" and BalanceConfig's 1.06 cap).** Every number is in `VehicleConfig.Premium`.
+  - "Best cash vehicle of the same type" = the same kit family (JetFighter, HeliAttack, NavalCapital, NavalPatrol, TrackedMBT,
+    WheeledLight), cash only.
+  - Speed = 1.4 x that family's fastest (Skylance 189, Stormwing 105, Leviathan 56, Tidebreaker 81, Warlord 50, Razorfang 95),
+    applied UNclamped (the tracked 36 cap does not apply to them).
+  - HP / armour = 2 x the family's toughest. Acceleration x1.6, turn rate x1.4–1.5.
+  - The rows are computed from the table after the Vehicles literal (no second copy of the numbers).
+- **Weapons** (new `PremiumWeaponService` + `PremiumWeaponsClient`; the premium jet and heli moved to AircraftWeaponConfig.Unarmed,
+  so one system owns all six):
+  - Guns (hitscan from the muzzle; FireRate / Damage / Range / cone off the nose):
+    - Skylance AirCannon 45 x10/s (12° cone)
+    - Stormwing ChinGun 40 x10/s (50°)
+    - Leviathan DeckCannon 170 x2/s (150°, splash 10)
+    - Tidebreaker BowMG 32 x12/s (70°)
+    - Warlord TankCannon 240 x1.25/s (turret 180°, splash 12)
+    - Razorfang HeavyMG 32 x12/s (100°)
+  - Missile (all six): 320 damage + splash 12. The server picks the lock: the nearest enemy player or vehicle inside a 30°
+    cone of the aim, within 250 studs, in sight. It flies at 140 studs/s, turns at most 110°/s (a fast jet or a hard turn
+    dodges it), explodes within 7 studs, and has a 5 s cooldown.
+- **Server-validated:**
+  - Checked on every request: the driver seat of HIS own premium vehicle, the pass / rollout (or the playtest owner),
+    14 requests/s, the fire rate / cooldown per vehicle, and the aim clamped to the cone.
+  - The server raycasts itself (range + line of sight). The client sends only an action and an aim, never a target or damage.
+  - All damage goes through CombatService.ApplyHit / ApplyRadiusDamage (PvP off, spawn / novice shields, vehicle spawn
+    protection, occupants). Friendly fire is off: self, own vehicles and clan allies are skipped (new CombatService.IsClanAlly;
+    splash already spares allies).
+- **Client:**
+  - FIRE (hold) and MISSILE (shows its cooldown) appear only while driving your own premium vehicle.
+  - They're placed by AirWeaponsClient.Layout (clear of jump / EXIT / thumbstick), 64 px (72 on tablets). PC / gamepad:
+    LMB / R2 and R / X, with hints only then.
+  - A gold lock reticle marks the target the server would lock (re-picked at 10 Hz).
+  - Everything is torn down on exit / death / respawn.
+- **Look:** a gold trail and a ROBUX badge (WorldLabel, MaxDistance 40) on every premium vehicle, seen by everyone.
+- Effects: one UnreliableRemoteEvent (PremiumWeaponFx) for tracers and explosions (visual Explosion: no pressure, no joints).
+- **Balance note:** these are pay-to-win by design now (owner's call). The rollout stays owner-only until he flips RolloutKeys to all.

@@ -60,3 +60,57 @@ for _root in ("src/StarterPlayer", "src/ReplicatedStorage"):
                     if re.search(r":FindFirstChild\([^)]*\)[:.][A-Za-z]", _code):
                         _q2_bad.append(f"{_p}:{_i} chained FindFirstChild")
 (ok if not _q2_bad else bad)(f"CLAUDE-BUD J8: streaming audit clean on client code ({_q2_bad[:5]})")
+
+# ── JOB 9 old WIP: finished or removed cleanly ──
+_q2_vac = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+_q2_v = read(_q2_vac) or ""
+must_not_contain(_q2_vac, "ModelAssetId = 16692908395", "CLAUDE-BUD J9: the real-world PT-boat body is gone")
+must_not_contain(_q2_vac, "ModelAssetId = 15838664806", "CLAUDE-BUD J9: the HELD gunboat body is not wired")
+for _k in ("PatrolBoat", "FastAttackCraft", "RiverBoat", "CoastCutter", "TorpedoBoat", "Gunboat", "MissileBoat", "MineLayer", "CoastalMonitor"):
+    must_contain(_q2_vac, "\t\t" + _k + " = { ModelAssetId = 0, Note = \"claude-bud J9: Part kit.", f"CLAUDE-BUD J9: {_k} back on the Part kit")
+(ok if "PendingAssetId = 8546141386" not in _q2_v and "PendingAssetId = 8455894899" not in _q2_v else bad)("CLAUDE-BUD J9: the failed truck picks (unit markings / 53 parts) left the rows")
+must_contain(_q2_vac, '\t\tFuelTanker = { ModelAssetId = 0, Note = "claude-bud J9: FINISHED as the Part kit', "CLAUDE-BUD J9: fuel tanker finished as the Part kit")
+_q2_ac = read("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau") or ""
+(ok if 'March = "owner"' not in _q2_ac and 'March = "TO %s"' not in _q2_ac else bad)("CLAUDE-BUD J9: the never-built lane C (March) is gone")
+must_contain("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau", "\t\tTidy = {\n\t\t\tRollout = \"owner\",", "CLAUDE-BUD J9: ATTACK marching = the finished Tidy rows / ring")
+import os as _q2_os2
+(ok if not any(_q2_os2.path.exists(_p) for _p in ("handoff/wip/09-vkit-framework_on_e506c9c.patch", "handoff/wip/12-vkit-naval_on_e506c9c.patch", "handoff/wip/04-army-laneA_on_oldFIX+A0.patch")) else bad)("CLAUDE-BUD J9: unfinished WIP patches retired (git history keeps them)")
+must_not_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "no underwater physics yet", "CLAUDE-BUD J9: no stub wording on the surface-only sub")
+
+# ── JOB 10 balance and progression (BalanceConfig; tools/progression_sim.py) ──
+import importlib.util as _q2_il
+_q2_bc = "src/ReplicatedStorage/Shared/Configs/BalanceConfig.luau"
+must_contain(_q2_bc, "local BalanceConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J10: the new curve is owner-only first")
+_q2_spec = _q2_il.spec_from_file_location("q2_progression_sim", "tools/progression_sim.py")
+_q2_ps = _q2_il.module_from_spec(_q2_spec)
+_q2_spec.loader.exec_module(_q2_ps)
+_q2_b = _q2_ps.balance()
+_q2_r = _q2_ps.simulate(20, 90, "balance")
+_q2_lo, _q2_hi = _q2_b.get("FirstRebirthMinutes") or (25, 40)
+(ok if _q2_r["RebirthMin"] is not None and _q2_lo <= _q2_r["RebirthMin"] <= _q2_hi else bad)(
+    f"CLAUDE-BUD J10: sim first rebirth {_q2_r['RebirthMin']} min is inside {_q2_lo}-{_q2_hi} min")
+(ok if _q2_r["WorstPaybackMin"] <= max(_q2_b.get("Payback") or [0]) + 0.05 and not _q2_r["DeadPurchases"] else bad)(
+    f"CLAUDE-BUD J10: no dead pads (worst payback {_q2_r['WorstPaybackMin']} min <= {max(_q2_b.get('Payback') or [0])})")
+_q2_old = _q2_ps.simulate(20, 90, "old")
+(ok if _q2_old["RebirthMin"] is None else bad)(f"CLAUDE-BUD J10: the old curve really had no first rebirth in 90 min (sim {_q2_old['RebirthMin']})")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "\tif player and BalanceConfig.LiveFor(player.UserId) and typeof(profile.BaseUpgrades) == \"table\" then", "CLAUDE-BUD J10: the server pays the curve only where it is live")
+must_contain("src/ServerScriptService/Server/Services/XPService.luau", '\t\tand reasonKey ~= "income" -- claude-bud JOB 10', "CLAUDE-BUD J10: income XP never feeds the battle pass")
+must_contain("src/ReplicatedStorage/Shared/Util/TycoonMath.luau", "if (BalanceConfig :: any).ClientCurve == true then", "CLAUDE-BUD J10: the owner's labels match what he is paid")
+must_not_contain("src/ReplicatedStorage/Shared/Util/TycoonMath.luau", "game:GetService", "CLAUDE-BUD J10: TycoonMath stays pure")
+
+# ── JOB 11 juice (purchase burst, rebirth celebration) + mobile HUD placement of the new touch UI ──
+_q2_jc = "src/ReplicatedStorage/Shared/Configs/JuiceConfig.luau"
+_q2_j = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/Juice.luau"
+must_contain(_q2_jc, "local JuiceConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J11: juice owner-only first")
+must_contain(_q2_j, "if typeof(payload) == \"table\" and payload.Ok == true then\n\t\t\tburst(J)", "CLAUDE-BUD J11: a burst on every successful purchase")
+must_contain(_q2_j, "if not lowFx() then\n\t\tlocal att = Instance.new(\"Attachment\")", "CLAUDE-BUD J11: no particles on low FX / the low tier")
+must_contain(_q2_j, "pcall((HudLayout :: any).RegisterTopStack, \"Rebirth\", banner, 15)", "CLAUDE-BUD J11: the rebirth banner sits in the HUD top stack (never over the controls)")
+must_contain("src/ServerScriptService/Server/Services/PrestigeService.luau", "(ev :: RemoteEvent):FireClient(player, \"Rebirth\", {", "CLAUDE-BUD J11: the server cues the celebration after a saved rebirth")
+must_contain(_q2_fc, "pcall((HudLayout :: any).RegisterTopStack, \"Airstrike\", btn, 35)", "CLAUDE-BUD J11: the AIRSTRIKE button is in the managed top stack (no overlap on phones)")
+must_contain(_q2_fc, "pcall((HudLayout :: any).AssertTouchTarget, btn, \"Airstrike\")", "CLAUDE-BUD J11: the AIRSTRIKE button is checked as a touch target")
+_q2_jj = read(_q2_j) or ""
+(ok if "Enum.Material.Neon" not in _q2_jj and "PointLight" not in _q2_jj else bad)("CLAUDE-BUD J11: no Neon, no lights in the effects")
+_q2_sizes = [int(x) for x in re.findall(r"TextSize = (\d+)", _q2_jj + (read(_q2_fc) or ""))]
+(ok if _q2_sizes and min(_q2_sizes) >= 20 else bad)(f"CLAUDE-BUD J11: new HUD text >= 20 code px (14 real at phone scale) {sorted(set(_q2_sizes))}")
+_q2_h = [int(x) for x in re.findall(r"UDim2\.fromOffset\(\d+, (\d+)\)", read(_q2_fc) or "")]
+(ok if _q2_h and min(_q2_h) >= 64 else bad)(f"CLAUDE-BUD J11: new touch buttons >= 64 code px tall (44 real) {_q2_h}")

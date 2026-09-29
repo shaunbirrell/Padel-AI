@@ -17,7 +17,7 @@ for _vid, _cls, _hp, _spd, _arm, _pk, _base in _cbm_prem:
     _m = re.search(r'\b' + _base + r' = V\(\s*"' + _base + r'",\s*"[^"]+",\s*"\w+",\s*"\w+",\s*\d+,\s*(\d+),\s*(\d+),\s*\d+,\s*(\d+),', _cbm_v)
     _b = [int(x) for x in _m.groups()] if _m else [0, 0, 0]
     _r = [int(_hp) / max(_b[0], 1), int(_spd) / max(_b[1], 1), int(_arm) / max(_b[2], 1)]
-    (ok if _m and all(1.0 <= x <= 1.08 for x in _r) and max(_r) > 1.0 else bad)(f"CLAUDE-BUD 5a: {_vid} is only slightly stronger than {_base} (HP/speed/armour x{[round(x, 3) for x in _r]})")
+    # claude-bud PREMIUM: the 'slightly stronger' rule is superseded (owner: clearly overpowered) - claude_bud_premium.py
     (ok if re.search(r"\n\t\t" + _pk + r" = \{[^\n]*\n\t\t\tId = \d+,", read(_cbm_mc) or "") else bad)(f"CLAUDE-BUD 5a: {_vid} has its own game pass {_pk}")
     must_contain(_cbm_mc, _pk + " = true", f"CLAUDE-BUD 5a: {_pk} is in RolloutKeys (owner-only first)")
 _cbm_best = {"Air": ["InterceptorJet", "StealthHeli"], "Naval": ["Battleship", "TorpedoBoat"], "Ground": ["FortressTank", "ReconBuggy"]}
@@ -32,8 +32,8 @@ must_contain(_cbm_vs, "and MonetizationService.PlayerOwnsGamePass(player, passKe
 must_contain(_cbm_vs, "if not isOwner and not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then", "CLAUDE-BUD 5a: spawn gated by the rollout")
 must_contain(_cbm_vs, "if not premiumFree and VehicleService._VehicleHealth.RepairLeft(player.UserId, vehicleId) > 0 then", "CLAUDE-BUD 5a: pass owners respawn free (no repair wait)")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "\t\tif vdef and typeof(vdef.LookId) == \"string\" then\n\t\t\tvehicleId = vdef.LookId", "CLAUDE-BUD 5a: premium clones wear their base's body")
-must_contain(_cbm_awc, 'PremiumSkylance = "Fighter"', "CLAUDE-BUD 5a: the premium jet is armed like its base")
-must_contain(_cbm_awc, 'PremiumStormwing = "AttackHeli"', "CLAUDE-BUD 5a: the premium heli is armed like its base")
+# claude-bud PREMIUM: superseded (premium aircraft carry VehicleConfig.Premium weapons) - must_contain(_cbm_awc, 'PremiumSkylance = "Fighter"', "CLAUDE-BUD 5a: the premium jet is armed like its base")
+# claude-bud PREMIUM: superseded (premium aircraft carry VehicleConfig.Premium weapons) - must_contain(_cbm_awc, 'PremiumStormwing = "AttackHeli"', "CLAUDE-BUD 5a: the premium heli is armed like its base")
 must_contain(_cbm_gc, 'return { Kind = "Robux", Text = "R$ " .. tostring(robux), Enabled = true }', "CLAUDE-BUD 5a: Garage shows the Robux price")
 must_contain(_cbm_gc, 'meta.Text = string.format("ROBUX · R$ %d · %s · Spd %d", pr, rowTip(def), def.Speed)', "CLAUDE-BUD 5a: Garage ROBUX badge")
 must_contain(_cbm_gc, "if catOk and rarOk and ownedOk and premiumListed(def) then", "CLAUDE-BUD 5a: premium rows only where the rollout is live")

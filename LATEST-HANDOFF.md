@@ -1,10 +1,24 @@
 <!-- Q2-START -->
-# WHERE I STOPPED â€” QUEUE 2 (2026-09-29, Claude on Bud, claude/desktop-bud rebased on v97 36c560e)
-Jobs: [x] 6 Extra Garage Slot Â· [x] 7 first-5-minutes tutorial Â· [x] 8 mobile perf + streaming audit Â· [ ] 9 old WIP Â· [ ] 10 balance Â· [ ] 11 juice
-- J6: `ExtraGarageSlot` pass (Id 0, 199 R$, owner-only; the playtest owner has it for testing). Spawning a different vehicle parks the current one.
-- J7: a welcome line on the first join, and the first-ATTACK hint after the tutorial (the existing tutorial covers claim / pad / cash / recruit).
-- J8: an automatic LOW tier on phones / low FPS (far decoration hidden, shadows off, cheaper FX), owner-only (`QualityConfig`).
-  The streaming audit found nothing to fix (details in ASSUMPTIONS); StreamingEnabled is left off.
+# WHERE I STOPPED â€” 2026-09-29 (Claude on Bud, claude/desktop-bud rebased on v98 08bcdf4)
+**PREMIUM job DONE and pushed:** the 6 Robux-only vehicles are clearly overpowered (owner-only through RolloutKeys; numbers in `VehicleConfig.Premium`).
+Queue 2 (jobs 6â€“11) was already done; see the summary below. Last run: BuyPathStatic PASS=5289 FAIL=0 (parse gate on), rojo build ok,
+luau-lsp no new errors. Not run: the headless world sim, the DataService harness, check_hud.py (not in the repo).
+
+## PREMIUM vehicles â€” what shipped
+- 1.4x the fastest and 2x the toughest cash vehicle of their family, x1.6 acceleration, x1.4â€“1.5 turning (unclamped speed).
+- Server-validated weapons for all six: a main gun (cannon / MG per vehicle) + homing missiles (lock â‰¤ 250 studs in a 30Â° cone,
+  turn-rate limited so they can be dodged, 5 s cooldown). Friendly fire is off; the shields and protections are obeyed.
+- Mobile FIRE / MISSILE buttons only while you drive one, a gold lock reticle, and a gold trail + ROBUX badge for everyone to see.
+
+## Phone tests (owner account; the premium vehicles spawn for you without the passes)
+1. Spawn the Warlord and the Razorfang next to a cash tank / buggy: visibly faster, quicker off the line, sharper turns.
+2. While driving one: FIRE and MISSILE appear bottom-right beside the drive buttons, never on the jump button or thumbstick. Get out: they vanish.
+3. Hold FIRE: tracers and hits on NPCs / an alt's vehicle. The Warlord's cannon splashes. A clan-mate and your own vehicles take no damage.
+4. Point at an alt within ~250 studs: a gold square locks on. MISSILE: it curves after them; a hard turn at speed can make it miss. It's ready again after 5 s.
+5. Skylance / Stormwing: cannon + missiles from the air; the old aircraft buttons don't show on them.
+6. Leviathan / Tidebreaker on the water: deck cannon / MG + missiles.
+7. A second account sees your gold trail and the ROBUX badge (within 40 studs); it can't spawn these vehicles.
+8. Spawn-protected / novice-shielded players take no damage from them.
 
 <!-- Q2-END -->
 

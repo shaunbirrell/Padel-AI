@@ -1014,6 +1014,14 @@ local function driveAttributes(def: VehicleDef, fp: Footprint, bonus: number?, a
 	end
 	a.WE_BaseMaxSpeed = base
 	a.WE_MaxSpeed = base * b
+	-- claude-bud PREMIUM: a Robux-only vehicle drives at its own (unclamped) speed with snappier acceleration / turning
+	local prem: any = (def :: any).Premium
+	if prem ~= nil then
+		a.WE_BaseMaxSpeed = def.Speed
+		a.WE_MaxSpeed = def.Speed * b
+		a.WE_Accel = (tonumber(a.WE_Accel) or 20) * (tonumber(prem.AccelMult) or 1)
+		a.WE_TurnRate = (tonumber(a.WE_TurnRate) or 1) * (tonumber(prem.TurnMult) or 1)
+	end
 	return a
 end
 
@@ -1687,7 +1695,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			seatOffset = CFrame.new(0, 3.0 * s, 5.2 * s)
 			labelY = 6.0 * s
 		elseif kind == "Sub" then
-			-- Surface stub: low dark hull (no underwater physics yet)
+			-- Surface boat by design (claude-bud J9: subs run on the surface; no dive)
 			body.Size = Vector3.new(5 * s, 2.2 * s, 18 * s)
 			body.Color = Color3.fromRGB(30, 40, 48)
 			addPart(model, body, "Sail", Vector3.new(1.8 * s, 2.8 * s, 4 * s), CFrame.new(0, 2.4 * s, -1 * s), Color3.fromRGB(35, 45, 55), Enum.Material.Metal, nil, true)
@@ -4960,6 +4968,12 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	end
 	activeVehicles[player.UserId] = model
 	lastSpawnAt[player.UserId] = now()
+	-- claude-bud PREMIUM: the gold look + the weapon marker (PremiumWeaponService; server-side weapons)
+	if (def :: any).Premium ~= nil then
+		pcall(function()
+			(require(script.Parent.PremiumWeaponService) :: any).OnSpawn(model, def, player)
+		end)
+	end
 	-- W2: vehicle HP (VehicleHealth). At 0 HP: the wreck look at once, the normal teardown after DebrisSeconds.
 	local okHp, errHp = pcall(VehicleService._VehicleHealth.Register, model, def, player, {
 		Premium = (def :: any).Premium ~= nil,

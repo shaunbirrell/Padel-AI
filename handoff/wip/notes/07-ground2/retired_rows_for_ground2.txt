@@ -1,5 +1,0 @@
-    3553891209: "the old jet pick (the owner's call 12): dropped by the owner 2026-09-28 for 14589101870 (live); its REJECT rows and HOLD / OWNER_YES / YAW_HINT history stay",
-    11357157285: "the old rescue helicopter pick: 78 parts, every part named Part / Wedge (no trim keeps the body)",
-    1577255368: "rescue helicopter in the owner's picture (KiloOfficial): his bot rejected it as a copy of a real helicopter; never in the config",
-    10077899617: "rescue helicopter backup (SarahNeedle_mouse): none of its 13 resolved mesh / paint ids are the uploader's (4 other creators); its store text says it is another person's version",
-    9120014090: "rescue helicopter pick (TripleTripleTwinTips): its 7 rotor meshes and 7 paints were uploaded by another user (JaimeEsP) five months before the seller's account existed",

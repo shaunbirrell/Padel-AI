@@ -5,7 +5,8 @@
 	████ army lane A0 blocks: Rollout · Escort · ShotFx · Text (+ the LiveFor / IsLive helper) ████
 	████ army fix blocks (the despawn fix): Follow · Recover · Gate · Loop (+ the ThreatStandingFor helper) ████
 	Other army lanes add their own self-contained blocks to this same table (lane A: Home / Guard / Hold / Path / Ui;
-	lane C: March). Keep each block self-contained; this file requires only AdminConfig.
+	claude-bud J9: lane C "March" was never built and is retired; ATTACK formations are Follow2.Tidy). Keep each block
+	self-contained; this file requires only AdminConfig.
 
 	ROLLOUT (owner 2026-09-28, integrator decision): each part is "off" | "owner" | "all".
 	  "off"   = today's game (e506c9c) for everyone;
@@ -14,7 +15,7 @@
 	  "all"   = everyone.
 	  Any other value counts as "off" (fail closed). The SERVER decides (ArmyConfig.LiveFor); nothing is read from a client.
 	  Parts: Escort (lane A0: the bank fix, defend-when-targeted, focus fire, side-step, visible unit shots), Army (lane A:
-	  guard line, follow outside, paths), March (lane C: ATTACK takes checkpoints).
+	  guard line, follow outside, paths), Fix (v90 despawn fix).
 
 	ESCORT (FOLLOW, lane A0, "I went to the bank and they didn't shoot"): for a live owner the escort's first targets are
 	  the NPCs aiming at him within DefendRadius of him (CombatService.NPCsAimingAt / NPCThreat) and the NPCs he hit
@@ -66,7 +67,6 @@ local ArmyConfig = {
 	Rollout = {
 		Escort = "owner", -- lane A0: bank fix / defend / focus fire / side-step / visible unit shots
 		Army = "owner", -- lane A: guard line, follow outside, movement
-		March = "owner", -- lane C: ATTACK takes checkpoints
 		Fix = "owner", -- v90 (Code Bot): the army despawn fix (Follow / Recover / Gate blocks); "all" once the owner has phone-tested it
 	},
 
@@ -131,21 +131,14 @@ local ArmyConfig = {
 			Guard = "GUARDING BASE",
 			Follow = "FOLLOWING",
 			Hold = "HOLDING",
-			HoldPost = "HOLDING POST",
-			March = "TO %s",
 			Fight = "FIGHTING",
-			Capture = "TAKING POST",
 			Wait = "WAITING FOR YOU",
 			Return = "RETURNING",
-			HoldLine = "AT THE CENTRE",
 			Clear = "FIGHTING",
 		},
 		Tile = { Guard = "GUARD", Follow = "FOLLOW", Attack = "ATTACK", Hold = "HOLD", Return = "RETURN" },
 		MovingOut = "Army moving out",
 		Waiting = "Army waiting for you",
-		TakeCentre = "Take the Centre!",
-		Taken = "%s taken",
-		UnderAttack = "%s under attack",
 		NoBase = "No base to guard",
 	},
 

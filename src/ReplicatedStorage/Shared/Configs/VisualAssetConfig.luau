@@ -280,50 +280,6 @@ local BODY_BOMBER = {
 	StripDecals = true,
 }
 
--- 16692908395 patrol torpedo boat (5 parts; the two seated crew figures Group1 / Group2 are dropped). Bow -X (Yaw -90).
--- Helmsman in the cockpit where the crew sat, the rest on the deck behind it.
-local BODY_PATROL_BOAT = {
-	ModelAssetId = 16692908395,
-	Rollout = "Body",
-	Fit = "Kit",
-	Yaw = -90,
-	HideKit = true,
-	BodyScale = 1,
-	BodyWaterline = 3,
-	OmitParts = { "Group1", "Group2" },
-	BodySeats = {
-		DriverSeat = Vector3.new(-12.5, 7.0, -1.2),
-		PassengerSeat1 = Vector3.new(-8, 8.4, -2.2),
-		PassengerSeat2 = Vector3.new(-8, 8.4, 2.2),
-		PassengerSeat3 = Vector3.new(-5, 8.4, -2.2),
-		PassengerSeat4 = Vector3.new(-5, 8.4, 2.2),
-	},
-	BodyAnchor = "DriverSeat",
-	StripDecals = true,
-}
-
--- 15838664806 gunboat (3 parts, authored 2048 studs long: 0.027 = 55 long, so this ref lowers its own scale floor).
--- Bow -X (the radio tower / bridge end, Yaw -90). Helmsman at the foot of the bridge tower, crew ahead of the gun deck.
-local BODY_GUNBOAT = {
-	ModelAssetId = 15838664806,
-	Rollout = "Body",
-	Fit = "Kit",
-	Yaw = -90,
-	HideKit = true,
-	BodyScale = 0.027,
-	BodyMinScale = 0.02,
-	BodyWaterline = 1.4,
-	BodySeats = {
-		DriverSeat = Vector3.new(-560, 131, 40),
-		PassengerSeat1 = Vector3.new(-290, 131, -160),
-		PassengerSeat2 = Vector3.new(-290, 131, -60),
-		PassengerSeat3 = Vector3.new(-290, 131, 60),
-		PassengerSeat4 = Vector3.new(-290, 131, 160),
-	},
-	BodyAnchor = "DriverSeat",
-	StripDecals = true,
-}
-
 -- 473576954 frigate hull (1 mesh; its texture path is dead, so it is recoloured naval grey). Bow +Z (Yaw 180). Captain
 -- inside the bridge, crew on the foredeck.
 local BODY_FRIGATE = {
@@ -986,7 +942,7 @@ local VisualAssetConfig = {
 			},
 			Note = "owner list: Roblox Pickup Truck (bronze) Body (41 MeshParts; the overlapping tail-light glass is omitted = 40), fitted to the kit; dress-only, the Part kit drives. 0 = Part kit",
 		} :: AssetRef,
-		ArmoredTruck = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		ArmoredTruck = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store picks retired: 8546141386 (stencilled military unit markings) / 8455894899 (53 parts > 40)" } :: AssetRef,
 		-- wc3 (second check, live place v75): front at -Z (white lights and the grey plate at -Z, red lights at +Z), Yaw 0.
 		-- 0.55 of Roblox size (27.5 long, 11 wide, antennas to 10.4). The hull mesh's box top (12.43) is its cupola, not
 		-- the roof: the flat roof is at or below 10.12, where the cupola's blue band starts (antenna bases 10.88), so 5.57
@@ -1229,15 +1185,15 @@ local VisualAssetConfig = {
 		TankerPlane = bodyRef(BODY_AIRLIFTER, "v89 owner pick 10649792198 4-engine airlifter, dark grey (wc7; replaces 17033079003), owner-only rollout"),
 		-- Free naval family
 		_FallbackNaval = { ModelAssetId = 0, Note = "Free Boat (Creator Store)" } :: AssetRef,
-		PatrolBoat = bodyRef(BODY_PATROL_BOAT, "v87 owner pick 16692908395 patrol boat (wc5), owner-only rollout"),
-		FastAttackCraft = bodyRef(BODY_PATROL_BOAT, "v87 owner pick 16692908395 patrol boat (wc5), owner-only rollout"),
-		RiverBoat = bodyRef(BODY_PATROL_BOAT, "v87 owner pick 16692908395 patrol boat (wc5), owner-only rollout"),
-		CoastCutter = bodyRef(BODY_PATROL_BOAT, "v87 owner pick 16692908395 patrol boat (wc5), owner-only rollout"),
-		TorpedoBoat = bodyRef(BODY_PATROL_BOAT, "v87 owner pick 16692908395 patrol boat (wc5), owner-only rollout"),
-		Gunboat = bodyRef(BODY_GUNBOAT, "v87 owner pick 15838664806 Basic Gunboat (wc5), owner-only rollout"),
-		MissileBoat = bodyRef(BODY_GUNBOAT, "v87 owner pick 15838664806 Basic Gunboat (wc5), owner-only rollout"),
-		MineLayer = bodyRef(BODY_GUNBOAT, "v87 owner pick 15838664806 Basic Gunboat (wc5), owner-only rollout"),
-		CoastalMonitor = bodyRef(BODY_GUNBOAT, "v87 owner pick 15838664806 Basic Gunboat (wc5), owner-only rollout"),
+		PatrolBoat = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store body 16692908395 retired: a real-world WW2 PT-boat design (ASSET_LICENSES; CLAUDE.md no real-world copies)" } :: AssetRef,
+		FastAttackCraft = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store body 16692908395 retired: a real-world WW2 PT-boat design (ASSET_LICENSES; CLAUDE.md no real-world copies)" } :: AssetRef,
+		RiverBoat = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store body 16692908395 retired: a real-world WW2 PT-boat design (ASSET_LICENSES; CLAUDE.md no real-world copies)" } :: AssetRef,
+		CoastCutter = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store body 16692908395 retired: a real-world WW2 PT-boat design (ASSET_LICENSES; CLAUDE.md no real-world copies)" } :: AssetRef,
+		TorpedoBoat = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store body 16692908395 retired: a real-world WW2 PT-boat design (ASSET_LICENSES; CLAUDE.md no real-world copies)" } :: AssetRef,
+		Gunboat = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store body 15838664806 retired: HELD in the owner's check (never promoted; ASSET_WIRING)" } :: AssetRef,
+		MissileBoat = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store body 15838664806 retired: HELD in the owner's check (never promoted; ASSET_WIRING)" } :: AssetRef,
+		MineLayer = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store body 15838664806 retired: HELD in the owner's check (never promoted; ASSET_WIRING)" } :: AssetRef,
+		CoastalMonitor = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store body 15838664806 retired: HELD in the owner's check (never promoted; ASSET_WIRING)" } :: AssetRef,
 		LandingCraft = bodyRef(BODY_BARGE, "v88 owner pick 12235335847 Barge (wc6), owner-only rollout"),
 		AssaultLanding = bodyRef(BODY_BARGE, "v88 owner pick 12235335847 Barge (wc6), owner-only rollout"),
 		HoverTransport = bodyRef(BODY_HOVER, "v88 owner pick 3626114334 Hover craft (wc6), owner-only rollout"),
@@ -1253,13 +1209,13 @@ local VisualAssetConfig = {
 		SubSurfaceRunner = bodyRef(BODY_SUB, "v87 owner pick 116924692473761 submarine (wc5), owner-only rollout"),
 		AttackSub = bodyRef(BODY_SUB, "v87 owner pick 116924692473761 submarine (wc5), owner-only rollout"),
 		-- Explicit aliases for depth-pass IDs (KitFamilyFallback also covers these)
-		SupplyTruck = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		FuelTanker = { ModelAssetId = 0, Note = "owner pick fuel truck (asp307) not used: owner check 2026-09-25 (Open Cloud, v75), 55 parts > 40 - family body / Part kit" } :: AssetRef,
+		SupplyTruck = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store picks retired: 8546141386 (stencilled military unit markings) / 8455894899 (53 parts > 40)" } :: AssetRef,
+		FuelTanker = { ModelAssetId = 0, Note = "claude-bud J9: FINISHED as the Part kit (olive tank body, VehicleService kitWheeledTruck fuel). Store picks rejected: 5318635087 (55 parts), 1578555399 (meshes by another user), 3284598659 (real-vehicle copy)" } :: AssetRef,
 		EngineeringTruck = { ModelAssetId = 0, Note = "owner list: pick rejected (cannot be checked from the store) - family body / Part kit" } :: AssetRef,
-		FlatbedHauler = { ModelAssetId = 0, PendingAssetId = 8455894899, Note = "owner pick FlatBed Truck (YourBoi_JonnyBoi): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		AmmoCarrier = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		FlatbedHauler = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store picks retired: 8546141386 (stencilled military unit markings) / 8455894899 (53 parts > 40)" } :: AssetRef,
+		AmmoCarrier = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store picks retired: 8546141386 (stencilled military unit markings) / 8455894899 (53 parts > 40)" } :: AssetRef,
 		MissileTruck = { ModelAssetId = 0, Note = "owner pick missile truck (KlassicKanadian) not used: owner check 2026-09-25 (Open Cloud, v75), 219 parts > 40 - family body / Part kit" } :: AssetRef,
-		AntiAirTruck = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		AntiAirTruck = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store picks retired: 8546141386 (stencilled military unit markings) / 8455894899 (53 parts > 40)" } :: AssetRef,
 		RadarTruck = { ModelAssetId = 0, Note = "owner pick RMAR truck radar (Armour_Fox) not used: owner check 2026-09-25 (Open Cloud, v75), 93 parts > 40 - family body / Part kit" } :: AssetRef,
 		CargoVan = {
 			ModelAssetId = 6433316269,
@@ -1285,8 +1241,8 @@ local VisualAssetConfig = {
 			},
 			Note = "owner list: Roblox Van (white) Body (26 MeshParts, no decals), fitted to the kit; dress-only, the Part kit drives. 0 = Part kit",
 		} :: AssetRef,
-		TroopTransport = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		RecoveryTruck = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		TroopTransport = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store picks retired: 8546141386 (stencilled military unit markings) / 8455894899 (53 parts > 40)" } :: AssetRef,
+		RecoveryTruck = { ModelAssetId = 0, Note = "claude-bud J9: Part kit. Store picks retired: 8546141386 (stencilled military unit markings) / 8455894899 (53 parts > 40)" } :: AssetRef,
 		EscortTruck = {
 			ModelAssetId = 6418225759,
 			ChildName = "Pickup Truck (bronze)",

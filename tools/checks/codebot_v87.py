@@ -14,8 +14,8 @@ _cb87_map = {
     "BODY_LIGHT_HELI": ("3130894523", ()),
     "BODY_TRANSPORT_HELI": ("109615982233602", ()),
     "BODY_BOMBER": ("14669079591", ("StrikeBomber", "HeavyBomber", "StrategicBomber")),
-    "BODY_PATROL_BOAT": ("16692908395", ("PatrolBoat", "FastAttackCraft", "RiverBoat", "CoastCutter", "TorpedoBoat")),
-    "BODY_GUNBOAT": ("15838664806", ("Gunboat", "MissileBoat", "MineLayer", "CoastalMonitor")),
+    # claude-bud J9: BODY_PATROL_BOAT (16692908395, real-world PT-boat design) retired -> Part kit (claude_bud_q2.py)
+    # claude-bud J9: BODY_GUNBOAT (15838664806, HELD in the owner check) retired -> Part kit (claude_bud_q2.py)
     "BODY_FRIGATE": ("473576954", ("Corvette", "Frigate", "CarrierEscort")),
     "BODY_CARRIER": ("7941124517", ("FleetCarrier",)),
     "BODY_AMPHIB": ("5545544418", ("AmphibAssault",)),
@@ -38,8 +38,6 @@ for _cb87_need, _cb87_label in (
     ('\tOmitParts = { "Part" },\n', "light helicopter drops its two transparent rotor discs (both named Part)"),
     ('KitRotor = { Parts = { "RotorHub", "RotorA", "RotorB" }, Hub = "RotorHub", At = Vector3.new(0, 8.7, -3.3), Span = 25.5 }', "light helicopter: the kit rotor on the body's mast, as wide as the body's own rotor"),
     ('RotorParts = { { Parts = { "RotorHub", "RotorA", "RotorB" }, Hub = "RotorHub", Axis = "Y", Rps = 5, Kit = true } }', "light helicopter: the kit rotor spins"),
-    ('\tOmitParts = { "Group1", "Group2" },\n', "patrol boat drops its seated crew figures"),
-    ("\tBodyScale = 0.027,\n\tBodyMinScale = 0.02,\n", "gunboat fits at 0.027 with its own scale floor (0.02)"),
     ("\tBodyColor = Color3.fromRGB(58, 62, 66),\n", "bomber recoloured dark military"),
     ("\tBodyMounts = { Bay = Vector3.new(0, 2, 0) },\n", "bomber bomb bay (AirWeaponService muzzle Bay) under the centre"),
     ("\tBodyClearTexture = true,\n", "frigate: the dead texture path is cleared, grey shows"),
@@ -48,7 +46,7 @@ for _cb87_need, _cb87_label in (
     ("\tBodyWaterline = 11,\n", "submarine rides 11 studs deep (surface runner)"),
 ):
     must_contain(_cb87_vac, _cb87_need, f"CODEBOT v87: {_cb87_label}")
-if _cb87_src.count("BodyMinScale = ") == 1:
+if _cb87_src.count("BodyMinScale = ") <= 1:  # claude-bud J9: the gunboat (the one user) is retired
     ok("CODEBOT v87: only the gunboat lowers the scale floor (every other body keeps 0.05)")
 else:
     bad("CODEBOT v87: only the gunboat lowers the scale floor (every other body keeps 0.05)")

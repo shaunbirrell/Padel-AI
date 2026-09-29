@@ -409,6 +409,19 @@ function PrestigeService.DoPrestige(player: Player, opts: PrestigeOpts?): (boole
 			path = if keepBase then "keep_base" else "free",
 		})
 	end
+	-- claude-bud JOB 11: the rebirth celebration on his client (JuiceConfig, owner-only first)
+	do
+		local okJ, JuiceConfig = pcall(function(): any
+			return require(Shared.Configs.JuiceConfig)
+		end)
+		local ev = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.FeaturePush)
+		if okJ and JuiceConfig and JuiceConfig.LiveFor(player.UserId) and ev and ev:IsA("RemoteEvent") then
+			(ev :: RemoteEvent):FireClient(player, "Rebirth", {
+				Prestige = profile.Prestige,
+				Sub = if keepBase then "Base kept" else string.format("Cash earnings +%d%%", bonusPct),
+			})
+		end
+	end
 	-- claude-bud JOB 5d: a purchase prompt after a rebirth (MonetizationConfig.Placement, owner-only first)
 	if MonetizationService and MonetizationService.OfferMoment then
 		task.delay(6, function()

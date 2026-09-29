@@ -427,7 +427,8 @@ local VehicleConfig = {
 			"NavalCapital",
 			{ Struct = N(5), Scale = 1.7, Prestige = 15, RebirthFlag = "EmpireFleet" }
 		),
-		-- claude-bud JOB 5a: Robux-only (see P above); base in the comment
+		-- claude-bud JOB 5a: Robux-only (see P above); base in the comment. PREMIUM: the stats below are placeholders, overwritten
+		-- from VehicleConfig.Premium (2x the family's toughest, 1.4x its fastest) right after this table.
 		PremiumSkylance = P(V("PremiumSkylance", "Skylance Interceptor", "Air", "Premium", 1, 714, 139, 1, 23, 0, "JetFighter", { Struct = A(1), Scale = 1.05 }), "PV_Skylance", "InterceptorJet"),
 		PremiumStormwing = P(V("PremiumStormwing", "Stormwing Gunship", "Air", "Premium", 1, 1155, 77, 2, 40, 0, "HeliAttack", { Struct = H(1), Scale = 1.1 }), "PV_Stormwing", "StealthHeli"),
 		PremiumLeviathan = P(V("PremiumLeviathan", "Leviathan Dreadnought", "Naval", "Premium", 1, 4200, 31, 10, 210, 0, "NavalCapital", { Struct = N(1), Scale = 1.55 }), "PV_Leviathan", "Battleship"),
@@ -1015,5 +1016,86 @@ local VehicleConfig = {
 		},
 	},
 }
+
+--[[ claude-bud PREMIUM (2026-09-29, owner: "make the 6 Robux-only vehicles clearly overpowered; players pay 199-1199 R$").
+	ONE table for every premium number. Supersedes JOB 5a's "about +5 %". Live per player through
+	MonetizationConfig.SkuLiveFor(PassKey) (RolloutKeys, owner-only first); VehicleService still refuses cash for them.
+	  Stats: against the BEST cash vehicle of the same kit family (KitFamily; CostCash > 0; no Premium): Speed x SpeedMult
+	    of that family's fastest (35-50 % faster; VehicleService uses it unclamped), Health / Armor x HPMult / ArmorMult of
+	    that family's toughest (2x); AccelMult / TurnMult scale the drive's acceleration and turn rate (snappier).
+	  Guns: server-validated hitscan (PremiumWeaponService): Damage per hit (VsInfantryMult vs players / NPCs), FireRate
+	    per second, Range studs, ConeDeg = the most the aim may be off the vehicle's nose (turrets wide, jets narrow),
+	    Splash radius (0 = none; half damage, line of sight, clan allies spared), Class = the vehicle damage class.
+	  Missile: homing, one per Cooldown seconds per vehicle; locks the nearest enemy player or vehicle inside LockConeDeg of
+	    the aim within LockRange (line of sight), flies Speed studs/s and turns at most TurnRateDeg per second (dodgeable),
+	    explodes within ProximityStuds or on a hit, Splash radius, Lifetime seconds.
+	  Look: gold trail + a small ROBUX badge (MaxDistance 40) on every premium vehicle, seen by everyone. ]]
+VehicleConfig.Premium = {
+	Stats = {
+		PremiumSkylance = { SpeedMult = 1.4, HPMult = 2, ArmorMult = 2, AccelMult = 1.6, TurnMult = 1.4, Gun = "AirCannon" },
+		PremiumStormwing = { SpeedMult = 1.4, HPMult = 2, ArmorMult = 2, AccelMult = 1.6, TurnMult = 1.4, Gun = "ChinGun" },
+		PremiumLeviathan = { SpeedMult = 1.4, HPMult = 2, ArmorMult = 2, AccelMult = 1.6, TurnMult = 1.5, Gun = "DeckCannon" },
+		PremiumTidebreaker = { SpeedMult = 1.4, HPMult = 2, ArmorMult = 2, AccelMult = 1.6, TurnMult = 1.5, Gun = "BowMG" },
+		PremiumWarlord = { SpeedMult = 1.4, HPMult = 2, ArmorMult = 2, AccelMult = 1.6, TurnMult = 1.5, Gun = "TankCannon" },
+		PremiumRazorfang = { SpeedMult = 1.4, HPMult = 2, ArmorMult = 2, AccelMult = 1.6, TurnMult = 1.4, Gun = "HeavyMG" },
+	} :: { [string]: { SpeedMult: number, HPMult: number, ArmorMult: number, AccelMult: number, TurnMult: number, Gun: string } },
+	Guns = {
+		AirCannon = { Damage = 45, VsInfantryMult = 1, FireRate = 10, Range = 320, ConeDeg = 12, Splash = 0, Class = "SmallArms" },
+		ChinGun = { Damage = 40, VsInfantryMult = 1, FireRate = 10, Range = 300, ConeDeg = 50, Splash = 0, Class = "SmallArms" },
+		DeckCannon = { Damage = 170, VsInfantryMult = 0.8, FireRate = 2, Range = 340, ConeDeg = 150, Splash = 10, Class = "AntiVehicle" },
+		BowMG = { Damage = 32, VsInfantryMult = 1, FireRate = 12, Range = 280, ConeDeg = 70, Splash = 0, Class = "SmallArms" },
+		TankCannon = { Damage = 240, VsInfantryMult = 0.8, FireRate = 1.25, Range = 320, ConeDeg = 180, Splash = 12, Class = "AntiVehicle" },
+		HeavyMG = { Damage = 32, VsInfantryMult = 1, FireRate = 12, Range = 280, ConeDeg = 100, Splash = 0, Class = "SmallArms" },
+	} :: { [string]: { Damage: number, VsInfantryMult: number, FireRate: number, Range: number, ConeDeg: number, Splash: number, Class: string } },
+	Missile = {
+		Damage = 320,
+		VsInfantryMult = 0.6,
+		Cooldown = 5,
+		LockRange = 250,
+		LockConeDeg = 30,
+		Speed = 140,
+		TurnRateDeg = 110,
+		ProximityStuds = 7,
+		Splash = 12,
+		Lifetime = 4,
+		Class = "Missile",
+		StepHz = 20,
+	},
+	Look = {
+		TrailColor = Color3.fromRGB(255, 205, 60),
+		TrailLifetime = 0.6,
+		Badge = "ROBUX",
+		BadgeMaxDistance = 40,
+	},
+	-- remote budget: every fire request together at most this many per second per player (>= every FireRate)
+	MaxRequestHz = 14,
+}
+
+-- claude-bud PREMIUM: the premium rows take their stats from the table above and the best cash vehicle of their family
+do
+	local best: { [string]: { Speed: number, Health: number, Armor: number } } = {}
+	for _, d in pairs(VehicleConfig.Vehicles) do
+		local dd: any = d
+		if dd.Premium == nil and (tonumber(dd.CostCash) or 0) > 0 then
+			local b: any = best[dd.KitFamily] or { Speed = 0, Health = 0, Armor = 0 }
+			b.Speed = math.max(b.Speed, dd.Speed)
+			b.Health = math.max(b.Health, dd.Health)
+			b.Armor = math.max(b.Armor, dd.Armor)
+			best[dd.KitFamily] = b
+		end
+	end
+	for id, s in pairs(VehicleConfig.Premium.Stats) do
+		local d: any = VehicleConfig.Vehicles[id]
+		local b = d and best[d.KitFamily]
+		if d and b then
+			d.Speed = math.floor(b.Speed * s.SpeedMult + 0.5)
+			d.Health = math.floor(b.Health * s.HPMult + 0.5)
+			d.Armor = math.floor(b.Armor * s.ArmorMult + 0.5)
+			d.Premium.AccelMult = s.AccelMult
+			d.Premium.TurnMult = s.TurnMult
+			d.Premium.Gun = s.Gun
+		end
+	end
+end
 
 return VehicleConfig

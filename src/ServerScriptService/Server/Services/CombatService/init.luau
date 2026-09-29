@@ -1556,6 +1556,11 @@ local function isClanAlly(a: Player, b: Player): boolean
 	return okA and okB and ca ~= nil and ca == cb
 end
 
+-- claude-bud PREMIUM: the clan ally test for callers outside CombatService (the premium vehicle weapons)
+function CombatService.IsClanAlly(a: Player, b: Player): boolean
+	return isClanAlly(a, b)
+end
+
 -- true during the spawn shield and the whole F6 novice shield (InvulnerableUntil = math.huge)
 function CombatService.IsSpawnInvulnerable(player: Player): boolean
 	local s = combatStates[player.UserId]

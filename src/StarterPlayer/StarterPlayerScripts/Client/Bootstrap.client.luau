@@ -142,6 +142,8 @@ safeInit("LabelGovernor", safeRequire("LabelGovernor", Modules:WaitForChild("Lab
 safeInit("OpsController", safeRequire("OpsController", Controllers:WaitForChild("OpsController", 5) :: Instance)) -- W3s2 Phase B Jobs: JOBS rows, job card, hold pill (a no-op while OpsConfig.Enabled is false)
 safeInit("FeatureController", safeRequire("FeatureController", Controllers:WaitForChild("FeatureController", 5) :: Instance)) -- claude-bud JOB 4/5: FeaturePush cues (airdrop / bounty markers)
 safeInit("QualityGovernor", safeRequire("QualityGovernor", Modules:WaitForChild("QualityGovernor", 5) :: Instance)) -- claude-bud JOB 8: automatic low tier (small screen / low FPS)
+safeInit("Juice", safeRequire("Juice", Modules:WaitForChild("Juice", 5) :: Instance)) -- claude-bud JOB 11: purchase burst + rebirth celebration
+safeInit("PremiumWeaponsClient", safeRequire("PremiumWeaponsClient", Modules:WaitForChild("PremiumWeaponsClient", 5) :: Instance)) -- claude-bud PREMIUM: FIRE / MISSILE while driving a Robux-only vehicle
 safeInit("RigAnimator", safeRequire("RigAnimator", Modules:WaitForChild("RigAnimator", 5) :: Instance)) -- R-RIG: soldier animation, army escorts, far LOD (client only; a no-op while RigConfig.Enabled is false)
 safeInit("AircraftBodyClient", safeRequire("AircraftBodyClient", Modules:WaitForChild("AircraftBodyClient", 5) :: Instance)) -- air-looks: store aircraft rotors spin + seated chase camera (client only; nothing to do until a store aircraft body is live)
 
