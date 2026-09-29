@@ -189,9 +189,11 @@ local function airstrikeButton()
 	gui.ResetOnSpawn = false
 	gui.Enabled = false
 	local btn = Instance.new("TextButton")
-	btn.AnchorPoint = Vector2.new(1, 0.5)
-	btn.Position = UDim2.new(1, -16, 0.42, 0)
-	btn.Size = UDim2.fromOffset(170, 64)
+	-- claude-bud JOB 11: in the HUD's managed top stack (under the top bar, above toasts), never hand-placed: nothing
+	-- can overlap it on a small phone, and HudLayout's UIScale keeps it >= 44 real px tall
+	btn.AnchorPoint = Vector2.new(0.5, 0)
+	btn.Position = UDim2.new(0.5, 0, 0, 0)
+	btn.Size = UDim2.fromOffset(190, 64)
 	btn.BackgroundColor3 = Color3.fromRGB(170, 40, 30)
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	btn.Font = Enum.Font.GothamBlack
@@ -205,6 +207,14 @@ local function airstrikeButton()
 		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPlazaAirstrike)
 	end)
 	gui.Parent = lp:WaitForChild("PlayerGui", 30)
+	do
+		local okH, HudLayout = pcall(require, script.Parent.Parent.Modules.HudLayout)
+		if okH and type(HudLayout) == "table" then
+			pcall((HudLayout :: any).ApplyScreen, gui)
+			pcall((HudLayout :: any).RegisterTopStack, "Airstrike", btn, 35)
+			pcall((HudLayout :: any).AssertTouchTarget, btn, "Airstrike")
+		end
+	end
 	task.spawn(function()
 		while lp.Parent do
 			local n = tonumber(lp:GetAttribute("WE_AirstrikeCharges")) or 0

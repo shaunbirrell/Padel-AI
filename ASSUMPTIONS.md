@@ -9023,3 +9023,18 @@ ds_territories.luau T3):
 - The check runs the sim: the first rebirth must fall inside FirstRebirthMinutes, and no pad may pay back slower than the last PaybackMinutes.
 - **Watch on the phone test:** cash inflation late in a life (vehicle prices feel cheap after the base is done). If so, lengthen the
   last two PaybackMinutes; the sim and the check follow.
+
+## 2026-09-29 — claude-bud JOB 11: juice + mobile HUD (JuiceConfig, owner-only)
+- **Already in the game and kept:** purchase / collect / level-up / capture sounds (SoundConfig.Hooks), HUD "+$N" cash floats
+  (HudLayout.CashFloat on collect and spend), toasts.
+- **Added:**
+  - A gold ring burst (plus a one-shot spark Emit, none on low FX) at the player's feet on every successful base purchase.
+    The client doesn't know its plot id, and the buyer stands at that pad's console, so the burst lands at the building he just bought.
+  - A rebirth celebration: the server's FeaturePush "Rebirth" (after the saved rebirth) → a gold "REBIRTH P3! / Cash earnings +30%"
+    banner in the HUD top stack (under the top bar, never over the controls), a light confetti fall (none on low FX) and the level-up sound, for 3.5 s.
+- **Mobile HUD:** my own touch UI from earlier jobs now uses HudLayout instead of hand-placed positions.
+  - The AIRSTRIKE button is registered in the top stack (order 35), scaled by HudLayout.ApplyScreen and checked with
+    AssertTouchTarget (64 code px = 44+ real).
+  - The rebirth banner is in the stack too. Toasts and offers already are.
+- **Not done:** the HUD harness (check_hud.py) is not in this repo, so the full-HUD overlap audit at 800×360 / 844×390 / 956×440 needs
+  the harness or the phone.

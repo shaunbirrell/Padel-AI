@@ -1,12 +1,40 @@
 <!-- Q2-START -->
-# WHERE I STOPPED â€” QUEUE 2 (2026-09-29, Claude on Bud, claude/desktop-bud rebased on v97 36c560e)
-Jobs: [x] 6 Extra Garage Slot Â· [x] 7 first-5-minutes tutorial Â· [x] 8 mobile perf + streaming audit Â· [x] 9 old WIP Â· [x] 10 balance Â· [ ] 11 juice
-- J6: `ExtraGarageSlot` pass (Id 0, 199 R$, owner-only; the playtest owner has it for testing). Spawning a different vehicle parks the current one.
-- J7: a welcome line on the first join, and the first-ATTACK hint after the tutorial (the existing tutorial covers claim / pad / cash / recruit).
-- J8: an automatic LOW tier on phones / low FPS (far decoration hidden, shadows off, cheaper FX), owner-only (`QualityConfig`). The streaming audit is clean.
-- J9: removed the PT-boat (real-world) and HELD gunboat bodies, the failed truck picks, the dead lane-C "March" flag and the stale WIP patches.
-- J10: `BalanceConfig` (owner-only): pads pay back in 2/3/6/12/25 min (was up to 139 h) plus 25 XP per $1k of income, giving a sim first
-  rebirth at ~34 min (was: none in 4 h). Robux vehicles are capped at +6 % (they're +3â€“5 %). Tool: `tools/progression_sim.py`.
+# WHERE I STOPPED â€” QUEUE 2 DONE (2026-09-29, Claude on Bud, claude/desktop-bud rebased on v97 36c560e)
+Jobs: [x] 6 Â· [x] 7 Â· [x] 8 Â· [x] 9 Â· [x] 10 Â· [x] 11. All pushed; nothing half-done. Last run: BuyPathStatic PASS=5256 FAIL=0 (parse gate on),
+rojo build ok, luau-lsp no new errors. The headless world sim, the DataService harness and check_hud.py are not in the repo, so they were NOT run.
+
+## Queue 2 summary (what shipped per job; every gameplay item is owner-only behind its own Rollout)
+- **J6 Extra Garage Slot** (`MonetizationConfig.GamePasses.ExtraGarageSlot`, Id 0): +1 vehicle slot. Spawning a different vehicle parks the
+  current one (health kept); sit in it to drive it again. A gold "ROBUX Â· Extra Garage Slot" Shop row (SOON until the Id exists). The
+  playtest owner has the slot for testing (`GarageSlot.OwnerTest`).
+- **J7 First 5 minutes** (`TutorialConfig.FirstMinutes`): the existing tutorial already does claim base â†’ first pad â†’ collect â†’ recruit
+  â†’ Barracks â†’ outpost â†’ 4x4, skippable, once per profile. Added a welcome line on the first join and a first-ATTACK hint (the Army popover
+  opens with ATTACK outlined until the first ATTACK order, saved).
+- **J8 Mobile performance** (`QualityConfig`): an automatic LOW tier on phone-size screens or under 28 FPS: far decoration hidden
+  (Tier 2 > 180 studs, any > 420), local shadows off, cheaper effects. Map profile: about 2,864 Full / 1,877 Low parts outside bases
+  (budgets 2,900 / 1,900). Streaming audit: nothing to fix, now guarded by a check; StreamingEnabled left off.
+- **J9 Old WIP:**
+  - Removed: the PT-boat (real-world design) and HELD gunboat bodies (9 boat keys â†’ Part kit), the failed truck picks, the never-built lane-C "March"
+    flag, and the stale WIP patches 03/03b/04/04b/07/09-12 (still in git history at e791323).
+  - Finished: fuel tanker (Part kit), water / boats, ATTACK rows (Tidy).
+- **J10 Balance** (`BalanceConfig`, one table): pads pay themselves back in 2/3/6/12/25 min (was up to 139 h) plus 25 XP per $1,000 of income.
+  The sim's first rebirth is 33.6 min (was: none in 4 h). Robux vehicles are capped at +6 % (they're +3â€“5 %). Tool: `tools/progression_sim.py`.
+- **J11 Juice** (`JuiceConfig`): a gold burst on every purchase, a rebirth banner + confetti + sound in the HUD top stack; the AIRSTRIKE button moved into
+  the managed top stack (no overlaps, 44+ real px).
+
+## Phone tests (owner account; a second account must see none of this)
+1. Buy a pad: a gold ring and sparks at your feet. Collect: the +$ float as before.
+2. With the new curve, each pad's "+$/s" is higher, and the next pad is only minutes away. Level climbs as income comes in; time your first rebirth (target 25â€“40 min).
+3. Rebirth: a gold "REBIRTH Pn!" banner and confetti under the top bar; controls stay usable.
+4. Spawn a jeep, then a tank: the jeep stays parked. Sit in the jeep: it drives. Leave the game and both are gone.
+5. New profile (or reset): the welcome line at join; after the tutorial the Army popover opens with ATTACK outlined; tap ATTACK and it stops.
+6. On the phone (small screen) far props thin out and FPS should be steadier; nearby props are all still there.
+7. Boats: PatrolBoat / TorpedoBoat / Gunboat and co. are back on their Part kits (the owner-only store hulls on those were removed).
+8. On 800Ã—360 and 956Ã—440: the AIRSTRIKE button (near the plaza, with a charge) and the rebirth banner never cover the thumbstick, jump or top-bar pills.
+
+## Creator Hub items (queue 2)
+- Extra Garage Slot (game pass, 199 R$) is new. It's in the full "Owner must create on Creator Hub" table below (with the 5aâ€“5c items).
+- Before setting `VisualAssetConfig.BodyRollout = "all"`: run WE_CHECK2 on the 11 remaining owner-only ship bodies (no licence record yet).
 
 <!-- Q2-END -->
 

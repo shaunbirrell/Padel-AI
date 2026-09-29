@@ -97,3 +97,20 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "\tif p
 must_contain("src/ServerScriptService/Server/Services/XPService.luau", '\t\tand reasonKey ~= "income" -- claude-bud JOB 10', "CLAUDE-BUD J10: income XP never feeds the battle pass")
 must_contain("src/ReplicatedStorage/Shared/Util/TycoonMath.luau", "if (BalanceConfig :: any).ClientCurve == true then", "CLAUDE-BUD J10: the owner's labels match what he is paid")
 must_not_contain("src/ReplicatedStorage/Shared/Util/TycoonMath.luau", "game:GetService", "CLAUDE-BUD J10: TycoonMath stays pure")
+
+# ── JOB 11 juice (purchase burst, rebirth celebration) + mobile HUD placement of the new touch UI ──
+_q2_jc = "src/ReplicatedStorage/Shared/Configs/JuiceConfig.luau"
+_q2_j = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/Juice.luau"
+must_contain(_q2_jc, "local JuiceConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J11: juice owner-only first")
+must_contain(_q2_j, "if typeof(payload) == \"table\" and payload.Ok == true then\n\t\t\tburst(J)", "CLAUDE-BUD J11: a burst on every successful purchase")
+must_contain(_q2_j, "if not lowFx() then\n\t\tlocal att = Instance.new(\"Attachment\")", "CLAUDE-BUD J11: no particles on low FX / the low tier")
+must_contain(_q2_j, "pcall((HudLayout :: any).RegisterTopStack, \"Rebirth\", banner, 15)", "CLAUDE-BUD J11: the rebirth banner sits in the HUD top stack (never over the controls)")
+must_contain("src/ServerScriptService/Server/Services/PrestigeService.luau", "(ev :: RemoteEvent):FireClient(player, \"Rebirth\", {", "CLAUDE-BUD J11: the server cues the celebration after a saved rebirth")
+must_contain(_q2_fc, "pcall((HudLayout :: any).RegisterTopStack, \"Airstrike\", btn, 35)", "CLAUDE-BUD J11: the AIRSTRIKE button is in the managed top stack (no overlap on phones)")
+must_contain(_q2_fc, "pcall((HudLayout :: any).AssertTouchTarget, btn, \"Airstrike\")", "CLAUDE-BUD J11: the AIRSTRIKE button is checked as a touch target")
+_q2_jj = read(_q2_j) or ""
+(ok if "Enum.Material.Neon" not in _q2_jj and "PointLight" not in _q2_jj else bad)("CLAUDE-BUD J11: no Neon, no lights in the effects")
+_q2_sizes = [int(x) for x in re.findall(r"TextSize = (\d+)", _q2_jj + (read(_q2_fc) or ""))]
+(ok if _q2_sizes and min(_q2_sizes) >= 20 else bad)(f"CLAUDE-BUD J11: new HUD text >= 20 code px (14 real at phone scale) {sorted(set(_q2_sizes))}")
+_q2_h = [int(x) for x in re.findall(r"UDim2\.fromOffset\(\d+, (\d+)\)", read(_q2_fc) or "")]
+(ok if _q2_h and min(_q2_h) >= 64 else bad)(f"CLAUDE-BUD J11: new touch buttons >= 64 code px tall (44 real) {_q2_h}")
