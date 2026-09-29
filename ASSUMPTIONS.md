@@ -9288,3 +9288,39 @@ ds_territories.luau T3):
 - **Low quality (client QualityGovernor):** every second light (WE_LowOff) stays off; the Neon glow still shows.
   Lights that stream in after the switch follow at the next dusk / dawn flip.
 - **Not done:** a HUD / device render. Phone brightness at 50 % needs the real phone.
+
+## 2026-09-29 — claude-bud JOB 18: WorldFill 2 (the same WorldFill system; live for all)
+- **One system:** WorldFill.Build runs Build2 at its end (same `Workspace.WorldFill` folder, same shared occupancy).
+  Every item is a WorldKits kit (≤ 8 parts, no scripts), a Terrain rock, or a plain flat / thin part. Each is
+  re-checked with WorldDress.Blocked (plots, aprons / runways, garage and naval pads, captures, spawn / event /
+  airdrop anchors, roads, water, POIs unless it's that POI's own identity field) and skipped when blocked.
+- **New kits:** CropField, Silo, Pylon, CivCar, Awning, Planter, Bin, Statue, RoofTank, ACUnit, Antenna, NameSign.
+  - NameSign has its own cap of 8 signs (MaxDistance 60) because the world sign budget of 17 is frozen and full.
+    The fill folder is outside WarEmpireSetup, so that budget is neither used nor exceeded.
+  - Made-up names only: SANDLINE BAZAAR, CAFE MIRAGE, DUNE MOTORS, SUNSTONE SPICE, SOUTHWHARF FREIGHT, CAMP KESTREL,
+    CAMP HALCYON, RED MESA FARMS.
+- **Town identities:**
+  - Crossroads Town: a desert market town, with four market corners (stalls, awnings, planters, bench, bin, parked
+    car, crates, a shop sign) and the existing fountain square.
+  - South Port: an industrial port (container stacks, fuel tank, trucks, drums, a statue square).
+  - West Depot / East Armory: garrison towns (tent lines, watchtower, sandbags, a statue square).
+  - Rooftops: up to 2 water tanks / AC units / antennas on each town building's real roof (raycast).
+  - Assumption: identity field positions inside the POIs are best guesses. Items that hit existing dressing are
+    skipped at build (logged count).
+- **Countryside:** every 300-stud cell (±1650) with nothing within 130 studs gets a themed patch. The theme comes
+  from the region (oil round the Oil Field, farms round the Oasis, ruins round the Ruined Village), otherwise a hashed
+  mix: farm, rocks / small hills (Terrain), palms, tank graveyard, wadi, comms post, ruins, oil.
+  - Power lines (pylons every 140 + 2 wires) along both highways outside the Town. A skipped pylon breaks the wire.
+  - Six flat dirt tracks from the Town corners to the outer POIs. Pieces over water, plots, aprons, pads or captures
+    are skipped.
+  - A low dune belt (48 wedges, one Atomic model) at 2,000–2,550 north / east / west, in front of the 2,700 skyline.
+    The south is sea. Dunes may partly sink into the canyon terrain there (harmless).
+- **Budget:** the new-part cap is 7,000 Full / 2,600 Low (the owner allowed ~15k; kept low for phones); the upper
+  bound is 6.3k. This exceeds CLAUDE.md's world-parts hard cap (3,100) on the owner's explicit say-so for this job;
+  flag it if the phone frame rate suffers.
+  - Tier 2 = small clutter: Full quality only, and the client hides it beyond 180 studs in low quality
+    (QualityGovernor, WorldFill folder).
+  - Small props cast no shadows. Nothing is Persistent; clusters are Atomic.
+- **Tests:** static `claude_bud_worldfill2.py` only. The real placement / skip counts print
+  `[WAR EMPIRE] WorldFill2: ... parts= skipped= cells= filled=` at server start; the aerial read needs the bomber
+  flyover.

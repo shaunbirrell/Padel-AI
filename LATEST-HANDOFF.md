@@ -10,13 +10,20 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
 - Phone tests (956x440 + a small phone): walk, run and sprint through town with 5+ soldiers — they stay on screen beside you, no vanish / pop-in; stop and turn: no swirl; enter your base: they still wait at the gate. If worse: ArmyConfig.Follow2.Tidy.Formation = "Wedge".
 
 ## QUEUE 4 (claude-bud, rebased on v107)
-Jobs: [x] 17 night lighting · [ ] 18 world fill 2 · [ ] 19 purchase stands · [ ] 20 real base guards
+Jobs: [x] 17 night lighting · [x] 18 world fill 2 · [ ] 19 purchase stands · [ ] 20 real base guards
 - J17 (live for all, LightingConfig): brighter moonlit night (midnight ambient 90,95,120, Brightness 2.0, blue colour
   correction), ~50 warm night lights (town roads, plaza ring, Town Square, base gates + hangars, plaza flag), Neon lamp
   heads / lit windows / runway edge markers only at night. Phone tests (brightness 50 %, 956x440 + a small phone): wait
   for night (~8 min into a server, or /time if admin): roads, bases and other players clearly visible; streetlights on
   along the town roads; windows lit; runway edge dots glow; plaza flag lit; drive the town roads at night (nothing in
   the lane); lower Graphics to 1-3: fewer lights, glow stays; frame rate OK. Revert: LightingConfig.Enabled = false.
+- J18 (live for all, WorldFillConfig.Fill2): town identities (market Town, industrial Port, garrison Depot/Armory),
+  rooftop tanks/AC/antennas, a themed patch in every empty 300-stud cell (farms+silos, oil, comms, ruins, tank
+  graveyard, palms, rocks/hills, wadis, checkpoints), power lines on the highways, dirt tracks, a dune belt. Phone
+  tests: BOMBER FLYOVER at 80+ studs over the whole map (no big empty squares, the horizon has dunes N/E/W); drive
+  every highway + the Town roads + the plaza (nothing blocks); walk the Town market corners (stalls, signs, cars);
+  check every base plot, runway, spawn and the plaza capture ring are clear; frame rate in the Town on a mid phone;
+  Graphics 1-3: small clutter vanishes beyond ~180 studs. Server log line: [WAR EMPIRE] WorldFill2: ... parts=.
 
 <!-- Q2-END -->
 

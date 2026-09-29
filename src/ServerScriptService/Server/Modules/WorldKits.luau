@@ -318,6 +318,19 @@ WorldKits.Specs = {
 	PipeRun = spec(1, 9, Vector3.new(40, 1.8, 1.8), "manmade", true, 2, "POI", { Unit = "40 studs", Variants = { rack = 3 } }), -- Length 40 .. 120 (a cluster must stay <= 64 wide: the layouts use 40); "rack" = 3 per 40 (pipe on 2 posts, top 4.5, 2 deep)
 	ActivityHost = spec(1, 1, Vector3.new(1, 1, 1), "anchor", false, 2, "POI"), -- invisible, CanCollide / CanQuery / CanTouch off, no overlay: hosts a POI layout's activity anchors (WorldConfig.Activity.HostKit)
 	Runway = spec(5, 5, Vector3.new(500, 0.12, 40), "infra", false, 2, "POI"), -- InfraRow only: Length (default 500) + Taxiway; flat, no collision, top <= 0.62 world, under POI_<Id>.Infra
+	-- claude-bud JOB 18 (WorldFill 2): countryside + town character; <= 8 parts, no scripts, no lights, no Neon
+	CropField = spec(5, 5, Vector3.new(40, 0.9, 30), "natural", false, 2, "Fill2", { Variants = { dry = 5 } }), -- soil + 4 crop rows, flat, no collision (Width / Depth)
+	Silo = spec(3, 3, Vector3.new(9, 27.5, 10), "manmade", true, 2, "Fill2"), -- farm silo: body, dome, ladder
+	Pylon = spec(3, 3, Vector3.new(9, 24, 0.8), "manmade", true, 2, "Fill2"), -- power-line pylon (2 legs + cross-arm); WorldFill strings the wires
+	CivCar = spec(4, 4, Vector3.new(3.6, 4.1, 6.4), "manmade", true, 2, "Fill2", { Variants = { pickup = 4 } }), -- a parked civilian car (long axis along Z)
+	Awning = spec(3, 3, Vector3.new(8, 4.2, 4.3), "manmade", false, 2, "Fill2"), -- 2 posts + a sloped cloth awning (walk under)
+	Planter = spec(2, 2, Vector3.new(3, 3.4, 3), "manmade", true, 2, "Fill2"), -- stone box + shrub
+	Bin = spec(1, 1, Vector3.new(1.6, 2.4, 1.6), "manmade", true, 2, "Fill2"),
+	Statue = spec(4, 4, Vector3.new(4, 11.4, 4), "manmade", true, 2, "Fill2"), -- plinth + a bronze figure (body, head, raised arm)
+	RoofTank = spec(2, 2, Vector3.new(3.4, 4.4, 3.4), "manmade", false, 2, "Fill2"), -- rooftop water tank on a stand
+	ACUnit = spec(2, 2, Vector3.new(3, 1.9, 2.4), "manmade", false, 2, "Fill2"), -- rooftop AC box + fan
+	Antenna = spec(2, 2, Vector3.new(2.4, 7, 0.3), "manmade", false, 2, "Fill2"), -- rooftop mast + cross-bar
+	NameSign = spec(3, 3, Vector3.new(12, 7.2, 0.8), "manmade", false, 2, "Fill2", { Signs = 1 }), -- 2 posts + a board with a made-up name (Text)
 } :: { [string]: KitSpec }
 
 function WorldKits.List(): { string }
@@ -1927,6 +1940,105 @@ function WorldKits.Place(kitId: string, cf: CFrame, parent: Instance, opts: Plac
 	local info = WorldKits.Finish(cluster, parent)
 	return if info.Ok then cluster else nil
 end
+
+-- ── claude-bud JOB 18 (WorldFill 2): countryside and town-character kits ─────────────────────────────────────────
+local FILL2 = {
+	Soil = Color3.fromRGB(104, 82, 60),
+	Crop = Color3.fromRGB(96, 128, 58),
+	CropDry = Color3.fromRGB(176, 150, 82),
+	Bronze = Color3.fromRGB(120, 92, 60),
+	Shrub = Color3.fromRGB(78, 104, 56),
+	Cars = { Color3.fromRGB(182, 48, 40), Color3.fromRGB(226, 222, 210), Color3.fromRGB(54, 86, 140), Color3.fromRGB(196, 170, 70), Color3.fromRGB(70, 74, 78) },
+	Awnings = { Color3.fromRGB(180, 60, 48), Color3.fromRGB(40, 110, 120), Color3.fromRGB(206, 170, 70) },
+}
+
+Builders.CropField = function(b: B)
+	local w = b.Opts.Width or 40
+	local d = b.Opts.Depth or 30
+	local crop = if b.Opts.Variant == "dry" then FILL2.CropDry else FILL2.Crop
+	put(b, "CropSoil", Vector3.new(w, 0.2, d), CFrame.new(0, 0.1, 0), FILL2.Soil, M.Ground, false)
+	for i = 1, 4 do
+		local x = -w / 2 + (i - 0.5) * w / 4
+		put(b, "CropRow", Vector3.new(w / 4 - 2.5, 0.7, d - 3), CFrame.new(x, 0.55, 0), crop, M.Grass, false)
+	end
+end
+
+Builders.Silo = function(b: B)
+	vcyl(b, "SiloBody", 0, 0, 0, 22, 9, PAL.ConcreteLight, M.Metal, true, true)
+	put(b, "SiloDome", Vector3.new(9, 9, 9), CFrame.new(0, 23, 0), PAL.Aluminium, M.Metal, true, true, Enum.PartType.Ball)
+	put(b, "SiloLadder", Vector3.new(1.2, 22, 0.4), CFrame.new(0, 11, -4.7), PAL.SteelDark, M.Metal, false)
+end
+
+Builders.Pylon = function(b: B)
+	put(b, "PylonLeg", Vector3.new(0.8, 24, 0.8), CFrame.new(-2.4, 12, 0) * CFrame.Angles(0, 0, math.rad(-4)), PAL.Steel, M.Metal, true)
+	put(b, "PylonLeg", Vector3.new(0.8, 24, 0.8), CFrame.new(2.4, 12, 0) * CFrame.Angles(0, 0, math.rad(4)), PAL.Steel, M.Metal, true)
+	put(b, "PylonArm", Vector3.new(9, 0.6, 0.6), CFrame.new(0, 22.5, 0), PAL.SteelDark, M.Metal, false)
+end
+
+Builders.CivCar = function(b: B)
+	local cols = FILL2.Cars
+	local col = cols[(math.floor(b.CF.Position.X * 7 + b.CF.Position.Z * 3) % #cols) + 1]
+	local pickup = b.Opts.Variant == "pickup"
+	put(b, "CarBody", Vector3.new(3.4, 1.6, 6.4), CFrame.new(0, 1.5, 0), col, M.Metal, true)
+	put(b, "CarCabin", Vector3.new(3.1, 1.4, if pickup then 2.4 else 3.4), CFrame.new(0, 3, if pickup then -1.2 else 0.2), col:Lerp(Color3.new(0, 0, 0), 0.25), M.Glass, true)
+	xcyl(b, "CarAxle", 0, 0.9, -2.1, 3.6, 1.8, PAL.MetalDark, M.Rubber, true)
+	xcyl(b, "CarAxle", 0, 0.9, 2.1, 3.6, 1.8, PAL.MetalDark, M.Rubber, true)
+end
+
+Builders.Awning = function(b: B)
+	local cols = FILL2.Awnings
+	local col = cols[(math.floor(b.CF.Position.X + b.CF.Position.Z) % #cols) + 1]
+	put(b, "AwningPost", Vector3.new(0.3, 3.8, 0.3), CFrame.new(-3.8, 1.9, -1.9), PAL.WoodDark, M.Wood, false)
+	put(b, "AwningPost", Vector3.new(0.3, 3.8, 0.3), CFrame.new(3.8, 1.9, -1.9), PAL.WoodDark, M.Wood, false)
+	put(b, "AwningCloth", Vector3.new(8, 0.2, 4.4), CFrame.new(0, 4, 0) * CFrame.Angles(math.rad(-12), 0, 0), col, M.Fabric, false)
+end
+
+Builders.Planter = function(b: B)
+	put(b, "PlanterBox", Vector3.new(3, 1.4, 3), CFrame.new(0, 0.7, 0), PAL.ConcreteLight, M.Concrete, true)
+	put(b, "PlanterShrub", Vector3.new(2.8, 2.2, 2.8), CFrame.new(0, 2.3, 0), FILL2.Shrub, M.Grass, false, false, Enum.PartType.Ball)
+end
+
+Builders.Bin = function(b: B)
+	vcyl(b, "Bin", 0, 0, 0, 2.4, 1.6, PAL.MetalDark, M.Metal, true)
+end
+
+Builders.Statue = function(b: B)
+	put(b, "StatuePlinth", Vector3.new(4, 4, 4), CFrame.new(0, 2, 0), PAL.ConcreteLight, M.Concrete, true, true)
+	put(b, "StatueBody", Vector3.new(1.8, 5, 1.2), CFrame.new(0, 6.5, 0), FILL2.Bronze, M.Metal, true)
+	put(b, "StatueHead", Vector3.new(1.4, 1.4, 1.4), CFrame.new(0, 9.7, 0), FILL2.Bronze, M.Metal, false, false, Enum.PartType.Ball)
+	put(b, "StatueArm", Vector3.new(0.5, 2.6, 0.5), CFrame.new(1.1, 9.8, 0) * CFrame.Angles(0, 0, math.rad(-25)), FILL2.Bronze, M.Metal, false)
+end
+
+Builders.RoofTank = function(b: B)
+	put(b, "RoofTankStand", Vector3.new(3, 1.2, 3), CFrame.new(0, 0.6, 0), PAL.SteelDark, M.Metal, false)
+	vcyl(b, "RoofTank", 0, 1.2, 0, 3.2, 3.4, PAL.TankCream, M.Metal, false)
+end
+
+Builders.ACUnit = function(b: B)
+	put(b, "ACBox", Vector3.new(3, 1.6, 2.4), CFrame.new(0, 0.8, 0), PAL.Aluminium, M.Metal, false)
+	put(b, "ACFan", Vector3.new(0.3, 1.8, 1.8), CFrame.new(0, 1.7, 0) * CFrame.Angles(0, 0, math.rad(90)), PAL.MetalDark, M.Metal, false, false, Enum.PartType.Cylinder)
+end
+
+Builders.Antenna = function(b: B)
+	put(b, "AntennaMast", Vector3.new(0.3, 7, 0.3), CFrame.new(0, 3.5, 0), PAL.Steel, M.Metal, false)
+	put(b, "AntennaBar", Vector3.new(2.4, 0.2, 0.2), CFrame.new(0, 5.8, 0), PAL.Steel, M.Metal, false)
+end
+
+Builders.NameSign = function(b: B)
+	put(b, "SignPost", Vector3.new(0.6, 7.2, 0.6), CFrame.new(-5.4, 3.6, 0.2), PAL.SteelDark, M.Metal, false)
+	put(b, "SignPost", Vector3.new(0.6, 7.2, 0.6), CFrame.new(5.4, 3.6, 0.2), PAL.SteelDark, M.Metal, false)
+	local board = put(b, "SignBoard", Vector3.new(12, 3, 0.4), CFrame.new(0, 5.4, 0), PAL.SignBoard, M.Wood, false)
+	local text = b.Opts.Text
+	-- WorldFill's own small sign budget (WorldKits.Fill2SignsMax; its folder is outside WarEmpireSetup, so the frozen
+	-- world budget of 17 is neither used nor exceeded)
+	local wk: any = WorldKits
+	if text ~= nil and text ~= "" and (wk.Fill2Signs or 0) < (wk.Fill2SignsMax or 8) then
+		wk.Fill2Signs = (wk.Fill2Signs or 0) + 1
+		WorldLabel.Surface(board, Enum.NormalId.Front, text, { Name = "WE_FillSign", MaxDistance = math.min(60, KC.SignMaxDistance), Color = PAL.LampLens })
+	end
+end
+;(WorldKits :: any).Fill2Signs = 0
+;(WorldKits :: any).Fill2SignsMax = 8
 
 -- ── Footprint (measured from a throw-away build; cached) ──────────────────────────────────────────────────────────
 local footCache: { [string]: Footprint } = {}

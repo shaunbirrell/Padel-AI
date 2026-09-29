@@ -236,10 +236,356 @@ function WorldFill.Build(quality: string, occ: any, wd: any, wk: any): (number, 
 			end
 		end
 	end
+	pcall(WorldFill.Build2, quality, occ, wd, wk) -- claude-bud JOB 18: WorldFill 2 (same folder, same occupancy)
 	folder:SetAttribute("WE_FillParts", state.Parts)
 	folder:SetAttribute("WE_FillSkipped", state.Skipped)
 	print(string.format("[WAR EMPIRE] WorldFill: quality=%s parts=%d skipped=%d (cap %d)", string.lower(quality), state.Parts, state.Skipped, limit))
 	return state.Parts, state.Skipped
+end
+
+-- ── claude-bud JOB 18: WorldFill 2 (WorldFillConfig.Fill2) ─────────────────────────────────────────────────────────
+local F2: any = (WorldFillConfig :: any).Fill2
+local fill2 = { Parts = 0, Skipped = 0, Limit = 0, Full = true }
+
+local function hash(a: number, b: number): number
+	local h = bit32.bxor(math.floor(a * 7385) % 2147483647, math.floor(b * 1934) % 2147483647)
+	return math.abs(h) % 1000003
+end
+
+-- one themed item at world (wx, wz); returns true when placed
+local function placeItem(ff: Instance, name: string, it: any, wx: number, wz: number, yaw: number, occ: any, wd: any, wk: any, rng: any, allowPOI: string?, text: string?): boolean
+	if not (it.Tier == 1 or fill2.Full) then
+		return false
+	end
+	if it.Kit == "Rock" then
+		local r = it.Radius or 10
+		local why = if occ and wd then wd.Blocked(occ, wx, wz, r, { AllowPOI = allowPOI }) else nil
+		if why ~= nil then
+			fill2.Skipped += 1
+			return false
+		end
+		pcall(wk.Rock, Vector3.new(wx, GROUND_Y, wz), it.Kind or "boulders", rng, { Radius = r })
+		if occ and wd then
+			wd.AddDisc(occ, wx, wz, r, "fill2rock")
+		end
+		return true
+	end
+	local opts = it.Opts
+	if text then
+		opts = table.clone(opts or {})
+		opts.Text = text
+	end
+	local fp = wk.Footprint(it.Kit, it.Opts)
+	local planned = if fp then fp.Parts else 8
+	local r = if fp then math.max(fp.X1 - fp.X0, fp.Z1 - fp.Z0) * 0.5 else 5
+	local why = if occ and wd then wd.Blocked(occ, wx, wz, r, { Spacing = WorldFillConfig.ItemSpacing, AllowPOI = allowPOI }) else nil
+	if why ~= nil or fill2.Parts + planned > fill2.Limit then
+		fill2.Skipped += 1
+		return false
+	end
+	local cf = CFrame.new(wx, GROUND_Y, wz) * CFrame.Angles(0, math.rad(yaw), 0)
+	local model = wk.Place(it.Kit, cf, ff, {
+		Name = name,
+		Cluster = { Source = "fill2", Kind = it.Kit, Anchor = "natural", AnchorX = wx, AnchorZ = wz, Tier = it.Tier },
+		Kit = opts,
+	})
+	if model == nil then
+		fill2.Skipped += 1
+		return false
+	end
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Script") or d:IsA("LocalScript") then
+			d:Destroy() -- never scripts in world props
+		elseif d:IsA("BasePart") then
+			d.Anchored = true
+			if d.Size.Magnitude < 8 then
+				d.CastShadow = false -- small props cast no shadows
+			end
+		end
+	end
+	fill2.Parts += countParts(model)
+	if occ and wd then
+		wd.AddDisc(occ, wx, wz, r, "fill2")
+	end
+	return true
+end
+
+-- a theme's items round (cx, cz) turned by yaw; the first placeable NameSign-worthy spot carries `sign`
+local function placeTheme(parent: Instance, id: string, theme: string, cx: number, cz: number, yaw: number, occ: any, wd: any, wk: any, rng: any, allowPOI: string?, sign: string?): number
+	local items = F2.Themes[theme]
+	if items == nil then
+		return 0
+	end
+	local ff = Instance.new("Folder")
+	ff.Name = "Fill2_" .. id
+	ff.Parent = parent
+	local field = { X = cx, Z = cz, Yaw = yaw }
+	local n = 0
+	for i, it in ipairs(items) do
+		local wx, wz, y = toWorld(field, it)
+		if placeItem(ff, string.format("Fill2_%s_%d_%s", id, i, it.Kit), it, wx, wz, y, occ, wd, wk, rng, allowPOI, nil) then
+			n += 1
+		end
+	end
+	if sign then
+		local sx, sz, y = toWorld(field, { X = 0, Z = -34, Yaw = 180 })
+		placeItem(ff, "Fill2_" .. id .. "_Sign", { Kit = "NameSign", Tier = 1 }, sx, sz, y, occ, wd, wk, rng, allowPOI, sign)
+	end
+	if #ff:GetChildren() == 0 then
+		ff:Destroy()
+	end
+	return n
+end
+
+-- nothing placed and no POI within EmptyRadius of (x, z)
+local function emptyAt(occ: any, wd: any, x: number, z: number): boolean
+	local R = F2.Cells.EmptyRadius
+	for _, d in ipairs(occ.Discs) do
+		if (d.X - x) ^ 2 + (d.Z - z) ^ 2 < (R + d.R) ^ 2 then
+			return false
+		end
+	end
+	for _, p in ipairs(occ.Zones.POIs or {}) do
+		if wd.POIDist and wd.POIDist(p, x, z) < R then
+			return false
+		end
+	end
+	return true
+end
+
+local function themeFor(x: number, z: number): string
+	for _, r in ipairs(F2.Cells.Regions) do
+		if x >= r.X0 and x <= r.X1 and z >= r.Z0 and z <= r.Z1 then
+			return r.Theme
+		end
+	end
+	local mix = F2.Cells.MixThemes
+	return mix[(hash(x, z) % #mix) + 1]
+end
+
+local function countryside(parent: Instance, occ: any, wd: any, wk: any, rng: any): (number, number)
+	local C = F2.Cells
+	local cells, filled = 0, 0
+	local signed = false
+	local e = C.Extent
+	for gx = -e + C.Size / 2, e, C.Size do
+		for gz = -e + C.Size / 2, e, C.Size do
+			cells += 1
+			local h = hash(gx, gz)
+			local cx = gx + ((h % 101) / 100 - 0.5) * 2 * C.Jitter
+			local cz = gz + (((h // 101) % 101) / 100 - 0.5) * 2 * C.Jitter
+			-- a patch needs its centre clear (ring, water, plots, roads...) and nothing around it yet
+			if wd.Blocked(occ, cx, cz, C.PatchRadius * 0.5) == nil and emptyAt(occ, wd, cx, cz) then
+				local theme = themeFor(cx, cz)
+				local sign: string? = nil
+				if theme == "Farm" and not signed then
+					sign = F2.SignFarms
+					signed = true
+				end
+				if placeTheme(parent, string.format("Cell_%d_%d", gx, gz), theme, cx, cz, (h % 8) * 45, occ, wd, wk, rng, nil, sign) > 0 then
+					filled += 1
+				end
+			end
+		end
+	end
+	return cells, filled
+end
+
+-- pylons every Step along the highways outside the Town, two wires between neighbours
+local function powerLines(parent: Instance, occ: any, wd: any, wk: any)
+	local P = F2.Power
+	local pf = Instance.new("Folder")
+	pf.Name = "Fill2_Power"
+	pf.Parent = parent
+	local function line(alongX: boolean, sign: number)
+		local prevTop: { Vector3 }? = nil
+		local t = P.From
+		while t <= P.To do
+			local along = t * sign
+			local x = if alongX then along else P.Offset
+			local z = if alongX then P.Offset else along
+			local yaw = if alongX then 0 else 90
+			local placed = false
+			if fill2.Parts + 5 <= fill2.Limit and wd.Blocked(occ, x, z, 5, { RoadClear = 8, RoadR = 0 }) == nil then
+				local cf = CFrame.new(x, GROUND_Y, z) * CFrame.Angles(0, math.rad(yaw), 0)
+				local m = wk.Place("Pylon", cf, pf, {
+					Name = "Fill2_Pylon",
+					Cluster = { Source = "fill2", Kind = "Pylon", Anchor = "natural", AnchorX = x, AnchorZ = z, Tier = 1 },
+				})
+				if m then
+					placed = true
+					fill2.Parts += countParts(m)
+					wd.AddDisc(occ, x, z, 5, "fill2pylon")
+					local right = cf.RightVector
+					local tops = { cf.Position + Vector3.new(0, 22.9, 0) - right * 4, cf.Position + Vector3.new(0, 22.9, 0) + right * 4 }
+					if prevTop then
+						for k = 1, 2 do
+							local a, b = prevTop[k], tops[k]
+							local mid = (a + b) / 2 - Vector3.new(0, P.WireSag, 0)
+							plain("Fill2_Wire", Vector3.new(0.15, 0.15, (b - a).Magnitude), CFrame.lookAt(mid, mid + (b - a)), P.WireColor, Enum.Material.Metal, false, pf)
+							fill2.Parts += 1
+						end
+					end
+					prevTop = tops
+				end
+			end
+			if not placed then
+				prevTop = nil -- a skipped pylon (plot, water, POI) breaks the line: no wire across it
+			end
+			t += P.Step
+		end
+	end
+	line(true, 1)
+	line(true, -1)
+	line(false, 1)
+	line(false, -1)
+end
+
+-- flat dirt tracks from the Town corners to the outer POIs; pieces over water / plots / aprons / captures skipped
+local function tracks(parent: Instance, occ: any, wd: any)
+	local T = F2.Tracks
+	local tf = Instance.new("Folder")
+	tf.Name = "Fill2_Tracks"
+	tf.Parent = parent
+	for i, l in ipairs(T.Lines) do
+		local a, b = Vector3.new(l.X0, 0, l.Z0), Vector3.new(l.X1, 0, l.Z1)
+		local len = (b - a).Magnitude
+		local dir = (b - a).Unit
+		local n = math.floor(len / T.Piece)
+		for k = 0, n - 1 do
+			local c = a + dir * (k + 0.5) * T.Piece
+			local why = wd.Blocked(occ, c.X, c.Z, T.Width * 0.5, { RoadClear = -1000, SkipRing = false })
+			local ok = why == nil or string.sub(why, 1, 4) == "poi:" or string.sub(why, 1, 7) == "anchor:" or string.sub(why, 1, 10) == "structure:"
+			if ok and fill2.Parts < fill2.Limit then
+				local p = plain("Fill2_Track" .. i, Vector3.new(T.Width, 0.12, T.Piece + 1), CFrame.lookAt(Vector3.new(c.X, GROUND_Y + 0.02, c.Z), Vector3.new(c.X, GROUND_Y + 0.02, c.Z) + dir), T.Color, Enum.Material.Ground, false, tf)
+				p.CanQuery = false
+				fill2.Parts += 1
+			end
+		end
+	end
+end
+
+-- rooftop clutter on the town buildings (raycast onto the real roof)
+local function rooftops(parent: Instance, wk: any)
+	local R = F2.Rooftops
+	if not R.Enabled or not fill2.Full then
+		return
+	end
+	local rf = Instance.new("Folder")
+	rf.Name = "Fill2_Rooftops"
+	rf.Parent = parent
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	for _, m in ipairs(Workspace:GetDescendants()) do
+		if m:IsA("Model") and m:GetAttribute("WE_Cluster") == "poi:block" then
+			local ok, cf, size = pcall(m.GetBoundingBox, m)
+			if ok then
+				params.FilterDescendantsInstances = { m }
+				for k = 1, R.PerBuilding do
+					if fill2.Parts + 2 > fill2.Limit then
+						return
+					end
+					local off = Vector3.new((if k == 1 then -0.25 else 0.25) * size.X, 0, (if k == 1 then 0.2 else -0.2) * size.Z)
+					local from = cf.Position + off + Vector3.new(0, size.Y / 2 + 10, 0)
+					local r = Workspace:Raycast(from, Vector3.new(0, -size.Y - 20, 0), params)
+					if r and r.Normal.Y > 0.9 and r.Position.Y > cf.Position.Y - size.Y / 2 + 5 then
+						local kit = R.Kits[(hash(from.X, from.Z + k) % #R.Kits) + 1]
+						local model = wk.Place(kit, CFrame.new(r.Position) * CFrame.Angles(0, math.rad(hash(from.Z, from.X) % 360), 0), rf, {
+							Name = "Fill2_Roof_" .. kit,
+							Cluster = { Source = "fill2", Kind = kit, Anchor = "natural", AnchorX = r.Position.X, AnchorZ = r.Position.Z, Tier = 2 },
+						})
+						if model then
+							fill2.Parts += countParts(model)
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+-- the dune belt: low sand ridges in front of the skyline (north, east, west), one Atomic model
+local function dunes(parent: Instance)
+	local D = F2.Dunes
+	if not D.Enabled then
+		return
+	end
+	local m = Instance.new("Model")
+	m.Name = "Fill2_Dunes"
+	m.ModelStreamingMode = Enum.ModelStreamingMode.Atomic -- (Persistent is reserved for WorldBounds / WorldPOI)
+	local sides = {
+		{ Axis = "z", Sign = -1 }, -- north (-Z)
+		{ Axis = "x", Sign = 1 }, -- east
+		{ Axis = "x", Sign = -1 }, -- west
+	}
+	local span = 2 * D.ROuter
+	for si, s in ipairs(sides) do
+		for i = 1, D.PerSide do
+			local h = hash(si * 100 + i, 7)
+			local along = -D.ROuter + (i - 0.5) * span / D.PerSide
+			local depthAt = D.RInner + (h % 1000) / 1000 * (D.ROuter - D.RInner - 200)
+			local height = D.Height[1] + (h % 97) / 97 * (D.Height[2] - D.Height[1])
+			local len = span / D.PerSide + 60
+			local pos: Vector3
+			local yaw: number
+			if s.Axis == "z" then
+				pos = Vector3.new(along, GROUND_Y + height / 2 - 4, s.Sign * depthAt)
+				yaw = 0
+			else
+				pos = Vector3.new(s.Sign * depthAt, GROUND_Y + height / 2 - 4, along)
+				yaw = 90
+			end
+			-- a ridge = a wedge facing the map + a wedge facing out (a triangular dune profile), 2 parts
+			local cf = CFrame.new(pos) * CFrame.Angles(0, math.rad(yaw), 0)
+			local col = if i % 2 == 0 then D.Color else D.ColorFar
+			for _, face in ipairs({ 1, -1 }) do
+				local w = Instance.new("WedgePart")
+				w.Name = "Fill2_Dune"
+				w.Anchored = true
+				w.CanCollide = false
+				w.CanQuery = false
+				w.CanTouch = false
+				w.CastShadow = false
+				w.Material = Enum.Material.Sand
+				w.Color = col
+				w.Size = Vector3.new(len, height, height * 2.2)
+				w.CFrame = cf * CFrame.new(0, 0, face * height * 1.1) * CFrame.Angles(0, if face < 0 then 0 else math.pi, 0) -- slopes face out, vertical backs meet
+				w.Parent = m
+				fill2.Parts += 1
+			end
+		end
+	end
+	m.Parent = parent
+end
+
+function WorldFill.Build2(quality: string, occ: any, wd: any, wk: any): (number, number)
+	fill2.Parts, fill2.Skipped = 0, 0
+	local folder = state.Folder
+	if F2 == nil or F2.Enabled ~= true or folder == nil or folder.Parent == nil or wk == nil or occ == nil or wd == nil then
+		return 0, 0
+	end
+	fill2.Full = quality == "Full"
+	fill2.Limit = if fill2.Full then F2.MaxParts2Full else F2.MaxParts2Low
+	pcall(function()
+		(wk :: any).Fill2Signs = 0
+	end)
+	local root = Instance.new("Folder")
+	root.Name = "Fill2"
+	root.Parent = folder
+	local rng = wk.Rng(18092026)
+	-- identity first (the towns), then the long lines, then the countryside fills what is left
+	for _, f in ipairs(F2.Identity) do
+		pcall(placeTheme, root, f.Id, f.Theme, f.X, f.Z, f.Yaw, occ, wd, wk, rng, f.AllowPOI, f.Sign)
+	end
+	pcall(powerLines, root, occ, wd, wk)
+	pcall(tracks, root, occ, wd)
+	pcall(rooftops, root, wk)
+	local okC, cells, filled = pcall(countryside, root, occ, wd, wk, rng)
+	pcall(dunes, root)
+	folder:SetAttribute("WE_Fill2Parts", fill2.Parts)
+	folder:SetAttribute("WE_Fill2Skipped", fill2.Skipped)
+	print(string.format("[WAR EMPIRE] WorldFill2: quality=%s parts=%d skipped=%d cells=%s filled=%s (cap %d)", string.lower(quality), fill2.Parts, fill2.Skipped, tostring(if okC then cells else "?"), tostring(if okC then filled else "?"), fill2.Limit))
+	return fill2.Parts, fill2.Skipped
 end
 
 return WorldFill
