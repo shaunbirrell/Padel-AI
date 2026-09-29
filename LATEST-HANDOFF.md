@@ -26,7 +26,7 @@ Merged `origin/claude/desktop-bud` tip `7667291` (JOB 17 night + JOB 18 WorldFil
 
 **Phone tests:** wait for night (~8 min or /time): roads/bases/players readable, streetlights on, windows lit, runway edge glow; Graphics 1–3 fewer lights. Bomber flyover 80+ studs: no big empty squares, dunes on horizon; drive highways/town/plaza (nothing blocks); stands: walk-on does nothing, hold "Buy - R$ …" opens Roblox dialog (cancel); owned = green ✓ OWNED.
 
-**Published:** (pending Open Cloud — see handoff commit)
+**Published:** Open Cloud `versionNumber=107` (commit cd9d421). Migrate to Latest Update for night lights, WorldFill 2, and purchase stands.
 
 # v108 — 2026-09-29 ~15:55 Dublin (Code Bot, branch phase-7-polish, WE_Build 108) — ARMY FLANK FORMATION (place version 106)
 
