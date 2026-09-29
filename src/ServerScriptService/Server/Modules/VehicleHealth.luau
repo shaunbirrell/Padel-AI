@@ -97,6 +97,9 @@ local RCFG = VehicleCombatConfig.Regen
 local BOUNTY = DCFG.Reward
 
 local VehicleHealth = {}
+-- claude-bud JOB 14: set by GameFeelService (vehicle damage numbers, splash hit markers, the vehicle kill feed); nil = off
+VehicleHealth.OnDamage = nil :: ((Model, number, string, number, Player?, Vector3?, boolean, boolean) -> ())?
+local inRadius = false -- true while ApplyRadiusDamage applies its hits (the cue marks them as splash)
 
 local entries: { [Model]: Entry } = {}
 local destroyedUntil: { [number]: { [string]: number } } = {} -- [ownerUserId][vehicleId] = os.clock() deadline
@@ -623,13 +626,20 @@ function VehicleHealth.ApplyDamage(model: Model, hit: DamageHit): (number, boole
 		e.LastAttacker = attacker
 	end
 	e.Dirty = true
+	local cue = VehicleHealth.OnDamage
 	if rec.HP <= 0 then
 		rec.HP = 0
 		ownerHitAt[rec.OwnerUserId] = nil -- a wreck is covered by the repair timer
 		destroyVehicle(e, killerOf(e, t))
+		if cue then
+			cue(model, rec.OwnerUserId, e.Def.DisplayName, dealt, attacker, hit.HitPos, true, inRadius)
+		end
 		return dealt, true
 	end
 	ownerHitAt[rec.OwnerUserId] = t
+	if cue then
+		cue(model, rec.OwnerUserId, e.Def.DisplayName, dealt, attacker, hit.HitPos, false, inRadius)
+	end
 	return dealt, false
 end
 
@@ -673,6 +683,7 @@ function VehicleHealth.ApplyRadiusDamage(
 		local amount = if core ~= nil and d <= core
 			then math.huge
 			else maxAmount * (1 + (minMult - 1) * math.clamp(d / radius, 0, 1))
+		inRadius = true -- claude-bud JOB 14: these hits are splash (VehicleHealth.OnDamage)
 		local dealt = VehicleHealth.ApplyDamage(rec.Model, {
 			Attacker = attacker,
 			Amount = amount,
@@ -681,6 +692,7 @@ function VehicleHealth.ApplyRadiusDamage(
 			WeaponMult = o.WeaponMult,
 			HitPos = center,
 		})
+		inRadius = false
 		if dealt > 0 then
 			table.insert(hitList, rec.Model)
 		end

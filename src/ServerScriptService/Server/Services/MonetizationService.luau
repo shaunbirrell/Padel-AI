@@ -960,6 +960,9 @@ function MonetizationService.Init(deps: { [string]: any })
 	local shopRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseDevProduct) :: RemoteEvent
 	-- v71 money (M1): optional 2nd arg `source` (where the prompt came from), whitelisted; analytics only
 	shopRemote.OnServerEvent:Connect(function(player: Player, productKey: any, rawSource: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPurchaseDevProduct", productKey, rawSource) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "shop_prompt", 2, 3) then
 			return
 		end
@@ -995,6 +998,9 @@ function MonetizationService.Init(deps: { [string]: any })
 
 	local passRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseGamePass) :: RemoteEvent
 	passRemote.OnServerEvent:Connect(function(player: Player, passKey: any, rawSource: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPurchaseGamePass", passKey, rawSource) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "shop_pass_prompt", 2, 3) then
 			return
 		end
@@ -1056,6 +1062,9 @@ function MonetizationService.Init(deps: { [string]: any })
 		local groupRemote = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.RequestGroupReward)
 		if groupRemote and groupRemote:IsA("RemoteEvent") then
 			(groupRemote :: RemoteEvent).OnServerEvent:Connect(function(player: Player)
+				if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestGroupReward") then -- claude-bud JOB 15: rate ceiling + argument schema
+					return
+				end
 				if RateLimitService and not RateLimitService.Allow(player, "group_reward", 1, 2) then
 					return
 				end

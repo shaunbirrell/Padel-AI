@@ -9145,3 +9145,68 @@ ds_territories.luau T3):
 - **Friends:** every 60 s, $500 per friend in the same server (max 3); friendships are cached at join with IsFriendsWithAsync.
 - **Comeback:** DataService keeps `PrevJoinUnix` before stamping LastJoinUnix. Away 3+ days pays $25,000 once on that join.
 - **Not in LaunchSafe yet** (new, unverified on Roblox servers). Flip `EngagementConfig.Rollout` per feature after the phone test.
+
+## 2026-09-29 — claude-bud JOB 14: game-feel polish (GameFeelConfig + GameFeelService + GameFeelClient, owner-only)
+- **Already there, kept:** infantry, NPC and direct vehicle hits already sent hit markers + damage numbers
+  (CombatHitFeedback → CombatController / WeaponVisuals); ATM raids already had Robbed / Defended chips.
+  Job 14 fills the gaps:
+  - **Kill feed:** PvP kills + vehicle kills by a player.
+    - Two lines max, in the HUD top stack (order 47, after the toasts and the event banner) rather than a corner, so
+      it can't overlap controls.
+    - Lines last 4 s. DisplayNames + the weapon's DisplayName only. Blast deaths stay quiet (nuke §15.2).
+    - Server-wide cap of 4 lines/s; extras are dropped, never queued.
+    - Assumption: NPC kills are left out of the feed (they would flood it).
+  - **Vehicle numbers:**
+    - The owner of a damaged vehicle sees red numbers over it, merged per 0.25 s, plus a metal hit sound.
+    - A vehicle hit with no hit point uses the vehicle's position for the attacker's number.
+    - Splash damage on a vehicle now gives the attacker a hit marker.
+    - Billboards: MaxDistance 40, never AlwaysOnTop (CLAUDE.md world-label rule). Assumption: from a jet camera
+      farther than 40 studs the number is not drawn (the sound still plays).
+  - **Premium missile splash:** it now also damages vehicles (VehicleHealth.ApplyRadiusDamage), never your own or a
+    clan mate's. Before, only a direct hit did. This is inside the owner-only premium weapons.
+  - **Raid report:**
+    - Base hits, a breach and ATM holds open a raid. 20 s after the last event the owner gets ONE banner:
+      "YOU WERE RAIDED -$N · name" if the ATM was robbed, else "BASE DEFENDED" ("Gate down · cash safe" after a breach).
+    - Hooks are pcall'd one-liners in GateDefenseService / MoneyCollectorService; for anyone the report isn't live
+      for, NoteRaid returns at once.
+  - **Sound pass:**
+    - `SoundConfig.Mix.Bands` gives one volume band per bus. AudioController clamps into it only while
+      `Mix.BandsLive` (set by GameFeelClient for players the pass is live for). Today only Level.Up (0.9 → 0.8) is
+      outside its band (`tools/sound_audit.py`).
+    - Once-silent actions now make a sound, using existing sound ids only: premium gun, missile launch,
+      airdrop / bounty marker, AIRSTRIKE tap, event banner, raid report, kill feed when you die.
+- **Tests:**
+  - `tools/gamefeel_test.py` runs the real service in the Luau CLI: 18/18.
+  - `tools/sound_audit.py`: every played key exists.
+  - There is no HUD viewport harness in this repo (check_hud.py is not here), so the top-stack placement at
+    800×360 / 844×390 needs the phone test.
+- All four features are owner-only via `GameFeelConfig.Rollout` and not in LaunchSafe yet.
+
+## 2026-09-29 — claude-bud JOB 15: anti-exploit sweep (SecurityConfig + RemoteGate)
+- **What was already there:** every handler already had its own RateLimitService key and most had type checks, plus
+  AntiExploitService strikes (decay, kick at 10). All of that is kept.
+- **New:** `RemoteGate.Check` is the first line of all 37 client → server handlers plus GetPlayerState and the
+  RequestPurchaseUpgrade hook:
+  - a per-remote rate ceiling set ABOVE each handler's own limit, so real play never meets it;
+  - an argument schema (`SecurityConfig.Schemas`) matched to the client's FireServer calls: types, string length,
+    finite numbers / Vector3, tables ≤ 16 keys and ≤ 2 deep, no Instances, no extra arguments.
+- Remotes the client must never fire (pushes, unused requests) get one sink listener; a fire there is a bad request.
+- Bad requests are logged once per 10 s per player, with counts, and ignored. A kick happens only after 600
+  rejected requests in 60 s.
+- **Rollout:** enforced for the owner only (`RemoteGate.Rollout = "owner"`). Everyone else runs in "observe": the same
+  checks run and are logged as "would reject", but nothing is dropped or kicked, so play is unchanged.
+  - Next step: read the live server logs for "would reject" lines, then set Rollout = "all".
+- **Checks:**
+  - `tools/remote_audit.py` (static): every handler is gated and has a schema; every remote the client fires has a schema.
+  - `tools/remotegate_test.py` (Luau CLI, real module): 37/37.
+
+## 2026-09-29 — claude-bud: after rebasing on v103 (all rollouts are "all" since v101)
+- The v101 Code Bot check allows no owner-only rollout, so:
+  - GameFeelConfig (JOB 14) is now "all" for every feature.
+  - SecurityConfig.RemoteGate.Rollout (JOB 15) is "observe": the checks run and log "would reject" for everyone,
+    and no one is enforced yet. Assumption: enforcing for every player before a phone test could block a real
+    request if one schema is wrong. Flip it to "all" once the live logs are quiet.
+- The codes schema now covers v102's `RedeemCode` RemoteFunction (gate inside its OnServerInvoke →
+  result("RateLimited")). RequestRedeemCode has no handler any more and gets the sink.
+- The behaviour tests set the rollouts to "owner" inside their harness, so both the gated and the open paths
+  are still exercised.

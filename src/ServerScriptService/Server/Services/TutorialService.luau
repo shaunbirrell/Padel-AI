@@ -393,6 +393,9 @@ function TutorialService.Init(deps: { [string]: any })
 
 	local skipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSkipTutorial) :: RemoteEvent
 	skipRemote.OnServerEvent:Connect(function(player: Player)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestSkipTutorial") then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "tutorial_skip", 1, 2) then
 			return
 		end

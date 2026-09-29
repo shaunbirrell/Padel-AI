@@ -527,6 +527,9 @@ function ClanService.Init(deps: { [string]: any })
 
 	local createRemote = RemoteSetup.Get(Constants.RemoteNames.RequestCreateClan) :: RemoteEvent
 	createRemote.OnServerEvent:Connect(function(player: Player, name: any, tag: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestCreateClan", name, tag) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "clan_create", 1, 2) then
 			return
 		end
@@ -545,6 +548,9 @@ function ClanService.Init(deps: { [string]: any })
 
 	local joinRemote = RemoteSetup.Get(Constants.RemoteNames.RequestJoinClan) :: RemoteEvent
 	joinRemote.OnServerEvent:Connect(function(player: Player, clanId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestJoinClan", clanId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "clan_join", 2, 3) then
 			return
 		end
@@ -562,6 +568,9 @@ function ClanService.Init(deps: { [string]: any })
 
 	local leaveRemote = RemoteSetup.Get(Constants.RemoteNames.RequestLeaveClan) :: RemoteEvent
 	leaveRemote.OnServerEvent:Connect(function(player: Player)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestLeaveClan") then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "clan_leave", 1, 2) then
 			return
 		end

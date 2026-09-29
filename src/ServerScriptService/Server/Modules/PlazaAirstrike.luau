@@ -48,6 +48,9 @@ function PlazaAirstrike.Start(deps: { [string]: any })
 		end
 	end
 	;(remote :: RemoteEvent).OnServerEvent:Connect(function(player: Player)
+		if not require(script.Parent.RemoteGate).Check(player, "RequestPlazaAirstrike") then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if deps.RateLimitService and not deps.RateLimitService.Allow(player, "plaza_airstrike", 1, 2) then
 			return
 		end

@@ -2,11 +2,103 @@
 # WHERE I STOPPED — 2026-09-29 (Claude on Bud tip 9b30223) — JOB 13 SHIPPED IN v103 (owner-only)
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v103) before new work.** Code Bot cherry-picked JOB 13 (`36779ce`)
 into WE_Build 103. Keep v102 Codes / CashBoost; do not rebuild a codes system. Engagement is owner-only (not LaunchSafe).
-Jobs: [x] 12 launch readiness · [x] 13 bring players back · [ ] 14 game-feel polish · [ ] 15 anti-exploit sweep
+Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [x] 15 anti-exploit sweep
 
 - J13 (owner-only, `EngagementConfig.Rollout` per feature): weekly events (Plaza War Week / Airdrop Frenzy / Double Cash Weekend) with a HUD banner and countdown;
   leaderboards (richest / plaza captures / rebirths) on a Town Square board; invite reward ($10k per new friend, 5/day; the friend gets $2.5k);
   friends in the server $500/min each (max 3); comeback after 3+ days $25k. Not in LaunchSafe yet. Phone-test as owner, then flip Rollout per feature.
+
+- J14 (owner-only, `GameFeelConfig.Rollout`): kill feed (2 lines in the top stack, PvP + vehicle kills), red damage numbers over
+  your own vehicle + splash hit markers (premium missile splash now hurts vehicles), one raid report per attack
+  ("YOU WERE RAIDED -$N" / "BASE DEFENDED"), sound pass (volume bands per bus; premium gun, missile, markers,
+  AIRSTRIKE tap, event banner no longer silent). Test on the phone: get killed by / kill an alt (feed line, gold when
+  it's you); drive a tank and let an alt shoot it (red numbers + metal clank); fire the premium missile near a jeep
+  (hit marker); let the alt hit your gate then wait 20 s (BASE DEFENDED), and rob your ATM (YOU WERE RAIDED -$N);
+  check that nothing covers the thumbstick, jump or the AIRSTRIKE button at 800x360.
+
+- J15: RemoteGate on every client->server remote (rate ceiling + argument schema; sink on push-only remotes).
+  Enforced for the owner, observe-only for everyone else. Read the live server logs for "[RemoteGate] would reject";
+  if they are quiet after a few days, set SecurityConfig.RemoteGate.Rollout = "all". Phone test: play normally for
+  10 min (drive, shoot, buy, army orders, premium weapons) and check that nothing stops working.
+
+## Launch readiness (JOB 12)
+**To open sales to everyone:** set `MonetizationConfig.LaunchAll = true` (one line). That makes every gate marked "yes" below live for everyone,
+and turns off your owner shortcuts on the Robux path (premium vehicle spawn without the pass, the Extra Garage Slot test, premium weapons),
+so you buy like anyone else. The "no" gates keep their own switches.
+Proof: `tools/launch_gate_test.py` runs the real gate code (Luau CLI) for a non-owner and for you, with LaunchAll off and on: 90/90 pass.
+
+| Gate (key) | Controls | Safe for all | Why |
+|---|---|---|---|
+| Sales: `MonetizationConfig.Rollout` over RolloutKeys | the 13 Robux items (Speed Pass, Keep-Base, Golden Pumpjacks, 6 PV vehicles, Bigger Army, Extra Garage Slot, Army Refill, Plaza Airstrike) + premium weapons | yes | Ids wired (v99); receipts idempotent + saved first; passes checked with UserOwnsGamePassAsync; the premium vehicles are pay-to-win by your decision |
+| `VIPPerks.Rollout` | [VIP] chat tag, VIP lounge | yes | server checks VIP ownership; the lounge pays once per 15 min |
+| `Placement.Rollout` | purchase prompts at moments, limited starter window | yes | soft-offer budget (4 min apart, 3 per session), never for owned items |
+| `Retention.Rollout` | FREE Shop rows, group reward, Premium daily | yes | server-checked, once per day / once ever; group row hidden until GroupId is set |
+| `SupplyDropConfig.Airdrop.Rollout` | parachute airdrop every 10 min | yes | server-built, server-claimed, 3 parts max |
+| `DailyRewardConfig.AutoClaim.Rollout` | daily streak auto-claim on join | yes | the existing once-per-UTC-day claim |
+| `PlazaBountyConfig.Rollout` | plaza retake bounty | yes | server capture hook, per-player cooldown |
+| `ArmyUpgradeConfig.Rollout` | Barracks "Army Upgrades" prompt | yes | opens the existing server-priced research |
+| `CombatConfig.GuardsFightBack` / `NpcUnstick` | guards shoot back / unstick | yes | NPC rules with LOS + hit chance |
+| `OpsConfig.Cargo.PickupLosRollout` | bag pickup line of sight | yes | stricter check; Ops is off anyway |
+| `TutorialConfig.FirstMinutes.Rollout` | welcome line + first-ATTACK hint | yes | display only, once per profile |
+| `QualityConfig.Rollout` | automatic low tier on phones / low FPS | yes | client-only; the server world is unchanged |
+| `JuiceConfig.Rollout` | purchase burst, rebirth celebration | yes | client visuals |
+| `BalanceConfig.Rollout` | income curve + income XP | **no** | changes every player's economy at once; phone-test the ~34 min first rebirth, then flip it on its own |
+| `ArmyConfig.Rollout` (Escort / Army / Fix) + `Follow2.Tidy.Rollout` | army behaviour | **no** | just rewritten in v99 (Code Bot's lane); flip after its phone test |
+| `AircraftWeaponConfig.WeaponsLive` | kit aircraft weapons | **no** | separate lane, never verified for everyone |
+| `RebirthConfig.WeaponsLive` | rebirth guns | **no** | separate lane, not verified |
+| `VisualAssetConfig.BodyRollout` | store vehicle bodies | **no** | 11 ship bodies still need your WE_CHECK2 run (no licence records) |
+| `VehicleConfigâ€¦AmphibiousRollout.BridgeLayer` | Bridge Layer wading | **no** | not phone-tested |
+| `MonetizationConfig.GarageSlot.OwnerTest` | your Extra Garage Slot test | n/a | owner test only; off automatically at launch |
+
+**Every pass and product, end to end** (`tools/launch_audit.py`; receipt rules checked once below the table):
+| Key | Type | Id | Prompt | Grant | Rejoin keeps it | OK |
+|---|---|---|---|---|---|---|
+| VIP | Game pass | 1985475542 | Shop | multiplier, server perk | UserOwnsGamePassAsync on every join | yes |
+| DoubleCash | Game pass | 1982865711 | Shop, ATM pad / offer | multiplier, server perk | UserOwnsGamePassAsync on every join | yes |
+| DoubleXP | Game pass | 1982487698 | Shop | multiplier, server perk | UserOwnsGamePassAsync on every join | yes |
+| ExtraPlotCosmetic | Game pass | 1983357731 | hidden (not sold) | - | UserOwnsGamePassAsync on every join | yes |
+| AutoCollect | Game pass | 1985115501 | Shop, ATM pad / offer | server perk | UserOwnsGamePassAsync on every join | yes |
+| ImpulseSpeed | Game pass | 1998656357 | Shop, ATM pad / offer | multiplier | UserOwnsGamePassAsync on every join | yes |
+| PV_Razorfang | Game pass | 2002484380 | Shop, Shop ROBUX row + Garage | premium vehicle + weapons | UserOwnsGamePassAsync on every join | yes |
+| PV_Bastion | Game pass | 0 (not created) | Shop ROBUX row + Garage | premium vehicle + weapons | UserOwnsGamePassAsync on every join | yes |
+| PV_Warlord | Game pass | 2001320428 | Shop, Shop ROBUX row + Garage | premium vehicle + weapons | UserOwnsGamePassAsync on every join | yes |
+| PV_MotorPool | Game pass | 0 (not created) | Shop ROBUX row + Garage | premium vehicle + weapons | UserOwnsGamePassAsync on every join | yes |
+| PV_Stormwing | Game pass | 2001722392 | Shop, Shop ROBUX row + Garage | premium vehicle + weapons | UserOwnsGamePassAsync on every join | yes |
+| PV_Tidebreaker | Game pass | 1999263465 | Shop, Shop ROBUX row + Garage | premium vehicle + weapons | UserOwnsGamePassAsync on every join | yes |
+| PV_Skylance | Game pass | 2001602422 | Shop, Shop ROBUX row + Garage | premium vehicle + weapons | UserOwnsGamePassAsync on every join | yes |
+| BiggerArmy | Game pass | 2001734404 | Shop | server perk | UserOwnsGamePassAsync on every join | yes |
+| ExtraGarageSlot | Game pass | 1999359549 | Shop, Shop ROBUX row | server perk | UserOwnsGamePassAsync on every join | yes |
+| PV_Leviathan | Game pass | 2001398410 | Shop, Shop ROBUX row + Garage | premium vehicle + weapons | UserOwnsGamePassAsync on every join | yes |
+| RebirthBoost | Game pass | 0 (not created) | hidden (not sold) | - | UserOwnsGamePassAsync on every join | yes |
+| CashSmall | Dev product | 3713838744 | Shop | cash | profile (saved before the ack) | yes |
+| CashMedium | Dev product | 3713838815 | Shop | cash | profile (saved before the ack) | yes |
+| CashLarge | Dev product | 3713838888 | Shop | cash | profile (saved before the ack) | yes |
+| CashMega | Dev product | 3713838952 | Shop | cash | profile (saved before the ack) | yes |
+| GoldSmall | Dev product | 3713839003 | hidden (not sold) | gold | profile (saved before the ack) | yes |
+| GoldMedium | Dev product | 3713839048 | hidden (not sold) | gold | profile (saved before the ack) | yes |
+| GoldLarge | Dev product | 3713839090 | hidden (not sold) | gold | profile (saved before the ack) | yes |
+| PremiumPass | Dev product | 3713839151 | Shop | battle pass premium | profile (saved before the ack) | yes |
+| AutoCollect | Dev product | 0 (not created) | ATM pad / offer | entitlement | profile (saved before the ack) | yes |
+| DoubleCash | Dev product | 0 (not created) | ATM pad / offer | entitlement | profile (saved before the ack) | yes |
+| ExtraSoldierSlot | Dev product | 3713839210 | Shop | entitlement | profile (saved before the ack) | yes |
+| InstantBarracks | Dev product | 3713839278 | hidden (not sold) | entitlement | profile (saved before the ack) | yes |
+| VIPBoost | Dev product | 0 (not created) | hidden (not sold) | entitlement | profile (saved before the ack) | yes |
+| SpeedBoost | Dev product | 3713839342 | Shop, ATM pad / offer | entitlement | profile (saved before the ack) | yes |
+| GoldenPumpjack | Dev product | 3714663783 | Shop | entitlement | profile (saved before the ack) | yes |
+| StarterBundle | Dev product | 3713839505 | Shop | cash, entitlement | profile (saved before the ack) | yes |
+| Nuke | Dev product | 0 (not created) | hidden (not sold) | saved counter GrantNukes | profile (saved before the ack) | yes |
+| NukeBundle3 | Dev product | 0 (not created) | hidden (not sold) | saved counter GrantNukes | profile (saved before the ack) | yes |
+| SoldierRefill | Dev product | 3715442523 | Shop | saved counter GrantSoldierRefills | profile (saved before the ack) | yes |
+| PlazaAirstrike | Dev product | 3715442542 | Shop | saved counter GrantAirstrikes | profile (saved before the ack) | yes |
+| RebirthKeepBase | Dev product | 3714663721 | Rebirth panel | saved counter GrantKeepBaseRebirths | profile (saved before the ack) | yes |
+- receipt: idempotent (saved PurchaseId): yes
+- receipt: one run per PurchaseId (in-flight lock): yes
+- receipt: saved before PurchaseGranted: yes
+- receipt: unknown product never acked: yes
+- receipt: pass purchase re-checked with UserOwnsGamePassAsync: yes
+- A second (non-owner) account: with LaunchAll = true every "yes" gate and every SKU is live for it (executed test). The prompt goes through
+  MarketplaceService, the grant happens only in ProcessReceipt (saved before PurchaseGranted, one per PurchaseId), and pass perks re-check
+  UserOwnsGamePassAsync on every join, so a rejoin keeps everything and nothing is granted twice. **Still needs a live buy on the phone.**
 
 <!-- Q2-END -->
 

@@ -580,6 +580,9 @@ function PrestigeService.Init(deps: { [string]: any })
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestPrestige) :: RemoteEvent
 	-- F7: optional 1st arg `path`. Only the exact string "KeepBase" picks the keep-base path (server-checked token).
 	remote.OnServerEvent:Connect(function(player: Player, rawPath: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPrestige", rawPath) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		-- v69: extra taps are dropped silently (the allowed tap already answered) — never a strike
 		if not RateLimitService.Allow(player, "prestige", 1, 2) then
 			return

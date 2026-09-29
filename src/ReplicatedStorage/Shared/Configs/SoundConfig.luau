@@ -151,6 +151,17 @@ SoundConfig.Sounds = {
 } :: { [string]: SoundDef }
 
 SoundConfig.Mix = {
+	-- claude-bud JOB 14 sound pass: each bus plays inside one volume band (min, max; before the master), so no cue is
+	-- much louder or quieter than its neighbours. Applied only while BandsLive (GameFeelClient sets it for a player
+	-- the pass is live for); tools/sound_audit.py lists every key outside its band.
+	Bands = {
+		UI = { 0.35, 0.6 },
+		Stinger = { 0.45, 0.8 },
+		World = { 0.15, 0.8 },
+		Music = { 0.15, 0.35 },
+		Loop = { 0.15, 0.5 },
+	} :: { [string]: { number } },
+	BandsLive = false,
 	MaxConcurrent = 12, -- one-shot voices playing at once, 2D + 3D (loops are separate: music, ambience, engine)
 	MaxConcurrent2D = 4, -- of those, non-positional (UI + Stinger)
 	PoolPerKey = 4, -- pooled Sound instances per key; a 5th overlapping play of one key restarts its oldest voice

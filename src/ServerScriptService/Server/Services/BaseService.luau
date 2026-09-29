@@ -1867,6 +1867,9 @@ function BaseService.Init(deps: { [string]: any })
 
 	local getStateFn = RemoteSetup.Get(Constants.RemoteNames.GetPlayerState) :: RemoteFunction
 	getStateFn.OnServerInvoke = function(player: Player)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "GetPlayerState") then -- claude-bud JOB 15
+			return nil
+		end
 		-- v56: do not nil bootstrap for first 20s after join (HUD/WorldPrompt poll)
 		local joinedAt = getStateJoinedAt[player.UserId]
 		local inBootstrap = typeof(joinedAt) == "number" and (os.clock() - joinedAt) < 20

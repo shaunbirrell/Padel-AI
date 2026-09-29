@@ -379,6 +379,15 @@ function PremiumWeaponsClient.Init()
 			end
 			if d.K == "G" and typeof(d.F) == "Vector3" and typeof(d.T) == "Vector3" then
 				fxTracer(d.F, d.T)
+				local GF = module("GameFeelClient") -- claude-bud JOB 14: the premium gun was silent
+				if GF then
+					GF.Sound("PremiumGun", d.F)
+				end
+			elseif d.K == "M" and typeof(d.F) == "Vector3" then
+				local GF = module("GameFeelClient") -- claude-bud JOB 14: the missile launch was silent
+				if GF then
+					GF.Sound("PremiumMissile", d.F)
+				end
 			elseif d.K == "X" and typeof(d.T) == "Vector3" then
 				local e = Instance.new("Explosion")
 				e.Position = d.T

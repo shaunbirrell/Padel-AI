@@ -1026,6 +1026,9 @@ function MissionService.Init(deps: { [string]: any })
 	-- cash/XP. Keep a listener (so events never queue) but drop requests unless explicitly enabled.
 	local startRemote = RemoteSetup.Get(Constants.RemoteNames.RequestStartMission) :: RemoteEvent
 	startRemote.OnServerEvent:Connect(function(player: Player, missionId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestStartMission", missionId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if MissionConfig.TimedMissionsRemoteEnabled ~= true then
 			return
 		end
@@ -1040,6 +1043,9 @@ function MissionService.Init(deps: { [string]: any })
 
 	local claimRemote = RemoteSetup.Get(Constants.RemoteNames.RequestClaimMission) :: RemoteEvent
 	claimRemote.OnServerEvent:Connect(function(player: Player, missionId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestClaimMission", missionId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "claim_mission", 2, 3) then
 			return
 		end
@@ -1048,6 +1054,9 @@ function MissionService.Init(deps: { [string]: any })
 
 	local dailyRemote = RemoteSetup.Get(Constants.RemoteNames.RequestClaimDailyReward) :: RemoteEvent
 	dailyRemote.OnServerEvent:Connect(function(player: Player)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestClaimDailyReward") then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "daily_reward", 1, 2) then
 			return
 		end

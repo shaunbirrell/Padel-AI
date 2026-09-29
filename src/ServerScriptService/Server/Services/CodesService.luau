@@ -280,6 +280,9 @@ function CodesService.Init(deps: { [string]: any })
 	local perMin = math.max(1, CodesConfig.TriesPerMinute)
 	local fn = RemoteSetup.Get(Constants.RemoteNames.RedeemCode) :: RemoteFunction
 	fn.OnServerInvoke = function(player: Player, code: any): RedeemResult
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RedeemCode", code) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return result("RateLimited")
+		end
 		-- 5 tries per minute: bucket of 5, refilled at 5 per 60 s
 		if not RateLimitService.Allow(player, "redeem_code", perMin / 60, perMin) then
 			return result("RateLimited")
