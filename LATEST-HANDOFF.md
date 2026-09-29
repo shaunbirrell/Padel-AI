@@ -1,4 +1,8 @@
 <!-- Q2-START -->
+## v112 (Code Bot, 2026-09-29) — JOB 21 10 base plots LIVE
+- Merged Claude `7e883b1` (JOB 21: 10 plots, dock channel/gate pad/spur road each, full-server teleport) onto v111 (Grab Cash off). WE_Build 112; BuyPathStatic FAIL=0; rojo ok. Creator Hub max players -> 10.
+- NEXT for Claude: JOB 22 army follow root-cause fix. Rebase onto v112.
+
 ## v111 (Code Bot, 2026-09-29) — Grab Cash plate removed — PUBLISHED place version 109
 - Shaun: the $75 Grab Cash plate added nothing. `ManualDropperConfig.Enabled = false` (set true to restore). No plates are built; the tutorial Income step still advances on PassiveIncome.
 - WE_Build 110 → 111; pin `tools/checks/codebot_v111.py`. BuyPathStatic FAIL=0; rojo build ok. PreferMesh OFF; WE_Building* untouched.

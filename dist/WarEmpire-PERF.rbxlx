@@ -1397,7 +1397,10 @@ local function costs(a: number, b: number, c: number, d: number, e: number): { n
 end
 
 local BaseConfig = {
-	MaxPlots = 6,
+	-- claude-bud JOB 21: 10 plots (was 6). Everything else reads MaxPlots / PlotPositions / #PlotPositions.
+	MaxPlots = 10,
+	-- claude-bud JOB 21: a player who still has no free plot 8 s after joining is moved to another public server
+	FullServerTeleport = true,
 	-- v68: follows BaseLayoutConfig.PlotSize (320) while the layout is on — MapSetup builds pads that size
 	PlotSize = if BaseLayoutConfig.Enabled
 		then Vector3.new(BaseLayoutConfig.PlotSize, 1, BaseLayoutConfig.PlotSize)
@@ -1410,6 +1413,14 @@ local BaseConfig = {
 		Vector3.new(0, 0.5, 800),
 		Vector3.new(800, 0.5, -400),
 		Vector3.new(800, 0.5, 400),
+		-- claude-bud JOB 21 (owner: every plot needs a dock): 4 more plots near the map edge, backs to the water, so each
+		-- Dock channel (WaterConfig.Channels) runs straight out of the rear into the ring canal (north) or the sea
+		-- (south) crossing no road, POI or capture; each gate apron joins its nearest +-800 road by a WorldFill spur.
+		-- Clear of every other plot, the Town, POIs, captures and water (tools/checks/claude_bud_plots.py).
+		Vector3.new(-980, 0.5, -1300), -- P7: rear north -> Ring_NW
+		Vector3.new(980, 0.5, -1300), -- P8: rear north -> Ring_NE
+		Vector3.new(-1000, 0.5, 1280), -- P9: rear south -> the sea
+		Vector3.new(560, 0.5, 1280), -- P10: rear south -> the sea
 	} :: { Vector3 },
 
 	Structures = {
@@ -3569,8 +3580,8 @@ local GameConfig = {
 	-- One base per player: must equal the place's Max Players setting (place settings, not code) and
 	-- BaseConfig.MaxPlots. A player past the plot count joins with no base. BaseService warns in the server log at boot
 	-- when the place allows more players than there are plots.
-	MaxPlayersPerServer = 6,
-	BasePlotCount = 6,
+	MaxPlayersPerServer = 10,
+	BasePlotCount = 10,
 	RespawnTimeSeconds = 5,
 	FriendlyFire = false,
 	PvPEnabled = true,
@@ -16049,6 +16060,11 @@ local WaterConfig = {
 		{ PlotId = 4, Until = 1364 }, -- south into Harbour_SouthDocks
 		{ PlotId = 5, Until = 1760 }, -- east into Ring_E2
 		{ PlotId = 6, Until = 1760 }, -- east into Ring_E3
+		-- claude-bud JOB 21: the new plots (short straight channels; none crosses a road or a POI)
+		{ PlotId = 7, Until = -1760 }, -- north into Ring_NW (x -872..-832, z -1760..-1460)
+		{ PlotId = 8, Until = -1760 }, -- north into Ring_NE (x 1088..1128)
+		{ PlotId = 9, Until = 1490 }, -- south into Sea_E1 (x -1148..-1108, z 1440..1490)
+		{ PlotId = 10, Until = 1490 }, -- south into Sea_E1 (x 412..452)
 	} :: { Channel },
 
 	-- Sea gate (plot-local, BaseLayoutConfig frame). Built by MapSetup in LayoutGround as folder "SeaGate_Dock" with
@@ -17360,6 +17376,11 @@ local WorldConfig = {
 			{ Id = "Gate_P4", PlotId = 4, LocalX = -62, LocalZ = 222 },
 			{ Id = "Gate_P5", PlotId = 5, LocalX = -62, LocalZ = 222 },
 			{ Id = "Gate_P6", PlotId = 6, LocalX = -62, LocalZ = 222 },
+			-- claude-bud JOB 21: the land plots 7-10 (no sign: the world sign budget of 17 is full)
+			{ Id = "Gate_P7", PlotId = 7, LocalX = -62, LocalZ = 222, NoSign = true },
+			{ Id = "Gate_P8", PlotId = 8, LocalX = -62, LocalZ = 222, NoSign = true },
+			{ Id = "Gate_P9", PlotId = 9, LocalX = -62, LocalZ = 222, NoSign = true },
+			{ Id = "Gate_P10", PlotId = 10, LocalX = -62, LocalZ = 222, NoSign = true },
 			{ Id = "Pool_Depot", X = -1180, Z = 34, Yaw = -90 }, -- faces +X (RoadZ0)
 			{ Id = "Pool_Armory", X = 1180, Z = -34, Yaw = 90 }, -- faces -X
 			{ Id = "Pool_Town", X = 40, Z = 170, Yaw = 0 }, -- faces -Z
@@ -17753,6 +17774,12 @@ local WorldFillConfig = {
 		{ Name = "Fill_RoadP5b", X0 = 400, Z0 = -407, X1 = 400, Z1 = -7 },
 		{ Name = "Fill_RoadP6a", X0 = 580, Z0 = 400, X1 = 393, Z1 = 400 },
 		{ Name = "Fill_RoadP6b", X0 = 400, Z0 = 407, X1 = 400, Z1 = 7 },
+		-- claude-bud JOB 21: the new plots' gates to the nearest +-800 road, between the front wall and the gate pad
+		-- (north plots: front edge z -1140, pad z -1078; south plots: front edge z 1120, pad z 1058)
+		{ Name = "Fill_RoadP7", X0 = -980, Z0 = -1110, X1 = -807, Z1 = -1110 },
+		{ Name = "Fill_RoadP8", X0 = 980, Z0 = -1110, X1 = 807, Z1 = -1110 },
+		{ Name = "Fill_RoadP9", X0 = -1000, Z0 = 1090, X1 = -807, Z1 = 1090 },
+		{ Name = "Fill_RoadP10", X0 = 560, Z0 = 1090, X1 = 793, Z1 = 1090 },
 	} :: { { Name: string, X0: number, Z0: number, X1: number, Z1: number } },
 
 	-- a bridge runs along Z at X, over a channel whose water spans Z0..Z1 (+ 6-stud banks)
@@ -18386,7 +18413,7 @@ Constants.SessionLockRefreshSeconds = 15
 Constants.DataStoreRetries = 3
 Constants.DataStoreRetryDelay = 1.5
 
-Constants.MaxBasePlots = 6
+Constants.MaxBasePlots = 10 -- claude-bud JOB 21: = BaseConfig.MaxPlots (tools/checks/claude_bud_plots.py)
 Constants.PassiveIncomeTickSeconds = 5
 
 Constants.Colors = {
@@ -23430,7 +23457,7 @@ do
 end
 
 if DevConfig.VerboseLogging then
-	print("[WAR EMPIRE] Services initialized. Plots:", Constants.MaxBasePlots)
+	print("[WAR EMPIRE] Services initialized. Plots:", require(ReplicatedStorage.Shared.Configs.BaseConfig).MaxPlots) -- claude-bud JOB 21
 end
 
 print("[WAR EMPIRE] Server Bootstrap ready.")
@@ -23595,7 +23622,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 111)
+		player:SetAttribute("WE_Build", 112)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -31800,6 +31827,7 @@ local WorldConfig = require(SharedConfigs:WaitForChild("WorldConfig"))
 -- F10 (owner's 11 features): the capture zones (incl. the Home Outposts) are TerritoryConfig's rows
 -- (ReplicatedStorage.Shared ships with the place and replicates before any server script runs: no wait needed)
 local TerritoryConfig = require(ReplicatedStorage.Shared.Configs.TerritoryConfig)
+local BaseConfig = require(ReplicatedStorage.Shared.Configs.BaseConfig) -- claude-bud JOB 21: the one plot list
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -31862,14 +31890,9 @@ local STRUCT_COLS = 4
 local STRUCT_GAP = 42 -- studs between upgrade pad centers (was 30)
 local STRUCT_ORIGIN = Vector3.new(-63, 1.6, -63) -- CommandCenter grid origin on each plot
 
-local PLOT_POSITIONS = {
-	Vector3.new(-PLOT_RING, 0.5, -PLOT_RING * 0.5), -- Plot1 SW
-	Vector3.new(-PLOT_RING, 0.5, PLOT_RING * 0.5), -- Plot2 NW
-	Vector3.new(0, 0.5, -PLOT_RING), -- Plot3 S
-	Vector3.new(0, 0.5, PLOT_RING), -- Plot4 N
-	Vector3.new(PLOT_RING, 0.5, -PLOT_RING * 0.5), -- Plot5 SE
-	Vector3.new(PLOT_RING, 0.5, PLOT_RING * 0.5), -- Plot6 NE
-}
+-- claude-bud JOB 21: the one plot list is BaseConfig.PlotPositions (MaxPlots of them); PLOT_RING stays for the ring roads
+local PLOT_POSITIONS: { Vector3 } = table.clone(BaseConfig.PlotPositions :: { Vector3 })
+local _ = PLOT_RING
 
 -- World v2 (spec §3.4): each fort's wall toward its nearest road has a 16-wide gate (GateSide = the gated wall)
 local FORT_GATE_WIDTH = 16
@@ -32790,6 +32813,10 @@ local function layoutSignature(): number
 	end
 	for id, c in pairs((StructureVisualConfig :: any).Installations or {}) do
 		table.insert(rows, string.format("I%s:%g,%g", tostring(id), tonumber(c.Width) or 0, tonumber(c.Depth) or 0))
+	end
+	-- claude-bud JOB 21: the plot list too, so a map saved with fewer plots is rebuilt
+	for i, p in ipairs(BaseConfig.PlotPositions :: { Vector3 }) do
+		table.insert(rows, string.format("P%d:%g,%g", i, p.X, p.Z))
 	end
 	table.sort(rows)
 	local text = table.concat(rows, ";")
@@ -34866,6 +34893,9 @@ function MapSetup.Run()
 			continue
 		end
 		-- 1-post sign on the back edge, the painted face toward the pad front (readable as you walk up to the pad)
+		if (def :: any).NoSign == true then
+			continue -- claude-bud JOB 21: the new plots' gate pads carry no sign (the world sign budget 17 is full)
+		end
 		-- vscale R2: now GarageSignBack behind the pad centre, clear of a Roblox-size body parked on it (pickup tail 13.29)
 		local back = tonumber(spawnCfg.GarageSignBack) or (spawnCfg.PadSize.Z * 0.5 + 0.4)
 		local topY = spawnCfg.PadSize.Y * 0.5
@@ -56535,6 +56565,19 @@ function BaseService.IsAtConsole(player: Player, structureId: string, atPart: Ba
 	return ok, reason, dist
 end
 
+-- claude-bud JOB 21: does this plot have a dock channel (a WaterConfig.Channels row)?
+function BaseService._PlotHasChannel(pid: number): boolean
+	local okW, WC = pcall(function()
+		return require(ReplicatedStorage.Shared.Configs.WaterConfig) :: any
+	end)
+	for _, c in ipairs(if okW and WC and WC.Channels then WC.Channels else {}) do
+		if c.PlotId == pid then
+			return true
+		end
+	end
+	return false
+end
+
 function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: PurchaseOpts?): Types.PurchaseUpgradeResult
 	if not RemoteGuard.IsIdString(structureId, 48) then
 		return { Ok = false, Error = "InvalidStructure" }
@@ -56592,6 +56635,13 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: 
 	if profile.BasePlotId ~= ownPlot then
 		profile.BasePlotId = ownPlot
 		DS.MarkDirty(player)
+	end
+	-- claude-bud JOB 21: a plot with no WaterConfig.Channels row has no water route: no Dock there (every plot has one today)
+	if structureId == "Dock" and not BaseService._PlotHasChannel(ownPlot) then
+		if NotificationService and NotificationService.Notify then
+			pcall(NotificationService.Notify, player, "This base has no harbour", "Warn", 3)
+		end
+		return { Ok = false, Error = "NoHarbour" }
 	end
 
 	-- v71: console-only buying — the player must stand at THIS structure's console on their own plot. Runs before
@@ -57502,6 +57552,34 @@ end
 -- v69: server full (every plot owned) — the player gets no plot and is told why, never a shared plot.
 local NO_PLOT_BUY_MESSAGE = "No free base on this server — you get the next one that frees up"
 
+-- claude-bud JOB 21: a player with no free plot is told and teleported to another public server (matchmaking picks
+-- one with room). Studio / BaseConfig.FullServerTeleport = false: only the message. pcall'd, one retry.
+function BaseService._MoveToAnotherServer(player: Player)
+	if (BaseConfig :: any).FullServerTeleport ~= true or RunService:IsStudio() then
+		return
+	end
+	if NotificationService and NotificationService.Notify then
+		pcall(NotificationService.Notify, player, "Server full - moving you to another server", "Warn", 6)
+	end
+	task.spawn(function()
+		task.wait(3)
+		local TeleportService = game:GetService("TeleportService")
+		for attempt = 1, 2 do
+			if player.Parent == nil or ownedPlotOf(player.UserId) ~= nil then
+				return -- left, or a base freed up meanwhile
+			end
+			local ok, err = pcall(function()
+				TeleportService:TeleportAsync(game.PlaceId, { player })
+			end)
+			if ok then
+				return
+			end
+			warn("[BaseService] full-server teleport failed", player.UserId, attempt, err)
+			task.wait(5)
+		end
+	end)
+end
+
 local function notifyNoPlot(player: Player)
 	if not (NotificationService and NotificationService.Notify) then
 		return
@@ -57823,7 +57901,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 111)
+			player:SetAttribute("WE_Build", 112)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -57832,6 +57910,8 @@ function BaseService.Init(deps: { [string]: any })
 			task.delay(8, function()
 				if player.Parent and ownedPlotOf(player.UserId) == nil then
 					notifyNoPlot(player)
+					-- claude-bud JOB 21 safety net: still no base -> another public server (never left baseless)
+					BaseService._MoveToAnotherServer(player)
 				end
 			end)
 		end
@@ -64974,7 +65054,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 111)
+		player:SetAttribute("WE_Build", 112)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -65115,7 +65195,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=111",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=112",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
