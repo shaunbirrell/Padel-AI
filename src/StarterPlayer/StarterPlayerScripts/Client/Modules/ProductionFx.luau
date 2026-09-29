@@ -276,6 +276,10 @@ end
 
 --[[ "Low FX": saved Graphics Quality 1..LowQualityLevel, or Automatic (0) while the device prefers touch. ]]
 function ProductionFx.IsLowFx(): boolean
+	-- claude-bud JOB 8: the automatic low tier (QualityGovernor: small screen / low FPS) also means low FX
+	if game:GetService("Players").LocalPlayer:GetAttribute("WE_LowQuality") == true then
+		return true
+	end
 	local q = savedQuality()
 	if q > 0 then
 		return q <= V.LowQualityLevel

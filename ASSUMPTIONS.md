@@ -8951,3 +8951,30 @@ ds_territories.luau T3):
     opens, the ATTACK button gets a pulsing gold outline, and a hint says "Tap ATTACK to send your army at enemies". The
     first ATTACK order (SquadOrdersService.SetOrder → TutorialService.OnArmyOrder) saves `profile.FirstAttackDone` and
     removes the outline; otherwise it fades after 20 s. The copy never names a key or says click.
+
+## 2026-09-29 — claude-bud JOB 8: mobile performance (QualityConfig + Client/Modules/QualityGovernor, owner-only) + streaming audit
+- **Profile (no Roblox runtime here, so these are the recorded and planned counts, not a live measurement):**
+  - World parts outside bases at Full quality: about 2,476 (last stand-in census) + WorldFill 388 = about 2,864 (budget 2,900, hard cap 3,100).
+  - Low (server dressing quality): about 1,679 + 198 = about 1,877 (budget 1,900). Lights 21, SurfaceGuis at budget, 0 Neon outside bases.
+  - WorldFill is 342 of its 388 parts in 6 army positions; Tier 2 (Full-only extras) is 174 of them.
+  - The server log line `WorldFill: quality=full parts=N` and `MapDressing complete: ... parts=` give the real numbers on live.
+- **Automatic low tier (client only; the server world is unchanged):**
+  - It turns on when the viewport's short side is ≤ 480 px (every phone in landscape: 390 / 440 / 360) or when FPS stays
+    under 28 for 8 s. It turns off after 30 s over 50 FPS, never on a small screen.
+  - While low: WorldKits decoration clusters in Workspace.WorldFill and WarEmpireSetup.WorldDressing are removed from this
+    client's world beyond 180 studs (Tier 2) or 420 studs (any), checked at 1 Hz from the camera focus; GlobalShadows is
+    off locally; and `WE_LowQuality` makes `ProductionFx.IsLowFx()` true (cheaper effects).
+  - Per frame it only bumps a counter. Each folder's cluster list is built once, then kept by DescendantAdded.
+  - Hidden clusters are at least 180 studs away and come back within 1 s of the camera nearing them (collidable props too;
+    vehicles at up to 70 studs/s never reach one before it is back).
+- **Streaming readiness (flag stays OFF):**
+  - `Workspace.StreamingEnabled` is not set in default.project.json, so the rojo build uses the reflection default; left untouched.
+  - Static audit of client code found nothing to fix:
+    - no dot-indexed map paths and no unbounded WaitForChild;
+    - no chained FindFirstChild calls;
+    - tag lookups (BankRaid, Territory, ConsoleWaypoint) re-query every time;
+    - the one-shot Workspace scan (UIController.restoreDefaultPrompts) is only a failure fallback;
+    - no instance references are sent over remotes.
+  - The earlier streaming2 lane (StreamPrefetch, bounded waits, atomic vehicle models) covers the rest.
+  - `tools/checks/claude_bud_q2.py` now fails if client code gains a dot-indexed map path or a chained FindFirstChild.
+  - Still needs a device test with the flag on in Studio before it is ever switched.

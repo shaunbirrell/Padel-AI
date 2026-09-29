@@ -1,10 +1,10 @@
 <!-- Q2-START -->
 # WHERE I STOPPED â€” QUEUE 2 (2026-09-29, Claude on Bud, claude/desktop-bud rebased on v97 36c560e)
-Jobs: [x] 6 Extra Garage Slot Â· [x] 7 first-5-minutes tutorial Â· [ ] 8 mobile perf + streaming audit Â· [ ] 9 old WIP Â· [ ] 10 balance Â· [ ] 11 juice
-- J6: `ExtraGarageSlot` pass (Id 0, 199 R$, owner-only; the playtest owner has it for testing). Spawning a different vehicle parks
-  the current one; sit in the parked one to drive it again. Gold "ROBUX" Shop row (SOON until the Id exists).
-- J7: a welcome line on the first join, and the first-ATTACK hint after the tutorial (Army popover opens, ATTACK outlined,
-  done for good on the first ATTACK). The existing tutorial covers claim / pad / cash / recruit and is skippable, once per profile.
+Jobs: [x] 6 Extra Garage Slot Â· [x] 7 first-5-minutes tutorial Â· [x] 8 mobile perf + streaming audit Â· [ ] 9 old WIP Â· [ ] 10 balance Â· [ ] 11 juice
+- J6: `ExtraGarageSlot` pass (Id 0, 199 R$, owner-only; the playtest owner has it for testing). Spawning a different vehicle parks the current one.
+- J7: a welcome line on the first join, and the first-ATTACK hint after the tutorial (the existing tutorial covers claim / pad / cash / recruit).
+- J8: an automatic LOW tier on phones / low FPS (far decoration hidden, shadows off, cheaper FX), owner-only (`QualityConfig`).
+  The streaming audit found nothing to fix (details in ASSUMPTIONS); StreamingEnabled is left off.
 
 <!-- Q2-END -->
 

@@ -30,3 +30,33 @@ must_contain("src/ServerScriptService/Server/Services/SquadOrdersService.luau", 
 must_contain(_q2_fc, 'local btn = pg and pg:FindFirstChild("Order_Attack", true)', "CLAUDE-BUD J7: the ATTACK button is outlined")
 _q2_t = read(_q2_tc) or ""
 (ok if not re.search(r"(?i)\b(click|press [A-Z]\b|key [A-Z]\b)", _q2_t[_q2_t.find("TutorialConfig.FirstMinutes = {"):]) else bad)("CLAUDE-BUD J7: first-minutes copy never says click or names a key (phones)")
+
+# ── JOB 8 mobile performance: automatic low tier + streaming readiness audit (flag stays OFF) ──
+import os as _q2_os
+_q2_qc = "src/ReplicatedStorage/Shared/Configs/QualityConfig.luau"
+_q2_qg = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/QualityGovernor.luau"
+must_contain(_q2_qc, "local QualityConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J8: low tier owner-only first")
+must_contain(_q2_qg, "local small = math.min(vp.X, vp.Y) <= Q.SmallScreenShortSide", "CLAUDE-BUD J8: small screens go low")
+must_contain(_q2_qg, "if small or lowFor >= Q.LowFpsSeconds then", "CLAUDE-BUD J8: sustained low FPS goes low")
+must_contain(_q2_qg, "local hide = low and ((e.Tier >= 2 and d > Q.HideTier2BeyondStuds) or d > Q.HideAnyBeyondStuds)", "CLAUDE-BUD J8: far decoration hidden while low")
+must_contain(_q2_qg, "\tfor _, d in ipairs(folder:GetDescendants()) do -- once per folder", "CLAUDE-BUD J8: the cluster list is built once per folder (no per-frame scans)")
+_q2_g = read(_q2_qg) or ""
+_q2_hb = _q2_g[_q2_g.find("RunService.Heartbeat:Connect"):_q2_g.find("end)", _q2_g.find("RunService.Heartbeat:Connect"))]
+(ok if _q2_hb and "GetDescendants" not in _q2_hb and "{" not in _q2_hb else bad)("CLAUDE-BUD J8: the per-frame work is one counter (no scans, no allocation)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/ProductionFx.luau", 'LocalPlayer:GetAttribute("WE_LowQuality") == true then', "CLAUDE-BUD J8: cheaper effects while low")
+must_not_contain("default.project.json", '"StreamingEnabled": true', "CLAUDE-BUD J8: StreamingEnabled stays OFF")
+# streaming audit (regression guard on client code): no dot-indexed map paths, no chained FindFirstChild method calls
+_q2_bad = []
+for _root in ("src/StarterPlayer", "src/ReplicatedStorage"):
+    for _dp, _dn, _fn in _q2_os.walk(_root):
+        for _f in _fn:
+            if _f.endswith(".luau"):
+                _p = _q2_os.path.join(_dp, _f).replace("\\", "/")
+                _src = re.sub(r"--\[(=*)\[.*?\]\1\]", lambda m: "\n" * m.group(0).count("\n"), read(_p) or "", flags=re.S)
+                for _i, _l in enumerate(_src.split("\n"), 1):
+                    _code = _l.split("--")[0]
+                    if re.search(r"\b[wW]orkspace\.(?!CurrentCamera|Terrain|Gravity|FallenPartsDestroyHeight|StreamingEnabled|DistributedGameTime)[A-Z]\w*\.[A-Z]", _code):
+                        _q2_bad.append(f"{_p}:{_i} map path")
+                    if re.search(r":FindFirstChild\([^)]*\)[:.][A-Za-z]", _code):
+                        _q2_bad.append(f"{_p}:{_i} chained FindFirstChild")
+(ok if not _q2_bad else bad)(f"CLAUDE-BUD J8: streaming audit clean on client code ({_q2_bad[:5]})")
