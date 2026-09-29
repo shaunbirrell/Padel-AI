@@ -26,6 +26,7 @@ Missions · **Codes**); the BuyPathStatic "5 rail tiles" pin was moved to "5 + C
   list. The pre-launch samples WARFOUNDING / BUILDCONQUER are kept but `Active = false` (players see "expired").
 - Pins: `tools/checks/codebot_v102.py` + `tools/codes_gate_test.py` (runs the real CodesService in the Luau CLI, 37 checks).
   PreferMesh OFF. WE_Building* untouched.
+- **Published:** Open Cloud place version **100** (commit 4b658d5). BuyPathStatic PASS=5525 FAIL=0 (parse gate on), rojo build ok.
 - **Publish note for Shaun:** "Migrate to Latest Update" (or shut down old servers) so v102 appears.
 
 ## How to add a new code (owner)
