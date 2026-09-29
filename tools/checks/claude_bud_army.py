@@ -63,7 +63,7 @@ _cba_min = min((_cba_math.hypot(a[0] - b[0], a[1] - b[1]) for a in _cba_cells fo
 (ok if all(z >= _cba_half + _cba_t.get("PlotPadStuds", 2) + 4 and abs(x) > _cba_gate for x, z in _cba_cells) and _cba_min >= 3 else bad)(
     f"CLAUDE-BUD army fix: hold cells all outside the gate plane (>= edge + pad + 4), off the gate lane, unique, >= 3 apart (min {_cba_min})")
 # ATTACK: per-seat spots, never a shared point; simulated for squads of 1..60
-must_contain(_cba_so, "unit.Humanoid:MoveTo(af.AttackPoint(st, unit, playerRoot.Position, playerRoot.CFrame.LookVector, \"march\"))", "CLAUDE-BUD army fix: ATTACK with no target uses per-seat march spots")
+must_contain(_cba_so, "SquadOrdersService._AF.Command(unit, af.AttackPoint(st, unit, playerRoot.Position, playerRoot.CFrame.LookVector, \"march\"))", "CLAUDE-BUD army fix: ATTACK with no target uses per-seat march spots")
 must_contain(_cba_so, "local ringAt = afA.AttackPoint(st, unit, center, center - (if playerRoot then playerRoot.Position else from), \"ring\")", "CLAUDE-BUD army fix: ATTACK chase uses a per-seat ring round the target")
 _cba_j = _cba_so_s.find("\tlocal afA = attackTidy(player)")
 _cba_blk2 = _cba_so_s[_cba_j:_cba_so_s.find("\tif unit.AimRoot ~= nil then", _cba_j)] if _cba_j >= 0 else ""

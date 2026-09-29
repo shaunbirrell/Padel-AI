@@ -18,6 +18,15 @@ Jobs: [x] 17 · [x] 18 · [x] 19 · [x] 20 real base guards · [x] 21 more plots
   moving you to another server" + teleport. Phone tests: join as the 7th-10th player: you get a base; drive from each
   new base's gate to the road; buy the Dock on P7-P10 and sail out the channel into the canal / sea; an old save with
   plot 1-6 still loads; with 11 players the 11th is moved to another server; frame rate with 10 players on a mid phone.
+- J22 ARMY FOLLOW ROOT-CAUSE FIX (docs/ARMY-FOLLOW-ROOTCAUSE.md; ArmyConfig.Follow2.Stable, false = old): one mover
+  (ArmyFollow.Command), smoothed formation anchor (facing-based heading, 90 deg/s cap, 20 deg deadzone, 1.5 s about-turn
+  hold, no 180 flips), stable seats (no side swaps), MoveTo only when the slot moved 2.5 studs / 0.5 s, 1.5-3 stud arrival
+  deadzone, AutoRotate faces travel (gyro only at rest), no soldier-player collision, escort fights use the same slots.
+  PLAYTEST (phone + PC, 2 players): stand still (no jitter); walk straight; slow 90 turn; fast 180; circles; sudden
+  stop; strafe L/R and walk backwards (shift-lock): the formation must NOT flip; sprint away (they speed up, no
+  teleport); zig-zag (formation steady); 5 / 8 soldiers (+ escorts for 20-50); fight near a bank guard then walk on
+  (no rush to new spots); walk through a doorway / round a building; another player walks through the army (no
+  pushing). If worse: ArmyConfig.Follow2.Stable = false.
 
 <!-- Q2-END -->
 

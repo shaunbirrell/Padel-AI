@@ -318,8 +318,36 @@ function BaseGuards.ExtraPosts(plotId: number, ownerUserId: number, gateCf: CFra
 	return out
 end
 
+-- claude-bud JOB 22: base guards never collide with each other (they still collide with the world and players)
+local GUARD_GROUP = "WE_Guards"
+local guardGroupReady = false
+local function guardGroup(model: Model)
+	if not guardGroupReady then
+		guardGroupReady = true
+		pcall(function()
+			local PS = game:GetService("PhysicsService")
+			if not PS:IsCollisionGroupRegistered(GUARD_GROUP) then
+				PS:RegisterCollisionGroup(GUARD_GROUP)
+			end
+			PS:CollisionGroupSetCollidable(GUARD_GROUP, GUARD_GROUP, false)
+		end)
+	end
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.CollisionGroup = GUARD_GROUP
+		end
+	end
+	model.DescendantAdded:Connect(function(d)
+		if d:IsA("BasePart") then
+			d.CollisionGroup = GUARD_GROUP
+		end
+	end)
+end
+BaseGuards.GuardGroup = GUARD_GROUP
+
 -- after a guard spawns: the Defenses research HP multiplier
 function BaseGuards.AfterSpawn(g: any, ownerUserId: number)
+	pcall(guardGroup, g.Model)
 	local owner = Players:GetPlayerByUserId(ownerUserId)
 	local rs = deps.ResearchService
 	if owner and rs and rs.GetBonus then
@@ -413,6 +441,7 @@ local function spawnTower(def: any, i: number, plat: BasePart, H: any): any?
 		return nil
 	end
 	g.Root.Anchored = true -- stands on the platform
+	pcall(guardGroup, g.Model)
 	g.Model:SetAttribute("TowerGuard", true)
 	g.Model:SetAttribute("OwnerUserId", def.OwnerUserId)
 	g.Humanoid.MaxHealth = C.Tower.Health
