@@ -909,6 +909,24 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 				SquadOrdersService.SyncArmy(plr)
 			end
 		end)
+		-- claude-bud JOB 5d: his last field soldier just died: one army prompt (MonetizationConfig.Placement)
+		task.defer(function()
+			local stNow = squadByUser[owner.UserId]
+			if stNow == nil then
+				return
+			end
+			for _, u in ipairs(stNow.Units) do
+				if u.Alive then
+					return
+				end
+			end
+			local okM, ms = pcall(function(): any
+				return require(script.Parent.MonetizationService)
+			end)
+			if okM and ms and ms.OfferMoment then
+				pcall(ms.OfferMoment, owner, "army")
+			end
+		end)
 	end)
 
 	return unit

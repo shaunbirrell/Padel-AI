@@ -439,6 +439,22 @@ local MonetizationConfig = {
 		              and never prompts; default = the offer's own key
 		Pads are 7x7-stud floor triggers (no tap target); each label is stud-scaled, MaxDistance = LabelMaxDistance,
 		never AlwaysOnTop, tagged WorldLabelConfig.BaseLabelTag. The server decides ownership and "coming soon". ]]
+	--[[ claude-bud JOB 5d: purchase prompts at the right moments, owner-only first. Every server offer spends the
+		existing soft-offer budget (MonetizationService.ClaimSoftOfferSlot: SoftOfferCooldownSeconds apart, at most
+		SoftOfferSessionMax per session, quiet during the tutorial) and never shows for something already owned.
+		  CantAffordVehicle: the Garage's "Need $X" tap offers the smallest cash pack that covers it (client toast).
+		  AfterRebirth: after a rebirth, 2x Cash (if not owned) else the large cash pack.
+		  ArmyWiped: when his last field soldier dies, the army refill (if its Id is live) else Army Expansion.
+		  StarterLimitedHours: the Commander Starter Pack is offered only within this many hours of the first join,
+		  and its toast shows the time left (a real limit, never a fake timer). ]]
+	Placement = {
+		Rollout = "owner",
+		CantAffordVehicle = true,
+		AfterRebirth = true,
+		ArmyWiped = true,
+		StarterLimitedHours = 48,
+	},
+
 	--[[ claude-bud JOB 5b: VIP perks on top of the live VIP pass (+25 % cash, unchanged: live buyers paid for it). For a VIP
 		they are live for: a [VIP] chat tag (player attribute WE_VIPTag -> FeatureController's OnIncomingMessage) and the
 		VIP lounge near the plaza (Server/Modules/VIPLounge: a VIP-only door, a bonus pad paying LoungeCash once per
@@ -596,6 +612,17 @@ local MonetizationConfig = {
 		build_backfill = true, -- XP rebalance XP-L2: the one-time backfill grant (season x1.1 only; no pass check at join)
 	},
 }
+
+-- claude-bud JOB 5d: are the placement prompts live for this player (fail closed)
+function MonetizationConfig.PlacementLiveFor(userId: any): boolean
+	local mode = (MonetizationConfig :: any).Placement.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
 
 -- claude-bud JOB 5b: are the VIP perks (chat tag, lounge) live for this player (fail closed)
 function MonetizationConfig.VIPPerksLiveFor(userId: any): boolean

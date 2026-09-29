@@ -746,6 +746,16 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 	if not player.Parent or DataService.GetProfile(player) ~= profile or profile.StarterBundleOffered == true then
 		return nil
 	end
+	-- claude-bud JOB 5d: a real limited window (Placement.StarterLimitedHours after the first join)
+	local limitedEnds: number? = nil
+	local place: any = (MonetizationConfig :: any).Placement
+	if MonetizationConfig.PlacementLiveFor(player.UserId) and typeof(place) == "table" and tonumber(place.StarterLimitedHours) then
+		local first = tonumber((profile :: any).FirstJoinUnix) or os.time()
+		limitedEnds = first + math.floor(place.StarterLimitedHours * 3600)
+		if os.time() >= (limitedEnds :: number) then
+			return nil -- the limited window is over: never offered again
+		end
+	end
 	if not MonetizationService.ClaimSoftOfferSlot(player) then
 		return false
 	end
@@ -760,6 +770,7 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 				DisplayName = bundle.DisplayName or "Starter Pack",
 				RobuxPrice = bundle.RobuxPrice,
 				Reason = if typeof(reason) == "string" then reason else "session",
+				EndsUnix = limitedEnds, -- claude-bud JOB 5d: the toast shows the time left (nil = no limit)
 			})
 		end
 	end
@@ -807,6 +818,46 @@ end
 	profile.Entitlements.BiggerArmy (SoldierService's cap reads it; GrantEntitlement pushes the Army panel); the VIP
 	perks (MonetizationConfig.VIPPerks) set the display attribute WE_VIPTag (chat tag + the lounge door on HIS client;
 	the lounge payout re-checks VIP ownership here on the server). ]]
+--[[ claude-bud JOB 5d: one purchase prompt at a moment ("rebirth" | "army"), owner-only first
+	(MonetizationConfig.Placement). Spends the soft-offer budget; nothing already owned; a FeaturePush "Offer" to this
+	player only (the client toast prompts Roblox; every grant stays ProcessReceipt / pass ownership). ]]
+function MonetizationService.OfferMoment(player: Player, moment: string)
+	if typeof(player) ~= "Instance" or not player.Parent then
+		return
+	end
+	local place: any = (MonetizationConfig :: any).Placement
+	if typeof(place) ~= "table" or not MonetizationConfig.PlacementLiveFor(player.UserId) then
+		return
+	end
+	local kind, key, title, cta = nil, nil, nil, nil
+	if moment == "rebirth" and place.AfterRebirth == true then
+		local dc: any = MonetizationConfig.GamePasses.DoubleCash
+		if dc and (tonumber(dc.Id) or 0) ~= 0 and not ownsCached(player, "DoubleCash") then
+			kind, key, title, cta = "GamePass", "DoubleCash", "Rebuild faster: 2x Cash", tostring(dc.RobuxPrice) .. " R$"
+		else
+			local cl: any = MonetizationConfig.DevProducts.CashLarge
+			if cl and (tonumber(cl.Id) or 0) ~= 0 then
+				kind, key, title, cta = "DevProduct", "CashLarge", "Fresh start boost: $200,000", tostring(cl.RobuxPrice) .. " R$"
+			end
+		end
+	elseif moment == "army" and place.ArmyWiped == true then
+		local rf: any = (MonetizationConfig.DevProducts :: any).SoldierRefill
+		local ex: any = (MonetizationConfig.DevProducts :: any).ExtraSoldierSlot
+		if rf and (tonumber(rf.Id) or 0) ~= 0 and MonetizationConfig.SkuLiveFor(player.UserId, "SoldierRefill") then
+			kind, key, title, cta = "DevProduct", "SoldierRefill", "Army down! Refill instantly", tostring(rf.RobuxPrice) .. " R$"
+		elseif ex and (tonumber(ex.Id) or 0) ~= 0 and not ownsCached(player, "ExtraSoldierSlot") then
+			kind, key, title, cta = "DevProduct", "ExtraSoldierSlot", "Bigger army: +10 soldiers", tostring(ex.RobuxPrice) .. " R$"
+		end
+	end
+	if key == nil or not MonetizationService.ClaimSoftOfferSlot(player) then
+		return
+	end
+	local ev = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.FeaturePush)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireClient(player, "Offer", { Kind = kind, Key = key, Title = title, Cta = cta, Source = "offer" })
+	end
+end
+
 function MonetizationService.ApplyPassPerks(player: Player)
 	if not player.Parent then
 		return

@@ -1284,6 +1284,15 @@ function ShopController.Init()
 			local p: any = if typeof(payload) == "table" then payload else {}
 			local displayName = tostring(p.DisplayName or def.DisplayName or "Starter Bundle")
 			local robux = tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)
+			-- claude-bud JOB 5d: a real limited window from the server (EndsUnix); no end = no timer text
+			local ends = tonumber(p.EndsUnix)
+			if ends then
+				local left = ends - os.time()
+				if left <= 0 then
+					return false
+				end
+				displayName ..= string.format(" · Limited: %dh left", math.max(1, math.floor(left / 3600)))
+			end
 			return showOffer({
 				Key = "StarterBundleToast",
 				Title = "Jumpstart your base",
@@ -1754,6 +1763,15 @@ end
 
 --[[ v70: the cash pill's + (HUDController.BindShopOpener → UIController): SUPPLY tab, Cash Pack Mega highlighted.
 	Visual only — no toast, no purchase prompt. ]]
+-- claude-bud JOB 5d: public prompts for offer toasts (FeatureController / Garage); the same guarded paths as the Shop rows
+function ShopController.PromptDevProduct(productKey: string, source: string?)
+	promptDevProduct(productKey, source)
+end
+
+function ShopController.PromptGamePass(passKey: string, source: string?)
+	promptGamePass(passKey, source)
+end
+
 function ShopController.OpenCashPacks()
 	pendingCashMegaHighlight = true
 	setOpen(true, "hud_plus") -- F2: the rows bought from here report source "hud_plus"

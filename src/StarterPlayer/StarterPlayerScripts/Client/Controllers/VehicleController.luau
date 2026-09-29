@@ -581,6 +581,31 @@ local function onRowTap(id: string)
 		setStatus("Buying " .. def.DisplayName .. "…")
 	elseif kind == "CantAfford" then
 		setStatus(string.format("Need $%s more for %s", commas(st.Need or 0), def.DisplayName))
+		-- claude-bud JOB 5d: offer the smallest cash pack that covers the gap (MonetizationConfig.Placement, owner-only)
+		local lp = Players.LocalPlayer
+		local place: any = (MonetizationConfig :: any).Placement
+		if lp and typeof(place) == "table" and place.CantAffordVehicle == true and MonetizationConfig.PlacementLiveFor(lp.UserId) then
+			local need = st.Need or 0
+			for _, k in ipairs({ "CashSmall", "CashMedium", "CashLarge", "CashMega" }) do
+				local pk: any = (MonetizationConfig.DevProducts :: any)[k]
+				if typeof(pk) == "table" and (tonumber(pk.Id) or 0) ~= 0 and (tonumber(pk.Cash) or 0) >= need then
+					local okN, NC = pcall(require, script.Parent.NotificationController)
+					local okS, SC = pcall(require, script.Parent.ShopController)
+					if okN and okS then
+						(NC :: any).ShowOffer({
+							Key = "fp_garage_cash",
+							Title = "Short on cash for " .. def.DisplayName,
+							Sub = string.format("%s: $%s", tostring(pk.DisplayName or k), commas(tonumber(pk.Cash) or 0)),
+							Cta = tostring(pk.RobuxPrice) .. " R$",
+							OnGet = function()
+								(SC :: any).PromptDevProduct(k, "garage")
+							end,
+						})
+					end
+					break
+				end
+			end
+		end
 	else
 		firePurchase(id, def)
 	end

@@ -81,3 +81,20 @@ _cbm_t = re.search(r"PlazaAirstrikeTuning = \{(.*?)\n\t\},", _cbm_mcs, re.S)
 _cbm_tv = dict((k, float(v)) for k, v in re.findall(r"(\w+) = ([\d.]+)", _cbm_t.group(1))) if _cbm_t else {}
 (ok if _cbm_tv.get("Damage", 999) <= 50 and _cbm_tv.get("WarnSeconds", 0) >= 2 and _cbm_tv.get("ServerCooldownSeconds", 0) >= 60 and _cbm_tv.get("MinHealthLeft", 0) >= 1 else bad)(
     f"CLAUDE-BUD 5c: airstrike balanced (<= 50 dmg, >= 2 s warning, >= 60 s server cooldown, non-lethal) {_cbm_tv}")
+
+# ── 5d placement: HUD Shop tile + ATM gamepass pads exist; + moment prompts and a real limited starter window ──
+_cbm_sc = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau"
+_cbm_ps = "src/ServerScriptService/Server/Services/PrestigeService.luau"
+_cbm_so = "src/ServerScriptService/Server/Services/SquadOrdersService.luau"
+must_contain("src/ReplicatedStorage/Shared/Configs/HudConfig.luau", "DockShop", "CLAUDE-BUD 5d: the HUD has a Shop tile")
+must_contain(_cbm_mc, "\tPremiumPads = {", "CLAUDE-BUD 5d: gamepass pads at each base (PremiumPads)")
+must_contain(_cbm_mc, "\tPlacement = {\n\t\tRollout = \"owner\",", "CLAUDE-BUD 5d: moment prompts owner-only first")
+must_contain(_cbm_ms, "if key == nil or not MonetizationService.ClaimSoftOfferSlot(player) then", "CLAUDE-BUD 5d: every moment prompt spends the soft-offer budget (not spammy)")
+must_contain(_cbm_ms, "if dc and (tonumber(dc.Id) or 0) ~= 0 and not ownsCached(player, \"DoubleCash\") then", "CLAUDE-BUD 5d: never offers a pass already owned")
+must_contain(_cbm_ps, "pcall(MonetizationService.OfferMoment, player, \"rebirth\")", "CLAUDE-BUD 5d: prompt after a rebirth")
+must_contain(_cbm_so, "pcall(ms.OfferMoment, owner, \"army\")", "CLAUDE-BUD 5d: prompt when the army is wiped")
+must_contain(_cbm_gc, "place.CantAffordVehicle == true and MonetizationConfig.PlacementLiveFor(lp.UserId)", "CLAUDE-BUD 5d: prompt when a vehicle is unaffordable")
+must_contain(_cbm_ms, "\t\tif os.time() >= (limitedEnds :: number) then\n\t\t\treturn nil -- the limited window is over", "CLAUDE-BUD 5d: the starter pack is really limited (never a fake timer)")
+must_contain(_cbm_sc, 'displayName ..= string.format(" · Limited: %dh left", math.max(1, math.floor(left / 3600)))', "CLAUDE-BUD 5d: the starter toast shows the time left")
+must_contain(_cbm_sc, "function ShopController.PromptDevProduct(productKey: string, source: string?)", "CLAUDE-BUD 5d: offers reuse the Shop's guarded prompt")
+must_not_contain(_cbm_fc, "PromptProductPurchase", "CLAUDE-BUD 5d: FeatureController never prompts Marketplace directly")

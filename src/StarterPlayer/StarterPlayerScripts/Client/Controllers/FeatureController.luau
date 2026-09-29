@@ -74,6 +74,34 @@ local function marker(kind: string, data: any)
 	end
 end
 
+-- claude-bud JOB 5d: a server "Offer" (a purchase prompt at a moment) as the standard offer toast; tapping it runs the
+-- Shop's own guarded prompt (nothing is granted here: ProcessReceipt / pass ownership decide)
+local function offerToast(data: any)
+	if typeof(data) ~= "table" or typeof(data.Key) ~= "string" or typeof(data.Title) ~= "string" then
+		return
+	end
+	local okN, NotificationController = pcall(require, script.Parent.NotificationController)
+	local okS, ShopController = pcall(require, script.Parent.ShopController)
+	if not (okN and okS) then
+		return
+	end
+	local key = data.Key :: string
+	local src = if typeof(data.Source) == "string" then data.Source else "offer"
+	;(NotificationController :: any).ShowOffer({
+		Key = "fp_" .. key,
+		Title = data.Title,
+		Sub = if typeof(data.Sub) == "string" then data.Sub else nil,
+		Cta = if typeof(data.Cta) == "string" then data.Cta else "GET",
+		OnGet = function()
+			if data.Kind == "GamePass" then
+				(ShopController :: any).PromptGamePass(key, src)
+			else
+				(ShopController :: any).PromptDevProduct(key, src)
+			end
+		end,
+	})
+end
+
 -- claude-bud JOB 5b: VIP perks on this client (display / own movement only; the server decides every payout)
 local function vipPerks()
 	local Players = game:GetService("Players")
@@ -160,6 +188,8 @@ function FeatureController.Init()
 			marker(kind, data)
 		elseif kind == "ArmyUpgrades" then
 			armyUpgrades(data)
+		elseif kind == "Offer" then
+			offerToast(data)
 		end
 	end)
 end

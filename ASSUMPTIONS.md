@@ -8897,3 +8897,17 @@ ds_territories.luau T3):
 - New remote: `RequestPlazaAirstrike` (client → server, no args). ProfileSchema sanitises both counters.
 - The luau-lsp errors listed in CombatService / VisualAssetService / AirBodyRig are pre-existing (26 at HEAD). They only
   show because the new PlazaAirstrike module requires CombatService.
+
+## 2026-09-29 — claude-bud JOB 5d: placement (MonetizationConfig.Placement, owner-only)
+- **Already there:** the HUD Shop tile (left rail "Shop", cart icon; plus the "+" on the cash pill), the gamepass pads at each
+  base's ATM (PremiumPads: Auto Collect, 2x Cash, Speed), and the Commander Starter Pack offer after the tutorial.
+- **Added moment prompts.** Every server one spends the existing soft-offer budget (4 min apart, at most 3 per session,
+  quiet in the tutorial) and never offers what is already owned:
+  - can't afford a vehicle (Garage "Need $X" tap): the smallest live cash pack that covers the gap (a client toast; the
+    Shop's guarded prompt; the grant stays ProcessReceipt);
+  - after a rebirth (6 s later): 2x Cash if not owned, else Cash Pack L;
+  - army wiped (his last field soldier dies): Instant Army Refill if its Id is live, else Army Expansion if not owned.
+    Field units come back from the saved count about 8 s later anyway, so the refill's real value is filling the saved army to its cap.
+- **Limited starter pack:** it is offered only within 48 h of `FirstJoinUnix`, and its toast shows "Limited: Nh left". It's a
+  real window (never offered again after it), so no fake countdown.
+- New client API: `ShopController.PromptDevProduct / PromptGamePass`; FeatureController handles the FeaturePush "Offer" cue.
