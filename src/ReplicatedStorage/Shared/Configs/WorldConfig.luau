@@ -924,6 +924,11 @@ local WorldConfig = {
 			{ Id = "Gate_P4", PlotId = 4, LocalX = -62, LocalZ = 222 },
 			{ Id = "Gate_P5", PlotId = 5, LocalX = -62, LocalZ = 222 },
 			{ Id = "Gate_P6", PlotId = 6, LocalX = -62, LocalZ = 222 },
+			-- claude-bud JOB 21: the land plots 7-10 (no sign: the world sign budget of 17 is full)
+			{ Id = "Gate_P7", PlotId = 7, LocalX = -62, LocalZ = 222, NoSign = true },
+			{ Id = "Gate_P8", PlotId = 8, LocalX = -62, LocalZ = 222, NoSign = true },
+			{ Id = "Gate_P9", PlotId = 9, LocalX = -62, LocalZ = 222, NoSign = true },
+			{ Id = "Gate_P10", PlotId = 10, LocalX = -62, LocalZ = 222, NoSign = true },
 			{ Id = "Pool_Depot", X = -1180, Z = 34, Yaw = -90 }, -- faces +X (RoadZ0)
 			{ Id = "Pool_Armory", X = 1180, Z = -34, Yaw = 90 }, -- faces -X
 			{ Id = "Pool_Town", X = 40, Z = 170, Yaw = 0 }, -- faces -Z

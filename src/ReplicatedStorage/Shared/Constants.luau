@@ -172,7 +172,7 @@ Constants.SessionLockRefreshSeconds = 15
 Constants.DataStoreRetries = 3
 Constants.DataStoreRetryDelay = 1.5
 
-Constants.MaxBasePlots = 6
+Constants.MaxBasePlots = 10 -- claude-bud JOB 21: = BaseConfig.MaxPlots (tools/checks/claude_bud_plots.py)
 Constants.PassiveIncomeTickSeconds = 5
 
 Constants.Colors = {

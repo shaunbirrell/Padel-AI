@@ -593,7 +593,7 @@ do
 end
 
 if DevConfig.VerboseLogging then
-	print("[WAR EMPIRE] Services initialized. Plots:", Constants.MaxBasePlots)
+	print("[WAR EMPIRE] Services initialized. Plots:", require(ReplicatedStorage.Shared.Configs.BaseConfig).MaxPlots) -- claude-bud JOB 21
 end
 
 print("[WAR EMPIRE] Server Bootstrap ready.")

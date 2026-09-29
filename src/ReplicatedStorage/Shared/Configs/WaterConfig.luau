@@ -89,6 +89,11 @@ local WaterConfig = {
 		{ PlotId = 4, Until = 1364 }, -- south into Harbour_SouthDocks
 		{ PlotId = 5, Until = 1760 }, -- east into Ring_E2
 		{ PlotId = 6, Until = 1760 }, -- east into Ring_E3
+		-- claude-bud JOB 21: the new plots (short straight channels; none crosses a road or a POI)
+		{ PlotId = 7, Until = -1760 }, -- north into Ring_NW (x -872..-832, z -1760..-1460)
+		{ PlotId = 8, Until = -1760 }, -- north into Ring_NE (x 1088..1128)
+		{ PlotId = 9, Until = 1490 }, -- south into Sea_E1 (x -1148..-1108, z 1440..1490)
+		{ PlotId = 10, Until = 1490 }, -- south into Sea_E1 (x 412..452)
 	} :: { Channel },
 
 	-- Sea gate (plot-local, BaseLayoutConfig frame). Built by MapSetup in LayoutGround as folder "SeaGate_Dock" with

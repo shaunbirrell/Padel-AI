@@ -9380,3 +9380,35 @@ ds_territories.luau T3):
 - **Balance:** at most 30 damage per target per second (12 for players below level 5 or in their first 10 minutes);
   at most 6 guards / tower guards / auto-guns firing per base at once. The AI stays in the 5 Hz loop.
 - **Tests:** static + GuardConfig pure functions (Luau CLI). The real fights need two accounts on a server.
+
+## 2026-09-29 — claude-bud JOB 21: 10 base plots (was 6), every one with a dock
+- **Final count: 10 plots.** `BaseConfig.MaxPlots = 10`, and GameConfig.MaxPlayersPerServer, GameConfig.BasePlotCount,
+  Constants.MaxBasePlots and docs/LIVE_PLACE.md all say 10. The owner must set the place's Max Players to 10 (a
+  place setting, no publish).
+- **Why not 12:** with the owner's rule that every plot has a dock, a new plot needs its back to open water with a
+  straight channel crossing no road (roads have no gaps, so water can't pass under them) and no POI. Only 4 such
+  spots exist without moving POIs.
+  - The gap spots between the ring plots (±400, ±800) were rejected: their channels would cross the Signal Station /
+    Airstrip / Port / Crash Site.
+- **The new plots** (same 320 size; PlotFrame.PlotYaw faces each front toward the map centre):
+  - P7 (−980, −1300) and P8 (980, −1300): rear north into the ring canal (channels x −872…−832 and 1088…1128,
+    z −1760…−1460);
+  - P9 (−1000, 1280) and P10 (560, 1280): rear south into the sea (x −1148…−1108 and 412…452, 50 long).
+  - Each gets a Gate_P<n> pad row (no painted sign: the frozen world sign budget of 17 is full) and a WorldFill spur
+    from the gate to the nearest ±800 road, running between the front wall and the gate pad.
+  - They're clear of every other plot (≥ 60 between pads), the Town, POIs, captures and water, and every channel
+    reaches water crossing no road / POI (`tools/checks/claude_bud_plots.py`, which also covers plots 1–6).
+  - Naval pad (420, 1580) sits ~90 studs off P10's channel mouth in open sea; boats steer round it.
+- **One plot list:** MapSetup's second, hard-coded 6-entry list is gone (it builds from BaseConfig.PlotPositions). The
+  map layout stamp now includes the plots, so a saved 6-plot map is rebuilt without bumping MAP_GEN. Everything else
+  already looped over MaxPlots / PlotPositions (BaseService, TerritoryConfig Starter_P rows, GateDefense, BaseGuards,
+  SquadOrders, NextPadChevrons, ProducerLabels, NightLights, Waterways, WorldDress, WorldHygiene).
+- **Saved profiles:** an old saved plot id (1–6) is still valid (isValidPlotId checks 1..MaxPlots) and is reclaimed
+  when free.
+- **Dock guard:** BaseService refuses a Dock on a plot without a WaterConfig.Channels row ("This base has no
+  harbour"). No plot is like that today.
+- **Safety net:** a player still without a plot 8 s after joining sees "Server full - moving you to another server"
+  and TeleportService.TeleportAsync(PlaceId) sends them to another public server (2 tries; skipped in Studio;
+  BaseConfig.FullServerTeleport = false = message only).
+- **Performance:** per-base part count is unchanged (same layout). A 10-player server has 10 bases' parts; the
+  max-player frame rate needs a real 10-account test.

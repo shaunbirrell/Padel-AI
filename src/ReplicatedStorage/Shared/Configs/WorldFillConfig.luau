@@ -53,6 +53,12 @@ local WorldFillConfig = {
 		{ Name = "Fill_RoadP5b", X0 = 400, Z0 = -407, X1 = 400, Z1 = -7 },
 		{ Name = "Fill_RoadP6a", X0 = 580, Z0 = 400, X1 = 393, Z1 = 400 },
 		{ Name = "Fill_RoadP6b", X0 = 400, Z0 = 407, X1 = 400, Z1 = 7 },
+		-- claude-bud JOB 21: the new plots' gates to the nearest +-800 road, between the front wall and the gate pad
+		-- (north plots: front edge z -1140, pad z -1078; south plots: front edge z 1120, pad z 1058)
+		{ Name = "Fill_RoadP7", X0 = -980, Z0 = -1110, X1 = -807, Z1 = -1110 },
+		{ Name = "Fill_RoadP8", X0 = 980, Z0 = -1110, X1 = 807, Z1 = -1110 },
+		{ Name = "Fill_RoadP9", X0 = -1000, Z0 = 1090, X1 = -807, Z1 = 1090 },
+		{ Name = "Fill_RoadP10", X0 = 560, Z0 = 1090, X1 = 793, Z1 = 1090 },
 	} :: { { Name: string, X0: number, Z0: number, X1: number, Z1: number } },
 
 	-- a bridge runs along Z at X, over a channel whose water spans Z0..Z1 (+ 6-stud banks)
