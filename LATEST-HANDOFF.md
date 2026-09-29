@@ -10,6 +10,11 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [ ] 14 game-feel p
 
 <!-- Q2-END -->
 
+# v105 — 2026-09-29 14:51 Dublin (Code Bot, branch phase-7-polish, WE_Build 105) — BUDSQUAD LIVE
+
+- Added active, non-expiring `BUDSQUAD` redeem code: **Bud Studios Discord**, `$25,000`, once per player via saved `RedeemedCodes`.
+- Commit `b7e3e19`; Open Cloud place version **103**. BuyPathStatic `PASS=5595 FAIL=0`; rojo build ok. PreferMesh OFF; `WE_Building*` untouched.
+
 # v104 — 2026-09-29 ~14:50 Dublin (Code Bot, branch phase-7-polish, WE_Build 104) — JOB 13 ENGAGEMENT LIVE FOR ALL
 
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v104, commit 865a1e3) before JOB 14/15.** JOB 13 is now live for
