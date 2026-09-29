@@ -7,10 +7,10 @@ _cb107_LB = _cb107_SH + "Configs/LeaderboardConfig.luau"
 _cb107_ES = _cb107_S + "Services/EngagementService.luau"
 _cb107_PS = _cb107_S + "Modules/ProfileSchema.luau"
 
-# ── build ──
-for _f in (_cb107_S + "Services/DataService.luau", _cb107_S + "Services/BaseService.luau", _cb107_S + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 107)', "CODEBOT v107: WE_Build=107 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb107_S + "Services/DataService.luau", "WE_Build=107", "CODEBOT v107: DataService profile-loaded log says WE_Build=107")
+# v108 (Code Bot): retired build pins, superseded in tools/checks/codebot_v108.py:
+# for _f in (_cb107_S + "Services/DataService.luau", _cb107_S + "Services/BaseService.luau", _cb107_S + "EarlyRemotes.server.luau"):
+#     must_contain(_f, 'SetAttribute("WE_Build", 107)', "CODEBOT v107: WE_Build=107 " + _f.rsplit("/", 1)[-1])
+# must_contain(_cb107_S + "Services/DataService.luau", "WE_Build=107", "CODEBOT v107: DataService profile-loaded log says WE_Build=107")
 
 # ── BOARDS live for all ──
 must_contain(_cb107_LB, '{ Id = "Kills", Title = "MOST KILLS"', "CODEBOT v107: LeaderboardConfig MOST KILLS")

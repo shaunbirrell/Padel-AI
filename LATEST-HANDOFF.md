@@ -1,21 +1,26 @@
 <!-- Q2-START -->
-# WHERE I STOPPED — 2026-09-29 (Code Bot shipped v107) — BOARDS LIVE FOR ALL
-**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v107) before new work.** Do not redo JOB 14, JOB 15, or BOARDS.
-Keep v102 Codes / CashBoost, v104 Engagement (all) + Discord invite + exploit guards, v105 BUDSQUAD, v106 GameFeel all + RemoteGate observe.
-Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [x] 15 anti-exploit sweep · [x] BOARDS (Town Centre notice boards)
+# WHERE I STOPPED — 2026-09-29 (Code Bot shipped v108) — ARMY FLANK LIVE
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v108) before new work.** Do not redo JOB 14, JOB 15, BOARDS, or Flank.
+Keep v102 Codes / CashBoost, v104 Engagement (all) + Discord invite + exploit guards, v105 BUDSQUAD, v106 GameFeel all + RemoteGate observe, v107 BOARDS.
+Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [x] 15 anti-exploit sweep · [x] BOARDS · [x] army Flank (phone camera)
 
-- J14 is **live for all** (`GameFeelConfig.Rollout` = "all").
-- J15 RemoteGate is **observe for all** (`SecurityConfig.RemoteGate.Rollout` = "observe"). Flip to "all" only after quiet live `[RemoteGate] would reject` logs.
-- BOARDS **live for all** (`LeaderboardConfig`): 6 Town Centre notice boards (MOST KILLS all-time/week, RICHEST, TOP SUPPORTERS with Settings opt-out, PLAZA CONQUEROR weekly, REBIRTH KINGS, TOP ARMY); weekly #1 crown; night spotlights; "You:" line. v104 friends daily cap + comeback once-per-absence + admin board exclusion kept.
+- Army Follow2.Tidy.Formation = **"Flank"** (file each side, last row ~8 studs back). "Wedge" restores the old trail.
 - PreferMesh stays OFF. WE_Building* untouched. Never bump WE_Build / publish (Code Bot only).
 
-- Phone tests (956x440 + a small phone): stand ~30 studs from the Town Centre south edge and read the 6 board names; walk up and check the gold "You: #.. · .." line; at night spotlights on; kill an alt 4 times in 10 min (only 3 count after write/refresh); Settings > LEADERBOARDS > Supporter board HIDDEN removes you from TOP SUPPORTERS; buy something cheap and check TOP SUPPORTERS. Boards fill only on a live server (DataStores).
-- ARMY (owner: "still glitchy and despawns when walking"): the wedge trailed behind the phone camera; now a Flank
-  formation (a file each side of you, last row 8 studs back). Phone test: walk, run and sprint through town with 5+
-  soldiers: they stay on screen beside you, no vanish / pop-in; stop and turn round: no swirl; enter your base: they
-  still wait at the gate. If it's worse: ArmyConfig.Follow2.Tidy.Formation = "Wedge" restores the old one.
+- Phone tests (956x440 + a small phone): walk, run and sprint through town with 5+ soldiers — they stay on screen beside you, no vanish / pop-in; stop and turn: no swirl; enter your base: they still wait at the gate. If worse: ArmyConfig.Follow2.Tidy.Formation = "Wedge".
 
 <!-- Q2-END -->
+
+# v108 — 2026-09-29 ~15:55 Dublin (Code Bot, branch phase-7-polish, WE_Build 108) — ARMY FLANK FORMATION (place version TBD)
+
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v108) before new work. Do not redo Flank, BOARDS, JOB 14, or JOB 15.**
+Merged `origin/claude/desktop-bud` tip `66cfdd7` (army Flank formation) into phase-7-polish.
+
+- **Army Flank (live for everyone via Follow2.Tidy):** the tidy wedge put rows behind the owner (at / behind the phone camera), so the camera guard hid them while walking. Formation = "Flank" — a file each side of the owner, last row ~8 studs back, rows on their own side lines. "Wedge" restores the old formation.
+- Kept: v104 Engagement all + guards; Discord invite; v105 BUDSQUAD; v106 GameFeel all + RemoteGate observe; v107 BOARDS.
+- Pins: `tools/checks/codebot_v108.py` + `claude_bud_army.py` Flank pins. PreferMesh OFF. WE_Building* untouched.
+
+**Published:** Open Cloud `versionNumber=TBD`. Migrate to Latest Update for army Flank.
 
 # v107 — 2026-09-29 ~15:35 Dublin (Code Bot, branch phase-7-polish, WE_Build 107) — BOARDS LIVE FOR ALL (place version 105)
 
