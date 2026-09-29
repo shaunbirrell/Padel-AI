@@ -156,6 +156,7 @@ Constants.RemoteNames = {
 	RequestGroupReward = "RequestGroupReward",
 	-- claude-bud PREMIUM: client -> server (action "Fire" | "Missile", aim: Vector3); PremiumWeaponService checks all
 	RequestPremiumWeapon = "RequestPremiumWeapon",
+	RequestBoardSetting = "RequestBoardSetting", -- claude-bud BOARDS: client -> server, the Supporter board opt-out (boolean)
 	-- claude-bud PREMIUM: UnreliableRemoteEvent (RemoteSetup UNRELIABLE list), server -> all clients: gun / missile / boom fx
 	PremiumWeaponFx = "PremiumWeaponFx",
 }

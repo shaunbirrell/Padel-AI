@@ -9210,3 +9210,38 @@ ds_territories.luau T3):
   result("RateLimited")). RequestRedeemCode has no handler any more and gets the sink.
 - The behaviour tests set the rollouts to "owner" inside their harness, so both the gated and the open paths
   are still exercised.
+
+## 2026-09-29 — claude-bud BOARDS: Town Centre notice boards (LeaderboardConfig; extends the JOB 13 leaderboard)
+- **One system:** EngagementService's leaderboard section and EngagementClient's single board were replaced in place:
+  same WE_Leaderboards folder, one server-wide fetch. The boards are live for everyone (no owner gate); the
+  Engagement events / invite / friends / comeback keep their own Rollout.
+- **Placement:** 6 boards in a row along the Town Square's south edge (x −187.5…−112.5, z 190), facing the fountain.
+  - That's clear of the event anchor's 20-stud circle, the west benches and the hall (z 216).
+  - Each board is 14 × 22 studs so 1.5-stud rows are readable from ~30 studs on a phone; the square's 90 studs is
+    why they are not wider.
+  - CanCollide off (they never block the square). Client-built: 36 parts, 6 SurfaceGuis (MaxDistance 80),
+    6 SpotLights (no shadows, night only).
+- **Stores:** new stores `WE_LB2_<Id>` and weekly `WE_LB2_<Id>_W<ISO week>`. The JOB 13 stores (WE_LB_*_v1) were
+  owner-only, so no player data is lost.
+  - Writes: per player at most every 90 s, only changed non-zero values, request budget checked, plus once on leave.
+  - Reads: one shared fetch every 75 s. Every call is pcall'd with a doubling back-off (30 → 600 s).
+- **"You:" line:** the rank comes from the shared top-100 page (one page, same cost as top 10), so outside the top 100
+  it shows "#100+" instead of an exact "#1,234". OrderedDataStores give no rank; counting further would cost reads
+  per player.
+- **Kills:** a separate counter (profile.LB.Kills), fed only by CombatService's death listener (the server creator
+  tag). Self and clan-mate kills never count, and each killer → victim pair counts at most 3 per 10 min. It is
+  seeded once from Stats.Kills (the existing PvP kill count) so veterans don't start at zero.
+- **Plaza weekly:** Stats.PlazaCaptures minus the count at the start of the ISO week.
+- **Top army:** the biggest army ever (profile.LB.ArmyMax, updated when scores are written).
+- **Supporters:** profile.Monetization.RobuxSpent.
+  - Dev products: receipt CurrencySpent, recorded with the grant and saved before PurchaseGranted (unchanged).
+  - Passes: now the real PriceInRobux from GetProductInfo (config price as a fallback), counted once after
+    UserOwnsGamePassAsync confirms.
+  - A player who spent 0 is never written. The Settings toggle "Supporter board" saves
+    Settings.SupporterBoardOptOut and removes the entry.
+- **Crown:** the weekly #1 on MOST KILLS (weekly) and PLAZA CONQUEROR gets a 👑 BillboardGui over the head
+  (MaxDistance 40), refreshed with each fetch and after respawn.
+- **Kills board tabs:** it alternates ALL-TIME / THIS WEEK every 8 s (no tap needed on a phone).
+- **Checks:** `tools/checks/claude_bud_boards.py` (throttle, confirmed-only Robux ordering, kill validation, opt-out,
+  budgets) and the pure helpers run in the Luau CLI (ISO weeks incl. 2020W53 / 2025W01, anti-farm, throttle).
+  - The four old pins of the single board are retired with a note (claude_bud_q3.py ×3, codebot_v103.py ×1).

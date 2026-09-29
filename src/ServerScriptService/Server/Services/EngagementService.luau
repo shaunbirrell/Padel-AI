@@ -1,27 +1,21 @@
 --!strict
 --[[
 	claude-bud JOB 13 (2026-09-29): events, leaderboards, invite / friends / comeback rewards (Shared/Configs/EngagementConfig).
+	claude-bud BOARDS: Town Centre notice boards (LeaderboardConfig) live for all.
+	v104 (Code Bot, kept): friends daily cap (FriendsDay/FriendsPaid), comeback once-per-absence
+	(ComebackPaidFor/ComebackPaidAt + persistent + saveNow), admin/playtest accounts off RICHEST writes.
 	Server only. Every reward is paid here with EconomyService.AddCash and every DataStore call is pcall'd (a failure
-	skips that write / read, never a player's session). Gated per feature by EngagementConfig.LiveFor ("all" since v104).
-	v104 (Code Bot) exploit guards for the all-players rollout:
-	  * invite: only a saved profile (DataService.IsLoaded), a brand-new account (InviteNewPlayerSeconds since FirstJoinUnix)
-	    that is a real Roblox friend of the inviter (IsFriendsWithAsync, a failed check pays nothing); ReferredBy is saved
-	    right away; the inviter stays capped at InviteDailyCap a day.
-	  * friends: at most FriendsCap friends per tick and FriendsDailyCap a day (profile.FriendsDay / FriendsPaid, saved).
-	  * leaderboards: one write per player per WriteMinGapSeconds (kept across leave / rejoin in this server), unchanged
-	    scores are not rewritten, a write waits while the server's sorted-store budget is low; admin accounts
-	    (AdminConfig.UserIds / the playtest owner, whose Cash is a playtest floor) never appear on a board.
-	  * comeback: once per absence (profile.ComebackPaidFor), only on a saved profile, saved right away.
+	skips that write / read, never a player's session). Gated per feature by EngagementConfig.LiveFor.
 ]]
 
 local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local EngagementConfig = require(Shared.Configs.EngagementConfig)
+local LeaderboardConfig = require(Shared.Configs.LeaderboardConfig) -- claude-bud BOARDS
 
 local EngagementService = {}
 
@@ -29,15 +23,13 @@ local E: any = EngagementConfig
 local deps: { [string]: any } = {}
 local friendsOf: { [number]: { [number]: boolean } } = {}
 local nameCache: { [number]: string } = {}
-local lastBoardWrite: { [number]: number } = {} -- v104: os.clock() of each user's last board write (survives leave / rejoin)
-local lastBoardScores: { [number]: { [string]: number } } = {} -- v104: what was last written per user and board
 
 local function adminConfig(): any
 	local ok, AC = pcall(require, Shared.Configs.AdminConfig)
 	return if ok then AC else nil
 end
 
--- v104: admin / playtest accounts (their Cash is a playtest floor) are kept off the public boards
+-- v104: admin / playtest accounts (their Cash is a playtest floor) stay off the public boards
 local function isBoardExcluded(uid: number): boolean
 	local AC = adminConfig()
 	if AC == nil then
@@ -54,7 +46,6 @@ local function isBoardExcluded(uid: number): boolean
 	return false
 end
 
--- v104: a reward that must stick is only paid on a profile that will be saved (a session-only profile would pay again)
 local function persistent(player: Player): boolean
 	local DS = deps.DataService
 	return DS ~= nil and DS.IsLoaded ~= nil and DS.IsLoaded(player) == true
@@ -131,64 +122,130 @@ function EngagementService.PlazaBountyMult(player: Player): number
 	return if ev and tonumber(ev.PlazaBountyMult) then math.clamp(ev.PlazaBountyMult, 1, 3) else 1
 end
 
--- ── leaderboards ──
-local function scoresOf(profile: any): { [string]: number }
+-- ── leaderboards: the Town Centre notice boards (claude-bud BOARDS, Shared/Configs/LeaderboardConfig; live for all) ──
+local LB: any = LeaderboardConfig
+local killLog: { [string]: { number } } = {}
+local lastWriteAt: { [number]: number } = {}
+local lastWritten: { [number]: { [string]: number? } } = {}
+local backoff: { [string]: number } = { WriteUntil = 0, WriteStep = 0, ReadUntil = 0, ReadStep = 0 }
+local crowned: { [number]: string } = {} -- userId -> the weekly board(s) he leads
+
+local function lbOf(profile: any): any
+	local lb = profile.LB
+	if typeof(lb) ~= "table" then
+		lb = {}
+		profile.LB = lb
+	end
+	return lb
+end
+
+-- the week rolled over: weekly kills restart, weekly plaza captures count from here
+local function rollWeek(profile: any, now: number)
+	local lb = lbOf(profile)
+	local week = LeaderboardConfig.IsoWeek(now)
+	if lb.Week ~= week then
+		lb.Week = week
+		lb.KillsW = 0
+		lb.PlazaBase = math.floor(tonumber(profile.Stats and profile.Stats.PlazaCaptures) or 0)
+	end
+	if lb.Seeded ~= true then
+		lb.Seeded = true -- the all-time kill board starts from the kills already on the profile (PvP kills)
+		lb.Kills = math.max(math.floor(tonumber(lb.Kills) or 0), math.floor(tonumber(profile.Stats and profile.Stats.Kills) or 0))
+	end
+end
+
+-- key ("Kills" / "Kills_W" / ...) -> this player's value right now (nil = not on that board)
+local function valuesOf(player: Player, profile: any): { [string]: number }
+	local lb = lbOf(profile)
 	local stats = if typeof(profile.Stats) == "table" then profile.Stats else {}
-	return {
+	local army = math.floor(tonumber(profile.Soldiers) or 0)
+	if army > (tonumber(lb.ArmyMax) or 0) then
+		lb.ArmyMax = army
+	end
+	local out: { [string]: number } = {
+		Kills = math.floor(tonumber(lb.Kills) or 0),
+		Kills_W = math.floor(tonumber(lb.KillsW) or 0),
 		Richest = math.max(0, math.floor(tonumber(profile.Cash) or 0)),
-		Plaza = math.max(0, math.floor(tonumber(stats.PlazaCaptures) or 0)),
+		Plaza_W = math.max(0, math.floor(tonumber(stats.PlazaCaptures) or 0) - math.floor(tonumber(lb.PlazaBase) or 0)),
 		Rebirths = math.max(0, math.floor(tonumber(profile.Prestige) or 0)),
+		Army = math.floor(tonumber(lb.ArmyMax) or 0),
 	}
+	-- Supporters: confirmed Robux only (profile.Monetization.RobuxSpent), never 0, never for an opted-out player
+	local settings = if typeof(profile.Settings) == "table" then profile.Settings else {}
+	local spent = math.floor(tonumber(typeof(profile.Monetization) == "table" and profile.Monetization.RobuxSpent) or 0)
+	if spent > 0 and settings.SupporterBoardOptOut ~= true then
+		out.Supporters = spent
+	end
+	return out
 end
 
-local function writeBudgetOk(): boolean
-	local ok, budget = pcall(function()
-		return DataStoreService:GetRequestBudgetForRequestType(Enum.DataStoreRequestType.SetIncrementSortedAsync)
+local function budgetOk(kind: Enum.DataStoreRequestType): boolean
+	local ok, n = pcall(function()
+		return DataStoreService:GetRequestBudgetForRequestType(kind)
 	end)
-	if not ok or typeof(budget) ~= "number" then
-		return true -- no budget API (tests): the per-player gap still throttles
-	end
-	return budget >= (tonumber(E.WriteBudgetFloor) or 0)
+	return not ok or (tonumber(n) or 0) >= LB.MinBudget
 end
 
-local function writeScores(player: Player)
-	if not live("Leaderboards", player) then
+local function fail(which: string)
+	local step = math.clamp((backoff[which .. "Step"] or 0) * 2, LB.BackoffSeconds, LB.BackoffMax)
+	backoff[which .. "Step"] = step
+	backoff[which .. "Until"] = os.clock() + step
+end
+
+local function storeFor(key: string, now: number): OrderedDataStore
+	local weekly = string.sub(key, -2) == "_W"
+	local id = if weekly then string.sub(key, 1, -3) else key
+	return DataStoreService:GetOrderedDataStore(LeaderboardConfig.StoreName(id, weekly, now))
+end
+
+-- write this player's changed values (force = on leave: ignore the per-player throttle)
+local function writeScores(player: Player, force: boolean?)
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil then
 		return
 	end
-	local uid = player.UserId
-	if isBoardExcluded(uid) then
-		return
+	if isBoardExcluded(player.UserId) then
+		return -- v104: admin / playtest cash floor never written to RICHEST
 	end
 	local now = os.clock()
-	local last = lastBoardWrite[uid]
-	if last ~= nil and now - last < (tonumber(E.WriteMinGapSeconds) or 60) then
-		return -- v104: throttled (one write per player per WriteMinGapSeconds)
-	end
-	local profile = deps.DataService and deps.DataService.GetProfile(player)
-	if profile == nil or not persistent(player) then
+	if not force and not LeaderboardConfig.WriteDue(lastWriteAt[player.UserId], now) then
 		return
 	end
-	lastBoardWrite[uid] = now
-	local s = scoresOf(profile)
-	local prev = lastBoardScores[uid] or {}
-	lastBoardScores[uid] = prev
-	for _, b in ipairs(E.Boards) do
-		local v = s[b.Id]
-		if v and prev[b.Id] ~= v and writeBudgetOk() then
-			local okW = pcall(function()
-				DataStoreService:GetOrderedDataStore(b.Store):SetAsync(tostring(player.UserId), v)
+	if now < backoff.WriteUntil then
+		return
+	end
+	lastWriteAt[player.UserId] = now
+	local unix = os.time()
+	rollWeek(profile, unix)
+	local vals = valuesOf(player, profile)
+	local prev = lastWritten[player.UserId] or {}
+	lastWritten[player.UserId] = prev
+	for key, v in pairs(vals) do
+		player:SetAttribute("WE_LBVal_" .. key, v) -- the "You:" line
+		if v > 0 and prev[key] ~= v and budgetOk(Enum.DataStoreRequestType.SetIncrementSortedAsync) then
+			local ok = pcall(function()
+				storeFor(key, unix):SetAsync(tostring(player.UserId), v)
 			end)
-			if okW then
-				prev[b.Id] = v
+			if ok then
+				prev[key] = v
+			else
+				fail("Write")
+				return
 			end
 		end
 	end
+	backoff.WriteStep = 0
 end
 
 local function nameOf(uid: number): string
 	local cached = nameCache[uid]
 	if cached then
 		return cached
+	end
+	local p = Players:GetPlayerByUserId(uid)
+	if p then
+		nameCache[uid] = p.DisplayName
+		return p.DisplayName
 	end
 	local ok, got = pcall(function()
 		return Players:GetNameFromUserIdAsync(uid)
@@ -198,7 +255,41 @@ local function nameOf(uid: number): string
 	return name
 end
 
+local function setCrown(p: Player, label: string?)
+	local char = p.Character
+	local head = char and char:FindFirstChild("Head")
+	local old = head and head:FindFirstChild("WE_Crown")
+	if label == nil then
+		if old then
+			old:Destroy()
+		end
+		return
+	end
+	if head == nil or old ~= nil then
+		return
+	end
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "WE_Crown"
+	bb.Size = UDim2.fromScale(2.4, 2.4)
+	bb.StudsOffset = Vector3.new(0, 2.6, 0)
+	bb.MaxDistance = LB.CrownMaxDistance
+	bb.LightInfluence = 0
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.TextScaled = true
+	t.Font = Enum.Font.GothamBlack
+	t.TextColor3 = Color3.fromRGB(255, 205, 60)
+	t.Text = "👑"
+	t.Parent = bb
+	bb.Parent = head
+end
+
+-- ONE server-wide fetch per board, published for every client; ranks for the players in this server
 local function readBoards()
+	if os.clock() < backoff.ReadUntil then
+		return
+	end
 	local folder = ReplicatedStorage:FindFirstChild("WE_Leaderboards")
 	if folder == nil then
 		local f = Instance.new("Folder")
@@ -206,27 +297,118 @@ local function readBoards()
 		f.Parent = ReplicatedStorage
 		folder = f
 	end
-	for _, b in ipairs(E.Boards) do
-		local ok, pages = pcall(function()
-			return DataStoreService:GetOrderedDataStore(b.Store):GetSortedAsync(false, math.min(100, E.TopN + 5))
-		end)
-		if ok and pages then
+	local unix = os.time()
+	local leaders: { [number]: string } = {}
+	for _, b in ipairs(LB.Boards) do
+		local keys = {}
+		if b.AllTime then
+			table.insert(keys, b.Id)
+		end
+		if b.Weekly then
+			table.insert(keys, b.Id .. "_W")
+		end
+		for _, key in ipairs(keys) do
+			if not budgetOk(Enum.DataStoreRequestType.GetSortedAsync) then
+				return
+			end
+			local ok, page = pcall(function()
+				return storeFor(key, unix):GetSortedAsync(false, LB.FetchN):GetCurrentPage()
+			end)
+			if not ok or typeof(page) ~= "table" then
+				fail("Read")
+				return
+			end
 			local rows = {}
-			for _, entry in ipairs(pages:GetCurrentPage()) do
+			local rankOf: { [number]: number } = {}
+			local shown = 0
+			for i, entry in ipairs(page) do
 				local uid = tonumber(entry.key)
-				if uid and not isBoardExcluded(uid) and #rows < E.TopN then -- v104: admin / playtest scores never shown
-					table.insert(rows, { N = nameOf(uid), V = entry.value })
+				if uid and not isBoardExcluded(uid) then
+					rankOf[uid] = i
+					if shown < LB.TopN then
+						shown += 1
+						table.insert(rows, { U = uid, N = nameOf(uid), V = entry.value })
+					end
 				end
 			end
-			local sv = (folder :: Instance):FindFirstChild(b.Id)
+			if string.sub(key, -2) == "_W" and rows[1] then
+				local u = rows[1].U
+				leaders[u] = if leaders[u] then leaders[u] .. " + " .. b.Title else b.Title
+			end
+			for _, p in ipairs(Players:GetPlayers()) do
+				p:SetAttribute("WE_LBRank_" .. key, rankOf[p.UserId] or 0)
+			end
+			local sv = (folder :: Instance):FindFirstChild(key)
 			if sv == nil then
 				local v = Instance.new("StringValue")
-				v.Name = b.Id
+				v.Name = key
 				v.Parent = folder
 				sv = v
 			end
-			(sv :: StringValue).Value = HttpService:JSONEncode({ Title = b.Title, Rows = rows })
+			(sv :: StringValue).Value = HttpService:JSONEncode({ Title = b.Title, Unit = b.Unit, Money = b.Money == true, Weekly = string.sub(key, -2) == "_W", Rows = rows, At = unix })
 		end
+	end
+	backoff.ReadStep = 0
+	-- the weekly #1 of each weekly board wears the crown while in game
+	crowned = leaders
+	for _, p in ipairs(Players:GetPlayers()) do
+		pcall(setCrown, p, crowned[p.UserId])
+	end
+end
+
+-- a real PvP kill (the server's creator tag): counts for the kill boards unless self / clan mate / farmed
+local function onKill(victim: Player, killer: Player?)
+	if killer == nil or killer == victim or killer.Parent == nil then
+		return
+	end
+	local cs = deps.CombatService
+	local allied = cs ~= nil and cs.IsClanAlly ~= nil and cs.IsClanAlly(killer, victim) == true
+	if not LeaderboardConfig.AllowKill(killLog, killer.UserId, victim.UserId, allied, os.clock()) then
+		return
+	end
+	local profile = deps.DataService and deps.DataService.GetProfile(killer)
+	if profile == nil then
+		return
+	end
+	rollWeek(profile, os.time())
+	local lb = lbOf(profile)
+	lb.Kills = (tonumber(lb.Kills) or 0) + 1
+	lb.KillsW = (tonumber(lb.KillsW) or 0) + 1
+	deps.DataService.MarkDirty(killer)
+end
+
+-- Settings "Supporter board": hide / show this player on TOP SUPPORTERS (hiding removes the stored entry)
+local function onBoardSetting(player: Player, hide: any)
+	if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestBoardSetting", hide) then -- claude-bud JOB 15
+		return
+	end
+	local rl = deps.RateLimitService
+	if rl and not rl.Allow(player, "board_setting", 1, 3) then
+		return
+	end
+	if typeof(hide) ~= "boolean" then
+		return
+	end
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil then
+		return
+	end
+	if typeof(profile.Settings) ~= "table" then
+		profile.Settings = {}
+	end
+	profile.Settings.SupporterBoardOptOut = hide
+	deps.DataService.MarkDirty(player)
+	player:SetAttribute("WE_SupporterOptOut", hide)
+	local prev = lastWritten[player.UserId]
+	if prev then
+		prev.Supporters = nil -- showing again rewrites it on the next write
+	end
+	if hide then
+		task.spawn(function()
+			pcall(function()
+				storeFor("Supporters", os.time()):RemoveAsync(tostring(player.UserId))
+			end)
+		end)
 	end
 end
 
@@ -246,7 +428,7 @@ local function claimQueuedInvites(player: Player, profile: any)
 end
 
 function EngagementService._PayInviter(inviter: Player, profile: any, count: number)
-	local today = utcDay()
+	local today = tonumber(os.date("!%Y%m%d")) or 0
 	if tonumber(profile.InviteDay) ~= today then
 		profile.InviteDay = today
 		profile.InviteCount = 0
@@ -369,10 +551,31 @@ function EngagementService.Init(d: { [string]: any })
 				player:SetAttribute("WE_Engagement", true) -- the client shows the event banner / the board
 			end
 			learnFriends(player)
+			-- claude-bud BOARDS: the Settings toggle's state; the crown comes back with every character
+			local st = if typeof(profile.Settings) == "table" then profile.Settings else {}
+			player:SetAttribute("WE_SupporterOptOut", st.SupporterBoardOptOut == true)
+			pcall(rollWeek, profile, os.time())
+			player.CharacterAdded:Connect(function()
+				task.wait(1)
+				pcall(setCrown, player, crowned[player.UserId])
+			end)
 		end)
 	end)
+	-- claude-bud BOARDS: real PvP kills (CombatService's creator tag), the supporter opt-out toggle
+	if d.CombatService and d.CombatService.OnPlayerDeath then
+		d.CombatService.OnPlayerDeath(function(victim: Player, killer: Player?, _info: any)
+			onKill(victim, killer)
+		end)
+	end
+	local okR, Remotes = pcall(require, Shared.Remotes)
+	local Constants = require(Shared.Constants)
+	local ev = okR and (Remotes :: any).TryGetEvent(Constants.RemoteNames.RequestBoardSetting)
+	if ev then
+		ev.OnServerEvent:Connect(onBoardSetting)
+	end
 	Players.PlayerRemoving:Connect(function(p)
-		writeScores(p)
+		-- v107: flush on leave but still respect WriteDue (leave/rejoin spam cannot flood stores)
+		writeScores(p, false)
 		friendsOf[p.UserId] = nil
 		for _, set in pairs(friendsOf) do
 			set[p.UserId] = nil
@@ -380,7 +583,7 @@ function EngagementService.Init(d: { [string]: any })
 	end)
 	-- the friends bonus + leaderboard writes / reads, one slow loop (no per-frame work)
 	task.spawn(function()
-		local lastWrite, lastRead, lastFriends = 0, -math.huge, 0
+		local lastRead, lastFriends = -math.huge, 0
 		while true do
 			task.wait(5)
 			local now = os.clock()
@@ -414,13 +617,11 @@ function EngagementService.Init(d: { [string]: any })
 					end
 				end
 			end
-			if now - lastWrite >= E.WriteSeconds then
-				lastWrite = now
-				for _, p in ipairs(Players:GetPlayers()) do
-					task.spawn(writeScores, p)
-				end
+			-- claude-bud BOARDS: each player's writes are throttled inside writeScores (WriteMinSeconds)
+			for _, p in ipairs(Players:GetPlayers()) do
+				task.spawn(writeScores, p, false)
 			end
-			if now - lastRead >= E.ReadSeconds and not RunService:IsStudio() then
+			if now - lastRead >= LeaderboardConfig.ReadSeconds then
 				lastRead = now
 				task.spawn(readBoards)
 			end

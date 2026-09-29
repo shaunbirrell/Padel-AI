@@ -8,10 +8,10 @@ _cb106_SC = _cb106_SH + "Configs/SecurityConfig.luau"
 _cb106_GS = _cb106_S + "Services/GameFeelService.luau"
 _cb106_RG = _cb106_S + "Modules/RemoteGate.luau"
 
-# ── build ──
-for _f in (_cb106_S + "Services/DataService.luau", _cb106_S + "Services/BaseService.luau", _cb106_S + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 106)', "CODEBOT v106: WE_Build=106 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb106_S + "Services/DataService.luau", "WE_Build=106", "CODEBOT v106: DataService profile-loaded log says WE_Build=106")
+# v107 (Code Bot): retired build pins, superseded in tools/checks/codebot_v107.py:
+# for _f in (_cb106_S + "Services/DataService.luau", _cb106_S + "Services/BaseService.luau", _cb106_S + "EarlyRemotes.server.luau"):
+#     must_contain(_f, 'SetAttribute("WE_Build", 106)', "CODEBOT v106: WE_Build=106 " + _f.rsplit("/", 1)[-1])
+# must_contain(_cb106_S + "Services/DataService.luau", "WE_Build=106", "CODEBOT v106: DataService profile-loaded log says WE_Build=106")
 
 # ── JOB 14 game-feel live for all ──
 _cb106_g = read(_cb106_GC) or ""

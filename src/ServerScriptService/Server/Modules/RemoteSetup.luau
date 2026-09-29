@@ -110,6 +110,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestPlazaAirstrike, -- claude-bud JOB 5c: client -> server, rate-limited (PlazaAirstrike)
 	Constants.RemoteNames.RequestGroupReward, -- claude-bud JOB 5e: client -> server, rate-limited (MonetizationService)
 	Constants.RemoteNames.RequestPremiumWeapon, -- claude-bud PREMIUM: client -> server, rate-limited (PremiumWeaponService)
+	Constants.RemoteNames.RequestBoardSetting, -- claude-bud BOARDS: client -> server, rate-limited (EngagementService)
 }
 
 -- v71 money (M2): UnreliableRemoteEvents (server → client cosmetic Fx; ordering and delivery not guaranteed)

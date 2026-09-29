@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Code Bot v104 (2026-09-29): executes the REAL JOB 13 engagement code with the Luau CLI (no Studio needed).
 
-Loads the real Shared/Configs/EngagementConfig.luau, Shared/Configs/AdminConfig.luau and
+Loads the real Shared/Configs/EngagementConfig.luau, LeaderboardConfig.luau, AdminConfig.luau and
 Server/Services/EngagementService.luau under small mocks (Players, DataStoreService with an OrderedDataStore + request
 budget, DataService, EconomyService, a controllable clock) for a NON-owner account, then drives joins, leaves and the
 service's slow loop. Checks the all-players rollout and the exploit guards:
@@ -46,7 +46,9 @@ task = {
 	wait = function() coroutine.yield() end,
 }
 task.defer = task.spawn
-Enum = { DataStoreRequestType = { SetIncrementSortedAsync = "SetIncrementSortedAsync" } }
+Enum = { DataStoreRequestType = { SetIncrementSortedAsync = "SetIncrementSortedAsync", GetSortedAsync = "GetSortedAsync" } }
+Vector3 = { new = function(x, y, z) return { X = x, Y = y, Z = z } end }
+
 
 local function proxy(name)
 	return setmetatable({ __name = name }, { __index = function(t, k) local p = proxy(k); rawset(t, k, p); return p end })
@@ -111,6 +113,9 @@ script = proxy("script")
 local MODS, SRC = {}, {}
 SRC.EngagementConfig = @ENGCFG@
 SRC.AdminConfig = @ADMINCFG@
+SRC.LeaderboardConfig = @LBCFG@
+SRC.Constants = @CONSTANTS@
+SRC.Remotes = @REMOTES@
 SRC.EngagementService = @ENGSVC@
 local function load(name) local f = assert(loadstring(SRC[name], name)); return f() end
 require = function(p) local n = rawget(p, "__name"); if MODS[n] == nil then MODS[n] = load(n) end; return MODS[n] end
@@ -144,7 +149,7 @@ local friendsWith, friendErr = {}, {}
 local function befriend(a, b) friendsWith[a .. ":" .. b] = true; friendsWith[b .. ":" .. a] = true end
 local function mkPlayer(uid, opts)
 	opts = opts or {}
-	local p = { UserId = uid, Parent = PlayersSvc, attrs = {} }
+	local p = { UserId = uid, Parent = PlayersSvc, attrs = {}, CharacterAdded = { Connect = function() end } }
 	function p:SetAttribute(k, v) self.attrs[k] = v end
 	function p:GetJoinData() return { ReferredByPlayerId = opts.ref } end
 	function p:IsFriendsWithAsync(other) if friendErr[uid] then error("http 500") end; return friendsWith[uid .. ":" .. other] == true end
@@ -251,20 +256,27 @@ join(ownerP)
 local L = mkPlayer(700, { cash = 12345, first = NOW - 30 * 86400 })
 join(L)
 local function writesFor(uid) local n = 0; for _, c in ipairs(setCalls) do if c[2] == tostring(uid) then n += 1 end end; return n end
-tick(300)
-check(writesFor(700) == 3, "boards: the periodic write sets the 3 boards for a player")
+-- BOARDS (v107): cash-only player writes Richest (WE_LB2_); WriteMinSeconds=90; leave respects throttle
+tick(91) -- periodic loop may write; leave also tries
+leave(L)
+check(writesFor(700) >= 1, "boards: after the write gap, a cash-only player writes Richest (" .. writesFor(700) .. ")")
+local afterFirst = writesFor(700)
 check(writesFor(OWNER) == 0, "boards: the playtest owner (admin cash floor) is never written")
 for _ = 1, 10 do profiles[700].Cash += 1; leave(L); tick(1); join(L) end
-check(writesFor(700) == 3, "boards: 10 leave / rejoins inside a minute write nothing more (throttled)")
-tick(61); leave(L)
-check(writesFor(700) == 4, "boards: after the gap only the changed score (cash) is written")
-join(L); tick(61); leave(L)
-check(writesFor(700) == 4, "boards: unchanged scores are not rewritten")
-budget = 0; profiles[700].Cash += 1; join(L); tick(61); leave(L); budget = 1000
-check(writesFor(700) == 4, "boards: a low write budget skips the write")
-ordered["WE_LB_Cash_v1"][tostring(OWNER)] = 50000000
-for i = 1, 14 do ordered["WE_LB_Cash_v1"][tostring(800 + i)] = i * 1000 end
-tick(300)
+check(writesFor(700) == afterFirst, "boards: 10 leave / rejoins inside the write gap write nothing more (throttled)")
+tick(91); leave(L)
+check(writesFor(700) == afterFirst + 1, "boards: after the gap only the changed score (cash) is written (" .. writesFor(700) .. ")")
+local afterSecond = writesFor(700)
+join(L); tick(91); leave(L)
+check(writesFor(700) == afterSecond, "boards: unchanged scores are not rewritten")
+budget = 0; profiles[700].Cash += 1; join(L); tick(91); leave(L); budget = 1000
+check(writesFor(700) == afterSecond, "boards: a low write budget skips the write")
+-- seed the all-time Richest store (StorePrefix WE_LB2_)
+local richestStore = "WE_LB2_Richest"
+ordered[richestStore] = ordered[richestStore] or {}
+ordered[richestStore][tostring(OWNER)] = 50000000
+for i = 1, 14 do ordered[richestStore][tostring(800 + i)] = i * 1000 end
+tick(80) -- ReadSeconds = 75
 local sv = RS:FindFirstChild("WE_Leaderboards") and RS:FindFirstChild("WE_Leaderboards"):FindFirstChild("Richest")
 local rows = sv and sv.Value and sv.Value.Rows or {}
 local ownerShown = false
@@ -284,9 +296,14 @@ if fails > 0 then error("FAIL") end
 
 
 def build() -> str:
+    constants = 'return { RemoteNames = { RequestBoardSetting = "RequestBoardSetting" } }'
+    remotes = 'return { TryGetEvent = function() return nil end }'
     return (HARNESS
             .replace("@ENGCFG@", lstr((CFG / "EngagementConfig.luau").read_text(encoding="utf-8")))
             .replace("@ADMINCFG@", lstr((CFG / "AdminConfig.luau").read_text(encoding="utf-8")))
+            .replace("@LBCFG@", lstr((CFG / "LeaderboardConfig.luau").read_text(encoding="utf-8")))
+            .replace("@CONSTANTS@", lstr(constants))
+            .replace("@REMOTES@", lstr(remotes))
             .replace("@ENGSVC@", lstr((SRV / "Services/EngagementService.luau").read_text(encoding="utf-8"))))
 
 

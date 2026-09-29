@@ -76,6 +76,7 @@ local SecurityConfig = {
 		RequestPlazaAirstrike = {},
 		RequestGroupReward = {},
 		RequestPremiumWeapon = { "string", "Vector3" },
+		RequestBoardSetting = { "boolean" }, -- claude-bud BOARDS
 	} :: { [string]: { string } },
 }
 
