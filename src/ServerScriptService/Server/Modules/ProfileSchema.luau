@@ -193,6 +193,10 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	if profile.FirstAttackDone ~= true then
 		profile.FirstAttackDone = nil -- claude-bud JOB 7: he has ordered ATTACK once (the hint is done)
 	end
+	-- claude-bud JOB 13: invite bookkeeping (who invited this account, the inviter's daily count)
+	profile.ReferredBy = if typeof(profile.ReferredBy) == "number" and profile.ReferredBy > 0 then math.floor(profile.ReferredBy) else nil
+	profile.InviteDay = nonNegInt(profile.InviteDay)
+	profile.InviteCount = nonNegInt(profile.InviteCount)
 	if profile.GroupRewardClaimed ~= true then
 		profile.GroupRewardClaimed = nil -- claude-bud JOB 5e: true once the group reward was paid
 	end

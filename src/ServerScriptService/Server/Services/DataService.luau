@@ -330,6 +330,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 		return nil
 	end
 
+	;(profile :: any).PrevJoinUnix = profile.LastJoinUnix -- claude-bud JOB 13: the comeback reward reads the previous join
 	profile.LastJoinUnix = os.time()
 	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
 		profile.FirstJoinUnix = os.time()

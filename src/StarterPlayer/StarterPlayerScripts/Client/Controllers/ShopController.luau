@@ -956,6 +956,15 @@ function ShopController.Init()
 					task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestGroupReward)
 				end, "JOIN", "fr_group", false)
 			end
+			-- claude-bud JOB 13: invite friends (Roblox's invite prompt; the reward is the server's, on the friend's join)
+			local okE, EC = pcall(require, Shared.Configs.EngagementConfig)
+			if okE and EC and (EC :: any).LiveFor("Invite", lp.UserId) then
+				addRow("FREE · Invite friends", "$" .. formatCash(tonumber((EC :: any).InviteCash) or 0) .. " per new friend who joins", function()
+					pcall(function()
+						game:GetService("SocialService"):PromptGameInvite(lp)
+					end)
+				end, "INVITE", "fr_invite", false)
+			end
 			if R.FavoritePrompt == true then
 				addRow("Favorite WAR EMPIRE", "Find us again fast (no reward)", function()
 					pcall(function()

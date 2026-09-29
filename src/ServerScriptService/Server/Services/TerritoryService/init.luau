@@ -1048,6 +1048,10 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	syncProfileOwnership(player)
 	-- claude-bud JOB 4.3: the plaza bounty (PlazaBountyConfig; a no-op for other zones and while its Rollout is off)
 	pcall(PlazaBounty.OnCaptured, player, rt.Def.Id, rt.Def.Position)
+	if rt.Def.Id == "CentralPlaza" then
+		local st: any = profile.Stats
+		st.PlazaCaptures = (tonumber(st.PlazaCaptures) or 0) + 1 -- claude-bud JOB 13: the Plaza leaderboard
+	end
 
 	-- F3 Empire Tax: recount from owned zones (stealable by re-capture); the toast names the TOTAL %
 	local incomeToastShown = false

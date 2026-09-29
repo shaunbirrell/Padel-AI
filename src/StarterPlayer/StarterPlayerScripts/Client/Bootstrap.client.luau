@@ -144,6 +144,7 @@ safeInit("FeatureController", safeRequire("FeatureController", Controllers:WaitF
 safeInit("QualityGovernor", safeRequire("QualityGovernor", Modules:WaitForChild("QualityGovernor", 5) :: Instance)) -- claude-bud JOB 8: automatic low tier (small screen / low FPS)
 safeInit("Juice", safeRequire("Juice", Modules:WaitForChild("Juice", 5) :: Instance)) -- claude-bud JOB 11: purchase burst + rebirth celebration
 safeInit("PremiumWeaponsClient", safeRequire("PremiumWeaponsClient", Modules:WaitForChild("PremiumWeaponsClient", 5) :: Instance)) -- claude-bud PREMIUM: FIRE / MISSILE while driving a Robux-only vehicle
+safeInit("EngagementClient", safeRequire("EngagementClient", Modules:WaitForChild("EngagementClient", 5) :: Instance)) -- claude-bud JOB 13: event banner + leaderboard board
 safeInit("RigAnimator", safeRequire("RigAnimator", Modules:WaitForChild("RigAnimator", 5) :: Instance)) -- R-RIG: soldier animation, army escorts, far LOD (client only; a no-op while RigConfig.Enabled is false)
 safeInit("AircraftBodyClient", safeRequire("AircraftBodyClient", Modules:WaitForChild("AircraftBodyClient", 5) :: Instance)) -- air-looks: store aircraft rotors spin + seated chase camera (client only; nothing to do until a store aircraft body is live)
 

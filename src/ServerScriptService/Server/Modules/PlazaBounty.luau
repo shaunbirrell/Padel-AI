@@ -68,11 +68,16 @@ function PlazaBounty.OnCaptured(player: Player, zoneId: string, position: Vector
 		local last = lastEarned[player.UserId]
 		if last == nil or now - last >= PlazaBountyConfig.EarnCooldownSeconds then
 			lastEarned[player.UserId] = now
+			-- claude-bud JOB 13: Plaza War Week doubles the bounty (EngagementService.PlazaBountyMult)
+			local mult = 1
+			pcall(function()
+				mult = (require(script.Parent.Parent.Services.EngagementService) :: any).PlazaBountyMult(player)
+			end)
 			local econ = deps.EconomyService
 			if econ and econ.AddCash then
-				econ.AddCash(player, PlazaBountyConfig.Cash, "plaza_bounty")
+				econ.AddCash(player, math.floor(PlazaBountyConfig.Cash * mult), "plaza_bounty")
 			end
-			notify(player, "Bounty claimed! +$" .. fmt(PlazaBountyConfig.Cash), "Reward")
+			notify(player, "Bounty claimed! +$" .. fmt(PlazaBountyConfig.Cash * mult), "Reward")
 		end
 		endBounty()
 	elseif b and now >= b.EndsAt then

@@ -1,9 +1,13 @@
 <!-- Q2-START -->
-# WHERE I STOPPED — 2026-09-29 (Claude on Bud tip fe22e41) — JOB 12 SHIPPED IN v101; ROLLOUTS ARE NOW "all"
-**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v101) before new work.** Code Bot cherry-picked JOB 12 (`fe22e41`)
-into WE_Build 101 and flipped every owner-only rollout to "all" (LaunchAll stays false; see the v101 section below).
-Jobs: [x] 12 launch readiness · [ ] 13 bring players back · [ ] 14 game-feel polish · [ ] 15 anti-exploit sweep
-**Code Bot v102 (after v101): redeem codes shipped (see v102 below). Rebase onto v102; do not rebuild a codes system.**
+# WHERE I STOPPED — 2026-09-29 (Claude on Bud tip 9b30223) — JOB 13 SHIPPED IN v103 (owner-only)
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v103) before new work.** Code Bot cherry-picked JOB 13 (`36779ce`)
+into WE_Build 103. Keep v102 Codes / CashBoost; do not rebuild a codes system. Engagement is owner-only (not LaunchSafe).
+Jobs: [x] 12 launch readiness · [x] 13 bring players back · [ ] 14 game-feel polish · [ ] 15 anti-exploit sweep
+
+- J13 (owner-only, `EngagementConfig.Rollout` per feature): weekly events (Plaza War Week / Airdrop Frenzy / Double Cash Weekend) with a HUD banner and countdown;
+  leaderboards (richest / plaza captures / rebirths) on a Town Square board; invite reward ($10k per new friend, 5/day; the friend gets $2.5k);
+  friends in the server $500/min each (max 3); comeback after 3+ days $25k. Not in LaunchSafe yet. Phone-test as owner, then flip Rollout per feature.
+
 <!-- Q2-END -->
 
 # v102 — 2026-09-29 ~15:00 Dublin (Code Bot, branch phase-7-polish, WE_Build 102) — REDEEM CODES (live for all)

@@ -221,6 +221,11 @@ local function cashMultFor(player: Player, profile: any, reason: string?): numbe
 		end
 		-- Code Bot v102: timed 2x Cash boost from a redeem code (CodesService writes profile.CashBoost)
 		mult *= EconomyService.CashBoostMult(profile)
+		-- claude-bud JOB 13: a Double Cash event (EngagementConfig.Events), for a player events are live for
+		local okE, ES = pcall(require, script.Parent.EngagementService)
+		if okE and type(ES) == "table" and (ES :: any).CashMult then
+			mult *= (ES :: any).CashMult(player)
+		end
 	end
 	return mult
 end

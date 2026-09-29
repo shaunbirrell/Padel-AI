@@ -62,6 +62,7 @@ local NationColorService = safeRequire("NationColorService", Services.NationColo
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
 local PremiumWeaponService = safeRequire("PremiumWeaponService", Services.PremiumWeaponService) -- claude-bud PREMIUM
+local EngagementService = safeRequire("EngagementService", Services.EngagementService) -- claude-bud JOB 13
 local BankRaidService = safeRequire("BankRaidService", Services.BankRaidService)
 local OpsService = safeRequire("OpsService", Services.OpsService) -- W3s2 Phase B Jobs (OpsConfig.Enabled; ships off)
 local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
@@ -563,6 +564,7 @@ safeInit("CodesService", CodesService, deps)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)
 safeInit("PremiumWeaponService", PremiumWeaponService, deps) -- claude-bud PREMIUM: Robux-only vehicle weapons (server-validated)
+safeInit("EngagementService", EngagementService, deps) -- claude-bud JOB 13: events, leaderboards, invite / friends / comeback
 safeInit("BankRaidService", BankRaidService, deps)
 safeInit("GateDefenseService", GateDefenseService, deps)
 safeInit("PlotOilPumpService", PlotOilPumpService, deps)

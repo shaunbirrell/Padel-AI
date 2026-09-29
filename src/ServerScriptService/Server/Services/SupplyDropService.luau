@@ -436,7 +436,12 @@ function SupplyDropService.Init(deps: { [string]: any })
 				warn("[SupplyDropService] airdrop failed:", spawned)
 			end
 			-- the full interval after a drop; a short re-check while nobody it is live for is here
-			task.wait(if okA and spawned == true then SupplyDropConfig.Airdrop.IntervalSeconds else 30)
+			-- claude-bud JOB 13: an Airdrop Frenzy event shortens the interval (EngagementService.AirdropInterval)
+			local frenzy: number? = nil
+			pcall(function()
+				frenzy = (require(script.Parent.EngagementService) :: any).AirdropInterval()
+			end)
+			task.wait(if okA and spawned == true then (frenzy or SupplyDropConfig.Airdrop.IntervalSeconds) else 30)
 		end
 	end)
 

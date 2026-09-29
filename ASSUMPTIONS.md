@@ -9128,3 +9128,20 @@ ds_territories.luau T3):
   only allows off-platform links through its own Social Links).
 - **Verified:** tools/codes_gate_test.py (real CodesService + RateLimitService + CashBoostMult + ensureCodesFields in the Luau CLI,
   37 checks), BuyPathStatic FAIL=0 with codebot_v102.py, rojo build. Not verified here: the panel on a real phone (owner test).
+## 2026-09-29 — claude-bud JOB 13: bring players back (EngagementConfig + EngagementService + EngagementClient, owner-only)
+- **Events:** week n (UTC, from the Monday epoch) runs `Events[n % 3]`: Plaza War Week (whole week, bounty x2), Airdrop Frenzy (weekend
+  Fri–Mon, airdrop every 3 min), Double Cash Weekend (weekend, x2 on non-exempt cash via EconomyService's stack).
+  - One pure `EngagementConfig.EventAt` drives both the server effects and the client banner. Executed in a check: Saturdays
+    always have an event, weekend events are "next" on a Wednesday.
+- **Leaderboards:** OrderedDataStores WE_LB_Cash_v1 / WE_LB_Plaza_v1 / WE_LB_Rebirths_v1.
+  - Scores are written every 5 min per player and on leave; the top 10 is read every 5 min (not in Studio), all pcall'd.
+  - Results go to ReplicatedStorage.WE_Leaderboards (JSON StringValues) with names cached. Plaza captures are a new
+    `Stats.PlazaCaptures` counter (TerritoryService).
+  - The board is client-built at Town Square's NE corner (1 part + SurfaceGui, MaxDistance 80), so it doesn't touch the world sign budget.
+- **Invite:** the Shop FREE row "Invite friends" calls SocialService:PromptGameInvite.
+  - A player who joins with `JoinData.ReferredByPlayerId` (an inviter the feature is live for) gets $2,500 once per account ever
+    (`profile.ReferredBy`).
+  - The inviter gets $10,000 per new friend (max 5/day): at once when in the server, else queued in a DataStore and paid on his next join.
+- **Friends:** every 60 s, $500 per friend in the same server (max 3); friendships are cached at join with IsFriendsWithAsync.
+- **Comeback:** DataService keeps `PrevJoinUnix` before stamping LastJoinUnix. Away 3+ days pays $25,000 once on that join.
+- **Not in LaunchSafe yet** (new, unverified on Roblox servers). Flip `EngagementConfig.Rollout` per feature after the phone test.

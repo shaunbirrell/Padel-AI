@@ -48,7 +48,7 @@ must_contain(_cbf_ts, "\tprofile.Stats.TerritoriesCaptured += 1\n\tsyncProfileOw
 must_contain(_cbf_ts, "pcall(PlazaBounty.OnCaptured, player, rt.Def.Id, rt.Def.Position)", "CLAUDE-BUD bounty: a bounty error never breaks a capture")
 must_contain(_cbf_pb, "if b and now < b.EndsAt and player.UserId ~= b.Holder and PlazaBountyConfig.LiveFor(player.UserId) then", "CLAUDE-BUD bounty: only another live player retaking in time is paid")
 must_contain(_cbf_pb, "if last == nil or now - last >= PlazaBountyConfig.EarnCooldownSeconds then", "CLAUDE-BUD bounty: per-player earn cooldown (anti-farm)")
-must_contain(_cbf_pb, 'econ.AddCash(player, PlazaBountyConfig.Cash, "plaza_bounty")', "CLAUDE-BUD bounty: cash granted on the server")
+must_contain(_cbf_pb, 'econ.AddCash(player, math.floor(PlazaBountyConfig.Cash * mult), "plaza_bounty")', "CLAUDE-BUD bounty: cash granted on the server")
 must_not_contain(_cbf_pb, "OnServerEvent", "CLAUDE-BUD bounty: no client -> server path")
 must_contain(_cbf_fc, 'local LABELS = { Airdrop = "AIRDROP", Bounty = "BOUNTY" }', "CLAUDE-BUD bounty: plaza marker on the client")
 
