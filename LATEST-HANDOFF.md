@@ -1,5 +1,5 @@
 <!-- Q2-START -->
-## v117 (Code Bot Roblox, 2026-09-29): JOB 24 army ATTACK AttackSteer LIVE — place version TBD
+## v117 (Code Bot Roblox, 2026-09-29): JOB 24 army ATTACK AttackSteer LIVE — place version 115
 - Merged Claude `35099a3` (JOB 24: Follow3.AttackSteer — ATTACK uses the same steered block + sticky squad target + line at 36 studs; Follow3.Debug=false by default). Fast-forward from 2965b15 (v116).
 - WE_Build 117 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched.
 - Pins: `tools/checks/claude_bud_armyattack.py` + `tools/checks/codebot_v117.py` (WE_Build 117, AttackSteer, Debug=false, attackAimOnly). Retired WE_Build=116 pins in codebot_v116; bumped v110/v113/BuyPathStatic frozen pins.
