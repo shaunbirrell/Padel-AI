@@ -12,10 +12,10 @@
 
 ## Server size
 
-- **Max Players = 6** (public API `games.roblox.com/v1/games?universeIds=10767159222` → `"maxPlayers":6`, checked
-  2026-09-27 15:37 UTC, no auth). One base per player: the map has 6 base plots (`BaseConfig.MaxPlots = 6`, and
-  `GameConfig.MaxPlayersPerServer = 6` records the same number). If Max Players is ever set above 6, a 7th player
-  gets in with no base and waits for one to free up (v69 no-plot path).
+- **Max Players = 10** — claude-bud JOB 21 (2026-09-29): the map now has 10 base plots (`BaseConfig.MaxPlots = 10`,
+  `GameConfig.MaxPlayersPerServer = 10`). **The owner must set the place's Max Players to 10** (it was 6: public API
+  `games.roblox.com/v1/games?universeIds=10767159222` → `"maxPlayers":6`, checked 2026-09-27 15:37 UTC). One base per
+  player; a player who still finds no free plot is told "Server full" and moved to another server (BaseService).
 - Re-check the live value any time: `curl -sS "https://games.roblox.com/v1/games?universeIds=10767159222"`, field
   `maxPlayers`.
 - It is a place setting (Max Players), not code: changing it needs no publish, and it is undone the same way. A change

@@ -610,6 +610,19 @@ function BaseService.IsAtConsole(player: Player, structureId: string, atPart: Ba
 	return ok, reason, dist
 end
 
+-- claude-bud JOB 21: does this plot have a dock channel (a WaterConfig.Channels row)?
+function BaseService._PlotHasChannel(pid: number): boolean
+	local okW, WC = pcall(function()
+		return require(ReplicatedStorage.Shared.Configs.WaterConfig) :: any
+	end)
+	for _, c in ipairs(if okW and WC and WC.Channels then WC.Channels else {}) do
+		if c.PlotId == pid then
+			return true
+		end
+	end
+	return false
+end
+
 function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: PurchaseOpts?): Types.PurchaseUpgradeResult
 	if not RemoteGuard.IsIdString(structureId, 48) then
 		return { Ok = false, Error = "InvalidStructure" }
@@ -667,6 +680,13 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: 
 	if profile.BasePlotId ~= ownPlot then
 		profile.BasePlotId = ownPlot
 		DS.MarkDirty(player)
+	end
+	-- claude-bud JOB 21: a plot with no WaterConfig.Channels row has no water route: no Dock there (every plot has one today)
+	if structureId == "Dock" and not BaseService._PlotHasChannel(ownPlot) then
+		if NotificationService and NotificationService.Notify then
+			pcall(NotificationService.Notify, player, "This base has no harbour", "Warn", 3)
+		end
+		return { Ok = false, Error = "NoHarbour" }
 	end
 
 	-- v71: console-only buying — the player must stand at THIS structure's console on their own plot. Runs before
@@ -1577,6 +1597,34 @@ end
 -- v69: server full (every plot owned) — the player gets no plot and is told why, never a shared plot.
 local NO_PLOT_BUY_MESSAGE = "No free base on this server — you get the next one that frees up"
 
+-- claude-bud JOB 21: a player with no free plot is told and teleported to another public server (matchmaking picks
+-- one with room). Studio / BaseConfig.FullServerTeleport = false: only the message. pcall'd, one retry.
+function BaseService._MoveToAnotherServer(player: Player)
+	if (BaseConfig :: any).FullServerTeleport ~= true or RunService:IsStudio() then
+		return
+	end
+	if NotificationService and NotificationService.Notify then
+		pcall(NotificationService.Notify, player, "Server full - moving you to another server", "Warn", 6)
+	end
+	task.spawn(function()
+		task.wait(3)
+		local TeleportService = game:GetService("TeleportService")
+		for attempt = 1, 2 do
+			if player.Parent == nil or ownedPlotOf(player.UserId) ~= nil then
+				return -- left, or a base freed up meanwhile
+			end
+			local ok, err = pcall(function()
+				TeleportService:TeleportAsync(game.PlaceId, { player })
+			end)
+			if ok then
+				return
+			end
+			warn("[BaseService] full-server teleport failed", player.UserId, attempt, err)
+			task.wait(5)
+		end
+	end)
+end
+
 local function notifyNoPlot(player: Player)
 	if not (NotificationService and NotificationService.Notify) then
 		return
@@ -1907,6 +1955,8 @@ function BaseService.Init(deps: { [string]: any })
 			task.delay(8, function()
 				if player.Parent and ownedPlotOf(player.UserId) == nil then
 					notifyNoPlot(player)
+					-- claude-bud JOB 21 safety net: still no base -> another public server (never left baseless)
+					BaseService._MoveToAnotherServer(player)
 				end
 			end)
 		end

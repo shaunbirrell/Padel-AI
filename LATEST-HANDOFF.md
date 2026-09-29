@@ -13,11 +13,17 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
 - Speed Pass display price is 99 R$ (owner repriced in Creator Hub).
 
 ## QUEUE 4 (claude-bud, rebased on v110: J20 shipped there)
-Jobs: [x] 17 · [x] 18 · [x] 19 · [x] 20 real base guards · [ ] 21 more plots
+Jobs: [x] 17 · [x] 18 · [x] 19 · [x] 20 real base guards · [x] 21 more plots (10)
 - J20 SHIPPED (live for all, GuardConfig + Modules/BaseGuards): base guards hold posts, fight intruders
   (players + enemy army) inside the plot within a 60-stud leash, return after 8 s, respawn after 45 s;
   Defenses research Guard Armor / Guard Roster / Tower Guards; owner-credited kills; anti-farm; damage caps.
-  Next: JOB 21 more plots (expand to 10 base plots). Phone tests for v110 below in the v110 section.
+- J21: **FINAL PLOT COUNT = 10 → set the place's Max Players to 10** (Creator Hub place settings; no publish).
+  4 new plots near the map edge (P7/P8 north, P9/P10 south), each with a dock channel into the ring canal / sea, a gate
+  pad and a spur road; 12 was not possible with a dock on every plot without moving POIs. Full server -> "Server full -
+  moving you to another server" + teleport. Phone tests: join as the 7th-10th player: you get a base; drive from each
+  new base's gate to the road; buy the Dock on P7-P10 and sail out the channel into the canal / sea; an old save with
+  plot 1-6 still loads; with 11 players the 11th is moved to another server; frame rate with 10 players on a mid phone.
+
 <!-- Q2-END -->
 
 # v110 — 2026-09-29 ~16:55 Dublin (Code Bot, branch phase-7-polish, WE_Build 110) — JOB 20 REAL BASE GUARDS LIVE FOR ALL

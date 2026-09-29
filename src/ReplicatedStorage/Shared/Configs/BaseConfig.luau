@@ -25,7 +25,10 @@ local function costs(a: number, b: number, c: number, d: number, e: number): { n
 end
 
 local BaseConfig = {
-	MaxPlots = 6,
+	-- claude-bud JOB 21: 10 plots (was 6). Everything else reads MaxPlots / PlotPositions / #PlotPositions.
+	MaxPlots = 10,
+	-- claude-bud JOB 21: a player who still has no free plot 8 s after joining is moved to another public server
+	FullServerTeleport = true,
 	-- v68: follows BaseLayoutConfig.PlotSize (320) while the layout is on — MapSetup builds pads that size
 	PlotSize = if BaseLayoutConfig.Enabled
 		then Vector3.new(BaseLayoutConfig.PlotSize, 1, BaseLayoutConfig.PlotSize)
@@ -38,6 +41,14 @@ local BaseConfig = {
 		Vector3.new(0, 0.5, 800),
 		Vector3.new(800, 0.5, -400),
 		Vector3.new(800, 0.5, 400),
+		-- claude-bud JOB 21 (owner: every plot needs a dock): 4 more plots near the map edge, backs to the water, so each
+		-- Dock channel (WaterConfig.Channels) runs straight out of the rear into the ring canal (north) or the sea
+		-- (south) crossing no road, POI or capture; each gate apron joins its nearest +-800 road by a WorldFill spur.
+		-- Clear of every other plot, the Town, POIs, captures and water (tools/checks/claude_bud_plots.py).
+		Vector3.new(-980, 0.5, -1300), -- P7: rear north -> Ring_NW
+		Vector3.new(980, 0.5, -1300), -- P8: rear north -> Ring_NE
+		Vector3.new(-1000, 0.5, 1280), -- P9: rear south -> the sea
+		Vector3.new(560, 0.5, 1280), -- P10: rear south -> the sea
 	} :: { Vector3 },
 
 	Structures = {
