@@ -1,6 +1,8 @@
 --!strict
 --[[ 7-day login streak; day 7 resets streak after claim. Field names match MissionService. ]]
 
+local AdminConfig = require(script.Parent.AdminConfig)
+
 local DailyRewardConfig = {
 	Rewards = {
 		{ Day = 1, Cash = 1000, Gold = 0, XP = 25 },
@@ -13,6 +15,25 @@ local DailyRewardConfig = {
 	},
 	StreakResetsAfterDay = 7,
 	MissedDayResetsStreak = true,
+	--[[ claude-bud JOB 4.2 (2026-09-29): the streak is claimed FOR the player DelaySeconds after the save loads (no
+		panel to find, no tap), through the same server claim (MissionService.ClaimDailyLogin: once per UTC day, saved
+		in the profile's DailyLogin), then one toast "Day N of 7: +$X. Tomorrow: $Y". Rollout "owner" =
+		AdminConfig.IsPlaytestOwner only, "all", anything else = off (claim from the Missions panel only, as before). ]]
+	AutoClaim = {
+		Rollout = "owner",
+		DelaySeconds = 8,
+	},
 }
+
+-- claude-bud: is auto-claim live for this player (fail closed)
+function DailyRewardConfig.AutoClaimLiveFor(userId: any): boolean
+	local mode = DailyRewardConfig.AutoClaim.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
 
 return DailyRewardConfig

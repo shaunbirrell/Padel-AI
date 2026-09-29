@@ -24,3 +24,16 @@ must_contain(_cbf_sds, 'EconomyService.AddCash(player, rec.ClaimCash, "supply_dr
 must_contain(_cbf_sds, "if SupplyDropConfig.AirdropLiveFor(p.UserId) then\n\t\t\tev:FireClient(p, \"Airdrop\", data)", "CLAUDE-BUD airdrop: the marker goes only to players it is live for")
 must_contain(_cbf_sds, "if not r.Airdrop then -- claude-bud: the airdrop never takes a crate slot", "CLAUDE-BUD airdrop: the old crates are unchanged (MaxActive 2)")
 must_contain(_cbf_fc, 'ObjectiveMarker.ShowWith({ Short = label, X = x, Y = y, Z = z }, { TimeoutSeconds = 300 })', "CLAUDE-BUD airdrop: map marker via the one objective marker")
+
+# 4.2 daily login reward: auto-claimed through the existing server claim (once per UTC day, saved in DailyLogin)
+_cbf_drc = "src/ReplicatedStorage/Shared/Configs/DailyRewardConfig.luau"
+_cbf_ms = "src/ServerScriptService/Server/Services/MissionService.luau"
+must_contain(_cbf_drc, '\tAutoClaim = {\n\t\tRollout = "owner",', "CLAUDE-BUD daily: auto-claim owner-only first")
+must_contain(_cbf_drc, "\t\treturn AdminConfig.IsPlaytestOwner(userId)\n\tend\n\treturn false\nend", "CLAUDE-BUD daily: AutoClaimLiveFor fails closed")
+_cbf_days = [int(x) for x in re.findall(r"\{ Day = \d+, Cash = (\d+),", read(_cbf_drc) or "")]
+(ok if len(_cbf_days) == 7 and all(b > a for a, b in zip(_cbf_days, _cbf_days[1:])) else bad)(f"CLAUDE-BUD daily: 7-day streak with rising cash {_cbf_days}")
+must_contain(_cbf_ms, "if DailyRewardConfig.AutoClaimLiveFor(player.UserId) then", "CLAUDE-BUD daily: auto-claim gated per player")
+must_contain(_cbf_ms, "local okClaim = MissionService.ClaimDailyLogin(player)", "CLAUDE-BUD daily: auto-claim reuses the server claim (idempotent per day)")
+must_contain(_cbf_ms, "\tif daily.LastClaimDay == today then", "CLAUDE-BUD daily: one claim per UTC day")
+must_contain(_cbf_ms, "\tdaily.LastClaimDay = today\n\tdaily.LastClaimUnix = os.time()", "CLAUDE-BUD daily: the streak day is saved in the profile")
+must_contain(_cbf_ms, "\tDataService.MarkDirty(player)\n\tMissionService.Push(player)\n\treturn true, nil\nend\n\nfunction MissionService.Start", "CLAUDE-BUD daily: the claim marks the save dirty")

@@ -8776,3 +8776,10 @@ ds_territories.luau T3):
     (the server decides everything). It is gone after 300 s.
 - Owner-only means only owner-live players see the marker and can claim; other players see a crate they cannot claim.
 - New shared remote: `FeaturePush` (server → client only, no OnServerEvent), used by the JOB 4/5 cues.
+
+## 2026-09-29 — claude-bud JOB 4.2: daily login reward (DailyRewardConfig.AutoClaim, owner-only)
+- It already existed: a 7-day streak with rising cash ($1k → $20k plus gold and XP) in MissionService.ClaimDailyLogin, once per UTC
+  day, saved in `profile.DailyLogin` (Streak, LastClaimDay, LastClaimUnix; MarkDirty). It was claimable only from the Missions panel.
+- Added: 8 s after the save loads, the server claims it FOR a player the flag is live for (same function, so still once
+  per day), then toasts "Login streak: day N of 7. Tomorrow: $X". A missed day still resets the streak (existing rule).
+- Assumed the owner wanted this streak made visible and automatic, not a second, parallel reward system.
