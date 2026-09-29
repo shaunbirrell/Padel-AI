@@ -4,10 +4,10 @@ _cb109_S = "src/ServerScriptService/Server/"
 _cb109_SH = "src/ReplicatedStorage/Shared/"
 _cb109_CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 
-# ── build ──
-for _f in (_cb109_S + "Services/DataService.luau", _cb109_S + "Services/BaseService.luau", _cb109_S + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 109)', "CODEBOT v109: WE_Build=109 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb109_S + "Services/DataService.luau", "WE_Build=109", "CODEBOT v109: DataService profile-loaded log says WE_Build=109")
+# v110 (Code Bot): retired build pins, superseded in tools/checks/codebot_v110.py:
+# for _f in (_cb109_S + "Services/DataService.luau", _cb109_S + "Services/BaseService.luau", _cb109_S + "EarlyRemotes.server.luau"):
+#     must_contain(_f, 'SetAttribute("WE_Build", 109)', "CODEBOT v109: WE_Build=109 " + _f.rsplit("/", 1)[-1])
+# must_contain(_cb109_S + "Services/DataService.luau", "WE_Build=109", "CODEBOT v109: DataService profile-loaded log says WE_Build=109")
 
 # ── JOB 17 night (live for all) ──
 must_contain(_cb109_SH + "Configs/LightingConfig.luau", "\tEnabled = true,", "CODEBOT v109: LightingConfig Enabled")

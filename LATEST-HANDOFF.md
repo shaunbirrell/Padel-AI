@@ -1,26 +1,32 @@
 <!-- Q2-START -->
-# WHERE I STOPPED — 2026-09-29 (Code Bot shipped v109) — JOBS 17–19 LIVE
-**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v109) before new work.** Do not redo JOB 14, JOB 15, BOARDS, Flank, JOB 17, JOB 18, or JOB 19.
-Keep v102 Codes / CashBoost, v104 Engagement (all) + Discord invite + exploit guards, v105 BUDSQUAD, v106 GameFeel all + RemoteGate observe, v107 BOARDS, v108 Flank.
-Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [x] 15 anti-exploit sweep · [x] BOARDS · [x] army Flank · [x] 17 night lighting · [x] 18 world fill 2 · [x] 19 purchase stands · [ ] 20 real base guards
+# WHERE I STOPPED — 2026-09-29 (Code Bot shipped v110) — JOB 20 LIVE
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v110) before new work.** Do not redo JOB 14, JOB 15, BOARDS, Flank, JOB 17, JOB 18, JOB 19, or JOB 20.
+Keep v102 Codes / CashBoost, v104 Engagement (all) + Discord invite + exploit guards, v105 BUDSQUAD, v106 GameFeel all + RemoteGate observe, v107 BOARDS, v108 Flank, v109 night/WorldFill2/stands.
+Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [x] 15 anti-exploit sweep · [x] BOARDS · [x] army Flank · [x] 17 night lighting · [x] 18 world fill 2 · [x] 19 purchase stands · [x] 20 real base guards · [ ] 21 more plots
 
 - PreferMesh stays OFF. WE_Building* untouched. Never bump WE_Build / publish (Code Bot only).
 - Speed Pass display price is 99 R$ (owner repriced in Creator Hub).
 
-## QUEUE 4 (claude-bud, rebased on v109: J17-19 shipped there)
+## QUEUE 4 (claude-bud, rebased on v110: J20 shipped there)
 Jobs: [x] 17 · [x] 18 · [x] 19 · [x] 20 real base guards · [ ] 21 more plots
-- J20 (live for all, GuardConfig): base guards hold their posts, fight intruders (players + enemy army units)
-  inside the plot within a 60-stud leash, return after 8 s, respawn after 45 s; Defenses research: Guard Armor /
-  Guard Roster / Tower Guards (one per corner tower, Cash, price x rebirths). Guard kills credit YOU (cash, XP, MOST
-  KILLS, feed "<you>'s Tower Guard"), max 3 per victim per 10 min, none in private servers. PHONE TESTS WITH A SECOND
-  ACCOUNT: alt walks into your base -> guards turn, chase (never out of the plot / past 60 studs), shoot; alt dies ->
-  you get the kill (toast, board, feed); you, a friend and a clan-mate are never shot; your own army inside is safe,
-  the alt's army is shot; alt waits outside 8 s -> guards walk back to their posts; buy Watchtowers, hire a tower
-  guard at the corner tower prompt (only you see it), it shoots the alt outside the walls (not inside); kill a guard
-  as the alt -> small reward; a new/low-level alt is not deleted instantly (damage cap).
-
-Phone tests for v109 below in the v109 section.
+- J20 SHIPPED (live for all, GuardConfig + Modules/BaseGuards): base guards hold posts, fight intruders
+  (players + enemy army) inside the plot within a 60-stud leash, return after 8 s, respawn after 45 s;
+  Defenses research Guard Armor / Guard Roster / Tower Guards; owner-credited kills; anti-farm; damage caps.
+  Next: JOB 21 more plots (expand to 10 base plots). Phone tests for v110 below in the v110 section.
 <!-- Q2-END -->
+
+# v110 — 2026-09-29 ~16:55 Dublin (Code Bot, branch phase-7-polish, WE_Build 110) — JOB 20 REAL BASE GUARDS LIVE FOR ALL
+
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v110) before JOB 21. Do not redo J14–J20, Flank, BOARDS.**
+Merged `origin/claude/desktop-bud` tip `f5387ae` (JOB 20 real base guards) into phase-7-polish (fast-forward from eac6cf9 v109 handoff).
+
+- **JOB 20 Base guards (live for everyone, `GuardConfig` + `Modules/BaseGuards`):** GuardConfig Enabled=true (no owner gate). GateDefenseService 5 Hz loop runs ThinkGuard / ThinkTowers. Intruders (not owner / clan / friends) and enemy army units inside the plot are fought with 60-stud leash, return after 8 s, 45 s respawn, LOS + hit chance, per-target DPS cap, ≤6 shooters/base. Defenses research: Guard Armor / Guard Roster / Tower Guards (paid via ResearchService.Purchase, rebirth-scaled). Kills credit the owner via server creator tag (cash, XP, MOST KILLS, feed "<owner>'s Tower Guard"); max 3 per victim per 10 min; none in private servers; guard/unit kills give smaller rewards.
+- Kept: v104 Engagement all + guards; Discord invite; v105 BUDSQUAD; v106 GameFeel all + RemoteGate observe; v107 BOARDS; v108 Flank; v109 night + WorldFill 2 + purchase stands; Speed Pass 99 R$.
+- Pins: `tools/checks/codebot_v110.py` + `claude_bud_guards.py` (JOB 20 pins). BuyPathStatic PASS=5943 FAIL=0; rojo ok. PreferMesh OFF. WE_Building* untouched.
+
+**Phone tests (second account / alt):** alt walks into your base → guards turn, chase (never out of plot / past 60 studs), shoot; alt dies → you get the kill (toast, board, feed); you / friend / clan-mate never shot; your own army safe, alt's army shot; alt waits outside 8 s → guards walk back; buy Watchtowers, hire tower guard at corner prompt (owner-only), it shoots alt outside walls (not inside); kill a guard as alt → small reward; new/low-level alt not deleted instantly (damage cap).
+
+**Published:** Open Cloud `versionNumber=PENDING` (commit PENDING). Migrate to Latest Update for real base guards.
 
 # v109 — 2026-09-29 ~16:35 Dublin (Code Bot, branch phase-7-polish, WE_Build 109) — JOBS 17–19 LIVE FOR ALL
 
