@@ -84,6 +84,9 @@ Constants.RemoteNames = {
 	ClanWarStateUpdate = "ClanWarStateUpdate",
 	RequestRedeemCode = "RequestRedeemCode",
 	RequestAnalyticsEvent = "RequestAnalyticsEvent", -- claude-bud JOB 24 §10: a whitelisted UI event (AnalyticsService)
+	BuildingTip = "BuildingTip", -- claude-bud JOB 24 §5: server -> client "NEW BUILDING" card { Id }
+	RequestTipSetting = "RequestTipSetting", -- claude-bud JOB 24 §5: Settings -> TIPS on / off
+	RequestTipsReplay = "RequestTipsReplay", -- claude-bud JOB 24 §5: Settings -> show my building tips again
 	CodeStateUpdate = "CodeStateUpdate",
 	-- Code Bot v102: RemoteFunction. Client -> server (code: string) -> { Result = "Success" | "AlreadyUsed" | "Invalid"
 	-- | "Expired" | "RateLimited" | "NotReady", Message: string }. Server validates + rate-limits (CodesService).

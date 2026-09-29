@@ -25,6 +25,17 @@ local QualityConfig = {
 	HideAnyBeyondStuds = 420,
 	CheckHz = 1,
 	ShadowsOffWhenLow = true,
+	-- claude-bud JOB 24 §8 (owner: "town buildings vanish / pop when driving fast"): the cause was this governor, not
+	-- instance streaming (StreamingEnabled is OFF). On a phone it is always LOW, and it took whole clusters out beyond
+	-- 180 / 420 studs, checked once a second from the camera: at 60-100+ studs/s a building popped in late / vanished.
+	--   * NeverHideKinds: WE_Cluster kinds (the part after "source:") that are buildings / landmarks: never hidden;
+	--   * LookAheadSeconds: the distance is measured from where the camera will be this far ahead (its velocity);
+	--   * FastHz: the check rate while the camera moves faster than FastStuds per second; ShowSlackStuds: hysteresis.
+	NeverHideKinds = { "block", "tower", "landmark", "square", "town", "fort", "checkpoint", "motorpool", "mast", "ruins", "camp", "hold", "Booth" },
+	LookAheadSeconds = 1.5,
+	FastStuds = 30,
+	FastHz = 3,
+	ShowSlackStuds = 40,
 	-- where the decoration lives (resolved from Workspace by name; missing ones are retried every few seconds)
 	Folders = { "WorldFill", "WarEmpireSetup/WorldDressing" } :: { string },
 }

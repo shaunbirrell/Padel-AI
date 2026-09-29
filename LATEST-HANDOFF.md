@@ -1,4 +1,87 @@
 <!-- Q2-START -->
+## claude-bud JOB 24 big pass (2026-09-29, branch `claude/desktop-bud`, on v116 2965b15): 35099a3 + 458f2ed + the JOB 24c commit
+- **§1 ATTACK + §3 debug off:** commit 35099a3 (docs/ARMY-ATTACK-ROOTCAUSE.md).
+- **§2 the army now hurts enemy players:**
+  - Root cause (code-proven), three parts:
+    - the target scan only saw CombatService NPCs;
+    - `CombatService.ApplyUnitHit` refuses players by design;
+    - gate guards only took hits with the attacking PLAYER in range.
+  - Now (ArmyConfig.ArmyCombat, kill switch `Enabled`), targets can be players, guards and the gate:
+    - players go through `CombatService.ApplyUnitPlayerHit` (PvP / clan / shields → "X is Protected" toast; kill →
+      owner cash, XP, MOST KILLS);
+    - guards and gates go through `GateDefenseService.ApplyUnitDamage`, range measured from the soldier;
+    - a player behind the gate → the army shoots the gate.
+  - Player DPS is capped at 40. There is a hit log (/armydebug).
+  - Model (config numbers): 5 soldiers kill a player in ~2.6 s (94 % hits) and a guard in 2–4 s. A player behind a
+    gate takes 14–55 s (breach L1–L5 first).
+- **§4 live warnings:**
+  - **Guard research was dead live:** stats were missing from ResearchConfig.StatIds, and flat costs were refused.
+    Both fixed, so GuardArmor / GuardRoster / TowerGuards now work.
+  - **Terrain never built live:** the `Terrain.Decoration` throw aborted the whole build. It is now pcall'd, and
+    keep-out drops are one info line.
+  - **Assets:** 8 asset ids (not authorized / over 40 parts) set to 0. The Part kits stay, and the owner may pick
+    replacements.
+  - **WorldPOI:** skips are now info lines. The ActivityHost is never capped out (the "anchor rows not stamped" bug:
+    a POI's job prompts were missing).
+  - **UpgradePadService:** waits for the map before reporting zero pads.
+  - **Autosave:** skips a key written in the last 10 s (the DataStore queue warning). Purchase and leave saves always
+    write.
+- **§5 building cards:**
+  - On the first purchase of a building (server-confirmed) you get one "NEW: X UNLOCKED" card with OK / SHOW ME
+    (SHOW ME draws a beam to the console for 8 s).
+  - Cards are queued and never shown while driving. They are saved in profile.SeenTutorials, which rebirth keeps.
+  - Settings → TIPS turns them off or shows them again.
+  - Copy is in BuildingTutorialConfig (checked against the code).
+  - **Buildings that do nothing extra yet:** PowerStation, Warehouse, Radar (only a MissileDefense prerequisite),
+    SpecialForcesFacility, and WeaponsFacility (only the ArmsCrateLine prerequisite). All of them earn income.
+  - The first-join tutorial already has 7 steps (claim → CC → collect → recruit → Barracks → outpost → jeep), so no
+    duplicate chain was added.
+- **§6 outpost defenders + §7 enemy areas** (`OutpostDefenderConfig`, `Server/Modules/OutpostDefenders`):
+  - Root cause: TerritoryConfig GuardNPCType / GuardCount were never read, so nothing spawned.
+  - Every capturable outpost that no player holds now has CombatService defenders, and capture is blocked until they
+    are dead ("Defeat the defenders first!"):
+    - Easy (3 Infantry): NorthRidge, SouthDocks, EastArmory, WestDepot, CentralPlaza;
+    - Medium (2 Infantry + 2 Heavy): OilFields, RadarHill;
+    - Hard (4 Fort / Oil Rig guards): FortIronclad, FortSandhold, CoastalOilAlpha / Bravo.
+  - Five enemy areas: Crash Site and Signal Station (easy), Airstrip and Ruined Village (medium), Oasis (hard).
+  - Defenders are awake only within 260 studs of a player and sleep 30 s after nobody is within 380. They come back
+    150 s after being cleared.
+  - At most 20 defenders per server (CombatConfig.SpecialOverCap 4 → 24).
+  - Kills pay the NPC reward and count on MOST KILLS.
+  - **NOT done:** friendly guards on player-owned outposts, and the new area art (walled compound, fuel depot …).
+    The map's named POIs already have ground detail and signs, but a real art pass needs Studio and screenshots.
+- **§8 town buildings vanishing at speed:**
+  - Root cause: the phone LOW-quality culler (Client/Modules/QualityGovernor), not streaming (StreamingEnabled is
+    still OFF). It hid whole clusters beyond 180 / 420 studs at 1 Hz from the camera point.
+  - Fix:
+    - buildings and landmarks (block / tower / landmark / square / town / fort / checkpoint …) are never culled;
+    - decor distance is measured to 1.5 s ahead of the camera;
+    - checks run at 3 Hz while moving fast;
+    - 40-stud hysteresis.
+  - Model at 100 studs/s: decor pop-in 82 → 294 studs ahead; buildings missing 3.4 s → 0.
+  - JOB 27 will add the bounding-box / buffer / Studio-log pass.
+- **§9 codes:** BUDSTUDIOS ($50k + 30 min 2x), BUDSQUAD ($25k), **WAREMPIRE** ($30k + 15 min 2x Cash), **ATTACK**
+  ($10k + 500 XP). One per player, `Expires` optional.
+- **§10 analytics** (Roblox AnalyticsService; Creator Hub → Analytics):
+  - Funnel (new players): Joined → CollectedCash → FirstBuilding → OpenedArmy → FirstAttack → FirstOutpost →
+    PurchasePrompt → FirstPurchase.
+  - Economy: Cash sources / sinks per reason, per minute.
+  - Custom events: ShopOpened, ProductPrompted, PromptCancelled, RobuxPurchase (value = Robux), VehicleSpawned,
+    MissileLaunched, NukeLaunched, CodeRedeemed, TipShown / TipClosed, ArmyAttack, SessionLength (bucket).
+- **§11 crown:** a "#1 MOST KILLS this week" label under the crown, plus a one-time note per board per week. Owner /
+  admin stay off boards and crowns.
+- **Checks:** tools/checks/claude_bud_job24b.py (53 pins + the PvP model). Pins retired: 4 asset ids, SpecialOverCap
+  4, the J8 hide line. BuyPathStatic PASS=6324 FAIL=0; rojo ok; no new LSP errors.
+- **Test ON HIS PHONE:**
+  1. ATTACK a player's base with a full army: the defender should die. Try a player behind the gate (the gate goes
+     down first) and a shielded new player ("Protected").
+  2. Buy Guard Armor / Tower Guards research: it must not be greyed out.
+  3. Buy a new building: one card should appear. Try SHOW ME, then Settings → TIPS off and "show my tips".
+  4. Walk to North Ridge: defenders should shoot back, and capture only starts once they are down.
+  5. Drive the fastest vehicle through town: no building should vanish.
+  6. Redeem WAREMPIRE and ATTACK.
+  7. Take a weekly #1: the crown label should show.
+  8. Next day: Creator Hub → Analytics → Funnel / Economy / Custom events should have data.
 ## v118 (Code Bot Roblox, 2026-09-29): JOB 24b army PvP + warnings + codes + analytics + crown LIVE — place version 116
 - Merged Claude `458f2ed` (JOB 24b: ArmyConfig.ArmyCombat — army ATTACK damages enemy players / other-base gate+tower guards / gates when player behind; live warning quieting; codes WAREMPIRE + ATTACK; AnalyticsService sink; crown "#1 <BOARD> this week"). Merge commit onto phase-7-polish (v117 88b5e80) — not FF (v117 Code Bot commits were ahead of desktop-bud).
 - WE_Build 118 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched.

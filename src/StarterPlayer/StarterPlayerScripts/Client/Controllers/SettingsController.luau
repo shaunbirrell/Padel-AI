@@ -377,6 +377,29 @@ function SettingsController.Init()
 	refreshSup()
 	y += TAP + 14
 
+	-- claude-bud JOB 24 §5: "NEW BUILDING" tips on / off (saved on the server: WE_TipsOff) and show them again
+	section("TIPS")
+	local tipsBtn = button("TipsToggle", "Building tips: ON", UDim.new(0, 16), UDim.new(1, -32))
+	local function refreshTips()
+		local off = player:GetAttribute("WE_TipsOff") == true
+		tipsBtn.Text = if off then "Building tips: OFF" else "Building tips: ON"
+		tipsBtn.BackgroundColor3 = if off then Constants.Colors.Background else Constants.Colors.Accent
+	end
+	tipsBtn.Activated:Connect(function()
+		AudioController.PlayClick()
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestTipSetting, player:GetAttribute("WE_TipsOff") ~= true)
+	end)
+	player:GetAttributeChangedSignal("WE_TipsOff"):Connect(refreshTips)
+	refreshTips()
+	y += TAP + 14
+	local replayBtn = button("TipsReplay", "SHOW MY BUILDING TIPS", UDim.new(0, 16), UDim.new(1, -32))
+	replayBtn.Activated:Connect(function()
+		AudioController.PlayClick()
+		setOpen(false)
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestTipsReplay)
+	end)
+	y += TAP + 14
+
 	-- Supply spinner (the Missions panel has the same claim row; this section stays per spec §3.7)
 	section("SUPPLY SPINNER")
 	local spinnerBtn = button("SpinnerClaim", "SUPPLY SPINNER — Claim free Cash/Gold", UDim.new(0, 16), UDim.new(1, -32))

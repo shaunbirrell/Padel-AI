@@ -115,3 +115,36 @@ _jb('analyticsEconomy(player, "Source", granted, profile.Cash, reason)' in _jb_c
 _ES = read("src/ServerScriptService/Server/Services/EngagementService.luau") or ""
 _jb('"#1 " .. string.upper(label) .. " this week"' in _ES and "Keep it to keep your crown." in _ES, "crown label + one-time note")
 _jb("not isBoardExcluded(uid)" in _ES, "owner / admin stay off the boards and crowns")
+
+# §5 building tips
+_BT = read("src/ReplicatedStorage/Shared/Configs/BuildingTutorialConfig.luau") or ""
+_BC = read("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau") or ""
+_sids = set(_jb_re.findall(r"\n\t\t(\w+) = \{\n\t\t\tId = \"\w+\"", _BC.replace("\r\n", "\n")))
+_tips = set(_jb_re.findall(r"\n\t\t(\w+) = \{ Lines = ", _BT.replace("\r\n", "\n")))
+_jb(_tips and _sids <= _tips, f"every building has a tip card (missing {sorted(_sids - _tips)})")
+_long = [l for l in _jb_re.findall(r'"([^"]{3,})"', _BT[_BT.find("Tips = {"):]) if len(l.split()) > 12]
+_jb(not _long, f"tip lines stay short (<= 12 words): {_long[:3]}")
+_jb(not _jb_re.search(r"\b(press|click)\b|\b[EF] key\b", _BT[_BT.find("Tips = {"):], _jb_re.I), "tip copy names no key and never says click (phones)")
+_BTS = _jb_code("src/ServerScriptService/Server/Services/BuildingTips.luau")
+_jb("GetUpgradeChangedEvent" in _BTS and "newLevel ~= 1" in _BTS and "profile.SeenTutorials[structureId] = true" in _BTS, "a card only after a server-confirmed first purchase, once per building (SeenTutorials)")
+_jb('RemoteGate).Check(player, "RequestTipSetting"' in (read("src/ServerScriptService/Server/Services/BuildingTips.luau") or ""), "tip remotes gated")
+_BTC = _jb_code("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BuildingTipController.luau")
+_jb("hum.SeatPart ~= nil" in _BTC and "table.remove(queue, 1)" in _BTC and "WE_ConsolePos_" in _BTC, "cards queued, never while driving; SHOW ME beams to the console")
+_jb("TipsToggle" in (read("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/SettingsController.luau") or ""), "Settings: tips toggle + replay")
+
+# §6 / §7 defenders
+_OD = _jb_code("src/ServerScriptService/Server/Modules/OutpostDefenders.luau")
+_ODC = read("src/ReplicatedStorage/Shared/Configs/OutpostDefenderConfig.luau") or ""
+_jb("\tEnabled = true," in _ODC and "MaxTotal = " in _ODC and "Areas = {" in _ODC, "outpost + area defenders on, capped, areas listed")
+_jb("NoRespawn = true" in _OD and "OverCap = true" in _OD and "DespawnNPC" in _OD and "anyPlayerWithin(pos, C.WakeStuds)" in _OD, "defenders: CombatService NPCs, awake only near players, managed respawn")
+_jb("OutpostDefenders.Blocking(rt.Def.Id)" in _jb_code("src/ServerScriptService/Server/Services/TerritoryService/init.luau"), "no capture while defenders stand")
+_jb("es.NoteDefenderKill" in _OD and "function EngagementService.NoteDefenderKill(" in _jb_code("src/ServerScriptService/Server/Services/EngagementService.luau"),
+    "defender kills count on MOST KILLS")
+_jb("SpecialOverCap = 24," in (read("src/ReplicatedStorage/Shared/Configs/CombatConfig.luau") or ""), "NPC headroom = bank 4 + defenders 20")
+
+# §8 phone culling
+_QG = _jb_code("src/StarterPlayer/StarterPlayerScripts/Client/Modules/QualityGovernor.luau")
+_QC = read("src/ReplicatedStorage/Shared/Configs/QualityConfig.luau") or ""
+_jb("NeverHideKinds = {" in _QC and '"block"' in _QC and "LookAheadSeconds" in _QC, "town buildings / landmarks are never culled; look-ahead for fast travel")
+_jb("if neverHide[kind] then" in _QG and "focusVel * (tonumber(Q.LookAheadSeconds) or 0)" in _QG and "ShowSlackStuds" in _QG, "governor: skip buildings, predict, hysteresis")
+_jb("Streaming" not in (read("default.project.json") or ""), "StreamingEnabled untouched (still off)")

@@ -9488,3 +9488,27 @@ ds_territories.luau T3):
   - Static pins plus the attack sim (7 tests; the old mode is a re-implementation of the v116 movement).
   - FOLLOW sims unchanged.
   - Not run in Studio or on a phone. The headless world sim and the DataService harness are not in the repo.
+
+## 2026-09-29 — claude-bud JOB 24 big pass (§2, §4-§11)
+- **§2 PvP:** army player damage = 0.6 x the soldier hit, capped at 40 DPS per victim, so a full army needs >= 2.5 s.
+  - Guard kills keep the JOB 20 guard reward (not MOST KILLS).
+  - NPC kills from a steered ATTACK are credited (the 140-stud leash keeps the owner near); v116 attack kills paid
+    nothing.
+- **§4c:** the 8 asset ids are removed, not replaced: I cannot acquire assets, and the Part kit look was already what
+  live showed. The owner can pick owned / free replacements through tools/wire-asset-ids.py.
+- **§4d:** the Radar / Airstrip "skipped" lines were cap / occupancy skips of decoration, now info only. The
+  ActivityHost cluster no longer goes through those tests. The exact live line was not available, so this is inferred
+  from "3 anchor rows not stamped (no ActivityHost cluster was built)".
+- **§5 copy:** avoids key names (phones), so it says "at its terminal", not "press E".
+- **§6:**
+  - Defenders exist only while no player / clan holds the outpost, and only near players (performance), so an
+    owner's outpost has no hostile NPCs.
+  - Friendly guards on owned outposts: not done.
+  - Defender kills count on MOST KILLS as the owner asked; the respawn timer (150 s) limits farming.
+- **§7:** the areas use the map's existing named POIs, so no new geometry was placed blind.
+- **§8:** the NeverHideKinds list is a judgement of which WorldKits cluster kinds are buildings. All culling is
+  client-only, and StreamingEnabled is untouched.
+- **§10:** the funnel only includes players whose FirstJoinUnix is within 15 minutes, so returning players never
+  enter it. Economy events are summed per minute to respect Roblox limits.
+- **Tests:** static pins, sims and models only. Nothing was run in Studio or on a phone. The headless world sim and
+  the DataService harness are not in the repo.

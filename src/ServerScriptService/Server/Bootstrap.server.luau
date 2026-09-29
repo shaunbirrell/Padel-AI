@@ -58,6 +58,7 @@ local SquadOrdersService = safeRequire("SquadOrdersService", Services.SquadOrder
 local SeasonService = safeRequire("SeasonService", Services.SeasonService)
 local ClanWarService = safeRequire("ClanWarService", Services.ClanWarService)
 local CodesService = safeRequire("CodesService", Services.CodesService)
+local BuildingTips = safeRequire("BuildingTips", Services.BuildingTips) -- claude-bud JOB 24 §5
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
@@ -96,6 +97,7 @@ local deps: { [string]: any } = {
 	CombatService = CombatService,
 	VehicleService = VehicleService,
 	TerritoryService = TerritoryService,
+	EngagementService = EngagementService, -- claude-bud JOB 24 §6: outpost defender kills count on MOST KILLS
 	MissionService = MissionService,
 	PrestigeService = PrestigeService,
 	ClanService = ClanService,
@@ -562,6 +564,7 @@ safeInit("OpsService", OpsService, deps) -- W3s2 Jobs: after Data / Combat / Mis
 safeInit("SeasonService", SeasonService, deps)
 safeInit("ClanWarService", ClanWarService, deps)
 safeInit("CodesService", CodesService, deps)
+safeInit("BuildingTips", BuildingTips, deps) -- claude-bud JOB 24 §5: "NEW BUILDING" cards (after BaseService)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)
 safeInit("PremiumWeaponService", PremiumWeaponService, deps) -- claude-bud PREMIUM: Robux-only vehicle weapons (server-validated)

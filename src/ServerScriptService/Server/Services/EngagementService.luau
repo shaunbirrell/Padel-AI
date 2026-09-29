@@ -428,6 +428,24 @@ local function onKill(victim: Player, killer: Player?)
 	deps.DataService.MarkDirty(killer)
 end
 
+-- claude-bud JOB 24 §6: an outpost / area DEFENDER killed by this player (or his army) counts on MOST KILLS too.
+-- Defenders respawn on a timer (OutpostDefenderConfig.RespawnSeconds) and only exist near players, so this cannot be
+-- farmed faster than the defenders come back. Owner / admin boards stay excluded when the board is written.
+function EngagementService.NoteDefenderKill(killer: Player)
+	if typeof(killer) ~= "Instance" or not killer:IsA("Player") or killer.Parent == nil then
+		return
+	end
+	local profile = deps.DataService and deps.DataService.GetProfile(killer)
+	if profile == nil then
+		return
+	end
+	rollWeek(profile, os.time())
+	local lb = lbOf(profile)
+	lb.Kills = (tonumber(lb.Kills) or 0) + 1
+	lb.KillsW = (tonumber(lb.KillsW) or 0) + 1
+	deps.DataService.MarkDirty(killer)
+end
+
 -- Settings "Supporter board": hide / show this player on TOP SUPPORTERS (hiding removes the stored entry)
 local function onBoardSetting(player: Player, hide: any)
 	if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestBoardSetting", hide) then -- claude-bud JOB 15

@@ -1119,8 +1119,18 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	updateMarkerVisual(rt)
 end
 
+local OutpostDefenders = require(script.Parent.Parent.Modules.OutpostDefenders) -- claude-bud JOB 24 §6
+
 local function playersInZone(rt: TerritoryRuntime): { Player }
-	return TerritoryCapture.PlayersInZone(rt)
+	local inside = TerritoryCapture.PlayersInZone(rt)
+	-- claude-bud JOB 24 §6: nobody captures (or contests) an outpost while its defenders stand; they are told why
+	if #inside > 0 and OutpostDefenders.Blocking(rt.Def.Id) then
+		for _, p in ipairs(inside) do
+			OutpostDefenders.NoteBlocked(p)
+		end
+		return {}
+	end
+	return inside
 end
 
 local function tickTerritory(rt: TerritoryRuntime, dt: number)
@@ -1451,6 +1461,26 @@ function TerritoryService.Init(deps: { [string]: any })
 
 	ensureRuntime()
 	seedNpcOwners()
+
+	-- claude-bud JOB 24 §6: defenders at every capturable (non-starter) outpost while no player / clan holds it
+	OutpostDefenders.Start({
+		CombatService = CombatService,
+		EngagementService = deps.EngagementService,
+		NotificationService = NotificationService,
+		Territories = function()
+			local ot = ownerTypes()
+			local out = {}
+			for id, rt in pairs(territories) do
+				if not rt.Def.IsStarter and typeof(rt.Def.Position) == "Vector3" then
+					table.insert(out, { Id = id, Def = rt.Def, Held = rt.OwnerType == ot.Player or rt.OwnerType == ot.Clan })
+				end
+			end
+			table.sort(out, function(a, b)
+				return a.Id < b.Id
+			end)
+			return out
+		end,
+	})
 
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestCaptureTerritory) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player, territoryId: any)

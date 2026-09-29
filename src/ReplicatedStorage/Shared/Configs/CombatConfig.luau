@@ -59,7 +59,7 @@ local CombatConfig = {
 	-- W3 step 2 Phase B, lane N (NPC core; spec w3s2 §4, contract §5). The cap stays MaxActiveNPCs (18 regular);
 	-- these types, and SpawnNPC's opts.OverCap event NPCs, may go SpecialOverCap past it (18 + 4 = 22 alive at most).
 	SpecialNPCTypes = { "BankGuard", "OilRigGuard", "FortGuard" } :: { string },
-	SpecialOverCap = 4,
+	SpecialOverCap = 24, -- claude-bud JOB 24 §6: 4 (bank) + OutpostDefenderConfig.MaxTotal 20 (defenders only exist near players)
 	-- The legacy field NPCs (BootstrapNPCs over the WE_NPCSpawn anchors). Ships true (today). The Ops cutover sets
 	-- it false: the camps' garrisons then come from OpsService, never two garrisons on the same posts.
 	FieldBootstrap = true,

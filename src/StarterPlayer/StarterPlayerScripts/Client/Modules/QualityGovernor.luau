@@ -29,6 +29,11 @@ function QualityGovernor.IsLow(): boolean
 	return low
 end
 
+local neverHide: { [string]: boolean } = {}
+local lastFocus: Vector3? = nil
+local lastFocusAt = 0
+local focusVel = Vector3.zero
+
 local function track(m: Instance, home: Instance)
 	if not m:IsA("Model") or entries[m] ~= nil or m:GetAttribute("WE_Cluster") == nil then
 		return
@@ -37,6 +42,11 @@ local function track(m: Instance, home: Instance)
 		return m:GetPivot()
 	end)
 	if not okP then
+		return
+	end
+	-- claude-bud JOB 24 §8: buildings / landmarks are never taken out (they were the "vanishing town at speed")
+	local kind = string.match(tostring(m:GetAttribute("WE_Cluster")), ":(.+)$") or ""
+	if neverHide[kind] then
 		return
 	end
 	entries[m] = {
@@ -126,12 +136,21 @@ local function cull(Q: any)
 		return
 	end
 	local focus = cam.Focus.Position
+	-- claude-bud JOB 24 §8: where the camera will be LookAheadSeconds from now (a car's path is shown before it gets there)
+	local now = os.clock()
+	if lastFocus ~= nil and now > lastFocusAt then
+		focusVel = (focus - (lastFocus :: Vector3)) / (now - lastFocusAt)
+	end
+	lastFocus, lastFocusAt = focus, now
+	local ahead = focus + focusVel * (tonumber(Q.LookAheadSeconds) or 0)
+	local slack = tonumber(Q.ShowSlackStuds) or 0
 	for m, e in pairs(entries) do
 		if e.Hidden == false and m.Parent == nil then
 			entries[m] = nil -- streamed out / destroyed by the server
 		else
-			local d = (e.Pos - focus).Magnitude
-			local hide = low and ((e.Tier >= 2 and d > Q.HideTier2BeyondStuds) or d > Q.HideAnyBeyondStuds)
+			local d = math.min((e.Pos - focus).Magnitude, (e.Pos - ahead).Magnitude)
+			local extra = if e.Hidden then 0 else slack -- (hysteresis: shown ones stay a little longer)
+			local hide = low and ((e.Tier >= 2 and d > Q.HideTier2BeyondStuds + extra) or d > Q.HideAnyBeyondStuds + extra)
 			if hide ~= e.Hidden then
 				e.Hidden = hide
 				pcall(function()
@@ -152,6 +171,9 @@ function QualityGovernor.Init()
 	if not Q.LiveFor(lp.UserId) then
 		return
 	end
+	for _, k in ipairs(Q.NeverHideKinds or {}) do
+		neverHide[k] = true
+	end
 	local frames = 0
 	RunService.Heartbeat:Connect(function()
 		frames += 1
@@ -160,8 +182,10 @@ function QualityGovernor.Init()
 		local lowFor, highFor, since, lastFind = 0, 0, os.clock(), -math.huge
 		local interval = 1 / math.max(0.2, Q.CheckHz)
 		while lp.Parent do
-			task.wait(interval)
+			-- claude-bud JOB 24 §8: faster checks while the camera moves fast (driving / flying)
+			task.wait(if focusVel.Magnitude > (tonumber(Q.FastStuds) or math.huge) then 1 / math.max(1, tonumber(Q.FastHz) or 1) else interval)
 			local now = os.clock()
+			local step = now - since -- (the real loop step: the wait varies with speed, JOB 24 §8)
 			local fps = frames / math.max(0.001, now - since)
 			frames, since = 0, now
 			if now - lastFind >= 5 then
@@ -172,10 +196,10 @@ function QualityGovernor.Init()
 			local vp = if cam then cam.ViewportSize else Vector2.new(1920, 1080)
 			local small = math.min(vp.X, vp.Y) <= Q.SmallScreenShortSide
 			if fps < Q.LowFpsBelow then
-				lowFor += interval
+				lowFor += step
 				highFor = 0
 			elseif fps > Q.RecoverFpsAbove then
-				highFor += interval
+				highFor += step
 				lowFor = 0
 			end
 			if small or lowFor >= Q.LowFpsSeconds then

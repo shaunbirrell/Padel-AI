@@ -4036,7 +4036,7 @@ must_contain(N_CC, 'SpecialNPCTypes', 'W3s2 N: the special NPC list lives in Com
 must_contain(N_NPC, 'Stance', 'W3s2 N: CombatNPC stances (spec §8)')
 # CombatConfig (contract §5.1); FieldBootstrap ships true: the integrator swaps this needle for 'FieldBootstrap = false,' at the cutover
 must_contain(N_CC, 'SpecialNPCTypes = { "BankGuard", "OilRigGuard", "FortGuard" } :: { string },', 'W3s2 N: special types = BankGuard, OilRigGuard, FortGuard (today\'s list, now config)')
-must_contain(N_CC, 'SpecialOverCap = 4,', 'W3s2 N: special / OverCap headroom +4 (18 + 4 = 22)')
+# claude-bud JOB 24 §6: retired, superseded in tools/checks/claude_bud_job24b.py (SpecialOverCap 24 = the bank 4 + OutpostDefenderConfig.MaxTotal 20; defenders exist only near players): #must_contain(N_CC, 'SpecialOverCap = 4,', 'W3s2 N: special / OverCap headroom +4 (18 + 4 = 22)')
 must_contain(N_CC, 'MaxActiveNPCs = 18,', 'W3s2 N: the regular NPC cap stays 18 (spec §4)')
 must_contain(N_CC, '\tFieldBootstrap = true,', 'W3s2 N: legacy field NPCs ship ON until the Ops cutover (swap to false there)')
 must_contain(N_CC, 'ProvokeHoldSeconds = 2,', 'W3s2 N: an on-foot player provokes a Passive group after 2 s')
