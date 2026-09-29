@@ -46,6 +46,8 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
 local OpsConfig = require(Shared.Configs.OpsConfig)
+local AdminConfig = require(Shared.Configs.AdminConfig) -- claude-bud: PickupLosRollout
+local CombatDamage = require(script.Parent.CombatService.CombatDamage) -- claude-bud: bag pickup line of sight
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local OpsSites = require(script.OpsSites)
@@ -332,6 +334,25 @@ function ctx.OnSitePrompt(rt: any, key: string, role: string, stage: OpsConfig.S
 	OpsKinds.OnPrompt(rt, stage, role, player)
 end
 
+--[[ claude-bud (OpsConfig.Cargo.PickupLosRollout): a clear ray from the picker's head to the top of the bag. Collidable
+	parts block (walls, floors, crates); the picker's own character and the bag never do; non-colliding decor never does.
+	true while the rollout is off for this player (the distance check alone, as before). ]]
+local function bagInSight(player: Player, part: BasePart): boolean
+	local mode = (OpsConfig.Cargo :: any).PickupLosRollout
+	local live = mode == "all" or (mode == "owner" and AdminConfig.IsPlaytestOwner(player.UserId))
+	if not live then
+		return true
+	end
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if char == nil or root == nil or not root:IsA("BasePart") then
+		return false
+	end
+	local from = root.Position + Vector3.new(0, 1.5, 0)
+	local to = part.Position + Vector3.new(0, part.Size.Y * 0.5, 0)
+	return CombatDamage.LineOfSight(from, to, { char, part }, nil, true)
+end
+
 function ctx.OnBagPrompt(bag: any, player: Player)
 	if not RateLimitService.Allow(player, "ops_prompt", Z.RateLimitRate, Z.RateLimitBurst) then
 		return
@@ -341,6 +362,9 @@ function ctx.OnBagPrompt(bag: any, player: Player)
 	end
 	if not actor(player, bag.Part.Position, OpsConfig.Cargo.PickupDist, false) then
 		return
+	end
+	if not bagInSight(player, bag.Part) then
+		return -- claude-bud (CP-9 E4): no pickup through a wall
 	end
 	if OpsCargo.Carrying(player) ~= nil then
 		ctx.Notify(player, TOAST.HandsFull, "Info")

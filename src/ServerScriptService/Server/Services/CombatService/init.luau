@@ -128,6 +128,13 @@ type NPCRecord = {
 	SpawnOpts: NPCSpawnOpts?, -- a copy of the opts, reused by a respawn (nil for a 2-argument spawn)
 	Returning: boolean, -- walking back past the leash (targets ignored until home)
 	DeathFired: boolean, -- OnNPCDeath fired (or silenced by DespawnNPC): once per death
+	-- claude-bud (CombatConfig.GuardsFightBack / NpcUnstick; CombatNPC)
+	UnitFoe: Model?, -- the last squad unit that hit it (only while GuardsFightBack is live for that unit's owner)
+	UnitFoeAt: number?,
+	StuckPos: Vector3?, -- where its chase progress was last measured
+	StuckAt: number?,
+	DetourUntil: number?, -- sidestepping around an obstacle until then
+	DetourSide: number?,
 }
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
@@ -829,10 +836,26 @@ end
 
 --[[ Damage one NPC record. Returns (dealt, killed). With no attacker nobody is credited (the Died handler respawns
 	it). W2: fb carries the feedback / credit switches (quiet blast kills, splash aggregation, squad unit shots). ]]
+-- claude-bud (CombatConfig.GuardsFightBack): the squad unit whose shot SquadOrdersService is about to apply
+-- (CombatService.SetUnitShooter right before its ApplyUnitHit pcall; consumed by the next UnitShot hurtNPC, cleared after)
+local pendingShooter: Model? = nil
+
+function CombatService.SetUnitShooter(model: Model?)
+	pendingShooter = if typeof(model) == "Instance" and model:IsA("Model") then model else nil
+end
+
 local function hurtNPC(attacker: Player?, npcId: string, damage: number, weaponId: string, fb: FbOpts?): (number, boolean)
 	local rec = npcRecords[npcId]
 	if not rec or not rec.Alive or rec.Humanoid.Health <= 0 then
 		return 0, false
+	end
+	-- claude-bud: an NPC hit by a squad unit remembers that unit and fights back (per unit owner, CombatConfig.GuardsFightBack)
+	if fb ~= nil and fb.UnitShot == true and pendingShooter ~= nil and attacker ~= nil then
+		if CombatConfig.LiveFor(CombatConfig.GuardsFightBack, attacker.UserId) then
+			rec.UnitFoe = pendingShooter
+			rec.UnitFoeAt = clock()
+		end
+		pendingShooter = nil
 	end
 	if not (damage > 0) then
 		return 0, false

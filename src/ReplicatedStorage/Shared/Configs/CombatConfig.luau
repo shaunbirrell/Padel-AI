@@ -18,6 +18,8 @@ export type NPCTypeDef = {
 	Color: Color3,
 }
 
+local AdminConfig = require(script.Parent.AdminConfig)
+
 local CombatConfig = {
 	PlayerMaxHealth = 100,
 	SpawnInvulnerabilitySeconds = 3, -- mirrors GameConfig; CombatService uses this
@@ -156,6 +158,40 @@ local CombatConfig = {
 	} :: { [string]: NPCTypeDef },
 
 	DefaultNPCType = "Infantry",
+
+	--[[ claude-bud (2026-09-29): NPC guards shoot back at the squad unit that shot them (the Empire Bank guards, camps).
+		A plain NPC (Aggressive, no group) remembers the last unit that hit it for MemorySeconds and, while no player is in
+		its AggroRange, fights that unit through the same line-of-sight + CombatNPC.HitChance gates as its shots at players
+		(DamageMult x its Damage). Rollout is per unit owner: "owner" = AdminConfig.IsPlaytestOwner only, "all", anything
+		else = off (today's game: NPCs never hurt squad units). ]]
+	GuardsFightBack = {
+		Rollout = "owner",
+		MemorySeconds = 8,
+		DamageMult = 1,
+	},
+
+	--[[ claude-bud (2026-09-29): unstick a chasing NPC (bank guards G1 / G2 jam on the 6 x 3 x 2 planters in front of the
+		hall). A plain NPC walking after its target that moved under MinProgressStuds in StuckSeconds jumps and sidesteps
+		SidestepStuds to one side (alternating) for DetourSeconds, then resumes the chase. Rollout per target (the player
+		or the unit owner): "owner" / "all" / off (today's straight MoveTo only). ]]
+	NpcUnstick = {
+		Rollout = "owner",
+		StuckSeconds = 1.5,
+		MinProgressStuds = 1,
+		SidestepStuds = 8,
+		DetourSeconds = 1.2,
+	},
 }
+
+-- claude-bud: is a GuardsFightBack / NpcUnstick block live for this user id (fail closed)
+function CombatConfig.LiveFor(block: any, userId: any): boolean
+	local mode = if typeof(block) == "table" then block.Rollout else nil
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
 
 return CombatConfig

@@ -8696,3 +8696,26 @@ ds_territories.luau T3):
 - **Check:** `tools/checks/claude_bud_runway.py`. It pins the config (190 x 29, 68 x 40), fit in the plot, no overlap
   with the HeliApron or any installation footprint, the config-reading builders, the two dormant strips staying dead,
   and the signature stamp/compare.
+
+## 2026-09-29 — claude-bud: guards fight back, bag pickup line of sight, unstick G1/G2 (owner-only)
+- **Which guards:** the Empire Bank guards (`Town.Bank.G1..G5`, live via BankRaidService, which spawns plain Aggressive NPCs) and any plain camp NPC.
+  These are CP-9 items 1, 5 and 7. OilField / Ops garrisons are off (Jobs off) and are not touched.
+- **Fight back** (`CombatConfig.GuardsFightBack`, Rollout "owner", per UNIT OWNER):
+  - SquadOrdersService names the shooting unit (`CombatService.SetUnitShooter`) right before its unchanged ApplyUnitHit
+    pcall and clears it after. `hurtNPC` stamps `rec.UnitFoe` on a UnitShot hit.
+  - With no player in AggroRange, the NPC fights that unit for up to MemorySeconds 8. It uses the player rules:
+    chase outside 0.85 x Range, eye line of sight (NPC and unit ignored), reaction delay, FireRate, and HitChance at
+    the unit's speed. Damage is Def.Damage x DamageMult (1).
+  - A player target always comes first. Grouped / stance NPCs (Ops) are unchanged.
+  - Assumed "fight back" means return fire at the army, not a new aggro rule for players.
+- **Bag LOS** (`OpsConfig.Cargo.PickupLosRollout`, "owner", per picker): OnBagPrompt also needs a clear ray from the head
+  (root + 1.5) to the top of the bag. Collidable parts block; the character, the bag and non-colliding decor don't.
+  Bags exist only while Ops is on, so this is dormant on live today.
+- **Unstick** (`CombatConfig.NpcUnstick`, "owner", per target player / unit owner):
+  - Both player chase MoveTos go through `chaseTo`. Less than 1 stud of flat progress in 1.5 s → Jump + a sidestep of
+    8 studs to alternating sides (plus 2 forward) for 1.2 s, then the chase resumes. The planters are 3 studs tall, so the jump alone often clears them.
+  - `holdStill` resets the progress timer so standing to shoot never counts as stuck.
+  - The posts were not moved: the jam happens while chasing in front of the planters, not at the post.
+  - OFF: the same straight MoveTo as before.
+- **Frozen squadfair pins untouched:** the ApplyUnitHit signature and the pcall line are byte-identical, via the pending-shooter handoff.
+- Not verified in Roblox: the headless stand-in is not in the repo. Needs a device test.

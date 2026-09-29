@@ -239,6 +239,46 @@ local function npcHasLos(rec: any, target: Player, th: Humanoid, troot: BasePart
 	return CombatDamage.LineOfSight(eye, troot.Position, ignore, nil, CombatFairnessConfig.NpcLosRespectCanCollide)
 end
 
+--[[ claude-bud (CombatConfig.NpcUnstick): walk after `goal`. With the flag live for `userId` (the target player or the
+	unit owner), a chase that made under MinProgressStuds in StuckSeconds (G1 / G2 on the bank planters) jumps and
+	sidesteps SidestepStuds to one side, alternating, for DetourSeconds. Off: today's straight MoveTo. ]]
+local function chaseTo(rec: any, goal: Vector3, now: number, userId: any)
+	local U = CombatConfig.NpcUnstick
+	if not CombatConfig.LiveFor(U, userId) then
+		rec.Humanoid:MoveTo(goal)
+		return
+	end
+	if rec.DetourUntil ~= nil and now < rec.DetourUntil then
+		return -- still sidestepping
+	end
+	local pos = rec.Root.Position
+	local moved = if rec.StuckPos then Vector3.new(pos.X - rec.StuckPos.X, 0, pos.Z - rec.StuckPos.Z).Magnitude else math.huge
+	if rec.StuckPos == nil or rec.StuckAt == nil or moved >= U.MinProgressStuds then
+		rec.StuckPos = pos
+		rec.StuckAt = now
+	elseif now - rec.StuckAt >= U.StuckSeconds then
+		local flat = Vector3.new(goal.X - pos.X, 0, goal.Z - pos.Z)
+		local dir = if flat.Magnitude > 0.05 then flat.Unit else rec.Root.CFrame.LookVector
+		rec.DetourSide = if rec.DetourSide == 1 then -1 else 1
+		local side = Vector3.new(-dir.Z, 0, dir.X) * rec.DetourSide
+		rec.Humanoid.Jump = true
+		rec.Humanoid:MoveTo(pos + side * U.SidestepStuds + dir * 2)
+		rec.DetourUntil = now + U.DetourSeconds
+		rec.StuckPos = nil
+		rec.StuckAt = nil
+		return
+	end
+	rec.Humanoid:MoveTo(goal)
+end
+
+-- claude-bud: stop walking (and forget the chase progress, so standing to shoot never counts as stuck)
+local function holdStill(rec: any)
+	rec.StuckPos = nil
+	rec.StuckAt = nil
+	rec.DetourUntil = nil
+	rec.Humanoid:MoveTo(rec.Root.Position)
+end
+
 --[[ One NPC's fight against `target` this tick: today's Think body (P1-2 / W2), unchanged for a walking NPC.
 	`canMove` false = the Post stance (lane N): no MoveTo at all (no chase, no stop-in-place); it turns, and fires
 	within Range through the same line-of-sight and hit-chance gates. ]]
@@ -255,8 +295,9 @@ local function engage(rec: any, target: Player, dist: number, now: number, canMo
 		if gyro and gyro:IsA("BodyGyro") then
 			gyro.CFrame = look
 		end
+		rec.UnitAimSince = nil -- claude-bud: a player target resets the fight-back aim
 		if canMove and dist > rec.Def.Range * 0.85 then
-			rec.Humanoid:MoveTo(troot.Position)
+			chaseTo(rec, troot.Position, now, target.UserId)
 		elseif not canMove and dist > rec.Def.Range then
 			-- Post (lane N): out of range, it only turns
 		elseif not npcHasLos(rec, target, th, troot) then
@@ -264,9 +305,9 @@ local function engage(rec: any, target: Player, dist: number, now: number, canMo
 			if not canMove then
 				-- Post (lane N): holds its spot behind the cover
 			elseif C.NpcChaseWithoutLos then
-				rec.Humanoid:MoveTo(troot.Position)
+				chaseTo(rec, troot.Position, now, target.UserId)
 			else
-				rec.Humanoid:MoveTo(rec.Root.Position)
+				holdStill(rec)
 			end
 			if C.NpcReactionOnLosRegain then
 				rec.AimBlocked = true
@@ -278,7 +319,7 @@ local function engage(rec: any, target: Player, dist: number, now: number, canMo
 				rec.AimSince = now
 			end
 			if canMove then
-				rec.Humanoid:MoveTo(rec.Root.Position)
+				holdStill(rec)
 			end
 			local interval = 1 / math.max(rec.Def.FireRate, 0.1)
 			local aimed = now - (rec.AimSince or now) >= C.NpcReactionSeconds
@@ -583,6 +624,73 @@ local function settleGroups(now: number)
 	end
 end
 
+--[[ claude-bud (CombatConfig.GuardsFightBack): a plain NPC with no player in range fights the squad unit that last shot
+	it (CombatService.ApplyUnitHit stamps rec.UnitFoe only while the flag is live for that unit's owner). Same rules as a
+	shot at a player: chase outside 0.85 x Range, line of sight from the eyes (the NPC and the unit never block), the
+	reaction delay, FireRate and CombatNPC.HitChance at the unit's speed. Returns true while it has a unit to fight. ]]
+local function fightUnit(rec: any, now: number): boolean
+	local foe = rec.UnitFoe
+	if foe == nil then
+		return false
+	end
+	local cfg = CombatConfig.GuardsFightBack
+	local C = CombatFairnessConfig
+	local fh = foe:FindFirstChildOfClass("Humanoid")
+	local fr = foe:FindFirstChild("HumanoidRootPart")
+	local ownerId = foe:GetAttribute("OwnerUserId")
+	if
+		foe.Parent == nil
+		or now - (rec.UnitFoeAt or 0) > (tonumber(cfg.MemorySeconds) or 8)
+		or fh == nil
+		or fh.Health <= 0
+		or fr == nil
+		or not fr:IsA("BasePart")
+		or not CombatConfig.LiveFor(cfg, ownerId)
+	then
+		rec.UnitFoe = nil
+		rec.UnitAimSince = nil
+		return false
+	end
+	local froot = fr :: BasePart
+	local dist = (froot.Position - rec.Root.Position).Magnitude
+	if dist > rec.Def.AggroRange then
+		rec.UnitFoe = nil
+		rec.UnitAimSince = nil
+		return false
+	end
+	local gyro = rec.Root:FindFirstChild("NPCFaceGyro") or rec.Root:FindFirstChildOfClass("BodyGyro")
+	if gyro and gyro:IsA("BodyGyro") then
+		gyro.CFrame = CFrame.lookAt(rec.Root.Position, Vector3.new(froot.Position.X, rec.Root.Position.Y, froot.Position.Z))
+	end
+	if dist > rec.Def.Range * 0.85 then
+		chaseTo(rec, froot.Position, now, ownerId)
+		rec.UnitAimSince = nil
+		return true
+	end
+	local eye = rec.Root.Position + Vector3.new(0, C.NpcEyeHeight, 0)
+	if C.NpcRequireLos and not CombatDamage.LineOfSight(eye, froot.Position, { rec.Model, foe }, nil, C.NpcLosRespectCanCollide) then
+		chaseTo(rec, froot.Position, now, ownerId)
+		rec.UnitAimSince = nil
+		return true
+	end
+	holdStill(rec)
+	if rec.UnitAimSince == nil then
+		rec.UnitAimSince = now
+	end
+	local interval = 1 / math.max(rec.Def.FireRate, 0.1)
+	if now - rec.UnitAimSince >= C.NpcReactionSeconds and now - rec.LastFireAt >= interval and dist <= rec.Def.Range then
+		rec.LastFireAt = now
+		local chance = CombatNPC.HitChance(dist, rec.Def.Range, froot.AssemblyLinearVelocity.Magnitude)
+		if rng:NextNumber() < chance then
+			fh:TakeDamage(rec.Def.Damage * math.clamp(tonumber(cfg.DamageMult) or 1, 0, 3))
+			sendFx(rec, eye, froot.Position, "P")
+		else
+			sendFx(rec, eye, missPoint(froot.Position), "M")
+		end
+	end
+	return true
+end
+
 function CombatNPC.Think()
 	if next(B.npcRecords) == nil then
 		return
@@ -598,6 +706,8 @@ function CombatNPC.Think()
 				aim(rec, target, now)
 				if target then
 					engage(rec, target, dist, now, true)
+				elseif rec.UnitFoe ~= nil then
+					fightUnit(rec, now) -- claude-bud: guards fight back at the squad that shot them
 				end
 			else
 				thinkStance(rec, now)
