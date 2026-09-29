@@ -1,5 +1,5 @@
 <!-- Q2-START -->
-## v111 (Code Bot, 2026-09-29 17:1x) — Grab Cash plate removed
+## v111 (Code Bot, 2026-09-29) — Grab Cash plate removed — PUBLISHED place version 109
 - Shaun: the $75 Grab Cash plate added nothing. `ManualDropperConfig.Enabled = false` (set true to restore). No plates are built; the tutorial Income step still advances on PassiveIncome.
 - WE_Build 110 → 111; pin `tools/checks/codebot_v111.py`. BuyPathStatic FAIL=0; rojo build ok. PreferMesh OFF; WE_Building* untouched.
 - NEXT for Claude: JOB 22 army follow root-cause fix (prompt given to Shaun) BEFORE JOB 21 plots. Rebase onto v111.
