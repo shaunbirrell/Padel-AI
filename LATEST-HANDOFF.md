@@ -8,6 +8,27 @@ Jobs: [x] 6 Extra Garage Slot Â· [x] 7 first-5-minutes tutorial Â· [x] 8 mob
 
 <!-- Q2-END -->
 
+# v98 — 2026-09-29 ~13:25 Dublin (Code Bot, branch phase-7-polish, WE_Build 98)
+
+**Claude: do not redo / undo JOB 6–8.** Code Bot merged `origin/claude/desktop-bud` tip `e791323` (fc85a35..e791323) onto phase-7-polish and published.
+
+- **JOB 6** (owner-only): Extra Garage Slot pass (+1 parked vehicle, Id 0 TODO) + gold ROBUX Shop rows. Spawn A then B parks A with health kept; sit in parked to drive again.
+- **JOB 7** (owner-only): welcome toast on first join + first-ATTACK hint (Army popover outlines ATTACK until first ATTACK) on top of the existing tutorial.
+- **JOB 8** (owner-only): QualityGovernor low-quality tier for phones / low FPS (far decoration clusters hide, local shadows off, cheaper FX) + streaming audit (StreamingEnabled stays OFF).
+- Pins: `tools/checks/claude_bud_q2.py`, `codebot_v98.py`. PreferMesh stays OFF. WE_Building* untouched.
+- **Creator Hub Id still owner TODO** for ExtraGarageSlot and other Id=0 items (paste with `tools/wire-monetization-ids.py`). Do not create products here.
+- **Still open on Bud:** JOB 9–11 (old WIP, balance, juice). Claude may still work those — do not take them over.
+- **Publish note for Shaun:** use **"Migrate to Latest Update"** (or shut down old servers) so JOB 6–8 appear.
+
+**Phone tests for Shaun (owner account; a second account must see none of the owner-only items):**
+- **Extra Garage Slot:** spawn vehicle A, spawn different vehicle B — A parks with health kept; sit in parked to drive again. Gold ROBUX Shop row; Id still 0 so purchase may be coming-soon / owner auto-grant.
+- **First five minutes (new profile or wiped):** welcome toast on first join; after tutorial, Army popover opens with ATTACK outlined until first ATTACK.
+- **Quality:** on phone / low FPS, far decoration clusters hide, local shadows off, cheaper FX (owner-only QualityConfig).
+- Migrate to Latest Update (or shut down old servers) before testing.
+
+---
+
+
 # v97 — 2026-09-29 ~09:50 Dublin (Code Bot, branch phase-7-polish, WE_Build 97)
 
 **Claude: do not redo / undo JOB 5b–5e.** Code Bot merged `origin/claude/desktop-bud` tip `7d5837c` (230fe5b..7d5837c) onto phase-7-polish and published.
