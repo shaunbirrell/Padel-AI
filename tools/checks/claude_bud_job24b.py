@@ -146,5 +146,5 @@ _jb("SpecialOverCap = 24," in (read("src/ReplicatedStorage/Shared/Configs/Combat
 _QG = _jb_code("src/StarterPlayer/StarterPlayerScripts/Client/Modules/QualityGovernor.luau")
 _QC = read("src/ReplicatedStorage/Shared/Configs/QualityConfig.luau") or ""
 _jb("NeverHideKinds = {" in _QC and '"block"' in _QC and "LookAheadSeconds" in _QC, "town buildings / landmarks are never culled; look-ahead for fast travel")
-_jb("if neverHide[kind] then" in _QG and "focusVel * (tonumber(Q.LookAheadSeconds) or 0)" in _QG and "ShowSlackStuds" in _QG, "governor: skip buildings, predict, hysteresis")
+_jb("local building = neverHide[kind]" in _QG and "focusVel * (tonumber(Q.LookAheadSeconds) or 0)" in _QG and "Tier2HideStuds" in _QG, "governor: skip buildings, predict, load / unload buffer (JOB 27)")
 _jb("Streaming" not in (read("default.project.json") or ""), "StreamingEnabled untouched (still off)")

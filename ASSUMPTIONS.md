@@ -9532,3 +9532,10 @@ ds_territories.luau T3):
   give ~2.6 s). It is one config number.
 - **Kept through rebirth:** yes (research is not reset by rebirth). No extra rebirth bonus was added.
 - **Tests:** static pins + the TTK model only; nothing was run in Studio or on a phone.
+
+## 2026-09-30 — claude-bud JOB 27: city building culling
+- **Building definition:** bounding-box footprint >= 14 studs or height >= 10, plus the POI NeverHideKinds. Anything
+  whose box touches a building's box (rooftop props, signs) counts as part of it.
+- **Load / unload distances:** 220 / 320 (Tier 2) and 480 / 640 (others) for small decor only. The brief's example was
+  550 / 700 for loading. Small decor at 480+ studs is not noticeable, and phones keep the benefit.
+- **Not measured:** FPS and memory need a device. The replay model replaces the Studio route, and says so.

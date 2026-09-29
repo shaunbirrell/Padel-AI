@@ -1,4 +1,55 @@
 <!-- Q2-START -->
+## claude-bud JOB 27 (2026-09-30): city buildings popping in / out (branch `claude/desktop-bud`)
+- **Proven root cause:** Client/Modules/QualityGovernor.cull, case B (our code removes the models).
+  - **Streaming ruled out:** `StreamingEnabled` is absent from default.project.json and from the built place (class
+    default false); codebot_v101 forbids turning it on.
+  - **Server ruled out:** no server loop rebuilds town models (Waterways / WorldPOI only clear decor once at boot).
+  - **Other client code ruled out:** no other client code re-parents or destroys world models; BusinessVisuals only
+    touches plot crates.
+- **Why it popped:** on every phone the governor is LOW (small screen). It took WorldKits clusters out of the client's
+  world like this:
+  - **#1:** a custom distance cull;
+  - **#5:** measured from ONE cached pivot point, so a 300-stud building with its pivot at one end hid while you stood
+    beside it;
+  - **#4:** ONE threshold for hide and show;
+  - **1 Hz checks:** too slow at speed;
+  - **#7:** it included the city's building clusters AND rooftop props, which are separate clusters on top of
+    buildings.
+  - JOB 24 §8's NeverHideKinds only listed POI roles, but the city's fill buildings use kit names. So they still
+    popped while running.
+- **Replay** (tools/sim/quality_cull_model.py: the three versions of the rule on a city street), building-seconds
+  missing within 200 studs of the player:
+
+  | Speed | v116 | JOB 24 §8 | JOB 27 |
+  |---|---|---|---|
+  | 16 studs/s (run) | 101.8 | 34.2 | **0** |
+  | 28 studs/s | 59.9 | 11.4 | **0** |
+  | 60 studs/s | 33.5 | 0.4 | **0** |
+  | 100 studs/s | 25.7 | 0 | **0** |
+  | 140 studs/s | 22.3 | 0 | **0** |
+
+  Small decoration still loads 240-330 studs ahead.
+- **Fix** (one architecture, no second streaming system):
+  - distance to each cluster's bounding box;
+  - buildings recognised by SIZE (footprint >= 14 or height >= 10), plus NeverHideKinds, plus anything standing on a
+    building, are never culled;
+  - only small far decor is culled, with a LOAD / UNLOAD buffer (Tier 2: in < 220, out > 320; others: in < 480,
+    out > 640);
+  - one central manager at 0.4 s (0.2 s when fast) with look-ahead;
+  - no Destroy / Clone; `QualityConfig.DebugLog` prints `[BUILDING DEBUG] UNLOADING|LOADING: <name> PlayerDistance
+    CameraDistance Chunk Reason`.
+  - Kill switch: `QualityConfig.CullTownBuildings = true` restores the old behaviour.
+- **NOT verified on a device:** I cannot run Studio or a phone from here, so there is no FPS / memory before / after.
+  Buildings now always render on phones, which costs a little more than before; small decor is still culled.
+  - **Verify in Studio:** set DebugLog = true, Device emulator = phone landscape (low quality turns on by itself on a
+    small screen), Start Server + Player. Walk, run and drive the town street. No building line should ever print,
+    only small decor LOADING / UNLOADING far away.
+- **Checks:** tools/checks/claude_bud_job27.py (+ the replay). The J8 / J24 §8 pins are updated. BuyPathStatic
+  PASS=6405 FAIL=0; rojo ok; no new LSP errors.
+- **Test ON HIS PHONE:**
+  1. Run, sprint, then drive the fastest vehicle down the town street and back, with fast camera turns.
+  2. No building, roof or wall may flash out.
+  3. Note the phone's FPS in town (Settings → performance stats) against yesterday.
 ## claude-bud JOB 26 (2026-09-29): stronger army + buyable player armour (branch `claude/desktop-bud`)
 - **Before:**
   - soldier HP 90 (x1.0-1.5 Body Armor), damage 8 (x1.0-1.5 Marksman Training), 1.8 shots/s, range 55 (fire band

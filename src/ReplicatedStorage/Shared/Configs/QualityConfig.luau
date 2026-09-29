@@ -36,6 +36,19 @@ local QualityConfig = {
 	FastStuds = 30,
 	FastHz = 3,
 	ShowSlackStuds = 40,
+	-- claude-bud JOB 27 (the city popping; QualityGovernor header): buildings are recognised by SIZE (their bounding box),
+	-- never culled, nor the small clusters on them. CullTownBuildings = true brings back the old behaviour (kill switch).
+	CullTownBuildings = false,
+	BuildingMinStuds = 14, -- a cluster this wide / deep (bounding box) is a building
+	BuildingMinHeight = 10, -- or this tall
+	-- small decoration only: LOAD within / UNLOAD beyond (studs to its bounding box); nothing happens in between
+	Tier2ShowStuds = 220,
+	Tier2HideStuds = 320,
+	AnyShowStuds = 480,
+	AnyHideStuds = 640,
+	CullSeconds = 0.4, -- the one cull manager's period ...
+	FastCullSeconds = 0.2, -- ... while the camera moves faster than FastStuds per second
+	DebugLog = false, -- true: "[BUILDING DEBUG] UNLOADING|LOADING ..." per change (Studio investigation)
 	-- where the decoration lives (resolved from Workspace by name; missing ones are retried every few seconds)
 	Folders = { "WorldFill", "WarEmpireSetup/WorldDressing" } :: { string },
 }
