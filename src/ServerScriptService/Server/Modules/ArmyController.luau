@@ -71,12 +71,17 @@ function ArmyController.LiveFor(userId: any): boolean
 	return false
 end
 
--- debug overlay / logs on for this player: Follow3.Debug and his WE_ArmyDebug attribute (/armydebug toggles it)
-function ArmyController.DebugFor(player: Player): boolean
-	return cfg().Debug == true and player:GetAttribute("WE_ArmyDebug") == true
+-- JOB 24 (claude-bud, docs/ARMY-ATTACK-ROOTCAUSE.md): ATTACK is driven here too, by the same steered block
+-- (Follow3.Steer + Follow3.AttackSteer; false = the v116 SquadOrdersService.attackUnit movement)
+function ArmyController.AttackLive(userId: any): boolean
+	local c = cfg()
+	return ArmyController.LiveFor(userId) and c.Steer == true and c.AttackSteer == true
 end
 
-local function isDebugUser(userId: number): boolean
+-- debug overlay / logs on for this player: his WE_ArmyDebug attribute (/armydebug toggles it; admin allowlist) --
+-- JOB 24: off by default for EVERYONE (Follow3.Debug = false no longer switches it on by itself; with Debug true it
+-- still defaults on for DebugUserIds). Otherwise only a DebugUserIds player who typed /armydebug sees it.
+local function isDebugUserId(userId: number): boolean
 	local ids = cfg().DebugUserIds
 	if typeof(ids) == "table" then
 		for _, id in ipairs(ids) do
@@ -87,6 +92,12 @@ local function isDebugUser(userId: number): boolean
 	end
 	return false
 end
+
+function ArmyController.DebugFor(player: Player): boolean
+	return player:GetAttribute("WE_ArmyDebug") == true and (cfg().Debug == true or isDebugUserId(player.UserId))
+end
+
+local isDebugUser = isDebugUserId
 
 local STATE_OF: { [string]: string } = { Follow = "FOLLOW", Hold = "HOLD", Attack = "ATTACK", Retreat = "RETREAT" }
 
@@ -356,9 +367,16 @@ local function stepArmy(player: Player, st: any, now: number)
 	local prevState = a.State
 	a.State = state
 	local debugOn = ArmyController.DebugFor(player)
-	if state ~= "FOLLOW" then
-		-- HOLD / ATTACK / RETREAT: SquadOrdersService issues their goals (through SoldierController); nothing here
+	-- JOB 24: ATTACK is steered here as well (the block advances on the squad target, deploys, folds back); the
+	-- squad target is SquadOrdersService's (st._acTarget, server-side NPC roots only; it only shoots and aims)
+	local attackOn = state == "ATTACK" and ArmyController.AttackLive(player.UserId)
+	local wasDriven = a.Driven == true
+	if state ~= "FOLLOW" and not attackOn then
+		-- HOLD / RETREAT (and ATTACK with AttackSteer off): SquadOrdersService issues their goals (through
+		-- SoldierController); nothing here
 		a.LastPos = nil
+		a.Driven = false
+		a.F.Attack = nil
 		publish(player, st, a, {}, false)
 		return
 	end
@@ -396,8 +414,13 @@ local function stepArmy(player: Player, st: any, now: number)
 	if jumped or seated then
 		ownerVelNow = vel
 	end
-	local snap = jumped or fresh or prevState ~= "FOLLOW"
+	-- (FOLLOW <-> ATTACK keeps the block: no restart; only a spell under HOLD / RETREAT restarts it behind him)
+	local snap = jumped or fresh or prevState ~= "FOLLOW" and not (wasDriven and (prevState == "ATTACK" or prevState == "FOLLOW"))
+	a.Driven = true
 	local c = cfg()
+	local tgt = if attackOn then st._acTarget else nil
+	local troot: BasePart? = if tgt then tgt.Root else nil
+	a.F.Attack = if troot and troot.Parent then { Pos = troot.Position } else nil
 	local plans, _frames, cols, last = FormationController.Plan(a.F, living, pos, proot.CFrame.LookVector, vel, dt, snap, escOf, c, ownerVelNow)
 	local key = tostring(cols) .. "x" .. tostring(last + 1)
 	if a.LayoutKey ~= nil and a.LayoutKey ~= key then
@@ -421,7 +444,7 @@ local function stepArmy(player: Player, st: any, now: number)
 		local p = plans[u]
 		local goal: Vector3 = if p then p.Goal else pos
 		local heading: Vector3 = if p then p.Heading else flat(proot.CFrame.LookVector)
-		local moving = trail.Moving
+		local moving = FormationController.BlockMoving(a.F, c) -- (his walk, or an ATTACK block advancing / deploying)
 		-- its pace = its OWN slot's speed (a row rounding a corner outside moves faster than him, inside slower)
 		local pace = if p then p.Pace else 0
 		if seated then
@@ -433,7 +456,7 @@ local function stepArmy(player: Player, st: any, now: number)
 		local clear = num("OwnerClearStuds", 5)
 		local upos = u.Root.Position
 		local vel0 = ownerVelNow
-		if inBase and plotId then
+		if inBase and plotId and a.F.Attack == nil then
 			-- his base: its gate cell (straight, never through his plot), standing facing out
 			local cell, out = ArmyFollow.HoldSpot(plotId, idx)
 			goal = Vector3.new(cell.X, pos.Y, cell.Z)

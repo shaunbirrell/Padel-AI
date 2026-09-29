@@ -92,7 +92,7 @@ _keys5 = ["Enabled", "Rollout", "UpdateSeconds", "Formation", "VelSmoothSeconds"
 _miss5 = [k for k in _keys5 if not _v115_re.search(r"\n\t\t" + k + r" = ", _f35)]
 _v115_check(_f35 != "" and not _miss5, f"ArmyConfig.Follow3 has every v115 tunable (missing {_miss5})")
 _v115_check("\t\tEnabled = true," in _f35 and '\t\tFormation = "TrailBlock",' in _f35, "Follow3 on, TrailBlock formation (Enabled = false = the v113 path, kill switch)")
-_v115_check("\t\tDebug = true," in _f35 and "470626172" in _f35, "debug overlay on, default for the owner UserId only")
+# claude-bud JOB 24: retired, superseded in tools/checks/claude_bud_armyattack.py (the owner asked for NO debug visuals by default: Follow3.Debug = false, /armydebug for DebugUserIds only): #_v115_check("\t\tDebug = true," in _f35 and "470626172" in _f35, "debug overlay on, default for the owner UserId only")
 
 # 5. debug toggle, client markers, escorts
 _adm5 = read(_v115_ADM) or ""

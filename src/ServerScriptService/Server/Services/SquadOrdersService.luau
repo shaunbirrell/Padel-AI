@@ -53,6 +53,7 @@ local ArmyConfig = require(Shared.Configs.ArmyConfig) -- army fix: Follow (lead 
 local BaseConfig = require(Shared.Configs.BaseConfig) -- army fix: plot squares (Recover)
 local WorldLabel = require(Shared.Util.WorldLabel)
 local PlotFrame = require(Shared.Util.PlotFrame) -- army fix: plot centres (Recover)
+local FormationController = require(Shared.Util.FormationController) -- claude-bud JOB 24: the sticky squad target
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
@@ -2633,6 +2634,80 @@ local function thinkError(player: Player, err: any, now: number)
 	end
 end
 
+--[[ claude-bud JOB 24 (docs/ARMY-ATTACK-ROOTCAUSE.md): ATTACK with Follow3.AttackSteer (ArmyController.AttackLive).
+	The ArmyController moves every unit (the steered block advances on the target, deploys into a line facing it at
+	AttackStandoff, folds back into the follow block when the target is down or the order changes); here the squad
+	gets ONE target and each unit only shoots and aims.
+	  * pickSquadTarget (once per think pass): the hostiles this squad may hurt (nearestHostile's rules) within
+	    AttackAggroStuds + AttackKeepExtraStuds of the army's centre and AttackLeashStuds of him; the current one kept
+	    (FormationController.PickTarget: sticky, a switch only for one AttackRetargetStuds nearer), else the nearest.
+	    Stored as st._acTarget (server-side NPC Humanoid + root; the client never names a target).
+	  * attackAimOnly (per unit per think): when the gun is ready, the squad target if it is in its fire band and in
+	    sight (squadfair: line of sight), else the nearest hostile in its band it can see (pickShot); it faces what it
+	    shoots. It never walks: no ring seats, no chase, no MoveTo from here. ]]
+local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
+	local f3 = (ArmyConfig :: any).Follow3
+	local reach = (tonumber(f3.AttackAggroStuds) or 120) + (tonumber(f3.AttackKeepExtraStuds) or 20)
+	local leash = tonumber(f3.AttackLeashStuds) or 140
+	local sum, cnt = Vector3.zero, 0
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Root.Parent then
+			sum += Vector3.new(u.Root.Position.X, 0, u.Root.Position.Z)
+			cnt += 1
+		end
+	end
+	if cnt == 0 then
+		(st :: any)._acTarget = nil
+		return
+	end
+	local centre = sum / cnt
+	nearestHostile(centre, reach, false, player, attackCands, reach)
+	local cands: { { Key: any, Pos: Vector3 } } = {}
+	local roots: { [any]: BasePart } = {}
+	local function consider(h: Humanoid?, r: BasePart?)
+		if h and r and h.Health > 0 and r.Parent ~= nil and not roots[h] and flatDist(r.Position, proot.Position) <= leash then
+			roots[h] = r
+			table.insert(cands, { Key = h, Pos = r.Position })
+		end
+	end
+	for i = 1, attackCands.N do
+		consider(attackCands.Hum[i], attackCands.Root[i])
+	end
+	local cur = (st :: any)._acTarget
+	if cur and flatDist(cur.Root.Position, centre) <= reach then
+		consider(cur.Hum, cur.Root) -- (the current one counts even when more than candCap() others are nearer)
+	end
+	candReset(attackCands) -- hold no reference to the NPCs between thinks
+	local key = FormationController.PickTarget(if cur then cur.Hum else nil, cands, centre, f3)
+	;(st :: any)._acTarget = if key and roots[key] then { Hum = key, Root = roots[key] } else nil
+end
+
+local function attackAimOnly(player: Player, st: SquadState, unit: SquadUnit, now: number)
+	local tgt = (st :: any)._acTarget
+	if tgt == nil or tgt.Root.Parent == nil or tgt.Hum.Health <= 0 then
+		unit.AimRoot = nil
+		unit.AimHum = nil
+		return
+	end
+	local band = (OrdersConfig.AttackRange or 55) * 0.85 -- the fire band, as attackUnit
+	if losCheckDue(unit, now) then
+		nearestHostile(unit.Root.Position, band, false, player, attackCands, band) -- the in-band fallback candidates
+		local th, troot, rays = pickShot(player, unit, tgt.Hum, tgt.Root, band, attackCands, CombatFairnessConfig.UnitAttackRequireLos == true)
+		candReset(attackCands)
+		if th and troot then
+			unit.LosBlocked = false
+			unit.AimRoot = if th ~= tgt.Hum then troot else nil
+			unit.AimHum = if th ~= tgt.Hum then th else nil
+			local firedAt = unit.LastFireAt
+			local hit = unitShoot(player, unit, th, now, CombatFairnessConfig.UnitKillCreditOnAttack == true)
+			unitShotFx(player, unit, troot, firedAt, hit)
+		elseif rays > 0 then
+			losBlockedFor(unit, now)
+		end
+	end
+	faceYaw(unit.Root, aimPoint(unit, tgt.Root)) -- (the gyro; SoldierController leaves the aim alone after a shot)
+end
+
 local function reformRootless(uid: number): boolean
 	local rc = (ArmyConfig :: any).Recover
 	-- off with the Recover kill switch; v90: only for a Rollout.Fix owner
@@ -2650,6 +2725,10 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 	end
 	local order = st.Order
 	local playerRoot = characterRoot(player)
+	if order == "Attack" and SquadOrdersService._AC.AttackLive(player.UserId) then
+		attackAimOnly(player, st, unit, now) -- claude-bud JOB 24: the ArmyController moves it; here it only shoots / aims
+		return
+	end
 	if order ~= "Follow" then
 		SquadOrdersService._AF.Release(unit, order) -- v99: HOLD / ATTACK / RETREAT drive it now (one controller per unit; JOB 22: its state)
 		SquadOrdersService._PaceSpeed(unit, 0) -- v85 FollowPace: back to UnitWalkSpeed outside FOLLOW
@@ -3435,6 +3514,16 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					-- lane C FollowPath (squadfair: also ATTACK once a unit has given up a chase: it walks the trail)
 					if (st.Order == "Follow" or (st.Order == "Attack" and anyGaveUp(st))) and proot and pathCfg and probe == nil then
 						probe = buildProbe(pathCfg)
+					end
+					-- claude-bud JOB 24: the squad's ONE attack target (sticky), before any unit thinks
+					if st.Order == "Attack" and proot and SquadOrdersService._AC.AttackLive(player.UserId) then
+						local okP, errP = pcall(pickSquadTarget :: any, player, st, proot)
+						if not okP then
+							(st :: any)._acTarget = nil
+							thinkError(player, errP, now)
+						end
+					else
+						(st :: any)._acTarget = nil
 					end
 					for _, unit in ipairs(st.Units) do
 						-- army fix (ArmyConfig.Loop): an error in one unit's think never stops the loop for every army

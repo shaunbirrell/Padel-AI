@@ -54,9 +54,11 @@ local trails: { [string]: Trail } = {}
 
 local STATE_LETTER: { [string]: string } = { InPosition = "S", Following = "F", CatchingUp = "C", StuckRecovery = "R" }
 
+-- JOB 24: only while the server set his WE_ArmyDebug (the /armydebug toggle, admin allowlist; off by default for
+-- everyone, Follow3.Debug = false): no markers / discs / lines / labels / panel otherwise
 local function enabled(player: Player): boolean
 	local f3 = (ArmyConfig :: any).Follow3
-	return typeof(f3) == "table" and f3.Debug == true and player:GetAttribute("WE_ArmyDebug") == true
+	return typeof(f3) == "table" and player:GetAttribute("WE_ArmyDebug") == true
 end
 
 local function part(name: string, color: Color3, parent: Instance): Part

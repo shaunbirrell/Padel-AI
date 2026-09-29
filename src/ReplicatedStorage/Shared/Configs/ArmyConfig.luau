@@ -480,12 +480,27 @@ local ArmyConfig = {
 		SpeedMaxBonus = 14, -- ... at most this over its slot's speed ...
 		SpeedMaxSlow = 8, -- ... at most this under it ...
 		SpeedSmoothSeconds = 0.1, -- ... eased toward it over this (no step at a state change: the states are labels only)
+		-- JOB 24 (claude-bud, docs/ARMY-ATTACK-ROOTCAUSE.md): ATTACK = the same steered block (ArmyController), ONE sticky
+		-- squad target (SquadOrdersService pickSquadTarget; units only shoot / aim). AttackSteer = false: the v116 attack.
+		AttackSteer = true,
+		AttackStandoff = 36, -- the block's centre stops this far from the target on its own side, facing it (fire band 46.75)
+		AttackMaxSpeed = 16, -- it advances (and slides into / out of the line) no faster than this
+		AttackFeedMax = 12, -- a moving target's velocity is fed forward up to this
+		AttackDeployStuds = 8, -- within this of its spot it deploys into the line (folds back past twice this) ...
+		AttackDeploySeconds = 1.2, -- ... over at least this, longer when a slot must slide further than AttackSlideSpeed allows
+		AttackSlideSpeed = 8,
+		AttackLinePerRank = 6, -- the line: this many abreast per rank (centre-out by permanent slot: nobody changes sides) ...
+		AttackLineSpacing = 6, -- ... this far apart; the next rank behind with room for its escorts
+		AttackAggroStuds = 120, -- the squad target: a hostile within this of the army's centre (OrdersConfig.AttackAggroRange) ...
+		AttackKeepExtraStuds = 20, -- ... the current one kept out to this much further ...
+		AttackRetargetStuds = 15, -- ... unless another one is this much nearer ...
+		AttackLeashStuds = 140, -- ... and never one further than this from him (past it the army follows him again)
 		SpikeErrStuds = 6, -- debug: a soldier this far from its slot, or a slot faster than a soldier can run, is logged
 		DebugPanelSeconds = 0.5, -- debug: the owner's formation panel refresh
 		-- v115 debug (owner-visible, toggleable): slot markers + labels on his client, per-soldier logs on the server.
 		-- Debug = false: nothing at all. Default on for DebugUserIds; anyone listed toggles it with /armydebug.
-		Debug = true,
-		DebugUserIds = { 470626172 },
+		Debug = false, -- JOB 24: no debug visuals for anyone by default (true = on by default for DebugUserIds)
+		DebugUserIds = { 470626172 }, -- only these can turn it on (/armydebug, admin allowlist)
 		DebugLogSeconds = 2, -- the per-soldier state line, per army, this often
 		DebugPublishStuds = 0.5, -- WE_SlotPos (the marker) is rewritten only when the slot moved this far
 		-- soldier (SoldierController)

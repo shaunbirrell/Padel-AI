@@ -1,4 +1,47 @@
 <!-- Q2-START -->
+## claude-bud JOB 24 (2026-09-29): army ATTACK mode + debug visuals removed (branch `claude/desktop-bud`, on v116 2965b15)
+- **Root cause** (`docs/ARMY-ATTACK-ROOTCAUSE.md`): on ATTACK the ArmyController let go. `SquadOrdersService.attackUnit`
+  then moved each soldier on its own:
+  - its own nearest enemy, re-picked every 0.4 s;
+  - MoveTo every think to a ring seat 8 studs round that enemy, stopping wherever it crossed 46.75 studs;
+  - no line of sight → run in to 8 studs;
+  - nothing in reach → march 10 studs in front of his LOOK vector, forever.
+  - Sim: soldiers overlapping (closest pair 0.05–0.74 studs), up to 5 path crossings, no reform after the target dies.
+- **Fix** (`Follow3.AttackSteer = true`; false = v116):
+  - ATTACK is the same steered block as FOLLOW. It advances as one unit on ONE sticky squad target, deploys into a line
+    facing it at 36 studs (each soldier's cell by its permanent slot), and soldiers stand and fire.
+  - SquadOrdersService only picks the target and shoots / aims, with line of sight kept.
+  - When the target is down, out of the 140-stud leash, or the order changes, the line slides back into the follow
+    block on its own side of him. No teleport, no WalkSpeed raise, no extra MoveTo.
+  - FOLLOW is unchanged: the J23 and v115 sim numbers are identical.
+- **Sim** (v116 → JOB 24, closest two soldiers during the attack):
+  - stationary target 0.23 → 3.22;
+  - moving target 0.26 → 4.26;
+  - target dies 0.05 → 2.27 (reform never → 2.6 s);
+  - switch targets 0.74 → 3.22;
+  - cancel 0.23 → 3.22 (reform 0.57 s);
+  - max army 0.18 → 3.05;
+  - he keeps walking 0.21 → 4.17 (reform never → 2.6 s);
+  - deployed slot error ≤ 2.0 studs; 0 crossings, 0 teleports.
+- **Debug visuals gone:** `Follow3.Debug = false`. No markers, labels or panel for anyone, including the owner.
+  `/armydebug` (admin allowlist, DebugUserIds) still turns it on for testing.
+- **Checks:**
+  - `tools/checks/claude_bud_armyattack.py` (87 pins + the attack sim);
+  - the v115 "Debug = true" pin is retired;
+  - BuyPathStatic PASS=6276 FAIL=0; rojo ok; no new LSP errors.
+- **Test ON HIS PHONE:**
+  1. Walk near an enemy group and tap ATTACK. The army should jog toward it as one block, then spread into a line
+     facing it at gun range and stand and fire. Nobody should bunch on one point or run into the enemy.
+  2. While they fight, walk around them. They must not run through you, and the line should not follow your camera.
+  3. Kill the target. They should switch to the next nearby enemy smoothly, or, with none left, fold back into the
+     follow block behind / beside you within about 3 s.
+  4. Tap FOLLOW mid-approach. They should fold back straight away, with no teleport.
+  5. Attack with the max army (8 units): two ranks, no overlap.
+  6. Attack, then keep walking away. Past about 140 studs they should leave the fight and follow you.
+  7. Check the screen: no slot markers, no "S01 / Slot 01" labels, no "Formation … (tap)" panel. `/armydebug on`
+     brings them back.
+  8. Follow as before: turns, stop, 180° walk-back. It must feel exactly like v116.
+  - Kill switches: `Follow3.AttackSteer = false` (v116 attack), `Follow3.Steer = false`, `Follow3.Enabled = false`.
 ## v116 (Code Bot Roblox, 2026-09-29): JOB 23 army formation Steer LIVE — place version 114
 - Merged Claude `46fe085` (JOB 23: one steered block Follow3.Steer / FormationController.SteerFrames). Fast-forward from a95c2a8.
 - WE_Build 116 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched.

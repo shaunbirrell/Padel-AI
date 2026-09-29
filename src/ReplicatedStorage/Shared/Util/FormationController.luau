@@ -339,6 +339,8 @@ export type Form = {
 	Err: number, -- heading error (rad) this tick
 	Target: Vector3?, -- its steering point last tick (on his trail)
 	Waiting: boolean?, -- he walks back through it (an about-turn): it holds still and waits
+	Deploy: number?, -- JOB 24 ATTACK: 0 = the follow block, 1 = the attack line (blended in between)
+	AttackOn: boolean?, -- JOB 24: it had an ATTACK target last tick
 }
 
 export type Army = {
@@ -348,12 +350,53 @@ export type Army = {
 	SVel: { [any]: Vector3 },
 	LayoutKey: string?,
 	Form: Form?,
+	Attack: { Pos: Vector3 }?, -- JOB 24: the squad's ATTACK target this tick (nil = follow him)
 }
 
 export type Plan = { Goal: Vector3, Heading: Vector3, Lead: Vector3, Pace: number, Row: number, X: number, Esc: number, Idx: number, SlotSpeed: number }
 
 function FormationController.NewArmy(): Army
-	return { Trail = FormationController.NewTrail(), Assign = FormationController.NewAssignment(), Prev = {}, SVel = {}, LayoutKey = nil, Form = nil }
+	return { Trail = FormationController.NewTrail(), Assign = FormationController.NewAssignment(), Prev = {}, SVel = {}, LayoutKey = nil, Form = nil, Attack = nil }
+end
+
+--[[ JOB 24 (claude-bud, docs/ARMY-ATTACK-ROOTCAUSE.md): a unit's cell in the ATTACK line, by its PERMANENT slot index:
+	AttackLinePerRank abreast, centre-out (left, right, left ...) like the block's columns (so nobody changes sides),
+	AttackLineSpacing apart; the next ranks behind, room for its escorts. Local to the block centre: x = right, z = back. ]]
+function FormationController.LineOffset(idx: number, escMax: number, ranks: number, cfg: any): (number, number)
+	local per = math.max(1, math.floor(n(cfg, "AttackLinePerRank", 6)))
+	local sp = n(cfg, "AttackLineSpacing", 6)
+	local i = math.max(1, math.floor(idx)) - 1
+	local j = i % per
+	local rank = i // per
+	local side = if j % 2 == 0 then -1 else 1
+	local depth = (1 + math.max(0, escMax)) * n(cfg, "RowSpacing", 4.5)
+	return side * (sp / 2 + (j // 2) * sp), rank * depth - (math.max(1, ranks) - 1) * depth / 2
+end
+
+--[[ JOB 24: the squad's ATTACK target, sticky. `cur` = the current target key (or nil), `cands` = { { Key, Pos } } the
+	hostiles it may hurt within reach. Keeps `cur` while it is still a candidate within AttackAggroStuds +
+	AttackKeepExtraStuds of the army's centre `from`, unless another one is AttackRetargetStuds nearer; else the nearest.
+	Never uses iteration order for a tie (the lower distance wins, then the first in `cands` order is irrelevant: exact
+	ties keep `cur`). Returns the chosen key (or nil). ]]
+function FormationController.PickTarget(cur: any, cands: { { Key: any, Pos: Vector3 } }, from: Vector3, cfg: any): any
+	local best, bestD = nil, math.huge
+	local curD = math.huge
+	for _, c in ipairs(cands) do
+		local d = flatDist(c.Pos, from)
+		if c.Key == cur then
+			curD = d
+		end
+		if d < bestD then
+			best, bestD = c.Key, d
+		end
+	end
+	if cur ~= nil and curD <= n(cfg, "AttackAggroStuds", 120) + n(cfg, "AttackKeepExtraStuds", 20) and bestD > curD - n(cfg, "AttackRetargetStuds", 15) then
+		return cur
+	end
+	if best ~= nil and bestD <= n(cfg, "AttackAggroStuds", 120) then
+		return best
+	end
+	return nil
 end
 
 local function rotY(v: Vector3, rad: number): Vector3
@@ -417,6 +460,18 @@ function FormationController.SteerFrames(army: Army, units: { any }, ownerPos: V
 		army.Form = f
 	end
 	local F = f :: Form
+	local atk = army.Attack
+	if atk == nil and F.AttackOn then
+		-- JOB 24: the attack is over (target down / gone, order changed): it re-forms on ITS side of him, heading kept
+		-- (his old path may lie on the far side of him: the block would sweep past him to reach it)
+		local u = unitOr(F.C - me, -F.H)
+		t.Pts = { ownerPos }
+		t.Smooth = ownerPos
+		t.Head = ownerPos
+		t.Seed = -u
+		F.Hd = F.H
+	end
+	F.AttackOn = atk ~= nil
 	-- how far the block reaches out from C along a direction, as it is turned NOW (on a corner its width, not its depth,
 	-- is what must stay behind him)
 	local right = Vector3.new(-F.H.Z, 0, F.H.X)
@@ -437,7 +492,13 @@ function FormationController.SteerFrames(army: Army, units: { any }, ownerPos: V
 	end
 	local target = flat(FormationController.TrailPoint(t, s))
 	local mv = flat(t.Vel)
-	if t.Moving and mv.Magnitude > 1e-3 then
+	if atk ~= nil then
+		-- JOB 24 ATTACK: the same body steers to its own side of the target, AttackStandoff from it, facing it (the
+		-- heading rate cap, accel / brake and the bubble round him all still apply: it advances as one block)
+		local tp = flat(atk.Pos)
+		F.Hd = unitOr(tp - F.C, F.H)
+		target = tp - F.Hd * n(cfg, "AttackStandoff", 36)
+	elseif t.Moving and mv.Magnitude > 1e-3 then
 		-- clearance: no slot of the block (as turned now) may sit less than FirstRowStuds behind him along the way he
 		-- walks NOW (a corner: the wide front row would otherwise cross his new path just behind him)
 		local vd = mv.Unit
@@ -453,15 +514,18 @@ function FormationController.SteerFrames(army: Army, units: { any }, ownerPos: V
 		target = me + unitOr(off, -F.Hd) * bubble
 	end
 	local ff = Vector3.zero
-	if F.Target ~= nil and t.Moving and dt > 1e-3 then
+	if F.Target ~= nil and (t.Moving or atk ~= nil) and dt > 1e-3 then
 		ff = (target - (F.Target :: Vector3)) / dt
+		if atk ~= nil and ff.Magnitude > n(cfg, "AttackFeedMax", 12) then
+			ff = ff.Unit * n(cfg, "AttackFeedMax", 12) -- (a new target is a jump: steered to, not fed forward)
+		end
 	end
 	F.Target = target
 	-- (C moves by V x dt after this, so it aims at the target less this tick's own travel: it lands ON it, not a tick ahead)
 	local gap = target - ff * dt - F.C
 	local want = ff + gap * n(cfg, "FormGain", 2.5)
 	local waiting = false
-	if t.Moving and mv.Magnitude > 1e-3 then
+	if atk == nil and t.Moving and mv.Magnitude > 1e-3 then
 		-- he walks back into / through his block (an about-turn, a hairpin of his path): it stops going his way and
 		-- waits (sideways correction only) until he is past its centre; it never charges through him (on a corner, with
 		-- the block beside him, it may back off out of his way)
@@ -474,7 +538,11 @@ function FormationController.SteerFrames(army: Army, units: { any }, ownerPos: V
 			end
 		end
 	end
-	local vmax = math.max(n(cfg, "FormMaxSpeed", 22), t.Vel.Magnitude * n(cfg, "FormSpeedMult", 1.25))
+	local vmax = if atk ~= nil then n(cfg, "AttackMaxSpeed", 16) -- (ATTACK: the block advances at a steady jog)
+		else math.max(n(cfg, "FormMaxSpeed", 22), t.Vel.Magnitude * n(cfg, "FormSpeedMult", 1.25))
+	if (F.Deploy or 0) > 0 and (F.Deploy or 0) < 1 then
+		vmax = math.min(vmax, n(cfg, "AttackMaxSpeed", 16)) -- (sliding into / out of the line: the block goes no faster)
+	end
 	-- while it turns its outer slots already move |W| x radius sideways: it travels that much slower, so no slot ever
 	-- moves faster than FormMaxSpeed (what a soldier can hold, with catch-up headroom to spare)
 	vmax = math.max(0, vmax - math.abs(F.W) * rad * n(cfg, "TurnSlowFactor", 1))
@@ -499,10 +567,32 @@ function FormationController.SteerFrames(army: Army, units: { any }, ownerPos: V
 		dv = dv.Unit * acc
 	end
 	F.V += dv
-	if not t.Moving and gap.Magnitude < 0.05 and F.V.Magnitude < 0.5 then
+	if (atk ~= nil or not t.Moving) and gap.Magnitude < 0.05 and F.V.Magnitude < 0.5 then
 		F.V = Vector3.zero
 	end
 	F.C += F.V * dt
+	-- JOB 24: deploy into the attack line once the block has reached its spot (AttackDeployStuds; it folds back past
+	-- twice that, or when the attack ends), blended over AttackDeploySeconds: every slot slides, nothing jumps
+	local dep = F.Deploy or 0
+	local near = atk ~= nil and gap.Magnitude < n(cfg, "AttackDeployStuds", 8) * (if dep > 0.5 then 2 else 1)
+	-- the slide takes long enough that no slot slides faster than AttackSlideSpeed (the longest slide sets it; the
+	-- smoothstep peaks at 1.5 x its mean speed)
+	local slide = 0
+	if near or dep > 0 then
+		local per = math.max(1, math.floor(n(cfg, "AttackLinePerRank", 6)))
+		local escMax, maxIdx = 0, 1
+		for u, c in pairs(cells) do
+			escMax = math.max(escMax, c.Esc)
+			maxIdx = math.max(maxIdx, army.Assign.ByUnit[u] or 1)
+		end
+		for u, c in pairs(cells) do
+			local lx, lz = FormationController.LineOffset(army.Assign.ByUnit[u] or 1, escMax, (maxIdx - 1) // per + 1, cfg)
+			local dx, dz = lx - c.X, lz - (c.Row * rs - half)
+			slide = math.max(slide, math.sqrt(dx * dx + dz * dz))
+		end
+	end
+	local secs = math.max(n(cfg, "AttackDeploySeconds", 1.2), 1.5 * slide / math.max(1, n(cfg, "AttackSlideSpeed", 8)))
+	F.Deploy = math.clamp(dep + (if near then 1 else -1) * dt / secs, 0, 1)
 	-- heading: toward Hd with angular inertia, the rate capped so no slot swings sideways faster than SlotLateralSpeed
 	local omax = n(cfg, "SlotLateralSpeed", 10) / rad
 	local e = FormationController.Angle(F.H, F.Hd)
@@ -527,7 +617,7 @@ function FormationController.SteerFrames(army: Army, units: { any }, ownerPos: V
 		end
 	else
 		F.W = 0
-		if t.Moving then
+		if t.Moving or atk ~= nil then
 			-- inside the deadband: a slow drift onto his heading (no jitter from a wobbling thumbstick, no standing tilt)
 			F.H = rotY(F.H, e * (1 - math.exp(-dt * n(cfg, "SettleTurnPerSec", 0.8))))
 		end
@@ -584,6 +674,20 @@ function FormationController.Part(frame: CFrame, xs: { number }, ownerPos: Vecto
 	return dl * f, dr * f
 end
 
+-- JOB 24: the block itself is on the move (he walks, or an ATTACK block advances / deploys): soldiers walk (no
+-- InPosition stop) while this is true
+function FormationController.BlockMoving(army: Army, cfg: any): boolean
+	if army.Trail.Moving then
+		return true
+	end
+	local F = army.Form
+	if F == nil or army.Attack == nil and (F.Deploy or 0) <= 0 then
+		return false
+	end
+	local d = F.Deploy or 0
+	return F.V.Magnitude > n(cfg, "MovingOffSpeed", 1.5) or (d > 0 and d < 1)
+end
+
 function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3, ownerLook: Vector3, vel: Vector3, dt: number, snap: boolean,
 	escOf: (any) -> number, cfg: any, ownerVelNow: Vector3?): ({ [any]: Plan }, { [number]: CFrame }, number, number)
 	local t = army.Trail
@@ -603,7 +707,7 @@ function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3,
 	-- the rows he walks back into (an about-turn) part to let him through (ownerVelNow: his root's velocity now)
 	local partL: { [number]: number } = {}
 	local partR: { [number]: number } = {}
-	if ownerVelNow and t.Moving then
+	if ownerVelNow and t.Moving and army.Attack == nil then
 		local xsByRow: { [number]: { number } } = {}
 		for _, u in ipairs(units) do
 			local c = cells[u]
@@ -622,12 +726,31 @@ function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3,
 	local leadS = if steer then n(cfg, "SteerLeadSeconds", 0.5) else n(cfg, "MoveLeadSeconds", 0.4)
 	local leadCap = if steer then n(cfg, "SteerLeadMaxStuds", 6) else n(cfg, "MoveLeadMaxStuds", 5)
 	local blend = math.clamp(n(cfg, "SlotVelBlend", 0.5), 0, 1)
+	-- JOB 24: the attack line (blended by the block's Deploy): per unit its line cell by its permanent index
+	local F = army.Form
+	local dk = if steer and F ~= nil then (F.Deploy or 0) else 0
+	dk = dk * dk * (3 - 2 * dk) -- (smoothstep: the slide starts and ends gently)
+	local escMax, maxIdx = 0, 1
+	if dk > 0 then
+		for u, c in pairs(cells) do -- (max only: no iteration order matters)
+			escMax = math.max(escMax, c.Esc)
+			maxIdx = math.max(maxIdx, army.Assign.ByUnit[u] or 1)
+		end
+	end
+	local ranks = (maxIdx - 1) // math.max(1, math.floor(n(cfg, "AttackLinePerRank", 6))) + 1
 	for _, u in ipairs(units) do
 		local c = cells[u]
 		if c then
 			local x = c.X * FormationController.RowSide(t, c.Row)
 			x = if x < 0 then x - (partL[c.Row] or 0) else x + (partR[c.Row] or 0)
 			local goal = frames[c.Row]:PointToWorldSpace(Vector3.new(x, 0, 0))
+			if dk > 0 and F ~= nil then
+				local lx, lz = FormationController.LineOffset(army.Assign.ByUnit[u] or 1, escMax, ranks, cfg)
+				local bz = c.Row * n(cfg, "RowSpacing", 4.5) - (F.HalfDepth or 0)
+				local ox, oz = x + (lx - x) * dk, bz + (lz - bz) * dk
+				local p = F.C + Vector3.new(-F.H.Z, 0, F.H.X) * ox - F.H * oz
+				goal = Vector3.new(p.X, goal.Y, p.Z)
+			end
 			local prev = army.Prev[u]
 			local sv = Vector3.zero
 			if prev ~= nil and not snap and not relayout and dt > 1e-3 then

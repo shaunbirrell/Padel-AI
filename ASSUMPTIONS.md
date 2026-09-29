@@ -9466,3 +9466,25 @@ ds_territories.luau T3):
   - The v115 and v114 sims pass.
   - Not run in Studio or on a real server. The headless world sim and the DataService harness are not in the repo.
   - Phone tests are in LATEST-HANDOFF.
+
+## 2026-09-29 — claude-bud JOB 24: army ATTACK mode + no debug visuals by default (docs/ARMY-ATTACK-ROOTCAUSE.md)
+- **Switch:** ATTACK is driven by the Follow3 steered block when `Follow3.AttackSteer = true` (and `Steer`). False
+  gives the v116 `attackUnit` movement exactly. It is live for all players, like Follow3, per the standing "no owner
+  gate" rule.
+- **Target:** one per squad (the nearest to the army's centre, sticky), not one per soldier. The client still sends
+  only "Attack"; there is no tap-to-target UI, so "switch targets" means a retarget when the target dies, leaves reach,
+  or another comes 15 studs nearer.
+- **Leash:** 140 studs from him. Past that the army leaves the fight and follows him, but the order stays "Attack", so
+  it engages again when something comes in reach. v116 had no leash.
+- **Standoff:** 36 studs (the fire band is 46.75), so the whole line, including rear ranks, is inside the band.
+  Soldiers stand and fire; they do not close in.
+- **Walls:** no chase round a wall. The v116 give-up / trail walk is not used in steered ATTACK. A blocked soldier holds
+  its cell and shoots what it can see in its band.
+- **Line layout:** by permanent slot index, centre-out, so sides are kept. A death leaves a hole in the line (no
+  renumbering), as in FOLLOW.
+- **Debug:** off for everyone by default. `/armydebug` (admin allowlist) plus `DebugUserIds` turns it on. The v115 pin
+  "Debug = true" is retired with a claude-bud note.
+- **Tests:**
+  - Static pins plus the attack sim (7 tests; the old mode is a re-implementation of the v116 movement).
+  - FOLLOW sims unchanged.
+  - Not run in Studio or on a phone. The headless world sim and the DataService harness are not in the repo.
