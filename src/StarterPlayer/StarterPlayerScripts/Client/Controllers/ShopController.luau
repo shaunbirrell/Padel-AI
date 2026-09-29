@@ -1260,6 +1260,44 @@ function ShopController.Init()
 		local PAD_TAG = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
 
 		local function applyOwnedVisual(part: BasePart, owned: boolean)
+			-- claude-bud JOB 19: a purchase stand: OWNED = green ring + hologram, a check badge in the price chip, no prompt
+			if part:GetAttribute("WE_Stand") == true then
+				local stand = part.Parent
+				local color = part:GetAttribute("WE_StandColor")
+				local base: Color3 = if typeof(color) == "Color3" then color else Color3.fromRGB(255, 210, 40)
+				local green = Color3.fromRGB(80, 210, 110)
+				for _, nm in ipairs({ "FloorRing", "Hologram" }) do
+					local p = stand and stand:FindFirstChild(nm)
+					if p and p:IsA("BasePart") then
+						p.Color = if owned then green else base
+					end
+				end
+				local chip = part:FindFirstChild("WE_PremiumBillboard")
+				chip = chip and chip:FindFirstChild("PriceChip")
+				if chip and chip:IsA("Frame") then
+					local price = chip:FindFirstChild("Price")
+					if price and price:IsA("TextLabel") then
+						if owned then
+							if price:GetAttribute("WE_PriceText") == nil then
+								price:SetAttribute("WE_PriceText", price.Text)
+							end
+							price.Text = "✓ OWNED"
+						else
+							local was = price:GetAttribute("WE_PriceText")
+							if typeof(was) == "string" then
+								price.Text = was
+							end
+						end
+					end
+					chip.BackgroundColor3 = if owned then green else Color3.fromRGB(214, 170, 62)
+				end
+				local pp = part:FindFirstChild("WE_BuyPrompt")
+				if pp and pp:IsA("ProximityPrompt") then
+					pp.Enabled = not owned
+				end
+				part:SetAttribute("WE_LocalOwned", owned)
+				return
+			end
 			local bb = part:FindFirstChild("WE_PremiumBillboard")
 			if not bb then
 				bb = part:FindFirstChildWhichIsA("BillboardGui")

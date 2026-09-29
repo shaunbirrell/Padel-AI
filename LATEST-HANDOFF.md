@@ -10,7 +10,7 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
 - Phone tests (956x440 + a small phone): walk, run and sprint through town with 5+ soldiers — they stay on screen beside you, no vanish / pop-in; stop and turn: no swirl; enter your base: they still wait at the gate. If worse: ArmyConfig.Follow2.Tidy.Formation = "Wedge".
 
 ## QUEUE 4 (claude-bud, rebased on v107)
-Jobs: [x] 17 night lighting · [x] 18 world fill 2 · [ ] 19 purchase stands · [ ] 20 real base guards
+Jobs: [x] 17 night lighting · [x] 18 world fill 2 · [x] 19 purchase stands · [ ] 20 real base guards
 - J17 (live for all, LightingConfig): brighter moonlit night (midnight ambient 90,95,120, Brightness 2.0, blue colour
   correction), ~50 warm night lights (town roads, plaza ring, Town Square, base gates + hangars, plaza flag), Neon lamp
   heads / lit windows / runway edge markers only at night. Phone tests (brightness 50 %, 956x440 + a small phone): wait
@@ -24,6 +24,11 @@ Jobs: [x] 17 night lighting · [x] 18 world fill 2 · [ ] 19 purchase stands · 
   every highway + the Town roads + the plaza (nothing blocks); walk the Town market corners (stalls, signs, cars);
   check every base plot, runway, spawn and the plaza capture ring are clear; frame rate in the Town on a mid phone;
   Graphics 1-3: small clutter vanishes beyond ~180 studs. Server log line: [WAR EMPIRE] WorldFill2: ... parts=.
+- J19 (live for all): the flat red / yellow / cyan Robux pads are purchase STANDS (hex steel plinth, gold trim, spinning
+  hologram, info board with the config price, pulsing ring) in a SUPPLY DEPOT row at the front-left of every base; the
+  Golden Pump stand by the pumps. Phone tests: walk onto a stand: NOTHING happens; hold the prompt "Buy - R$ 99": the
+  normal Roblox purchase dialog (cancel it); with an owned pass the stand is green with "✓ OWNED" and no prompt;
+  names / prices readable at 956x440; the row does not block the gate road or the ATM; Graphics 1-3: no spin.
 
 <!-- Q2-END -->
 

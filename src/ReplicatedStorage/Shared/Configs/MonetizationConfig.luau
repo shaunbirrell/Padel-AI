@@ -513,11 +513,38 @@ local MonetizationConfig = {
 
 	PremiumPads = {
 		LabelMaxDistance = 20,
+		-- claude-bud JOB 19: every base Robux offer is a purchase STAND (Server/Modules/PurchaseStands): a hexagonal steel
+		-- plinth with a gold trim, a spinning hologram, an info board with the price from this config, a pulsing floor
+		-- ring; ONLY its ProximityPrompt buys (stepping on it never does). Stands = true; false = the old flat pads.
+		Stands = true,
+		Stand = {
+			Radius = 3.2, -- hexagon circumradius
+			Height = 1.6,
+			HoloSize = 1.6,
+			HoloLift = 2.6, -- hologram centre above the top
+			HoloTransparency = 0.3,
+			RingTransparency = 0.55,
+			LabelMaxDistance = 30, -- CLAUDE.md world labels (<= 40)
+			PromptDistance = 10,
+			HoldSeconds = 0.3, -- a short hold: never an accidental buy, easy with a finger
+			LightBrightness = 0.7,
+			LightRange = 10,
+			Steel = Color3.fromRGB(58, 62, 68),
+			Top = Color3.fromRGB(40, 43, 48),
+			Gold = Color3.fromRGB(214, 170, 62),
+			Owned = Color3.fromRGB(80, 210, 110),
+			SpinSeconds = 6, -- one hologram turn (client)
+			PulseSeconds = 1.6, -- ring pulse (client)
+		},
+		-- the Supply Depot corner (plot-local): the stands in one row (front-left, off the gate road and the ATM), the sign
+		-- behind them facing the plot
+		Depot = { X0 = -78, Step = 12, Z = 146, SignZ = 153, Sign = "SUPPLY DEPOT" },
 		Slots = {
 			{
 				Id = "AutoCollect",
 				Label = "Auto Collect",
 				Color = Color3.fromRGB(220, 50, 50), -- red
+				Icon = "💰",
 				Offset = Vector3.new(-10, 0.55, 14),
 				Offers = { { Kind = "GamePass", Key = "AutoCollect" } },
 			},
@@ -525,6 +552,7 @@ local MonetizationConfig = {
 				Id = "DoubleCash",
 				Label = "2x Cash",
 				Color = Color3.fromRGB(255, 210, 40), -- yellow
+				Icon = "2x",
 				Offset = Vector3.new(0, 0.55, 16),
 				Offers = { { Kind = "GamePass", Key = "DoubleCash" } },
 			},
@@ -532,6 +560,7 @@ local MonetizationConfig = {
 				Id = "Speed",
 				Label = "Speed",
 				Color = Color3.fromRGB(60, 190, 255), -- cyan
+				Icon = "⚡",
 				Offset = Vector3.new(10, 0.55, 14),
 				-- the 5 R$ pass once its Id is live, else the 99 R$ Speed Boost product; owning either = OWNED
 				Offers = { { Kind = "GamePass", Key = "ImpulseSpeed" }, { Kind = "DevProduct", Key = "SpeedBoost" } },

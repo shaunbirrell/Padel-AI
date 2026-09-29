@@ -1898,10 +1898,34 @@ end
 -- never AlwaysOnTop, and tagged WorldLabelConfig.BaseLabelTag for the client LabelGovernor.
 local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLocal: Vector3)
 	local labelRange = MonetizationConfig.PremiumPads.LabelMaxDistance
+	-- claude-bud JOB 19: purchase stands in the plot's Supply Depot corner (PurchaseStands; only the prompt buys)
+	local PP: any = MonetizationConfig.PremiumPads
+	local okS, Stands = pcall(require, script.Parent.PurchaseStands)
+	local useStands = PP.Stands == true and okS and type(Stands) == "table"
+	local standIndex = 0
 	for _, slot in ipairs(MonetizationConfig.PremiumPads.Slots) do
 		local offer = MonetizationConfig.LivePadOffer(slot)
 		if offer == nil then
 			continue -- no live Id for this slot: no pad, no label, nothing to prompt
+		end
+		if useStands then
+			standIndex += 1
+			local D = PP.Depot
+			local at = F * CFrame.new(D.X0 + (standIndex - 1) * D.Step, 0.3, D.Z) * CFrame.Angles(0, math.pi, 0) -- front faces the plot (-Z)
+			local okB, errB = pcall((Stands :: any).Build, folder, at, {
+				Kind = offer.Kind,
+				Key = offer.Key,
+				PlotId = plotId,
+				Label = slot.Label,
+				Color = slot.Color,
+				Icon = (slot :: any).Icon,
+				OwnedIfAny = table.concat(MonetizationConfig.PadOwnedKeys(slot), ","),
+				PadSlot = slot.Id,
+			})
+			if not okB then
+				warn("[MapSetup] purchase stand failed", offer.Key, errB)
+			end
+			continue
 		end
 		local pad = part({
 			Name = "PremiumPad_" .. offer.Key,
@@ -1926,6 +1950,11 @@ local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLo
 			Offset = Vector3.new(0, 5.5, 0),
 			BaseLabel = true, -- CollectionService tag WorldLabelConfig.BaseLabelTag (the LabelGovernor's cap)
 		})
+	end
+	if useStands and standIndex > 0 then
+		local D = PP.Depot
+		local mid = D.X0 + (standIndex - 1) * D.Step / 2
+		pcall((Stands :: any).Sign, folder, F * CFrame.new(mid, 0.3, D.SignZ) * CFrame.Angles(0, math.pi, 0), D.Sign)
 	end
 end
 

@@ -310,6 +310,23 @@ local function attachPad(part: BasePart)
 	attached[part] = true
 	hardenPad(part)
 
+	-- claude-bud JOB 19: a purchase stand buys ONLY through its ProximityPrompt (stepping on it never does); the same
+	-- tryPrompt -> PromptPremiumPad -> PromptPurchase / ProcessReceipt path as the old pads
+	if part:GetAttribute("WE_Stand") == true then
+		local pp = part:FindFirstChild("WE_BuyPrompt")
+		if pp and pp:IsA("ProximityPrompt") then
+			trackConn(part, pp.Triggered:Connect(function(player: Player)
+				tryPrompt(player, part, false)
+			end))
+		end
+		trackConn(part, part.AncestryChanged:Connect(function(_, parent)
+			if parent == nil then
+				detach(part)
+			end
+		end))
+		return
+	end
+
 	trackConn(part, part.Touched:Connect(function(hit)
 		if hit:IsA("BasePart") then
 			onPadTouched(part, hit)
@@ -384,8 +401,8 @@ function PremiumPadService.Init(deps: { [string]: any })
 		end
 		accum = 0
 		for part, _ in pairs(attached) do
-			if not part.Parent then
-				continue
+			if not part.Parent or part:GetAttribute("WE_Stand") == true then
+				continue -- claude-bud JOB 19: stands never buy by standing on them
 			end
 			for _, player in ipairs(Players:GetPlayers()) do
 				local character = player.Character

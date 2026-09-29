@@ -280,6 +280,22 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 			local lat = (if count == 1 then 0 else spread * 0.5) + GOLD_PAD_BESIDE_PUMP
 			padPos = (plotPos :: Vector3) + toward * out + right * lat + Vector3.new(0, 0.3, 0)
 		end
+		-- claude-bud JOB 19: a purchase stand (only its prompt buys); the flat pad below stays the fallback
+		local PP: any = MonetizationConfig.PremiumPads
+		local okS, Stands = pcall(require, script.Parent.Parent.Modules.PurchaseStands)
+		if PP.Stands == true and okS and type(Stands) == "table" then
+			local okB = pcall((Stands :: any).Build, folder, CFrame.lookAt(padPos - Vector3.new(0, 0.3, 0), padPos - Vector3.new(0, 0.3, 0) - toward), {
+				Kind = "DevProduct",
+				Key = GOLDEN_KEY,
+				PlotId = plotId,
+				Label = "Golden Pump",
+				Color = g.Color,
+				Icon = "⛽",
+			})
+			if okB then
+				return
+			end
+		end
 		local pad = Instance.new("Part")
 		pad.Name = "PremiumPad_" .. GOLDEN_KEY
 		pad.Size = Vector3.new(7, 0.45, 7)

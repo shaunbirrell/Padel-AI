@@ -9324,3 +9324,25 @@ ds_territories.luau T3):
 - **Tests:** static `claude_bud_worldfill2.py` only. The real placement / skip counts print
   `[WAR EMPIRE] WorldFill2: ... parts= skipped= cells= filled=` at server start; the aerial read needs the bomber
   flyover.
+
+## 2026-09-29 — claude-bud JOB 19: purchase stands replace the flat Robux pads (live for all)
+- **Stand** (Server/Modules/PurchaseStands), for every base Robux offer (the 3 ATM slots + the Golden Pump):
+  - a hexagonal steel plinth (3 boxes at 0 / 60 / 120°, 1.6 tall) with a gold trim ring and a steel top;
+  - a Neon hologram diamond (the client spins it) with an icon BillboardGui (💰 / 2x / ⚡ / ⛽);
+  - an info board: name, a benefit line (config Description), a gold price chip with the Robux glyph + RobuxPrice
+    from MonetizationConfig;
+  - a Neon floor ring (the client pulses it);
+  - one PointLight (Shadows off); nothing casts shadows; labels MaxDistance 30.
+- **Purchase:** the steel top IS the old pad: same WE_PremiumPad tag and PlotId / OfferKind / OfferKey / OwnedIfAny /
+  PadSlot attributes, so PremiumPadService.tryPrompt → PromptPremiumPad → PromptPurchase / ProcessReceipt is unchanged
+  (same Ids).
+  - The only trigger is its ProximityPrompt ("Buy - R$ X", 0.3 s hold, 10 studs). Stands skip the Touched and
+    standing checks, so stepping on one never buys.
+  - OWNED (client ShopController, from the server's WE_Ent_* attributes): green ring + hologram + chip,
+    "✓ OWNED", prompt hidden. The server still refuses an owned offer.
+- **Supply Depot corner:** plot-local row x −78…−42, z 146, with a "SUPPLY DEPOT" sign at z 153 facing the plot. It's
+  clear of the barracks, the business lines, the kiosks, the gate road, the spawn and the ATM (static check). The
+  Golden Pump stand stays by the pumps, where its pad was.
+- **Revert:** `MonetizationConfig.PremiumPads.Stands = false` restores the flat pads.
+- **Low quality:** no spin, no pulse.
+- **Map:** existing servers keep their current map until it rebuilds; new servers build stands.
