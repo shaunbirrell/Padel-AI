@@ -46,8 +46,11 @@ _ARMY = read("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau") or ""
 # §2 army vs players / guards / gates
 _jb("\tArmyCombat = {\n\t\tEnabled = true," in _ARMY and "PlayerMaxDps = " in _ARMY, "ArmyConfig.ArmyCombat on (kill switch Enabled), player DPS capped")
 _may = _jb_fn(_CS, "function CombatService.UnitMayHitPlayer(")
-_jb(all(k in _may for k in ("GameConfig.PvPEnabled", "isClanAlly(owner, victim)", "NS.allowsAttack(owner)", "InvulnerableUntil", '"protected"')),
-    "UnitMayHitPlayer keeps PvP, clan, novice and spawn-shield rules")
+# v124 (Code Bot Roblox): the PvP / novice / spawn-shield rules moved into the ONE shared pvpBlock (guns + army); pinned there
+_pvb = _jb_fn(_CS, "local function pvpBlock(")
+_jb("isClanAlly(owner, victim)" in _may and "pvpBlock(owner, victim)" in _may
+    and all(k in _pvb for k in ("GameConfig.PvPEnabled", "NS.allowsAttack(attacker)", "InvulnerableUntil", '"protected"')),
+    "UnitMayHitPlayer keeps PvP, clan, novice and spawn-shield rules (v124: via the shared pvpBlock)")
 _uph = _jb_fn(_CS, "function CombatService.ApplyUnitPlayerHit(")
 _jb("CombatService.UnitMayHitPlayer(owner, victim)" in _uph and 'hurtPlayer(owner, victim, damage, "Squad", { UnitShot = true })' in _uph,
     "an army hit on a player goes through hurtPlayer (creator tag = the owner: cash, XP, MOST KILLS)")
@@ -56,7 +59,7 @@ _jb("function GateDefenseService.ApplyUnitDamage(" in _GD and "local function ap
     and "((fromPos or root.Position) - hitPart.Position).Magnitude > maxDist" in _GD, "guards / gates: the unit's shot is range-checked from the unit")
 _jb("function GateDefenseService.HostileGuards(" in _GD and "GateDefenseService.IsAlly(def.OwnerUserId, player)" in _GD, "hostile guards only from other, non-allied bases")
 _pst = _jb_fn(_SOS, "local function pickSquadTarget(")
-_jb('consider(hum, r, "Player", pl)' in _pst and 'consider(g.Hum, g.Root, "Guard")' in _pst and "noteProtected(player, pl, why)" in _pst,
+_jb('consider(hum, r, "Player", pl, pri)' in _pst and 'consider(g.Hum, g.Root, "Guard")' in _pst and "noteProtected(player, pl, why)" in _pst,
     "the attack target may be an enemy player / guard; protected players shown as Protected")
 _usa = _jb_fn(_SOS, "local function unitShootAt(")
 _jb("unitHitChance(" in _usa and "CombatService.ApplyUnitPlayerHit" in _usa and "gd.ApplyUnitDamage" in _usa and "PlayerMaxDps" in _usa and "hitLog(" in _usa,

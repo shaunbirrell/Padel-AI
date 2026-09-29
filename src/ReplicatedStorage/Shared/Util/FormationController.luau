@@ -399,6 +399,40 @@ function FormationController.PickTarget(cur: any, cands: { { Key: any, Pos: Vect
 	return nil
 end
 
+--[[ v124 (Code Bot): PickTarget with priority tiers. Each cand may carry Pri (number, default 0; higher = answered
+	first: SquadOrdersService gives 2 to an enemy player who just hurt the owner, 1 to any other enemy player, 0 to guards
+	and NPCs). Only the highest tier with an eligible cand is picked from (eligible: within AttackAggroStuds of `from`, or
+	the current one within AttackAggroStuds + AttackKeepExtraStuds); inside it the sticky PickTarget rule is unchanged. So
+	a sticky NPC / guard target never shields an enemy player standing in the army's reach. Returns (key, tier). ]]
+function FormationController.PickTargetTiered(cur: any, cands: { { Key: any, Pos: Vector3, Pri: number? } }, from: Vector3, cfg: any): (any, number?)
+	local aggro = n(cfg, "AttackAggroStuds", 120)
+	local keep = aggro + n(cfg, "AttackKeepExtraStuds", 20)
+	local top: number? = nil
+	for _, c in ipairs(cands) do
+		local d = flatDist(c.Pos, from)
+		if d <= aggro or (c.Key == cur and d <= keep) then
+			local pri = tonumber(c.Pri) or 0
+			if top == nil or pri > top then
+				top = pri
+			end
+		end
+	end
+	if top == nil then
+		return nil, nil
+	end
+	local tier = {}
+	local curIn = false
+	for _, c in ipairs(cands) do
+		if (tonumber(c.Pri) or 0) == top then
+			table.insert(tier, c)
+			if c.Key == cur then
+				curIn = true
+			end
+		end
+	end
+	return FormationController.PickTarget(if curIn then cur else nil, tier, from, cfg), top
+end
+
 local function rotY(v: Vector3, rad: number): Vector3
 	local r = math.atan2(v.X, v.Z) + rad
 	return Vector3.new(math.sin(r), 0, math.cos(r))

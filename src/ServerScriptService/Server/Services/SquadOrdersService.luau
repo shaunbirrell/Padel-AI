@@ -2700,6 +2700,10 @@ local function noteProtected(player: Player, victim: Player, why: string)
 	pcall(NotificationService.Notify, player, victim.DisplayName .. " is Protected (shield)", "Warn")
 end
 
+-- v124 (Code Bot): /armydebug [ArmyTarget] lines: every other player's verdict (why he is or is not a candidate), the
+-- guard / NPC counts and the pick, per owner at most every ArmyCombat.TargetLogSeconds
+local targetLogAt: { [number]: number } = {}
+
 local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
 	local f3 = (ArmyConfig :: any).Follow3
 	local reach = (tonumber(f3.AttackAggroStuds) or 120) + (tonumber(f3.AttackKeepExtraStuds) or 20)
@@ -2716,43 +2720,92 @@ local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
 		return
 	end
 	local centre = sum / cnt
+	local ac = armyCombat()
+	-- v124: the per-candidate rejection log (only for an owner with /armydebug on, rate-limited)
+	local acm = SquadOrdersService._AC
+	local now = os.clock()
+	local dbg = acm and acm.DebugFor and acm.DebugFor(player)
+		and now - (targetLogAt[player.UserId] or -math.huge) >= (tonumber(ac and ac.TargetLogSeconds) or 2)
+	local dlines: { string }? = if dbg then {} else nil
+	if dbg then
+		targetLogAt[player.UserId] = now
+	end
 	nearestHostile(centre, reach, false, player, attackCands, reach)
-	local cands: { { Key: any, Pos: Vector3 } } = {}
+	local cands: { { Key: any, Pos: Vector3, Pri: number? } } = {}
 	local roots: { [any]: BasePart } = {}
 	local kinds: { [any]: string } = {}
 	local who: { [any]: Player } = {}
-	local function consider(h: Humanoid?, r: BasePart?, kind: string?, pl: Player?)
+	local function consider(h: Humanoid?, r: BasePart?, kind: string?, pl: Player?, pri: number?): boolean
 		if h and r and h.Health > 0 and r.Parent ~= nil and not roots[h] and flatDist(r.Position, proot.Position) <= leash then
 			roots[h] = r
 			kinds[h] = kind or "NPC"
 			if pl then
 				who[h] = pl
 			end
-			table.insert(cands, { Key = h, Pos = r.Position })
+			table.insert(cands, { Key = h, Pos = r.Position, Pri = pri or 0 })
+			return true
 		end
+		return false
 	end
+	local nNpc, nGuard = 0, 0
 	for i = 1, attackCands.N do
-		consider(attackCands.Hum[i], attackCands.Root[i], "NPC")
+		if consider(attackCands.Hum[i], attackCands.Root[i], "NPC") then
+			nNpc += 1
+		end
 	end
 	candReset(attackCands) -- hold no reference to the NPCs between thinks
 	-- JOB 24 §2: enemy players and base defenders are targets too (ArmyConfig.ArmyCombat)
-	local ac = armyCombat()
+	-- v124: an enemy player outranks every guard / NPC (ArmyCombat.PreferPlayers), and one who hurt the owner in the
+	-- last ArmyCombat.AggressorSeconds outranks every other player: a sticky NPC target never hides him
+	local preferPlayers = ac ~= nil and ac.PreferPlayers == true
+	local aggroSecs = tonumber(ac and ac.AggressorSeconds) or 0
 	if ac and ac.TargetPlayers == true and CombatService and CombatService.UnitMayHitPlayer then
 		for _, pl in ipairs(Players:GetPlayers()) do
 			if pl ~= player then
 				local ch = pl.Character
 				local hum = ch and ch:FindFirstChildOfClass("Humanoid")
 				local r = ch and ch:FindFirstChild("HumanoidRootPart")
-				if hum and r and r:IsA("BasePart") and hum.Health > 0 and flatDist(r.Position, centre) <= reach then
-					local okM, may, why = pcall(CombatService.UnitMayHitPlayer, player, pl)
-					if okM and may then
-						consider(hum, r, "Player", pl)
-					elseif okM then
-						noteProtected(player, pl, why)
+				local verdict: string
+				if not (hum and r and r:IsA("BasePart")) then
+					verdict = "no_character"
+				elseif hum.Health <= 0 then
+					verdict = "dead"
+				else
+					local dC = flatDist(r.Position, centre)
+					local dO = flatDist(r.Position, proot.Position)
+					if dC > reach then
+						verdict = string.format("out_of_reach dCentre=%.0f>%.0f", dC, reach)
+					else
+						local okM, may, why = pcall(CombatService.UnitMayHitPlayer, player, pl)
+						if not okM then
+							verdict = "error " .. tostring(may)
+						elseif not may then
+							verdict = "rejected " .. tostring(why)
+							noteProtected(player, pl, why)
+						else
+							local pri = 0
+							if preferPlayers then
+								pri = 1
+								if aggroSecs > 0 and CombatService.RecentlyHurtBy and CombatService.RecentlyHurtBy(player, pl, aggroSecs) then
+									pri = 2
+								end
+							end
+							if consider(hum, r, "Player", pl, pri) then
+								verdict = string.format("CANDIDATE pri=%d", pri)
+							else
+								verdict = string.format("leash dOwner=%.0f>%.0f", dO, leash)
+							end
+						end
 					end
+					verdict ..= string.format(" (dCentre=%.0f dOwner=%.0f)", dC, dO)
+				end
+				if dlines then
+					table.insert(dlines, pl.Name .. ": " .. verdict)
 				end
 			end
 		end
+	elseif dlines then
+		table.insert(dlines, "players off (ArmyCombat " .. (if ac then "TargetPlayers=" .. tostring(ac.TargetPlayers) else "disabled") .. ")")
 	end
 	if ac and ac.TargetGuards == true then
 		local gd = gateSvc()
@@ -2760,8 +2813,12 @@ local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
 			local okG = pcall(gd.HostileGuards, player, centre, reach, guardBuf)
 			if okG then
 				for _, g in ipairs(guardBuf) do
-					consider(g.Hum, g.Root, "Guard")
+					if consider(g.Hum, g.Root, "Guard") then
+						nGuard += 1
+					end
 				end
+			elseif dlines then
+				table.insert(dlines, "HostileGuards error")
 			end
 			table.clear(guardBuf)
 		end
@@ -2774,11 +2831,27 @@ local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
 			stillOk = okM and may == true
 		end
 		if stillOk then
-			consider(cur.Hum, cur.Root, cur.Kind, cur.Player) -- (the current one counts even when more than candCap() others are nearer)
+			-- (the current one counts even when more than candCap() others are nearer; a player keeps his tier)
+			local pri = 0
+			for _, c in ipairs(cands) do
+				if c.Key == cur.Hum then
+					pri = c.Pri or 0
+				end
+			end
+			consider(cur.Hum, cur.Root, cur.Kind, cur.Player, pri)
 		end
 	end
-	local key = FormationController.PickTarget(if cur then cur.Hum else nil, cands, centre, f3)
+	local key, tier = FormationController.PickTargetTiered(if cur then cur.Hum else nil, cands, centre, f3)
 	;(st :: any)._acTarget = if key and roots[key] then { Hum = key, Root = roots[key], Kind = kinds[key] or "NPC", Player = who[key] } else nil
+	if dlines then
+		local t = (st :: any)._acTarget
+		local pick = "none"
+		if t then
+			pick = string.format("%s %s tier=%s d=%.0f", t.Kind, if t.Player then t.Player.Name else (t.Hum.Parent and t.Hum.Parent.Name or "?"), tostring(tier), flatDist(t.Root.Position, centre))
+		end
+		print(string.format("[ArmyTarget] %s units=%d npcs=%d guards=%d players=%d pick=%s | %s", player.Name, cnt, nNpc, nGuard, #Players:GetPlayers() - 1, pick,
+			if #dlines > 0 then table.concat(dlines, " ; ") else "no other players"))
+	end
 end
 
 -- JOB 24 §2: the per-army hit log (always counted; printed only for an owner with /armydebug on)

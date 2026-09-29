@@ -40,8 +40,8 @@ def _code(text):
 
 
 for _f in (_cb123_S + "Services/DataService.luau", _cb123_S + "Services/BaseService.luau", _cb123_S + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 123)', "CODEBOT v123: WE_Build=123 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb123_S + "Services/DataService.luau", "WE_Build=123", "CODEBOT v123: DataService profile-loaded log says WE_Build=123")
+    pass  # v124 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v124.py: #must_contain(_f, 'SetAttribute("WE_Build", 123)', "CODEBOT v123: WE_Build=123 " + _f.rsplit("/", 1)[-1])
+# v124 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v124.py: #must_contain(_cb123_S + "Services/DataService.luau", "WE_Build=123", "CODEBOT v123: DataService profile-loaded log says WE_Build=123")
 
 # 1. collision: soldiers (ArmyNPCs) never collide with player characters (WE_PlayerChars), whatever the flags
 _af = _rd(_cb123_AF)

@@ -583,6 +583,14 @@ local ArmyConfig = {
 		CreditSteeredAttackKills = true, -- NPC kills by a steered ATTACK pay the owner (the 140-stud leash keeps him near)
 		ProtectedNoteSeconds = 8, -- "X is protected" to the attacker at most this often per victim
 		HitLogSeconds = 5, -- debug (/armydebug): the per-kind hit / miss / blocked counts, this often
+		-- v124 (Code Bot, phone bug "my ATTACK army shot the bank guards but never the player killing me beside it"):
+		-- the squad target's priority tiers (FormationController.PickTargetTiered). PreferPlayers: an enemy player
+		-- (CombatService.UnitMayHitPlayer: THE shared PvP rule + never a clan ally) in reach outranks every guard / NPC,
+		-- so a sticky NPC target no longer hides him; false = the v123 nearest-first pick. AggressorSeconds: one who hurt
+		-- the owner within this outranks every other player (0 = off).
+		PreferPlayers = true,
+		AggressorSeconds = 10,
+		TargetLogSeconds = 2, -- debug (/armydebug): the [ArmyTarget] per-candidate verdict line, this often per army
 	},
 
 	Gate = {

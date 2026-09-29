@@ -644,15 +644,44 @@ end
 --[[ Damage one player. With an attacker: PvP, self (FriendlyFire) and the spawn shield apply, and the creator tag
 	credits the kill. With no attacker (a wreck with no killer): only the spawn shield applies and nobody is credited.
 	Returns (dealt, killed). W2: also records WE_LastWeapon (DeathInfo) and the richer feedback fields. ]]
+--[[ v124 (Code Bot): THE player-vs-player hostility rule. Every PvP damage path uses it: a gun / melee / vehicle hit
+	(hurtPlayer), a blast (ApplyBlastDamage) and an ATTACKING army (UnitMayHitPlayer, which adds only "never his clan
+	ally" on top). nil = `attacker` may hurt `victim` now; else the reason: "pvp_off" (GameConfig.PvPEnabled off) |
+	"self" | "owner_shielded" (the attacker is under the F6 novice shield and EndOnFire is off; with it on his attack
+	ends the shield first, NS.allowsAttack) | "protected" (the victim's spawn shield or novice shield) | "dead". Admin /
+	owner / playtest status plays NO part in it (no admin bypass, no admin immunity). ]]
+local function pvpBlock(attacker: Player, victim: Player): string?
+	if not GameConfig.PvPEnabled then
+		return "pvp_off"
+	end
+	if attacker == victim then
+		return "self"
+	end
+	if not NS.allowsAttack(attacker) then -- F6: a shielded player deals no PvP damage
+		return "owner_shielded"
+	end
+	local vState = combatStates[victim.UserId]
+	if (vState and clock() < vState.InvulnerableUntil) or NS.Active[victim.UserId] ~= nil then
+		return "protected"
+	end
+	local _, hum = characterParts(victim)
+	if hum == nil or hum.Health <= 0 then
+		return "dead"
+	end
+	return nil
+end
+
+-- v124: who hurt whom last (victim userId -> attacker userId -> clock()): an ATTACKING army answers the player who is
+-- shooting its owner first (SquadOrdersService pickSquadTarget, ArmyCombat.AggressorSeconds)
+local pvpHurtAt: { [number]: { [number]: number } } = {}
+
 local function hurtPlayer(attacker: Player?, victim: Player, damage: number, weaponId: string, fb: FbOpts?): (number, boolean)
 	if attacker ~= nil then
-		if not GameConfig.PvPEnabled then
-			return 0, false
-		end
-		if attacker == victim and not GameConfig.FriendlyFire then
-			return 0, false
-		end
-		if attacker ~= victim and not NS.allowsAttack(attacker) then -- F6: a shielded player deals no PvP damage
+		if attacker == victim then
+			if not GameConfig.PvPEnabled or not GameConfig.FriendlyFire then
+				return 0, false
+			end
+		elseif pvpBlock(attacker, victim) ~= nil then -- v124: THE shared PvP rule (guns, blasts and the army)
 			return 0, false
 		end
 	end
@@ -676,6 +705,14 @@ local function hurtPlayer(attacker: Player?, victim: Player, damage: number, wea
 	local dealt = math.max(0, before - humanoid.Health)
 	if dealt <= 0 then
 		return 0, false
+	end
+	if attacker ~= nil and attacker ~= victim then
+		local byVictim = pvpHurtAt[victim.UserId]
+		if byVictim == nil then
+			byVictim = {}
+			pvpHurtAt[victim.UserId] = byVictim
+		end
+		byVictim[attacker.UserId] = clock() -- v124: the army's aggressor priority
 	end
 	local killed = humanoid.Health <= 0
 	local from: Vector3? = nil
@@ -1864,10 +1901,7 @@ function CombatService.ApplyBlastDamage(attacker: Player?, humanoid: Humanoid, d
 	end
 	local victim = Players:GetPlayerFromCharacter(model)
 	if victim then
-		if attacker ~= nil and (not GameConfig.PvPEnabled or attacker == victim) then
-			return 0, false
-		end
-		if not NS.allowsAttack(attacker) then -- F6: a shielded attacker deals no PvP damage
+		if attacker ~= nil and (attacker == victim or pvpBlock(attacker, victim) ~= nil) then -- v124: THE shared PvP rule
 			return 0, false
 		end
 		if CombatService.IsSpawnInvulnerable(victim) or humanoid.Health <= 0 then
@@ -1986,32 +2020,32 @@ function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: num
 	return hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = not fb, NoCredit = credit ~= true })
 end
 
---[[ claude-bud JOB 24 §2 (ArmyConfig.ArmyCombat): may an ATTACKING army of `owner` shoot player `victim`? The same rules
-	as the owner's own gun: PvP on, not himself, not a clan ally, the owner not under the novice shield, the victim not
-	spawn / novice shielded, alive. Returns (ok, reason): "ok" | "pvp_off" | "self" | "ally" | "owner_shielded" |
-	"protected" | "dead". A "protected" victim is shown to the attacker as Protected (SquadOrdersService). ]]
+--[[ claude-bud JOB 24 §2 (ArmyConfig.ArmyCombat): may an ATTACKING army of `owner` shoot player `victim`? v124: THE
+	shared PvP rule (pvpBlock: PvP on, not himself, the owner not under the novice shield, the victim not spawn / novice
+	shielded, alive) - the very rule his own gun uses - plus "never his clan ally". Returns (ok, reason): "ok" |
+	"pvp_off" | "self" | "ally" | "owner_shielded" | "protected" | "dead". A "protected" victim is shown to the
+	attacker as Protected (SquadOrdersService). ]]
 function CombatService.UnitMayHitPlayer(owner: Player, victim: Player): (boolean, string)
-	if not GameConfig.PvPEnabled then
-		return false, "pvp_off"
-	end
-	if owner == victim then
-		return false, "self"
-	end
-	if isClanAlly(owner, victim) then
+	if owner ~= victim and isClanAlly(owner, victim) then
 		return false, "ally"
 	end
-	if not NS.allowsAttack(owner) then
-		return false, "owner_shielded"
-	end
-	local vState = combatStates[victim.UserId]
-	if (vState and clock() < vState.InvulnerableUntil) or NS.Active[victim.UserId] ~= nil then
-		return false, "protected"
-	end
-	local _, hum = characterParts(victim)
-	if hum == nil or hum.Health <= 0 then
-		return false, "dead"
+	local why = pvpBlock(owner, victim)
+	if why ~= nil then
+		return false, why
 	end
 	return true, "ok"
+end
+
+-- v124: THE shared PvP rule for callers outside CombatService (nil = may hurt; else the reason, as pvpBlock)
+function CombatService.PvPBlockReason(attacker: Player, victim: Player): string?
+	return pvpBlock(attacker, victim)
+end
+
+-- v124: did `attacker` hurt `victim` within the last `seconds`? (the army's aggressor priority)
+function CombatService.RecentlyHurtBy(victim: Player, attacker: Player, seconds: number): boolean
+	local byVictim = pvpHurtAt[victim.UserId]
+	local at = byVictim and byVictim[attacker.UserId]
+	return at ~= nil and clock() - at <= seconds
 end
 
 --[[ claude-bud JOB 24 §2: one ATTACK army unit's hit on an enemy player (SquadOrdersService checked the line of sight and
@@ -2927,6 +2961,7 @@ function CombatService.Init(deps: { [string]: any })
 
 	Players.PlayerRemoving:Connect(function(player)
 		combatStates[player.UserId] = nil
+		pvpHurtAt[player.UserId] = nil -- v124 (an attacker's entries in other victims' maps expire by time)
 		gunSchedule[player.UserId] = nil -- v69 research
 		claimRefusals[player.UserId] = nil -- P0-7
 		CombatNPC.ForgetPlayer(player.UserId) -- P1-2 speed samples

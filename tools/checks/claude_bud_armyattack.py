@@ -88,7 +88,7 @@ _aim = _atk_fn(_sosa, "local function attackAimOnly(")
 _atk_check(_aim != "" and "_AF.Command(" not in _aim and "MoveTo" not in _aim and "pickShot(player, unit, tgt.Hum, tgt.Root, band, attackCands, CombatFairnessConfig.UnitAttackRequireLos == true)" in _aim,
            "attackAimOnly never walks; shots keep the line-of-sight rule")
 _pst = _atk_fn(_sosa, "local function pickSquadTarget(")
-_atk_check("FormationController.PickTarget(" in _pst and "nearestHostile(centre, reach, false, player, attackCands, reach)" in _pst and "leash" in _pst,
+_atk_check("FormationController.PickTargetTiered(" in _pst and "nearestHostile(centre, reach, false, player, attackCands, reach)" in _pst and "leash" in _pst,
            "one server-side squad target (nearestHostile's may-hit rules, leash to him)")
 _atk_check("local function attackUnit(" in _sosa, "the v116 attackUnit kept for AttackSteer = false")
 
