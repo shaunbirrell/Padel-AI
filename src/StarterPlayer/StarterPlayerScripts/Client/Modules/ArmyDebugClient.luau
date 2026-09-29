@@ -9,6 +9,16 @@
 	  * a thin line from the soldier to its slot, green (in its slot) / yellow (a few studs off) / red (far off);
 	  * a label over the soldier: "S07 / Slot 07" + its move state (WE_MoveState) + its distance to its slot.
 	Refreshed at RefreshHz; nothing is created while debug is off (all of it is destroyed when it turns off).
+
+	claude-bud JOB 23 (docs/ARMY-FOLLOW-ROOTCAUSE-4.md):
+	  * compact two-line labels: "S01 / Slot 01" and "<state letter> <distance to its slot>" (S = settled / InPosition,
+	    F = Following, C = CatchingUp, R = stuck recovery, else its first letter); the full per-soldier lines stay in the
+	    server console ([ArmyDebug], DebugLogSeconds);
+	  * the formation panel (top right, under the top bar; tap it to fold it to one line): the server's WE_ArmyPanel
+	    player attribute (formation speed, turn rate, heading error, player / desired / actual heading, max slot speed,
+	    average / max slot error, catching up N / total);
+	  * trails: the last TRAIL_SECONDS of the world slot of two opposite outer corners (the lowest and the highest
+	    FormationSlot: cyan / magenta dots), to see a slot's path through a turn.
 ]]
 
 local Players = game:GetService("Players")
@@ -30,6 +40,19 @@ type Vis = { Marker: BasePart, Line: BasePart, Gui: BillboardGui, Text: TextLabe
 
 local folder: Folder? = nil
 local vis: { [Model]: Vis } = {}
+
+-- JOB 23: panel + corner-slot trails
+local TRAIL_SECONDS = 1.6
+local TRAIL_DOTS = 8 -- (5 Hz x 1.6 s)
+local CYAN = Color3.fromRGB(60, 220, 255)
+local MAGENTA = Color3.fromRGB(255, 80, 220)
+local panelGui: ScreenGui? = nil
+local panelText: TextButton? = nil
+local panelFolded = false
+type Trail = { Dots: { BasePart }, Hist: { { P: Vector3, At: number } } }
+local trails: { [string]: Trail } = {}
+
+local STATE_LETTER: { [string]: string } = { InPosition = "S", Following = "F", CatchingUp = "C", StuckRecovery = "R" }
 
 local function enabled(player: Player): boolean
 	local f3 = (ArmyConfig :: any).Follow3
@@ -57,6 +80,17 @@ local function clearAll()
 		v.Gui:Destroy()
 	end
 	table.clear(vis)
+	for _, tr in pairs(trails) do
+		for _, d in ipairs(tr.Dots) do
+			d:Destroy()
+		end
+	end
+	table.clear(trails)
+	if panelGui then
+		panelGui:Destroy()
+		panelGui = nil
+		panelText = nil
+	end
 	if folder then
 		folder:Destroy()
 		folder = nil
@@ -83,7 +117,7 @@ local function ensure(model: Model): Vis
 	line.Transparency = 0.35
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "WE_ArmyDebugLabel"
-	gui.Size = UDim2.fromOffset(120, 34)
+	gui.Size = UDim2.fromOffset(96, 34) -- (two short lines, TextScaled)
 	gui.StudsOffsetWorldSpace = Vector3.new(0, 3.6, 0)
 	gui.AlwaysOnTop = true
 	gui.MaxDistance = 140
@@ -143,7 +177,8 @@ local function refresh(player: Player)
 					end
 					v.Line.Color = col
 					v.Gui.Adornee = root
-					v.Text.Text = string.format("S%02d / Slot %02d\n%s %.1f", id, slot, tostring(m:GetAttribute("WE_MoveState") or "?"), d)
+					local st = tostring(m:GetAttribute("WE_MoveState") or "?")
+					v.Text.Text = string.format("S%02d / Slot %02d\n%s %.1f", id, slot, STATE_LETTER[st] or string.sub(st, 1, 1), d)
 					v.Text.TextColor3 = col
 				end
 			end
@@ -152,6 +187,122 @@ local function refresh(player: Player)
 	for m, _ in pairs(vis) do
 		if not seen[m] then
 			drop(m)
+		end
+	end
+end
+
+-- JOB 23: the formation panel (top right, below the top bar; a tap folds it to its first line)
+local function panel(player: Player)
+	local txt = player:GetAttribute("WE_ArmyPanel")
+	if typeof(txt) ~= "string" then
+		if panelGui then
+			panelGui.Enabled = false
+		end
+		return
+	end
+	if panelGui == nil or panelGui.Parent == nil then
+		local pg = player:FindFirstChildOfClass("PlayerGui")
+		if pg == nil then
+			return
+		end
+		local g = Instance.new("ScreenGui")
+		g.Name = "WE_ArmyDebugPanel"
+		g.ResetOnSpawn = false
+		g.DisplayOrder = 40
+		local b = Instance.new("TextButton")
+		b.Name = "Panel"
+		b.AnchorPoint = Vector2.new(1, 0)
+		b.Position = UDim2.new(1, -12, 0, 64) -- (under the top-bar pills, clear of the jump button)
+		b.Size = UDim2.fromOffset(250, 150)
+		b.BackgroundColor3 = Color3.new(0, 0, 0)
+		b.BackgroundTransparency = 0.35
+		b.TextColor3 = Color3.new(1, 1, 1)
+		b.TextSize = 14 -- (no UIScale on this gui: 14 px real)
+		b.Font = Enum.Font.GothamMedium
+		b.TextXAlignment = Enum.TextXAlignment.Left
+		b.TextYAlignment = Enum.TextYAlignment.Top
+		b.AutoButtonColor = false
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, 8)
+		pad.PaddingTop = UDim.new(0, 6)
+		pad.Parent = b
+		b.Activated:Connect(function()
+			panelFolded = not panelFolded
+		end)
+		b.Parent = g
+		g.Parent = pg
+		panelGui = g
+		panelText = b
+	end
+	local g = panelGui :: ScreenGui
+	local b = panelText :: TextButton
+	g.Enabled = true
+	if panelFolded then
+		b.Size = UDim2.fromOffset(250, 48) -- (>= 44 px tap target)
+		b.Text = string.split(txt, "\n")[1] .. "  (tap)"
+	else
+		b.Size = UDim2.fromOffset(250, 150)
+		b.Text = txt
+	end
+end
+
+-- JOB 23: the last TRAIL_SECONDS of the world slot of the two opposite outer corners (lowest / highest FormationSlot)
+local function trailStep(player: Player, now: number)
+	local squads = Workspace:FindFirstChild("WarEmpireSquads")
+	local lo, hi = math.huge, -math.huge
+	local loM: Model? = nil
+	local hiM: Model? = nil
+	if squads then
+		for _, m in ipairs(squads:GetChildren()) do
+			if m:IsA("Model") and m:GetAttribute("OwnerUserId") == player.UserId and typeof(m:GetAttribute("WE_SlotPos")) == "Vector3" then
+				local slot = tonumber(m:GetAttribute("FormationSlot")) or 0
+				if slot < lo then
+					lo, loM = slot, m
+				end
+				if slot > hi then
+					hi, hiM = slot, m
+				end
+			end
+		end
+	end
+	local want: { [string]: { M: Model?, C: Color3 } } = { first = { M = loM, C = CYAN }, last = { M = if hi ~= lo then hiM else nil, C = MAGENTA } }
+	for key, w in pairs(want) do
+		local tr = trails[key]
+		if w.M == nil then
+			if tr then
+				for _, d in ipairs(tr.Dots) do
+					d:Destroy()
+				end
+				trails[key] = nil
+			end
+		else
+			if tr == nil then
+				local nt: Trail = { Dots = {}, Hist = {} }
+				for i = 1, TRAIL_DOTS do
+					local d = part("SlotTrail", w.C, folder :: Folder)
+					d.Shape = Enum.PartType.Ball
+					d.Size = Vector3.new(0.6, 0.6, 0.6)
+					d.Transparency = 1
+					nt.Dots[i] = d
+				end
+				trails[key] = nt
+				tr = nt
+			end
+			local t = tr :: Trail
+			local sp = (w.M :: Model):GetAttribute("WE_SlotPos") :: Vector3
+			table.insert(t.Hist, { P = Vector3.new(sp.X, sp.Y - 2.6, sp.Z), At = now })
+			while #t.Hist > TRAIL_DOTS or (#t.Hist > 0 and now - t.Hist[1].At > TRAIL_SECONDS) do
+				table.remove(t.Hist, 1)
+			end
+			for i, d in ipairs(t.Dots) do
+				local h = t.Hist[i]
+				if h then
+					d.CFrame = CFrame.new(h.P)
+					d.Transparency = 0.2 + 0.7 * math.clamp((now - h.At) / TRAIL_SECONDS, 0, 1)
+				else
+					d.Transparency = 1
+				end
+			end
 		end
 	end
 end
@@ -166,10 +317,16 @@ function ArmyDebugClient.Init()
 			task.wait(REFRESH)
 			if enabled(player) then
 				local ok, err = pcall(refresh, player)
+				if ok and folder ~= nil then
+					ok, err = pcall(trailStep, player, os.clock())
+				end
+				if ok then
+					ok, err = pcall(panel, player)
+				end
 				if not ok then
 					warn("[ArmyDebugClient] " .. tostring(err))
 				end
-			elseif folder ~= nil then
+			elseif folder ~= nil or panelGui ~= nil then
 				clearAll()
 			end
 		end

@@ -35,11 +35,15 @@ def find_luau():
         c = os.path.join(os.path.dirname(os.environ["LUAU_COMPILE"]), "luau")
         if os.path.exists(c):
             return c
+    if os.environ.get("LUAU_COMPILE"):  # (claude-bud JOB 23: Windows builds are luau.exe)
+        c = os.path.join(os.path.dirname(os.environ["LUAU_COMPILE"]), "luau.exe")
+        if os.path.exists(c):
+            return c
     c = os.path.expanduser("~/.local/bin/luau")
     return c if os.path.exists(c) else None
 
 
-def build(trace=()):
+def build(trace=(), j23=False):
     sc = SC.read_text(encoding="utf-8")
     sc_body = sc[sc.find("local SoldierController = {}"):]
     code = SIM.read_text(encoding="utf-8")
@@ -47,27 +51,30 @@ def build(trace=()):
     code = code.replace("--@@SC@@", sc_body)
     code = code.replace("--@@CFG@@", follow3_lua()[0])
     code = code.replace("--@@TRACE@@", ", ".join(f"{n} = true" for n in trace))
+    if j23:  # claude-bud JOB 23: the turn-transition acceptance set A..J instead of the v115 list
+        code = code.replace("local J23 = false --@@J23@@", "local J23 = true")
     return code
 
 
-def run(trace=(), timeout=300):
+def run(trace=(), timeout=300, j23=False):
     luau = find_luau()
     if not luau:
         return None
-    with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False) as fh:
-        fh.write(build(trace))
+    # (claude-bud JOB 23: utf-8, the sources carry box-drawing comment characters; the Windows default codepage failed)
+    with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as fh:
+        fh.write(build(trace, j23))
         tmp = fh.name
     try:
-        r = subprocess.run([luau, tmp], capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run([luau, tmp], capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace")
         return (r.stdout or "") + (r.stderr or "")
     finally:
         os.unlink(tmp)
 
 
-def metrics(out):
+def metrics(out, prefix="METRIC,"):
     res = {}
     for line in out.splitlines():
-        if line.startswith("METRIC,"):
+        if line.startswith(prefix):
             parts = line.split(",")
             d = {}
             for kv in parts[2:]:

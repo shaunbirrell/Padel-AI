@@ -1,4 +1,55 @@
 <!-- Q2-START -->
+## claude-bud JOB 23 (2026-09-29): army formation turn transitions (branch `claude/desktop-bud`, on v115 a95c2a8)
+- **Root causes** (`docs/ARMY-FOLLOW-ROOTCAUSE-4.md`, the 15 answers with measured data):
+  1. v115 slots rode his breadcrumb trail. At every corner their velocity swung 90° in one tick, and the rows turned
+     at 100°/s, so slots reached 30 studs/s (about 1.9× his speed) and the rows made a crescent.
+  2. About-turn: each row's point ran up his old path into the turn point and straight back, then folded, so a
+     whole rank fell behind at once (5 of 5 or 7 of 8 CatchingUp). With slower soldier response it gives 13–18.5
+     studs, which is his 13–17 at about 23 s.
+  3. Catch-up gain jumped 0.6 → 0.9 at 6 studs and only dropped under 3: his "C at 3.3 next to F at 3.5".
+  - His LookVector was NOT a cause: a stationary 90° / 180° turn or spin moved every slot 0.00 studs in both designs.
+- **Fix** (`Follow3.Steer = true`; false = the v115 rows):
+  - The block is ONE steered body (`FormationController.SteerFrames`). Its position is steered along his path, with
+    accel, brake and speed caps.
+  - Its heading comes from his movement only, with angular inertia. The turn-rate cap is 10 studs/s ÷ the block's
+    radius, and it pivots about its own centre.
+  - On an about-turn it waits, then arcs round. No slot moves faster than 24 studs/s.
+  - Soldiers use one continuous WalkSpeed law toward their OWN slot. The state names are labels only. There is no new
+    teleport, no higher catch-up and no extra MoveTo rate.
+- **Debug** (owner, `/armydebug`):
+  - labels "S01 / Slot 01" + "F 2.1";
+  - a formation panel at the top right (tap to fold);
+  - cyan / magenta trails for the first and last slot;
+  - a `[ArmyDebug] SPIKE` console line on every spike.
+- **Sim** (A–J, while turning; v115 → JOB 23; max slot error / most CatchingUp at once):
+  - sharp 90°: 6.2 / 1 → 5.2 / 0;
+  - tight circle: 6.1 / 1 → 4.3 / 0;
+  - zig-zag: 6.9 / 1 → 5.6 / 0;
+  - walk-back: 7.8 / **5 of 5** → 7.5 / 1;
+  - max army: 11.5 / **7 of 8** → 10.6 / 4;
+  - max slot speed: 30 → 24;
+  - stationary turns and spin: 0.00;
+  - 0 slot changes, 0 teleports.
+- **Checks:**
+  - `tools/checks/claude_bud_armyj23.py` (70 pins + the A–J sim);
+  - the v115 sim passes, with the orbit tick exempted while the block waits (claude-bud comment);
+  - the v114 sim passes;
+  - BuyPathStatic PASS=6188 FAIL=0;
+  - rojo ok; no new LSP errors;
+  - the headless world sim and the DataService harness are not in the repo, so they were not run.
+- **Test ON HIS PHONE** (debug on, panel open):
+  1. Walk straight, then make a sharp 90° with the thumbstick. The grid should stay a grid (no crescent), no soldier
+     should show "C" above ~6, and the panel's max slot error should stay under ~6.
+  2. Stand still and spin the camera and your character 180°. Nothing should move (the panel reads formation 0.0).
+  3. Walk, then walk straight back through your army. It should stop, let you through its aisle, then arc round
+     behind you, with no teleport and no whole row lighting up "C" at once.
+  4. Run a big circle and a tight circle round a base. Watch the magenta and cyan trails: they should be smooth arcs
+     with no kinks.
+  5. Do all of that with the max army (8 units). Check the console for `[ArmyDebug] SPIKE` lines and send any with
+     maxErr > 10.
+  6. Stop suddenly after a turn. The block should settle within about 1 s without overshooting past its slots.
+  7. Check the panel sits under the top-bar pills at the right, is readable at 14 px, and folds with a tap.
+  - Kill switches: `Follow3.Steer = false` (v115 rows) or `Follow3.Enabled = false` (v113).
 ## v115 (Code Bot Roblox, 2026-09-29): army follow root cause 3 LIVE, place version 113
 - **What the owner saw on v114:** wings, then a split into two groups, a diagonal train, then an orbit/U, reforming only when he stopped.
 - **Root causes** (`docs/ARMY-FOLLOW-ROOTCAUSE-3.md`):

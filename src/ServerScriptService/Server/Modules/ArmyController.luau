@@ -275,6 +275,58 @@ local function debugLog(player: Player, a: any, living: { any }, plans: { [any]:
 	end
 end
 
+-- claude-bud JOB 23: the owner's formation panel (the WE_ArmyPanel player attribute his ArmyDebugClient shows, every
+-- DebugPanelSeconds) and the SPIKE log (a soldier past SpikeErrStuds from its slot, or a slot faster than a soldier can
+-- run), both only in debug. Player / desired / actual heading: his facing (display only) / his movement direction
+-- (the formation steers to it) / the formation's own heading.
+local function yawOf(v: Vector3?): string
+	if v == nil or v.Magnitude < 1e-3 then
+		return "-"
+	end
+	return string.format("%.0f", FormationController.YawDeg(v))
+end
+
+local function formationDebug(player: Player, a: any, living: { any }, plans: { [any]: any }, proot: BasePart, now: number)
+	local f = a.F.Form
+	local trail = a.F.Trail
+	local mxE, sumE, nC, mxV, worst = 0, 0, 0, 0, nil
+	for _, u in ipairs(living) do
+		local p = plans[u]
+		if p then
+			local d = flatDist(u.Root.Position, p.Goal)
+			sumE += d
+			if d > mxE then
+				mxE = d
+				worst = u
+			end
+			if u._scState == "CatchingUp" then
+				nC += 1
+			end
+			mxV = math.max(mxV, tonumber(p.SlotSpeed) or 0)
+		end
+	end
+	local n = math.max(1, #living)
+	local spd = if f then f.V.Magnitude else trail.Vel.Magnitude
+	local turn = if f then math.deg(math.abs(f.W)) else 0
+	local herr = if f then math.deg(math.abs(f.Err)) else 0
+	local cap = math.min(num("MaxSpeed", 40), math.max(trail.Vel.Magnitude, 14) + num("SpeedMaxBonus", 14))
+	if now - (a.PanelAt or -math.huge) >= num("DebugPanelSeconds", 0.5) then
+		a.PanelAt = now
+		pcall(function()
+			player:SetAttribute("WE_ArmyPanel", string.format(
+				"Formation %.1f  Turn %.0f/s\nHeading err %.0f\nPlayer %s  Want %s  Is %s\nMax slot speed %.1f\nSlot err avg %.1f  max %.1f\nCatching up %d/%d",
+				spd, turn, herr, yawOf(flat(proot.CFrame.LookVector)), yawOf(if f then f.Hd else trail.Vel), yawOf(if f then f.H else nil),
+				mxV, sumE / n, mxE, nC, #living))
+		end)
+	end
+	if (mxE > num("SpikeErrStuds", 6) or mxV > cap) and now - (a.SpikeAt or -math.huge) >= 0.5 then
+		a.SpikeAt = now
+		print(string.format("[ArmyDebug] SPIKE %s maxErr=%.1f (%s) maxSlotV=%.1f cap=%.1f catching=%d/%d formSpd=%.1f turn=%.0f/s hdgErr=%.0f player=%s desired=%s actual=%s waiting=%s",
+			player.Name, mxE, if worst then unitName(worst) else "-", mxV, cap, nC, #living, spd, turn, herr, yawOf(flat(proot.CFrame.LookVector)),
+			yawOf(if f then f.Hd else trail.Vel), yawOf(if f then f.H else nil), tostring(f ~= nil and f.Waiting == true)))
+	end
+end
+
 local function stepArmy(player: Player, st: any, now: number)
 	local a = army(st)
 	local state = STATE_OF[st.Order] or "FOLLOW"
@@ -375,7 +427,7 @@ local function stepArmy(player: Player, st: any, now: number)
 		if seated then
 			pace = math.max(16, math.min(math.max(pace, speedSmooth), num("CatchUpMin", 30)))
 		end
-		local lead = if p and moving then p.Lead else Vector3.zero
+		local lead = if p and (moving or c.Steer == true) then p.Lead else Vector3.zero
 		local allow = not drivingFast and not walkBack
 		local noPath = false
 		local clear = num("OwnerClearStuds", 5)
@@ -434,6 +486,13 @@ local function stepArmy(player: Player, st: any, now: number)
 	end
 	if debugOn then
 		debugLog(player, a, living, plans, pos, now)
+		formationDebug(player, a, living, plans, proot, now)
+		a.PanelOn = true
+	elseif a.PanelOn then
+		a.PanelOn = nil
+		pcall(function()
+			player:SetAttribute("WE_ArmyPanel", nil)
+		end)
 	end
 end
 ArmyController._StepArmy = stepArmy

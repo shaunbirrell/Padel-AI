@@ -412,12 +412,23 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 	unit._scState = state
 
 	-- the walk target: its slot (+ its slot's lead while he moves), never inside OwnerClear of him
-	local target = clearOf(goal + (if moving then (ctx.Lead or Vector3.zero) else Vector3.zero))
+	local leadV: Vector3 = if moving or cfg().Steer == true then (ctx.Lead or Vector3.zero) else Vector3.zero
+	if cfg().Steer == true and clear > 0 then
+		-- JOB 23: the lead is shortened (not pushed sideways) where it would reach into his clear zone: a front-row
+		-- soldier's walk point stays on its own slot's path
+		for _ = 1, 4 do
+			if leadV.Magnitude < 0.2 or flatDist(goal + leadV, ownerPos) >= clear + 1 then
+				break
+			end
+			leadV *= 0.5
+		end
+	end
+	local target = clearOf(goal + leadV)
 	local yieldTo: Vector3? = nil -- (reserved: a unit in his lane yields via clearOf above)
 
 	-- 2) speed: his pace + per stud from its own slot, capped, rate-limited
 	local base = tonumber(ctx.BaseSpeed) or 14
-	local pace = math.max(if moving then (tonumber(ctx.Pace) or 0) else 0, 0)
+	local pace = math.max(if moving or cfg().Steer == true then (tonumber(ctx.Pace) or 0) else 0, 0)
 	local want: number
 	local arrive = num("ArriveStuds", 2.5)
 	-- catching up (hysteresis above) raises WalkSpeed toward its OWN slot; in step it only trims
@@ -436,10 +447,37 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 	local cap = math.min(num("MaxSpeed", 40), math.max(pace * num("CatchUpMaxMult", 1.8), num("CatchUpMin", 30)))
 	want = math.clamp(want, num("MinSpeed", 8), cap)
 	local cur = tonumber(unit._scSpeed) or unit.Humanoid.WalkSpeed
+	local steer = cfg().Steer == true
+	if steer then
+		-- JOB 23: ONE continuous law (the state is a label only: no gain step at CatchUpStartStuds). Base = its slot's
+		-- speed (moving) or the unit's walk speed (he stands); + SpeedGain per stud past a deadzone behind its slot (-
+		-- ahead of it) + SpeedLatGain beside it; within [base - SpeedMaxSlow, base + SpeedMaxBonus]; eased over
+		-- SpeedSmoothSeconds. Its destination is always its own slot (above).
+		local dz = num("SpeedDeadzoneStuds", 1)
+		local function dead(x: number): number
+			return if x > dz then x - dz elseif x < -dz then x + dz else 0
+		end
+		local toGoal = flat(goal - pos)
+		local sb = if moving then pace else math.max(pace, base) -- (he stands: its slot may still be settling)
+		local e: number, lat: number
+		if moving or pace > 0.5 then
+			local lead: Vector3 = flat(ctx.Lead or Vector3.zero)
+			local dir: Vector3 = if lead.Magnitude > 0.1 then lead.Unit else flat(ctx.Heading or Vector3.new(0, 0, -1))
+			dir = if dir.Magnitude > 1e-3 then dir.Unit else Vector3.new(0, 0, -1)
+			e = toGoal:Dot(dir)
+			lat = (toGoal - dir * e).Magnitude
+		else
+			e = math.max(0, d - arrive + dz) -- (standing: toward its slot, the arrival deadzone first)
+			lat = 0
+		end
+		want = sb + num("SpeedGain", 0.9) * dead(e) + num("SpeedLatGain", 0.6) * math.max(0, lat - dz)
+		want = math.clamp(want, math.max(num("MinSpeed", 8), sb - num("SpeedMaxSlow", 8)), math.min(num("MaxSpeed", 40), sb + num("SpeedMaxBonus", 14)))
+		want = cur + (want - cur) * (1 - math.exp(-dt / math.max(0.05, num("SpeedSmoothSeconds", 0.3))))
+	end
 	if yielding then
 		-- he walks at it (an about-turn back down his path): it steps out of his lane at once, quickly
 		want = math.max(want, num("YieldSpeed", 24))
-	else
+	elseif not steer then
 		want = math.clamp(want, cur - num("SpeedDownPerTick", 5), cur + num("SpeedUpPerTick", 6))
 	end
 	SoldierController.SetSpeed(unit, want)
@@ -555,7 +593,11 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 
 	-- 6) MoveTo only when the goal moved ReissueStuds (or RefreshSeconds passed, or a stuck stage asks)
 	local last: Vector3? = unit._scGoal
-	if forceIssue or last == nil or flatDist(last :: Vector3, walkTo) >= num("ReissueStuds", 2.5) or now - (unit._scGoalAt or 0) >= num("RefreshSeconds", 6) then
+	-- JOB 23 (Steer): a soldier about to reach its MoveTo point while still off its slot is re-aimed (else it stops
+	-- there and waits for its slot to move ReissueStuds: the stop-start on the inside of a turn); still <= 1 per tick
+	local reaim = moving and cfg().Steer == true and last ~= nil and d > num("ArriveStuds", 2.5)
+		and flatDist(pos, last :: Vector3) < math.max(2, (tonumber(unit._scSpeed) or 14) * dt)
+	if forceIssue or reaim or last == nil or flatDist(last :: Vector3, walkTo) >= num("ReissueStuds", 2.5) or now - (unit._scGoalAt or 0) >= num("RefreshSeconds", 6) then
 		SoldierController.Move(unit, walkTo)
 		unit._scGoal = walkTo
 		unit._scGoalAt = now

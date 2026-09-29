@@ -129,6 +129,27 @@ for _ = 1, 6 do table.insert(ss, seg(2, 16)); table.insert(ss, seg(1.5, 0)) end
 add("startStop", ss, E5)
 add("maxArmy", { seg(4, 16), seg(0.3, 16, 300), seg(4, 16), seg(2 * math.pi / circ, 16, math.deg(circ)), seg(0.15, 16, 1200), seg(5, 16), seg(4, 0) }, E8)
 
+-- claude-bud JOB 23 (docs/ARMY-FOLLOW-ROOTCAUSE-4.md): the turn-transition acceptance set A..J, judged WHILE turning
+-- (tools/checks/claude_bud_armyj23.py runs it with J23 = true; the v115 list above is unchanged when J23 = false)
+local J23 = false --@@J23@@
+if J23 then
+	SCEN = {}
+	add("A_straight", { seg(20, 16), seg(3, 0) }, E5)
+	add("B_gentle90", { seg(5, 16), seg(2, 16, 45), seg(6, 16), seg(3, 0) }, E5)
+	add("C_sharp90", { seg(5, 16), seg(0.1, 16, 900), seg(8, 16), seg(3, 0) }, E5)
+	-- D: he stands, then turns on the spot 90 L, back 90 R, 90 R, then 180 (a stationary rotation must move nothing)
+	add("D_standTurns", { seg(4, 16), seg(3, 0), seg(0.5, 0, 180), seg(1, 0), seg(0.5, 0, -180), seg(1, 0), seg(0.5, 0, -180), seg(1, 0), seg(0.5, 0, 360), seg(2, 0) }, E5)
+	add("E_spin", { seg(4, 16), seg(3, 0), seg(3, 0, 360), seg(2, 0, -720), seg(2, 0) }, E5)
+	add("F_bigCircle", { seg(3, 16), seg(2 * math.pi / (16 / 60), 16, math.deg(16 / 60)), seg(3, 0) }, E5)
+	add("G_tightCircle", { seg(3, 16), seg(2 * math.pi / (16 / 10), 16, math.deg(16 / 10)), seg(3, 0) }, E5)
+	local zz2 = { seg(3, 16) }
+	for k = 1, 12 do table.insert(zz2, seg(0.15, 16, if k % 2 == 1 then 400 else -400)); table.insert(zz2, seg(0.6, 16)) end
+	table.insert(zz2, seg(4, 0))
+	add("H_zigzag", zz2, E5)
+	add("I_walkBack", { seg(6, 16), seg(0.15, 16, 1200), seg(8, 16), seg(3, 0) }, E5)
+	add("J_maxArmy", { seg(4, 16), seg(0.3, 16, 300), seg(4, 16), seg(2 * math.pi / circ, 16, math.deg(circ)), seg(0.15, 16, 1200), seg(5, 16), seg(4, 0) }, E8)
+end
+
 -- segment intersection (strict) for path crossings
 local function cross(a1, a2, b1, b2)
 	local function o(p, q, r) return (q.X - p.X) * (r.Z - p.Z) - (q.Z - p.Z) * (r.X - p.X) end
@@ -210,6 +231,36 @@ for _, sc in ipairs(SCEN) do
 					Spot = function() return CFrame.lookAt(p.Goal, p.Goal + p.Heading) end, OutOfView = function() return true end })
 				if u._scYielding then u._simYieldUntil = t + 1 end -- (it stepped out of his lane: its way back counts too)
 			end
+			-- claude-bud JOB 23: slot error / CatchingUp / slot speed per tick (while he moves = while turning in B..J), and on
+			-- the spot: how far any slot moves while he turns in place (D, E)
+			if J23 and t > 1.5 then
+				local mx, sum, nC, mxV = 0, 0, 0, 0
+				for _, u in ipairs(units) do
+					local p = plans[u]
+					local d = fd(u.Root.Position, p.Goal)
+					mx = math.max(mx, d); sum += d
+					if u._scState == "CatchingUp" then nC += 1 end
+					local pg = u._j23Prev
+					if pg then mxV = math.max(mxV, fd(p.Goal, pg) / tdt) end
+					u._j23Prev = p.Goal
+				end
+				if moving then
+					m.jErrMove = math.max(m.jErrMove or 0, mx); m.jSum = (m.jSum or 0) + sum / #units; m.jN = (m.jN or 0) + 1
+					m.jCatch = math.max(m.jCatch or 0, nC)
+				else
+					m.jErrStand = math.max(m.jErrStand or 0, mx); m.jCatchStand = math.max(m.jCatchStand or 0, nC)
+				end
+				m.jSlotV = math.max(m.jSlotV or 0, mxV)
+				local sg = sc.Segs[segI]
+				if sg and sg.V == 0 and sg.R ~= 0 then
+					m.jSpin = m.jSpin or {}
+					for _, u in ipairs(units) do
+						local p = plans[u]
+						m.jSpin[u] = m.jSpin[u] or p.Goal
+						m.jStandMove = math.max(m.jStandMove or 0, fd(p.Goal, m.jSpin[u]))
+					end
+				end
+			end
 			-- per-tick metrics (after a 1 s start-up)
 			if t > 1 then
 				local mv = army.Trail.Vel
@@ -237,7 +288,12 @@ for _, sc in ipairs(SCEN) do
 							-- orbit: in front AND off his own old trail (not the column walking back up his path)
 							local near = math.huge
 							for _, c in ipairs(army.Trail.Pts) do near = math.min(near, fd(c, p.Goal)) end
-							if near > CFG.AisleStuds / 2 + (CFG.ColumnsMax / 2 - 1) * CFG.ColSpacing + CFG.PartMaxStuds + 1.5 then m.orbit += 1 end
+							if near > CFG.AisleStuds / 2 + (CFG.ColumnsMax / 2 - 1) * CFG.ColSpacing + CFG.PartMaxStuds + 1.5 then
+								-- claude-bud JOB 23: a steered block (Follow3.Steer) that is WAITING for him to walk back through it
+								-- is the block he walks into (held still, heading held), not a slot swinging round him
+								if army.Form and army.Form.Waiting then m.orbitWait = (m.orbitWait or 0) + 1 else m.orbit += 1 end
+								if DEBUGNEAR then print(string.format("ORBIT %s t=%.2f %s near=%.1f waiting=%s", sc.Name, t, u.Id, near, tostring(army.Form and army.Form.Waiting))) end
+							end
 						end
 						if flat(u.Root.Position - owner):Dot(mdir) > 1 then m.soldierAhead += 1 end
 					end
@@ -326,13 +382,19 @@ for _, sc in ipairs(SCEN) do
 	m.cap = cap
 	results[sc.Name] = m
 	print("MINOWNER," .. sc.Name .. "," .. tostring(m.minOwnerAt))
+	if J23 then
+		print(string.format("J23,%s,maxErrMoving=%.2f,meanErrMoving=%.2f,maxCatching=%d,of=%d,maxErrStanding=%.2f,maxCatchingStanding=%d,maxSlotSpeed=%.1f,standMove=%.2f,slotChanges=%d,teleports=%d,minOwner=%.2f,minOwnerSlot=%.2f",
+			sc.Name, m.jErrMove or 0, if (m.jN or 0) > 0 then m.jSum / m.jN else 0, m.jCatch or 0, N, m.jErrStand or 0, m.jCatchStand or 0, m.jSlotV or 0,
+			m.jStandMove or 0, m.slotChanges, m.teleports, m.minOwner, m.minOwnerSlot))
+	end
 	print(string.format("METRIC,%s,slotChanges=%d,teleports=%d,rmsMean=%.2f,rmsMax=%.2f,finalRms=%.2f,widthRatio=%.2f,rankViol=%d,rankYield=%d,crossings=%d,minOwner=%.2f,minOwnerSlot=%.2f,slotAhead=%d,soldierAhead=%d,orbit=%d,maxSlotSpeed=%.1f,cap=%.1f,movesPerSec=%.2f,maxRowTurn=%.0f",
 		sc.Name, m.slotChanges, m.teleports, m.rmsMean, m.rmsMax, m.finalRms, m.widthRatio, m.rankViol, m.rankYield, m.crossings, m.minOwner, m.minOwnerSlot,
 		m.slotAhead, m.soldierAhead, m.orbit, m.maxSlotSpeed, cap, m.movesPerSec, m.maxTurnDeg))
 end
 
 -- ── thresholds ────────────────────────────────────────────────────────────────────────────────────────────────────
-for _, sc in ipairs(SCEN) do
+-- (claude-bud JOB 23: the A..J set has its own thresholds in tools/checks/claude_bud_armyj23.py)
+for _, sc in ipairs(if J23 then {} else SCEN) do
 	local m = results[sc.Name]
 	local nm = sc.Name
 	local rev = nm == "u180" or nm == "maxArmy" -- an about-turn: the rows walk back up his old path past him (by design)

@@ -324,18 +324,223 @@ function FormationController.Assign(s: Assignment, units: { any }): boolean
 	return changed
 end
 
+-- JOB 23: the steered block (Follow3.Steer). C = its centre (the pivot), V = its velocity, H = its heading, W = its
+-- turn rate (rad/s, + = toward +atan2(X, Z)), Hd = the heading it steers to (his MOVEMENT direction, kept while he stands)
+export type Form = {
+	C: Vector3,
+	V: Vector3,
+	H: Vector3,
+	W: number,
+	Hd: Vector3,
+	Turning: boolean,
+	Radius: number, -- farthest slot from C
+	Omega: number, -- the turn-rate cap now (SlotLateralSpeed / Radius)
+	HalfDepth: number,
+	Err: number, -- heading error (rad) this tick
+	Target: Vector3?, -- its steering point last tick (on his trail)
+	Waiting: boolean?, -- he walks back through it (an about-turn): it holds still and waits
+}
+
 export type Army = {
 	Trail: Trail,
 	Assign: Assignment,
 	Prev: { [any]: Vector3 }, -- per unit: its slot last tick (its slot's velocity)
 	SVel: { [any]: Vector3 },
 	LayoutKey: string?,
+	Form: Form?,
 }
 
-export type Plan = { Goal: Vector3, Heading: Vector3, Lead: Vector3, Pace: number, Row: number, X: number, Esc: number, Idx: number }
+export type Plan = { Goal: Vector3, Heading: Vector3, Lead: Vector3, Pace: number, Row: number, X: number, Esc: number, Idx: number, SlotSpeed: number }
 
 function FormationController.NewArmy(): Army
-	return { Trail = FormationController.NewTrail(), Assign = FormationController.NewAssignment(), Prev = {}, SVel = {}, LayoutKey = nil }
+	return { Trail = FormationController.NewTrail(), Assign = FormationController.NewAssignment(), Prev = {}, SVel = {}, LayoutKey = nil, Form = nil }
+end
+
+local function rotY(v: Vector3, rad: number): Vector3
+	local r = math.atan2(v.X, v.Z) + rad
+	return Vector3.new(math.sin(r), 0, math.cos(r))
+end
+
+--[[ JOB 23 (claude-bud, docs/ARMY-FOLLOW-ROOTCAUSE-4.md): the block as ONE steered body. v115 put every row ON his
+	breadcrumb trail, so a slot turned each of his corners at his full speed (its velocity swung 90 deg in one tick) and,
+	on an about-turn, ran up his old path into the turn point and straight back (a hairpin: its velocity reversed in one
+	tick, a whole rank fell 8-11 studs behind at once in the sim). Now the trail is only the GUIDE the body steers along:
+	  * position: C (the block's centre, its pivot) steers to the point on his trail (his walked path) that puts the
+	    block's nearest slot FirstRowStuds behind him, that point's velocity fed forward, FormGain per stud of gap, its
+	    own velocity changing at most FormAccel per second and capped at FormMaxSpeed: continuous, so on a corner it keeps
+	    going briefly and then comes round along his path (never across the corner into him); while he walks back into
+	    his block it stops going his way and waits (sideways correction only) until he is through;
+	  * heading: H turns toward Hd = his MOVEMENT direction where the block is on his path (the trail tangent; updated
+	    only while he moves, MovingOn / MovingOff hysteresis; never his look vector, so a spin on the spot moves nothing)
+	    past RowDeadbandDeg (a slow drift inside it), with angular inertia (TurnAccelSeconds) and a rate cap of
+	    SlotLateralSpeed / the block's radius: no slot is swung sideways faster than SlotLateralSpeed, a bigger army
+	    turns slower, the pivot is the block's own centre (not him);
+	  * slots: C + H-rotated constant offsets (row frames below): every slot path is smooth and continuous.
+	Returns the row frames (row r's centre, facing H). ]]
+function FormationController.SteerFrames(army: Army, units: { any }, ownerPos: Vector3, cells: { [any]: Cell }, last: number, dt: number,
+	snap: boolean, cfg: any): { [number]: CFrame }
+	local t = army.Trail
+	dt = math.clamp(dt, 0, 1)
+	local rs = n(cfg, "RowSpacing", 4.5)
+	local half = last * rs / 2
+	local first = n(cfg, "FirstRowStuds", 7)
+	-- the farthest slot from the pivot (escort cells included); max only, so no iteration order matters
+	local rad = 4
+	for _, c in pairs(cells) do
+		for k = 0, c.Esc do
+			local z = (c.Row + k) * rs - half
+			rad = math.max(rad, math.sqrt(c.X * c.X + z * z))
+		end
+	end
+	local me = flat(ownerPos)
+	local f = army.Form
+	if f == nil or snap then
+		-- a fresh block: facing from where the army stands toward him (never his look vector), else the old heading;
+		-- the fresh trail runs straight back from him along it
+		local h = if f then f.H else Vector3.new(0, 0, -1)
+		local sum, cnt = Vector3.zero, 0
+		for _, u in ipairs(units) do
+			local r = u.Root
+			if r then
+				sum += flat(r.Position)
+				cnt += 1
+			end
+		end
+		if cnt > 0 then
+			local d = me - sum / cnt
+			if d.Magnitude > 1 then
+				h = d.Unit
+			end
+		end
+		t.Seed = h
+		f = { C = me - h * (first + half), V = Vector3.zero, H = h, W = 0, Hd = h, Turning = false, Radius = rad, Omega = 0, HalfDepth = half, Err = 0 }
+		army.Form = f
+	end
+	local F = f :: Form
+	-- how far the block reaches out from C along a direction, as it is turned NOW (on a corner its width, not its depth,
+	-- is what must stay behind him)
+	local right = Vector3.new(-F.H.Z, 0, F.H.X)
+	local function reach(dir: Vector3): number
+		local r = 0
+		for _, c in pairs(cells) do
+			for k = 0, c.Esc do
+				r = math.max(r, (right * c.X - F.H * ((c.Row + k) * rs - half)):Dot(dir))
+			end
+		end
+		return r
+	end
+	local s = first + reach(F.Hd)
+	-- desired heading: his movement direction there (the trail tangent), only while he moves
+	if t.Moving then
+		F.Hd = if cfg.SteerHeadingPath == true then FormationController.Tangent(t, s, cfg) else unitOr(flat(t.Vel), F.Hd)
+		s = first + reach(F.Hd)
+	end
+	local target = flat(FormationController.TrailPoint(t, s))
+	local mv = flat(t.Vel)
+	if t.Moving and mv.Magnitude > 1e-3 then
+		-- clearance: no slot of the block (as turned now) may sit less than FirstRowStuds behind him along the way he
+		-- walks NOW (a corner: the wide front row would otherwise cross his new path just behind him)
+		local vd = mv.Unit
+		local over = (target - me):Dot(vd) + reach(vd) + first
+		if over > 0 then
+			target -= vd * over
+		end
+	end
+	-- and its centre never nearer him than its radius + BubbleStuds (no slot of it near him, whichever way it faces)
+	local bubble = rad + n(cfg, "BubbleStuds", 3)
+	local off = target - me
+	if off.Magnitude < bubble then
+		target = me + unitOr(off, -F.Hd) * bubble
+	end
+	local ff = Vector3.zero
+	if F.Target ~= nil and t.Moving and dt > 1e-3 then
+		ff = (target - (F.Target :: Vector3)) / dt
+	end
+	F.Target = target
+	-- (C moves by V x dt after this, so it aims at the target less this tick's own travel: it lands ON it, not a tick ahead)
+	local gap = target - ff * dt - F.C
+	local want = ff + gap * n(cfg, "FormGain", 2.5)
+	local waiting = false
+	if t.Moving and mv.Magnitude > 1e-3 then
+		-- he walks back into / through his block (an about-turn, a hairpin of his path): it stops going his way and
+		-- waits (sideways correction only) until he is past its centre; it never charges through him (on a corner, with
+		-- the block beside him, it may back off out of his way)
+		local vd = mv.Unit
+		if (F.C - me):Dot(vd) > n(cfg, "WaitAheadStuds", 0) then
+			waiting = true
+			local along = want:Dot(vd)
+			if along < 0 then
+				want -= vd * along
+			end
+		end
+	end
+	local vmax = math.max(n(cfg, "FormMaxSpeed", 22), t.Vel.Magnitude * n(cfg, "FormSpeedMult", 1.25))
+	-- while it turns its outer slots already move |W| x radius sideways: it travels that much slower, so no slot ever
+	-- moves faster than FormMaxSpeed (what a soldier can hold, with catch-up headroom to spare)
+	vmax = math.max(0, vmax - math.abs(F.W) * rad * n(cfg, "TurnSlowFactor", 1))
+	if want.Magnitude > vmax then
+		want = want.Unit * vmax
+	end
+	local dv = want - F.V
+	-- speeding up / turning its course: FormAccel (it keeps going briefly on a reversal); slowing down along its course:
+	-- FormBrake (it stops with him, and never coasts into his new path on a corner)
+	local acc = math.max(n(cfg, "FormAccel", 24), vmax) * dt
+	local vm = F.V.Magnitude
+	if vm > 1e-3 then
+		local vu = F.V / vm
+		local a = dv:Dot(vu)
+		local side = dv - vu * a
+		a = if a < 0 then math.max(a, -math.max(n(cfg, "FormBrake", 60), vmax) * dt) else math.min(a, acc)
+		if side.Magnitude > acc then
+			side = side.Unit * acc
+		end
+		dv = vu * a + side
+	elseif dv.Magnitude > acc then
+		dv = dv.Unit * acc
+	end
+	F.V += dv
+	if not t.Moving and gap.Magnitude < 0.05 and F.V.Magnitude < 0.5 then
+		F.V = Vector3.zero
+	end
+	F.C += F.V * dt
+	-- heading: toward Hd with angular inertia, the rate capped so no slot swings sideways faster than SlotLateralSpeed
+	local omax = n(cfg, "SlotLateralSpeed", 10) / rad
+	local e = FormationController.Angle(F.H, F.Hd)
+	if not F.Turning and math.abs(e) > math.rad(n(cfg, "RowDeadbandDeg", 8)) then
+		F.Turning = true
+	end
+	if F.Turning then
+		if math.abs(e) > math.rad(170) and math.abs(F.W) > 1e-3 then
+			e = (if F.W > 0 then 1 else -1) * math.abs(e) -- an about-turn: keep coming round the way it already turns
+		end
+		-- (while he walks through it, it holds its heading: its aisle stays on his path; it comes round once he is past)
+		local wt = if waiting then 0 else math.clamp(e * n(cfg, "TurnGain", 2.5), -omax, omax)
+		local aw = omax / math.max(0.05, n(cfg, "TurnAccelSeconds", 0.4)) * dt
+		F.W = math.clamp(F.W + math.clamp(wt - F.W, -aw, aw), -omax, omax)
+		local step = F.W * dt
+		if not waiting and (math.abs(e) < math.rad(1.5) or (e >= 0 and step >= e) or (e <= 0 and step <= e)) then
+			F.H = rotY(F.H, e) -- lands on it (within 1.5 deg, or this step would pass it)
+			F.W = 0
+			F.Turning = false
+		else
+			F.H = rotY(F.H, step)
+		end
+	else
+		F.W = 0
+		if t.Moving then
+			-- inside the deadband: a slow drift onto his heading (no jitter from a wobbling thumbstick, no standing tilt)
+			F.H = rotY(F.H, e * (1 - math.exp(-dt * n(cfg, "SettleTurnPerSec", 0.8))))
+		end
+	end
+	F.Radius, F.Omega, F.HalfDepth, F.Err, F.Waiting = rad, omax, half, e, waiting
+	local frames: { [number]: CFrame } = {}
+	for r = 0, last do
+		local p = F.C - F.H * (r * rs - half)
+		p = Vector3.new(p.X, ownerPos.Y, p.Z)
+		frames[r] = CFrame.lookAt(p, p + F.H)
+		t.RowDir[r] = F.H
+	end
+	return frames
 end
 
 --[[ One FOLLOW planning tick for an army (the whole chain ArmyController runs and the acceptance sim runs):
@@ -388,8 +593,12 @@ function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3,
 	local relayout = army.LayoutKey ~= nil and army.LayoutKey ~= key
 	army.LayoutKey = key
 	local frames: { [number]: CFrame } = {}
-	for r = 0, last do
-		frames[r] = FormationController.RowFrame(t, r, dt, cfg)
+	if typeof(cfg) == "table" and cfg.Steer == true then
+		frames = FormationController.SteerFrames(army, units, ownerPos, cells, last, dt, snap, cfg) -- JOB 23: one steered block
+	else
+		for r = 0, last do
+			frames[r] = FormationController.RowFrame(t, r, dt, cfg)
+		end
 	end
 	-- the rows he walks back into (an about-turn) part to let him through (ownerVelNow: his root's velocity now)
 	local partL: { [number]: number } = {}
@@ -408,8 +617,10 @@ function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3,
 		end
 	end
 	local plans: { [any]: Plan } = {}
-	local leadS = n(cfg, "MoveLeadSeconds", 0.4)
-	local leadCap = n(cfg, "MoveLeadMaxStuds", 5)
+	local steer = typeof(cfg) == "table" and cfg.Steer == true
+	-- (JOB 23: a steered slot's walk point is further ahead, so a soldier never reaches it and stops between MoveTos)
+	local leadS = if steer then n(cfg, "SteerLeadSeconds", 0.5) else n(cfg, "MoveLeadSeconds", 0.4)
+	local leadCap = if steer then n(cfg, "SteerLeadMaxStuds", 6) else n(cfg, "MoveLeadMaxStuds", 5)
 	local blend = math.clamp(n(cfg, "SlotVelBlend", 0.5), 0, 1)
 	for _, u in ipairs(units) do
 		local c = cells[u]
@@ -422,12 +633,13 @@ function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3,
 			if prev ~= nil and not snap and not relayout and dt > 1e-3 then
 				sv = flat(goal - prev) / dt
 			end
-			local sm = if snap or relayout then sv else (army.SVel[u] or sv):Lerp(sv, blend)
+			-- (JOB 23: a steered block's slots are already smooth, so its lead / pace use the slot's velocity NOW, no lag)
+			local sm = if snap or relayout or steer then sv else (army.SVel[u] or sv):Lerp(sv, blend)
 			army.Prev[u] = goal
 			army.SVel[u] = sm
 			local lead = Vector3.zero
 			local pace = 0
-			if t.Moving then
+			if t.Moving or steer then -- (a steered block may still be settling after he stops: its own velocity)
 				lead = sm * leadS
 				if lead.Magnitude > leadCap then
 					lead = lead.Unit * leadCap
@@ -435,7 +647,7 @@ function FormationController.Plan(army: Army, units: { any }, ownerPos: Vector3,
 				pace = sm.Magnitude
 			end
 			plans[u] = { Goal = goal, Heading = t.RowDir[c.Row] or t.Seed, Lead = lead, Pace = pace, Row = c.Row,
-				X = c.X * FormationController.RowSide(t, c.Row), Esc = c.Esc, Idx = army.Assign.ByUnit[u] }
+				X = c.X * FormationController.RowSide(t, c.Row), Esc = c.Esc, Idx = army.Assign.ByUnit[u], SlotSpeed = sv.Magnitude }
 		end
 	end
 	for u, _ in pairs(army.Prev) do

@@ -9441,3 +9441,28 @@ ds_territories.luau T3):
   - Checked: ≤ 1 MoveTo per soldier per 0.4 s think, 0 once settled, turn ≤ 36° per think, no flips, sides stable,
     no bunching.
   - Not run in Studio / a real server (no Roblox runtime here); the phone playtest list is in LATEST-HANDOFF.
+
+## 2026-09-29 — claude-bud JOB 23: army formation turn transitions (docs/ARMY-FOLLOW-ROOTCAUSE-4.md)
+- **Switch:** `ArmyConfig.Follow3.Steer = true` turns on the steered block. False gives the v115 TrailBlock rows
+  exactly. `Follow3.Enabled` is still the kill switch (the v113 path). It is live for all players, like Follow3
+  (`Rollout = "all"`), per the standing "no owner gate" rule.
+- **Heading source:** his smoothed MOVEMENT direction (never his look vector), as the brief requires. This reverses
+  JOB 22's facing-based heading, which v115 had already replaced. Backing up with shift-lock therefore turns the block
+  round (slowly, capped), like any other change of direction.
+- **Fresh block** (spawn / respawn / FOLLOW restart): it faces from the army's centroid toward him, not his look vector.
+  If the army stands on top of him it keeps its old heading.
+- **About-turn:** while he walks back into the block, it waits with its heading held, so the aisle stays on his path.
+  It turns round once he is past its centre. The brief asked for "keeps going briefly, then arcs round": the block
+  brakes to a stop, then arcs.
+- **Rigid block:** it keeps its grid shape on corners (no crescent), so on a sharp turn it trails further behind him
+  for about a second. It stays ≥ 7.6 studs from him.
+- **Labels:** the CatchingUp / Following labels keep the 6 / 3 hysteresis, but they no longer change speed.
+- **Tuning:** values were chosen by a parameter sweep in the sim (mock humanoids), not on a device. They are all in
+  `Follow3` for phone tuning.
+- **Sim fix:** `tools/sim/run_army_sim.py` now writes utf-8 and finds `luau.exe` next to `LUAU_COMPILE`. On Windows
+  the v115 sim used to crash on the box-drawing comments and silently SKIP.
+- **Tests:**
+  - Static pins plus the A–J sim (the real FormationController / SoldierController in the Luau CLI) all pass.
+  - The v115 and v114 sims pass.
+  - Not run in Studio or on a real server. The headless world sim and the DataService harness are not in the repo.
+  - Phone tests are in LATEST-HANDOFF.
