@@ -2223,6 +2223,8 @@ export type NPCTypeDef = {
 	Color: Color3,
 }
 
+local AdminConfig = require(script.Parent.AdminConfig)
+
 local CombatConfig = {
 	PlayerMaxHealth = 100,
 	SpawnInvulnerabilitySeconds = 3, -- mirrors GameConfig; CombatService uses this
@@ -2361,7 +2363,41 @@ local CombatConfig = {
 	} :: { [string]: NPCTypeDef },
 
 	DefaultNPCType = "Infantry",
+
+	--[[ claude-bud (2026-09-29): NPC guards shoot back at the squad unit that shot them (the Empire Bank guards, camps).
+		A plain NPC (Aggressive, no group) remembers the last unit that hit it for MemorySeconds and, while no player is in
+		its AggroRange, fights that unit through the same line-of-sight + CombatNPC.HitChance gates as its shots at players
+		(DamageMult x its Damage). Rollout is per unit owner: "owner" = AdminConfig.IsPlaytestOwner only, "all", anything
+		else = off (today's game: NPCs never hurt squad units). ]]
+	GuardsFightBack = {
+		Rollout = "owner",
+		MemorySeconds = 8,
+		DamageMult = 1,
+	},
+
+	--[[ claude-bud (2026-09-29): unstick a chasing NPC (bank guards G1 / G2 jam on the 6 x 3 x 2 planters in front of the
+		hall). A plain NPC walking after its target that moved under MinProgressStuds in StuckSeconds jumps and sidesteps
+		SidestepStuds to one side (alternating) for DetourSeconds, then resumes the chase. Rollout per target (the player
+		or the unit owner): "owner" / "all" / off (today's straight MoveTo only). ]]
+	NpcUnstick = {
+		Rollout = "owner",
+		StuckSeconds = 1.5,
+		MinProgressStuds = 1,
+		SidestepStuds = 8,
+		DetourSeconds = 1.2,
+	},
 }
+
+-- claude-bud: is a GuardsFightBack / NpcUnstick block live for this user id (fail closed)
+function CombatConfig.LiveFor(block: any, userId: any): boolean
+	local mode = if typeof(block) == "table" then block.Rollout else nil
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
 
 return CombatConfig
 ]]></string>
@@ -6668,6 +6704,10 @@ local OpsConfig = {
 		DropLifetimeSeconds = 45, -- a dropped bag lies this long
 		PickupHold = 2,
 		PickupDist = 12,
+		-- claude-bud (2026-09-29, CP-9 E4): the server also needs a clear line from the picker's head to the bag, so a bag
+		-- dropped inside the bank hall cannot be taken through its 7.8-stud back wall. "owner" = AdminConfig.IsPlaytestOwner
+		-- only, "all" = everyone, anything else = off (distance check only, as before).
+		PickupLosRollout = "owner",
 		PickerMult = 0.6, -- a picker who is not the grabber gets this share (fresh deadline)
 		MaxHandoffs = 3, -- the 4th drop destroys it
 		MaxBagsInWorld = 3, -- carried + dropped, all sites: busiest 512-stud circle 493 static + 4 crate parts + 3 bags = 500 (cap 500)
@@ -21721,7 +21761,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 93)
+		player:SetAttribute("WE_Build", 94)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -52626,7 +52666,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 93)
+			player:SetAttribute("WE_Build", 94)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -55166,6 +55206,13 @@ type NPCRecord = {
 	SpawnOpts: NPCSpawnOpts?, -- a copy of the opts, reused by a respawn (nil for a 2-argument spawn)
 	Returning: boolean, -- walking back past the leash (targets ignored until home)
 	DeathFired: boolean, -- OnNPCDeath fired (or silenced by DespawnNPC): once per death
+	-- claude-bud (CombatConfig.GuardsFightBack / NpcUnstick; CombatNPC)
+	UnitFoe: Model?, -- the last squad unit that hit it (only while GuardsFightBack is live for that unit's owner)
+	UnitFoeAt: number?,
+	StuckPos: Vector3?, -- where its chase progress was last measured
+	StuckAt: number?,
+	DetourUntil: number?, -- sidestepping around an obstacle until then
+	DetourSide: number?,
 }
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
@@ -55867,10 +55914,26 @@ end
 
 --[[ Damage one NPC record. Returns (dealt, killed). With no attacker nobody is credited (the Died handler respawns
 	it). W2: fb carries the feedback / credit switches (quiet blast kills, splash aggregation, squad unit shots). ]]
+-- claude-bud (CombatConfig.GuardsFightBack): the squad unit whose shot SquadOrdersService is about to apply
+-- (CombatService.SetUnitShooter right before its ApplyUnitHit pcall; consumed by the next UnitShot hurtNPC, cleared after)
+local pendingShooter: Model? = nil
+
+function CombatService.SetUnitShooter(model: Model?)
+	pendingShooter = if typeof(model) == "Instance" and model:IsA("Model") then model else nil
+end
+
 local function hurtNPC(attacker: Player?, npcId: string, damage: number, weaponId: string, fb: FbOpts?): (number, boolean)
 	local rec = npcRecords[npcId]
 	if not rec or not rec.Alive or rec.Humanoid.Health <= 0 then
 		return 0, false
+	end
+	-- claude-bud: an NPC hit by a squad unit remembers that unit and fights back (per unit owner, CombatConfig.GuardsFightBack)
+	if fb ~= nil and fb.UnitShot == true and pendingShooter ~= nil and attacker ~= nil then
+		if CombatConfig.LiveFor(CombatConfig.GuardsFightBack, attacker.UserId) then
+			rec.UnitFoe = pendingShooter
+			rec.UnitFoeAt = clock()
+		end
+		pendingShooter = nil
 	end
 	if not (damage > 0) then
 		return 0, false
@@ -58738,6 +58801,46 @@ local function npcHasLos(rec: any, target: Player, th: Humanoid, troot: BasePart
 	return CombatDamage.LineOfSight(eye, troot.Position, ignore, nil, CombatFairnessConfig.NpcLosRespectCanCollide)
 end
 
+--[[ claude-bud (CombatConfig.NpcUnstick): walk after `goal`. With the flag live for `userId` (the target player or the
+	unit owner), a chase that made under MinProgressStuds in StuckSeconds (G1 / G2 on the bank planters) jumps and
+	sidesteps SidestepStuds to one side, alternating, for DetourSeconds. Off: today's straight MoveTo. ]]
+local function chaseTo(rec: any, goal: Vector3, now: number, userId: any)
+	local U = CombatConfig.NpcUnstick
+	if not CombatConfig.LiveFor(U, userId) then
+		rec.Humanoid:MoveTo(goal)
+		return
+	end
+	if rec.DetourUntil ~= nil and now < rec.DetourUntil then
+		return -- still sidestepping
+	end
+	local pos = rec.Root.Position
+	local moved = if rec.StuckPos then Vector3.new(pos.X - rec.StuckPos.X, 0, pos.Z - rec.StuckPos.Z).Magnitude else math.huge
+	if rec.StuckPos == nil or rec.StuckAt == nil or moved >= U.MinProgressStuds then
+		rec.StuckPos = pos
+		rec.StuckAt = now
+	elseif now - rec.StuckAt >= U.StuckSeconds then
+		local flat = Vector3.new(goal.X - pos.X, 0, goal.Z - pos.Z)
+		local dir = if flat.Magnitude > 0.05 then flat.Unit else rec.Root.CFrame.LookVector
+		rec.DetourSide = if rec.DetourSide == 1 then -1 else 1
+		local side = Vector3.new(-dir.Z, 0, dir.X) * rec.DetourSide
+		rec.Humanoid.Jump = true
+		rec.Humanoid:MoveTo(pos + side * U.SidestepStuds + dir * 2)
+		rec.DetourUntil = now + U.DetourSeconds
+		rec.StuckPos = nil
+		rec.StuckAt = nil
+		return
+	end
+	rec.Humanoid:MoveTo(goal)
+end
+
+-- claude-bud: stop walking (and forget the chase progress, so standing to shoot never counts as stuck)
+local function holdStill(rec: any)
+	rec.StuckPos = nil
+	rec.StuckAt = nil
+	rec.DetourUntil = nil
+	rec.Humanoid:MoveTo(rec.Root.Position)
+end
+
 --[[ One NPC's fight against `target` this tick: today's Think body (P1-2 / W2), unchanged for a walking NPC.
 	`canMove` false = the Post stance (lane N): no MoveTo at all (no chase, no stop-in-place); it turns, and fires
 	within Range through the same line-of-sight and hit-chance gates. ]]
@@ -58754,8 +58857,9 @@ local function engage(rec: any, target: Player, dist: number, now: number, canMo
 		if gyro and gyro:IsA("BodyGyro") then
 			gyro.CFrame = look
 		end
+		rec.UnitAimSince = nil -- claude-bud: a player target resets the fight-back aim
 		if canMove and dist > rec.Def.Range * 0.85 then
-			rec.Humanoid:MoveTo(troot.Position)
+			chaseTo(rec, troot.Position, now, target.UserId)
 		elseif not canMove and dist > rec.Def.Range then
 			-- Post (lane N): out of range, it only turns
 		elseif not npcHasLos(rec, target, th, troot) then
@@ -58763,9 +58867,9 @@ local function engage(rec: any, target: Player, dist: number, now: number, canMo
 			if not canMove then
 				-- Post (lane N): holds its spot behind the cover
 			elseif C.NpcChaseWithoutLos then
-				rec.Humanoid:MoveTo(troot.Position)
+				chaseTo(rec, troot.Position, now, target.UserId)
 			else
-				rec.Humanoid:MoveTo(rec.Root.Position)
+				holdStill(rec)
 			end
 			if C.NpcReactionOnLosRegain then
 				rec.AimBlocked = true
@@ -58777,7 +58881,7 @@ local function engage(rec: any, target: Player, dist: number, now: number, canMo
 				rec.AimSince = now
 			end
 			if canMove then
-				rec.Humanoid:MoveTo(rec.Root.Position)
+				holdStill(rec)
 			end
 			local interval = 1 / math.max(rec.Def.FireRate, 0.1)
 			local aimed = now - (rec.AimSince or now) >= C.NpcReactionSeconds
@@ -59082,6 +59186,73 @@ local function settleGroups(now: number)
 	end
 end
 
+--[[ claude-bud (CombatConfig.GuardsFightBack): a plain NPC with no player in range fights the squad unit that last shot
+	it (CombatService.ApplyUnitHit stamps rec.UnitFoe only while the flag is live for that unit's owner). Same rules as a
+	shot at a player: chase outside 0.85 x Range, line of sight from the eyes (the NPC and the unit never block), the
+	reaction delay, FireRate and CombatNPC.HitChance at the unit's speed. Returns true while it has a unit to fight. ]]
+local function fightUnit(rec: any, now: number): boolean
+	local foe = rec.UnitFoe
+	if foe == nil then
+		return false
+	end
+	local cfg = CombatConfig.GuardsFightBack
+	local C = CombatFairnessConfig
+	local fh = foe:FindFirstChildOfClass("Humanoid")
+	local fr = foe:FindFirstChild("HumanoidRootPart")
+	local ownerId = foe:GetAttribute("OwnerUserId")
+	if
+		foe.Parent == nil
+		or now - (rec.UnitFoeAt or 0) > (tonumber(cfg.MemorySeconds) or 8)
+		or fh == nil
+		or fh.Health <= 0
+		or fr == nil
+		or not fr:IsA("BasePart")
+		or not CombatConfig.LiveFor(cfg, ownerId)
+	then
+		rec.UnitFoe = nil
+		rec.UnitAimSince = nil
+		return false
+	end
+	local froot = fr :: BasePart
+	local dist = (froot.Position - rec.Root.Position).Magnitude
+	if dist > rec.Def.AggroRange then
+		rec.UnitFoe = nil
+		rec.UnitAimSince = nil
+		return false
+	end
+	local gyro = rec.Root:FindFirstChild("NPCFaceGyro") or rec.Root:FindFirstChildOfClass("BodyGyro")
+	if gyro and gyro:IsA("BodyGyro") then
+		gyro.CFrame = CFrame.lookAt(rec.Root.Position, Vector3.new(froot.Position.X, rec.Root.Position.Y, froot.Position.Z))
+	end
+	if dist > rec.Def.Range * 0.85 then
+		chaseTo(rec, froot.Position, now, ownerId)
+		rec.UnitAimSince = nil
+		return true
+	end
+	local eye = rec.Root.Position + Vector3.new(0, C.NpcEyeHeight, 0)
+	if C.NpcRequireLos and not CombatDamage.LineOfSight(eye, froot.Position, { rec.Model, foe }, nil, C.NpcLosRespectCanCollide) then
+		chaseTo(rec, froot.Position, now, ownerId)
+		rec.UnitAimSince = nil
+		return true
+	end
+	holdStill(rec)
+	if rec.UnitAimSince == nil then
+		rec.UnitAimSince = now
+	end
+	local interval = 1 / math.max(rec.Def.FireRate, 0.1)
+	if now - rec.UnitAimSince >= C.NpcReactionSeconds and now - rec.LastFireAt >= interval and dist <= rec.Def.Range then
+		rec.LastFireAt = now
+		local chance = CombatNPC.HitChance(dist, rec.Def.Range, froot.AssemblyLinearVelocity.Magnitude)
+		if rng:NextNumber() < chance then
+			fh:TakeDamage(rec.Def.Damage * math.clamp(tonumber(cfg.DamageMult) or 1, 0, 3))
+			sendFx(rec, eye, froot.Position, "P")
+		else
+			sendFx(rec, eye, missPoint(froot.Position), "M")
+		end
+	end
+	return true
+end
+
 function CombatNPC.Think()
 	if next(B.npcRecords) == nil then
 		return
@@ -59097,6 +59268,8 @@ function CombatNPC.Think()
 				aim(rec, target, now)
 				if target then
 					engage(rec, target, dist, now, true)
+				elseif rec.UnitFoe ~= nil then
+					fightUnit(rec, now) -- claude-bud: guards fight back at the squad that shot them
 				end
 			else
 				thinkStance(rec, now)
@@ -59425,7 +59598,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 93)
+		player:SetAttribute("WE_Build", 94)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -59565,7 +59738,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=93",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=94",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -69035,6 +69208,8 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
 local OpsConfig = require(Shared.Configs.OpsConfig)
+local AdminConfig = require(Shared.Configs.AdminConfig) -- claude-bud: PickupLosRollout
+local CombatDamage = require(script.Parent.CombatService.CombatDamage) -- claude-bud: bag pickup line of sight
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local OpsSites = require(script.OpsSites)
@@ -69321,6 +69496,25 @@ function ctx.OnSitePrompt(rt: any, key: string, role: string, stage: OpsConfig.S
 	OpsKinds.OnPrompt(rt, stage, role, player)
 end
 
+--[[ claude-bud (OpsConfig.Cargo.PickupLosRollout): a clear ray from the picker's head to the top of the bag. Collidable
+	parts block (walls, floors, crates); the picker's own character and the bag never do; non-colliding decor never does.
+	true while the rollout is off for this player (the distance check alone, as before). ]]
+local function bagInSight(player: Player, part: BasePart): boolean
+	local mode = (OpsConfig.Cargo :: any).PickupLosRollout
+	local live = mode == "all" or (mode == "owner" and AdminConfig.IsPlaytestOwner(player.UserId))
+	if not live then
+		return true
+	end
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if char == nil or root == nil or not root:IsA("BasePart") then
+		return false
+	end
+	local from = root.Position + Vector3.new(0, 1.5, 0)
+	local to = part.Position + Vector3.new(0, part.Size.Y * 0.5, 0)
+	return CombatDamage.LineOfSight(from, to, { char, part }, nil, true)
+end
+
 function ctx.OnBagPrompt(bag: any, player: Player)
 	if not RateLimitService.Allow(player, "ops_prompt", Z.RateLimitRate, Z.RateLimitBurst) then
 		return
@@ -69330,6 +69524,9 @@ function ctx.OnBagPrompt(bag: any, player: Player)
 	end
 	if not actor(player, bag.Part.Position, OpsConfig.Cargo.PickupDist, false) then
 		return
+	end
+	if not bagInSight(player, bag.Part) then
+		return -- claude-bud (CP-9 E4): no pickup through a wall
 	end
 	if OpsCargo.Carrying(player) ~= nil then
 		ctx.Notify(player, TOAST.HandsFull, "Info")
@@ -77295,7 +77492,15 @@ local function unitShoot(player: Player, unit: SquadUnit, th: Humanoid, now: num
 	if typeof(apply) ~= "function" then
 		return false
 	end
+	-- claude-bud (CombatConfig.GuardsFightBack): name the shooting unit for this one hit, so the NPC can fight back
+	local setShooter = if CombatService then CombatService.SetUnitShooter else nil
+	if typeof(setShooter) == "function" then
+		setShooter(unit.Model)
+	end
 	local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit) -- v69 research
+	if typeof(setShooter) == "function" then
+		setShooter(nil)
+	end
 	if not ok then
 		-- squadfair: never silent (every squad would deal 0 damage), never a log flood (one line per UnitHitErrorLogSeconds)
 		if now - hitErrLogAt >= (tonumber(CombatFairnessConfig.UnitHitErrorLogSeconds) or 30) then

@@ -1355,7 +1355,15 @@ local function unitShoot(player: Player, unit: SquadUnit, th: Humanoid, now: num
 	if typeof(apply) ~= "function" then
 		return false
 	end
+	-- claude-bud (CombatConfig.GuardsFightBack): name the shooting unit for this one hit, so the NPC can fight back
+	local setShooter = if CombatService then CombatService.SetUnitShooter else nil
+	if typeof(setShooter) == "function" then
+		setShooter(unit.Model)
+	end
 	local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit) -- v69 research
+	if typeof(setShooter) == "function" then
+		setShooter(nil)
+	end
 	if not ok then
 		-- squadfair: never silent (every squad would deal 0 damage), never a log flood (one line per UnitHitErrorLogSeconds)
 		if now - hitErrLogAt >= (tonumber(CombatFairnessConfig.UnitHitErrorLogSeconds) or 30) then
