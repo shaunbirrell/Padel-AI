@@ -24,8 +24,8 @@ for _f in (
     _cb120_S + "Services/BaseService.luau",
     _cb120_S + "EarlyRemotes.server.luau",
 ):
-    must_contain(_f, 'SetAttribute("WE_Build", 120)', "CODEBOT v120: WE_Build=120 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb120_S + "Services/DataService.luau", "WE_Build=120", "CODEBOT v120: DataService profile-loaded log says WE_Build=120")
+    pass  # v121 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v121.py: #must_contain(_f, 'SetAttribute("WE_Build", 120)', "CODEBOT v120: WE_Build=120 " + _f.rsplit("/", 1)[-1])
+# v121 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v121.py: #must_contain(_cb120_S + "Services/DataService.luau", "WE_Build=120", "CODEBOT v120: DataService profile-loaded log says WE_Build=120")
 
 # the asset switch + fallback
 must_contain(_cb120_VAC, "local SOLDIER_ASSET_ID = 7703684779\n", "CODEBOT v120: SoldierAssetId = Army Soldier 7703684779")
