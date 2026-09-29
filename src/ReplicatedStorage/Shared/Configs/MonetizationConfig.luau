@@ -112,7 +112,7 @@ local MonetizationConfig = {
 		ImpulseSpeed = {
 			Id = 1998656357,
 			DisplayName = "Speed Pass",
-			RobuxPrice = 5,
+			RobuxPrice = 99, -- 2026-09-29 owner repriced 5 -> 99 in Creator Hub
 			WalkSpeedMult = 1.15,
 			Description = "Run 15% faster, forever",
 		},
