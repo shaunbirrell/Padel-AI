@@ -858,6 +858,63 @@ function MonetizationService.OfferMoment(player: Player, moment: string)
 	end
 end
 
+--[[ claude-bud JOB 5e: the Roblox Premium daily bonus (Retention.PremiumDailyCash once per UTC day, saved in
+	profile.PremiumBonusDay). Server-side MembershipType check; on join and when the membership changes. ]]
+function MonetizationService.TryPremiumBonus(player: Player)
+	local R: any = (MonetizationConfig :: any).Retention
+	if not player.Parent or typeof(R) ~= "table" or not MonetizationConfig.RetentionLiveFor(player.UserId) then
+		return
+	end
+	if player.MembershipType ~= Enum.MembershipType.Premium then
+		return
+	end
+	local profile: any = DataService.GetProfile(player)
+	if profile == nil then
+		return
+	end
+	local today = tonumber(os.date("!%Y%m%d")) or 0
+	if tonumber(profile.PremiumBonusDay) == today then
+		return
+	end
+	profile.PremiumBonusDay = today
+	EconomyService.AddCash(player, R.PremiumDailyCash, "premium_daily")
+	DataService.MarkDirty(player)
+	if NotificationService then
+		NotificationService.Notify(player, "Premium daily bonus +$" .. tostring(R.PremiumDailyCash), "Reward")
+	end
+end
+
+--[[ claude-bud JOB 5e: the one-time group reward. The server checks the group itself (IsInGroupAsync), the flag
+	profile.GroupRewardClaimed and the rollout; the client only asks. ]]
+local function claimGroupReward(player: Player)
+	local R: any = (MonetizationConfig :: any).Retention
+	if typeof(R) ~= "table" or (tonumber(R.GroupId) or 0) <= 0 or not MonetizationConfig.RetentionLiveFor(player.UserId) then
+		return
+	end
+	local profile: any = DataService.GetProfile(player)
+	if profile == nil or profile.GroupRewardClaimed == true then
+		return
+	end
+	local okG, inGroup = pcall(function()
+		return player:IsInGroupAsync(R.GroupId)
+	end)
+	if not (okG and inGroup == true) then
+		if NotificationService then
+			NotificationService.Notify(player, "Join the group first, then tap again", "Info")
+		end
+		return
+	end
+	if not player.Parent or DataService.GetProfile(player) ~= profile or profile.GroupRewardClaimed == true then
+		return -- the check yielded
+	end
+	profile.GroupRewardClaimed = true
+	EconomyService.AddCash(player, R.GroupCash, "group_reward")
+	DataService.MarkDirty(player)
+	if NotificationService then
+		NotificationService.Notify(player, "Group reward +$" .. tostring(R.GroupCash), "Reward")
+	end
+end
+
 function MonetizationService.ApplyPassPerks(player: Player)
 	if not player.Parent then
 		return
@@ -994,6 +1051,21 @@ function MonetizationService.Init(deps: { [string]: any })
 		end
 	end)
 
+	-- claude-bud JOB 5e: group reward remote (rate-limited) and the Premium bonus on a membership change
+	do
+		local groupRemote = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.RequestGroupReward)
+		if groupRemote and groupRemote:IsA("RemoteEvent") then
+			(groupRemote :: RemoteEvent).OnServerEvent:Connect(function(player: Player)
+				if RateLimitService and not RateLimitService.Allow(player, "group_reward", 1, 2) then
+					return
+				end
+				claimGroupReward(player)
+			end)
+		end
+		Players.PlayerMembershipChanged:Connect(function(player: Player)
+			MonetizationService.TryPremiumBonus(player)
+		end)
+	end
 	-- claude-bud JOB 5c: a saved army refill is spent right after its receipt is saved; the plaza airstrike remote
 	MonetizationService.OnGranted(function(player: Player, productKey: string)
 		if productKey == "SoldierRefill" and SoldierService and SoldierService.ConsumeRefills then
@@ -1058,6 +1130,7 @@ function MonetizationService.Init(deps: { [string]: any })
 			-- F8: the character can spawn before the pass cache and the profile are ready; apply the speed now
 			applySpeedBoostToCharacter(player)
 			MonetizationService.ApplyPassPerks(player) -- claude-bud JOB 5b: Bigger Army mirror, VIP tag
+			MonetizationService.TryPremiumBonus(player) -- claude-bud JOB 5e
 			if SoldierService and SoldierService.ConsumeRefills then
 				pcall(SoldierService.ConsumeRefills, player) -- claude-bud JOB 5c: a refill banked before a crash
 			end

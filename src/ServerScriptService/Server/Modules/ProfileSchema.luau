@@ -186,6 +186,10 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	profile.KeepBaseRebirths = nonNegInt(profile.KeepBaseRebirths)
 	profile.SoldierRefills = nonNegInt(profile.SoldierRefills) -- claude-bud JOB 5c (ProcessReceipt only; SoldierService spends)
 	profile.AirstrikeCharges = nonNegInt(profile.AirstrikeCharges) -- claude-bud JOB 5c (ProcessReceipt only; PlazaAirstrike spends)
+	profile.PremiumBonusDay = nonNegInt(profile.PremiumBonusDay) -- claude-bud JOB 5e: UTC yyyymmdd of the last Premium bonus
+	if profile.GroupRewardClaimed ~= true then
+		profile.GroupRewardClaimed = nil -- claude-bud JOB 5e: true once the group reward was paid
+	end
 	if rawTutorialOrder == nil then
 		profile.TutorialOrderVersion = 1
 	else

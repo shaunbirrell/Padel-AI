@@ -98,3 +98,16 @@ must_contain(_cbm_ms, "\t\tif os.time() >= (limitedEnds :: number) then\n\t\t\tr
 must_contain(_cbm_sc, 'displayName ..= string.format(" · Limited: %dh left", math.max(1, math.floor(left / 3600)))', "CLAUDE-BUD 5d: the starter toast shows the time left")
 must_contain(_cbm_sc, "function ShopController.PromptDevProduct(productKey: string, source: string?)", "CLAUDE-BUD 5d: offers reuse the Shop's guarded prompt")
 must_not_contain(_cbm_fc, "PromptProductPurchase", "CLAUDE-BUD 5d: FeatureController never prompts Marketplace directly")
+
+# ── 5e retention: free Shop rows (daily, airdrop), group reward (server IsInGroupAsync), Premium daily bonus ──
+must_contain(_cbm_mc, "\tRetention = {\n\t\tRollout = \"owner\",\n\t\tGroupId = 0,", "CLAUDE-BUD 5e: retention owner-only first; group id TODO (0 = hidden)")
+must_contain(_cbm_sc, "task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestClaimDailyReward)", "CLAUDE-BUD 5e: daily reward in the Shop (server claim)")
+must_contain(_cbm_sc, 'addRow("FREE · Airdrop"', "CLAUDE-BUD 5e: airdrop in the Shop")
+must_contain(_cbm_ms, "return player:IsInGroupAsync(R.GroupId)", "CLAUDE-BUD 5e: group reward checked on the server")
+must_contain(_cbm_ms, "if profile == nil or profile.GroupRewardClaimed == true then", "CLAUDE-BUD 5e: group reward once")
+must_contain(_cbm_ms, "if player.MembershipType ~= Enum.MembershipType.Premium then", "CLAUDE-BUD 5e: Premium perk checks membership on the server")
+must_contain(_cbm_ms, "if tonumber(profile.PremiumBonusDay) == today then", "CLAUDE-BUD 5e: Premium bonus once per UTC day")
+must_contain(_cbm_sc, 'addRow("Favorite WAR EMPIRE", "Find us again fast (no reward)"', "CLAUDE-BUD 5e: favorite prompt carries no reward (Roblox rules)")
+_cbm_scs = read(_cbm_sc) or ""
+_cbm_k = _cbm_scs.find('addRow("Favorite WAR EMPIRE"')
+(ok if _cbm_k >= 0 and "AddCash" not in _cbm_scs[_cbm_k:_cbm_k + 600] and "Reward" not in _cbm_scs[_cbm_k + 60:_cbm_k + 600] else bad)("CLAUDE-BUD 5e: nothing rewards a favorite / like")

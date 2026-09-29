@@ -439,6 +439,19 @@ local MonetizationConfig = {
 		              and never prompts; default = the offer's own key
 		Pads are 7x7-stud floor triggers (no tap target); each label is stud-scaled, MaxDistance = LabelMaxDistance,
 		never AlwaysOnTop, tagged WorldLabelConfig.BaseLabelTag. The server decides ownership and "coming soon". ]]
+	--[[ claude-bud JOB 5e: retention, owner-only first. FREE rows at the top of the Shop's Robux tab: the daily
+		login reward (the existing server claim), the airdrop (tracks the live one), a group-join reward (GroupCash once,
+		checked with IsInGroupAsync on the server; hidden while GroupId is 0 — TODO(owner): paste the group id) and an
+		UNREWARDED favorite prompt (Roblox rules forbid rewards for favorites / likes). Roblox Premium members get
+		PremiumDailyCash once per UTC day (server MembershipType check), which keeps them playing (Premium Payouts). ]]
+	Retention = {
+		Rollout = "owner",
+		GroupId = 0,
+		GroupCash = 10000,
+		PremiumDailyCash = 2500,
+		FavoritePrompt = true,
+	},
+
 	--[[ claude-bud JOB 5d: purchase prompts at the right moments, owner-only first. Every server offer spends the
 		existing soft-offer budget (MonetizationService.ClaimSoftOfferSlot: SoftOfferCooldownSeconds apart, at most
 		SoftOfferSessionMax per session, quiet during the tutorial) and never shows for something already owned.
@@ -612,6 +625,17 @@ local MonetizationConfig = {
 		build_backfill = true, -- XP rebalance XP-L2: the one-time backfill grant (season x1.1 only; no pass check at join)
 	},
 }
+
+-- claude-bud JOB 5e: is retention (free Shop rows, group reward, Premium bonus) live for this player (fail closed)
+function MonetizationConfig.RetentionLiveFor(userId: any): boolean
+	local mode = (MonetizationConfig :: any).Retention.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
 
 -- claude-bud JOB 5d: are the placement prompts live for this player (fail closed)
 function MonetizationConfig.PlacementLiveFor(userId: any): boolean

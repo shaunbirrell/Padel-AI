@@ -8911,3 +8911,14 @@ ds_territories.luau T3):
 - **Limited starter pack:** it is offered only within 48 h of `FirstJoinUnix`, and its toast shows "Limited: Nh left". It's a
   real window (never offered again after it), so no fake countdown.
 - New client API: `ShopController.PromptDevProduct / PromptGamePass`; FeatureController handles the FeaturePush "Offer" cue.
+
+## 2026-09-29 — claude-bud JOB 5e: retention (MonetizationConfig.Retention, owner-only)
+- **FREE rows at the top of the Shop's Robux tab:**
+  - Daily Reward: the existing server claim, RequestClaimDailyReward.
+  - Airdrop: TRACK shows the live airdrop's marker from `Workspace.WE_AirdropAt`, set by SupplyDropService while one is up.
+  - Join our group: hidden while `GroupId = 0`. TODO(owner): the group id. $10,000 once; the server checks `IsInGroupAsync`
+    and `profile.GroupRewardClaimed`; new remote `RequestGroupReward` (rate-limited).
+  - Favorite: `AvatarEditorService:PromptSetFavorite`, with NO reward. Roblox's rules forbid rewarding favorites / likes / votes.
+- **Roblox Premium:** $2,500 once per UTC day (server `MembershipType`, `profile.PremiumBonusDay`), on join and on
+  `PlayerMembershipChanged`. It's small on purpose: engagement time from Premium members is what Premium Payouts pay for.
+- All Robux prices stay in the one table, `MonetizationConfig` (RobuxPrice on every pass and product).
