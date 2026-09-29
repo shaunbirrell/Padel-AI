@@ -7,8 +7,17 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
 - PreferMesh stays OFF. WE_Building* untouched. Never bump WE_Build / publish (Code Bot only).
 - Speed Pass display price is 99 R$ (owner repriced in Creator Hub).
 
-## QUEUE 4 remaining
-- J20 (not started): real base guards + purchasable watchtower guards that earn cash/XP/leaderboard credit for kills. Rebase on v109 first.
+## QUEUE 4 (claude-bud, rebased on v109: J17-19 shipped there)
+Jobs: [x] 17 · [x] 18 · [x] 19 · [x] 20 real base guards · [ ] 21 more plots
+- J20 (live for all, GuardConfig): base guards hold their posts, fight intruders (players + enemy army units)
+  inside the plot within a 60-stud leash, return after 8 s, respawn after 45 s; Defenses research: Guard Armor /
+  Guard Roster / Tower Guards (one per corner tower, Cash, price x rebirths). Guard kills credit YOU (cash, XP, MOST
+  KILLS, feed "<you>'s Tower Guard"), max 3 per victim per 10 min, none in private servers. PHONE TESTS WITH A SECOND
+  ACCOUNT: alt walks into your base -> guards turn, chase (never out of the plot / past 60 studs), shoot; alt dies ->
+  you get the kill (toast, board, feed); you, a friend and a clan-mate are never shot; your own army inside is safe,
+  the alt's army is shot; alt waits outside 8 s -> guards walk back to their posts; buy Watchtowers, hire a tower
+  guard at the corner tower prompt (only you see it), it shoots the alt outside the walls (not inside); kill a guard
+  as the alt -> small reward; a new/low-level alt is not deleted instantly (damage cap).
 
 Phone tests for v109 below in the v109 section.
 <!-- Q2-END -->

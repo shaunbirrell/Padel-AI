@@ -69,7 +69,7 @@ for _feat in ("KillFeed", "VehicleNumbers", "RaidReport", "SoundPass"):
     must_contain(_q3_gc, f'\t\t{_feat} = "all"', f"CLAUDE-BUD J14: {_feat} live for all (owner's v101 rule)")
 must_contain(_q3_gs, "if killer == nil or killer == victim or (typeof(info) == \"table\" and info.Quiet == true) then", "CLAUDE-BUD J14: kill feed = PvP kills only, blast deaths stay quiet")
 must_contain(_q3_gs, "if feedCount >= G.KillFeed.MaxPerSecond then", "CLAUDE-BUD J14: kill feed rate cap (dropped, never queued)")
-must_contain(_q3_gs, "K = killer.DisplayName,", "CLAUDE-BUD J14: kill feed uses DisplayNames (never a nation)")
+must_contain(_q3_gs, "K = killerName or killer.DisplayName, -- DisplayNames only (never a nation)", "CLAUDE-BUD J14: kill feed uses DisplayNames (never a nation; J20: <owner>'s Tower Guard)")
 must_contain(_q3_gs, "task.delay(G.VehicleNumbers.AggregateSeconds, flushVehicle, model)", "CLAUDE-BUD J14: vehicle numbers merged (<= 4 pushes/s per vehicle)")
 must_contain(_q3_gs, "if now - r.Last >= G.RaidReport.QuietSeconds then", "CLAUDE-BUD J14: one raid report after the attack goes quiet")
 must_contain("src/ServerScriptService/Server/Modules/VehicleHealth.luau", "cue(model, rec.OwnerUserId, e.Def.DisplayName, dealt, attacker, hit.HitPos, false, inRadius)", "CLAUDE-BUD J14: vehicle damage cue hook")

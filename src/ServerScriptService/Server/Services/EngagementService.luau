@@ -531,6 +531,12 @@ local function learnFriends(player: Player)
 	end
 end
 
+-- claude-bud JOB 20: are these two players Roblox friends (learned at join; false when unknown)
+function EngagementService.AreFriends(a: number, b: number): boolean
+	local set = friendsOf[a]
+	return set ~= nil and set[b] == true
+end
+
 function EngagementService.Init(d: { [string]: any })
 	deps = d
 	local DS = d.DataService

@@ -9346,3 +9346,37 @@ ds_territories.luau T3):
 - **Revert:** `MonetizationConfig.PremiumPads.Stands = false` restores the flat pads.
 - **Low quality:** no spin, no pulse.
 - **Map:** existing servers keep their current map until it rebuilds; new servers build stands.
+
+## 2026-09-29 — claude-bud JOB 20: base guards as real defenders (GuardConfig + Modules/BaseGuards; live for all)
+- **Structure:** GateDefenseService still builds the guards and runs the 5 Hz loop. Its thinkGuard hands off to
+  BaseGuards, which receives GateDefenseService's own helpers (LOS, plot bounds, spawn grace, clan check).
+  `GuardConfig.Enabled = false` restores the old guards exactly.
+- **Guards:**
+  - They stand at their posts (no patrol), idle via the existing rig 187790284.
+  - Hostiles inside the plot are players (not owner / clan / friend; friends come from EngagementService's join-time
+    friends list) and enemy army units (WE_SquadUnit, not the owner's or a friend's / clan-mate's).
+  - The nearest hostile within the leash (60 from the post, clamped inside the plot) gets faced and walked to; a
+    throttled path is used when there's no line of sight. Shots need LOS and roll a hit chance (0.8 near → 0.45 at
+    range), with a tracer.
+  - Guards go back to the post 8 s after the last intruder. Respawn at the post is 45 s (was 12).
+  - Upgrades use the existing Defenses research: Guard Armor (+20 % HP per level), Guard Roster (+1 / +2 guards
+    beside the courtyard), Targeting Systems (damage, unchanged).
+- **Tower guards:** one per base corner tower (StructureKitBuilder corner towers, so the Watchtowers must be bought),
+  hired in order at a prompt on the next free tower (owner only; the client hides it for others).
+  - Paid with Cash as the Defenses research "Tower Guards" (4 levels) through ResearchService.Purchase. The frozen
+    SpendCash pin allows no new spend site, so this reuses the research path.
+  - Price = 25,000 × (1 + 0.5 × rebirths), capped at 2M (RebirthScale in ResearchService).
+  - Assumption: the Research panel's card shows the unscaled 25,000 while the tower prompt shows the real price.
+  - Anchored on the platform; shoots hostiles outside the walls within 150 at 0.5 shots/s for 34 damage (60 % hit).
+    Gold helmet + ★ badge (MaxDistance 40), 260 HP, can be shot and killed (via GateDefenseService.ApplyDamage),
+    respawns after 45 s.
+- **Rewards:**
+  - A guard / tower-guard kill of a player sets the server creator tag to the owner on the killing hit only, so
+    CombatService treats it as his kill: PlayerKill cash / XP, Stats.Kills, MOST KILLS, the kill feed
+    "<owner>'s Tower Guard".
+  - At most 3 per victim per 10 min (then no credit), and never in a private server.
+  - Killing an enemy guard: 1,500 Cash + 40 XP; your guard killing an enemy army unit: 600 + 15. Same pair limit,
+    not on MOST KILLS.
+- **Balance:** at most 30 damage per target per second (12 for players below level 5 or in their first 10 minutes);
+  at most 6 guards / tower guards / auto-guns firing per base at once. The AI stays in the 5 Hz loop.
+- **Tests:** static + GuardConfig pure functions (Luau CLI). The real fights need two accounts on a server.

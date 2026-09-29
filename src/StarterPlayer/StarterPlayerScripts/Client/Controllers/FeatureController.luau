@@ -248,6 +248,20 @@ function FeatureController.Init()
 		lp:GetAttributeChangedSignal("WE_Balance2"):Connect(sync)
 	end
 	task.spawn(airstrikeButton)
+	-- claude-bud JOB 20: a tower-guard hire prompt shows only for its base owner (the server validates the hire too)
+	do
+		local CS = game:GetService("CollectionService")
+		local me = game:GetService("Players").LocalPlayer.UserId
+		local function own(pp: Instance)
+			if pp:IsA("ProximityPrompt") then
+				pp.Enabled = pp:GetAttribute("OwnerUserId") == me
+			end
+		end
+		for _, pp in ipairs(CS:GetTagged("WE_TowerGuardPrompt")) do
+			own(pp)
+		end
+		CS:GetInstanceAddedSignal("WE_TowerGuardPrompt"):Connect(own)
+	end
 	vipPerks()
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if typeof(kind) ~= "string" then

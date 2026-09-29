@@ -275,6 +275,11 @@ function ResearchService.Purchase(player: Player, upgradeId: any): (boolean, str
 		return false, "BadConfig"
 	end
 	cost = math.floor(cost)
+	-- claude-bud JOB 20: RebirthScale (Tower Guards): the price grows with the buyer's rebirths
+	local rebirthScale = tonumber((def :: any).RebirthScale)
+	if rebirthScale and rebirthScale > 0 then
+		cost = math.min(2000000, math.floor(cost * (1 + rebirthScale * math.max(0, math.floor(tonumber((profile :: any).Prestige) or 0)))))
+	end
 	if EconomyService == nil or EconomyService.SpendCash == nil then
 		return false, "SpendFailed"
 	end

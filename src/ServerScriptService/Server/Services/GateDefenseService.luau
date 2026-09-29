@@ -611,7 +611,9 @@ local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, st
 		-- respawn the other guard too)
 		local def = defenses[plotId]
 		if def and def.OwnerUserId == ownerUserId then
-			task.delay(GateDefenseConfig.GuardRespawnSeconds or 12, respawnGuard, plotId, slot, ownerUserId, def, unit)
+			local bgMod = (GateDefenseService :: any)._BG -- claude-bud JOB 20: GuardConfig.RespawnSeconds (45)
+			local wait = if bgMod and bgMod.Live() then bgMod.RespawnSeconds() else (GateDefenseConfig.GuardRespawnSeconds or 12)
+			task.delay(wait, respawnGuard, plotId, slot, ownerUserId, def, unit)
 		end
 	end)
 
@@ -1545,9 +1547,23 @@ function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amo
 				if g.Alive and g.Humanoid.Health > 0 then
 					g.Humanoid:TakeDamage(amount)
 					alertBaseUnderAttack(def.PlotId, def.OwnerUserId, attacker)
+					-- claude-bud JOB 20: killing an enemy guard pays the smaller GuardKill reward (not on MOST KILLS)
+					local bgMod = (GateDefenseService :: any)._BG
+					if g.Humanoid.Health <= 0 and bgMod and bgMod.Live() then
+						pcall(bgMod.OnGuardKilledBy, attacker, def.OwnerUserId)
+					end
 					return true
 				end
 				return false
+			end
+		end
+		-- claude-bud JOB 20: a tower guard
+		local bgMod = (GateDefenseService :: any)._BG
+		if bgMod and bgMod.Live() then
+			local okT, landed = pcall(bgMod.DamageTower, def, hitPart, amount, attacker)
+			if okT and landed == true then
+				alertBaseUnderAttack(def.PlotId, def.OwnerUserId, attacker)
+				return true
 			end
 		end
 		return false
@@ -1836,6 +1852,10 @@ respawnGuard = function(plotId: number, slot: number, ownerUserId: number, def: 
 		return
 	end
 	def.Guards[idx] = g
+	local bgMod = (GateDefenseService :: any)._BG -- claude-bud JOB 20: the research HP multiplier on every respawn
+	if bgMod and bgMod.Live() then
+		bgMod.AfterSpawn(g, ownerUserId)
+	end
 end
 
 -- Owner's DefensiveWalls level from the loaded profile (0 when offline / not loaded)
@@ -1934,6 +1954,19 @@ local function syncPlotNow(plotId: number)
 			local g = spawnGuardModel(ownerUserId, slot, at, stats, folder, plotId)
 			g.Model:SetAttribute("OwnerUserId", ownerUserId)
 			table.insert(guards, g)
+		end
+		-- claude-bud JOB 20: Defenses research: guard HP (GuardArmor) and +1 / +2 guards (GuardRoster)
+		local bgMod = (GateDefenseService :: any)._BG
+		if bgMod and bgMod.Live() then
+			for _, g in ipairs(guards) do
+				bgMod.AfterSpawn(g, ownerUserId)
+			end
+			for k, at in ipairs(bgMod.ExtraPosts(plotId, ownerUserId, gateCf)) do
+				local g = spawnGuardModel(ownerUserId, 2 + k, at, stats, folder, plotId)
+				g.Model:SetAttribute("OwnerUserId", ownerUserId)
+				bgMod.AfterSpawn(g, ownerUserId)
+				table.insert(guards, g)
+			end
 		end
 	end
 
@@ -2077,6 +2110,13 @@ end
 
 local function thinkGuard(def: PlotDefense, g: GuardUnit, stats: any, tnow: number)
 	if not g.Alive or g.Humanoid.Health <= 0 or not g.Root.Parent then
+		return
+	end
+	-- claude-bud JOB 20: real defenders (Modules/BaseGuards, GuardConfig): intruders incl. army units, leash, return
+	-- to post, hit chance, owner-credited kills, damage caps. Off = the old think below, exactly.
+	local bgMod = (GateDefenseService :: any)._BG
+	if bgMod and bgMod.Live() then
+		bgMod.ThinkGuard(def, g, stats, tnow, (GateDefenseService :: any)._H)
 		return
 	end
 	local aggro = stats.AggroRange or GateDefenseConfig.DefaultAggroRange or 95
@@ -2239,7 +2279,32 @@ local function thinkTurret(def: PlotDefense, t: TurretUnit, stats: any, tnow: nu
 	end
 end
 
+-- claude-bud JOB 20: this service's own helpers for BaseGuards (line of sight, plot bounds, spawn grace, clan)
+local function bindBaseGuards(deps: { [string]: any })
+	local ok, BG = pcall(require, script.Parent.Parent.Modules.BaseGuards)
+	if not ok or type(BG) ~= "table" then
+		return
+	end
+	;(BG :: any).Bind(deps)
+	;(GateDefenseService :: any)._BG = BG
+	;(GateDefenseService :: any)._H = {
+		HasLos = hasLos,
+		InsidePlot = insidePlot,
+		ClampInside = clampInsidePlot,
+		FaceYaw = faceYaw,
+		InSpawnGrace = inSpawnGrace,
+		IsAlly = GateDefenseService.IsAlly,
+		ResearchMult = researchMult,
+		Alert = alertBaseUnderAttack,
+		SpawnGuardModel = spawnGuardModel,
+		ShotFx = function(def: any, g: any, from: Vector3, to: Vector3)
+			turretShotFx(def, { Slot = 50 + (tonumber(g.Slot) or 0) } :: any, from, to, true)
+		end,
+	}
+end
+
 function GateDefenseService.Init(deps: { [string]: any })
+	bindBaseGuards(deps)
 	BaseService = deps.BaseService
 	DataService = deps.DataService
 	VisualAssetService = deps.VisualAssetService
@@ -2357,6 +2422,14 @@ function GateDefenseService.Init(deps: { [string]: any })
 				end
 				for _, tur in ipairs(def.Turrets) do
 					thinkTurret(def, tur, stats, tnow)
+				end
+				-- claude-bud JOB 20: the tower guards (hired per corner tower)
+				local bgMod = (GateDefenseService :: any)._BG
+				if bgMod and bgMod.Live() then
+					local okTw, errTw = pcall(bgMod.ThinkTowers, def, tnow, (GateDefenseService :: any)._H)
+					if not okTw then
+						warn("[GateDefense] tower guards:", errTw)
+					end
 				end
 				-- Gate regen / auto-rebuild (guards keep shooting either way)
 				if def.GateBreached then

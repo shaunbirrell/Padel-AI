@@ -46,7 +46,9 @@ local function weaponLabel(id: string?): string
 	return if w and typeof(w.DisplayName) == "string" then w.DisplayName else ""
 end
 
-local function feed(killer: Player, victimName: string, victim: Player?, weapon: string)
+local GUARD_LABELS = { BaseGuard = "Base Guard", TowerGuard = "Tower Guard" } -- claude-bud JOB 20
+
+local function feed(killer: Player, victimName: string, victim: Player?, weapon: string, killerName: string?)
 	local sec = math.floor(os.clock())
 	if sec ~= feedSecond then
 		feedSecond, feedCount = sec, 0
@@ -58,7 +60,7 @@ local function feed(killer: Player, victimName: string, victim: Player?, weapon:
 	for _, p in ipairs(Players:GetPlayers()) do
 		if live("KillFeed", p) then
 			push(p, "KillFeed", {
-				K = killer.DisplayName,
+				K = killerName or killer.DisplayName, -- DisplayNames only (never a nation)
 				V = victimName,
 				W = weapon,
 				Mine = p == killer,
@@ -195,7 +197,13 @@ function GameFeelService.Init(d: { [string]: any })
 			if killer == nil or killer == victim or (typeof(info) == "table" and info.Quiet == true) then
 				return
 			end
-			feed(killer, victim.DisplayName, victim, weaponLabel(if typeof(info) == "table" then info.WeaponId else nil))
+			local wid = if typeof(info) == "table" then info.WeaponId else nil
+			local guard = if typeof(wid) == "string" then GUARD_LABELS[wid] else nil
+			if guard then
+				feed(killer, victim.DisplayName, victim, "", killer.DisplayName .. "'s " .. guard) -- a base / tower guard kill
+			else
+				feed(killer, victim.DisplayName, victim, weaponLabel(wid))
+			end
 		end)
 	end
 	local okV, VehicleHealth = pcall(require, script.Parent.Parent.Modules.VehicleHealth)

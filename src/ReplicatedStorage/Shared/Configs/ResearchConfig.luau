@@ -279,6 +279,53 @@ ResearchConfig.Upgrades = {
 		EffectText = "%s gate guard and auto-gun damage",
 		Enabled = true,
 	},
+	-- claude-bud JOB 20 (GuardConfig): tougher guards, more guards
+	GuardArmor = {
+		Id = "GuardArmor",
+		Track = "Defenses",
+		Order = 2,
+		DisplayName = "Guard Armor",
+		Badge = "ARM",
+		Stat = "GuardHP",
+		Kind = "Mult",
+		PerLevel = 0.2,
+		MaxLevel = 5,
+		Costs = { 5000, 20000, 60000, 150000, 350000 },
+		EffectText = "%s base guard health",
+		Enabled = true,
+	},
+	GuardRoster = {
+		Id = "GuardRoster",
+		Track = "Defenses",
+		Order = 3,
+		DisplayName = "Guard Roster",
+		Badge = "GRD",
+		Stat = "GuardCount",
+		Kind = "Add",
+		PerLevel = 1,
+		MaxLevel = 2,
+		Costs = { 40000, 200000 },
+		EffectText = "%s base guards at your posts",
+		Enabled = true,
+	},
+	-- claude-bud JOB 20: one tower guard per level, on the base corner towers (in order); bought at the tower's prompt
+	-- (or here). RebirthScale: the price is Costs x (1 + RebirthScale x rebirths) (ResearchService.Purchase)
+	TowerGuards = {
+		Id = "TowerGuards",
+		Track = "Defenses",
+		Order = 4,
+		DisplayName = "Tower Guards",
+		Badge = "TWR",
+		Stat = "TowerGuards",
+		Kind = "Add",
+		PerLevel = 1,
+		MaxLevel = 4,
+		Costs = { 25000, 25000, 25000, 25000 }, -- = GuardConfig.Tower.BaseCost
+		RebirthScale = 0.5, -- = GuardConfig.Tower.PerRebirth
+		LabLevels = { 0, 0, 0, 0 }, -- no Research Lab needed: the Watchtowers are
+		EffectText = "%s tower guards on your corner towers",
+		Enabled = true,
+	},
 } :: { [string]: UpgradeDef }
 
 --[[ Upgrades of one track sorted by Order (disabled ones included — the card shows SOON). ]]
