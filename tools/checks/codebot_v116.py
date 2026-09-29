@@ -12,12 +12,13 @@ if "must_contain" not in globals():
             raise SystemExit(1)
 
 _cb116_S = "src/ServerScriptService/Server/"
+# WE_Build=116 pins retired — superseded in tools/checks/codebot_v117.py
 for _f in (
     _cb116_S + "Services/DataService.luau",
     _cb116_S + "Services/BaseService.luau",
     _cb116_S + "EarlyRemotes.server.luau",
 ):
-    must_contain(_f, 'SetAttribute("WE_Build", 116)', "CODEBOT v116: WE_Build=116 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb116_S + "Services/DataService.luau", "WE_Build=116", "CODEBOT v116: DataService profile-loaded log says WE_Build=116")
+    pass  # v117 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v117.py: #must_contain(_f, 'SetAttribute("WE_Build", 116)', "CODEBOT v116: WE_Build=116 " + _f.rsplit("/", 1)[-1])
+# v117 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v117.py: #must_contain(_cb116_S + "Services/DataService.luau", "WE_Build=116", "CODEBOT v116: DataService profile-loaded log says WE_Build=116")
 must_contain("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau", "Steer", "CODEBOT v116: ArmyConfig Follow3.Steer present")
 must_contain("src/ReplicatedStorage/Shared/Util/FormationController.luau", "SteerFrames", "CODEBOT v116: FormationController.SteerFrames present")

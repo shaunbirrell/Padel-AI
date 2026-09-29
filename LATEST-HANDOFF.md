@@ -1,4 +1,13 @@
 <!-- Q2-START -->
+## v117 (Code Bot Roblox, 2026-09-29): JOB 24 army ATTACK AttackSteer LIVE — place version TBD
+- Merged Claude `35099a3` (JOB 24: Follow3.AttackSteer — ATTACK uses the same steered block + sticky squad target + line at 36 studs; Follow3.Debug=false by default). Fast-forward from 2965b15 (v116).
+- WE_Build 117 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched.
+- Pins: `tools/checks/claude_bud_armyattack.py` + `tools/checks/codebot_v117.py` (WE_Build 117, AttackSteer, Debug=false, attackAimOnly). Retired WE_Build=116 pins in codebot_v116; bumped v110/v113/BuyPathStatic frozen pins.
+- Checks: BuyPathStatic PASS=6274 FAIL=0; rojo build ok.
+- Kill switches: `Follow3.AttackSteer = false` (v116 attack), `Follow3.Steer = false`, `Follow3.Enabled = false`.
+- **Phone tests (owner):** (1) tap ATTACK near enemies — jog as one block, line at gun range, stand and fire, no bunching; (2) walk around while they fight — no run-through-you, line ignores camera; (3) kill target — switch next or fold back ~3s; (4) FOLLOW mid-approach — fold, no teleport; (5) max army 8 — two ranks, no overlap; (6) walk away past ~140 studs — leave fight and follow; (7) no slot markers / labels / formation panel; `/armydebug on` brings them back; (8) Follow turns/stop/180° same as v116.
+- **NEXT for Claude:** rebase `claude/desktop-bud` onto phase-7-polish (v117). Await phone verdict before further army movement changes.
+
 ## claude-bud JOB 24 (2026-09-29): army ATTACK mode + debug visuals removed (branch `claude/desktop-bud`, on v116 2965b15)
 - **Root cause** (`docs/ARMY-ATTACK-ROOTCAUSE.md`): on ATTACK the ArmyController let go. `SquadOrdersService.attackUnit`
   then moved each soldier on its own:
