@@ -147,6 +147,10 @@ Constants.RemoteNames = {
 	-- claude-bud JOB 4/5: server -> one client, (kind: string, data: table): feature cues (airdrop marker, plaza bounty,
 	-- daily streak, offers). Owner-only features fire it only to players the feature is live for. No OnServerEvent.
 	FeaturePush = "FeaturePush",
+	-- claude-bud JOB 5c: client -> server, no args: use one Plaza Airstrike charge (the server checks everything)
+	RequestPlazaAirstrike = "RequestPlazaAirstrike",
+	-- claude-bud JOB 5e: client -> server, no args: claim the one-time group-join reward (the server checks the group)
+	RequestGroupReward = "RequestGroupReward",
 }
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v2" -- v55: intentional bump; fresh CreateDefault + StartingCash (kills stuck $0 v1 saves)

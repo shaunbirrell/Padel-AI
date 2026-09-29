@@ -74,7 +74,112 @@ local function marker(kind: string, data: any)
 	end
 end
 
+-- claude-bud JOB 5d: a server "Offer" (a purchase prompt at a moment) as the standard offer toast; tapping it runs the
+-- Shop's own guarded prompt (nothing is granted here: ProcessReceipt / pass ownership decide)
+local function offerToast(data: any)
+	if typeof(data) ~= "table" or typeof(data.Key) ~= "string" or typeof(data.Title) ~= "string" then
+		return
+	end
+	local okN, NotificationController = pcall(require, script.Parent.NotificationController)
+	local okS, ShopController = pcall(require, script.Parent.ShopController)
+	if not (okN and okS) then
+		return
+	end
+	local key = data.Key :: string
+	local src = if typeof(data.Source) == "string" then data.Source else "offer"
+	;(NotificationController :: any).ShowOffer({
+		Key = "fp_" .. key,
+		Title = data.Title,
+		Sub = if typeof(data.Sub) == "string" then data.Sub else nil,
+		Cta = if typeof(data.Cta) == "string" then data.Cta else "GET",
+		OnGet = function()
+			if data.Kind == "GamePass" then
+				(ShopController :: any).PromptGamePass(key, src)
+			else
+				(ShopController :: any).PromptDevProduct(key, src)
+			end
+		end,
+	})
+end
+
+-- claude-bud JOB 5b: VIP perks on this client (display / own movement only; the server decides every payout)
+local function vipPerks()
+	local Players = game:GetService("Players")
+	local TextChatService = game:GetService("TextChatService")
+	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+	local tag = tostring(((MonetizationConfig :: any).VIPPerks or {}).ChatTag or "[VIP]")
+	-- the [VIP] chat tag of any sender the server marked (WE_VIPTag), seen by everyone
+	pcall(function()
+		TextChatService.OnIncomingMessage = function(message: TextChatMessage)
+			local props = Instance.new("TextChatMessageProperties")
+			local src = message.TextSource
+			local sender = if src then Players:GetPlayerByUserId(src.UserId) else nil
+			if sender and sender:GetAttribute("WE_VIPTag") == true then
+				props.PrefixText = "<font color='#D4AF37'>" .. tag .. "</font> " .. message.PrefixText
+			end
+			return props
+		end
+	end)
+	-- the lounge door: open (non-colliding) on a VIP's own client only; 3 s poll (streaming-safe, no tree scans)
+	task.spawn(function()
+		local lp = Players.LocalPlayer
+		while lp.Parent do
+			local lounge = workspace:FindFirstChild("WE_VIPLounge")
+			local door = lounge and lounge:FindFirstChild("VIPDoor")
+			if door and door:IsA("BasePart") then
+				local vip = lp:GetAttribute("WE_VIPTag") == true
+				door.CanCollide = not vip
+				door.LocalTransparencyModifier = if vip then 0.5 else 0
+			end
+			task.wait(3)
+		end
+	end)
+end
+-- claude-bud JOB 5c: the AIRSTRIKE button (only with a charge, only near the Central Plaza; 2 Hz check). Right edge,
+-- mid-height: clear of the thumbstick (left), jump (bottom-right) and top-bar pills; 64 code px tall (>= 44 real).
+local function airstrikeButton()
+	local Players = game:GetService("Players")
+	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+	local lp = Players.LocalPlayer
+	if not MonetizationConfig.SkuLiveFor(lp.UserId, "PlazaAirstrike") then
+		return
+	end
+	local range = tonumber(((MonetizationConfig :: any).PlazaAirstrikeTuning or {}).UseRangeStuds) or 220
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "WE_Airstrike"
+	gui.ResetOnSpawn = false
+	gui.Enabled = false
+	local btn = Instance.new("TextButton")
+	btn.AnchorPoint = Vector2.new(1, 0.5)
+	btn.Position = UDim2.new(1, -16, 0.42, 0)
+	btn.Size = UDim2.fromOffset(170, 64)
+	btn.BackgroundColor3 = Color3.fromRGB(170, 40, 30)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.GothamBlack
+	btn.TextSize = 20
+	btn.Text = "AIRSTRIKE"
+	btn.Parent = gui
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = btn
+	btn.Activated:Connect(function()
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPlazaAirstrike)
+	end)
+	gui.Parent = lp:WaitForChild("PlayerGui", 30)
+	task.spawn(function()
+		while lp.Parent do
+			local n = tonumber(lp:GetAttribute("WE_AirstrikeCharges")) or 0
+			local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+			local near = root ~= nil and root:IsA("BasePart") and Vector3.new(root.Position.X, 0, root.Position.Z).Magnitude <= range
+			gui.Enabled = n > 0 and near
+			btn.Text = string.format("AIRSTRIKE (%d)", n)
+			task.wait(0.5)
+		end
+	end)
+end
 function FeatureController.Init()
+	task.spawn(airstrikeButton)
+	vipPerks()
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if typeof(kind) ~= "string" then
 			return
@@ -83,6 +188,8 @@ function FeatureController.Init()
 			marker(kind, data)
 		elseif kind == "ArmyUpgrades" then
 			armyUpgrades(data)
+		elseif kind == "Offer" then
+			offerToast(data)
 		end
 	end)
 end

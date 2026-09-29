@@ -409,6 +409,12 @@ function PrestigeService.DoPrestige(player: Player, opts: PrestigeOpts?): (boole
 			path = if keepBase then "keep_base" else "free",
 		})
 	end
+	-- claude-bud JOB 5d: a purchase prompt after a rebirth (MonetizationConfig.Placement, owner-only first)
+	if MonetizationService and MonetizationService.OfferMoment then
+		task.delay(6, function()
+			pcall(MonetizationService.OfferMoment, player, "rebirth")
+		end)
+	end
 
 	return true, nil
 end

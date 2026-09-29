@@ -746,6 +746,16 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 	if not player.Parent or DataService.GetProfile(player) ~= profile or profile.StarterBundleOffered == true then
 		return nil
 	end
+	-- claude-bud JOB 5d: a real limited window (Placement.StarterLimitedHours after the first join)
+	local limitedEnds: number? = nil
+	local place: any = (MonetizationConfig :: any).Placement
+	if MonetizationConfig.PlacementLiveFor(player.UserId) and typeof(place) == "table" and tonumber(place.StarterLimitedHours) then
+		local first = tonumber((profile :: any).FirstJoinUnix) or os.time()
+		limitedEnds = first + math.floor(place.StarterLimitedHours * 3600)
+		if os.time() >= (limitedEnds :: number) then
+			return nil -- the limited window is over: never offered again
+		end
+	end
 	if not MonetizationService.ClaimSoftOfferSlot(player) then
 		return false
 	end
@@ -760,6 +770,7 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 				DisplayName = bundle.DisplayName or "Starter Pack",
 				RobuxPrice = bundle.RobuxPrice,
 				Reason = if typeof(reason) == "string" then reason else "session",
+				EndsUnix = limitedEnds, -- claude-bud JOB 5d: the toast shows the time left (nil = no limit)
 			})
 		end
 	end
@@ -801,6 +812,133 @@ local function applyStarterGoodwill(player: Player, profile: any)
 		end
 	end
 	DataService.MarkDirty(player)
+end
+
+--[[ claude-bud JOB 5b: pass perks, server side. Bigger Army (a pass live for him that he owns) is mirrored into
+	profile.Entitlements.BiggerArmy (SoldierService's cap reads it; GrantEntitlement pushes the Army panel); the VIP
+	perks (MonetizationConfig.VIPPerks) set the display attribute WE_VIPTag (chat tag + the lounge door on HIS client;
+	the lounge payout re-checks VIP ownership here on the server). ]]
+--[[ claude-bud JOB 5d: one purchase prompt at a moment ("rebirth" | "army"), owner-only first
+	(MonetizationConfig.Placement). Spends the soft-offer budget; nothing already owned; a FeaturePush "Offer" to this
+	player only (the client toast prompts Roblox; every grant stays ProcessReceipt / pass ownership). ]]
+function MonetizationService.OfferMoment(player: Player, moment: string)
+	if typeof(player) ~= "Instance" or not player.Parent then
+		return
+	end
+	local place: any = (MonetizationConfig :: any).Placement
+	if typeof(place) ~= "table" or not MonetizationConfig.PlacementLiveFor(player.UserId) then
+		return
+	end
+	local kind, key, title, cta = nil, nil, nil, nil
+	if moment == "rebirth" and place.AfterRebirth == true then
+		local dc: any = MonetizationConfig.GamePasses.DoubleCash
+		if dc and (tonumber(dc.Id) or 0) ~= 0 and not ownsCached(player, "DoubleCash") then
+			kind, key, title, cta = "GamePass", "DoubleCash", "Rebuild faster: 2x Cash", tostring(dc.RobuxPrice) .. " R$"
+		else
+			local cl: any = MonetizationConfig.DevProducts.CashLarge
+			if cl and (tonumber(cl.Id) or 0) ~= 0 then
+				kind, key, title, cta = "DevProduct", "CashLarge", "Fresh start boost: $200,000", tostring(cl.RobuxPrice) .. " R$"
+			end
+		end
+	elseif moment == "army" and place.ArmyWiped == true then
+		local rf: any = (MonetizationConfig.DevProducts :: any).SoldierRefill
+		local ex: any = (MonetizationConfig.DevProducts :: any).ExtraSoldierSlot
+		if rf and (tonumber(rf.Id) or 0) ~= 0 and MonetizationConfig.SkuLiveFor(player.UserId, "SoldierRefill") then
+			kind, key, title, cta = "DevProduct", "SoldierRefill", "Army down! Refill instantly", tostring(rf.RobuxPrice) .. " R$"
+		elseif ex and (tonumber(ex.Id) or 0) ~= 0 and not ownsCached(player, "ExtraSoldierSlot") then
+			kind, key, title, cta = "DevProduct", "ExtraSoldierSlot", "Bigger army: +10 soldiers", tostring(ex.RobuxPrice) .. " R$"
+		end
+	end
+	if key == nil or not MonetizationService.ClaimSoftOfferSlot(player) then
+		return
+	end
+	local ev = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.FeaturePush)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireClient(player, "Offer", { Kind = kind, Key = key, Title = title, Cta = cta, Source = "offer" })
+	end
+end
+
+--[[ claude-bud JOB 5e: the Roblox Premium daily bonus (Retention.PremiumDailyCash once per UTC day, saved in
+	profile.PremiumBonusDay). Server-side MembershipType check; on join and when the membership changes. ]]
+function MonetizationService.TryPremiumBonus(player: Player)
+	local R: any = (MonetizationConfig :: any).Retention
+	if not player.Parent or typeof(R) ~= "table" or not MonetizationConfig.RetentionLiveFor(player.UserId) then
+		return
+	end
+	if player.MembershipType ~= Enum.MembershipType.Premium then
+		return
+	end
+	local profile: any = DataService.GetProfile(player)
+	if profile == nil then
+		return
+	end
+	local today = tonumber(os.date("!%Y%m%d")) or 0
+	if tonumber(profile.PremiumBonusDay) == today then
+		return
+	end
+	profile.PremiumBonusDay = today
+	EconomyService.AddCash(player, R.PremiumDailyCash, "premium_daily")
+	DataService.MarkDirty(player)
+	if NotificationService then
+		NotificationService.Notify(player, "Premium daily bonus +$" .. tostring(R.PremiumDailyCash), "Reward")
+	end
+end
+
+--[[ claude-bud JOB 5e: the one-time group reward. The server checks the group itself (IsInGroupAsync), the flag
+	profile.GroupRewardClaimed and the rollout; the client only asks. ]]
+local function claimGroupReward(player: Player)
+	local R: any = (MonetizationConfig :: any).Retention
+	if typeof(R) ~= "table" or (tonumber(R.GroupId) or 0) <= 0 or not MonetizationConfig.RetentionLiveFor(player.UserId) then
+		return
+	end
+	local profile: any = DataService.GetProfile(player)
+	if profile == nil or profile.GroupRewardClaimed == true then
+		return
+	end
+	local okG, inGroup = pcall(function()
+		return player:IsInGroupAsync(R.GroupId)
+	end)
+	if not (okG and inGroup == true) then
+		if NotificationService then
+			NotificationService.Notify(player, "Join the group first, then tap again", "Info")
+		end
+		return
+	end
+	if not player.Parent or DataService.GetProfile(player) ~= profile or profile.GroupRewardClaimed == true then
+		return -- the check yielded
+	end
+	profile.GroupRewardClaimed = true
+	EconomyService.AddCash(player, R.GroupCash, "group_reward")
+	DataService.MarkDirty(player)
+	if NotificationService then
+		NotificationService.Notify(player, "Group reward +$" .. tostring(R.GroupCash), "Reward")
+	end
+end
+
+function MonetizationService.ApplyPassPerks(player: Player)
+	if not player.Parent then
+		return
+	end
+	local profile = DataService.GetProfile(player)
+	if profile == nil then
+		return
+	end
+	local ents = (profile :: any).Entitlements
+	if MonetizationConfig.SkuLiveFor(player.UserId, "BiggerArmy") and ownsCached(player, "BiggerArmy") then
+		if typeof(ents) ~= "table" or ents.BiggerArmy ~= true then
+			MonetizationService.GrantEntitlement(player, "BiggerArmy")
+			DataService.MarkDirty(player)
+		end
+		if SoldierService and SoldierService.Push then
+			task.defer(function()
+				pcall(SoldierService.Push, player)
+			end)
+		end
+	end
+	local vip = MonetizationConfig.VIPPerksLiveFor(player.UserId) and ownsCached(player, "VIP")
+	pcall(function()
+		player:SetAttribute("WE_VIPTag", if vip then true else nil)
+	end)
 end
 
 function MonetizationService.Init(deps: { [string]: any })
@@ -913,6 +1051,64 @@ function MonetizationService.Init(deps: { [string]: any })
 		end
 	end)
 
+	-- claude-bud JOB 5e: group reward remote (rate-limited) and the Premium bonus on a membership change
+	do
+		local groupRemote = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.RequestGroupReward)
+		if groupRemote and groupRemote:IsA("RemoteEvent") then
+			(groupRemote :: RemoteEvent).OnServerEvent:Connect(function(player: Player)
+				if RateLimitService and not RateLimitService.Allow(player, "group_reward", 1, 2) then
+					return
+				end
+				claimGroupReward(player)
+			end)
+		end
+		Players.PlayerMembershipChanged:Connect(function(player: Player)
+			MonetizationService.TryPremiumBonus(player)
+		end)
+	end
+	-- claude-bud JOB 5c: a saved army refill is spent right after its receipt is saved; the plaza airstrike remote
+	MonetizationService.OnGranted(function(player: Player, productKey: string)
+		if productKey == "SoldierRefill" and SoldierService and SoldierService.ConsumeRefills then
+			SoldierService.ConsumeRefills(player)
+		end
+	end)
+	do
+		local okA, strike = pcall(function(): any
+			return require(script.Parent.Parent.Modules.PlazaAirstrike)
+		end)
+		if okA and strike then
+			pcall(strike.Start, {
+				DataService = DataService,
+				NotificationService = NotificationService,
+				RateLimitService = RateLimitService,
+				RemoteSetup = RemoteSetup,
+			})
+		end
+	end
+	-- claude-bud JOB 5b: pass perks when a pass is bought in-game; the VIP lounge (VIPPerks.Lounge)
+	MonetizationService.OnPassOwned(function(player: Player, _passKey: string)
+		MonetizationService.ApplyPassPerks(player)
+	end)
+	task.delay(10, function()
+		local okL, lounge = pcall(function(): any
+			return require(script.Parent.Parent.Modules.VIPLounge)
+		end)
+		if okL and lounge then
+			pcall(lounge.Start, {
+				IsVIP = function(pl: Player): boolean
+					return MonetizationConfig.VIPPerksLiveFor(pl.UserId) and ownsCached(pl, "VIP")
+				end,
+				AddCash = function(pl: Player, n: number, why: string)
+					EconomyService.AddCash(pl, n, why)
+				end,
+				Notify = function(pl: Player, msg: string, kind: string)
+					if NotificationService then
+						NotificationService.Notify(pl, msg, kind)
+					end
+				end,
+			})
+		end
+	end)
 	DataService.OnProfileLoaded(function(player: Player, profile: any)
 		sessionStartAt[player.UserId] = os.clock() -- v71 money (M1): tutorial quiet window
 		task.spawn(function()
@@ -933,6 +1129,11 @@ function MonetizationService.Init(deps: { [string]: any })
 			end
 			-- F8: the character can spawn before the pass cache and the profile are ready; apply the speed now
 			applySpeedBoostToCharacter(player)
+			MonetizationService.ApplyPassPerks(player) -- claude-bud JOB 5b: Bigger Army mirror, VIP tag
+			MonetizationService.TryPremiumBonus(player) -- claude-bud JOB 5e
+			if SoldierService and SoldierService.ConsumeRefills then
+				pcall(SoldierService.ConsumeRefills, player) -- claude-bud JOB 5c: a refill banked before a crash
+			end
 
 			-- v71 money (M1): display-only counter attributes (e.g. WE_Nukes); never read back by the server
 			local counterSpecs = (MonetizationConfig :: any).CounterGrants

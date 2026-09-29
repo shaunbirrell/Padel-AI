@@ -928,6 +928,44 @@ function ShopController.Init()
 		return keys
 	end
 
+	-- claude-bud JOB 5e: FREE rows first (MonetizationConfig.Retention, owner-only first). Every reward is the server's.
+	do
+		local lp = Players.LocalPlayer
+		local R: any = (MonetizationConfig :: any).Retention
+		if typeof(R) == "table" and MonetizationConfig.RetentionLiveFor(lp.UserId) then
+			addRow("FREE · Daily Reward", "Your login streak cash, once a day", function()
+				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestClaimDailyReward)
+			end, "CLAIM", "fr_daily", false)
+			addRow("FREE · Airdrop", "A cash crate lands every 10 min: first to reach it wins", function()
+				local at = workspace:GetAttribute("WE_AirdropAt")
+				if typeof(at) == "Vector3" then
+					local okM, OM = pcall(require, script.Parent.Parent.Modules.ObjectiveMarker)
+					if okM then
+						(OM :: any).ShowWith({ Short = "AIRDROP", X = at.X, Y = at.Y, Z = at.Z }, { TimeoutSeconds = 300 })
+					end
+				else
+					toast("No airdrop right now: next one soon", "Info")
+				end
+			end, "TRACK", "fr_airdrop", false)
+			local gid = tonumber(R.GroupId) or 0
+			if gid > 0 then
+				addRow("FREE · Join our group", "+$" .. formatCash(tonumber(R.GroupCash) or 0) .. " once, for members", function()
+					pcall(function()
+						game:GetService("GroupService"):PromptJoinAsync(gid)
+					end)
+					task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestGroupReward)
+				end, "JOIN", "fr_group", false)
+			end
+			if R.FavoritePrompt == true then
+				addRow("Favorite WAR EMPIRE", "Find us again fast (no reward)", function()
+					pcall(function()
+						game:GetService("AvatarEditorService"):PromptSetFavorite(game.PlaceId, Enum.AvatarItemType.Asset, true)
+					end)
+				end, "★", "fr_favorite", false)
+			end
+		end
+	end
+
 	-- Hero CashMega first, then remaining cash packs, then other DevProducts
 	local cashOrder = { "CashMega", "CashLarge", "CashMedium", "CashSmall" }
 	local listed: { [string]: boolean } = {}
@@ -1284,6 +1322,15 @@ function ShopController.Init()
 			local p: any = if typeof(payload) == "table" then payload else {}
 			local displayName = tostring(p.DisplayName or def.DisplayName or "Starter Bundle")
 			local robux = tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)
+			-- claude-bud JOB 5d: a real limited window from the server (EndsUnix); no end = no timer text
+			local ends = tonumber(p.EndsUnix)
+			if ends then
+				local left = ends - os.time()
+				if left <= 0 then
+					return false
+				end
+				displayName ..= string.format(" · Limited: %dh left", math.max(1, math.floor(left / 3600)))
+			end
 			return showOffer({
 				Key = "StarterBundleToast",
 				Title = "Jumpstart your base",
@@ -1754,6 +1801,15 @@ end
 
 --[[ v70: the cash pill's + (HUDController.BindShopOpener → UIController): SUPPLY tab, Cash Pack Mega highlighted.
 	Visual only — no toast, no purchase prompt. ]]
+-- claude-bud JOB 5d: public prompts for offer toasts (FeatureController / Garage); the same guarded paths as the Shop rows
+function ShopController.PromptDevProduct(productKey: string, source: string?)
+	promptDevProduct(productKey, source)
+end
+
+function ShopController.PromptGamePass(passKey: string, source: string?)
+	promptGamePass(passKey, source)
+end
+
 function ShopController.OpenCashPacks()
 	pendingCashMegaHighlight = true
 	setOpen(true, "hud_plus") -- F2: the rows bought from here report source "hud_plus"

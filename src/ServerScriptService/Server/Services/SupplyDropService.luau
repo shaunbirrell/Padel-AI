@@ -162,6 +162,7 @@ local function destroyDrop(id: string)
 	active[id] = nil
 	if rec.Airdrop then
 		pushAirdrop({ Show = false })
+		Workspace:SetAttribute("WE_AirdropAt", nil)
 	end
 	if rec.Part and rec.Part.Parent then
 		rec.Part:Destroy()
@@ -391,6 +392,7 @@ local function spawnAirdrop(): boolean
 	}
 	active[id] = rec
 	pushAirdrop({ Show = true, X = ground.X, Y = ground.Y, Z = ground.Z, Cash = cash })
+	Workspace:SetAttribute("WE_AirdropAt", ground) -- claude-bud JOB 5e: the Shop's airdrop row tracks it
 	if NotificationService then
 		for _, p in ipairs(Players:GetPlayers()) do
 			if SupplyDropConfig.AirdropLiveFor(p.UserId) then

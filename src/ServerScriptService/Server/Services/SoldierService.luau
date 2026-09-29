@@ -78,13 +78,23 @@ end
 	who bought the old +1 slot get +10 on their next state push. A one-time boolean — owning it never stacks. ]]
 local ARMY_EXPANSION_DEFAULT_BONUS = 10
 
-local function armyCapBonus(profile: any): number
-	if typeof(profile.Entitlements) ~= "table" or profile.Entitlements.ExtraSoldierSlot ~= true then
+-- claude-bud JOB 5b: the Bigger Army game pass (mirrored into Entitlements.BiggerArmy by MonetizationService)
+local function biggerArmyBonus(profile: any): number
+	if typeof(profile.Entitlements) ~= "table" or profile.Entitlements.BiggerArmy ~= true then
 		return 0
+	end
+	local pass: any = (MonetizationConfig.GamePasses :: any).BiggerArmy
+	return math.max(0, math.floor((if typeof(pass) == "table" then tonumber(pass.ArmyCapBonus) else nil) or 10))
+end
+
+local function armyCapBonus(profile: any): number
+	local passBonus = biggerArmyBonus(profile)
+	if typeof(profile.Entitlements) ~= "table" or profile.Entitlements.ExtraSoldierSlot ~= true then
+		return passBonus
 	end
 	local def: any = MonetizationConfig.DevProducts.ExtraSoldierSlot
 	local bonus = if typeof(def) == "table" then tonumber(def.ArmyCapBonus) else nil
-	return math.max(0, math.floor(bonus or ARMY_EXPANSION_DEFAULT_BONUS))
+	return math.max(0, math.floor(bonus or ARMY_EXPANSION_DEFAULT_BONUS)) + passBonus
 end
 
 local function maxSoldiers(profile: any): number
@@ -230,6 +240,31 @@ function SoldierService.Dismiss(player: Player, amount: any): (boolean, string?)
 		AnalyticsService.Log(eventName, player.UserId, { amount = n, refund = refund })
 	end
 	return true, nil
+end
+
+--[[ claude-bud JOB 5c: spend the saved refill tokens (MonetizationConfig.CounterGrants.GrantSoldierRefills, banked in
+	ProcessReceipt): each one fills the army to its cap. Called after the grant is saved and on join (a crash between
+	the save and this call keeps the token, so a paid refill is never lost). Server only. ]]
+function SoldierService.ConsumeRefills(player: Player)
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	local tokens = math.max(0, math.floor(tonumber((profile :: any).SoldierRefills) or 0))
+	if tokens < 1 then
+		return
+	end
+	local cap = maxSoldiers(profile)
+	;(profile :: any).SoldierRefills = 0
+	profile.Soldiers = math.max(tonumber(profile.Soldiers) or 0, cap)
+	pcall(function()
+		player:SetAttribute("WE_SoldierRefills", 0)
+	end)
+	DataService.MarkDirty(player)
+	pushState(player)
+	if NotificationService then
+		NotificationService.Notify(player, string.format("Army refilled: %d/%d", profile.Soldiers, cap), "Reward")
+	end
 end
 
 function SoldierService.Push(player: Player)

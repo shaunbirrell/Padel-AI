@@ -7,7 +7,7 @@ _cbud_ps = "src/ServerScriptService/Server/Services/PrestigeService.luau"
 _cbud_sc = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau"
 
 must_contain(_cbud_mc, '\tRollout = "owner",\n', "CLAUDE-BUD: MonetizationConfig.Rollout is owner-only first")
-must_contain(_cbud_mc, "RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true }", "CLAUDE-BUD: the 3 gated SKU keys")
+must_contain(_cbud_mc, "RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true, BiggerArmy = true, ExtraGarageSlot = true, SoldierRefill = true, PlazaAirstrike = true }", "CLAUDE-BUD: the 3 gated SKU keys")
 must_contain(_cbud_mc, "function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean", "CLAUDE-BUD: SkuLiveFor helper")
 must_contain(_cbud_mc, "return AdminConfig.IsPlaytestOwner(userId)", "CLAUDE-BUD: owner mode uses IsPlaytestOwner")
 must_contain(_cbud_mc, "\t\t\tId = 1998656357,\n\t\t\tDisplayName = \"Speed Pass\",", "CLAUDE-BUD: Speed Pass Id")

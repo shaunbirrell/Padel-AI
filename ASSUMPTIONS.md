@@ -8869,3 +8869,61 @@ ds_territories.luau T3):
 - Owner-only: Follow2.Tidy army hold/ATTACK uniqueness fix; six Premium Robux vehicles behind RolloutKeys (PV_* pass Ids still 0).
 - Behaviour documented in the 2026-09-29 claude-bud JOB 5a + army-fix sections above; no new product behaviour beyond those notes.
 - PreferMesh stays OFF. WE_Building* attributes untouched.
+## 2026-09-29 — claude-bud JOB 5b: game passes
+- **Already live, unchanged:** 2x Cash (1982865711), VIP (1985475542, +25 % cash), Auto Collect (1985115501).
+  - The owner asked for VIP +10 % income. VIP already gives +25 % and buyers paid for that, so it is not reduced.
+- **Bigger Army** (new pass `BiggerArmy`, Id 0, 249 R$): +10 army capacity.
+  - When a player the rollout is live for owns it (the UserOwnsGamePassAsync cache), MonetizationService.ApplyPassPerks
+    mirrors it into `profile.Entitlements.BiggerArmy` (via GrantEntitlement) on join and on an in-game buy (OnPassOwned).
+  - SoldierService's `armyCapBonus` adds it; it stacks with the Army Expansion dev product (both +10).
+- **VIP perks** (`MonetizationConfig.VIPPerks`, Rollout "owner"):
+  - a gold [VIP] chat prefix (server attribute WE_VIPTag → TextChatService.OnIncomingMessage on every client);
+  - the VIP lounge at (-150, -430), just north of the Town, clear of every keep-out (checked with the worldfill checker), 8 parts:
+    - the door is solid for all and is non-colliding only on a VIP's own client;
+    - the gold pad pays $5,000 per 15 min per player to a VIP holding 2 s, with position, VIP ownership and cooldown all checked on the server.
+- **Extra Garage Slot** (`ExtraGarageSlot`, Id 0, 199 R$): **not built.** VehicleService keeps exactly one active vehicle
+  per player, and a second one touches spawn, health, seats and despawn. It stays HideFromShop so nobody can buy a
+  perk that does not exist. A dev task is listed in the handoff.
+
+## 2026-09-29 — claude-bud JOB 5c: dev products
+- **Already live:** cash packs in 4 tiers (49 / 149 / 399 / 799 R$ → $10k / 50k / 200k / 2M).
+- **Skip build timer: not applicable.** Upgrades are instant (BaseService.PurchaseUpgrade spends cash; no timers exist).
+  Nothing was added, so nobody can buy a skip for a wait that doesn't exist.
+- **Instant Army Refill** (`SoldierRefill`, Id 0, 49 R$):
+  - The receipt banks `profile.SoldierRefills` through the whitelisted CounterGrants (saved before PurchaseGranted).
+  - The OnGranted listener (after the save) and the join path call `SoldierService.ConsumeRefills`: army = cap, tokens spent.
+  - A crash between the save and the refill keeps the token for the next join.
+- **Plaza Airstrike** (`PlazaAirstrike`, Id 0, 79 R$): the receipt banks `profile.AirstrikeCharges`. It's used from an AIRSTRIKE button
+  that shows only with a charge within 220 studs of the plaza. `RequestPlazaAirstrike` is rate-limited, and the server checks
+  the rollout, the charge, distance, a 120 s server cooldown and a 300 s player cooldown.
+  - Everyone in the zone gets a 3 s warning toast, then everyone else inside the 70-stud capture zone takes 35 damage,
+    never below 1 HP. Spawn-protected and novice players are skipped; there is no kill credit and the capture timer is untouched.
+  - Assumed "balanced" means a strong disruption, never a paid kill.
+- New remote: `RequestPlazaAirstrike` (client → server, no args). ProfileSchema sanitises both counters.
+- The luau-lsp errors listed in CombatService / VisualAssetService / AirBodyRig are pre-existing (26 at HEAD). They only
+  show because the new PlazaAirstrike module requires CombatService.
+
+## 2026-09-29 — claude-bud JOB 5d: placement (MonetizationConfig.Placement, owner-only)
+- **Already there:** the HUD Shop tile (left rail "Shop", cart icon; plus the "+" on the cash pill), the gamepass pads at each
+  base's ATM (PremiumPads: Auto Collect, 2x Cash, Speed), and the Commander Starter Pack offer after the tutorial.
+- **Added moment prompts.** Every server one spends the existing soft-offer budget (4 min apart, at most 3 per session,
+  quiet in the tutorial) and never offers what is already owned:
+  - can't afford a vehicle (Garage "Need $X" tap): the smallest live cash pack that covers the gap (a client toast; the
+    Shop's guarded prompt; the grant stays ProcessReceipt);
+  - after a rebirth (6 s later): 2x Cash if not owned, else Cash Pack L;
+  - army wiped (his last field soldier dies): Instant Army Refill if its Id is live, else Army Expansion if not owned.
+    Field units come back from the saved count about 8 s later anyway, so the refill's real value is filling the saved army to its cap.
+- **Limited starter pack:** it is offered only within 48 h of `FirstJoinUnix`, and its toast shows "Limited: Nh left". It's a
+  real window (never offered again after it), so no fake countdown.
+- New client API: `ShopController.PromptDevProduct / PromptGamePass`; FeatureController handles the FeaturePush "Offer" cue.
+
+## 2026-09-29 — claude-bud JOB 5e: retention (MonetizationConfig.Retention, owner-only)
+- **FREE rows at the top of the Shop's Robux tab:**
+  - Daily Reward: the existing server claim, RequestClaimDailyReward.
+  - Airdrop: TRACK shows the live airdrop's marker from `Workspace.WE_AirdropAt`, set by SupplyDropService while one is up.
+  - Join our group: hidden while `GroupId = 0`. TODO(owner): the group id. $10,000 once; the server checks `IsInGroupAsync`
+    and `profile.GroupRewardClaimed`; new remote `RequestGroupReward` (rate-limited).
+  - Favorite: `AvatarEditorService:PromptSetFavorite`, with NO reward. Roblox's rules forbid rewarding favorites / likes / votes.
+- **Roblox Premium:** $2,500 once per UTC day (server `MembershipType`, `profile.PremiumBonusDay`), on join and on
+  `PlayerMembershipChanged`. It's small on purpose: engagement time from Premium members is what Premium Payouts pay for.
+- All Robux prices stay in the one table, `MonetizationConfig` (RobuxPrice on every pass and product).

@@ -45,7 +45,7 @@ local MonetizationConfig = {
 		them and feel their effect; "all" = everyone; anything else = off (fail closed). ProcessReceipt still grants any
 		receipt Roblox delivers for these Ids (a paid receipt is never dropped). OFF must equal the old game. ]]
 	Rollout = "owner",
-	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true } :: { [string]: boolean },
+	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true, BiggerArmy = true, ExtraGarageSlot = true, SoldierRefill = true, PlazaAirstrike = true } :: { [string]: boolean },
 	GamePasses = {
 		VIP = {
 			Id = 1985475542,
@@ -161,6 +161,24 @@ local MonetizationConfig = {
 			VehicleIds = { "PremiumSkylance" },
 			Feature = "PremiumVehicles",
 			Description = "Robux-only interceptor jet",
+		},
+		-- claude-bud JOB 5b: Bigger Army pass (+ArmyCapBonus army capacity, mirrored into profile.Entitlements.BiggerArmy on
+		-- ownership so SoldierService's cap reads it). TODO(owner): create "Bigger Army" (game pass, 249 R$), paste the Id.
+		BiggerArmy = {
+			Id = 0,
+			DisplayName = "Bigger Army",
+			RobuxPrice = 249,
+			ArmyCapBonus = 10,
+			Description = "+10 soldiers in your army, forever",
+		},
+		-- claude-bud JOB 5b: TODO(dev + owner) Extra Garage Slot: a second vehicle out at once. NOT BUILT (VehicleService
+		-- tracks one active vehicle per player); HideFromShop until it is, so nobody can buy a perk that does not exist.
+		ExtraGarageSlot = {
+			Id = 0,
+			DisplayName = "Extra Garage Slot",
+			RobuxPrice = 199,
+			HideFromShop = true,
+			Description = "Keep a second vehicle out (coming soon)",
 		},
 		PV_Leviathan = {
 			Id = 0,
@@ -331,6 +349,27 @@ local MonetizationConfig = {
 		-- PrestigeConfig.KeepBase); a token that cannot be used yet is banked and never expires. Sold only from the
 		-- Rebirth panel (SoldFrom), never from the Shop list. Id = 0 until the owner creates it: the Rebirth panel
 		-- shows SOON and never prompts. Paste the Id only after the double prestige multiplier (B1) is fixed.
+		-- claude-bud JOB 5c: TODO(owner) create "Instant Army Refill" (dev product, 49 R$) and "Plaza Airstrike" (dev
+		-- product, 79 R$), then paste the Ids. Both bank a saved counter in ProcessReceipt (CounterGrants below), spent
+		-- by the server (SoldierService.ConsumeRefills / Server/Modules/PlazaAirstrike). Owner-only first (RolloutKeys).
+		SoldierRefill = {
+			Id = 0,
+			DisplayName = "Instant Army Refill",
+			RobuxPrice = 49,
+			Cash = 0,
+			Gold = 0,
+			GrantSoldierRefills = 1,
+			Description = "Fill your army to its cap right now",
+		},
+		PlazaAirstrike = {
+			Id = 0,
+			DisplayName = "Plaza Airstrike",
+			RobuxPrice = 79,
+			Cash = 0,
+			Gold = 0,
+			GrantAirstrikes = 1,
+			Description = "One airstrike on the Central Plaza (3 s warning, never lethal)",
+		},
 		RebirthKeepBase = {
 			Id = 3714663721,
 			DisplayName = "Keep-Base Rebirth",
@@ -361,6 +400,27 @@ local MonetizationConfig = {
 			Attribute = "WE_KeepBaseRebirths",
 			MaxPerReceipt = 1,
 		},
+		-- claude-bud JOB 5c: army refill tokens (spent at once by SoldierService.ConsumeRefills; on join if a crash came first)
+		GrantSoldierRefills = {
+			Field = "SoldierRefills",
+			Attribute = "WE_SoldierRefills",
+			MaxPerReceipt = 1,
+		},
+		-- claude-bud JOB 5c: plaza airstrike charges (spent by Server/Modules/PlazaAirstrike)
+		GrantAirstrikes = {
+			Field = "AirstrikeCharges",
+			Attribute = "WE_AirstrikeCharges",
+			MaxPerReceipt = 1,
+		},
+	},
+	-- claude-bud JOB 5c: Plaza Airstrike balance (Server/Modules/PlazaAirstrike)
+	PlazaAirstrikeTuning = {
+		UseRangeStuds = 220,
+		WarnSeconds = 3,
+		Damage = 35,
+		MinHealthLeft = 1,
+		ServerCooldownSeconds = 120,
+		PlayerCooldownSeconds = 300,
 	},
 	-- v71 money (M1, D2): one-time thank-you for players who bought the old 249 R$ Starter Bundle: Auto Collect on
 	-- their next join. Entitlements[Flag] marks it done (set even when they already owned Auto Collect).
@@ -379,6 +439,50 @@ local MonetizationConfig = {
 		              and never prompts; default = the offer's own key
 		Pads are 7x7-stud floor triggers (no tap target); each label is stud-scaled, MaxDistance = LabelMaxDistance,
 		never AlwaysOnTop, tagged WorldLabelConfig.BaseLabelTag. The server decides ownership and "coming soon". ]]
+	--[[ claude-bud JOB 5e: retention, owner-only first. FREE rows at the top of the Shop's Robux tab: the daily
+		login reward (the existing server claim), the airdrop (tracks the live one), a group-join reward (GroupCash once,
+		checked with IsInGroupAsync on the server; hidden while GroupId is 0 — TODO(owner): paste the group id) and an
+		UNREWARDED favorite prompt (Roblox rules forbid rewards for favorites / likes). Roblox Premium members get
+		PremiumDailyCash once per UTC day (server MembershipType check), which keeps them playing (Premium Payouts). ]]
+	Retention = {
+		Rollout = "owner",
+		GroupId = 0,
+		GroupCash = 10000,
+		PremiumDailyCash = 2500,
+		FavoritePrompt = true,
+	},
+
+	--[[ claude-bud JOB 5d: purchase prompts at the right moments, owner-only first. Every server offer spends the
+		existing soft-offer budget (MonetizationService.ClaimSoftOfferSlot: SoftOfferCooldownSeconds apart, at most
+		SoftOfferSessionMax per session, quiet during the tutorial) and never shows for something already owned.
+		  CantAffordVehicle: the Garage's "Need $X" tap offers the smallest cash pack that covers it (client toast).
+		  AfterRebirth: after a rebirth, 2x Cash (if not owned) else the large cash pack.
+		  ArmyWiped: when his last field soldier dies, the army refill (if its Id is live) else Army Expansion.
+		  StarterLimitedHours: the Commander Starter Pack is offered only within this many hours of the first join,
+		  and its toast shows the time left (a real limit, never a fake timer). ]]
+	Placement = {
+		Rollout = "owner",
+		CantAffordVehicle = true,
+		AfterRebirth = true,
+		ArmyWiped = true,
+		StarterLimitedHours = 48,
+	},
+
+	--[[ claude-bud JOB 5b: VIP perks on top of the live VIP pass (+25 % cash, unchanged: live buyers paid for it). For a VIP
+		they are live for: a [VIP] chat tag (player attribute WE_VIPTag -> FeatureController's OnIncomingMessage) and the
+		VIP lounge near the plaza (Server/Modules/VIPLounge: a VIP-only door, a bonus pad paying LoungeCash once per
+		LoungeCooldownSeconds). Rollout "owner" = AdminConfig.IsPlaytestOwner only, "all", anything else = off. ]]
+	VIPPerks = {
+		Rollout = "owner",
+		ChatTag = "[VIP]",
+		Lounge = true,
+		LoungeX = -150,
+		LoungeZ = -430,
+		LoungeCash = 5000,
+		LoungeHoldSeconds = 2,
+		LoungeCooldownSeconds = 900,
+	},
+
 	PremiumPads = {
 		LabelMaxDistance = 20,
 		Slots = {
@@ -521,6 +625,39 @@ local MonetizationConfig = {
 		build_backfill = true, -- XP rebalance XP-L2: the one-time backfill grant (season x1.1 only; no pass check at join)
 	},
 }
+
+-- claude-bud JOB 5e: is retention (free Shop rows, group reward, Premium bonus) live for this player (fail closed)
+function MonetizationConfig.RetentionLiveFor(userId: any): boolean
+	local mode = (MonetizationConfig :: any).Retention.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
+
+-- claude-bud JOB 5d: are the placement prompts live for this player (fail closed)
+function MonetizationConfig.PlacementLiveFor(userId: any): boolean
+	local mode = (MonetizationConfig :: any).Placement.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
+
+-- claude-bud JOB 5b: are the VIP perks (chat tag, lounge) live for this player (fail closed)
+function MonetizationConfig.VIPPerksLiveFor(userId: any): boolean
+	local mode = (MonetizationConfig :: any).VIPPerks.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
 
 -- claude-bud: is this SKU key on sale / effective for this player under Rollout. Keys outside RolloutKeys are always live.
 function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean
