@@ -6766,7 +6766,7 @@ must_contain(SQF_SO, '\tlocal repeatOrder = order == st.Order\n\t\tand st.OrderA
 must_contain(SQF_SO, '\t\tu.LosCheckAt = math.max(u.LosCheckAt, now)\n\t\tif not repeatOrder then\n\t\t\tresetChase(u)', 'squadfair v3: no order ever re-checks a blocked line early; a repeat keeps the chase timers and the give-up')
 must_not_contain(SQF_SO, '\t\tu.LosCheckAt = 0\n', 'squadfair v3: an order never zeroes the blocked re-check wait (order spam cost)')
 must_contain(SQF_SO, '\t\t\t\t\tif (st.Order == "Follow" or (st.Order == "Attack" and anyGaveUp(st))) and proot and pathCfg and probe == nil then\n\t\t\t\t\t\tprobe = buildProbe(pathCfg)', 'squadfair v3: ATTACK builds the FollowPath probe only once a unit has given up')
-must_contain(SQF_SO, '\t\tunit.Humanoid:MoveTo(nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up', 'squadfair: an ATTACK unit with nothing in sight closes in (UnitChaseWithoutLos) until the give-up')
+# claude-bud JOB 22: retired, superseded in tools/checks/claude_bud_armyfollow.py (every soldier MoveTo goes through ArmyFollow.Command; Release names the new state): #must_contain(SQF_SO, '\t\tunit.Humanoid:MoveTo(nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up', 'squadfair: an ATTACK unit with nothing in sight closes in (UnitChaseWithoutLos) until the give-up')
 # CombatService: squad hits, provoke by proxy
 must_contain(SQF_CS, 'function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: number, credit: boolean): (number, boolean)', 'squadfair: CombatService.ApplyUnitHit (squad hits)')
 must_contain(SQF_CS, '\tif model == nil or not model:IsA("Model") or Players:GetPlayerFromCharacter(model) ~= nil then\n\t\treturn 0, false -- never a player', 'squadfair: a squad never hurts a player (novice shield, clan ally, anyone)')
@@ -9289,7 +9289,7 @@ def _army_fix_pins() -> None:
     _af_has(ru, ('st.Seated and st.OwnerSpeed > cfgNum(rc, "VehicleDeferSpeed", 20)',), "recoverUnit — no recover while the owner drives faster than VehicleDeferSpeed")
     _af_has(ru, ("now - unit.RecoverAt < cooldown",), "recoverUnit — at most one recover per unit per CooldownSeconds")
     _af_has(ru, ("ownerOnWater(player, st, playerRoot, rc, now)",), "recoverUnit — no recover while the owner is on water")
-    _af_has(ru, ("resetChase(unit)", "unit.Humanoid:MoveTo(at.Position)"), "recoverUnit — chase state reset and MoveTo re-issued after a recover")
+    # claude-bud JOB 22: retired, superseded in tools/checks/claude_bud_armyfollow.py (every soldier MoveTo goes through ArmyFollow.Command; Release names the new state): #_af_has(ru, ("resetChase(unit)", "unit.Humanoid:MoveTo(at.Position)"), "recoverUnit — chase state reset and MoveTo re-issued after a recover")
     _af_has(ru, ("noteLanding(st, at.Position, now)",), "recoverUnit — every landing is remembered (units land apart)")
     i_mm, i_pv = ru.find('if moveBy < cfgNum(rc, "MinMoveStuds", 4) then'), ru.find("unit.Model:PivotTo(at)")
     if 0 <= i_mm < i_pv and "unit.ProgSince = now" in ru[i_mm:i_pv] and "return false" in ru[i_mm:i_pv]:

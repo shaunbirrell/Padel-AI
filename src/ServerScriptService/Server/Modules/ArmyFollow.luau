@@ -75,6 +75,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ArmyConfig = require(Shared.Configs.ArmyConfig)
+local FormationMath = require(Shared.Util.FormationMath) -- claude-bud JOB 22: the stable formation maths
 local AdminConfig = require(Shared.Configs.AdminConfig)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local BaseLayoutConfig = require(Shared.Configs.BaseLayoutConfig)
@@ -134,6 +135,44 @@ local function logLine(key: string, msg: string)
 end
 ArmyFollow.Log = logLine
 
+-- claude-bud JOB 22: the stable formation controller (ArmyConfig.Follow2.Stable)
+local function stableOn(): boolean
+	return cfg().Stable == true
+end
+ArmyFollow.StableOn = stableOn
+
+-- claude-bud JOB 22: player characters in their own group, so soldiers never push / block players (Follow2.CollideWithPlayers)
+ArmyFollow.PlayerGroup = "WE_PlayerChars"
+local playersHooked = false
+local function setCharGroup(char: Model)
+	for _, d in ipairs(char:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.CollisionGroup = ArmyFollow.PlayerGroup
+		end
+	end
+	char.DescendantAdded:Connect(function(d)
+		if d:IsA("BasePart") then
+			d.CollisionGroup = ArmyFollow.PlayerGroup
+		end
+	end)
+end
+local function hookPlayers()
+	if playersHooked or not stableOn() then
+		return
+	end
+	playersHooked = true
+	local function onPlayer(p: Player)
+		if p.Character then
+			setCharGroup(p.Character)
+		end
+		p.CharacterAdded:Connect(setCharGroup)
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		onPlayer(p)
+	end
+	Players.PlayerAdded:Connect(onPlayer)
+end
+
 local function ensureGroup()
 	if groupReady then
 		return
@@ -145,9 +184,53 @@ local function ensureGroup()
 		end
 		PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.Group, false)
 		PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, "Default", true) -- the world and the players
+		if stableOn() then
+			if not PhysicsService:IsCollisionGroupRegistered(ArmyFollow.PlayerGroup) then
+				PhysicsService:RegisterCollisionGroup(ArmyFollow.PlayerGroup)
+			end
+			PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.PlayerGroup, cfg().CollideWithPlayers == true)
+		end
 	end)
+	pcall(hookPlayers)
 end
 ArmyFollow.EnsureGroup = ensureGroup
+
+-- claude-bud JOB 22: ONE mover. Every Humanoid:MoveTo on an army soldier goes through here (ArmyFollow's own follow
+-- states and SquadOrdersService's HOLD / ATTACK / RETREAT / escort states); `state` names who drives it now.
+local function setState(unit: any, state: string)
+	if unit._afState ~= state then
+		unit._afState = state
+		unit.MoveState = state
+		pcall(function()
+			unit.Model:SetAttribute("WE_MoveState", state) -- debugging (only on change)
+		end)
+	end
+end
+function ArmyFollow.Command(unit: any, goal: Vector3, state: string?)
+	if state then
+		setState(unit, state)
+	end
+	unit.Humanoid:MoveTo(goal)
+end
+
+-- claude-bud JOB 22: one yaw owner. Moving: AutoRotate faces travel and the face gyro has no torque (nothing else can
+-- turn it); standing (InPosition): AutoRotate off, the gyro holds the formation heading.
+local function setYawMode(unit: any, moving: boolean)
+	if unit._afYawMoving == moving then
+		return
+	end
+	unit._afYawMoving = moving
+	local gyro = unit.Root and unit.Root:FindFirstChild("NPCFaceGyro")
+	if gyro and gyro:IsA("BodyGyro") then
+		if unit._afGyroTorque == nil then
+			unit._afGyroTorque = gyro.MaxTorque
+		end
+		gyro.MaxTorque = if moving then Vector3.zero else unit._afGyroTorque
+	end
+	pcall(function()
+		unit.Humanoid.AutoRotate = moving
+	end)
+end
 
 local function flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
@@ -191,6 +274,7 @@ local function prepUnit(unit: any)
 		hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
 		hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
 		hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false) -- claude-bud JOB 22: never joins a vehicle assembly
 	end)
 	hum.Died:Connect(function()
 		ArmyFollow.Stats.Died += 1
@@ -222,13 +306,22 @@ local function resetMotion(unit: any)
 	unit._afSpeedCur = nil
 end
 
-function ArmyFollow.Release(unit: any)
+function ArmyFollow.Release(unit: any, state: string?)
 	if unit._afCtl then
 		unit._afCtl = false
 		resetMotion(unit)
 		pcall(function()
 			unit.Humanoid.AutoRotate = true
 		end)
+		-- claude-bud JOB 22: the face gyro gets its torque back (the order / combat code aims with it)
+		local gyro = unit.Root and unit.Root:FindFirstChild("NPCFaceGyro")
+		if gyro and gyro:IsA("BodyGyro") and unit._afGyroTorque ~= nil then
+			gyro.MaxTorque = unit._afGyroTorque
+		end
+		unit._afYawMoving = nil
+	end
+	if state then
+		setState(unit, state)
 	end
 end
 
@@ -236,6 +329,7 @@ local function acquire(unit: any, now: number)
 	if not unit._afCtl or now - (unit._afThinkAt or -math.huge) > num("ThinkGapReset", 1.2) then
 		resetMotion(unit)
 		unit._afCtl = true
+		unit._afYawMoving = nil
 		pcall(function()
 			unit.Humanoid.AutoRotate = false -- the NPCFaceGyro turns it (faceTo): one yaw owner
 		end)
@@ -586,6 +680,13 @@ local function plan(st: any, player: Player?, root: BasePart, units: { any }, no
 	-- facing (v99): his root CFrame's look (his move direction when he backs away), turned at most TurnRateDeg per
 	-- second (a sharp turn swings the wedge round smoothly, never 180 degrees in one think); standing, re-aimed only
 	-- once he turned past FacingTurnDeg (no swirl on the spot), then turned all the way
+	-- claude-bud JOB 22: the smoothed formation anchor (position lag, smoothed lead, capped turn, deadzone, no 180 flip)
+	if stableOn() then
+		st._afAnchor = st._afAnchor or FormationMath.NewAnchor()
+		FormationMath.Step(st._afAnchor, pos, root.CFrame.LookVector, vel, dt, now, jumped or st._afSeated == true, cfg())
+		st._afDir = st._afAnchor.Dir
+		st._afFlip = nil -- seat sides never swap
+	end
 	local look = flat(root.CFrame.LookVector)
 	look = if look.Magnitude > 1e-3 then look.Unit else Vector3.new(0, 0, -1)
 	local want: Vector3 = look
@@ -595,7 +696,9 @@ local function plan(st: any, player: Player?, root: BasePart, units: { any }, no
 	local cur: Vector3? = st._afDir
 	local tdt = math.clamp(now - (st._afDirAt or now), 0, 0.6)
 	st._afDirAt = now
-	if cur == nil or jumped then
+	if stableOn() then
+		-- (the anchor above owns the heading)
+	elseif cur == nil or jumped then
 		st._afDir = want
 		st._afTurning = false
 	else
@@ -638,7 +741,7 @@ local function plan(st: any, player: Player?, root: BasePart, units: { any }, no
 		logLine("base" .. tostring(player.UserId), string.format("owner %d %s his base: army %s", player.UserId, if plotId then "entered" else "left", if plotId then "waits at the gate" else "follows"))
 	end
 	-- claude-bud: wedge row pairs keep their world sides when he turns round (no crossing through each other)
-	if st._afTidy and not st._afInBase and st._afSeatMap then
+	if st._afTidy and not st._afInBase and st._afSeatMap and not stableOn() then
 		local dir: Vector3 = st._afDir or Vector3.new(0, 0, -1)
 		local right = Vector3.new(-dir.Z, 0, dir.X)
 		st._afFlip = st._afFlip or {}
@@ -693,6 +796,10 @@ local function slotPoint(st: any, root: BasePart, rank: number): Vector3
 			back = tnum("FlankFront", -1) + (row - 1) * tnum("FlankRowBack", 3)
 			lat = side * (tnum("FlankSide", 3.5) + (row - 1) * tnum("FlankRowSide", 2.6))
 		end
+	end
+	if stableOn() and st._afAnchor then
+		-- claude-bud JOB 22: slot = the smoothed anchor x this seat's fixed offset (+ the smoothed, capped lead)
+		return FormationMath.SlotWorld(st._afAnchor, lat, back, root.Position.Y, cfg())
 	end
 	local lead = (st._afVel or Vector3.zero) * num("LeadSeconds", 0.3)
 	local cap = num("LeadMaxStuds", 5)
@@ -750,7 +857,7 @@ local function regroup(st: any, unit: any, root: BasePart, now: number, why: str
 	unit.Model:PivotTo(cf)
 	unit.Root.AssemblyLinearVelocity = Vector3.zero
 	unit.Root.AssemblyAngularVelocity = Vector3.zero
-	unit.Humanoid:MoveTo(cf.Position)
+	ArmyFollow.Command(unit, cf.Position, "StuckRecovery")
 	unit._afPath = nil
 	unit._afMoveGoal = cf.Position
 	unit._afMoveAt = now
@@ -797,8 +904,11 @@ end
 
 local function moveTo(unit: any, goal: Vector3, now: number)
 	local last: Vector3? = unit._afMoveGoal
-	if last == nil or flatDist(last, goal) >= num("ReissueStuds", 1.5) or now - (unit._afMoveAt or 0) >= num("ReissueSeconds", 5) then
-		unit.Humanoid:MoveTo(goal)
+	local due = if stableOn()
+		then FormationMath.ReissueDue(last, unit._afMoveAt, goal, now, cfg()) -- claude-bud JOB 22: never every frame
+		else (last == nil or flatDist(last, goal) >= num("ReissueStuds", 1.5) or now - (unit._afMoveAt or 0) >= num("ReissueSeconds", 5))
+	if due then
+		ArmyFollow.Command(unit, goal)
 		unit._afMoveGoal = goal
 		unit._afMoveAt = now
 	end
@@ -895,6 +1005,7 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 				end
 			elseif since >= num("StuckAltSeconds", 6) and (unit._afStuck or 0) < 2 then
 				unit._afStuck = 2
+				setState(unit, "StuckRecovery") -- claude-bud JOB 22
 				local to = flat(slot - pos)
 				to = if to.Magnitude > 1e-3 then to.Unit else Vector3.new(0, 0, -1)
 				local side = Vector3.new(-to.Z, 0, to.X) * num("StuckAltStuds", 6)
@@ -915,6 +1026,7 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 				end
 			elseif since >= num("StuckSeconds", 3) and (unit._afStuck or 0) < 1 then
 				unit._afStuck = 1
+				setState(unit, "StuckRecovery") -- claude-bud JOB 22
 				unit._afPath = nil
 				unit._afPathAt = -math.huge -- one repath now (the per-unit cooldown is skipped once)
 				requestPath(unit, pos, slot, now)
@@ -935,6 +1047,15 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 			if m < sep then
 				push += (if m > 1e-3 then off / m else Vector3.new(((rank % 2) * 2 - 1), 0, 0)) * (sep - m) / sep
 			end
+		end
+	end
+	-- claude-bud JOB 22: the owner is in the separation too (they never walk into him)
+	if stableOn() and not st._afInBase then
+		local oc = num("OwnerClearStuds", 3.5)
+		local off = flat(pos - root.Position)
+		local m = off.Magnitude
+		if m < oc then
+			push += (if m > 1e-3 then off / m else Vector3.new(((rank % 2) * 2 - 1), 0, 0)) * (oc - m) / oc
 		end
 	end
 	-- v99: the push is capped (SeparationMaxStuds): neighbours step apart, the goal never jumps round the slot
@@ -989,7 +1110,7 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	if st._afTidy and st._afInBase and st._afPlot and flatDist(pos, goal) <= tnum("HoldArriveStuds", 1.5) then
 		if not unit._afStand then
 			unit._afStand = true
-			unit.Humanoid:MoveTo(pos)
+			ArmyFollow.Command(unit, pos, "BaseHold")
 			unit._afMoveGoal = pos
 			unit._afMoveAt = now
 			local _, out = tidyWaitSpot(st._afPlot, rank)
@@ -999,19 +1120,41 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 		unit._afPath = nil
 		return
 	end
-	-- v99: facing: toward its goal while it runs to catch up, else his facing (so its client escort file points
-	-- where the formation points and never swings through its neighbours)
-	faceTo(unit, if d > num("FaceMoveStuds", 8) then goal - pos else (st._afDir or Vector3.new(0, 0, -1)), now)
-	-- arrive: stand in the slot while the owner stands
-	if d <= num("ArriveStuds", 2) and (st._afSpeed or 0) < 1 and push.Magnitude < 0.05 then
-		if not unit._afStand then
+	if stableOn() and not st._afInBase then
+		-- claude-bud JOB 22: the follow state machine. InPosition (arrival deadzone, left only past LeaveDeadzone):
+		-- one stop, then NOTHING is issued; the gyro holds the formation heading. Following / CatchingUp: AutoRotate
+		-- faces travel (no gyro), MoveTo only when the target moved MoveReissueStuds or MoveRefreshSeconds passed.
+		local prevState = unit._afState
+		local state = FormationMath.State(prevState, flatDist(pos, goal), cfg())
+		if state == "InPosition" then
+			if prevState ~= "InPosition" then
+				ArmyFollow.Command(unit, pos, "InPosition")
+				unit._afMoveGoal = pos
+				unit._afMoveAt = now
+				setYawMode(unit, false)
+			end
+			faceTo(unit, st._afDir or Vector3.new(0, 0, -1), now) -- (the gyro writes only past 4 degrees)
+			unit._afPath = nil
 			unit._afStand = true
-			unit.Humanoid:MoveTo(pos)
-			unit._afMoveGoal = pos
-			unit._afMoveAt = now
+			return
 		end
-		unit._afPath = nil
-		return
+		setState(unit, state)
+		setYawMode(unit, true)
+	else
+		-- v99: facing: toward its goal while it runs to catch up, else his facing (so its client escort file points
+		-- where the formation points and never swings through its neighbours)
+		faceTo(unit, if d > num("FaceMoveStuds", 8) then goal - pos else (st._afDir or Vector3.new(0, 0, -1)), now)
+		-- arrive: stand in the slot while the owner stands
+		if d <= num("ArriveStuds", 2) and (st._afSpeed or 0) < 1 and push.Magnitude < 0.05 then
+			if not unit._afStand then
+				unit._afStand = true
+				ArmyFollow.Command(unit, pos, "InPosition")
+				unit._afMoveGoal = pos
+				unit._afMoveAt = now
+			end
+			unit._afPath = nil
+			return
+		end
 	end
 	unit._afStand = false
 
@@ -1094,6 +1237,22 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	-- him = the blob round buildings.
 	local mid = root.Position + (slot - root.Position) * 0.5
 	moveTo(unit, if st._afInBase then goal else keepOut(if clearLine(pos, mid) then mid else goal), now)
+end
+
+-- claude-bud JOB 22: is the owner moving (the escort-vs-follow switch), with hysteresis (no flicker at ~2 studs/s)
+function ArmyFollow.OwnerMoving(st: any, speed: number): boolean
+	if not stableOn() then
+		return speed >= 2
+	end
+	local m = FormationMath.Moving(st._afOwnerMoving == true, speed, cfg())
+	st._afOwnerMoving = m
+	return m
+end
+
+-- claude-bud JOB 22: this unit's formation slot (the SAME one ArmyFollow walks it to), for the escort's standing fight
+function ArmyFollow.HomePoint(player: Player?, st: any, unit: any, root: BasePart, now: number): Vector3
+	plan(st, player, root, st.Units, now)
+	return slotPoint(st, root, unit._afRank or 1)
 end
 
 return ArmyFollow

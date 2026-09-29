@@ -1645,9 +1645,9 @@ local function stepMove(unit: SquadUnit, playerRoot: BasePart, troot: BasePart, 
 	end
 	faceYaw(unit.Root, troot.Position)
 	if flatDist(goal, unit.Root.Position) > 1.5 then
-		unit.Humanoid:MoveTo(goal)
+		SquadOrdersService._AF.Command(unit, goal)
 	else
-		unit.Humanoid:MoveTo(unit.Root.Position)
+		SquadOrdersService._AF.Command(unit, unit.Root.Position)
 	end
 	return true
 end
@@ -1727,7 +1727,7 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		local goalW = if offW.Magnitude > maxW then playerPos + offW.Unit * maxW else aimW
 		followSpeed(st, unit, 0, false) -- his pace (a unit that falls beyond the walking leash catches up in followMove)
 		unit.Goal = goalW
-		unit.Humanoid:MoveTo(goalW)
+		SquadOrdersService._AF.Command(unit, goalW)
 		return true
 	end
 	if followCtx.Live and followCtx.Moving then
@@ -1751,11 +1751,13 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 			local goal = (playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position + st.Lead
 			followSpeed(st, unit, flatDist(goal, unitPos), false) -- the owner's pace: never a run into a wall
 			unit.Goal = goal
-			unit.Humanoid:MoveTo(goal)
+			SquadOrdersService._AF.Command(unit, goal)
 		else
 			-- back to the formation slot next to the player (still shooting on the way when possible)
 			SquadOrdersService._PaceSpeed(unit, fromPlayer) -- v85 FollowPace (base speed when not live)
-			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position)
+			-- claude-bud JOB 22: back to the SAME formation slot ArmyFollow uses (never the old wing slots)
+			local home = if SquadOrdersService._AF.StableOn() then SquadOrdersService._AF.HomePoint(player, st, unit, playerRoot, now) else (playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position
+			SquadOrdersService._AF.Command(unit, home)
 		end
 	elseif dist > range * 0.85 then
 		-- close in, but never past 90 % of the leash from the player
@@ -1764,11 +1766,11 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		local goal = if off.Magnitude > maxOff then playerPos + off.Unit * maxOff else aimAt
 		followSpeed(st, unit, 0, false) -- army fix: the owner's pace
 		unit.Goal = goal
-		unit.Humanoid:MoveTo(goal)
+		SquadOrdersService._AF.Command(unit, goal)
 	else
 		followSpeed(st, unit, 0, false)
 		unit.Goal = nil
-		unit.Humanoid:MoveTo(unitPos)
+		SquadOrdersService._AF.Command(unit, unitPos)
 	end
 	return true
 end
@@ -1791,7 +1793,7 @@ local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart,
 			local up = unit.Root.Position
 			if flatDist(slotPos, up) <= stopHoldStuds() and (slotPos.X - up.X) * lv.X + (slotPos.Z - up.Z) * lv.Z < 0 then
 				unit.Goal = nil
-				unit.Humanoid:MoveTo(up)
+				SquadOrdersService._AF.Command(unit, up)
 				faceYaw(unit.Root, up + lv * 8)
 				return
 			end
@@ -1815,13 +1817,13 @@ local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart,
 		local dist = (unit.Root.Position - playerRoot.Position).Magnitude
 		local stop = OrdersConfig.FollowStopDistance or 6
 		if dist > (OrdersConfig.FollowDistance or 10) then
-			unit.Humanoid:MoveTo(target)
+			SquadOrdersService._AF.Command(unit, target)
 			faceYaw(unit.Root, playerRoot.Position)
 		elseif dist > stop then
-			unit.Humanoid:MoveTo(target)
+			SquadOrdersService._AF.Command(unit, target)
 		else
 			unit.Goal = nil
-			unit.Humanoid:MoveTo(unit.Root.Position)
+			SquadOrdersService._AF.Command(unit, unit.Root.Position)
 		end
 		return
 	end
@@ -1849,13 +1851,13 @@ local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart,
 		go = toGoal > arrive or (followCtx.Live and followCtx.Moving) -- v85 FollowPace
 	end
 	if go then
-		unit.Humanoid:MoveTo(target)
+		SquadOrdersService._AF.Command(unit, target)
 		if toGoal > 4 then
 			faceYaw(unit.Root, target)
 		end
 	else
 		unit.Goal = nil
-		unit.Humanoid:MoveTo(unit.Root.Position)
+		SquadOrdersService._AF.Command(unit, unit.Root.Position)
 		faceYaw(unit.Root, unit.Root.Position + playerRoot.CFrame.LookVector * 8)
 	end
 end
@@ -1942,9 +1944,9 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 			local af = attackTidy(player)
 			if af then
 				-- claude-bud (ATTACK fix): its own march spot by seat, never the one point 12 studs ahead of him
-				unit.Humanoid:MoveTo(af.AttackPoint(st, unit, playerRoot.Position, playerRoot.CFrame.LookVector, "march"))
+				SquadOrdersService._AF.Command(unit, af.AttackPoint(st, unit, playerRoot.Position, playerRoot.CFrame.LookVector, "march"))
 			else
-				unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
+				SquadOrdersService._AF.Command(unit, (playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
 			end
 		end
 		return
@@ -2021,7 +2023,7 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		if playerRoot then
 			followMove(st, unit, playerRoot, trail, probe, now)
 		else
-			unit.Humanoid:MoveTo(unit.Root.Position)
+			SquadOrdersService._AF.Command(unit, unit.Root.Position)
 		end
 		return
 	end
@@ -2035,30 +2037,30 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		local ringAt = afA.AttackPoint(st, unit, center, center - (if playerRoot then playerRoot.Position else from), "ring")
 		if unit.AimRoot ~= nil then
 			if (aimAt - from).Magnitude > band then
-				unit.Humanoid:MoveTo(ringAt)
+				SquadOrdersService._AF.Command(unit, ringAt)
 			else
-				unit.Humanoid:MoveTo(from)
+				SquadOrdersService._AF.Command(unit, from)
 			end
 		elseif dist > band or (unit.LosBlocked and CombatFairnessConfig.UnitChaseWithoutLos == true) then
-			unit.Humanoid:MoveTo(ringAt)
+			SquadOrdersService._AF.Command(unit, ringAt)
 		else
-			unit.Humanoid:MoveTo(from)
+			SquadOrdersService._AF.Command(unit, from)
 		end
 		return
 	end
 	if unit.AimRoot ~= nil then
 		-- squadfair: it shoots a visible hostile (the fallback): it closes in on that one only, never on the walled-off one
 		if (aimAt - unit.Root.Position).Magnitude > band then
-			unit.Humanoid:MoveTo(aimAt)
+			SquadOrdersService._AF.Command(unit, aimAt)
 		else
-			unit.Humanoid:MoveTo(unit.Root.Position)
+			SquadOrdersService._AF.Command(unit, unit.Root.Position)
 		end
 	elseif dist > band then
-		unit.Humanoid:MoveTo(nroot.Position)
+		SquadOrdersService._AF.Command(unit, nroot.Position)
 	elseif unit.LosBlocked and CombatFairnessConfig.UnitChaseWithoutLos == true then
-		unit.Humanoid:MoveTo(nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up
+		SquadOrdersService._AF.Command(unit, nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up
 	else
-		unit.Humanoid:MoveTo(unit.Root.Position)
+		SquadOrdersService._AF.Command(unit, unit.Root.Position)
 	end
 end
 
@@ -2546,7 +2548,7 @@ local function recoverUnit(player: Player, st: SquadState, unit: SquadUnit, play
 	unit.ProgSum = 0
 	unit.ProgSince = now
 	unit.PlotId = nil
-	unit.Humanoid:MoveTo(at.Position)
+	SquadOrdersService._AF.Command(unit, at.Position)
 	noteLanding(st, at.Position, now)
 	noteRecover(player, st, why :: string, rc, now)
 	return true
@@ -2636,7 +2638,7 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 	local order = st.Order
 	local playerRoot = characterRoot(player)
 	if order ~= "Follow" then
-		SquadOrdersService._AF.Release(unit) -- v99: HOLD / ATTACK / RETREAT drive it now (one controller per unit)
+		SquadOrdersService._AF.Release(unit, order) -- v99: HOLD / ATTACK / RETREAT drive it now (one controller per unit; JOB 22: its state)
 		SquadOrdersService._PaceSpeed(unit, 0) -- v85 FollowPace: back to UnitWalkSpeed outside FOLLOW
 	end
 
@@ -2650,7 +2652,7 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 		if SquadOrdersService._AFOn then
 			-- v91 ArmyFollow: the escort still shoots (and stands to fight only while he stands near a hostile outside his
 			-- base); every walk, catch-up, regroup and the base wait line are ArmyFollow's
-			local moving = st.OwnerSpeed >= 2 or st.Seated
+			local moving = SquadOrdersService._AF.OwnerMoving(st, st.OwnerSpeed) or st.Seated -- claude-bud JOB 22: hysteresis
 			if not (st :: any)._afInBase then
 				followCtx.Live = moving
 				followCtx.Moving = moving
@@ -2660,7 +2662,7 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 				if fought and not moving then
 					-- v99: the escort fight moved it (its own MoveTo): ArmyFollow lets go, and takes it back with fresh
 					-- state (no stale goal / stuck window = no snap-back teleport right after the fight)
-					SquadOrdersService._AF.Release(unit)
+					SquadOrdersService._AF.Release(unit, "Combat") -- claude-bud JOB 22: the escort fight owns it (state Combat)
 					return
 				end
 			end
@@ -2689,9 +2691,9 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 		local holdPos = unit.HoldPos :: Vector3
 		local dist = (unit.Root.Position - holdPos).Magnitude
 		if dist > leash * 0.4 then
-			unit.Humanoid:MoveTo(holdPos)
+			SquadOrdersService._AF.Command(unit, holdPos)
 		else
-			unit.Humanoid:MoveTo(unit.Root.Position)
+			SquadOrdersService._AF.Command(unit, unit.Root.Position)
 		end
 		return
 	end
@@ -2702,14 +2704,14 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 			local dest = cf.Position
 			local dist = (unit.Root.Position - dest).Magnitude
 			if dist > 6 then
-				unit.Humanoid:MoveTo(dest)
+				SquadOrdersService._AF.Command(unit, dest)
 				faceYaw(unit.Root, dest)
 			else
-				unit.Humanoid:MoveTo(unit.Root.Position)
+				SquadOrdersService._AF.Command(unit, unit.Root.Position)
 				unit.HoldPos = unit.Root.Position
 			end
 		elseif playerRoot then
-			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, 8)).Position)
+			SquadOrdersService._AF.Command(unit, (playerRoot.CFrame * CFrame.new(0, 0, 8)).Position)
 		end
 		return
 	end
@@ -2900,7 +2902,7 @@ function SquadOrdersService._PaceRecover(player: Player, st: SquadState, unit: S
 	unit.Model:PivotTo(cf)
 	unit.Root.AssemblyLinearVelocity = Vector3.zero
 	unit.Crumb = nil
-	unit.Humanoid:MoveTo(cf.Position)
+	SquadOrdersService._AF.Command(unit, cf.Position)
 	return true
 end
 

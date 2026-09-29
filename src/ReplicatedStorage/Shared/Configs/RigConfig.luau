@@ -44,7 +44,7 @@ local RigConfig = {
 		WalkMinStuds = 1.5, -- studs/s of flat root movement that counts as walking
 		WalkSpeedRef = 14.5, -- Walk track speed = figure speed / WalkSpeedRef (clamped)
 		WalkRateMin = 0.6,
-		WalkRateMax = 1.4,
+		WalkRateMax = 2.4, -- claude-bud JOB 22: up to the army catch-up speed (34 studs/s / 14.5): no foot sliding
 		AimSeconds = 1.2, -- after an NPC shot (WeaponFx S = 0) the shooter plays Aim this long, if standing
 		AimMatchStuds = 3, -- a shot's origin within this many studs (flat) of a figure's root = its shot
 		FadeSeconds = 0.2,

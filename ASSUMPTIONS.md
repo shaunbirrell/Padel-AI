@@ -9412,3 +9412,32 @@ ds_territories.luau T3):
   BaseConfig.FullServerTeleport = false = message only).
 - **Performance:** per-base part count is unchanged (same layout). A 10-player server has 10 bases' parts; the
   max-player frame rate needs a real 10-account test.
+
+## 2026-09-29 — claude-bud JOB 22: army follow / formation root-cause fix (docs/ARMY-FOLLOW-ROOTCAUSE.md)
+- **Order of work:** JOB 22 was asked for before JOB 21, but JOB 21 (10 plots) had already been pushed when it
+  arrived. JOB 22 was rebased onto v110 on top of it; the two touch different code.
+- **Switch:** `ArmyConfig.Follow2.Stable = true` turns on the new controller; false = the v99 controller exactly.
+  Flank stays the default formation; Wedge still works (same seat offsets, same anchor).
+- **Heading:** follows the owner's FACING, not his velocity (the old velocity flip was a root cause). With
+  AutoRotate a walking character faces its travel, so normal turns work; backing up / strafing with shift-lock keeps
+  the formation.
+  - Assumption: a player who turns his character without moving (standing) re-aims the formation only after 60° held
+    for 1.2 s.
+- **One mover:** `ArmyFollow.Command` is the only `Humanoid:MoveTo` on soldiers (SquadOrdersService's 32 calls go
+  through it). HOLD / ATTACK / RETREAT / Combat keep their own logic but name their state when they take a unit
+  (`Release(unit, state)`), so exactly one state drives a unit at a time.
+  - In Combat (owner standing near a hostile) the escort keeps its old aim behaviour (AutoRotate + gyro aim), but
+    walks to the SAME Flank slot.
+- **Collision:** player characters are put in a `WE_PlayerChars` group (collides with everything except army
+  soldiers; ArmyNPCs ↔ WE_PlayerChars off). Nothing else in the repo sets character collision groups. Base guards are
+  in `WE_Guards` (not with each other).
+- **Animation:** RigConfig.Anim.WalkRateMax 1.4 → 2.4 (the Walk track keeps up with the 34 studs/s catch-up).
+- **Frozen pins:** retired in place with a claude-bud note and replaced in claude_bud_armyfollow.py — squadfair ATTACK
+  chase, army-fix recover re-issue (BuyPathStatic body), and two CODEBOT v99 checks that counted literal
+  `Humanoid:MoveTo(` / `Release(unit)` text.
+- **Tests:**
+  - Static + simulated only (the real FormationMath in the Luau CLI, with a Vector3 stand-in and simulated soldiers):
+    5 / 8 / 20 / 50 seats; straight, stop, slow 90°, fast 180°, backwards, strafe, zig-zag, circles.
+  - Checked: ≤ 1 MoveTo per soldier per 0.4 s think, 0 once settled, turn ≤ 36° per think, no flips, sides stable,
+    no bunching.
+  - Not run in Studio / a real server (no Roblox runtime here); the phone playtest list is in LATEST-HANDOFF.
