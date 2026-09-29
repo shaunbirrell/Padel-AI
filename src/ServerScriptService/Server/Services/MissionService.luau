@@ -1058,6 +1058,29 @@ function MissionService.Init(deps: { [string]: any })
 		ensureDaily(_profile)
 		MissionService.CheckAchievements(player)
 		MissionService.Push(player)
+		-- claude-bud JOB 4.2: auto-claim today's login reward (DailyRewardConfig.AutoClaim, owner-only first)
+		if DailyRewardConfig.AutoClaimLiveFor(player.UserId) then
+			task.delay(DailyRewardConfig.AutoClaim.DelaySeconds, function()
+				if player.Parent == nil then
+					return
+				end
+				local prof = DataService.GetProfile(player)
+				if prof == nil or prof.DailyLogin == nil or prof.DailyLogin.LastClaimDay == yyyymmdd(os.time()) then
+					return
+				end
+				local okClaim = MissionService.ClaimDailyLogin(player)
+				if okClaim and NotificationService then
+					local day = prof.DailyLogin.Streak
+					local nextDay = (day % DailyRewardConfig.StreakResetsAfterDay) + 1
+					local nextReward = DailyRewardConfig.Rewards[nextDay]
+					NotificationService.Notify(
+						player,
+						string.format("Login streak: day %d of %d. Tomorrow: $%d", day, DailyRewardConfig.StreakResetsAfterDay, if nextReward then nextReward.Cash else 0),
+						"Info"
+					)
+				end
+			end)
+		end
 	end)
 end
 

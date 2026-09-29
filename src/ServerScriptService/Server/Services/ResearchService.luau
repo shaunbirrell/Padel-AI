@@ -414,6 +414,23 @@ function ResearchService.Init(deps: { [string]: any })
 
 	sanityCheck()
 
+	-- claude-bud JOB 4.4: tell players ArmyUpgradeConfig is live for where their Barracks "Army Upgrades" prompt goes
+	if BaseService and BaseService.OnPlotReady then
+		local ArmyUpgradeConfig = require(ReplicatedStorage.Shared.Configs.ArmyUpgradeConfig)
+		local PlotFrame = require(ReplicatedStorage.Shared.Util.PlotFrame)
+		local Remotes = require(ReplicatedStorage.Shared.Remotes)
+		BaseService.OnPlotReady(function(player: Player, plotId: number)
+			if not ArmyUpgradeConfig.LiveFor(player.UserId) then
+				return
+			end
+			local p = PlotFrame.LocalToWorld(plotId, ArmyUpgradeConfig.PromptX, ArmyUpgradeConfig.PromptZ)
+			local ev = Remotes.TryGetEvent(Constants.RemoteNames.FeaturePush)
+			if ev and player.Parent then
+				ev:FireClient(player, "ArmyUpgrades", { X = p.X, Y = ArmyUpgradeConfig.PromptY, Z = p.Z, Track = ArmyUpgradeConfig.Track })
+			end
+		end)
+	end
+
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestResearch) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player, action: any, upgradeId: any)
 		if action == "Buy" then

@@ -106,6 +106,7 @@ local EVENTS = {
 	-- listens on the server: there is no Ops OnServerEvent)
 	Constants.RemoteNames.OpsState,
 	Constants.RemoteNames.OpsProgress,
+	Constants.RemoteNames.FeaturePush, -- claude-bud JOB 4/5: feature cues, server -> client only
 }
 
 -- v71 money (M2): UnreliableRemoteEvents (server → client cosmetic Fx; ordering and delivery not guaranteed)

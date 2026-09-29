@@ -8729,3 +8729,84 @@ ds_territories.luau T3):
 - Shipped as WE_Build 94 from `claude/desktop-bud` commit 18df075 (owner-only GuardsFightBack / NpcUnstick / PickupLosRollout).
 - Behaviour documented in the 2026-09-29 claude-bud guards section above; no new product behaviour beyond those notes.
 - PreferMesh stays OFF. WE_Building* attributes untouched.
+## 2026-09-29 — claude-bud JOB 2: army holds outside the gate, fixed seats, no crossing (ArmyConfig.Follow2.Tidy, owner-only)
+- **Why it still walked in (v91):** the base hold began only when the owner was 4 studs INSIDE his plot. By then his wedge
+  had followed him through the gate, and nothing kept a goal out of the plot. Ranks were re-sorted every think (a death
+  reshuffled everyone). When he turned round, the left and right columns swapped sides and walked through each other
+  (the squad group doesn't collide, so they overlapped). The wait line was a zig-zag and soldiers kept their walk facing.
+- **Tidy (Rollout "owner"; Follow2.Enabled / Rollout stay the kill switch; OFF = v91 byte-for-byte paths):**
+  - (a) The hold starts when he is within HoldApproachStuds 6 OUTSIDE his edge and releases at 10 out. A unit outside his
+    plot never gets a goal inside plot + 2 (the slot, path waypoints and the trail fallback all go through keepOut).
+    Wait rows: 4 per side per row, 4 apart, 4 deep, starting 14 studs out, gate lane + 5 kept clear. Each soldier
+    turns to face out once, on arrival (a turn in place, not a move).
+  - (b) Seats are for life (lowest free seat on join; a death frees only its own). Wedge rows are 4 back / 3 side
+    (5 studs between neighbours, above SeparationStuds 3.5). A row pair keeps its world sides when he turns (1.5-stud
+    hysteresis), so they never cross.
+  - (c) For 8 s after he leaves his base there is no far / stuck / owner-jump teleport; they run back into the wedge
+    with the v91 catch-up speeds. The void rescue still runs.
+- Not covered: the escort walk (while he stands near a hostile) and ATTACK / HOLD orders are unchanged.
+  Units spawned inside the base walk out to their seats.
+- Not verified in Roblox. Needs the owner's phone test.
+
+## 2026-09-29 — claude-bud JOB 3: fill the map (WorldFillConfig + Server/Modules/WorldFill → Workspace.WorldFill)
+- **Budget-first:** the world outside bases is about 2,476 Full / 1,679 Low parts (caps 2,900 / 1,900, hard cap 3,100), and the
+  Town's busiest 512-stud circle has about 22 parts of headroom.
+  - The fill plans 388 Full / 198 Low, so the totals come to about 2,864 / 1,877.
+  - The plaza ring is light (4 posts x 6 parts, placed north and south of the Town, outside its footprint + 30).
+  - Rocks and "hills" are Terrain (WorldKits.Rock, 0 parts).
+  - The build also stops at MaxPartsFull 400 / MaxPartsLow 210.
+- **Where** (all world studs; the static check proves every item clear of the keep-outs):
+  - 4 connector roads, 2 strips each, flat, non-colliding, top 0.625 like the world roads. They run from the P1/P2/P5/P6
+    gate aprons (x ±580) to x ±400, then along Z to RoadZ0, which runs into the Town and the plaza. P3 and P4 already sit on RoadX0.
+  - 2 bridges over the P1 (x -1050) and P6 (x 1300) dock channels. There is no river, so these are the "river crossing".
+    The deck bottom is at Y 21.5 (20 over the water), the piers stand on the bank slabs, and boats pass under.
+  - 6 army positions at (±470, ±620), (-1150, 400) and (1150, -400). Each has a watchtower, sandbag nest, bunker, tank
+    wreck, fuel tank and crates (Tier 1), plus a sandbag line, wire, truck wreck, drums, ruined house, trench revetment and
+    trees (Tier 2), plus 2 Terrain rock groups.
+  - 4 plaza posts: sandbag arc + 2 tank traps + rubble.
+- **Order in MapDressing.Dress:** POIs → WorldFill.ReserveRoads (roads + 13-stud discs in the shared occupancy, so the
+  travel dressing avoids them) → Dockside → WorldDress → cull → hygiene → WorldFill.Build. Every kit and rock is
+  re-checked with WorldDress.Blocked (Spacing 1) and skipped, and counted, if blocked. The log line is
+  `[WAR EMPIRE] WorldFill: quality=... parts=... skipped=...`; the folder also carries the attributes WE_FillParts / WE_FillSkipped.
+- **Side effect:** because the roads are reserved before WorldDress, a few road-rhythm clusters that used to sit where the
+  connectors now run move or drop. The dressing count can only go down.
+- **Phones:** Studio skips all dressing (StudioSkipWorldDressing), so the fill appears only on live and in ForceDress runs.
+  No lights, no Neon, no SurfaceGuis, and no scripts (any are stripped). Tier 2 builds only on Full.
+- World geometry cannot be owner-only (same as v90 runway). Kill switch: `WorldFillConfig.Enabled = false` removes the folder.
+- Not measured in Roblox: the real part count and the busiest-circle numbers need the headless stand-in, which is not in this repo, or a live server log.
+
+## 2026-09-29 — claude-bud JOB 4.1: parachute airdrop (SupplyDropConfig.Airdrop, owner-only)
+- The existing 90 s ground crates (everyone) are unchanged. The airdrop is separate and never takes a crate slot.
+- Every 600 s, while a player it is live for is in the server (it re-checks every 30 s otherwise):
+  - One crate (2 parts + a canopy while falling) is tweened down 160 studs in 12 s onto `pickSpawnPosition()`
+    (event pads, else open ground).
+  - Players it is live for get a toast and the one objective marker ("AIRDROP", FeaturePush → FeatureController).
+  - The first of them to stand within 12 studs for 2 s after landing gets $15,000–40,000 via `EconomyService.AddCash`
+    (the server decides everything). It is gone after 300 s.
+- Owner-only means only owner-live players see the marker and can claim; other players see a crate they cannot claim.
+- New shared remote: `FeaturePush` (server → client only, no OnServerEvent), used by the JOB 4/5 cues.
+
+## 2026-09-29 — claude-bud JOB 4.2: daily login reward (DailyRewardConfig.AutoClaim, owner-only)
+- It already existed: a 7-day streak with rising cash ($1k → $20k plus gold and XP) in MissionService.ClaimDailyLogin, once per UTC
+  day, saved in `profile.DailyLogin` (Streak, LastClaimDay, LastClaimUnix; MarkDirty). It was claimable only from the Missions panel.
+- Added: 8 s after the save loads, the server claims it FOR a player the flag is live for (same function, so still once
+  per day), then toasts "Login streak: day N of 7. Tomorrow: $X". A missed day still resets the streak (existing rule).
+- Assumed the owner wanted this streak made visible and automatic, not a second, parallel reward system.
+
+## 2026-09-29 — claude-bud JOB 4.3: plaza bounty (PlazaBountyConfig + Server/Modules/PlazaBounty, owner-only)
+- Hook: TerritoryService's completed capture calls `PlazaBounty.OnCaptured(player, zoneId, position)` (pcall), right
+  after the stats and ownership sync. Other zones do nothing.
+- A plaza capture starts a 180 s bounty on the capturer, but only if no bounty is running. Every other live player
+  gets a toast and the "BOUNTY" objective marker on the plaza. Another live player who completes a capture of the
+  plaza within the window gets $15,000 (server AddCash); the bounty ends and a new one starts on them.
+- Anti-farm: the holder can't earn their own bounty; each player earns at most once per 600 s (kept for the server's
+  life, so a rejoin doesn't reset it); the capture itself needs the normal 20 s server capture and protection period.
+
+## 2026-09-29 — claude-bud JOB 4.4: army upgrades at the Barracks (ArmyUpgradeConfig, owner-only)
+- Soldier HP and damage upgrades already exist as the Research "Soldiers" track: Body Armor = SoldierHealth, Marksman
+  Training = SoldierDamage, +10 %/level x5, cash $2.5k–240k, saved per player, applied by SquadOrdersService.researchMult.
+  A second, parallel upgrade system would stack power (pay-to-win drift), so I assumed the ask is to buy them AT THE BARRACKS.
+- Added: when a live player's plot is ready, ResearchService pushes (FeaturePush "ArmyUpgrades") the world spot in
+  front of their Barracks (plot-local -88, 110). The client puts a local "Army Upgrades / Barracks" prompt there
+  (tap, no hold, 14 studs) that opens the Research panel on the Soldiers tab. Purchases are still
+  ResearchService.Purchase (server price, cash, max level, save).

@@ -339,6 +339,33 @@ local ArmyConfig = {
 		BaseWaitOut = 12, -- the wait line: this far outside the plot's front edge (main gate) ...
 		BaseWaitGap = 5, -- ... beside the gate lane (MainGateWidth / 2 + this), never in it ...
 		BaseWaitSpacing = 4, -- ... then this apart, two staggered rows
+		--[[ claude-bud (2026-09-29, owner: "the army still walks into the base, soldiers bunch up and walk over each
+			other"): tidy follow, owner-only first. Off (Rollout not "owner"/"all" for him) = the v91 behaviour above.
+			* Hold: his army stops once he is within HoldApproachStuds OUTSIDE his plot edge (not 4 studs inside), and
+			  is released when he is HoldReleaseStuds out again. No follow goal of a unit outside his plot is ever inside
+			  it (+ PlotPadStuds): it is swapped for that unit's wait spot, so nobody crosses his gate or plot edge.
+			* Wait rows: both sides of the gate lane (MainGateWidth / 2 + WaitGap), PerRow per side per row, ColSpacing
+			  apart, RowSpacing deep from WaitOut outside the front edge; each soldier turns to face out on arrival.
+			* Fixed seats: each unit keeps its own seat number for life (the lowest free one when it joins), so a death
+			  never reshuffles the rest; wedge rows are RowBack / RowSide apart (> SeparationStuds, never inside each
+			  other); when he turns round, a row pair keeps its world sides (FlipHysteresisStuds) instead of crossing.
+			* Leaving: no far / stuck teleport for LeaveGraceSeconds after he leaves his base (they walk back into the
+			  wedge; the void rescue still runs). ]]
+		Tidy = {
+			Rollout = "owner",
+			HoldApproachStuds = 6,
+			HoldReleaseStuds = 10,
+			PlotPadStuds = 2,
+			WaitOut = 14,
+			WaitGap = 5,
+			PerRow = 4,
+			ColSpacing = 4,
+			RowSpacing = 4,
+			RowBack = 4,
+			RowSide = 3,
+			FlipHysteresisStuds = 1.5,
+			LeaveGraceSeconds = 8,
+		},
 		LogSeconds = 5,
 	},
 

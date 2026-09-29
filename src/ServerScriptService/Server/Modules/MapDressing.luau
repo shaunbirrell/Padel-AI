@@ -527,6 +527,15 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		end
 	end
 
+	-- claude-bud JOB 3: the world fill's connector roads, reserved in the occupancy before the travel dressing is placed
+	local wfill = getWorldModule("WorldFill")
+	if wfill then
+		local okR, errR = pcall(wfill.ReserveRoads, occ, wd)
+		if not okR then
+			warn("[MapDressing] WorldFill.ReserveRoads failed:", errR)
+		end
+	end
+
 	-- 2) the legacy quay kit, as-is (inside the reserved Port footprint) — only while the Port POI is not built
 	-- 7) Dockside — v70: re-laid round the South Docks harbour (water x -240..240, z 1364..1490). Piers stand in the
 	-- harbour off the quay (WE_AllowInWater); crates / drums / lights on the quay (z 1330..1360) beside them, never in
@@ -589,6 +598,14 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		local okHy, errHy = pcall(wh.Enforce, dressing)
 		if not okHy then
 			warn("[MapDressing] WorldHygiene.Enforce failed:", errHy)
+		end
+	end
+
+	-- claude-bud JOB 3: the world fill props (Workspace.WorldFill), after everything else so they avoid it all
+	if wfill then
+		local okF, errF = pcall(wfill.Build, quality, occ, wd, wk)
+		if not okF then
+			warn("[MapDressing] WorldFill.Build failed:", errF)
 		end
 	end
 

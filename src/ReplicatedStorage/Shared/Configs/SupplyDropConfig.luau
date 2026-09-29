@@ -9,6 +9,8 @@
 	overlaps the next one for 30 s and MaxActive 2 is the real cap.
 ]]
 
+local AdminConfig = require(script.Parent.AdminConfig)
+
 local SupplyDropConfig = {
 	Enabled = true,
 	SpawnIntervalSeconds = 90,
@@ -25,6 +27,37 @@ local SupplyDropConfig = {
 	CrateColor = Color3.fromRGB(210, 160, 55),
 	LidColor = Color3.fromRGB(180, 140, 50),
 	LabelLiftStuds = 3, -- label centre above the lid
+
+	--[[ claude-bud JOB 4.1 (2026-09-29): the parachute AIRDROP. Every IntervalSeconds (while a player it is live for is
+		in the server) one crate falls from DropHeight under a canopy (FallSeconds) onto a random open spot (the same
+		picker as the crates: event pads, else open ground), shows an objective marker to those players, and the FIRST
+		of them to hold ClaimHoldSeconds within ClaimRadius gets Cash (server-side, EconomyService.AddCash). Gone after
+		LifetimeSeconds. 3 parts while falling (crate, lid, canopy), 2 on the ground. Rollout "owner" =
+		AdminConfig.IsPlaytestOwner only, "all" = everyone, anything else = off (the game as before). ]]
+	Airdrop = {
+		Rollout = "owner",
+		FirstDelaySeconds = 60,
+		IntervalSeconds = 600,
+		DropHeight = 160,
+		FallSeconds = 12,
+		LifetimeSeconds = 300,
+		ClaimRadius = 12,
+		ClaimHoldSeconds = 2,
+		CashMin = 15000,
+		CashMax = 40000,
+		CanopyColor = Color3.fromRGB(96, 110, 70),
+	},
 }
+
+-- claude-bud: is the airdrop live for this player (fail closed)
+function SupplyDropConfig.AirdropLiveFor(userId: any): boolean
+	local mode = SupplyDropConfig.Airdrop.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
 
 return SupplyDropConfig
