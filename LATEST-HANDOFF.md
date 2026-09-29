@@ -23,6 +23,7 @@ gate back to "owner"; new features may still ship owner-only first under their o
 - **Id 0 hidden:** PV_Bastion / PV_MotorPool (and every Id 0 product) have no Shop row or prompt for anyone.
 - Pins: `tools/checks/codebot_v101.py` (+ `tools/v101_gate_test.py`, Luau-executed gates for a non-owner account). Old
   "owner-only first" pins retired with a `# v101 ... superseded` prefix. PreferMesh OFF. WE_Building* untouched.
+- **Published:** Open Cloud place version **99** (commit 56a1c5c). BuyPathStatic PASS=5471 FAIL=0 (parse gate on), rojo build ok.
 - **Publish note for Shaun:** "Migrate to Latest Update" (or shut down old servers) so v101 appears.
 
 ---
