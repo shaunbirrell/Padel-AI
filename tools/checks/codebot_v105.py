@@ -7,9 +7,10 @@ _cb105_CFG = _cb105_S + "Configs/CodesConfig.luau"
 _cb105_SVC = _cb105_S + "Services/CodesService.luau"
 
 # ── build ──
-for _f in (_cb105_S + "Services/DataService.luau", _cb105_S + "Services/BaseService.luau", _cb105_S + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 105)', "CODEBOT v105: WE_Build=105 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb105_S + "Services/DataService.luau", "WE_Build=105", "CODEBOT v105: DataService profile-loaded log says WE_Build=105")
+# v106 (Code Bot): retired build pins, superseded in tools/checks/codebot_v106.py:
+#for _f in (_cb105_S + "Services/DataService.luau", _cb105_S + "Services/BaseService.luau", _cb105_S + "EarlyRemotes.server.luau"):
+#    must_contain(_f, 'SetAttribute("WE_Build", 105)', "CODEBOT v105: WE_Build=105 " + _f.rsplit("/", 1)[-1])
+#must_contain(_cb105_S + "Services/DataService.luau", "WE_Build=105", "CODEBOT v105: DataService profile-loaded log says WE_Build=105")
 
 # ── BUDSQUAD: active, no expiry, Discord display name, exact cash reward ──
 _cb105_C = read(_cb105_CFG) or ""
