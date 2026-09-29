@@ -118,6 +118,25 @@ local RigConfig = {
 		},
 	},
 
+	-- v119 cloth bodies (VisualAssetConfig.SoldierAssetId, the Army Soldier 7703684779): block limbs dressed by a classic
+	-- Shirt / Pants template. A rig has no Humanoid (catalog rule: a Humanoid in WE_Rig would turn every limb into a
+	-- "character" for the hit / aim code), so RigBuilder paints the template's regions (standard 585 x 559 layout) onto
+	-- the limb faces as Texture objects named WE_Cloth, tinted TintAlpha of the way to the kit colour (friend / foe cue).
+	-- Clients (RigAnimator) hide WE_Cloth and the helmet on figures outside the LOD pick, and show helmets in pick order
+	-- only while the pick stays inside Budget.MaxMeshedTriangles (a cloth figure costs BodyTris, + HeadwearTris with its
+	-- helmet; a Roblox-body figure TrianglesPerMeshedFigure). Enabled = false: plain kit-colour blocks (still animated).
+	Cloth = {
+		Enabled = true,
+		CanvasW = 585, -- template pixels (Roblox shirt / pants template)
+		CanvasH = 559,
+		TintAlpha = 0.3, -- 0 = the template's own colours, 1 = multiplied by the kit colour
+		TopFaces = true, -- paint the shoulder / torso tops (seen from the raised third-person camera)
+		BodyTris = 60, -- Torso + 4 block limbs (12 triangles a box)
+		HeadwearTris = 2103, -- the Army Soldier FAST helmet mesh 5608666819, LOD0 (measured v119: mesh v3.01, 3536 faces all LODs)
+		-- the file's headwear pick: the first Accoutrement whose lower-case name holds one of these (else the first one)
+		HeadwearPrefer = { "helmet", "beret", "cap", "hat" } :: { string },
+	},
+
 	-- Figure budget (BuyPathStatic pins these; the census driver checks them)
 	Budget = {
 		MaxPartsPerFigure = 10, -- host root + Torso + 4 limbs + Head + headwear + Rifle (+ Pack on heavy kinds)

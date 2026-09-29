@@ -88,6 +88,7 @@ export type AirGear = {
 
 export type AssetRef = {
 	ModelAssetId: number?, -- InsertService / AssetService:LoadAssetAsync catalog Model
+	FallbackAssetId: number?, -- v119 rig rows: loaded instead when ModelAssetId fails for good (not authorized / not an R6 rig)
 	MeshId: number?, -- optional SpecialMesh / MeshPart MeshId (0 = unused)
 	Note: string?,
 	-- W3 LOOK: one piece of a (Roblox-owned) pack
@@ -729,8 +730,19 @@ local BODY_BATTLESHIP = {
 	StripDecals = true,
 }
 
+-- v119 (owner pick 2026-09-29): the soldier body of the player's army (Squad + escorts) and the base / tower guards.
+-- "Army Soldier" 7703684779 (Creator Store, @Ca_zr, free; owned by the place creator so LoadAsset works live): a
+-- block-limb R6 body dressed by a camo Shirt / Pants and a FAST helmet. Its 6 scripts, 9 remotes, weapons (26 unions,
+-- 8 MeshParts) and sounds never reach a template (VisualAssetService strips every script / remote first; RigBuilder keeps
+-- only Torso, 4 limbs, the helmet and the clothing template ids). A failed load or a refused rig falls back to the Roblox
+-- "Soldier" 187790284 (the v118 body). Set SOLDIER_ASSET_ID = 187790284 to go back to the old body everywhere.
+local SOLDIER_ASSET_ID = 7703684779
+local SOLDIER_FALLBACK_ID = 187790284
+
 local VisualAssetConfig = {
 	Enabled = true,
+	SoldierAssetId = SOLDIER_ASSET_ID, -- v119: Characters.Squad / Guard / GateGuard
+	SoldierFallbackAssetId = SOLDIER_FALLBACK_ID,
 	StripScripts = true,
 	-- v87 (Code Bot): who wears the Rollout = "Body" store bodies (helicopters, bombers, transports, ships): "owner" = only
 	-- vehicles spawned by the playtest owner (AdminConfig.IsPlaytestOwner), "all" = everyone, "off" = nobody (Part kit).
@@ -1384,17 +1396,17 @@ local VisualAssetConfig = {
 	Characters = {
 		-- R-RIG: owner rule 9 + decision #8 default: the Roblox "Soldier" 187790284 (creator Roblox) for every soldier kind
 		Soldier = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret", Note = "Roblox Soldier (rule 9)" } :: AssetRef,
-		Squad = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret", Note = "friendly squad units" } :: AssetRef,
+		Squad = { ModelAssetId = SOLDIER_ASSET_ID, FallbackAssetId = SOLDIER_FALLBACK_ID, Rig = "R6", Headwear = "Beret", Note = "v119 Army Soldier 7703684779: friendly squad units (the army escorts copy it on each phone)" } :: AssetRef,
 		Infantry = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet", Note = "hostile infantry" } :: AssetRef,
 		Worker = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet", Note = "#9 default: Roblox soldier body" } :: AssetRef,
 		WorkerFallback = { ModelAssetId = 0, Note = "R-RIG: unused (rig kinds keep the Part kit on a failed load)" } :: AssetRef,
 		HeavyInfantry = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
-		Guard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		Guard = { ModelAssetId = SOLDIER_ASSET_ID, FallbackAssetId = SOLDIER_FALLBACK_ID, Rig = "R6", Headwear = "Beret", Note = "v119 Army Soldier 7703684779" } :: AssetRef,
 		BankGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
 		OilRigGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
 		FortGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
 		CampCommander = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
-		GateGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		GateGuard = { ModelAssetId = SOLDIER_ASSET_ID, FallbackAssetId = SOLDIER_FALLBACK_ID, Rig = "R6", Headwear = "Beret", Note = "v119 Army Soldier 7703684779: base gate / tower guards" } :: AssetRef,
 		-- W1 CFG drop (country / real-world weapon in the source): 0 → CharacterAlt (0) → Part kit
 		SpecialForces = { ModelAssetId = 0, Note = "W1 CFG drop (real-world unit) — Part kit" } :: AssetRef,
 		SpecialForcesAlt = { ModelAssetId = 0, Note = "W1 CFG drop (real-world weapon) — unused key" } :: AssetRef,

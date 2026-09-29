@@ -45,6 +45,9 @@ type Escort = { Model: Model, Tracks: Tracks?, State: string, Torso: BasePart?, 
 -- v114: an escort's RootJoint, its index in the unit's row and the last local offset written (weak: goes with the escort)
 type EscLayout = { Joint: Motor6D, Index: number, Off: Vector3? }
 local escLayout: { [any]: EscLayout } = setmetatable({}, { __mode = "k" }) :: any
+-- v119: an escort's helmet and whether the helmet budget hides it this pass (weak: goes with the escort)
+type EscHelm = { Part: BasePart, Off: boolean }
+local escHelm: { [any]: EscHelm } = setmetatable({}, { __mode = "k" }) :: any
 type Entry = {
 	Rig: Model,
 	Index: number,
@@ -75,9 +78,14 @@ type Entry = {
 	WantEsc: number, -- escorts this figure asks for this pass (WE_Escorts, capped; 0 when not eligible)
 	Escorts: { Escort },
 	LeadHidden: boolean, -- an own squad unit in the camera's face: its rig hidden on this client (parts + Decals)
+	Cloth: { Texture }, -- v119: the WE_Cloth Textures of a cloth body (hidden while Far)
+	HasLod: boolean, -- v119: FileMesh limbs or cloth: the figure has a far look (blocks) to swap to
+	HelmetOff: boolean, -- v119: a cloth body's helmet hidden this pass (over Budget.MaxMeshedTriangles)
 }
 
 local TAG: string = RigConfig.Tag
+local CLOTH_NAME = "WE_Cloth" -- v119: RigBuilder.ClothName (server)
+local clothCfg = (RigConfig :: any).Cloth or {}
 local ESCORT_NAME = "WE_Escort"
 local TRACK_NAMES = { "Hold", "Idle", "Walk", "Aim" }
 local LIMB_NAMES = { "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg" }
@@ -109,7 +117,7 @@ local guardN = 0
 local stats = {
 	Passes = 0, Animated = 0, Loads = 0, Registered = 0, Escorts = 0, EscortParts = 0, EscortBuilds = 0, FarSwaps = 0,
 	Meshed = 0, MeshedStatic = 0, EscortsHidden = 0, EscortHides = 0, HoldBaked = 0, LeadsHidden = 0, LeadHides = 0,
-	GuardPasses = 0,
+	GuardPasses = 0, HelmetsOn = 0, HelmetsOff = 0, MeshedTris = 0,
 }
 
 local function animation(name: string): Animation?
@@ -210,6 +218,10 @@ local function setEscortHidden(x: Escort, hidden: boolean)
 	for _, p in ipairs(x.Parts) do
 		p.LocalTransparencyModifier = if hidden then 1 else 0
 	end
+	local hb = escHelm[x]
+	if hb and hb.Off and not hidden then
+		hb.Part.LocalTransparencyModifier = 1 -- v119: shown again, but its helmet stays over the triangle budget
+	end
 	for _, d in ipairs(x.Decals) do -- the face: a Decal is drawn even on a hidden part
 		d.LocalTransparencyModifier = if hidden then 1 else 0
 	end
@@ -229,9 +241,15 @@ local function setLeadHidden(e: Entry, hidden: boolean)
 	for _, c in ipairs(e.Rig:GetChildren()) do
 		if c:IsA("BasePart") then
 			c.LocalTransparencyModifier = if hidden or (c == e.Beret and e.Far) then 1 else 0
+			if c == e.Beret and e.HelmetOff then
+				c.LocalTransparencyModifier = 1 -- v119: a helmet over the triangle budget stays hidden
+			end
 			for _, d in ipairs(c:GetChildren()) do
 				if d:IsA("Decal") then -- the kit head's face: a Decal is drawn even on a hidden part
 					d.LocalTransparencyModifier = if hidden then 1 else 0
+					if e.Far and d.Name == CLOTH_NAME then
+						d.LocalTransparencyModifier = 1 -- v119: a far cloth body shows its kit-colour blocks
+					end
 				end
 			end
 		end
@@ -330,6 +348,7 @@ local function buildEscort(e: Entry, offset: Vector3, index: number): Escort?
 	stats.EscortParts += RigConfig.Budget.PartsPerEscort
 	stats.EscortBuilds += 1
 	local rec: Escort = { Model = copy, Tracks = loadTracks(animatorOf(copy), true, false), State = "", Torso = torso, Parts = parts, Decals = decals, Hidden = false }
+	escHelm[rec] = if byName.Beret then { Part = byName.Beret, Off = false } else nil -- v119: the copy's helmet
 	if joint then
 		escLayout[rec] = { Joint = joint, Index = index, Off = nil }
 	end
@@ -375,6 +394,12 @@ local function setFar(e: Entry, far: boolean)
 	end
 	if e.Beret then
 		e.Beret.LocalTransparencyModifier = if far or e.LeadHidden then 1 else 0
+		if e.HelmetOff then
+			e.Beret.LocalTransparencyModifier = 1 -- v119: over the helmet triangle budget
+		end
+	end
+	for _, t in ipairs(e.Cloth) do -- v119: the cloth body's far look is its kit-colour blocks
+		t.LocalTransparencyModifier = if far or e.LeadHidden then 1 else 0
 	end
 	stats.FarSwaps += 1
 end
@@ -397,6 +422,17 @@ local function add(inst: Instance)
 			local s = p.Size
 			local nominal = NOMINAL[n]
 			table.insert(brickScales, Vector3.new(nominal.X / s.X, nominal.Y / s.Y, nominal.Z / s.Z)) -- a 1.45-deep hit torso still looks 1 deep
+		end
+	end
+	local cloth: { Texture } = {}
+	for _, n in ipairs(LIMB_NAMES) do -- the WE_Cloth Textures sit on the limbs (RigBuilder.PaintCloth), once per figure
+		local p = rig:FindFirstChild(n)
+		if p then
+			for _, d in ipairs(p:GetChildren()) do
+				if d:IsA("Texture") and d.Name == CLOTH_NAME then
+					table.insert(cloth, d)
+				end
+			end
 		end
 	end
 	local beret = rig:FindFirstChild("Beret")
@@ -432,6 +468,9 @@ local function add(inst: Instance)
 		WantEsc = 0,
 		Escorts = {},
 		LeadHidden = false,
+		Cloth = cloth,
+		HasLod = #meshes > 0 or #cloth > 0,
+		HelmetOff = false,
 	}
 	entries[e.Index] = e
 	byRig[rig] = e
@@ -650,6 +689,67 @@ local function cameraGuard(camCf: CFrame, focus: Vector3?, fovDeg: number?)
 	end
 end
 
+-- ── v119 helmet budget ───────────────────────────────────────────────────────────────────────────────────────────
+-- A cloth body (Army Soldier) is 60 triangles of blocks + a 2103-triangle FAST helmet; a Roblox-body figure is
+-- Budget.TrianglesPerMeshedFigure (its beret included). Every meshed figure (and escort) pays its body; helmets then go
+-- in pick order (own army first, nearest next, statues last) while the total stays inside Budget.MaxMeshedTriangles.
+-- A unit's escorts share its helmet decision. Only a flip writes LocalTransparencyModifier.
+local helmOrder: { Entry? } = {}
+
+local function setHelmet(e: Entry, on: boolean)
+	local off = not on
+	if e.HelmetOff ~= off then
+		e.HelmetOff = off
+		if e.Beret then
+			e.Beret.LocalTransparencyModifier = if e.Far or e.LeadHidden or off then 1 else 0
+		end
+	end
+	for _, x in ipairs(e.Escorts) do
+		local hb = escHelm[x]
+		if hb and hb.Off ~= off then
+			hb.Off = off
+			hb.Part.LocalTransparencyModifier = if x.Hidden or off then 1 else 0
+		end
+	end
+end
+
+local function helmetBudget(hn: number)
+	local budget = tonumber(RigConfig.Budget.MaxMeshedTriangles) or math.huge
+	local roblox = tonumber(RigConfig.Budget.TrianglesPerMeshedFigure) or 0
+	local body = tonumber(clothCfg.BodyTris) or 0
+	local helm = tonumber(clothCfg.HeadwearTris) or 0
+	local used = 0
+	local sn = hn
+	for _, e in ipairs(entries) do
+		if (e.Picked or e.SPicked) and not e.Far and e.HasLod then
+			used += (if #e.Cloth > 0 then body else roblox) * (1 + #e.Escorts)
+			if e.SPicked then
+				sn += 1
+				helmOrder[sn] = e -- statues after the animated pick
+			end
+		end
+	end
+	local on, off = 0, 0
+	for i = 1, sn do
+		local e = helmOrder[i] :: Entry
+		helmOrder[i] = nil
+		if #e.Cloth > 0 and e.Beret and not e.Far then
+			local want = helm * (1 + #e.Escorts)
+			local show = used + want <= budget
+			if show then
+				used += want
+				on += 1 + #e.Escorts
+			else
+				off += 1 + #e.Escorts
+			end
+			setHelmet(e, show)
+		end
+	end
+	stats.HelmetsOn = on
+	stats.HelmetsOff = off
+	stats.MeshedTris = used
+end
+
 -- ── one LOD pass (also the test hook) ────────────────────────────────────────────────────────────────────────────
 -- now = os.clock(); camCf = the camera CFrame; focus = the local player's root position (nil: none); fovDeg = the
 -- camera's vertical field of view
@@ -714,6 +814,8 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 		end
 		if not e.Picked and not e.SPicked and #e.Meshes > 0 then
 			setFar(e, true)
+		elseif not e.Picked and not e.SPicked and e.HasLod then
+			setFar(e, true) -- v119: a cloth body (no FileMesh limbs) goes to its kit-colour blocks too
 		end
 		if e.LeadHidden and not e.Picked then
 			setLeadHidden(e, false) -- out of the guard buffer: shown again
@@ -726,7 +828,7 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 			setFar(e, false)
 			swaps += 1
 		end
-		if not e.Far and #e.Meshes > 0 then
+		if not e.Far and e.HasLod then
 			if e.SPicked then
 				meshedStatic += 1
 			else
@@ -792,10 +894,13 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 		end
 	end
 	local gn = 0
+	local hn = 0
 	local leadOn = (tonumber(camCfg.LeadScreenFrac) or 0) > 0 -- off: own units without escorts need no guard runs
 	for i = 1, pickN do
 		local e = pick[i] :: Entry
 		pick[i] = nil
+		hn += 1
+		helmOrder[hn] = e -- v119: helmets in pick order (own army first, then nearest)
 		if not e.Own and e.Tracks then
 			while #e.Escorts < e.WantEsc and room > 0 and builds < esc.MaxBuildsPerTick do
 				local x = buildEscort(e, esc.Offsets[#e.Escorts + 1], #e.Escorts + 1)
@@ -823,6 +928,7 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 	end
 	guardN = gn
 	cameraGuard(camCf, focus, fovDeg)
+	helmetBudget(hn) -- v119: after the escorts of this pass exist
 	stats.Passes += 1
 	stats.Animated = animated
 	stats.Meshed = meshed

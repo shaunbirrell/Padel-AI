@@ -454,20 +454,53 @@ end
 -- R-RIG: ids that a Characters ref with Rig = "R6" names are baked by RigBuilder (joints kept, no Humanoid)
 local function isRigId(assetId: number): boolean
 	for _, ref in pairs(VisualAssetConfig.Characters :: any) do
-		if typeof(ref) == "table" and ref.Rig == "R6" and ref.ModelAssetId == assetId then
+		if typeof(ref) == "table" and ref.Rig == "R6" and (ref.ModelAssetId == assetId or ref.FallbackAssetId == assetId) then
 			return true
 		end
 	end
 	return false
 end
 
+-- v119: the rig id a Characters row uses now: its ModelAssetId, or its FallbackAssetId once that failed for good
+-- (LoadAsset not authorized / archived, or BakeTemplate refused it: not an R6 rig, over the part cap)
+local function rigIdOf(ref: any): number
+	local id = refId(ref)
+	local fb = if typeof(ref) == "table" and typeof(ref.FallbackAssetId) == "number" then ref.FallbackAssetId else 0
+	if id > 0 and failed[id] and fb > 0 and fb ~= id then
+		return fb
+	end
+	return id
+end
+
+-- v119: every script, remote and bindable of an inserted rig file goes before anything reads it, whatever
+-- VisualAssetConfig.StripScripts says (free models can hide require() backdoors); returns how many went
+local RIG_HAZARDS = { "LuaSourceContainer", "RemoteEvent", "RemoteFunction", "UnreliableRemoteEvent", "BindableEvent", "BindableFunction" }
+local function stripRigHazards(model: Instance): number
+	local n = 0
+	for _, d in ipairs(model:GetDescendants()) do
+		for _, cls in ipairs(RIG_HAZARDS) do
+			if d:IsA(cls) then
+				n += 1
+				pcall(d.Destroy, d)
+				break
+			end
+		end
+	end
+	return n
+end
+
 -- R-RIG: hosts that asked for a rig while its file was loading or waiting for a retry (weak keys: a host that is
 -- destroyed meanwhile is simply forgotten). They get the rig when the file arrives (flushRigPending).
 local rigPending: { [Model]: string } = setmetatable({} :: any, { __mode = "k" })
 local flushRigPending: (number) -> ()
+local rigFallback: (number) -> ()
 
 local function acceptTemplate(assetId: number, model: Model): Model?
 	if isRigId(assetId) then
+		local stripped = stripRigHazards(model)
+		if stripped > 0 then
+			print(string.format("[VisualAssetService] rig %d: stripped %d script(s) / remote(s) before baking", assetId, stripped))
+		end
 		local rig, why = RigBuilder.BakeTemplate(model, assetId)
 		if rig == nil or countParts(rig) > maxParts() or hasHumanoid(rig) then
 			failed[assetId] = true
@@ -657,6 +690,7 @@ end
 local function giveUp(assetId: number, tries: number, errText: string, why: string?)
 	cooling[assetId] = nil
 	failed[assetId] = true
+	task.defer(rigFallback, assetId) -- v119: hosts waiting on a rig id that never came get its fallback
 	warn(string.format("[VisualAssetService] LoadAsset failed %d after %d %s (%s%s) — Part kit look stays", assetId,
 		tries, if tries == 1 then "try" else "tries", errText, if why then "; " .. why else ""))
 end
@@ -693,6 +727,7 @@ function scheduleRetry(assetId: number, errText: string)
 			print(string.format("[VisualAssetService] %d loaded on retry %d", assetId, tries + 1))
 		elseif failed[assetId] then
 			cooling[assetId] = nil
+			task.defer(rigFallback, assetId) -- v119: a retry that failed for good (refused rig / permanent error)
 		end
 		-- else: another retry is scheduled (cooling stays set)
 	end)
@@ -1285,7 +1320,7 @@ function flushRigPending(assetId: number)
 		rigPending[host] = nil
 		local ref = (VisualAssetConfig.Characters :: any)[kind] or VisualAssetConfig.Characters.Soldier
 		-- still in the world and still a Part kit (a dying host is removed by its builder moments later anyway)
-		if typeof(ref) == "table" and ref.Rig == "R6" and refId(ref) == assetId and host:IsDescendantOf(world)
+		if typeof(ref) == "table" and ref.Rig == "R6" and rigIdOf(ref) == assetId and host:IsDescendantOf(world)
 			and host:FindFirstChild(RigBuilder.RigName) == nil then
 			if RigBuilder.Attach(host, template, { Headwear = ref.Headwear, StaticHoldDeg = RigConfig.Anim.StaticHoldDeg }) then
 				host:SetAttribute("WE_CatalogAssetId", assetId)
@@ -1295,6 +1330,29 @@ function flushRigPending(assetId: number)
 	end
 	if n > 0 then
 		print(string.format("[VisualAssetService] rig %d attached late to %d figure(s)", assetId, n))
+	end
+end
+
+-- v119: a rig id failed for good: the hosts waiting on it (rigPending) get the row's FallbackAssetId (one insert,
+-- in its own thread; flushRigPending attaches it). Nothing to do for ids without a fallback row.
+function rigFallback(assetId: number)
+	if not failed[assetId] then
+		return
+	end
+	local seen: { [number]: boolean } = {}
+	for _, ref in pairs(VisualAssetConfig.Characters :: any) do
+		if typeof(ref) == "table" and ref.Rig == "R6" and refId(ref) == assetId then
+			local fb = rigIdOf(ref)
+			if fb ~= assetId and fb > 0 and not seen[fb] then
+				seen[fb] = true
+				warn(string.format("[VisualAssetService] rig %d unavailable — soldiers use the fallback rig %d", assetId, fb))
+				task.spawn(function()
+					if loadModel(fb, true) then
+						flushRigPending(fb)
+					end
+				end)
+			end
+		end
 	end
 end
 
@@ -1308,8 +1366,12 @@ function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: str
 		if RigConfig.Enabled ~= true then
 			return false -- R-RIG off: the Part kit stays (no load, never a welded statue)
 		end
-		local rid = refId(rigRef)
+		local rid = rigIdOf(rigRef) -- v119: the fallback rig once the preferred one failed for good
 		local rigTemplate = if rid > 0 then loadModel(rid, forceChar) else nil
+		if rigTemplate == nil and rigIdOf(rigRef) ~= rid then
+			rid = rigIdOf(rigRef) -- the preferred rig just failed (not authorized / refused): its fallback now
+			rigTemplate = loadModel(rid, forceChar)
+		end
 		if rigTemplate == nil then
 			if rid > 0 and not failed[rid] then
 				rigPending[hostModel] = rigKind -- loading / retry cooling: the rig comes when the file does
