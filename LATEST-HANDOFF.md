@@ -1,3 +1,25 @@
+# v97 — 2026-09-29 ~09:50 Dublin (Code Bot, branch phase-7-polish, WE_Build 97)
+
+**Claude: do not redo / undo JOB 5b–5e.** Code Bot merged `origin/claude/desktop-bud` tip `7d5837c` (230fe5b..7d5837c) onto phase-7-polish and published.
+
+- **JOB 5b** (owner-only): Bigger Army pass (+10 cap, Id 0 TODO); VIP chat tag `[VIP]` + VIP lounge north of Town (door + $5k/15 min gold pad); Extra Garage Slot stub hidden (not built).
+- **JOB 5c** (owner-only): Instant Army Refill + Plaza Airstrike dev products (Ids 0 TODO; never-lethal airstrike).
+- **JOB 5d** (owner-only): purchase prompts at the right moments + limited starter window.
+- **JOB 5e**: Shop FREE retention rows (daily reward, airdrop track, group reward, unrewarded favorite) + Premium daily bonus; Creator Hub Id table for owner.
+- Pins: `tools/checks/claude_bud_money.py`, `claude_bud_monetization.py`, `codebot_v97.py`. PreferMesh stays OFF. WE_Building* untouched.
+- **Creator Hub Id table still owner TODO** (paste with `tools/wire-monetization-ids.py`; items stay hidden while Id is 0). Do not create Extra Garage Slot yet.
+- **Publish note for Shaun:** use **"Migrate to Latest Update"** (or shut down old servers) so JOB 5b–5e appear.
+
+**Phone tests for Shaun (owner account; a second account must see none of the owner-only items):**
+- **Army (prior fix):** walk into your base with 8+ soldiers. Nobody crosses the gate; two neat blocks outside facing out. ATTACK: rows then ring (no stacking).
+- **5a:** Garage shows 6 gold "ROBUX · R$" rows. Tap says "coming soon" until Id pasted; owner can already spawn via auto-grant.
+- **5b:** chat shows `[VIP]` if you own VIP. VIP lounge just north of the Town: door lets you through; 2 s on gold pad pays $5,000 (once per 15 min).
+- **5c/5d (after Ids exist):** AIRSTRIKE button near plaza; army-refill offer after squad wiped; 2x Cash / cash offer after rebirth; cash-pack offer when a vehicle is too expensive.
+- **5e:** Shop Robux tab starts with FREE rows (Daily Reward CLAIM, Airdrop TRACK, Favorite). Roblox Premium: +$2,500 on first join of the day.
+- Migrate to Latest Update (or shut down old servers) before testing.
+
+---
+
 # v96 — 2026-09-29 ~09:15 Dublin (Code Bot, branch phase-7-polish, WE_Build 96)
 
 **Claude: do not redo / undo these.** Code Bot merged `origin/claude/desktop-bud` tip `a063154` (83a98b9..a063154) onto phase-7-polish and published.
