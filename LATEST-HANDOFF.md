@@ -1,36 +1,32 @@
 <!-- Q2-START -->
-# WHERE I STOPPED — 2026-09-29 (Code Bot shipped v108) — ARMY FLANK LIVE
-**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v108) before new work.** Do not redo JOB 14, JOB 15, BOARDS, or Flank.
-Keep v102 Codes / CashBoost, v104 Engagement (all) + Discord invite + exploit guards, v105 BUDSQUAD, v106 GameFeel all + RemoteGate observe, v107 BOARDS.
-Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [x] 15 anti-exploit sweep · [x] BOARDS · [x] army Flank (phone camera)
+# WHERE I STOPPED — 2026-09-29 (Code Bot shipped v109) — JOBS 17–19 LIVE
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v109) before new work.** Do not redo JOB 14, JOB 15, BOARDS, Flank, JOB 17, JOB 18, or JOB 19.
+Keep v102 Codes / CashBoost, v104 Engagement (all) + Discord invite + exploit guards, v105 BUDSQUAD, v106 GameFeel all + RemoteGate observe, v107 BOARDS, v108 Flank.
+Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [x] 15 anti-exploit sweep · [x] BOARDS · [x] army Flank · [x] 17 night lighting · [x] 18 world fill 2 · [x] 19 purchase stands · [ ] 20 real base guards
 
-- Army Follow2.Tidy.Formation = **"Flank"** (file each side, last row ~8 studs back). "Wedge" restores the old trail.
 - PreferMesh stays OFF. WE_Building* untouched. Never bump WE_Build / publish (Code Bot only).
+- Speed Pass display price is 99 R$ (owner repriced in Creator Hub).
 
-- Phone tests (956x440 + a small phone): walk, run and sprint through town with 5+ soldiers — they stay on screen beside you, no vanish / pop-in; stop and turn: no swirl; enter your base: they still wait at the gate. If worse: ArmyConfig.Follow2.Tidy.Formation = "Wedge".
+## QUEUE 4 remaining
+- J20 (not started): real base guards + purchasable watchtower guards that earn cash/XP/leaderboard credit for kills. Rebase on v109 first.
 
-## QUEUE 4 (claude-bud, rebased on v107)
-Jobs: [x] 17 night lighting · [x] 18 world fill 2 · [x] 19 purchase stands · [ ] 20 real base guards
-- J17 (live for all, LightingConfig): brighter moonlit night (midnight ambient 90,95,120, Brightness 2.0, blue colour
-  correction), ~50 warm night lights (town roads, plaza ring, Town Square, base gates + hangars, plaza flag), Neon lamp
-  heads / lit windows / runway edge markers only at night. Phone tests (brightness 50 %, 956x440 + a small phone): wait
-  for night (~8 min into a server, or /time if admin): roads, bases and other players clearly visible; streetlights on
-  along the town roads; windows lit; runway edge dots glow; plaza flag lit; drive the town roads at night (nothing in
-  the lane); lower Graphics to 1-3: fewer lights, glow stays; frame rate OK. Revert: LightingConfig.Enabled = false.
-- J18 (live for all, WorldFillConfig.Fill2): town identities (market Town, industrial Port, garrison Depot/Armory),
-  rooftop tanks/AC/antennas, a themed patch in every empty 300-stud cell (farms+silos, oil, comms, ruins, tank
-  graveyard, palms, rocks/hills, wadis, checkpoints), power lines on the highways, dirt tracks, a dune belt. Phone
-  tests: BOMBER FLYOVER at 80+ studs over the whole map (no big empty squares, the horizon has dunes N/E/W); drive
-  every highway + the Town roads + the plaza (nothing blocks); walk the Town market corners (stalls, signs, cars);
-  check every base plot, runway, spawn and the plaza capture ring are clear; frame rate in the Town on a mid phone;
-  Graphics 1-3: small clutter vanishes beyond ~180 studs. Server log line: [WAR EMPIRE] WorldFill2: ... parts=.
-- J19 (live for all): the flat red / yellow / cyan Robux pads are purchase STANDS (hex steel plinth, gold trim, spinning
-  hologram, info board with the config price, pulsing ring) in a SUPPLY DEPOT row at the front-left of every base; the
-  Golden Pump stand by the pumps. Phone tests: walk onto a stand: NOTHING happens; hold the prompt "Buy - R$ 99": the
-  normal Roblox purchase dialog (cancel it); with an owned pass the stand is green with "✓ OWNED" and no prompt;
-  names / prices readable at 956x440; the row does not block the gate road or the ATM; Graphics 1-3: no spin.
-
+Phone tests for v109 below in the v109 section.
 <!-- Q2-END -->
+
+# v109 — 2026-09-29 ~16:35 Dublin (Code Bot, branch phase-7-polish, WE_Build 109) — JOBS 17–19 LIVE FOR ALL
+
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v109) before JOB 20. Do not redo J17/J18/J19, Flank, BOARDS, JOB 14, or JOB 15.**
+Merged `origin/claude/desktop-bud` tip `7667291` (JOB 17 night + JOB 18 WorldFill 2 + JOB 19 purchase stands) into phase-7-polish (fast-forward from ad1c5f7 Speed Pass 99 R$).
+
+- **JOB 17 Night (live for everyone, `LightingConfig`):** moonlit night (midnight ambient ~90,95,120, Brightness floor 2.0, blue colour correction), ~50 warm night lights (town roads, plaza, Town Square, base gates/hangars, plaza flag), Neon glow only at night. Low quality halves lights.
+- **JOB 18 WorldFill 2 (live for everyone, `WorldFillConfig.Fill2`):** town identities (market/port/garrison), rooftop clutter, themed patch in every empty 300-stud cell, highway power lines, dirt tracks, dune belt. Cap 7,000 Full / 2,600 Low; Tier 2 clutter hidden beyond 180 on low quality.
+- **JOB 19 Purchase stands (live for everyone):** Supply Depot row of Robux purchase stands (hex steel plinth, gold trim, hologram, info board with config price, pulsing ring) + Golden Pump stand; prompt-only buying; OWNED green check. Same PromptPremiumPad path.
+- Kept: v104 Engagement all + guards; Discord invite; v105 BUDSQUAD; v106 GameFeel all + RemoteGate observe; v107 BOARDS; v108 Flank; Speed Pass 99 R$.
+- Pins: `tools/checks/codebot_v109.py` + `claude_bud_night.py` / `claude_bud_worldfill2.py` / `claude_bud_stands.py`. BuyPathStatic PASS=5890 FAIL=0; rojo ok. PreferMesh OFF. WE_Building* untouched.
+
+**Phone tests:** wait for night (~8 min or /time): roads/bases/players readable, streetlights on, windows lit, runway edge glow; Graphics 1–3 fewer lights. Bomber flyover 80+ studs: no big empty squares, dunes on horizon; drive highways/town/plaza (nothing blocks); stands: walk-on does nothing, hold "Buy - R$ …" opens Roblox dialog (cancel); owned = green ✓ OWNED.
+
+**Published:** (pending Open Cloud — see handoff commit)
 
 # v108 — 2026-09-29 ~15:55 Dublin (Code Bot, branch phase-7-polish, WE_Build 108) — ARMY FLANK FORMATION (place version 106)
 

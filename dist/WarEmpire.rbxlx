@@ -5049,6 +5049,95 @@ return LevelConfig
         </Item>
         <Item class="ModuleScript" referent="36">
           <Properties>
+            <string name="Name">LightingConfig</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 17 (2026-09-29): night readable on phones. Every night value in one place. Live for all players.
+	  * Night look (WorldAtmosphere reads this while Enabled; false = WorldConfig.Atmosphere's old night, exactly):
+	    raised Ambient / OutdoorAmbient (~ (90, 95, 120) at midnight), a Brightness floor, lighter bluish haze, and a
+	    moonlit ColorCorrectionEffect ("WE_NightCC": Brightness +0.05, Contrast +0.1, slight blue tint) faded in by the
+	    night share instead of darkening everything. Cycle: full night NightStart..NightEnd with Dusk / Dawn ramps
+	    (~42 % of the day counted as night).
+	  * Night lights (Server/Modules/NightLights, Workspace.WE_NightLights, outside the dressing folders so the world
+	    hygiene budget of 24 dressing lights is untouched): warm streetlights along the Town's two main roads, a ring
+	    round the Central Plaza and the Town Square, floodlights at every base gate and hangar, and a light on the
+	    plaza flag. PointLight / SpotLight, Range 40-60, Shadows = false, tagged WE_NightLight (on only at night).
+	  * Glow (Neon only while night, tag GlowTag): lamp heads, lit town windows (on the real front walls), runway edge
+	    markers and the plaza flag. By day they are plain SmoothPlastic.
+	  * Low quality (client, QualityGovernor): every light with WE_LowOff (every second one) stays off; the Neon glow
+	    still shows.
+]]
+
+local LightingConfig = {
+	Enabled = true,
+
+	Cycle = { NightEnd = 5, DawnEnd = 6, DuskStart = 19, NightStart = 20 },
+
+	Night = {
+		Brightness = 2.0, -- floor: moonlight
+		Ambient = Color3.fromRGB(80, 86, 112),
+		OutdoorAmbient = Color3.fromRGB(90, 95, 120),
+		Density = 0.3,
+		Offset = 0.22,
+		Color = Color3.fromRGB(84, 96, 128),
+		Decay = Color3.fromRGB(52, 62, 96),
+		Glare = 0.1,
+		Haze = 1.8,
+	},
+	ColorCorrection = {
+		Name = "WE_NightCC",
+		Brightness = 0.05, -- at full night (0 by day)
+		Contrast = 0.1,
+		Saturation = -0.05,
+		Tint = Color3.fromRGB(214, 224, 255), -- white by day
+	},
+
+	LightTag = "WE_NightLight", -- = WorldConfig.Atmosphere.NightLightTag
+	GlowTag = "WE_NightGlow",
+	MaxLights = 120,
+	LowOffAttribute = "WE_LowOff",
+
+	Street = {
+		Color = Color3.fromRGB(255, 196, 120),
+		Brightness = 1.4,
+		Range = 44,
+		PoleHeight = 14,
+		Spacing = 48, -- along a road
+		Offset = 14, -- from the road centre line (the corridor is 12: never on the lane)
+		TownHalf = 320, -- the Town's two main roads (RoadX0 / RoadZ0) inside +-TownHalf
+		SkipNearPlaza = 80, -- none inside the Central Plaza ring (its own lamps are the ring below)
+	},
+	PlazaRing = { Count = 6, Radius = 84, Range = 52, Brightness = 1.3 },
+	TownSquare = { X = -150, Z = 150, Half = 40, Range = 48, Brightness = 1.2 },
+	Flag = { Pole = "CentralPlaza_FlagPole", Flag = "CentralPlaza_Flag", Range = 40, Brightness = 2, Angle = 70 },
+	Base = {
+		GateRange = 56,
+		GateBrightness = 1.6,
+		HangarRange = 60,
+		HangarBrightness = 1.5,
+		Color = Color3.fromRGB(240, 238, 225),
+		RunwayMarkerSpacing = 19, -- plot-local runway (BaseLayoutConfig.Roads "Runway"), both long edges
+		RunwayMarkerColor = Color3.fromRGB(255, 200, 90),
+	},
+	Windows = {
+		Enabled = true,
+		MaxPerBuilding = 6, -- 2 floors x 3 at most
+		Size = Vector3.new(2.2, 2.4, 0.15),
+		FloorHeight = 5,
+		FirstFloorY = 3.5, -- above the ground under the building
+		ColumnSpacing = 5,
+		LitShare = 0.6, -- deterministic per window
+		DayColor = Color3.fromRGB(58, 66, 76),
+		NightColor = Color3.fromRGB(255, 214, 140),
+	},
+}
+
+return LightingConfig
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="37">
+          <Properties>
             <string name="Name">LootBoxConfig</string>
             <string name="Source"><![CDATA[--!strict
 --[[ POLICY-PENDING: random loot boxes are NOT enabled.
@@ -5071,7 +5160,7 @@ return LootBoxConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">ManualDropperConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -5178,7 +5267,7 @@ return ManualDropperConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">MissionConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -5441,7 +5530,7 @@ return MissionConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">MonetizationConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -5558,7 +5647,7 @@ local MonetizationConfig = {
 		ImpulseSpeed = {
 			Id = 1998656357,
 			DisplayName = "Speed Pass",
-			RobuxPrice = 5,
+			RobuxPrice = 99, -- 2026-09-29 owner repriced 5 -> 99 in Creator Hub
 			WalkSpeedMult = 1.15,
 			Description = "Run 15% faster, forever",
 		},
@@ -5959,11 +6048,38 @@ local MonetizationConfig = {
 
 	PremiumPads = {
 		LabelMaxDistance = 20,
+		-- claude-bud JOB 19: every base Robux offer is a purchase STAND (Server/Modules/PurchaseStands): a hexagonal steel
+		-- plinth with a gold trim, a spinning hologram, an info board with the price from this config, a pulsing floor
+		-- ring; ONLY its ProximityPrompt buys (stepping on it never does). Stands = true; false = the old flat pads.
+		Stands = true,
+		Stand = {
+			Radius = 3.2, -- hexagon circumradius
+			Height = 1.6,
+			HoloSize = 1.6,
+			HoloLift = 2.6, -- hologram centre above the top
+			HoloTransparency = 0.3,
+			RingTransparency = 0.55,
+			LabelMaxDistance = 30, -- CLAUDE.md world labels (<= 40)
+			PromptDistance = 10,
+			HoldSeconds = 0.3, -- a short hold: never an accidental buy, easy with a finger
+			LightBrightness = 0.7,
+			LightRange = 10,
+			Steel = Color3.fromRGB(58, 62, 68),
+			Top = Color3.fromRGB(40, 43, 48),
+			Gold = Color3.fromRGB(214, 170, 62),
+			Owned = Color3.fromRGB(80, 210, 110),
+			SpinSeconds = 6, -- one hologram turn (client)
+			PulseSeconds = 1.6, -- ring pulse (client)
+		},
+		-- the Supply Depot corner (plot-local): the stands in one row (front-left, off the gate road and the ATM), the sign
+		-- behind them facing the plot
+		Depot = { X0 = -78, Step = 12, Z = 146, SignZ = 153, Sign = "SUPPLY DEPOT" },
 		Slots = {
 			{
 				Id = "AutoCollect",
 				Label = "Auto Collect",
 				Color = Color3.fromRGB(220, 50, 50), -- red
+				Icon = "💰",
 				Offset = Vector3.new(-10, 0.55, 14),
 				Offers = { { Kind = "GamePass", Key = "AutoCollect" } },
 			},
@@ -5971,6 +6087,7 @@ local MonetizationConfig = {
 				Id = "DoubleCash",
 				Label = "2x Cash",
 				Color = Color3.fromRGB(255, 210, 40), -- yellow
+				Icon = "2x",
 				Offset = Vector3.new(0, 0.55, 16),
 				Offers = { { Kind = "GamePass", Key = "DoubleCash" } },
 			},
@@ -5978,6 +6095,7 @@ local MonetizationConfig = {
 				Id = "Speed",
 				Label = "Speed",
 				Color = Color3.fromRGB(60, 190, 255), -- cyan
+				Icon = "⚡",
 				Offset = Vector3.new(10, 0.55, 14),
 				-- the 5 R$ pass once its Id is live, else the 99 R$ Speed Boost product; owning either = OWNED
 				Offers = { { Kind = "GamePass", Key = "ImpulseSpeed" }, { Kind = "DevProduct", Key = "SpeedBoost" } },
@@ -6203,7 +6321,7 @@ return MonetizationConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">NationColorConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -6235,7 +6353,7 @@ return NationColorConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">NationConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -6690,7 +6808,7 @@ return NationConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">NationFlagIds</string>
             <string name="Source"><![CDATA[--!strict
@@ -6725,7 +6843,7 @@ return NationFlagIds
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">NotificationConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -6865,7 +6983,7 @@ return NotificationConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">NukeConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -7152,7 +7270,7 @@ return NukeConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">OilRigConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -7189,7 +7307,7 @@ return OilRigConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">OpsConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8364,7 +8482,7 @@ return OpsConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">OrdersConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8485,7 +8603,7 @@ return OrdersConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">PlazaBountyConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8526,7 +8644,7 @@ return PlazaBountyConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">PlotOilPumpConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8563,7 +8681,7 @@ return PlotOilPumpConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">PremiumVehicleConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8799,7 +8917,7 @@ return PremiumVehicleConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">PrestigeConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9197,7 +9315,7 @@ return PrestigeConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">QualityConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9248,7 +9366,7 @@ return QualityConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">RaidConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9442,7 +9560,7 @@ return RaidConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">RebirthConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9758,7 +9876,7 @@ return RebirthConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">ResearchConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10184,7 +10302,7 @@ return ResearchConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">RigConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10364,7 +10482,7 @@ return RigConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">SeasonConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10385,7 +10503,7 @@ return SeasonConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">SecurityConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10484,7 +10602,7 @@ return SecurityConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">SocialConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10509,7 +10627,7 @@ return SocialConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">SoldierConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10575,7 +10693,7 @@ return SoldierConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">SoundConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10852,7 +10970,7 @@ return SoundConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">SpinnerConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10880,7 +10998,7 @@ return SpinnerConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">StreamingConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10914,7 +11032,7 @@ return StreamingConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">StructureVisualConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11415,7 +11533,7 @@ return StructureVisualConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">SupplyDropConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11487,7 +11605,7 @@ return SupplyDropConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">TerritoryConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11789,7 +11907,7 @@ return TerritoryConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">TrainingYardConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11922,7 +12040,7 @@ return TrainingYardConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">TutorialConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12246,7 +12364,7 @@ return TutorialConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">TycoonGuideConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12468,7 +12586,7 @@ return TycoonGuideConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">VehicleCombatConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12606,7 +12724,7 @@ return VehicleCombatConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">VehicleConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -13713,7 +13831,7 @@ return VehicleConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">VehicleWeaponConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -13943,7 +14061,7 @@ return VehicleWeaponConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">VisualAssetConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -15671,7 +15789,7 @@ return VisualAssetConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">WaterConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -15888,7 +16006,7 @@ return WaterConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">WeaponConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -16147,7 +16265,7 @@ return WeaponConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">WorldConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -17176,7 +17294,7 @@ return WorldConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">WorldDressConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -17411,7 +17529,7 @@ return WorldDressConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">WorldFillConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -17529,6 +17647,233 @@ local WorldFillConfig = {
 		{ Id = "Plaza_SE", Template = "PlazaPost", X = 300, Z = 420, Yaw = 180 },
 	} :: { { Id: string, Template: string, X: number, Z: number, Yaw: number } },
 
+	--[[ claude-bud JOB 18 (2026-09-29, owner: "the map looks empty, especially from the bomber; the towns lack character"):
+		WorldFill 2, the same system (WorldFill.Build runs it after the JOB 3 fill, same occupancy, same folder). Live
+		for all. Everything is a WorldKits kit (<= 8 parts, no scripts), a Terrain rock (0 parts) or a plain flat part
+		(tracks, wires, dunes); every item is re-checked against the shared occupancy (plots, aprons, runways, garage and
+		naval pads, captures, spawn / event / airdrop anchors, roads, water, POIs unless it is that POI's own identity
+		field) and skipped when blocked. Tier 2 = small clutter: Full quality only, and the client hides it beyond
+		QualityConfig.HideTier2BeyondStuds (180) in low quality.
+		  * Identity fields: Crossroads Town = a desert MARKET town (stalls, awnings, planters, parked cars, signs),
+		    South Port = an INDUSTRIAL port (containers, tanks, trucks), West Depot / East Armory = GARRISON towns
+		    (tents, sandbags, towers); a statue or the fountain in each square; made-up shop names only.
+		  * Rooftops: town buildings get a water tank / AC unit / antenna on their real roof (raycast).
+		  * Countryside: every 300-stud cell of the map with nothing within EmptyRadius gets a themed patch (farm, oil,
+		    comms, ruins, tank graveyard, palms, rocks, wadi, checkpoint), picked by region, so from 80+ studs up no
+		    empty square is bigger than ~300 x 300.
+		  * Power lines along the two highways outside the Town, dirt tracks from the Town to the outer POIs, and a low
+		    dune belt at the north / east / west edge in front of the skyline (the south is sea). ]]
+	Fill2 = {
+		Enabled = true,
+		MaxParts2Full = 7000, -- new parts (the owner's cap is ~15k; kept well under for phones)
+		MaxParts2Low = 2600,
+		Themes = {
+			-- a farm: crop patches, 2 silos, the farmhouse, fence, palms, a pickup
+			Farm = {
+				{ Kit = "CropField", X = -26, Z = -20, Tier = 1, Opts = { Width = 44, Depth = 32 } },
+				{ Kit = "CropField", X = 26, Z = -20, Tier = 1, Opts = { Width = 44, Depth = 32, Variant = "dry" } },
+				{ Kit = "CropField", X = -26, Z = 20, Tier = 1, Opts = { Width = 44, Depth = 32, Variant = "dry" } },
+				{ Kit = "CropField", X = 26, Z = 20, Tier = 1, Opts = { Width = 44, Depth = 32 } },
+				{ Kit = "Silo", X = 62, Z = -8, Tier = 1 },
+				{ Kit = "Silo", X = 62, Z = 8, Tier = 1 },
+				{ Kit = "AdobeHouse", X = -64, Z = 0, Yaw = 90, Tier = 1 },
+				{ Kit = "WireFence", X = 0, Z = 44, Tier = 2, Opts = { Length = 64 } },
+				{ Kit = "Palm", X = -62, Z = 22, Tier = 2 },
+				{ Kit = "Palm", X = -60, Z = -24, Tier = 2 },
+				{ Kit = "CivCar", X = -48, Z = 16, Yaw = 30, Tier = 2, Opts = { Variant = "pickup" } },
+				{ Kit = "DrumGroup", X = 50, Z = 24, Tier = 2, Opts = { Count = 2 } },
+			},
+			-- an oil patch: pumpjacks, a pipeline, a tank, a flare
+			Oil = {
+				{ Kit = "Pumpjack", X = -30, Z = 0, Yaw = 20, Tier = 1 },
+				{ Kit = "Pumpjack", X = 4, Z = 22, Yaw = -10, Tier = 1 },
+				{ Kit = "Pumpjack", X = 32, Z = -6, Yaw = 60, Tier = 1 },
+				{ Kit = "PipeRun", X = 0, Z = -24, Tier = 1, Opts = { Length = 40 } },
+				{ Kit = "FuelTank", X = 44, Z = 30, Tier = 1, Opts = { Scale = 0.8 } },
+				{ Kit = "FlareStack", X = -52, Z = -30, Tier = 1 },
+				{ Kit = "DrumGroup", X = -20, Z = 32, Tier = 2, Opts = { Count = 3 } },
+				{ Kit = "Rock", X = 40, Z = -40, Tier = 1, Kind = "rubble", Radius = 8 },
+			},
+			-- a comms post: a radio mast, bunker, tent, barriers
+			Comms = {
+				{ Kit = "RadioMast", X = 0, Z = 0, Tier = 1 },
+				{ Kit = "Bunker", X = 18, Z = 12, Yaw = 180, Tier = 1 },
+				{ Kit = "Tent", X = -16, Z = 14, Yaw = 90, Tier = 2 },
+				{ Kit = "Jersey", X = 0, Z = -22, Tier = 2 },
+				{ Kit = "Jersey", X = 6, Z = -22, Tier = 2 },
+				{ Kit = "SandbagNest", X = -20, Z = -16, Yaw = 200, Tier = 2 },
+				{ Kit = "WireFence", X = 0, Z = 30, Tier = 2, Opts = { Length = 48 } },
+			},
+			-- a ruined hamlet
+			Ruins = {
+				{ Kit = "RuinedHouse", X = -20, Z = -10, Yaw = 10, Tier = 1 },
+				{ Kit = "RuinedHouse", X = 18, Z = 6, Yaw = -80, Tier = 1 },
+				{ Kit = "RuinedHouse", X = -4, Z = 28, Yaw = 170, Tier = 1 },
+				{ Kit = "Rock", X = 30, Z = -26, Tier = 1, Kind = "rubble", Radius = 9 },
+				{ Kit = "Wreck", X = -34, Z = 20, Yaw = 50, Tier = 2, Opts = { Variant = "car" } },
+				{ Kit = "DeadTree", X = 34, Z = 30, Tier = 2 },
+				{ Kit = "DeadTree", X = -36, Z = -30, Tier = 2 },
+			},
+			-- a destroyed-tank graveyard
+			TankYard = {
+				{ Kit = "Wreck", X = -30, Z = -20, Yaw = 20, Tier = 1, Opts = { Variant = "tank" } },
+				{ Kit = "Wreck", X = 0, Z = -26, Yaw = -35, Tier = 1, Opts = { Variant = "tank" } },
+				{ Kit = "Wreck", X = 30, Z = -10, Yaw = 80, Tier = 1, Opts = { Variant = "tank" } },
+				{ Kit = "Wreck", X = -24, Z = 16, Yaw = 140, Tier = 1, Opts = { Variant = "truck" } },
+				{ Kit = "Wreck", X = 14, Z = 22, Yaw = -120, Tier = 1, Opts = { Variant = "tank" } },
+				{ Kit = "Wreck", X = 40, Z = 30, Yaw = 10, Tier = 2, Opts = { Variant = "gun" } },
+				{ Kit = "HeliWreck", X = -46, Z = 36, Yaw = 60, Tier = 2 },
+				{ Kit = "Rock", X = 0, Z = 0, Tier = 1, Kind = "rubble", Radius = 10 },
+			},
+			-- a palm grove round a dry hollow
+			Palms = {
+				{ Kit = "Palm", X = -18, Z = -12, Tier = 1 },
+				{ Kit = "Palm", X = 12, Z = -20, Tier = 1, Opts = { Scale = 1.2 } },
+				{ Kit = "Palm", X = 20, Z = 12, Tier = 1 },
+				{ Kit = "Palm", X = -10, Z = 20, Tier = 1, Opts = { Scale = 0.9 } },
+				{ Kit = "Palm", X = -30, Z = 6, Tier = 2 },
+				{ Kit = "DuneGrass", X = 0, Z = 0, Tier = 2 },
+				{ Kit = "DuneGrass", X = 28, Z = -4, Tier = 2 },
+				{ Kit = "Reeds", X = -4, Z = -30, Tier = 2 },
+			},
+			-- rock formations: a small hill / cliff and boulders
+			Rocks = {
+				{ Kit = "Rock", X = 0, Z = 0, Tier = 1, Kind = "outcrop", Radius = 24 },
+				{ Kit = "Rock", X = 40, Z = 26, Tier = 1, Kind = "boulders", Radius = 12 },
+				{ Kit = "Rock", X = -38, Z = -30, Tier = 1, Kind = "outcrop", Radius = 14 },
+				{ Kit = "Joshua", X = 30, Z = -30, Tier = 2 },
+				{ Kit = "Saguaro", X = -30, Z = 30, Tier = 2 },
+			},
+			-- a wadi: a dry stream bed of rubble, reeds and dead trees along local Z
+			Wadi = {
+				{ Kit = "Rock", X = 0, Z = -45, Tier = 1, Kind = "rubble", Radius = 9 },
+				{ Kit = "Rock", X = 6, Z = -15, Tier = 1, Kind = "rubble", Radius = 8 },
+				{ Kit = "Rock", X = -4, Z = 15, Tier = 1, Kind = "rubble", Radius = 9 },
+				{ Kit = "Rock", X = 4, Z = 45, Tier = 1, Kind = "rubble", Radius = 8 },
+				{ Kit = "Reeds", X = 10, Z = 0, Tier = 2 },
+				{ Kit = "Reeds", X = -10, Z = 30, Tier = 2 },
+				{ Kit = "DeadTree", X = 14, Z = -30, Tier = 2 },
+				{ Kit = "Driftwood", X = -8, Z = -2, Tier = 2 },
+			},
+			-- a road checkpoint
+			Checkpoint = {
+				{ Kit = "Checkpoint", X = 0, Z = 0, Tier = 1 },
+				{ Kit = "Jersey", X = -16, Z = 12, Tier = 2 },
+				{ Kit = "Jersey", X = 16, Z = 12, Tier = 2 },
+				{ Kit = "Tent", X = 20, Z = -14, Tier = 2 },
+				{ Kit = "DirSign", X = -20, Z = -10, Tier = 2 },
+			},
+			-- Crossroads Town: a market street corner
+			Market = {
+				{ Kit = "MarketStall", X = -16, Z = 0, Tier = 1 },
+				{ Kit = "MarketStall", X = -4, Z = 0, Tier = 1 },
+				{ Kit = "MarketStall", X = 8, Z = 0, Tier = 1 },
+				{ Kit = "Awning", X = 20, Z = 0, Tier = 1 },
+				{ Kit = "Planter", X = -26, Z = 6, Tier = 2 },
+				{ Kit = "Planter", X = 28, Z = 6, Tier = 2 },
+				{ Kit = "Bench", X = 0, Z = 10, Tier = 2 },
+				{ Kit = "Bin", X = -24, Z = -4, Tier = 2 },
+				{ Kit = "CivCar", X = 14, Z = 14, Yaw = 90, Tier = 2 },
+				{ Kit = "CrateStack", X = -30, Z = -2, Tier = 2, Opts = { Count = 2 } },
+			},
+			-- South Port: an industrial yard
+			PortYard = {
+				{ Kit = "ContainerStack", X = -20, Z = 0, Tier = 1, Opts = { Count = 3 } },
+				{ Kit = "ContainerStack", X = 4, Z = 0, Tier = 1, Opts = { Count = 2 } },
+				{ Kit = "FuelTank", X = 30, Z = -4, Tier = 1 },
+				{ Kit = "CivCar", X = -6, Z = 22, Yaw = 90, Tier = 2, Opts = { Variant = "pickup" } },
+				{ Kit = "DrumGroup", X = 22, Z = 20, Tier = 2, Opts = { Count = 3 } },
+				{ Kit = "CrateStack", X = -32, Z = 20, Tier = 2, Opts = { Count = 3 } },
+			},
+			-- West Depot / East Armory: garrison lines
+			Garrison = {
+				{ Kit = "Tent", X = -18, Z = 0, Tier = 1 },
+				{ Kit = "Tent", X = -6, Z = 0, Tier = 1 },
+				{ Kit = "Tent", X = 6, Z = 0, Tier = 1 },
+				{ Kit = "Watchtower", X = 26, Z = -10, Tier = 1 },
+				{ Kit = "SandbagLine", X = 0, Z = -16, Tier = 2, Opts = { Length = 30 } },
+				{ Kit = "CrateStack", X = -26, Z = 14, Tier = 2, Opts = { Count = 3 } },
+				{ Kit = "Jersey", X = 18, Z = 16, Tier = 2 },
+			},
+			Square = {
+				{ Kit = "Statue", X = 0, Z = 0, Tier = 1 },
+				{ Kit = "Bench", X = -8, Z = 6, Yaw = 90, Tier = 2 },
+				{ Kit = "Bench", X = 8, Z = 6, Yaw = -90, Tier = 2 },
+				{ Kit = "Planter", X = 0, Z = -8, Tier = 2 },
+			},
+		} :: { [string]: { FillItem } },
+
+		-- the towns' identity fields (AllowPOI: inside that POI's own footprint)
+		Identity = {
+			{ Id = "TownMarketN", Theme = "Market", X = 42, Z = -190, Yaw = 90, AllowPOI = "Town", Sign = "SANDLINE BAZAAR" },
+			{ Id = "TownMarketS", Theme = "Market", X = -42, Z = 190, Yaw = -90, AllowPOI = "Town", Sign = "CAFE MIRAGE" },
+			{ Id = "TownMarketE", Theme = "Market", X = 190, Z = 42, Yaw = 0, AllowPOI = "Town", Sign = "DUNE MOTORS" },
+			{ Id = "TownMarketW", Theme = "Market", X = -190, Z = -42, Yaw = 180, AllowPOI = "Town", Sign = "SUNSTONE SPICE" },
+			{ Id = "PortYard1", Theme = "PortYard", X = -150, Z = 1250, Yaw = 0, AllowPOI = "Port", Sign = "SOUTHWHARF FREIGHT" },
+			{ Id = "PortYard2", Theme = "PortYard", X = 160, Z = 1250, Yaw = 0, AllowPOI = "Port" },
+			{ Id = "PortSquare", Theme = "Square", X = 0, Z = 1170, Yaw = 0, AllowPOI = "Port" },
+			{ Id = "DepotLines", Theme = "Garrison", X = -1300, Z = -150, Yaw = 90, AllowPOI = "Depot", Sign = "CAMP KESTREL" },
+			{ Id = "DepotSquare", Theme = "Square", X = -1300, Z = 120, Yaw = 0, AllowPOI = "Depot" },
+			{ Id = "ArmoryLines", Theme = "Garrison", X = 1300, Z = 150, Yaw = -90, AllowPOI = "Armory", Sign = "CAMP HALCYON" },
+			{ Id = "ArmorySquare", Theme = "Square", X = 1300, Z = -120, Yaw = 0, AllowPOI = "Armory" },
+		} :: { { Id: string, Theme: string, X: number, Z: number, Yaw: number, AllowPOI: string?, Sign: string? } },
+		SignFarms = "RED MESA FARMS", -- the first farm patch carries this sign
+
+		-- the empty-cell generator
+		Cells = {
+			Size = 300, -- one patch per empty cell of this size ...
+			Extent = 1650, -- ... over +-Extent (inside the ring canal)
+			EmptyRadius = 130, -- a cell is empty when nothing placed / no POI lies within this of its centre
+			Jitter = 50,
+			PatchRadius = 70, -- a theme's items lie within this of the patch centre
+			-- theme by region (first match: x / z ranges, world studs); "Mix" = a hashed pick from MixThemes
+			Regions = {
+				{ Theme = "Oil", X0 = 500, X1 = 1700, Z0 = 500, Z1 = 1700 }, -- round the Oil Field (SE)
+				{ Theme = "Farm", X0 = -1700, X1 = -900, Z0 = 200, Z1 = 1000 }, -- round the Oasis (W)
+				{ Theme = "Ruins", X0 = -1000, X1 = -200, Z0 = -1700, Z1 = -1000 }, -- round the Ruined Village (N)
+			},
+			MixThemes = { "Farm", "Rocks", "Palms", "TankYard", "Wadi", "Comms", "Ruins", "Oil", "Rocks", "Palms" },
+		},
+
+		-- power lines along the highways outside the Town (RoadZ0 along X at z = 0, RoadX0 along Z at x = 0)
+		Power = {
+			Step = 140,
+			Offset = 30, -- from the road centre line
+			From = 420, -- |t| >= this (outside the Town)
+			To = 1640,
+			WireSag = 2,
+			WireColor = Color3.fromRGB(40, 40, 42),
+		},
+
+		-- dirt tracks from the Town's corners to outer POIs (flat, no collision, pieces skipped over water / plots)
+		Tracks = {
+			Width = 8,
+			Piece = 40,
+			Color = Color3.fromRGB(150, 120, 86),
+			Lines = {
+				{ X0 = -330, Z0 = -330, X1 = -540, Z1 = -1180 }, -- Ruined Village
+				{ X0 = -330, Z0 = 330, X1 = -1200, Z1 = 560 }, -- Oasis
+				{ X0 = -330, Z0 = 330, X1 = -540, Z1 = 1000 }, -- Crash Site
+				{ X0 = 330, Z0 = -330, X1 = 520, Z1 = -1150 }, -- Desert Airstrip
+				{ X0 = 330, Z0 = 330, X1 = 900, Z1 = 900 }, -- Oil Field
+				{ X0 = -330, Z0 = -330, X1 = -880, Z1 = -880 }, -- Radar Hill
+			},
+		},
+
+		Rooftops = { Enabled = true, PerBuilding = 2, Kits = { "RoofTank", "ACUnit", "Antenna" } },
+
+		-- the dune belt in front of the skyline (north / east / west; the south is the sea)
+		Dunes = {
+			Enabled = true,
+			RInner = 2000,
+			ROuter = 2550,
+			PerSide = 8,
+			Height = { 28, 70 },
+			Color = Color3.fromRGB(196, 164, 118),
+			ColorFar = Color3.fromRGB(176, 146, 108),
+		},
+	},
+
 	ItemSpacing = 1, -- min edge gap to anything already placed (WorldDress.Blocked Spacing)
 	MaxPartsFull = 400, -- a build that would pass this stops placing (the budget guard)
 	MaxPartsLow = 210,
@@ -17538,7 +17883,7 @@ return WorldFillConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">WorldLabelConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -17607,7 +17952,7 @@ return WorldLabelConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">XPBalanceConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -17698,7 +18043,7 @@ return XPBalanceConfig
           </Properties>
         </Item>
       </Item>
-      <Item class="ModuleScript" referent="81">
+      <Item class="ModuleScript" referent="82">
         <Properties>
           <string name="Name">Constants</string>
           <string name="Source"><![CDATA[--!strict
@@ -17910,7 +18255,7 @@ return Constants
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="82">
+      <Item class="ModuleScript" referent="83">
         <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[--!strict
@@ -18082,7 +18427,7 @@ return Remotes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="83">
+      <Item class="ModuleScript" referent="84">
         <Properties>
           <string name="Name">Types</string>
           <string name="Source"><![CDATA[--!strict
@@ -18489,11 +18834,11 @@ return {}
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="84">
+      <Item class="Folder" referent="85">
         <Properties>
           <string name="Name">Util</string>
         </Properties>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">ConsoleLocator</string>
             <string name="Source"><![CDATA[--!strict
@@ -18643,7 +18988,7 @@ return ConsoleLocator
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="86">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">NationTexture</string>
             <string name="Source"><![CDATA[--!strict
@@ -18808,7 +19153,7 @@ return NationTexture
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="87">
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">PlotFrame</string>
             <string name="Source"><![CDATA[--!strict
@@ -18890,7 +19235,7 @@ return PlotFrame
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="88">
+        <Item class="ModuleScript" referent="89">
           <Properties>
             <string name="Name">TycoonMath</string>
             <string name="Source"><![CDATA[--!strict
@@ -19548,7 +19893,7 @@ return TycoonMath
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="89">
+        <Item class="ModuleScript" referent="90">
           <Properties>
             <string name="Name">UIUtil</string>
             <string name="Source"><![CDATA[--!strict
@@ -20097,7 +20442,7 @@ return UIUtil
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="90">
+        <Item class="ModuleScript" referent="91">
           <Properties>
             <string name="Name">WaterRule</string>
             <string name="Source"><![CDATA[--!strict
@@ -20398,7 +20743,7 @@ return WaterRule
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="92">
           <Properties>
             <string name="Name">WorldLabel</string>
             <string name="Source"><![CDATA[--!strict
@@ -20842,11 +21187,11 @@ return WorldLabel
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="92">
+      <Item class="Folder" referent="93">
         <Properties>
           <string name="Name">Vendor</string>
         </Properties>
-        <Item class="ModuleScript" referent="93">
+        <Item class="ModuleScript" referent="94">
           <Properties>
             <string name="Name">Shake</string>
             <string name="Source"><![CDATA[--!strict
@@ -21399,7 +21744,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="94">
+        <Item class="ModuleScript" referent="95">
           <Properties>
             <string name="Name">Spring</string>
             <string name="Source"><![CDATA[--!strict
@@ -21509,7 +21854,7 @@ return Spring
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="95">
+        <Item class="ModuleScript" referent="96">
           <Properties>
             <string name="Name">Trove</string>
             <string name="Source"><![CDATA[--!strict
@@ -22312,15 +22657,15 @@ return {
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="96">
+  <Item class="ServerScriptService" referent="97">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="97">
+    <Item class="Folder" referent="98">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="Script" referent="98">
+      <Item class="Script" referent="99">
         <Properties>
           <string name="Name">Bootstrap</string>
           <token name="RunContext">0</token>
@@ -22927,11 +23272,11 @@ print("[WAR EMPIRE] CHECKLIST: 1) resetmap MANDATORY if void/dead-space persists
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="99">
+      <Item class="Folder" referent="100">
         <Properties>
           <string name="Name">Configs</string>
         </Properties>
-        <Item class="ModuleScript" referent="100">
+        <Item class="ModuleScript" referent="101">
           <Properties>
             <string name="Name">CodesConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -23011,7 +23356,7 @@ return CodesConfig
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="101">
+      <Item class="Script" referent="102">
         <Properties>
           <string name="Name">EarlyRemotes</string>
           <token name="RunContext">0</token>
@@ -23084,7 +23429,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 108)
+		player:SetAttribute("WE_Build", 109)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -23113,11 +23458,11 @@ print("[WAR EMPIRE] EarlyRemotes v63: WE_Remotes + leaderstats seed ready")
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="102">
+      <Item class="Folder" referent="103">
         <Properties>
           <string name="Name">Modules</string>
         </Properties>
-        <Item class="ModuleScript" referent="103">
+        <Item class="ModuleScript" referent="104">
           <Properties>
             <string name="Name">ActivityAnchors</string>
             <string name="Source"><![CDATA[--!strict
@@ -23458,7 +23803,7 @@ return ActivityAnchors
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="104">
+        <Item class="ModuleScript" referent="105">
           <Properties>
             <string name="Name">AirBodyRig</string>
             <string name="Source"><![CDATA[--!strict
@@ -24064,7 +24409,7 @@ return AirBodyRig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="105">
+        <Item class="ModuleScript" referent="106">
           <Properties>
             <string name="Name">AirOrdnance</string>
             <string name="Source"><![CDATA[--!strict
@@ -24336,7 +24681,7 @@ return AirOrdnance
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="106">
+        <Item class="ModuleScript" referent="107">
           <Properties>
             <string name="Name">ArmyFollow</string>
             <string name="Source"><![CDATA[--!strict
@@ -25441,7 +25786,7 @@ return ArmyFollow
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="107">
+        <Item class="ModuleScript" referent="108">
           <Properties>
             <string name="Name">BaseLayout</string>
             <string name="Source"><![CDATA[--!strict
@@ -25590,7 +25935,7 @@ return BaseLayout
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="108">
+        <Item class="ModuleScript" referent="109">
           <Properties>
             <string name="Name">DesertFlora</string>
             <string name="Source"><![CDATA[--!strict
@@ -25932,7 +26277,7 @@ return DesertFlora
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="109">
+        <Item class="ModuleScript" referent="110">
           <Properties>
             <string name="Name">HollowBuildingBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -27193,11 +27538,11 @@ return HollowBuildingBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="110">
+        <Item class="Folder" referent="111">
           <Properties>
             <string name="Name">Installations</string>
           </Properties>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">Airfield</string>
               <string name="Source"><![CDATA[--!strict
@@ -27334,7 +27679,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">Checkpoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -27465,7 +27810,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">Helipad</string>
               <string name="Source"><![CDATA[--!strict
@@ -27573,7 +27918,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="114">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">MissileDefense</string>
               <string name="Source"><![CDATA[--!strict
@@ -27677,7 +28022,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">PowerStation</string>
               <string name="Source"><![CDATA[--!strict
@@ -27827,7 +28172,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">Radar</string>
               <string name="Source"><![CDATA[--!strict
@@ -27935,7 +28280,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="117">
+          <Item class="ModuleScript" referent="118">
             <Properties>
               <string name="Name">Watchtower</string>
               <string name="Source"><![CDATA[--!strict
@@ -28044,11 +28389,11 @@ end
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="118">
+        <Item class="Folder" referent="119">
           <Properties>
             <string name="Name">Interiors</string>
           </Properties>
-          <Item class="ModuleScript" referent="119">
+          <Item class="ModuleScript" referent="120">
             <Properties>
               <string name="Name">Armory</string>
               <string name="Source"><![CDATA[--!strict
@@ -28364,7 +28709,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="120">
+          <Item class="ModuleScript" referent="121">
             <Properties>
               <string name="Name">Barracks</string>
               <string name="Source"><![CDATA[--!strict
@@ -28577,7 +28922,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="121">
+          <Item class="ModuleScript" referent="122">
             <Properties>
               <string name="Name">CommandCenter</string>
               <string name="Source"><![CDATA[--!strict
@@ -28719,7 +29064,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="122">
+          <Item class="ModuleScript" referent="123">
             <Properties>
               <string name="Name">ResearchLab</string>
               <string name="Source"><![CDATA[--!strict
@@ -29115,7 +29460,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="123">
+          <Item class="ModuleScript" referent="124">
             <Properties>
               <string name="Name">SpecialForces</string>
               <string name="Source"><![CDATA[--!strict
@@ -29347,7 +29692,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="124">
+          <Item class="ModuleScript" referent="125">
             <Properties>
               <string name="Name">VehicleDepot</string>
               <string name="Source"><![CDATA[--!strict
@@ -29631,7 +29976,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="125">
+          <Item class="ModuleScript" referent="126">
             <Properties>
               <string name="Name">Warehouse</string>
               <string name="Source"><![CDATA[--!strict
@@ -30015,7 +30360,7 @@ end
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="126">
+        <Item class="ModuleScript" referent="127">
           <Properties>
             <string name="Name">MapDressing</string>
             <string name="Source"><![CDATA[--!strict
@@ -30628,6 +30973,14 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			warn("[MapDressing] WorldFill.Build failed:", errF)
 		end
 	end
+	-- claude-bud JOB 17: the night lights (Workspace.WE_NightLights; outside the dressing folders / light budget above)
+	local nl = getWorldModule("NightLights")
+	if nl then
+		local okN, errN = pcall(nl.Build)
+		if not okN then
+			warn("[MapDressing] NightLights.Build failed:", errN)
+		end
+	end
 
 	-- CastShadow is governed by H9 (WorldKits sets it only on parts >= 8 studs; Enforce clears small casters)
 	local partCount = 0
@@ -30643,7 +30996,7 @@ return MapDressing
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="127">
+        <Item class="ModuleScript" referent="128">
           <Properties>
             <string name="Name">MapSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -32546,10 +32899,34 @@ end
 -- never AlwaysOnTop, and tagged WorldLabelConfig.BaseLabelTag for the client LabelGovernor.
 local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLocal: Vector3)
 	local labelRange = MonetizationConfig.PremiumPads.LabelMaxDistance
+	-- claude-bud JOB 19: purchase stands in the plot's Supply Depot corner (PurchaseStands; only the prompt buys)
+	local PP: any = MonetizationConfig.PremiumPads
+	local okS, Stands = pcall(require, script.Parent.PurchaseStands)
+	local useStands = PP.Stands == true and okS and type(Stands) == "table"
+	local standIndex = 0
 	for _, slot in ipairs(MonetizationConfig.PremiumPads.Slots) do
 		local offer = MonetizationConfig.LivePadOffer(slot)
 		if offer == nil then
 			continue -- no live Id for this slot: no pad, no label, nothing to prompt
+		end
+		if useStands then
+			standIndex += 1
+			local D = PP.Depot
+			local at = F * CFrame.new(D.X0 + (standIndex - 1) * D.Step, 0.3, D.Z) * CFrame.Angles(0, math.pi, 0) -- front faces the plot (-Z)
+			local okB, errB = pcall((Stands :: any).Build, folder, at, {
+				Kind = offer.Kind,
+				Key = offer.Key,
+				PlotId = plotId,
+				Label = slot.Label,
+				Color = slot.Color,
+				Icon = (slot :: any).Icon,
+				OwnedIfAny = table.concat(MonetizationConfig.PadOwnedKeys(slot), ","),
+				PadSlot = slot.Id,
+			})
+			if not okB then
+				warn("[MapSetup] purchase stand failed", offer.Key, errB)
+			end
+			continue
 		end
 		local pad = part({
 			Name = "PremiumPad_" .. offer.Key,
@@ -32574,6 +32951,11 @@ local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLo
 			Offset = Vector3.new(0, 5.5, 0),
 			BaseLabel = true, -- CollectionService tag WorldLabelConfig.BaseLabelTag (the LabelGovernor's cap)
 		})
+	end
+	if useStands and standIndex > 0 then
+		local D = PP.Depot
+		local mid = D.X0 + (standIndex - 1) * D.Step / 2
+		pcall((Stands :: any).Sign, folder, F * CFrame.new(mid, 0.3, D.SignZ) * CFrame.Angles(0, math.pi, 0), D.Sign)
 	end
 end
 
@@ -34020,7 +34402,7 @@ return MapSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="128">
+        <Item class="ModuleScript" referent="129">
           <Properties>
             <string name="Name">NationFlag</string>
             <string name="Source"><![CDATA[--!strict
@@ -34398,11 +34780,347 @@ return NationFlag
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="129">
+        <Item class="ModuleScript" referent="130">
+          <Properties>
+            <string name="Name">NightLights</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 17 (2026-09-29): the night lights (Shared/Configs/LightingConfig). Server-built once after the world
+	dressing (MapDressing, after WorldFill), into Workspace.WE_NightLights (outside the dressing folders, so the world
+	hygiene budget of 24 dressing lights is untouched). Live for all.
+	  * Streetlights: along the Town's two main roads (RoadX0 / RoadZ0, off the lane), a ring round the Central Plaza,
+	    the Town Square corners. Base gate + hangar floodlights on every plot. A light on the plaza flag.
+	    PointLight / SpotLight, Shadows = false, tag WE_NightLight: WorldAtmosphere turns them on only at night.
+	    Every second light carries WE_LowOff (the client's low-quality mode keeps those off).
+	  * Glow (tag WE_NightGlow, Neon only at night): lamp heads, runway edge markers, lit windows on the town buildings'
+	    real front walls (raycast onto the wall, never floating), the plaza flag.
+	Nothing collides (never blocks a road, the plaza or a plot), nothing casts shadows, CanQuery / CanTouch off.
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+local LightingConfig = require(Shared.Configs.LightingConfig)
+local WorldConfig = require(Shared.Configs.WorldConfig)
+local BaseConfig = require(Shared.Configs.BaseConfig)
+local BaseLayoutConfig = require(Shared.Configs.BaseLayoutConfig)
+local PlotFrame = require(Shared.Util.PlotFrame)
+
+local NightLights = {}
+
+local L: any = LightingConfig
+local lightCount = 0
+NightLights.Stats = { Lights = 0, Glow = 0, Windows = 0 }
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function groundY(x: number, z: number): number?
+	local r = Workspace:Raycast(Vector3.new(x, 300, z), Vector3.new(0, -400, 0), rayParams)
+	return if r then r.Position.Y else nil
+end
+
+local function part(name: string, size: Vector3, cf: CFrame, color: Color3, parent: Instance): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Material = Enum.Material.SmoothPlastic
+	p.Size = size
+	p.CFrame = cf
+	p.Color = color
+	p.Parent = parent
+	return p
+end
+
+-- Neon + NightColor at night, day material / colour by day (WorldAtmosphere.SetNightLights flips the tag)
+local function glow(p: BasePart, dayColor: Color3?, nightColor: Color3?)
+	p:SetAttribute("WE_DayMaterial", p.Material.Name)
+	if dayColor then
+		p:SetAttribute("WE_DayColor", dayColor)
+	end
+	if nightColor then
+		p:SetAttribute("WE_NightColor", nightColor)
+	end
+	CollectionService:AddTag(p, L.GlowTag)
+	NightLights.Stats.Glow += 1
+end
+
+local function addLight(host: BasePart, kind: string, range: number, brightness: number, color: Color3, face: Enum.NormalId?, angle: number?): Light?
+	if lightCount >= L.MaxLights then
+		return nil
+	end
+	lightCount += 1
+	local light: Light
+	if kind == "Spot" then
+		local s = Instance.new("SpotLight")
+		s.Face = face or Enum.NormalId.Front
+		s.Angle = angle or 70
+		s.Range = range
+		light = s
+	else
+		local pl = Instance.new("PointLight")
+		pl.Range = range
+		light = pl
+	end
+	light.Brightness = brightness
+	light.Color = color
+	light.Shadows = false
+	light.Enabled = false
+	if lightCount % 2 == 0 then
+		light:SetAttribute(L.LowOffAttribute, true) -- the client's low-quality mode keeps every second light off
+	end
+	light.Parent = host
+	CollectionService:AddTag(light, L.LightTag)
+	NightLights.Stats.Lights = lightCount
+	return light
+end
+
+-- one lamp post: a steel pole, an arm and a glowing head with the light
+local function post(parent: Instance, name: string, x: number, z: number, height: number, range: number, brightness: number, color: Color3, toward: Vector3?)
+	local y = groundY(x, z)
+	if y == nil or lightCount >= L.MaxLights then
+		return
+	end
+	local m = Instance.new("Model")
+	m.Name = name
+	local base = Vector3.new(x, y, z)
+	part("Pole", Vector3.new(0.5, height, 0.5), CFrame.new(base + Vector3.new(0, height / 2, 0)), Color3.fromRGB(52, 54, 58), m)
+	local out = if toward then Vector3.new(toward.X - x, 0, toward.Z - z) else Vector3.new(1, 0, 0)
+	out = if out.Magnitude > 1e-3 then out.Unit else Vector3.new(1, 0, 0)
+	local armCentre = base + Vector3.new(0, height - 0.2, 0) + out * 1.2
+	part("Arm", Vector3.new(0.3, 0.3, 2.4), CFrame.lookAt(armCentre, armCentre + out), Color3.fromRGB(52, 54, 58), m)
+	local headAt = base + Vector3.new(0, height - 0.6, 0) + out * 2.4
+	local head = part("Head", Vector3.new(1.4, 0.5, 1.4), CFrame.new(headAt), Color3.fromRGB(120, 112, 96), m)
+	glow(head, Color3.fromRGB(120, 112, 96), color)
+	addLight(head, "Point", range, brightness, color)
+	m.Parent = parent
+end
+
+local function townStreets(parent: Instance)
+	local S = L.Street
+	local i = 0
+	for t = -S.TownHalf, S.TownHalf, S.Spacing do
+		if math.abs(t) >= S.SkipNearPlaza then
+			i += 1
+			local side = if i % 2 == 0 then 1 else -1
+			-- RoadX0 runs along Z at x = 0; RoadZ0 along X at z = 0 (WaterConfig.RoadEnds): posts off the lane, arms over it
+			post(parent, "StreetX_" .. i, side * S.Offset, t, S.PoleHeight, S.Range, S.Brightness, S.Color, Vector3.new(0, 0, t))
+			post(parent, "StreetZ_" .. i, t, -side * S.Offset, S.PoleHeight, S.Range, S.Brightness, S.Color, Vector3.new(t, 0, 0))
+		end
+	end
+	local P = L.PlazaRing
+	for k = 0, P.Count - 1 do
+		local a = math.rad(15 + k * (360 / P.Count)) -- never on the roads through the plaza (0 / 90 / 180 / 270)
+		post(parent, "PlazaLamp_" .. k, math.cos(a) * P.Radius, math.sin(a) * P.Radius, L.Street.PoleHeight, P.Range, P.Brightness, S.Color, Vector3.zero)
+	end
+	local T = L.TownSquare
+	local sq = Vector3.new(T.X, 0, T.Z)
+	for k, off in ipairs({ Vector3.new(-T.Half, 0, -T.Half), Vector3.new(T.Half, 0, -T.Half), Vector3.new(T.Half + 4, 0, 0) }) do
+		post(parent, "SquareLamp_" .. k, T.X + off.X, T.Z + off.Z, L.Street.PoleHeight, T.Range, T.Brightness, S.Color, sq)
+	end
+end
+
+local function bases(parent: Instance)
+	local B = L.Base
+	local half = BaseConfig.PlotSize.X / 2
+	local gateX = BaseLayoutConfig.MainGateWidth / 2 + 4
+	local runway: any = nil
+	for _, r in ipairs(BaseLayoutConfig.Roads) do
+		if r.Name == "Runway" then
+			runway = r
+		end
+	end
+	for plotId = 1, BaseConfig.MaxPlots do
+		if PlotFrame.PlotPosition(plotId) == nil then
+			continue
+		end
+		local f = Instance.new("Folder")
+		f.Name = "Plot" .. plotId .. "_Night"
+		local function at(lx: number, lz: number): Vector3
+			return PlotFrame.LocalToWorld(plotId, lx, lz)
+		end
+		-- gate floodlights, just inside the main gate on both sides of the lane, lighting the lane
+		for _, sx in ipairs({ -1, 1 }) do
+			local p = at(sx * gateX, half - 6)
+			post(f, "GateFlood", p.X, p.Z, 12, B.GateRange, B.GateBrightness, B.Color, at(0, half - 20))
+		end
+		-- hangar floodlight beside the apron (never on the runway / apron rectangles)
+		local h = at(-74, -101)
+		post(f, "HangarFlood", h.X, h.Z, 14, B.HangarRange, B.HangarBrightness, B.Color, at(-100, -110))
+		-- runway edge markers (Neon at night, no lights)
+		if runway then
+			local x0 = runway.X - runway.SizeX / 2
+			local x1 = runway.X + runway.SizeX / 2
+			for _, sz in ipairs({ -1, 1 }) do
+				local lz = runway.Z + sz * (runway.SizeZ / 2 + 1)
+				local lx = x0 + 2
+				while lx <= x1 - 2 do
+					local p = at(lx, lz)
+					local y = groundY(p.X, p.Z)
+					if y then
+						local mk = part("RunwayEdge", Vector3.new(0.8, 0.35, 0.8), CFrame.new(p.X, y + 0.18, p.Z), Color3.fromRGB(90, 86, 70), f)
+						glow(mk, Color3.fromRGB(90, 86, 70), B.RunwayMarkerColor)
+					end
+					lx += B.RunwayMarkerSpacing
+				end
+			end
+		end
+		f.Parent = parent
+	end
+end
+
+-- the plaza flag: glows at night, one spotlight from the pole top onto it (TerritoryService builds it; waited for)
+local function plazaFlag(parent: Instance)
+	local F = L.Flag
+	task.spawn(function()
+		for _ = 1, 30 do
+			local pole = Workspace:FindFirstChild(F.Pole, true)
+			if pole and pole:IsA("BasePart") then
+				local top = pole.Position + Vector3.new(0, pole.Size.Y / 2 + 0.6, 0)
+				local lamp = part("FlagLamp", Vector3.new(0.8, 0.8, 0.8), CFrame.lookAt(top, top - Vector3.new(0, 1, 0) + Vector3.new(0.01, 0, 0)), Color3.fromRGB(90, 90, 90), parent)
+				addLight(lamp, "Spot", F.Range, F.Brightness, Color3.fromRGB(255, 244, 220), Enum.NormalId.Front, F.Angle)
+				local flag = Workspace:FindFirstChild(F.Flag, true)
+				if flag and flag:IsA("BasePart") then
+					glow(flag, nil, nil) -- Neon at night in its owner colour (TerritoryService keeps writing the colour)
+				end
+				local ok, WA = pcall(require, script.Parent.WorldAtmosphere)
+				if ok and type(WA) == "table" and (WA :: any).IsNight then
+					pcall((WA :: any).SetNightLights, (WA :: any).IsNight())
+				end
+				return
+			end
+			task.wait(2)
+		end
+	end)
+end
+
+-- Id -> Yaw of every town "block" cluster (the building's front faces (-sin yaw, 0, -cos yaw))
+local function blockYaws(): { [string]: number }
+	local out: { [string]: number } = {}
+	local seen: { [any]: boolean } = {}
+	local function walk(t: any, depth: number)
+		if depth > 6 or seen[t] then
+			return
+		end
+		seen[t] = true
+		if typeof(t.Id) == "string" and t.Role == "block" and typeof(t.Yaw) == "number" then
+			out[t.Id] = t.Yaw
+		end
+		for _, v in pairs(t) do
+			if type(v) == "table" then
+				walk(v, depth + 1)
+			end
+		end
+	end
+	walk(WorldConfig, 0)
+	return out
+end
+
+local function windows(parent: Instance)
+	local W = L.Windows
+	if not W.Enabled then
+		return
+	end
+	local yaws = blockYaws()
+	local wf = Instance.new("Folder")
+	wf.Name = "Windows"
+	local hitParams = RaycastParams.new()
+	hitParams.FilterType = Enum.RaycastFilterType.Include
+	for _, m in ipairs(Workspace:GetDescendants()) do
+		if m:IsA("Model") and m:GetAttribute("WE_Cluster") == "poi:block" and yaws[m.Name] ~= nil then
+			local yaw = math.rad(yaws[m.Name])
+			local front = Vector3.new(-math.sin(yaw), 0, -math.cos(yaw))
+			local right = Vector3.new(-front.Z, 0, front.X)
+			local mn, mx = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+			for _, d in ipairs(m:GetDescendants()) do
+				if d:IsA("BasePart") then
+					mn = mn:Min(d.Position - d.Size / 2)
+					mx = mx:Max(d.Position + d.Size / 2)
+				end
+			end
+			if mn.X == math.huge then
+				continue
+			end
+			local centre = (mn + mx) / 2
+			local ext = mx - mn
+			local depth = math.abs(ext.X * front.X) + math.abs(ext.Z * front.Z)
+			local width = math.abs(ext.X * right.X) + math.abs(ext.Z * right.Z)
+			hitParams.FilterDescendantsInstances = { m }
+			local placed = 0
+			local cols = math.clamp(math.floor(width / W.ColumnSpacing) - 1, 1, 3)
+			for floor = 1, 2 do
+				local y = mn.Y + W.FirstFloorY + (floor - 1) * W.FloorHeight
+				if y > mx.Y - 2 then
+					break
+				end
+				for c = 1, cols do
+					if placed >= W.MaxPerBuilding then
+						break
+					end
+					local lat = (c - (cols + 1) / 2) * W.ColumnSpacing
+					local from = Vector3.new(centre.X, y, centre.Z) + front * (depth / 2 + 6) + right * lat
+					local r = Workspace:Raycast(from, -front * (depth + 8), hitParams)
+					if r and r.Normal:Dot(front) > 0.9 then
+						local p = r.Position + r.Normal * 0.08
+						local win = part("Window", W.Size, CFrame.lookAt(p, p + r.Normal), W.DayColor, wf)
+						placed += 1
+						NightLights.Stats.Windows += 1
+						-- deterministic "lit" pattern (the same on every server)
+						local h = (#m.Name * 7 + floor * 13 + c * 5) % 10
+						if h < W.LitShare * 10 then
+							glow(win, W.DayColor, W.NightColor)
+						end
+					end
+				end
+			end
+		end
+	end
+	wf.Parent = parent
+end
+
+function NightLights.Build()
+	if not LightingConfig.Enabled then
+		return
+	end
+	local old = Workspace:FindFirstChild("WE_NightLights")
+	if old then
+		old:Destroy()
+	end
+	lightCount = 0
+	NightLights.Stats = { Lights = 0, Glow = 0, Windows = 0 }
+	local f = Instance.new("Folder")
+	f.Name = "WE_NightLights"
+	rayParams.FilterDescendantsInstances = { f }
+	local ok1, e1 = pcall(townStreets :: any, f)
+	local ok2, e2 = pcall(bases :: any, f)
+	local ok3, e3 = pcall(windows :: any, f)
+	if not (ok1 and ok2 and ok3) then
+		warn("[NightLights] partial build:", e1, e2, e3)
+	end
+	f.Parent = Workspace
+	plazaFlag(f)
+	local ok, WA = pcall(require, script.Parent.WorldAtmosphere)
+	if ok and type(WA) == "table" and (WA :: any).IsNight then
+		pcall((WA :: any).SetNightLights, (WA :: any).IsNight())
+	end
+	print(string.format("[NightLights] %d lights, %d glow parts, %d windows", NightLights.Stats.Lights, NightLights.Stats.Glow, NightLights.Stats.Windows))
+end
+
+return NightLights
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="Folder" referent="131">
           <Properties>
             <string name="Name">POILayouts</string>
           </Properties>
-          <Item class="ModuleScript" referent="130">
+          <Item class="ModuleScript" referent="132">
             <Properties>
               <string name="Name">Frontier</string>
               <string name="Source"><![CDATA[--!strict
@@ -34602,7 +35320,7 @@ return Layouts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="131">
+          <Item class="ModuleScript" referent="133">
             <Properties>
               <string name="Name">Industry</string>
               <string name="Source"><![CDATA[--!strict
@@ -34867,7 +35585,7 @@ return Layouts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="132">
+          <Item class="ModuleScript" referent="134">
             <Properties>
               <string name="Name">Wilds</string>
               <string name="Source"><![CDATA[--!strict
@@ -35116,7 +35834,7 @@ return Layouts
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="133">
+        <Item class="ModuleScript" referent="135">
           <Properties>
             <string name="Name">PlazaAirstrike</string>
             <string name="Source"><![CDATA[--!strict
@@ -35241,7 +35959,7 @@ return PlazaAirstrike
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="134">
+        <Item class="ModuleScript" referent="136">
           <Properties>
             <string name="Name">PlazaBounty</string>
             <string name="Source"><![CDATA[--!strict
@@ -35357,7 +36075,7 @@ return PlazaBounty
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="135">
+        <Item class="ModuleScript" referent="137">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -36357,7 +37075,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="136">
+        <Item class="ModuleScript" referent="138">
           <Properties>
             <string name="Name">Projectile</string>
             <string name="Source"><![CDATA[--!strict
@@ -36555,7 +37273,207 @@ return Projectile
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="137">
+        <Item class="ModuleScript" referent="139">
+          <Properties>
+            <string name="Name">PurchaseStands</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 19 (2026-09-29, owner: "the Robux purchase pads look terrible"): a proper purchase stand for every
+	base Robux offer (MonetizationConfig.PremiumPads.Stand / .Depot). Built by MapSetup (the ATM offers, grouped in the
+	plot's "Supply Depot" corner under one sign) and PlotOilPumpService (the Golden Pump stand by the pumps).
+	  * A raised hexagonal steel plinth (3 boxes at 0 / 60 / 120 degrees) with a gold trim ring, a steel top.
+	  * The top is THE purchase part: WE_PremiumPad tag + OfferKind / OfferKey / PlotId / OwnedIfAny / PadSlot (exactly
+	    what the old flat pad carried), WE_Stand = true, and a ProximityPrompt "Buy - R$ X". PremiumPadService listens
+	    to that prompt ONLY for stands: stepping on a stand never buys (no Touched, no standing check). The purchase path
+	    is unchanged: PremiumPadService.tryPrompt -> PromptPremiumPad -> the client's PromptPurchase / ProcessReceipt.
+	  * A slowly spinning glowing hologram (client spins it; icon BillboardGui) and a floating info BillboardGui (name, a
+	    short benefit line, a gold price chip with the Robux icon; price read from MonetizationConfig, never typed here).
+	  * A soft Neon ring on the floor (the client pulses it; low quality: still).
+	  * OWNED (client, ShopController): green ring + tint, a check badge in the chip, the prompt hidden.
+	No shadows; one PointLight per stand (Shadows off). Anchored; only the plinth collides.
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+local Constants = require(Shared.Constants)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+
+local PurchaseStands = {}
+
+local TAG = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
+local ROBUX = utf8.char(0xE002) -- the Robux icon glyph in Roblox fonts
+
+export type StandOpts = {
+	Kind: string, -- "GamePass" | "DevProduct"
+	Key: string,
+	PlotId: number,
+	Label: string?, -- display name (else the config DisplayName)
+	Benefit: string?, -- one short line (else the config Description)
+	Color: Color3,
+	Icon: string?, -- the hologram glyph
+	OwnedIfAny: string?, -- comma list (PremiumPads slot)
+	PadSlot: string?,
+}
+
+-- price + name + benefit, from MonetizationConfig only
+function PurchaseStands.OfferInfo(kind: string, key: string): (number, string, string)
+	local def: any = if kind == "GamePass" then (MonetizationConfig.GamePasses :: any)[key] else (MonetizationConfig.DevProducts :: any)[key]
+	local price = if typeof(def) == "table" then tonumber(def.RobuxPrice) or 0 else 0
+	local name = if typeof(def) == "table" and typeof(def.DisplayName) == "string" then def.DisplayName else key
+	local desc = if typeof(def) == "table" and typeof(def.Description) == "string" then def.Description else ""
+	return price, name, desc
+end
+
+local function part(name: string, size: Vector3, cf: CFrame, color: Color3, mat: Enum.Material, collide: boolean, parent: Instance, shape: Enum.PartType?): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Anchored = true
+	p.CanCollide = collide
+	p.CanTouch = false
+	p.CanQuery = collide
+	p.CastShadow = false
+	p.Size = size
+	p.CFrame = cf
+	p.Color = color
+	p.Material = mat
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if shape then
+		p.Shape = shape
+	end
+	p.Parent = parent
+	return p
+end
+
+local function label(parent: Instance, name: string, text: string, pos: UDim2, size: UDim2, color: Color3, font: Enum.Font): TextLabel
+	local t = Instance.new("TextLabel")
+	t.Name = name
+	t.BackgroundTransparency = 1
+	t.Position = pos
+	t.Size = size
+	t.Font = font
+	t.TextScaled = true
+	t.TextColor3 = color
+	t.TextStrokeTransparency = 0.4
+	t.Text = text
+	t.Parent = parent
+	return t
+end
+
+--[[ One stand at `base` (world CFrame on the floor; its -Z = the stand's front). Returns the purchase part (the top). ]]
+function PurchaseStands.Build(parent: Instance, base: CFrame, o: StandOpts): BasePart
+	local S: any = MonetizationConfig.PremiumPads.Stand
+	local price, cfgName, cfgDesc = PurchaseStands.OfferInfo(o.Kind, o.Key)
+	local name = o.Label or cfgName
+	local benefit = o.Benefit or cfgDesc
+	local m = Instance.new("Model")
+	m.Name = "PurchaseStand_" .. o.Key
+	m.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+
+	local R, H = S.Radius, S.Height
+	-- hexagonal plinth: 3 boxes (side R, width sqrt(3) R) turned 0 / 60 / 120 degrees
+	for k = 0, 2 do
+		part("Plinth", Vector3.new(R, H, R * math.sqrt(3)), base * CFrame.new(0, H / 2, 0) * CFrame.Angles(0, math.rad(60 * k), 0), S.Steel, Enum.Material.DiamondPlate, true, m)
+	end
+	-- gold trim ring round the top edge
+	part("GoldTrim", Vector3.new(0.3, 2 * R + 0.7, 2 * R + 0.7), base * CFrame.new(0, H - 0.1, 0) * CFrame.Angles(0, 0, math.rad(90)), S.Gold, Enum.Material.Metal, false, m, Enum.PartType.Cylinder)
+	-- the purchase part: the steel top
+	local top = part("PremiumPad_" .. o.Key, Vector3.new(0.2, 2 * R, 2 * R), base * CFrame.new(0, H + 0.1, 0) * CFrame.Angles(0, 0, math.rad(90)), S.Top, Enum.Material.Metal, true, m, Enum.PartType.Cylinder)
+	top:SetAttribute("PlotId", o.PlotId)
+	top:SetAttribute("OfferKind", o.Kind)
+	top:SetAttribute("OfferKey", o.Key)
+	if o.OwnedIfAny then
+		top:SetAttribute("OwnedIfAny", o.OwnedIfAny)
+	end
+	if o.PadSlot then
+		top:SetAttribute("PadSlot", o.PadSlot)
+	end
+	top:SetAttribute("WE_Stand", true)
+	top:SetAttribute("WE_StandColor", o.Color)
+	-- the soft floor ring (the client pulses it)
+	local ring = part("FloorRing", Vector3.new(0.1, 2 * R + 3, 2 * R + 3), base * CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), o.Color, Enum.Material.Neon, false, m, Enum.PartType.Cylinder)
+	ring.Transparency = S.RingTransparency
+	-- the hologram (the client spins it) + its icon
+	local holo = part("Hologram", Vector3.new(S.HoloSize, S.HoloSize, S.HoloSize), base * CFrame.new(0, H + S.HoloLift, 0) * CFrame.Angles(math.rad(45), 0, math.rad(45)), o.Color, Enum.Material.Neon, false, m)
+	holo.Transparency = S.HoloTransparency
+	local light = Instance.new("PointLight")
+	light.Color = o.Color
+	light.Brightness = S.LightBrightness
+	light.Range = S.LightRange
+	light.Shadows = false
+	light.Parent = holo
+	local icon = Instance.new("BillboardGui")
+	icon.Name = "WE_StandIcon"
+	icon.Size = UDim2.fromScale(2.6, 2.6)
+	icon.MaxDistance = S.LabelMaxDistance
+	icon.LightInfluence = 0
+	icon.Parent = holo
+	label(icon, "Icon", o.Icon or "★", UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), Color3.new(1, 1, 1), Enum.Font.GothamBlack)
+	-- the info board: name, benefit, gold price chip (the client's OWNED look finds it by name)
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "WE_PremiumBillboard"
+	bb.Size = UDim2.fromScale(7, 3.6)
+	bb.StudsOffsetWorldSpace = Vector3.new(0, H + S.HoloLift + 3.4, 0)
+	bb.MaxDistance = S.LabelMaxDistance
+	bb.LightInfluence = 0
+	bb.Adornee = top
+	bb.Parent = top
+	label(bb, "Title", name, UDim2.fromScale(0, 0), UDim2.fromScale(1, 0.38), Color3.fromRGB(245, 240, 225), Enum.Font.GothamBlack)
+	label(bb, "Benefit", benefit, UDim2.fromScale(0, 0.38), UDim2.fromScale(1, 0.24), Color3.fromRGB(210, 214, 220), Enum.Font.GothamMedium)
+	local chip = Instance.new("Frame")
+	chip.Name = "PriceChip"
+	chip.AnchorPoint = Vector2.new(0.5, 0)
+	chip.Position = UDim2.fromScale(0.5, 0.66)
+	chip.Size = UDim2.fromScale(0.5, 0.32)
+	chip.BackgroundColor3 = S.Gold
+	chip.BorderSizePixel = 0
+	chip.Parent = bb
+	local cc = Instance.new("UICorner")
+	cc.CornerRadius = UDim.new(0.5, 0)
+	cc.Parent = chip
+	label(chip, "Price", ROBUX .. " " .. tostring(price), UDim2.fromScale(0.05, 0.05), UDim2.fromScale(0.9, 0.9), Color3.fromRGB(34, 26, 8), Enum.Font.GothamBlack).TextStrokeTransparency = 1
+	-- the ONLY purchase trigger
+	local pp = Instance.new("ProximityPrompt")
+	pp.Name = "WE_BuyPrompt"
+	pp.ActionText = "Buy - " .. ROBUX .. " " .. tostring(price)
+	pp.ObjectText = name
+	pp.HoldDuration = S.HoldSeconds
+	pp.MaxActivationDistance = S.PromptDistance
+	pp.RequiresLineOfSight = false
+	pp.Parent = top
+
+	CollectionService:AddTag(top, TAG)
+	m.Parent = parent
+	return top
+end
+
+--[[ The depot sign behind the stand row (a 2-post board, one SurfaceGui, MaxDistance 60). ]]
+function PurchaseStands.Sign(parent: Instance, cf: CFrame, text: string)
+	local S: any = MonetizationConfig.PremiumPads.Stand
+	local m = Instance.new("Model")
+	m.Name = "SupplyDepotSign"
+	for _, x in ipairs({ -6, 6 }) do
+		part("SignPost", Vector3.new(0.6, 7, 0.6), cf * CFrame.new(x, 3.5, 0.3), S.Steel, Enum.Material.Metal, false, m)
+	end
+	local board = part("SignBoard", Vector3.new(14, 2.6, 0.4), cf * CFrame.new(0, 6, 0), S.Steel, Enum.Material.Metal, false, m)
+	part("SignGold", Vector3.new(14.4, 0.3, 0.5), cf * CFrame.new(0, 7.4, 0), S.Gold, Enum.Material.Metal, false, m)
+	local sg = Instance.new("SurfaceGui")
+	sg.Face = Enum.NormalId.Front
+	sg.MaxDistance = 60
+	sg.LightInfluence = 0
+	sg.CanvasSize = Vector2.new(560, 104)
+	sg.Parent = board
+	label(sg, "Text", text, UDim2.fromScale(0.03, 0.08), UDim2.fromScale(0.94, 0.84), S.Gold, Enum.Font.GothamBlack)
+	m.Parent = parent
+end
+
+return PurchaseStands
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="140">
           <Properties>
             <string name="Name">RemoteGate</string>
             <string name="Source"><![CDATA[--!strict
@@ -36809,7 +37727,7 @@ return RemoteGate
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="138">
+        <Item class="ModuleScript" referent="141">
           <Properties>
             <string name="Name">RemoteGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -36877,7 +37795,7 @@ return RemoteGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="139">
+        <Item class="ModuleScript" referent="142">
           <Properties>
             <string name="Name">RemoteSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -37235,7 +38153,7 @@ return RemoteSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="140">
+        <Item class="ModuleScript" referent="143">
           <Properties>
             <string name="Name">RigBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -37658,7 +38576,7 @@ return RigBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="141">
+        <Item class="ModuleScript" referent="144">
           <Properties>
             <string name="Name">SessionLock</string>
             <string name="Source"><![CDATA[--!strict
@@ -37917,7 +38835,7 @@ return SessionLock
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="142">
+        <Item class="ModuleScript" referent="145">
           <Properties>
             <string name="Name">StreamPrefetch</string>
             <string name="Source"><![CDATA[--!strict
@@ -38187,7 +39105,7 @@ return StreamPrefetch
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="143">
+        <Item class="ModuleScript" referent="146">
           <Properties>
             <string name="Name">StructureKitBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -39844,7 +40762,7 @@ return StructureKitBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="144">
+        <Item class="ModuleScript" referent="147">
           <Properties>
             <string name="Name">StudioBuySmoke</string>
             <string name="Source"><![CDATA[--!strict
@@ -40135,7 +41053,7 @@ return StudioBuySmoke
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="145">
+        <Item class="ModuleScript" referent="148">
           <Properties>
             <string name="Name">TrainingYardBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -40346,7 +41264,7 @@ return TrainingYardBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="146">
+        <Item class="ModuleScript" referent="149">
           <Properties>
             <string name="Name">VIPLounge</string>
             <string name="Source"><![CDATA[--!strict
@@ -40471,7 +41389,7 @@ return VIPLounge
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="147">
+        <Item class="ModuleScript" referent="150">
           <Properties>
             <string name="Name">VehicleHealth</string>
             <string name="Source"><![CDATA[--!strict
@@ -41307,7 +42225,7 @@ return VehicleHealth
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="148">
+        <Item class="ModuleScript" referent="151">
           <Properties>
             <string name="Name">VehicleWaterGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -42166,7 +43084,7 @@ return VehicleWaterGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="149">
+        <Item class="ModuleScript" referent="152">
           <Properties>
             <string name="Name">Waterways</string>
             <string name="Source"><![CDATA[--!strict
@@ -42990,7 +43908,7 @@ return Waterways
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="150">
+        <Item class="ModuleScript" referent="153">
           <Properties>
             <string name="Name">WeaponAssetLoader</string>
             <string name="Source"><![CDATA[--!strict
@@ -43281,7 +44199,7 @@ return WeaponAssetLoader
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="151">
+        <Item class="ModuleScript" referent="154">
           <Properties>
             <string name="Name">WorldAtmosphere</string>
             <string name="Source"><![CDATA[--!strict
@@ -43318,6 +44236,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Configs = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs")
 local WorldConfig = require(Configs:WaitForChild("WorldConfig"))
 local StructureVisualConfig = require(Configs:WaitForChild("StructureVisualConfig"))
+local LightingConfig = require(Configs:WaitForChild("LightingConfig")) -- claude-bud JOB 17: the phone-readable night
 
 export type Values = {
 	ClockTime: number,
@@ -43331,6 +44250,10 @@ export type Values = {
 	Decay: Color3,
 	Glare: number,
 	Haze: number,
+	CCBrightness: number, -- claude-bud JOB 17: WE_NightCC (0 / 0 / 0 / white by day)
+	CCContrast: number,
+	CCSaturation: number,
+	CCTint: Color3,
 }
 export type Handle = { Preset: string, Stop: () -> () }
 
@@ -43356,7 +44279,7 @@ local function worldLighting(): any
 end
 
 function WorldAtmosphere.NightShare(clock: number): number
-	local c = WorldConfig.Atmosphere
+	local c: any = if LightingConfig.Enabled then LightingConfig.Cycle else WorldConfig.Atmosphere -- claude-bud JOB 17
 	local t = clock % 24
 	if t < c.NightEnd or t > c.NightStart then
 		return 1
@@ -43382,6 +44305,11 @@ function WorldAtmosphere.Sample(clock: number, preset: string?): Values
 	local _, p = presetOf(preset)
 	local night = WorldAtmosphere.NightShare(clock)
 	local d, n = p.Day, p.Night
+	if LightingConfig.Enabled then
+		n = LightingConfig.Night -- claude-bud JOB 17: moody but readable (no black phones)
+	end
+	local cc = LightingConfig.ColorCorrection
+	local ccOn = if LightingConfig.Enabled then night else 0
 	local wl = worldLighting()
 	local dayAmbient: Color3 = if typeof(wl.DayAmbient) == "Color3" then wl.DayAmbient else d.Ambient
 	return {
@@ -43396,6 +44324,10 @@ function WorldAtmosphere.Sample(clock: number, preset: string?): Values
 		Decay = lerpColor(d.Decay, n.Decay, night),
 		Glare = r3(d.Glare + (n.Glare - d.Glare) * night),
 		Haze = r3(d.Haze + (n.Haze - d.Haze) * night),
+		CCBrightness = r3(cc.Brightness * ccOn),
+		CCContrast = r3(cc.Contrast * ccOn),
+		CCSaturation = r3(cc.Saturation * ccOn),
+		CCTint = lerpColor(Color3.new(1, 1, 1), cc.Tint, ccOn),
 	}
 end
 
@@ -43436,7 +44368,12 @@ local FIELDS: { { string } } = {
 	{ "A", "Decay" },
 	{ "A", "Glare" },
 	{ "A", "Haze" },
+	{ "C", "CCBrightness", "Brightness" }, -- claude-bud JOB 17: the moonlit colour correction
+	{ "C", "CCContrast", "Contrast" },
+	{ "C", "CCSaturation", "Saturation" },
+	{ "C", "CCTint", "TintColor" },
 }
+local ccEffect: ColorCorrectionEffect? = nil
 
 -- write only what differs from the last written values; returns the number of property writes
 local function write(atm: Atmosphere?, v: Values, last: Values?): number
@@ -43447,8 +44384,10 @@ local function write(atm: Atmosphere?, v: Values, last: Values?): number
 		if cur[key] ~= old[key] then
 			n += 1
 			if atm then
-				local obj: any = if f[1] == "L" then Lighting else atm
-				obj[key] = cur[key]
+				local obj: any = if f[1] == "L" then Lighting elseif f[1] == "C" then ccEffect else atm
+				if obj then
+					obj[f[3] or key] = cur[key]
+				end
 			end
 		end
 	end
@@ -43461,6 +44400,31 @@ local function setNightLights(on: boolean)
 			inst.Enabled = on
 		end
 	end
+	-- claude-bud JOB 17: night glow (lamp heads, lit windows, runway markers, the plaza flag): Neon + its night colour
+	-- only at night; by day its own day material / colour (attributes WE_DayMaterial / WE_DayColor / WE_NightColor)
+	for _, inst in ipairs(CollectionService:GetTagged(LightingConfig.GlowTag)) do
+		if inst:IsA("BasePart") then
+			local dayMat = inst:GetAttribute("WE_DayMaterial")
+			local dayCol = inst:GetAttribute("WE_DayColor")
+			local nightCol = inst:GetAttribute("WE_NightColor")
+			if on then
+				inst.Material = Enum.Material.Neon
+				if typeof(nightCol) == "Color3" then
+					inst.Color = nightCol
+				end
+			else
+				inst.Material = if typeof(dayMat) == "string" and (Enum.Material :: any)[dayMat] then (Enum.Material :: any)[dayMat] else Enum.Material.SmoothPlastic
+				if typeof(dayCol) == "Color3" then
+					inst.Color = dayCol
+				end
+			end
+		end
+	end
+end
+WorldAtmosphere.SetNightLights = setNightLights -- claude-bud JOB 17: NightLights applies the current state after building
+function WorldAtmosphere.IsNight(): boolean
+	local clock: any = Lighting.ClockTime
+	return WorldAtmosphere.NightShare(if type(clock) == "number" then clock else 12) > 0.5
 end
 
 -- counters of the running loop (Counters() returns a copy)
@@ -43480,6 +44444,19 @@ function WorldAtmosphere.Apply(opts: { Preset: string?, DayCycle: boolean?, Star
 	end)
 	ensureSky()
 	local atm = ensureAtmosphere()
+	-- claude-bud JOB 17: the moonlit colour correction (one effect, written by the day loop like Atmosphere)
+	if LightingConfig.Enabled then
+		local name = LightingConfig.ColorCorrection.Name
+		local existing = Lighting:FindFirstChild(name)
+		if existing and existing:IsA("ColorCorrectionEffect") then
+			ccEffect = existing
+		else
+			local e = Instance.new("ColorCorrectionEffect")
+			e.Name = name
+			e.Parent = Lighting
+			ccEffect = e
+		end
+	end
 
 	local clock = if opts and opts.StartClock then opts.StartClock else cfg.StartClock
 	local last = WorldAtmosphere.Sample(clock, key)
@@ -43564,7 +44541,7 @@ return WorldAtmosphere
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="152">
+        <Item class="ModuleScript" referent="155">
           <Properties>
             <string name="Name">WorldBounds</string>
             <string name="Source"><![CDATA[--!strict
@@ -43965,7 +44942,7 @@ return WorldBounds
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="153">
+        <Item class="ModuleScript" referent="156">
           <Properties>
             <string name="Name">WorldDress</string>
             <string name="Source"><![CDATA[--!strict
@@ -45636,7 +46613,7 @@ return WorldDress
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="154">
+        <Item class="ModuleScript" referent="157">
           <Properties>
             <string name="Name">WorldFill</string>
             <string name="Source"><![CDATA[--!strict
@@ -45877,17 +46854,363 @@ function WorldFill.Build(quality: string, occ: any, wd: any, wk: any): (number, 
 			end
 		end
 	end
+	pcall(WorldFill.Build2, quality, occ, wd, wk) -- claude-bud JOB 18: WorldFill 2 (same folder, same occupancy)
 	folder:SetAttribute("WE_FillParts", state.Parts)
 	folder:SetAttribute("WE_FillSkipped", state.Skipped)
 	print(string.format("[WAR EMPIRE] WorldFill: quality=%s parts=%d skipped=%d (cap %d)", string.lower(quality), state.Parts, state.Skipped, limit))
 	return state.Parts, state.Skipped
 end
 
+-- ── claude-bud JOB 18: WorldFill 2 (WorldFillConfig.Fill2) ─────────────────────────────────────────────────────────
+local F2: any = (WorldFillConfig :: any).Fill2
+local fill2 = { Parts = 0, Skipped = 0, Limit = 0, Full = true }
+
+local function hash(a: number, b: number): number
+	local h = bit32.bxor(math.floor(a * 7385) % 2147483647, math.floor(b * 1934) % 2147483647)
+	return math.abs(h) % 1000003
+end
+
+-- one themed item at world (wx, wz); returns true when placed
+local function placeItem(ff: Instance, name: string, it: any, wx: number, wz: number, yaw: number, occ: any, wd: any, wk: any, rng: any, allowPOI: string?, text: string?): boolean
+	if not (it.Tier == 1 or fill2.Full) then
+		return false
+	end
+	if it.Kit == "Rock" then
+		local r = it.Radius or 10
+		local why = if occ and wd then wd.Blocked(occ, wx, wz, r, { AllowPOI = allowPOI }) else nil
+		if why ~= nil then
+			fill2.Skipped += 1
+			return false
+		end
+		pcall(wk.Rock, Vector3.new(wx, GROUND_Y, wz), it.Kind or "boulders", rng, { Radius = r })
+		if occ and wd then
+			wd.AddDisc(occ, wx, wz, r, "fill2rock")
+		end
+		return true
+	end
+	local opts = it.Opts
+	if text then
+		opts = table.clone(opts or {})
+		opts.Text = text
+	end
+	local fp = wk.Footprint(it.Kit, it.Opts)
+	local planned = if fp then fp.Parts else 8
+	local r = if fp then math.max(fp.X1 - fp.X0, fp.Z1 - fp.Z0) * 0.5 else 5
+	local why = if occ and wd then wd.Blocked(occ, wx, wz, r, { Spacing = WorldFillConfig.ItemSpacing, AllowPOI = allowPOI }) else nil
+	if why ~= nil or fill2.Parts + planned > fill2.Limit then
+		fill2.Skipped += 1
+		return false
+	end
+	local cf = CFrame.new(wx, GROUND_Y, wz) * CFrame.Angles(0, math.rad(yaw), 0)
+	local model = wk.Place(it.Kit, cf, ff, {
+		Name = name,
+		Cluster = { Source = "fill2", Kind = it.Kit, Anchor = "natural", AnchorX = wx, AnchorZ = wz, Tier = it.Tier },
+		Kit = opts,
+	})
+	if model == nil then
+		fill2.Skipped += 1
+		return false
+	end
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Script") or d:IsA("LocalScript") then
+			d:Destroy() -- never scripts in world props
+		elseif d:IsA("BasePart") then
+			d.Anchored = true
+			if d.Size.Magnitude < 8 then
+				d.CastShadow = false -- small props cast no shadows
+			end
+		end
+	end
+	fill2.Parts += countParts(model)
+	if occ and wd then
+		wd.AddDisc(occ, wx, wz, r, "fill2")
+	end
+	return true
+end
+
+-- a theme's items round (cx, cz) turned by yaw; the first placeable NameSign-worthy spot carries `sign`
+local function placeTheme(parent: Instance, id: string, theme: string, cx: number, cz: number, yaw: number, occ: any, wd: any, wk: any, rng: any, allowPOI: string?, sign: string?): number
+	local items = F2.Themes[theme]
+	if items == nil then
+		return 0
+	end
+	local ff = Instance.new("Folder")
+	ff.Name = "Fill2_" .. id
+	ff.Parent = parent
+	local field = { X = cx, Z = cz, Yaw = yaw }
+	local n = 0
+	for i, it in ipairs(items) do
+		local wx, wz, y = toWorld(field, it)
+		if placeItem(ff, string.format("Fill2_%s_%d_%s", id, i, it.Kit), it, wx, wz, y, occ, wd, wk, rng, allowPOI, nil) then
+			n += 1
+		end
+	end
+	if sign then
+		local sx, sz, y = toWorld(field, { X = 0, Z = -34, Yaw = 180 })
+		placeItem(ff, "Fill2_" .. id .. "_Sign", { Kit = "NameSign", Tier = 1 }, sx, sz, y, occ, wd, wk, rng, allowPOI, sign)
+	end
+	if #ff:GetChildren() == 0 then
+		ff:Destroy()
+	end
+	return n
+end
+
+-- nothing placed and no POI within EmptyRadius of (x, z)
+local function emptyAt(occ: any, wd: any, x: number, z: number): boolean
+	local R = F2.Cells.EmptyRadius
+	for _, d in ipairs(occ.Discs) do
+		if (d.X - x) ^ 2 + (d.Z - z) ^ 2 < (R + d.R) ^ 2 then
+			return false
+		end
+	end
+	for _, p in ipairs(occ.Zones.POIs or {}) do
+		if wd.POIDist and wd.POIDist(p, x, z) < R then
+			return false
+		end
+	end
+	return true
+end
+
+local function themeFor(x: number, z: number): string
+	for _, r in ipairs(F2.Cells.Regions) do
+		if x >= r.X0 and x <= r.X1 and z >= r.Z0 and z <= r.Z1 then
+			return r.Theme
+		end
+	end
+	local mix = F2.Cells.MixThemes
+	return mix[(hash(x, z) % #mix) + 1]
+end
+
+local function countryside(parent: Instance, occ: any, wd: any, wk: any, rng: any): (number, number)
+	local C = F2.Cells
+	local cells, filled = 0, 0
+	local signed = false
+	local e = C.Extent
+	for gx = -e + C.Size / 2, e, C.Size do
+		for gz = -e + C.Size / 2, e, C.Size do
+			cells += 1
+			local h = hash(gx, gz)
+			local cx = gx + ((h % 101) / 100 - 0.5) * 2 * C.Jitter
+			local cz = gz + (((h // 101) % 101) / 100 - 0.5) * 2 * C.Jitter
+			-- a patch needs its centre clear (ring, water, plots, roads...) and nothing around it yet
+			if wd.Blocked(occ, cx, cz, C.PatchRadius * 0.5) == nil and emptyAt(occ, wd, cx, cz) then
+				local theme = themeFor(cx, cz)
+				local sign: string? = nil
+				if theme == "Farm" and not signed then
+					sign = F2.SignFarms
+					signed = true
+				end
+				if placeTheme(parent, string.format("Cell_%d_%d", gx, gz), theme, cx, cz, (h % 8) * 45, occ, wd, wk, rng, nil, sign) > 0 then
+					filled += 1
+				end
+			end
+		end
+	end
+	return cells, filled
+end
+
+-- pylons every Step along the highways outside the Town, two wires between neighbours
+local function powerLines(parent: Instance, occ: any, wd: any, wk: any)
+	local P = F2.Power
+	local pf = Instance.new("Folder")
+	pf.Name = "Fill2_Power"
+	pf.Parent = parent
+	local function line(alongX: boolean, sign: number)
+		local prevTop: { Vector3 }? = nil
+		local t = P.From
+		while t <= P.To do
+			local along = t * sign
+			local x = if alongX then along else P.Offset
+			local z = if alongX then P.Offset else along
+			local yaw = if alongX then 0 else 90
+			local placed = false
+			if fill2.Parts + 5 <= fill2.Limit and wd.Blocked(occ, x, z, 5, { RoadClear = 8, RoadR = 0 }) == nil then
+				local cf = CFrame.new(x, GROUND_Y, z) * CFrame.Angles(0, math.rad(yaw), 0)
+				local m = wk.Place("Pylon", cf, pf, {
+					Name = "Fill2_Pylon",
+					Cluster = { Source = "fill2", Kind = "Pylon", Anchor = "natural", AnchorX = x, AnchorZ = z, Tier = 1 },
+				})
+				if m then
+					placed = true
+					fill2.Parts += countParts(m)
+					wd.AddDisc(occ, x, z, 5, "fill2pylon")
+					local right = cf.RightVector
+					local tops = { cf.Position + Vector3.new(0, 22.9, 0) - right * 4, cf.Position + Vector3.new(0, 22.9, 0) + right * 4 }
+					if prevTop then
+						for k = 1, 2 do
+							local a, b = prevTop[k], tops[k]
+							local mid = (a + b) / 2 - Vector3.new(0, P.WireSag, 0)
+							plain("Fill2_Wire", Vector3.new(0.15, 0.15, (b - a).Magnitude), CFrame.lookAt(mid, mid + (b - a)), P.WireColor, Enum.Material.Metal, false, pf)
+							fill2.Parts += 1
+						end
+					end
+					prevTop = tops
+				end
+			end
+			if not placed then
+				prevTop = nil -- a skipped pylon (plot, water, POI) breaks the line: no wire across it
+			end
+			t += P.Step
+		end
+	end
+	line(true, 1)
+	line(true, -1)
+	line(false, 1)
+	line(false, -1)
+end
+
+-- flat dirt tracks from the Town corners to the outer POIs; pieces over water / plots / aprons / captures skipped
+local function tracks(parent: Instance, occ: any, wd: any)
+	local T = F2.Tracks
+	local tf = Instance.new("Folder")
+	tf.Name = "Fill2_Tracks"
+	tf.Parent = parent
+	for i, l in ipairs(T.Lines) do
+		local a, b = Vector3.new(l.X0, 0, l.Z0), Vector3.new(l.X1, 0, l.Z1)
+		local len = (b - a).Magnitude
+		local dir = (b - a).Unit
+		local n = math.floor(len / T.Piece)
+		for k = 0, n - 1 do
+			local c = a + dir * (k + 0.5) * T.Piece
+			local why = wd.Blocked(occ, c.X, c.Z, T.Width * 0.5, { RoadClear = -1000, SkipRing = false })
+			local ok = why == nil or string.sub(why, 1, 4) == "poi:" or string.sub(why, 1, 7) == "anchor:" or string.sub(why, 1, 10) == "structure:"
+			if ok and fill2.Parts < fill2.Limit then
+				local p = plain("Fill2_Track" .. i, Vector3.new(T.Width, 0.12, T.Piece + 1), CFrame.lookAt(Vector3.new(c.X, GROUND_Y + 0.02, c.Z), Vector3.new(c.X, GROUND_Y + 0.02, c.Z) + dir), T.Color, Enum.Material.Ground, false, tf)
+				p.CanQuery = false
+				fill2.Parts += 1
+			end
+		end
+	end
+end
+
+-- rooftop clutter on the town buildings (raycast onto the real roof)
+local function rooftops(parent: Instance, wk: any)
+	local R = F2.Rooftops
+	if not R.Enabled or not fill2.Full then
+		return
+	end
+	local rf = Instance.new("Folder")
+	rf.Name = "Fill2_Rooftops"
+	rf.Parent = parent
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	for _, m in ipairs(Workspace:GetDescendants()) do
+		if m:IsA("Model") and m:GetAttribute("WE_Cluster") == "poi:block" then
+			local ok, cf, size = pcall(m.GetBoundingBox, m)
+			if ok then
+				params.FilterDescendantsInstances = { m }
+				for k = 1, R.PerBuilding do
+					if fill2.Parts + 2 > fill2.Limit then
+						return
+					end
+					local off = Vector3.new((if k == 1 then -0.25 else 0.25) * size.X, 0, (if k == 1 then 0.2 else -0.2) * size.Z)
+					local from = cf.Position + off + Vector3.new(0, size.Y / 2 + 10, 0)
+					local r = Workspace:Raycast(from, Vector3.new(0, -size.Y - 20, 0), params)
+					if r and r.Normal.Y > 0.9 and r.Position.Y > cf.Position.Y - size.Y / 2 + 5 then
+						local kit = R.Kits[(hash(from.X, from.Z + k) % #R.Kits) + 1]
+						local model = wk.Place(kit, CFrame.new(r.Position) * CFrame.Angles(0, math.rad(hash(from.Z, from.X) % 360), 0), rf, {
+							Name = "Fill2_Roof_" .. kit,
+							Cluster = { Source = "fill2", Kind = kit, Anchor = "natural", AnchorX = r.Position.X, AnchorZ = r.Position.Z, Tier = 2 },
+						})
+						if model then
+							fill2.Parts += countParts(model)
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+-- the dune belt: low sand ridges in front of the skyline (north, east, west), one Atomic model
+local function dunes(parent: Instance)
+	local D = F2.Dunes
+	if not D.Enabled then
+		return
+	end
+	local m = Instance.new("Model")
+	m.Name = "Fill2_Dunes"
+	m.ModelStreamingMode = Enum.ModelStreamingMode.Atomic -- (Persistent is reserved for WorldBounds / WorldPOI)
+	local sides = {
+		{ Axis = "z", Sign = -1 }, -- north (-Z)
+		{ Axis = "x", Sign = 1 }, -- east
+		{ Axis = "x", Sign = -1 }, -- west
+	}
+	local span = 2 * D.ROuter
+	for si, s in ipairs(sides) do
+		for i = 1, D.PerSide do
+			local h = hash(si * 100 + i, 7)
+			local along = -D.ROuter + (i - 0.5) * span / D.PerSide
+			local depthAt = D.RInner + (h % 1000) / 1000 * (D.ROuter - D.RInner - 200)
+			local height = D.Height[1] + (h % 97) / 97 * (D.Height[2] - D.Height[1])
+			local len = span / D.PerSide + 60
+			local pos: Vector3
+			local yaw: number
+			if s.Axis == "z" then
+				pos = Vector3.new(along, GROUND_Y + height / 2 - 4, s.Sign * depthAt)
+				yaw = 0
+			else
+				pos = Vector3.new(s.Sign * depthAt, GROUND_Y + height / 2 - 4, along)
+				yaw = 90
+			end
+			-- a ridge = a wedge facing the map + a wedge facing out (a triangular dune profile), 2 parts
+			local cf = CFrame.new(pos) * CFrame.Angles(0, math.rad(yaw), 0)
+			local col = if i % 2 == 0 then D.Color else D.ColorFar
+			for _, face in ipairs({ 1, -1 }) do
+				local w = Instance.new("WedgePart")
+				w.Name = "Fill2_Dune"
+				w.Anchored = true
+				w.CanCollide = false
+				w.CanQuery = false
+				w.CanTouch = false
+				w.CastShadow = false
+				w.Material = Enum.Material.Sand
+				w.Color = col
+				w.Size = Vector3.new(len, height, height * 2.2)
+				w.CFrame = cf * CFrame.new(0, 0, face * height * 1.1) * CFrame.Angles(0, if face < 0 then 0 else math.pi, 0) -- slopes face out, vertical backs meet
+				w.Parent = m
+				fill2.Parts += 1
+			end
+		end
+	end
+	m.Parent = parent
+end
+
+function WorldFill.Build2(quality: string, occ: any, wd: any, wk: any): (number, number)
+	fill2.Parts, fill2.Skipped = 0, 0
+	local folder = state.Folder
+	if F2 == nil or F2.Enabled ~= true or folder == nil or folder.Parent == nil or wk == nil or occ == nil or wd == nil then
+		return 0, 0
+	end
+	fill2.Full = quality == "Full"
+	fill2.Limit = if fill2.Full then F2.MaxParts2Full else F2.MaxParts2Low
+	pcall(function()
+		(wk :: any).Fill2Signs = 0
+	end)
+	local root = Instance.new("Folder")
+	root.Name = "Fill2"
+	root.Parent = folder
+	local rng = wk.Rng(18092026)
+	-- identity first (the towns), then the long lines, then the countryside fills what is left
+	for _, f in ipairs(F2.Identity) do
+		pcall(placeTheme, root, f.Id, f.Theme, f.X, f.Z, f.Yaw, occ, wd, wk, rng, f.AllowPOI, f.Sign)
+	end
+	pcall(powerLines, root, occ, wd, wk)
+	pcall(tracks, root, occ, wd)
+	pcall(rooftops, root, wk)
+	local okC, cells, filled = pcall(countryside, root, occ, wd, wk, rng)
+	pcall(dunes, root)
+	folder:SetAttribute("WE_Fill2Parts", fill2.Parts)
+	folder:SetAttribute("WE_Fill2Skipped", fill2.Skipped)
+	print(string.format("[WAR EMPIRE] WorldFill2: quality=%s parts=%d skipped=%d cells=%s filled=%s (cap %d)", string.lower(quality), fill2.Parts, fill2.Skipped, tostring(if okC then cells else "?"), tostring(if okC then filled else "?"), fill2.Limit))
+	return fill2.Parts, fill2.Skipped
+end
+
 return WorldFill
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="155">
+        <Item class="ModuleScript" referent="158">
           <Properties>
             <string name="Name">WorldHygiene</string>
             <string name="Source"><![CDATA[--!strict
@@ -47146,7 +48469,7 @@ return WorldHygiene
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="156">
+        <Item class="ModuleScript" referent="159">
           <Properties>
             <string name="Name">WorldKits</string>
             <string name="Source"><![CDATA[--!strict
@@ -47469,6 +48792,19 @@ WorldKits.Specs = {
 	PipeRun = spec(1, 9, Vector3.new(40, 1.8, 1.8), "manmade", true, 2, "POI", { Unit = "40 studs", Variants = { rack = 3 } }), -- Length 40 .. 120 (a cluster must stay <= 64 wide: the layouts use 40); "rack" = 3 per 40 (pipe on 2 posts, top 4.5, 2 deep)
 	ActivityHost = spec(1, 1, Vector3.new(1, 1, 1), "anchor", false, 2, "POI"), -- invisible, CanCollide / CanQuery / CanTouch off, no overlay: hosts a POI layout's activity anchors (WorldConfig.Activity.HostKit)
 	Runway = spec(5, 5, Vector3.new(500, 0.12, 40), "infra", false, 2, "POI"), -- InfraRow only: Length (default 500) + Taxiway; flat, no collision, top <= 0.62 world, under POI_<Id>.Infra
+	-- claude-bud JOB 18 (WorldFill 2): countryside + town character; <= 8 parts, no scripts, no lights, no Neon
+	CropField = spec(5, 5, Vector3.new(40, 0.9, 30), "natural", false, 2, "Fill2", { Variants = { dry = 5 } }), -- soil + 4 crop rows, flat, no collision (Width / Depth)
+	Silo = spec(3, 3, Vector3.new(9, 27.5, 10), "manmade", true, 2, "Fill2"), -- farm silo: body, dome, ladder
+	Pylon = spec(3, 3, Vector3.new(9, 24, 0.8), "manmade", true, 2, "Fill2"), -- power-line pylon (2 legs + cross-arm); WorldFill strings the wires
+	CivCar = spec(4, 4, Vector3.new(3.6, 4.1, 6.4), "manmade", true, 2, "Fill2", { Variants = { pickup = 4 } }), -- a parked civilian car (long axis along Z)
+	Awning = spec(3, 3, Vector3.new(8, 4.2, 4.3), "manmade", false, 2, "Fill2"), -- 2 posts + a sloped cloth awning (walk under)
+	Planter = spec(2, 2, Vector3.new(3, 3.4, 3), "manmade", true, 2, "Fill2"), -- stone box + shrub
+	Bin = spec(1, 1, Vector3.new(1.6, 2.4, 1.6), "manmade", true, 2, "Fill2"),
+	Statue = spec(4, 4, Vector3.new(4, 11.4, 4), "manmade", true, 2, "Fill2"), -- plinth + a bronze figure (body, head, raised arm)
+	RoofTank = spec(2, 2, Vector3.new(3.4, 4.4, 3.4), "manmade", false, 2, "Fill2"), -- rooftop water tank on a stand
+	ACUnit = spec(2, 2, Vector3.new(3, 1.9, 2.4), "manmade", false, 2, "Fill2"), -- rooftop AC box + fan
+	Antenna = spec(2, 2, Vector3.new(2.4, 7, 0.3), "manmade", false, 2, "Fill2"), -- rooftop mast + cross-bar
+	NameSign = spec(3, 3, Vector3.new(12, 7.2, 0.8), "manmade", false, 2, "Fill2", { Signs = 1 }), -- 2 posts + a board with a made-up name (Text)
 } :: { [string]: KitSpec }
 
 function WorldKits.List(): { string }
@@ -49079,6 +50415,105 @@ function WorldKits.Place(kitId: string, cf: CFrame, parent: Instance, opts: Plac
 	return if info.Ok then cluster else nil
 end
 
+-- ── claude-bud JOB 18 (WorldFill 2): countryside and town-character kits ─────────────────────────────────────────
+local FILL2 = {
+	Soil = Color3.fromRGB(104, 82, 60),
+	Crop = Color3.fromRGB(96, 128, 58),
+	CropDry = Color3.fromRGB(176, 150, 82),
+	Bronze = Color3.fromRGB(120, 92, 60),
+	Shrub = Color3.fromRGB(78, 104, 56),
+	Cars = { Color3.fromRGB(182, 48, 40), Color3.fromRGB(226, 222, 210), Color3.fromRGB(54, 86, 140), Color3.fromRGB(196, 170, 70), Color3.fromRGB(70, 74, 78) },
+	Awnings = { Color3.fromRGB(180, 60, 48), Color3.fromRGB(40, 110, 120), Color3.fromRGB(206, 170, 70) },
+}
+
+Builders.CropField = function(b: B)
+	local w = b.Opts.Width or 40
+	local d = b.Opts.Depth or 30
+	local crop = if b.Opts.Variant == "dry" then FILL2.CropDry else FILL2.Crop
+	put(b, "CropSoil", Vector3.new(w, 0.2, d), CFrame.new(0, 0.1, 0), FILL2.Soil, M.Ground, false)
+	for i = 1, 4 do
+		local x = -w / 2 + (i - 0.5) * w / 4
+		put(b, "CropRow", Vector3.new(w / 4 - 2.5, 0.7, d - 3), CFrame.new(x, 0.55, 0), crop, M.Grass, false)
+	end
+end
+
+Builders.Silo = function(b: B)
+	vcyl(b, "SiloBody", 0, 0, 0, 22, 9, PAL.ConcreteLight, M.Metal, true, true)
+	put(b, "SiloDome", Vector3.new(9, 9, 9), CFrame.new(0, 23, 0), PAL.Aluminium, M.Metal, true, true, Enum.PartType.Ball)
+	put(b, "SiloLadder", Vector3.new(1.2, 22, 0.4), CFrame.new(0, 11, -4.7), PAL.SteelDark, M.Metal, false)
+end
+
+Builders.Pylon = function(b: B)
+	put(b, "PylonLeg", Vector3.new(0.8, 24, 0.8), CFrame.new(-2.4, 12, 0) * CFrame.Angles(0, 0, math.rad(-4)), PAL.Steel, M.Metal, true)
+	put(b, "PylonLeg", Vector3.new(0.8, 24, 0.8), CFrame.new(2.4, 12, 0) * CFrame.Angles(0, 0, math.rad(4)), PAL.Steel, M.Metal, true)
+	put(b, "PylonArm", Vector3.new(9, 0.6, 0.6), CFrame.new(0, 22.5, 0), PAL.SteelDark, M.Metal, false)
+end
+
+Builders.CivCar = function(b: B)
+	local cols = FILL2.Cars
+	local col = cols[(math.floor(b.CF.Position.X * 7 + b.CF.Position.Z * 3) % #cols) + 1]
+	local pickup = b.Opts.Variant == "pickup"
+	put(b, "CarBody", Vector3.new(3.4, 1.6, 6.4), CFrame.new(0, 1.5, 0), col, M.Metal, true)
+	put(b, "CarCabin", Vector3.new(3.1, 1.4, if pickup then 2.4 else 3.4), CFrame.new(0, 3, if pickup then -1.2 else 0.2), col:Lerp(Color3.new(0, 0, 0), 0.25), M.Glass, true)
+	xcyl(b, "CarAxle", 0, 0.9, -2.1, 3.6, 1.8, PAL.MetalDark, M.Rubber, true)
+	xcyl(b, "CarAxle", 0, 0.9, 2.1, 3.6, 1.8, PAL.MetalDark, M.Rubber, true)
+end
+
+Builders.Awning = function(b: B)
+	local cols = FILL2.Awnings
+	local col = cols[(math.floor(b.CF.Position.X + b.CF.Position.Z) % #cols) + 1]
+	put(b, "AwningPost", Vector3.new(0.3, 3.8, 0.3), CFrame.new(-3.8, 1.9, -1.9), PAL.WoodDark, M.Wood, false)
+	put(b, "AwningPost", Vector3.new(0.3, 3.8, 0.3), CFrame.new(3.8, 1.9, -1.9), PAL.WoodDark, M.Wood, false)
+	put(b, "AwningCloth", Vector3.new(8, 0.2, 4.4), CFrame.new(0, 4, 0) * CFrame.Angles(math.rad(-12), 0, 0), col, M.Fabric, false)
+end
+
+Builders.Planter = function(b: B)
+	put(b, "PlanterBox", Vector3.new(3, 1.4, 3), CFrame.new(0, 0.7, 0), PAL.ConcreteLight, M.Concrete, true)
+	put(b, "PlanterShrub", Vector3.new(2.8, 2.2, 2.8), CFrame.new(0, 2.3, 0), FILL2.Shrub, M.Grass, false, false, Enum.PartType.Ball)
+end
+
+Builders.Bin = function(b: B)
+	vcyl(b, "Bin", 0, 0, 0, 2.4, 1.6, PAL.MetalDark, M.Metal, true)
+end
+
+Builders.Statue = function(b: B)
+	put(b, "StatuePlinth", Vector3.new(4, 4, 4), CFrame.new(0, 2, 0), PAL.ConcreteLight, M.Concrete, true, true)
+	put(b, "StatueBody", Vector3.new(1.8, 5, 1.2), CFrame.new(0, 6.5, 0), FILL2.Bronze, M.Metal, true)
+	put(b, "StatueHead", Vector3.new(1.4, 1.4, 1.4), CFrame.new(0, 9.7, 0), FILL2.Bronze, M.Metal, false, false, Enum.PartType.Ball)
+	put(b, "StatueArm", Vector3.new(0.5, 2.6, 0.5), CFrame.new(1.1, 9.8, 0) * CFrame.Angles(0, 0, math.rad(-25)), FILL2.Bronze, M.Metal, false)
+end
+
+Builders.RoofTank = function(b: B)
+	put(b, "RoofTankStand", Vector3.new(3, 1.2, 3), CFrame.new(0, 0.6, 0), PAL.SteelDark, M.Metal, false)
+	vcyl(b, "RoofTank", 0, 1.2, 0, 3.2, 3.4, PAL.TankCream, M.Metal, false)
+end
+
+Builders.ACUnit = function(b: B)
+	put(b, "ACBox", Vector3.new(3, 1.6, 2.4), CFrame.new(0, 0.8, 0), PAL.Aluminium, M.Metal, false)
+	put(b, "ACFan", Vector3.new(0.3, 1.8, 1.8), CFrame.new(0, 1.7, 0) * CFrame.Angles(0, 0, math.rad(90)), PAL.MetalDark, M.Metal, false, false, Enum.PartType.Cylinder)
+end
+
+Builders.Antenna = function(b: B)
+	put(b, "AntennaMast", Vector3.new(0.3, 7, 0.3), CFrame.new(0, 3.5, 0), PAL.Steel, M.Metal, false)
+	put(b, "AntennaBar", Vector3.new(2.4, 0.2, 0.2), CFrame.new(0, 5.8, 0), PAL.Steel, M.Metal, false)
+end
+
+Builders.NameSign = function(b: B)
+	put(b, "SignPost", Vector3.new(0.6, 7.2, 0.6), CFrame.new(-5.4, 3.6, 0.2), PAL.SteelDark, M.Metal, false)
+	put(b, "SignPost", Vector3.new(0.6, 7.2, 0.6), CFrame.new(5.4, 3.6, 0.2), PAL.SteelDark, M.Metal, false)
+	local board = put(b, "SignBoard", Vector3.new(12, 3, 0.4), CFrame.new(0, 5.4, 0), PAL.SignBoard, M.Wood, false)
+	local text = b.Opts.Text
+	-- WorldFill's own small sign budget (WorldKits.Fill2SignsMax; its folder is outside WarEmpireSetup, so the frozen
+	-- world budget of 17 is neither used nor exceeded)
+	local wk: any = WorldKits
+	if text ~= nil and text ~= "" and (wk.Fill2Signs or 0) < (wk.Fill2SignsMax or 8) then
+		wk.Fill2Signs = (wk.Fill2Signs or 0) + 1
+		WorldLabel.Surface(board, Enum.NormalId.Front, text, { Name = "WE_FillSign", MaxDistance = math.min(60, KC.SignMaxDistance), Color = PAL.LampLens })
+	end
+end
+;(WorldKits :: any).Fill2Signs = 0
+;(WorldKits :: any).Fill2SignsMax = 8
+
 -- ── Footprint (measured from a throw-away build; cached) ──────────────────────────────────────────────────────────
 local footCache: { [string]: Footprint } = {}
 
@@ -49236,7 +50671,7 @@ return WorldKits
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="157">
+        <Item class="ModuleScript" referent="160">
           <Properties>
             <string name="Name">WorldLabelPolicy</string>
             <string name="Source"><![CDATA[--!strict
@@ -49382,7 +50817,7 @@ return WorldLabelPolicy
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="158">
+        <Item class="ModuleScript" referent="161">
           <Properties>
             <string name="Name">WorldPOI</string>
             <string name="Source"><![CDATA[--!strict
@@ -50286,7 +51721,7 @@ return WorldPOI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="159">
+        <Item class="ModuleScript" referent="162">
           <Properties>
             <string name="Name">WorldTerrain</string>
             <string name="Source"><![CDATA[--!strict
@@ -51047,11 +52482,11 @@ return WorldTerrain
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="160">
+      <Item class="Folder" referent="163">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="161">
+        <Item class="ModuleScript" referent="164">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -51739,7 +53174,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="162">
+        <Item class="ModuleScript" referent="165">
           <Properties>
             <string name="Name">AirWeaponService</string>
             <string name="Source"><![CDATA[--!strict
@@ -52638,7 +54073,7 @@ return AirWeaponService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="163">
+        <Item class="ModuleScript" referent="166">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -52687,7 +54122,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="164">
+        <Item class="ModuleScript" referent="167">
           <Properties>
             <string name="Name">AntiExploitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -52808,7 +54243,7 @@ return AntiExploitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="165">
+        <Item class="ModuleScript" referent="168">
           <Properties>
             <string name="Name">BankRaidService</string>
             <string name="Source"><![CDATA[--!strict
@@ -53730,7 +55165,7 @@ return BankRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="166">
+        <Item class="ModuleScript" referent="169">
           <Properties>
             <string name="Name">BaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -55633,7 +57068,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 108)
+			player:SetAttribute("WE_Build", 109)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -55782,7 +57217,7 @@ return BaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="167">
+        <Item class="ModuleScript" referent="170">
           <Properties>
             <string name="Name">BattlePassService</string>
             <string name="Source"><![CDATA[--!strict
@@ -56144,7 +57579,7 @@ return BattlePassService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="168">
+        <Item class="ModuleScript" referent="171">
           <Properties>
             <string name="Name">BusinessService</string>
             <string name="Source"><![CDATA[--!strict
@@ -56698,7 +58133,7 @@ return BusinessService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="169">
+        <Item class="ModuleScript" referent="172">
           <Properties>
             <string name="Name">CaptureStipendService</string>
             <string name="Source"><![CDATA[--!strict
@@ -56805,7 +58240,7 @@ return CaptureStipendService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="170">
+        <Item class="ModuleScript" referent="173">
           <Properties>
             <string name="Name">ClanService</string>
             <string name="Source"><![CDATA[--!strict
@@ -57441,7 +58876,7 @@ return ClanService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="171">
+        <Item class="ModuleScript" referent="174">
           <Properties>
             <string name="Name">ClanWarService</string>
             <string name="Source"><![CDATA[--!strict
@@ -57903,7 +59338,7 @@ return ClanWarService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="172">
+        <Item class="ModuleScript" referent="175">
           <Properties>
             <string name="Name">CodesService</string>
             <string name="Source"><![CDATA[--!strict
@@ -58230,7 +59665,7 @@ return CodesService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="173">
+        <Item class="ModuleScript" referent="176">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -61160,7 +62595,7 @@ end
 return CombatService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="174">
+          <Item class="ModuleScript" referent="177">
             <Properties>
               <string name="Name">CombatAssist</string>
               <string name="Source"><![CDATA[--!strict
@@ -61381,7 +62816,7 @@ return CombatAssist
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="175">
+          <Item class="ModuleScript" referent="178">
             <Properties>
               <string name="Name">CombatDamage</string>
               <string name="Source"><![CDATA[--!strict
@@ -61505,7 +62940,7 @@ return CombatDamage
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="176">
+          <Item class="ModuleScript" referent="179">
             <Properties>
               <string name="Name">CombatFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -61743,7 +63178,7 @@ return CombatFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="177">
+          <Item class="ModuleScript" referent="180">
             <Properties>
               <string name="Name">CombatNPC</string>
               <string name="Source"><![CDATA[--!strict
@@ -62517,7 +63952,7 @@ return CombatNPC
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="178">
+          <Item class="ModuleScript" referent="181">
             <Properties>
               <string name="Name">CombatWeaponLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -62571,7 +64006,7 @@ return CombatWeaponLogic
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="179">
+        <Item class="ModuleScript" referent="182">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -62784,7 +64219,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 108)
+		player:SetAttribute("WE_Build", 109)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -62925,7 +64360,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=108",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=109",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -63103,7 +64538,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="180">
+        <Item class="ModuleScript" referent="183">
           <Properties>
             <string name="Name">EconomyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -63769,7 +65204,7 @@ return EconomyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="181">
+        <Item class="ModuleScript" referent="184">
           <Properties>
             <string name="Name">EngagementService</string>
             <string name="Source"><![CDATA[--!strict
@@ -64407,7 +65842,7 @@ return EngagementService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="182">
+        <Item class="ModuleScript" referent="185">
           <Properties>
             <string name="Name">FallSafetyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -64520,7 +65955,7 @@ return FallSafetyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="183">
+        <Item class="ModuleScript" referent="186">
           <Properties>
             <string name="Name">GameFeelService</string>
             <string name="Source"><![CDATA[--!strict
@@ -64747,7 +66182,7 @@ return GameFeelService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="184">
+        <Item class="ModuleScript" referent="187">
           <Properties>
             <string name="Name">GateDefenseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -67162,7 +68597,7 @@ return GateDefenseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="185">
+        <Item class="ModuleScript" referent="188">
           <Properties>
             <string name="Name">ManualDropperService</string>
             <string name="Source"><![CDATA[--!strict
@@ -67874,7 +69309,7 @@ return ManualDropperService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="186">
+        <Item class="ModuleScript" referent="189">
           <Properties>
             <string name="Name">MissileStrikeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -68604,7 +70039,7 @@ return MissileStrikeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="187">
+        <Item class="ModuleScript" referent="190">
           <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -69706,7 +71141,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="188">
+        <Item class="ModuleScript" referent="191">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -71478,7 +72913,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="189">
+        <Item class="ModuleScript" referent="192">
           <Properties>
             <string name="Name">MoneyCollectorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -72861,7 +74296,7 @@ return MoneyCollectorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="190">
+        <Item class="ModuleScript" referent="193">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -73430,7 +74865,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="191">
+        <Item class="ModuleScript" referent="194">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -73503,7 +74938,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="192">
+        <Item class="ModuleScript" referent="195">
           <Properties>
             <string name="Name">OpsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -74677,7 +76112,7 @@ end
 return OpsService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="193">
+          <Item class="ModuleScript" referent="196">
             <Properties>
               <string name="Name">OpsCargo</string>
               <string name="Source"><![CDATA[--!strict
@@ -75150,7 +76585,7 @@ return OpsCargo
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="194">
+          <Item class="ModuleScript" referent="197">
             <Properties>
               <string name="Name">OpsDirector</string>
               <string name="Source"><![CDATA[--!strict
@@ -75298,7 +76733,7 @@ return OpsDirector
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="195">
+          <Item class="ModuleScript" referent="198">
             <Properties>
               <string name="Name">OpsGarrison</string>
               <string name="Source"><![CDATA[--!strict
@@ -75795,7 +77230,7 @@ return OpsGarrison
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="196">
+          <Item class="ModuleScript" referent="199">
             <Properties>
               <string name="Name">OpsKinds</string>
               <string name="Source"><![CDATA[--!strict
@@ -76624,7 +78059,7 @@ return OpsKinds
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="197">
+          <Item class="ModuleScript" referent="200">
             <Properties>
               <string name="Name">OpsRewards</string>
               <string name="Source"><![CDATA[--!strict
@@ -76922,7 +78357,7 @@ return OpsRewards
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="198">
+          <Item class="ModuleScript" referent="201">
             <Properties>
               <string name="Name">OpsSites</string>
               <string name="Source"><![CDATA[--!strict
@@ -77405,7 +78840,7 @@ return OpsSites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="199">
+          <Item class="ModuleScript" referent="202">
             <Properties>
               <string name="Name">OpsZones</string>
               <string name="Source"><![CDATA[--!strict
@@ -77594,7 +79029,7 @@ return OpsZones
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="200">
+        <Item class="ModuleScript" referent="203">
           <Properties>
             <string name="Name">PlotOilPumpService</string>
             <string name="Source"><![CDATA[--!strict
@@ -77879,6 +79314,22 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 			local lat = (if count == 1 then 0 else spread * 0.5) + GOLD_PAD_BESIDE_PUMP
 			padPos = (plotPos :: Vector3) + toward * out + right * lat + Vector3.new(0, 0.3, 0)
 		end
+		-- claude-bud JOB 19: a purchase stand (only its prompt buys); the flat pad below stays the fallback
+		local PP: any = MonetizationConfig.PremiumPads
+		local okS, Stands = pcall(require, script.Parent.Parent.Modules.PurchaseStands)
+		if PP.Stands == true and okS and type(Stands) == "table" then
+			local okB = pcall((Stands :: any).Build, folder, CFrame.lookAt(padPos - Vector3.new(0, 0.3, 0), padPos - Vector3.new(0, 0.3, 0) - toward), {
+				Kind = "DevProduct",
+				Key = GOLDEN_KEY,
+				PlotId = plotId,
+				Label = "Golden Pump",
+				Color = g.Color,
+				Icon = "⛽",
+			})
+			if okB then
+				return
+			end
+		end
 		local pad = Instance.new("Part")
 		pad.Name = "PremiumPad_" .. GOLDEN_KEY
 		pad.Size = Vector3.new(7, 0.45, 7)
@@ -78036,7 +79487,7 @@ return PlotOilPumpService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="201">
+        <Item class="ModuleScript" referent="204">
           <Properties>
             <string name="Name">PremiumPadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -78351,6 +79802,23 @@ local function attachPad(part: BasePart)
 	attached[part] = true
 	hardenPad(part)
 
+	-- claude-bud JOB 19: a purchase stand buys ONLY through its ProximityPrompt (stepping on it never does); the same
+	-- tryPrompt -> PromptPremiumPad -> PromptPurchase / ProcessReceipt path as the old pads
+	if part:GetAttribute("WE_Stand") == true then
+		local pp = part:FindFirstChild("WE_BuyPrompt")
+		if pp and pp:IsA("ProximityPrompt") then
+			trackConn(part, pp.Triggered:Connect(function(player: Player)
+				tryPrompt(player, part, false)
+			end))
+		end
+		trackConn(part, part.AncestryChanged:Connect(function(_, parent)
+			if parent == nil then
+				detach(part)
+			end
+		end))
+		return
+	end
+
 	trackConn(part, part.Touched:Connect(function(hit)
 		if hit:IsA("BasePart") then
 			onPadTouched(part, hit)
@@ -78425,8 +79893,8 @@ function PremiumPadService.Init(deps: { [string]: any })
 		end
 		accum = 0
 		for part, _ in pairs(attached) do
-			if not part.Parent then
-				continue
+			if not part.Parent or part:GetAttribute("WE_Stand") == true then
+				continue -- claude-bud JOB 19: stands never buy by standing on them
 			end
 			for _, player in ipairs(Players:GetPlayers()) do
 				local character = player.Character
@@ -78460,7 +79928,7 @@ return PremiumPadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="202">
+        <Item class="ModuleScript" referent="205">
           <Properties>
             <string name="Name">PremiumWeaponService</string>
             <string name="Source"><![CDATA[--!strict
@@ -78938,7 +80406,7 @@ return PremiumWeaponService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="203">
+        <Item class="ModuleScript" referent="206">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -79602,7 +81070,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="204">
+        <Item class="ModuleScript" referent="207">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -79654,7 +81122,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="205">
+        <Item class="ModuleScript" referent="208">
           <Properties>
             <string name="Name">ResearchService</string>
             <string name="Source"><![CDATA[--!strict
@@ -80172,7 +81640,7 @@ return ResearchService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="206">
+        <Item class="ModuleScript" referent="209">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -80436,7 +81904,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="207">
+        <Item class="ModuleScript" referent="210">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -80881,7 +82349,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="208">
+        <Item class="ModuleScript" referent="211">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -81043,7 +82511,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="209">
+        <Item class="ModuleScript" referent="212">
           <Properties>
             <string name="Name">SquadOrdersService</string>
             <string name="Source"><![CDATA[--!strict
@@ -84483,7 +85951,7 @@ return SquadOrdersService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="210">
+        <Item class="ModuleScript" referent="213">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -84975,7 +86443,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="211">
+        <Item class="ModuleScript" referent="214">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -86566,7 +88034,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="212">
+          <Item class="ModuleScript" referent="215">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -86696,7 +88164,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="213">
+          <Item class="ModuleScript" referent="216">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -86773,7 +88241,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="214">
+          <Item class="ModuleScript" referent="217">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -86842,7 +88310,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="215">
+        <Item class="ModuleScript" referent="218">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -87376,7 +88844,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="216">
+        <Item class="ModuleScript" referent="219">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -88091,7 +89559,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="217">
+        <Item class="ModuleScript" referent="220">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -93494,7 +94962,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="218">
+        <Item class="ModuleScript" referent="221">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -96294,7 +97762,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="219">
+        <Item class="ModuleScript" referent="222">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -96708,19 +98176,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="220">
+  <Item class="StarterPlayer" referent="223">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="221">
+    <Item class="StarterPlayerScripts" referent="224">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="222">
+      <Item class="Folder" referent="225">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="223">
+        <Item class="LocalScript" referent="226">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -96871,6 +98339,7 @@ safeInit("Juice", safeRequire("Juice", Modules:WaitForChild("Juice", 5) :: Insta
 safeInit("PremiumWeaponsClient", safeRequire("PremiumWeaponsClient", Modules:WaitForChild("PremiumWeaponsClient", 5) :: Instance)) -- claude-bud PREMIUM: FIRE / MISSILE while driving a Robux-only vehicle
 safeInit("EngagementClient", safeRequire("EngagementClient", Modules:WaitForChild("EngagementClient", 5) :: Instance)) -- claude-bud JOB 13: event banner + leaderboard board
 safeInit("GameFeelClient", safeRequire("GameFeelClient", Modules:WaitForChild("GameFeelClient", 5) :: Instance)) -- claude-bud JOB 14: kill feed, vehicle numbers, raid report, sounds
+safeInit("StandFx", safeRequire("StandFx", Modules:WaitForChild("StandFx", 5) :: Instance)) -- claude-bud JOB 19: purchase stand hologram spin + ring pulse
 safeInit("RigAnimator", safeRequire("RigAnimator", Modules:WaitForChild("RigAnimator", 5) :: Instance)) -- R-RIG: soldier animation, army escorts, far LOD (client only; a no-op while RigConfig.Enabled is false)
 safeInit("AircraftBodyClient", safeRequire("AircraftBodyClient", Modules:WaitForChild("AircraftBodyClient", 5) :: Instance)) -- air-looks: store aircraft rotors spin + seated chase camera (client only; nothing to do until a store aircraft body is live)
 
@@ -96878,11 +98347,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="224">
+        <Item class="Folder" referent="227">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="225">
+          <Item class="ModuleScript" referent="228">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -97553,7 +99022,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="226">
+          <Item class="ModuleScript" referent="229">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -97826,7 +99295,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="227">
+          <Item class="ModuleScript" referent="230">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -98527,7 +99996,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="228">
+          <Item class="ModuleScript" referent="231">
             <Properties>
               <string name="Name">CodesController</string>
               <string name="Source"><![CDATA[--!strict
@@ -98896,7 +100365,7 @@ return CodesController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="229">
+          <Item class="ModuleScript" referent="232">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -101309,7 +102778,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="230">
+          <Item class="ModuleScript" referent="233">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -101686,7 +103155,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="231">
+          <Item class="ModuleScript" referent="234">
             <Properties>
               <string name="Name">FeatureController</string>
               <string name="Source"><![CDATA[--!strict
@@ -101962,7 +103431,7 @@ return FeatureController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="232">
+          <Item class="ModuleScript" referent="235">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -103821,7 +105290,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="233">
+          <Item class="ModuleScript" referent="236">
             <Properties>
               <string name="Name">MissileController</string>
               <string name="Source"><![CDATA[--!strict
@@ -105703,7 +107172,7 @@ return MissileController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="234">
+          <Item class="ModuleScript" referent="237">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -106647,7 +108116,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="235">
+          <Item class="ModuleScript" referent="238">
             <Properties>
               <string name="Name">NationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -108103,7 +109572,7 @@ return NationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="236">
+          <Item class="ModuleScript" referent="239">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -109208,7 +110677,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="237">
+          <Item class="ModuleScript" referent="240">
             <Properties>
               <string name="Name">OpsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -110101,7 +111570,7 @@ return OpsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="238">
+          <Item class="ModuleScript" referent="241">
             <Properties>
               <string name="Name">OrdersController</string>
               <string name="Source"><![CDATA[--!strict
@@ -110667,7 +112136,7 @@ return OrdersController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="239">
+          <Item class="ModuleScript" referent="242">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -111647,7 +113116,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="240">
+            <Item class="ModuleScript" referent="243">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -111812,7 +113281,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="241">
+            <Item class="ModuleScript" referent="244">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -111852,7 +113321,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="242">
+          <Item class="ModuleScript" referent="245">
             <Properties>
               <string name="Name">PromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -112767,7 +114236,7 @@ return PromptController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="243">
+          <Item class="ModuleScript" referent="246">
             <Properties>
               <string name="Name">ResearchController</string>
               <string name="Source"><![CDATA[--!strict
@@ -113863,7 +115332,7 @@ return ResearchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="244">
+          <Item class="ModuleScript" referent="247">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -114381,7 +115850,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="245">
+          <Item class="ModuleScript" referent="248">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -115646,6 +117115,44 @@ function ShopController.Init()
 		local PAD_TAG = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
 
 		local function applyOwnedVisual(part: BasePart, owned: boolean)
+			-- claude-bud JOB 19: a purchase stand: OWNED = green ring + hologram, a check badge in the price chip, no prompt
+			if part:GetAttribute("WE_Stand") == true then
+				local stand = part.Parent
+				local color = part:GetAttribute("WE_StandColor")
+				local base: Color3 = if typeof(color) == "Color3" then color else Color3.fromRGB(255, 210, 40)
+				local green = Color3.fromRGB(80, 210, 110)
+				for _, nm in ipairs({ "FloorRing", "Hologram" }) do
+					local p = stand and stand:FindFirstChild(nm)
+					if p and p:IsA("BasePart") then
+						p.Color = if owned then green else base
+					end
+				end
+				local chip = part:FindFirstChild("WE_PremiumBillboard")
+				chip = chip and chip:FindFirstChild("PriceChip")
+				if chip and chip:IsA("Frame") then
+					local price = chip:FindFirstChild("Price")
+					if price and price:IsA("TextLabel") then
+						if owned then
+							if price:GetAttribute("WE_PriceText") == nil then
+								price:SetAttribute("WE_PriceText", price.Text)
+							end
+							price.Text = "✓ OWNED"
+						else
+							local was = price:GetAttribute("WE_PriceText")
+							if typeof(was) == "string" then
+								price.Text = was
+							end
+						end
+					end
+					chip.BackgroundColor3 = if owned then green else Color3.fromRGB(214, 170, 62)
+				end
+				local pp = part:FindFirstChild("WE_BuyPrompt")
+				if pp and pp:IsA("ProximityPrompt") then
+					pp.Enabled = not owned
+				end
+				part:SetAttribute("WE_LocalOwned", owned)
+				return
+			end
 			local bb = part:FindFirstChild("WE_PremiumBillboard")
 			if not bb then
 				bb = part:FindFirstChildWhichIsA("BillboardGui")
@@ -116247,7 +117754,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="246">
+          <Item class="ModuleScript" referent="249">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -117514,7 +119021,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="247">
+          <Item class="ModuleScript" referent="250">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -119150,7 +120657,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="248">
+          <Item class="ModuleScript" referent="251">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -119511,7 +121018,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="249">
+          <Item class="ModuleScript" referent="252">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -120955,7 +122462,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="250">
+          <Item class="ModuleScript" referent="253">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -123256,11 +124763,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="251">
+        <Item class="Folder" referent="254">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="252">
+          <Item class="ModuleScript" referent="255">
             <Properties>
               <string name="Name">AimTargets</string>
               <string name="Source"><![CDATA[--!strict
@@ -123803,7 +125310,7 @@ return AimTargets
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="253">
+          <Item class="ModuleScript" referent="256">
             <Properties>
               <string name="Name">AirWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -124455,7 +125962,7 @@ return AirWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="254">
+          <Item class="ModuleScript" referent="257">
             <Properties>
               <string name="Name">AircraftBodyClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -124786,7 +126293,7 @@ return AircraftBodyClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="255">
+          <Item class="ModuleScript" referent="258">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -125618,7 +127125,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="256">
+          <Item class="ModuleScript" referent="259">
             <Properties>
               <string name="Name">AudioHooks</string>
               <string name="Source"><![CDATA[--!strict
@@ -126150,7 +127657,7 @@ return AudioHooks
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="257">
+          <Item class="ModuleScript" referent="260">
             <Properties>
               <string name="Name">BusinessVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -127585,7 +129092,7 @@ return BusinessVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="258">
+          <Item class="ModuleScript" referent="261">
             <Properties>
               <string name="Name">CameraFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -128136,7 +129643,7 @@ return CameraFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="259">
+          <Item class="ModuleScript" referent="262">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -128204,7 +129711,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="260">
+          <Item class="ModuleScript" referent="263">
             <Properties>
               <string name="Name">ConsoleWaypoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -128518,7 +130025,7 @@ return ConsoleWaypoint
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="261">
+          <Item class="ModuleScript" referent="264">
             <Properties>
               <string name="Name">EngagementClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -128964,7 +130471,7 @@ return EngagementClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="262">
+          <Item class="ModuleScript" referent="265">
             <Properties>
               <string name="Name">GameFeelClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -129267,7 +130774,7 @@ return GameFeelClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="263">
+          <Item class="ModuleScript" referent="266">
             <Properties>
               <string name="Name">HudIcons</string>
               <string name="Source"><![CDATA[--!strict
@@ -129626,7 +131133,7 @@ return HudIcons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="264">
+          <Item class="ModuleScript" referent="267">
             <Properties>
               <string name="Name">HudLayout</string>
               <string name="Source"><![CDATA[--!strict
@@ -130943,7 +132450,7 @@ return HudLayout
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="265">
+          <Item class="ModuleScript" referent="268">
             <Properties>
               <string name="Name">Juice</string>
               <string name="Source"><![CDATA[--!strict
@@ -131107,7 +132614,7 @@ return Juice
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="266">
+          <Item class="ModuleScript" referent="269">
             <Properties>
               <string name="Name">LabelGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -131349,7 +132856,7 @@ return LabelGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="267">
+          <Item class="ModuleScript" referent="270">
             <Properties>
               <string name="Name">NextPadChevrons</string>
               <string name="Source"><![CDATA[--!strict
@@ -131837,7 +133344,7 @@ return NextPadChevrons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="268">
+          <Item class="ModuleScript" referent="271">
             <Properties>
               <string name="Name">ObjectiveMarker</string>
               <string name="Source"><![CDATA[--!strict
@@ -132296,7 +133803,7 @@ return ObjectiveMarker
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="269">
+          <Item class="ModuleScript" referent="272">
             <Properties>
               <string name="Name">OpsJobs</string>
               <string name="Source"><![CDATA[--!strict
@@ -132920,7 +134427,7 @@ return OpsJobs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="270">
+          <Item class="ModuleScript" referent="273">
             <Properties>
               <string name="Name">PanelShell</string>
               <string name="Source"><![CDATA[--!strict
@@ -133166,7 +134673,7 @@ return PanelShell
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="271">
+          <Item class="ModuleScript" referent="274">
             <Properties>
               <string name="Name">PremiumWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -133580,7 +135087,7 @@ return PremiumWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="272">
+          <Item class="ModuleScript" referent="275">
             <Properties>
               <string name="Name">ProducerLabels</string>
               <string name="Source"><![CDATA[--!strict
@@ -134013,7 +135520,7 @@ return ProducerLabels
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="273">
+          <Item class="ModuleScript" referent="276">
             <Properties>
               <string name="Name">ProductionFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -135267,7 +136774,7 @@ return ProductionFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="274">
+          <Item class="ModuleScript" referent="277">
             <Properties>
               <string name="Name">ProgressPill</string>
               <string name="Source"><![CDATA[--!strict
@@ -135446,7 +136953,7 @@ return ProgressPill
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="275">
+          <Item class="ModuleScript" referent="278">
             <Properties>
               <string name="Name">QualityGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -135533,6 +137040,34 @@ local function setLow(on: boolean, Q: any)
 	pcall(function()
 		lp:SetAttribute("WE_LowQuality", if on then true else nil)
 	end)
+	-- claude-bud JOB 17: low quality keeps every second night light off (LightingConfig.LowOffAttribute); the Neon
+	-- glow of lamp heads / windows still shows. The server's dusk / dawn flip is re-applied on each change.
+	pcall(function()
+		local LC = require((ReplicatedStorage :: any).Shared.Configs.LightingConfig) :: any
+		local nl = Workspace:FindFirstChild("WE_NightLights")
+		if nl then
+			for _, d in ipairs(nl:GetDescendants()) do
+				if d:IsA("Light") and d:GetAttribute(LC.LowOffAttribute) == true then
+					if on then
+						d.Enabled = false
+						if not d:GetAttribute("WE_LowHooked") then
+							d:SetAttribute("WE_LowHooked", true)
+							d:GetPropertyChangedSignal("Enabled"):Connect(function()
+								if low and d.Enabled then
+									d.Enabled = false
+								end
+							end)
+						end
+					else
+						-- back to normal quality: on again if it is night now (the server's night share > 0.5)
+						local t = Lighting.ClockTime
+						local C = LC.Cycle
+						d.Enabled = t < (C.NightEnd + C.DawnEnd) / 2 or t > (C.DuskStart + C.NightStart) / 2
+					end
+				end
+			end
+		end
+	end)
 	if Q.ShadowsOffWhenLow then
 		if on then
 			shadowsBefore = Lighting.GlobalShadows
@@ -135615,7 +137150,7 @@ return QualityGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="276">
+          <Item class="ModuleScript" referent="279">
             <Properties>
               <string name="Name">RebirthConfirm</string>
               <string name="Source"><![CDATA[--!strict
@@ -136501,7 +138036,7 @@ return RebirthConfirm
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="277">
+          <Item class="ModuleScript" referent="280">
             <Properties>
               <string name="Name">RigAnimator</string>
               <string name="Source"><![CDATA[--!strict
@@ -137305,7 +138840,88 @@ return RigAnimator
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="278">
+          <Item class="ModuleScript" referent="281">
+            <Properties>
+              <string name="Name">StandFx</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 19 (2026-09-29): purchase stand motion on this client only (MonetizationConfig.PremiumPads.Stand):
+	the hologram turns slowly (a 120-degree tween every SpinSeconds / 3, never per frame) and the floor ring pulses (one
+	looping tween). Low quality (WE_LowQuality) or a stand that streams out: nothing moves. Display only.
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local StandFx = {}
+
+local running: { [Instance]: boolean } = {}
+
+local function low(): boolean
+	return Players.LocalPlayer:GetAttribute("WE_LowQuality") == true
+end
+
+local function animate(top: Instance, S: any)
+	if running[top] or not top:IsA("BasePart") or top:GetAttribute("WE_Stand") ~= true then
+		return
+	end
+	local model = top.Parent
+	local holo = model and model:FindFirstChild("Hologram")
+	local ring = model and model:FindFirstChild("FloorRing")
+	if not (holo and holo:IsA("BasePart")) then
+		return
+	end
+	running[top] = true
+	if ring and ring:IsA("BasePart") and not low() then
+		local base = ring.Transparency
+		TweenService:Create(ring, TweenInfo.new(S.PulseSeconds, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Transparency = math.min(0.9, base + 0.3) }):Play()
+	end
+	task.spawn(function()
+		local pos = holo.Position
+		local tilt = CFrame.Angles(math.rad(45), 0, math.rad(45))
+		local a = 0
+		local step = S.SpinSeconds / 3
+		while holo.Parent and top.Parent do
+			if low() then
+				task.wait(2)
+			else
+				a += 2 * math.pi / 3
+				local tw = TweenService:Create(holo, TweenInfo.new(step, Enum.EasingStyle.Linear), { CFrame = CFrame.new(pos) * CFrame.Angles(0, a, 0) * tilt })
+				tw:Play()
+				tw.Completed:Wait()
+			end
+		end
+		running[top] = nil
+	end)
+end
+
+function StandFx.Init()
+	local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+	if not Shared then
+		return
+	end
+	local MC = require((Shared :: any).Configs.MonetizationConfig) :: any
+	local S = MC.PremiumPads and MC.PremiumPads.Stand
+	if S == nil then
+		return
+	end
+	local Constants = require((Shared :: any).Constants) :: any
+	local tag = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
+	for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+		task.defer(animate, inst, S)
+	end
+	CollectionService:GetInstanceAddedSignal(tag):Connect(function(inst)
+		task.defer(animate, inst, S)
+	end)
+end
+
+return StandFx
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="282">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -137370,7 +138986,7 @@ return StudioSmokeClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="279">
+          <Item class="ModuleScript" referent="283">
             <Properties>
               <string name="Name">VehicleCombatClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -138060,7 +139676,7 @@ return VehicleCombatClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="280">
+          <Item class="ModuleScript" referent="284">
             <Properties>
               <string name="Name">VehicleDriveClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -141828,7 +143444,7 @@ return VehicleDriveClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="281">
+          <Item class="ModuleScript" referent="285">
             <Properties>
               <string name="Name">WeaponVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -143975,7 +145591,7 @@ return WeaponVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="282">
+          <Item class="ModuleScript" referent="286">
             <Properties>
               <string name="Name">WorldSpinners</string>
               <string name="Source"><![CDATA[--!strict
@@ -144116,7 +145732,7 @@ return WorldSpinners
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="283">
+  <Item class="Workspace" referent="287">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

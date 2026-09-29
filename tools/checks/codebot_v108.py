@@ -5,10 +5,10 @@ _cb108_SH = "src/ReplicatedStorage/Shared/"
 _cb108_AC = _cb108_SH + "Configs/ArmyConfig.luau"
 _cb108_AF = _cb108_S + "Modules/ArmyFollow.luau"
 
-# ── build ──
-for _f in (_cb108_S + "Services/DataService.luau", _cb108_S + "Services/BaseService.luau", _cb108_S + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 108)', "CODEBOT v108: WE_Build=108 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb108_S + "Services/DataService.luau", "WE_Build=108", "CODEBOT v108: DataService profile-loaded log says WE_Build=108")
+# v109 (Code Bot): retired build pins, superseded in tools/checks/codebot_v109.py:
+# for _f in (_cb108_S + "Services/DataService.luau", _cb108_S + "Services/BaseService.luau", _cb108_S + "EarlyRemotes.server.luau"):
+#     must_contain(_f, 'SetAttribute("WE_Build", 108)', "CODEBOT v108: WE_Build=108 " + _f.rsplit("/", 1)[-1])
+# must_contain(_cb108_S + "Services/DataService.luau", "WE_Build=108", "CODEBOT v108: DataService profile-loaded log says WE_Build=108")
 
 # ── Flank formation (live for all via Follow2.Tidy) ──
 must_contain(_cb108_AC, '\t\t\tFormation = "Flank",', 'CODEBOT v108: ArmyConfig.Follow2.Tidy.Formation = Flank')
