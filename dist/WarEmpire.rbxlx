@@ -463,6 +463,8 @@ local AircraftWeaponConfig = {
 		StrikeBomber = "Bomber",
 		HeavyBomber = "Bomber",
 		StrategicBomber = "Bomber",
+		PremiumSkylance = "Fighter", -- claude-bud JOB 5a: the Robux-only clones keep their base's loadout
+		PremiumStormwing = "AttackHeli",
 	} :: { [string]: string },
 
 	-- never armed (listed so a new aircraft must be placed on purpose; a test checks every Air id is in one list)
@@ -1021,6 +1023,16 @@ local ArmyConfig = {
 			RowSide = 3,
 			FlipHysteresisStuds = 1.5,
 			LeaveGraceSeconds = 8,
+			-- claude-bud (owner v95 phone test fix): hold cells are raycast / overlap-checked (bad ones skipped outward),
+			-- reached straight with no path and no teleport; arrival within HoldArriveStuds. ATTACK: every unit its own
+			-- spot by its seat (march rows MarchPerRow x MarchSpacing, MarchAhead in front; a ring of AttackRingSpacing
+			-- round the target, at least AttackRingMin), never one shared point.
+			HoldArriveStuds = 1.5,
+			MarchPerRow = 5,
+			MarchSpacing = 3.5,
+			MarchAhead = 10,
+			AttackRingSpacing = 3.5,
+			AttackRingMin = 8,
 		},
 		LogSeconds = 5,
 	},
@@ -5052,7 +5064,7 @@ local MonetizationConfig = {
 		them and feel their effect; "all" = everyone; anything else = off (fail closed). ProcessReceipt still grants any
 		receipt Roblox delivers for these Ids (a paid receipt is never dropped). OFF must equal the old game. ]]
 	Rollout = "owner",
-	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true } :: { [string]: boolean },
+	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true } :: { [string]: boolean },
 	GamePasses = {
 		VIP = {
 			Id = 1985475542,
@@ -5112,7 +5124,6 @@ local MonetizationConfig = {
 			VehicleIds = { "PremiumRazorfang" },
 			BundlePassKeys = { "PV_MotorPool" },
 			Feature = "PremiumVehicles",
-			HideFromShop = true,
 			Description = "Premium armored car with twin hood machine guns",
 		},
 		PV_Bastion = {
@@ -5132,7 +5143,6 @@ local MonetizationConfig = {
 			VehicleIds = { "PremiumWarlord" },
 			BundlePassKeys = { "PV_MotorPool" },
 			Feature = "PremiumVehicles",
-			HideFromShop = true,
 			Description = "Premium heavy tank with a siege cannon",
 		},
 		PV_MotorPool = {
@@ -5151,7 +5161,6 @@ local MonetizationConfig = {
 			RobuxPrice = 999,
 			VehicleIds = { "PremiumStormwing" },
 			Feature = "PremiumVehicles",
-			HideFromShop = true,
 			Description = "Premium attack helicopter",
 		},
 		PV_Tidebreaker = { -- M6b (after waterways / boats)
@@ -5160,8 +5169,25 @@ local MonetizationConfig = {
 			RobuxPrice = 299,
 			VehicleIds = { "PremiumTidebreaker" },
 			Feature = "PremiumVehicles",
-			HideFromShop = true,
 			Description = "Premium assault boat",
+		},
+		-- claude-bud JOB 5a: Robux-only jet and capital ship (VehicleConfig Premium defs). TODO(owner): create on the Creator
+		-- Hub, then paste the Ids (tools/wire-monetization-ids.py). Id 0 = hidden everywhere, nothing prompts.
+		PV_Skylance = {
+			Id = 0,
+			DisplayName = "Skylance Interceptor",
+			RobuxPrice = 899,
+			VehicleIds = { "PremiumSkylance" },
+			Feature = "PremiumVehicles",
+			Description = "Robux-only interceptor jet",
+		},
+		PV_Leviathan = {
+			Id = 0,
+			DisplayName = "Leviathan Dreadnought",
+			RobuxPrice = 1199,
+			VehicleIds = { "PremiumLeviathan" },
+			Feature = "PremiumVehicles",
+			Description = "Robux-only dreadnought",
 		},
 		-- v71 money (M1): Rebirth Boost (J13: +15% Cash per Rebirth instead of +10%, 1.5x starting Cash; no Gold x2).
 		-- RebirthConfig.Boost.GamePassKey. Id = 0 until created (OFF sale until the M7b/M7d publish).
@@ -7966,6 +7992,8 @@ local GOLD = Color3.fromRGB(255, 200, 70) -- premium pinstripes / rims / turret 
 
 local PremiumVehicleConfig = {
 	Enabled = true,
+	-- claude-bud JOB 5a: a pass owner's premium vehicle skips the post-destruction repair wait (VehicleService.RequestSpawn)
+	FreeRespawn = true,
 
 	Lineup = {
 		{
@@ -11875,6 +11903,19 @@ local N = function(l: number): { StructureId: string, Level: number }
 	return { StructureId = "Dock", Level = l }
 end
 
+--[[ claude-bud JOB 5a (2026-09-29): ROBUX-ONLY vehicles (the Premium* rows in Vehicles). Each clones the best cash
+	vehicle of its role (same kit; LookId = its store body / colours) and is only slightly stronger (about +5 % HP and
+	armour, +3 % speed; tools/checks/claude_bud_money.py compares). Bought ONLY with its own game pass
+	(Premium.PassKey, MonetizationConfig.GamePasses): VehicleService.Purchase refuses cash for any def with Premium,
+	RequestSpawn needs the pass and the rollout (MonetizationConfig.SkuLiveFor), pass owners skip the repair wait.
+	CostCash 0 is never "free": the Premium check comes first. UnlockLevel 1, no prestige; the spawn structure at L1. ]]
+local function P(d: VehicleDef, passKey: string, lookId: string): VehicleDef
+	local x: any = d
+	x.Premium = { PassKey = passKey }
+	x.LookId = lookId
+	return d
+end
+
 local VehicleConfig = {
 	Vehicles = {
 		-- ═══ GROUND — early wheeled ═══
@@ -12161,6 +12202,13 @@ local VehicleConfig = {
 			"NavalCapital",
 			{ Struct = N(5), Scale = 1.7, Prestige = 15, RebirthFlag = "EmpireFleet" }
 		),
+		-- claude-bud JOB 5a: Robux-only (see P above); base in the comment
+		PremiumSkylance = P(V("PremiumSkylance", "Skylance Interceptor", "Air", "Premium", 1, 714, 139, 1, 23, 0, "JetFighter", { Struct = A(1), Scale = 1.05 }), "PV_Skylance", "InterceptorJet"),
+		PremiumStormwing = P(V("PremiumStormwing", "Stormwing Gunship", "Air", "Premium", 1, 1155, 77, 2, 40, 0, "HeliAttack", { Struct = H(1), Scale = 1.1 }), "PV_Stormwing", "StealthHeli"),
+		PremiumLeviathan = P(V("PremiumLeviathan", "Leviathan Dreadnought", "Naval", "Premium", 1, 4200, 31, 10, 210, 0, "NavalCapital", { Struct = N(1), Scale = 1.55 }), "PV_Leviathan", "Battleship"),
+		PremiumTidebreaker = P(V("PremiumTidebreaker", "Tidebreaker Assault Boat", "Naval", "Premium", 1, 504, 60, 3, 29, 0, "NavalPatrol", { Struct = N(1), Scale = 0.88 }), "PV_Tidebreaker", "TorpedoBoat"),
+		PremiumWarlord = P(V("PremiumWarlord", "Warlord Siege Tank", "Ground", "Premium", 1, 3780, 19, 4, 210, 0, "TrackedMBT", { Struct = D(1), Scale = 1.6 }), "PV_Warlord", "FortressTank"),
+		PremiumRazorfang = P(V("PremiumRazorfang", "Razorfang GT Interceptor", "Ground", "Premium", 1, 315, 70, 2, 21, 0, "WheeledLight", { Struct = D(1), Scale = 0.85 }), "PV_Razorfang", "ReconBuggy"),
 	} :: { [string]: VehicleDef },
 
 	Categories = { "Ground", "Air", "Naval" } :: { VehicleCategory },
@@ -22050,7 +22098,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 95)
+		player:SetAttribute("WE_Build", 96)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -23579,7 +23627,101 @@ local function ownPlotInside(st: any, player: Player?, pos: Vector3): number?
 	return if inside then id else nil
 end
 
+--[[ claude-bud (Tidy): fixed seats for life, UNIQUE per squad (seat -> unit map): a dead / gone unit frees its seat,
+	nobody else moves up, and no two units ever share one (a duplicated or missing seat is re-issued the lowest free
+	number). FOLLOW (wedge), the base hold and ATTACK (march rows / target ring) all place a unit by its seat. ]]
+local function assignSeats(st: any, units: { any })
+	local order = table.clone(units)
+	table.sort(order, function(a, b)
+		return (a.Slot or 0) < (b.Slot or 0)
+	end)
+	local taken: { [number]: any } = {}
+	for _, u in ipairs(order) do
+		local s = u._afSeat
+		if typeof(s) == "number" and s >= 1 and taken[s] == nil then
+			taken[s] = u
+		else
+			u._afSeat = nil
+		end
+	end
+	for _, u in ipairs(order) do
+		if u._afSeat == nil then
+			local s = 1
+			while taken[s] ~= nil do
+				s += 1
+			end
+			u._afSeat = s
+			taken[s] = u
+		end
+	end
+	st._afSeatMap = taken
+	st._afSeatCount = #order
+end
+ArmyFollow.AssignSeats = assignSeats
+
 -- claude-bud: tidy wait spot of seat `rank`: rows on both sides of the gate lane, facing out (plot-local +Z)
+local overlapParams = OverlapParams.new()
+overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+overlapParams.RespectCanCollide = true
+local gridCache: { [number]: { At: number, Cells: { [number]: { Vector3 } }, Need: number } } = {}
+
+-- one hold cell (plot-local x, z) is usable: ground under it (not water, not a roof) and nothing collidable in a
+-- soldier-sized box on it (walls, props, parked vehicles; the squads and characters are excluded)
+local function cellFree(plotId: number, lx: number, lz: number): Vector3?
+	local w = PlotFrame.LocalToWorld(plotId, lx, lz)
+	local c = PlotFrame.PlotPosition(plotId)
+	local refY = if c then c.Y + 0.5 else w.Y
+	local hit = Workspace:Raycast(Vector3.new(w.X, refY + 30, w.Z), Vector3.new(0, -60, 0), rayParams)
+	if hit == nil or hit.Material == Enum.Material.Water or math.abs(hit.Position.Y - refY) > 2.5 then
+		return nil
+	end
+	overlapParams.FilterDescendantsInstances = rayParams.FilterDescendantsInstances
+	local box = CFrame.new(hit.Position + Vector3.new(0, 3.2, 0))
+	local parts = Workspace:GetPartBoundsInBox(box, Vector3.new(3, 4.6, 3), overlapParams)
+	if #parts > 0 then
+		return nil
+	end
+	return hit.Position
+end
+
+-- the hold grid of plot `plotId`: per side (1 = left, 2 = right), the free cells in order (row 0 first, outward),
+-- PerRow per row, ColSpacing apart, RowSpacing deep, never nearer the front edge than WaitOut (always outside the gate
+-- plane). Cached for 30 s (props do not move).
+local function holdCells(plotId: number, need: number): { [number]: { Vector3 } }
+	local now = os.clock()
+	local c = gridCache[plotId]
+	local perSide = math.ceil(need / 2)
+	if c and now - c.At < 30 and c.Need >= need then
+		return c.Cells -- (a side short of free cells is not re-scanned every think: Need, not the cell count)
+	end
+	refreshRayFilter(nil)
+	local half = BaseConfig.PlotSize.X * 0.5
+	local gateHalf = (tonumber(BaseLayoutConfig.MainGateWidth) or 14) * 0.5
+	local perRow = math.max(1, math.floor(tnum("PerRow", 4)))
+	local cells: { [number]: { Vector3 } } = { {}, {} }
+	for sideIdx, side in ipairs({ -1, 1 }) do
+		local list = cells[sideIdx]
+		for row = 0, 40 do
+			if #list >= perSide then
+				break
+			end
+			for col = 0, perRow - 1 do
+				if #list >= perSide then
+					break
+				end
+				local lx = side * (gateHalf + tnum("WaitGap", 5) + col * tnum("ColSpacing", 4))
+				local lz = half + tnum("WaitOut", 14) + row * tnum("RowSpacing", 4)
+				local at = cellFree(plotId, lx, lz)
+				if at then
+					table.insert(list, at)
+				end
+			end
+		end
+	end
+	gridCache[plotId] = { At = now, Cells = cells, Need = math.max(need, 16) }
+	return cells
+end
+
 local function tidyWaitSpot(plotId: number, rank: number): (Vector3, Vector3)
 	local half = BaseConfig.PlotSize.X * 0.5
 	local gateHalf = (tonumber(BaseLayoutConfig.MainGateWidth) or 14) * 0.5
@@ -23593,7 +23735,42 @@ local function tidyWaitSpot(plotId: number, rank: number): (Vector3, Vector3)
 	local p = PlotFrame.LocalToWorld(plotId, x, z)
 	local out = PlotFrame.LocalToWorld(plotId, x, z + 1) - p
 	out = Vector3.new(out.X, 0, out.Z)
+	-- claude-bud (hold fix): the k-th FREE cell of this side (walls / props / water skipped, moved outward)
+	local cells = holdCells(plotId, rank + 1)
+	local mine = cells[if side < 0 then 1 else 2][j + 1]
+	if mine then
+		p = mine
+	end
 	return p, if out.Magnitude > 1e-3 then out.Unit else Vector3.new(0, 0, 1)
+end
+
+--[[ claude-bud (ATTACK fix): a unit's own attack spot by its seat, never a shared point.
+	"march": rows abreast in front of `center` along `facing` (no target in reach): MarchPerRow per row, MarchSpacing
+	apart, the first row MarchAhead studs ahead. "ring": round a target at `center`, one seat each, AttackRingSpacing
+	studs apart along the ring (radius grows with the squad), the ring turned so the units approach from their side. ]]
+function ArmyFollow.AttackPoint(st: any, unit: any, center: Vector3, facing: Vector3, mode: string): Vector3
+	if unit._afSeat == nil or st._afSeatMap == nil or st._afSeatMap[unit._afSeat] ~= unit then
+		assignSeats(st, st.Units)
+	end
+	local k = unit._afSeat or 1
+	local n = math.max(1, st._afSeatCount or #st.Units)
+	local f = Vector3.new(facing.X, 0, facing.Z)
+	f = if f.Magnitude > 1e-3 then f.Unit else Vector3.new(0, 0, -1)
+	local right = Vector3.new(-f.Z, 0, f.X)
+	if mode == "ring" then
+		local spacing = tnum("AttackRingSpacing", 3.5)
+		local r = math.max(tnum("AttackRingMin", 8), n * spacing / (2 * math.pi))
+		local a = (k - 1) * 2 * math.pi / n
+		local dir = -f * math.cos(a) + right * math.sin(a)
+		return center + dir * r
+	end
+	local perRow = math.max(1, math.floor(tnum("MarchPerRow", 5)))
+	local spacing = tnum("MarchSpacing", 3.5)
+	local row = math.floor((k - 1) / perRow)
+	local col = (k - 1) % perRow
+	local inRow = math.min(perRow, n - row * perRow)
+	local lateral = (col - (inRow - 1) * 0.5) * spacing
+	return center + f * (tnum("MarchAhead", 10) + row * spacing) + right * lateral
 end
 
 local function waitSpot(plotId: number, rank: number): Vector3
@@ -23650,28 +23827,10 @@ local function plan(st: any, player: Player?, root: BasePart, units: { any }, no
 	end)
 	st._afTidy = tidyLive(player)
 	if st._afTidy then
-		-- claude-bud: fixed seats for life; a dead / gone unit frees its seat, nobody else moves up
-		local taken: { [number]: any } = {}
+		assignSeats(st, order)
 		for _, u in ipairs(order) do
-			local s = u._afSeat
-			if typeof(s) == "number" and taken[s] == nil then
-				taken[s] = u
-			else
-				u._afSeat = nil
-			end
-		end
-		for _, u in ipairs(order) do
-			if u._afSeat == nil then
-				local s = 1
-				while taken[s] ~= nil do
-					s += 1
-				end
-				u._afSeat = s
-				taken[s] = u
-			end
 			u._afRank = u._afSeat
 		end
-		st._afSeatMap = taken
 	else
 		for i, u in ipairs(order) do
 			u._afRank = i
@@ -23864,7 +24023,10 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	end
 	-- claude-bud (Tidy): just out of his base, they walk back into the wedge (no far / stuck teleport for a grace spell)
 	local walkBack = st._afTidy and not st._afInBase and now - (st._afLeftBaseAt or -math.huge) < tnum("LeaveGraceSeconds", 8)
-	if not seatedFast and not walkBack then
+	-- claude-bud (hold fix): while he is in his base, a unit OUTSIDE his plot walks straight to its hold cell: no
+	-- pathfinding (a path ran through the open gate), no stuck / far teleport correction (void rescue only)
+	local holdOut = st._afTidy and st._afInBase and st._afPlot ~= nil and not inPlot(st._afPlot, pos, 0)
+	if not seatedFast and not walkBack and not holdOut then
 		if st._afJumped and ownerD > num("JumpRegroupStuds", 40) and regroup(st, unit, root, now, "owner-jump") then
 			return
 		end
@@ -23896,7 +24058,7 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	end
 
 	-- separation: steer away from any squad-mate closer than SeparationStuds
-	local sep = num("SeparationStuds", 3.5)
+	local sep = if st._afTidy and st._afInBase then 0 else num("SeparationStuds", 3.5) -- claude-bud: hold cells are exact
 	local push = Vector3.zero
 	for _, o in ipairs(st.Units) do
 		if o ~= unit and o.Alive and o.Root and o.Root.Parent then
@@ -23940,7 +24102,7 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	setSpeed(unit, speed)
 
 	-- claude-bud (Tidy): at its gate wait spot it stands still facing out, whatever he does inside
-	if st._afTidy and st._afInBase and st._afPlot and flatDist(pos, goal) <= num("ArriveStuds", 2) then
+	if st._afTidy and st._afInBase and st._afPlot and flatDist(pos, goal) <= tnum("HoldArriveStuds", 1.5) then
 		if not unit._afStand then
 			unit._afStand = true
 			unit.Humanoid:MoveTo(pos)
@@ -23965,6 +24127,41 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	end
 	unit._afStand = false
 
+	-- claude-bud (hold fix): outside his plot while he is in it: straight to the cell; if that line would clip his plot
+	-- square, first to the nearest outside corner point (the plot is never crossed, no path through the gate)
+	if holdOut and st._afPlot then
+		local lp = plotLocal(st._afPlot, pos)
+		local lg = plotLocal(st._afPlot, goal)
+		local via = goal
+		if lp and lg then
+			local half = BaseConfig.PlotSize.X * 0.5 + tnum("PlotPadStuds", 2) + 4
+			local crosses = false
+			for i = 1, 7 do
+				local t = i / 8
+				local x, z = lp.X + (lg.X - lp.X) * t, lp.Z + (lg.Z - lp.Z) * t
+				if math.abs(x) < half and math.abs(z) < half then
+					crosses = true
+					break
+				end
+			end
+			if crosses then
+				local sx = if lp.X < 0 then -1 else 1
+				local cx, cz
+				if math.abs(lp.X) >= half then
+					cx, cz = sx * half, half -- beside the plot: up that side to its front corner
+				elseif lp.Z < 0 then
+					cx, cz = sx * half, lp.Z -- behind it: straight out sideways to the side line first
+				else
+					cx, cz = lg.X, half -- in front: along the front line
+				end
+				via = PlotFrame.LocalToWorld(st._afPlot, cx, cz)
+				via = Vector3.new(via.X, goal.Y, via.Z)
+			end
+		end
+		unit._afPath = nil
+		moveTo(unit, via, now)
+		return
+	end
 	-- movement: straight while it sees the slot, a throttled path only when blocked
 	if clearLine(pos, goal) then
 		unit._afPath = nil
@@ -53494,7 +53691,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 95)
+			player:SetAttribute("WE_Build", 96)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -60426,7 +60623,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 95)
+		player:SetAttribute("WE_Build", 96)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -60566,7 +60763,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=95",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=96",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -78887,6 +79084,15 @@ end
 	is given up at its first blocked check, with no approach, until the timer starts over (a shot, a check with nothing
 	in the band, nothing in reach, a target beyond the band, a new order). Only two spots are remembered, so a fresh
 	approach inside the band would let three or more walled spots take turns forever (reviewer S1 / S2). ]]
+-- claude-bud (ATTACK fix, ArmyConfig.Follow2.Tidy): the ArmyFollow module when tidy formations are live for him
+local function attackTidy(player: Player): any?
+	local af = SquadOrdersService._AF
+	if af and af.TidyLive and af.AttackPoint and af.TidyLive(player) then
+		return af
+	end
+	return nil
+end
+
 local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playerRoot: BasePart?, now: number, trail: Trail?, probe: Probe?)
 	local aggro = OrdersConfig.AttackAggroRange or 120
 	local band = (OrdersConfig.AttackRange or 55) * 0.85 -- HEAD's ATTACK fire band: it fires only once this close
@@ -78914,7 +79120,13 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		unit.AimRoot = nil
 		unit.AimHum = nil
 		if playerRoot then
-			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
+			local af = attackTidy(player)
+			if af then
+				-- claude-bud (ATTACK fix): its own march spot by seat, never the one point 12 studs ahead of him
+				unit.Humanoid:MoveTo(af.AttackPoint(st, unit, playerRoot.Position, playerRoot.CFrame.LookVector, "march"))
+			else
+				unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
+			end
 		end
 		return
 	end
@@ -78996,6 +79208,25 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 	end
 	local aimAt = aimPoint(unit, nroot)
 	faceYaw(unit.Root, aimAt)
+	-- claude-bud (ATTACK fix): chasing, each unit closes on its own ring seat round the target (no shared Vector3)
+	local afA = attackTidy(player)
+	if afA then
+		local from = unit.Root.Position
+		local center = if unit.AimRoot ~= nil then aimAt else nroot.Position
+		local ringAt = afA.AttackPoint(st, unit, center, center - (if playerRoot then playerRoot.Position else from), "ring")
+		if unit.AimRoot ~= nil then
+			if (aimAt - from).Magnitude > band then
+				unit.Humanoid:MoveTo(ringAt)
+			else
+				unit.Humanoid:MoveTo(from)
+			end
+		elseif dist > band or (unit.LosBlocked and CombatFairnessConfig.UnitChaseWithoutLos == true) then
+			unit.Humanoid:MoveTo(ringAt)
+		else
+			unit.Humanoid:MoveTo(from)
+		end
+		return
+	end
 	if unit.AimRoot ~= nil then
 		-- squadfair: it shoots a visible hostile (the fallback): it closes in on that one only, never on the walled-off one
 		if (aimAt - unit.Root.Position).Magnitude > band then
@@ -88619,6 +88850,9 @@ function VehicleService.Purchase(player: Player, vehicleId: any): (boolean, stri
 	if not def then
 		return false, "UnknownVehicle"
 	end
+	if (def :: any).Premium ~= nil then
+		return false, "RobuxOnly" -- claude-bud JOB 5a: a premium vehicle is never sold for cash (its game pass only)
+	end
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return false, "NoProfile"
@@ -88680,6 +88914,29 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	if not profile then
 		return false, "NoProfile"
 	end
+	-- claude-bud JOB 5a: a premium (Robux-only) vehicle spawns only for a player its game pass is live for AND who owns
+	-- the pass (checked every spawn, so a lost pass stops it); pass owners skip the repair wait (free respawn)
+	local premium: any = (def :: any).Premium
+	local premiumFree = false
+	if premium ~= nil then
+		local passKey = tostring(premium.PassKey)
+		local isOwner = VehicleService._IsPlaytestOwner(player)
+		local MonetizationConfig = require(Shared.Configs.MonetizationConfig) :: any -- (required here: the module is at the 200-local limit)
+		if not isOwner and not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then
+			return false, "UnknownVehicle"
+		end
+		local owns = MonetizationService ~= nil
+			and MonetizationService.PlayerOwnsGamePass ~= nil
+			and MonetizationService.PlayerOwnsGamePass(player, passKey) == true
+		if not owns and not isOwner then
+			return false, "NeedsPass"
+		end
+		premiumFree = owns and (require(Shared.Configs.PremiumVehicleConfig) :: any).FreeRespawn == true
+		if not profile.Vehicles[vehicleId] then
+			profile.Vehicles[vehicleId] = true -- shown as owned in the Garage; the pass check above stays the gate
+			DataService.MarkDirty(player)
+		end
+	end
 	if not profile.Vehicles[vehicleId] then
 		if VehicleService._IsPlaytestOwner(player) then
 			-- v81: owner playtest owns every vehicle (DataService writes them at load; heal a late / missed write)
@@ -88704,8 +88961,8 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			return false, presErr
 		end
 	end
-	if VehicleService._VehicleHealth.RepairLeft(player.UserId, vehicleId) > 0 then
-		return false, "Repairing" -- W2: destroyed → that id is locked for Destroy.RepairSeconds
+	if not premiumFree and VehicleService._VehicleHealth.RepairLeft(player.UserId, vehicleId) > 0 then
+		return false, "Repairing" -- W2: destroyed → that id is locked for Destroy.RepairSeconds (claude-bud: pass owners respawn free)
 	end
 	if cooldownLeft(player.UserId, player) > 0 then
 		return false, "Cooldown"
@@ -90009,6 +90266,16 @@ end
 
 -- The vehicle's own ref, else its KitFamilyFallback ref (the whole ref: ChildName / Fit travel with the id).
 local function resolveVehicleRef(vehicleId: string, kitFamily: string?): AssetRef?
+	-- claude-bud JOB 5a: a Robux-only clone (VehicleConfig Premium* rows) wears its base vehicle's body (LookId)
+	do
+		local okV, VC = pcall(function(): any
+			return require(ReplicatedStorage.Shared.Configs.VehicleConfig)
+		end)
+		local vdef = if okV and VC and VC.Vehicles then VC.Vehicles[vehicleId] else nil
+		if vdef and typeof(vdef.LookId) == "string" then
+			vehicleId = vdef.LookId
+		end
+	end
 	local vehicles = VisualAssetConfig.Vehicles :: any
 	local ref = vehicles[vehicleId]
 	if refId(ref) > 0 then
@@ -114539,6 +114806,7 @@ local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local VehicleConfig = require(Shared.Configs.VehicleConfig)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig) -- claude-bud JOB 5a: Robux-only vehicles
 
 local HudConfig = require(Shared.Configs.HudConfig)
 
@@ -114608,6 +114876,7 @@ local rarityColors: { [string]: Color3 } = {
 	Rare = Color3.fromRGB(80, 140, 220),
 	Epic = Color3.fromRGB(170, 90, 220),
 	Legendary = Color3.fromRGB(230, 170, 60),
+	Premium = Color3.fromRGB(255, 205, 60), -- claude-bud JOB 5a: Robux-only (gold)
 }
 
 -- rows currently on screen: every row's action button, and the owned (spawn / cooldown) subset
@@ -114624,7 +114893,31 @@ local STRUCTURE_SHORT: { [string]: string } =
 local STRUCTURE_LONG: { [string]: string } =
 	{ VehicleDepot = "Vehicle Depot", Helipad = "Helipad", Airfield = "Airfield", Dock = "Dock" }
 local KIND_RANK: { [string]: number } =
-	{ Despawn = 0, Repairing = 1, Cooldown = 1, Spawn = 1, Claim = 2, Buy = 2, CantAfford = 3, Locked = 4 }
+	{ Despawn = 0, Repairing = 1, Cooldown = 1, Spawn = 1, Robux = 2, Claim = 2, Buy = 2, CantAfford = 3, Locked = 4 }
+
+-- claude-bud JOB 5a: a Robux-only vehicle's pass (nil for a cash vehicle), its R$ price and whether this player has it
+local function premiumPass(def: any): (string?, number, boolean)
+	local prem = if typeof(def) == "table" then def.Premium else nil
+	if typeof(prem) ~= "table" or typeof(prem.PassKey) ~= "string" then
+		return nil, 0, false
+	end
+	local key = prem.PassKey :: string
+	local pass = (MonetizationConfig.GamePasses :: any)[key]
+	local robux = if typeof(pass) == "table" then (tonumber(pass.RobuxPrice) or 0) else 0
+	local lp = Players.LocalPlayer
+	local owns = lp ~= nil and lp:GetAttribute("WE_Ent_" .. key) == true
+	return key, robux, owns
+end
+
+-- a Robux-only vehicle is listed only while its pass is live for this player (MonetizationConfig.Rollout)
+local function premiumListed(def: any): boolean
+	local key = premiumPass(def)
+	if key == nil then
+		return true
+	end
+	local lp = Players.LocalPlayer
+	return lp ~= nil and MonetizationConfig.SkuLiveFor(lp.UserId, key)
+end
 
 local function addCorner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -114730,6 +115023,14 @@ function VehicleController._RowState(id: string, def: VehicleDef, ctx: RowCtx): 
 			return { Kind = "Cooldown", Text = string.format("%ds", math.max(1, math.floor(cd + 0.5))), Enabled = false }
 		end
 		return { Kind = "Spawn", Text = "SPAWN", Enabled = true }
+	end
+	-- claude-bud JOB 5a: a Robux-only vehicle is bought with its game pass only (never cash); a pass owner spawns it
+	local passKey, robux, ownsPass = premiumPass(def)
+	if passKey ~= nil then
+		if ownsPass then
+			return { Kind = "Spawn", Text = "SPAWN", Enabled = true }
+		end
+		return { Kind = "Robux", Text = "R$ " .. tostring(robux), Enabled = true }
 	end
 	local reason = VehicleController._LockReason(def, ctx.Gates)
 	if reason then
@@ -114839,7 +115140,7 @@ local function sortedIds(): { string }
 		local catOk = filterCategory == "All" or cat == filterCategory
 		local rarOk = filterRarity == "All" or rar == filterRarity
 		local ownedOk = not filterOwnedOnly or ownedMap[id] == true
-		if catOk and rarOk and ownedOk then
+		if catOk and rarOk and ownedOk and premiumListed(def) then
 			table.insert(ids, id)
 			rank[id] = KIND_RANK[VehicleController._RowState(id, def, ctx).Kind] or 5
 		end
@@ -114928,6 +115229,8 @@ local function paintButton(btn: TextButton, id: string, st: RowState)
 		wrapped = true
 	elseif kind == "CantAfford" then
 		bg, fg = Constants.Colors.Gunmetal, Constants.Colors.Gold
+	elseif kind == "Robux" then
+		bg, fg = Constants.Colors.Gold, Color3.fromRGB(20, 20, 20) -- claude-bud JOB 5a: the gold Robux button
 	end
 	if (kind == "Buy" or kind == "Claim" or kind == "CantAfford") and (buyingUntil[id] or 0) > os.clock() then
 		text = "BUYING…"
@@ -115025,6 +115328,19 @@ local function onRowTap(id: string)
 		fireSpawn(id)
 	elseif kind == "Locked" then
 		setStatus(VehicleController._LockDetail(def, gates) or (def.DisplayName .. " is locked"))
+	elseif kind == "Robux" then
+		-- claude-bud JOB 5a: prompt the vehicle's game pass (the server never grants from this; ownership is re-checked)
+		local passKey = premiumPass(def)
+		local pass = if passKey then (MonetizationConfig.GamePasses :: any)[passKey] else nil
+		local passId = if typeof(pass) == "table" then (tonumber(pass.Id) or 0) else 0
+		if passKey == nil or passId == 0 then
+			setStatus(def.DisplayName .. ": coming soon")
+		else
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseGamePass, passKey, "garage")
+			pcall(function()
+				game:GetService("MarketplaceService"):PromptGamePassPurchase(Players.LocalPlayer, passId)
+			end)
+		end
 	elseif (buyingUntil[id] or 0) > os.clock() then
 		setStatus("Buying " .. def.DisplayName .. "…")
 	elseif kind == "CantAfford" then
@@ -115242,6 +115558,12 @@ local function rebuild()
 				def.Speed,
 				req
 			)
+			local pk, pr = premiumPass(def)
+			if pk ~= nil then
+				-- claude-bud JOB 5a: the gold ROBUX badge + price (no cash price for a Robux-only vehicle)
+				meta.Text = string.format("ROBUX · R$ %d · %s · Spd %d", pr, rowTip(def), def.Speed)
+				meta.TextColor3 = Constants.Colors.Gold
+			end
 			meta.Parent = row
 
 			local btn = Instance.new("TextButton")

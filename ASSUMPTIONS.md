@@ -8863,3 +8863,9 @@ ds_territories.luau T3):
 - **Check:** `tools/checks/claude_bud_army.py` simulates the cells and the attack spots from the config: unique, at least 3 apart,
   every hold cell at least edge + pad + 4 outside the gate plane and off the gate lane.
 - Not verified in Roblox (no stand-in here); the owner's phone test decides.
+
+## 2026-09-29 — v96 ship (Code Bot): Claude Bud army gate-hold fix + JOB 5a Robux-only vehicles live
+- Shipped as WE_Build 96 from `claude/desktop-bud` tip a063154 (83a98b9 + a063154).
+- Owner-only: Follow2.Tidy army hold/ATTACK uniqueness fix; six Premium Robux vehicles behind RolloutKeys (PV_* pass Ids still 0).
+- Behaviour documented in the 2026-09-29 claude-bud JOB 5a + army-fix sections above; no new product behaviour beyond those notes.
+- PreferMesh stays OFF. WE_Building* attributes untouched.
