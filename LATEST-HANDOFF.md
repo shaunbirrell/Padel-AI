@@ -13,7 +13,7 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
 
 <!-- Q2-END -->
 
-# v107 — 2026-09-29 ~15:35 Dublin (Code Bot, branch phase-7-polish, WE_Build 107) — BOARDS LIVE FOR ALL
+# v107 — 2026-09-29 ~15:35 Dublin (Code Bot, branch phase-7-polish, WE_Build 107) — BOARDS LIVE FOR ALL (place version 105)
 
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v107) before new work. Do not redo BOARDS, JOB 14, or JOB 15.**
 Merged `origin/claude/desktop-bud` tip `0bd3c79` (Town Centre notice boards) into phase-7-polish, keeping v104
@@ -29,6 +29,8 @@ Merged `origin/claude/desktop-bud` tip `0bd3c79` (Town Centre notice boards) int
   new-player checks, admin board exclusion.
 - Pins: `tools/checks/codebot_v107.py` + `claude_bud_boards.py`. BuyPathStatic PASS=5702 FAIL=0; rojo ok.
   PreferMesh OFF. WE_Building* untouched.
+
+**Published:** Open Cloud `versionNumber=105`. Migrate to Latest Update for the Town Centre boards.
 
 
 # v106 — 2026-09-29 15:05 Dublin (Code Bot, branch phase-7-polish, WE_Build 106) — JOB 14 GAME-FEEL LIVE FOR ALL + JOB 15 REMOTEGATE OBSERVE
