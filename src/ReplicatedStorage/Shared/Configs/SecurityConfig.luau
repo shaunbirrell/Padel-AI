@@ -18,7 +18,7 @@
 
 local SecurityConfig = {
 	RemoteGate = {
-		Rollout = "owner",
+		Rollout = "observe", -- "all" = enforced for everyone, "observe" = nobody enforced (flip after reading the logs)
 		Others = "observe", -- "observe" | "off"
 		Default = { Rate = 15, Burst = 30 },
 		Limits = {

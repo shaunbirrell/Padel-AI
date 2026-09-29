@@ -46,6 +46,7 @@ load = function(name)
 	return CACHE[name]
 end
 local SC = load("SecurityConfig")
+SC.RemoteGate.Rollout = "owner" -- exercise both paths: the owner enforced, the other observed
 local G = load("RemoteGate")
 G._clock = function() return CLOCK end
 G._log = function(s) table.insert(LOGS, s) end

@@ -65,7 +65,7 @@ _q3_gc = "src/ReplicatedStorage/Shared/Configs/GameFeelConfig.luau"
 _q3_gs = "src/ServerScriptService/Server/Services/GameFeelService.luau"
 _q3_gcl = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/GameFeelClient.luau"
 for _feat in ("KillFeed", "VehicleNumbers", "RaidReport", "SoundPass"):
-    must_contain(_q3_gc, f'\t\t{_feat} = "owner",', f"CLAUDE-BUD J14: {_feat} owner-only first")
+    must_contain(_q3_gc, f'\t\t{_feat} = "all"', f"CLAUDE-BUD J14: {_feat} live for all (owner's v101 rule)")
 must_contain(_q3_gs, "if killer == nil or killer == victim or (typeof(info) == \"table\" and info.Quiet == true) then", "CLAUDE-BUD J14: kill feed = PvP kills only, blast deaths stay quiet")
 must_contain(_q3_gs, "if feedCount >= G.KillFeed.MaxPerSecond then", "CLAUDE-BUD J14: kill feed rate cap (dropped, never queued)")
 must_contain(_q3_gs, "K = killer.DisplayName,", "CLAUDE-BUD J14: kill feed uses DisplayNames (never a nation)")
@@ -97,7 +97,7 @@ if _q3_luau:
     (ok if _r14b.returncode == 0 else bad)("CLAUDE-BUD J14: GameFeelService executed (kill feed, merged vehicle numbers, raid report; owner-only) " + _last)
 
 # ── claude-bud JOB 15: anti-exploit sweep (RemoteGate + SecurityConfig) ──
-must_contain("src/ReplicatedStorage/Shared/Configs/SecurityConfig.luau", '\t\tRollout = "owner",', "CLAUDE-BUD J15: gate enforced owner-only first")
+must_contain("src/ReplicatedStorage/Shared/Configs/SecurityConfig.luau", '\t\tRollout = "observe",', "CLAUDE-BUD J15: gate observe-only for everyone until the owner reads the logs")
 must_contain("src/ReplicatedStorage/Shared/Configs/SecurityConfig.luau", '\t\tOthers = "observe", -- "observe" | "off"', "CLAUDE-BUD J15: everyone else observe-only (logs, never drops)")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "\tsinkClientOnly(folder :: Folder)", "CLAUDE-BUD J15: push-only remotes get a sink listener")
 _r15 = _q3_sp.run([_q3_sys.executable, str(ROOT / "tools" / "remote_audit.py")], capture_output=True, text=True, timeout=60)

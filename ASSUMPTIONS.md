@@ -9199,3 +9199,14 @@ ds_territories.luau T3):
 - **Checks:**
   - `tools/remote_audit.py` (static): every handler is gated and has a schema; every remote the client fires has a schema.
   - `tools/remotegate_test.py` (Luau CLI, real module): 37/37.
+
+## 2026-09-29 — claude-bud: after rebasing on v103 (all rollouts are "all" since v101)
+- The v101 Code Bot check allows no owner-only rollout, so:
+  - GameFeelConfig (JOB 14) is now "all" for every feature.
+  - SecurityConfig.RemoteGate.Rollout (JOB 15) is "observe": the checks run and log "would reject" for everyone,
+    and no one is enforced yet. Assumption: enforcing for every player before a phone test could block a real
+    request if one schema is wrong. Flip it to "all" once the live logs are quiet.
+- The codes schema now covers v102's `RedeemCode` RemoteFunction (gate inside its OnServerInvoke →
+  result("RateLimited")). RequestRedeemCode has no handler any more and gets the sink.
+- The behaviour tests set the rollouts to "owner" inside their harness, so both the gated and the open paths
+  are still exercised.

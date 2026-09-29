@@ -1,7 +1,7 @@
 --!strict
 --[[
 	claude-bud JOB 14 (2026-09-29): game-feel polish from the phone tests (Server/Services/GameFeelService +
-	Client/Modules/GameFeelClient). Owner-only first (Rollout per feature); OFF = the old behaviour, exactly.
+	Client/Modules/GameFeelClient). Live for all players (the owner's v101 rule); a feature set to "off" = the old behaviour, exactly.
 	  * KillFeed: PvP kills and vehicle kills by a player, 2 short lines in the HUD top stack under the toasts (never a
 	    fixed corner: the stack cannot overlap anything), 4 s each. DisplayNames only (never a nation). Blast deaths
 	    stay quiet (nuke §15.2). The server drops lines over MaxPerSecond (never queued).
@@ -16,10 +16,10 @@
 
 local GameFeelConfig = {
 	Rollout = {
-		KillFeed = "owner",
-		VehicleNumbers = "owner",
-		RaidReport = "owner",
-		SoundPass = "owner",
+		KillFeed = "all", -- v103 rule (owner): everything live for all players
+		VehicleNumbers = "all",
+		RaidReport = "all",
+		SoundPass = "all",
 	} :: { [string]: string },
 
 	KillFeed = {

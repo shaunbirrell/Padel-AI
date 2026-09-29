@@ -77,6 +77,7 @@ load = function(name)
 	return CACHE[name]
 end
 local G = load("GameFeelConfig")
+for k in pairs(G.Rollout) do G.Rollout[k] = "owner" end -- exercise the gate: owner live, the other not
 local S = load("GameFeelService")
 local deathFn
 S.Init({ CombatService = { OnPlayerDeath = function(fn) deathFn = fn end } })
