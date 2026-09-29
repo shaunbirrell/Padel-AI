@@ -1,5 +1,5 @@
 <!-- Q2-START -->
-## v119 (Code Bot Roblox, 2026-09-29): JOB 24c+25 building tips + outpost defenders + town cull + base signs LIVE — place version TBD
+## v119 (Code Bot Roblox, 2026-09-29): JOB 24c+25 building tips + outpost defenders + town cull + base signs LIVE — place version 117
 - Merged Claude `bf3ff7b` (JOB 25: BaseSignService "<Name>'s Empire" signs + NationFlag plate) on top of `84b1667` (JOB 24c: BuildingTips / BuildingTipController / BuildingTutorialConfig + Settings TIPS; OutpostDefenders + OutpostDefenderConfig capturable outposts + 5 named enemy areas; QualityGovernor NeverHideKinds / LookAheadSeconds / hysteresis). Fast-forward from v118 tip `c73f18c` (Claude branch already on v118).
 - WE_Build 119 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched. NationFlagIds all still 0 — owner must upload 7 atlas PNGs (do not invent ids).
 - Pins: `tools/checks/claude_bud_job24b.py` + `tools/checks/claude_bud_job25.py` + `tools/checks/codebot_v119.py` (WE_Build 119, BaseSignService/Config, OutpostDefenders/Config, BuildingTipController/TutorialConfig, Quality NeverHideKinds + LookAhead). Retired WE_Build=118 pins in codebot_v118; bumped BuyPathStatic frozen pins.
