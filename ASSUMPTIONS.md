@@ -9245,3 +9245,19 @@ ds_territories.luau T3):
 - **Checks:** `tools/checks/claude_bud_boards.py` (throttle, confirmed-only Robux ordering, kill validation, opt-out,
   budgets) and the pure helpers run in the Luau CLI (ISO weeks incl. 2020W53 / 2025W01, anti-farm, throttle).
   - The four old pins of the single board are retired with a note (claude_bud_q3.py ×3, codebot_v103.py ×1).
+
+## 2026-09-29 — claude-bud army: Flank formation (owner: "the army is still glitchy and despawns when walking")
+- **Cause (from the code; no server log to confirm):** the tidy wedge put row k at 3 + 4k studs behind him (7, 11, 15,
+  19 for 8 units), plus the catch-up lag while he walks. The phone camera sits ~12–15 studs behind him, so the back
+  rows are at or behind the camera: they leave the view, and the client camera guard (RigConfig LeadScreenFrac)
+  hides one that fills the screen.
+  - Result: soldiers vanish while he walks and "respawn" when he stops.
+  - A far / stuck regroup also lands behind the camera by design (RegroupBehindStuds).
+- **Fix:** `ArmyConfig.Follow2.Tidy.Formation = "Flank"`. A file on each side of him:
+  - row k sits 1 stud ahead then 3 studs back per row, 3.5 + 2.6 × (k−1) studs out;
+  - for 8 units (5 + research 3) the last row is 8 studs back, in front of the camera;
+  - each row on its own side line, so the client escort files ahead of a soldier never land on another soldier;
+  - neighbours are 3.97 studs apart, above SeparationStuds 3.5.
+  - `"Wedge"` restores the old formation. Hold, attack and the base wait rows are unchanged.
+- **Assumption:** soldiers 3.5 studs beside him may brush him on a sharp turn (turns are rate-limited); widen
+  FlankSide if that shows up on the phone.

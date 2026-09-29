@@ -363,6 +363,14 @@ local ArmyConfig = {
 			  wedge; the void rescue still runs). ]]
 		Tidy = {
 			Rollout = "all", -- v101
+			-- claude-bud (owner: "still glitchy and despawns when walking"): "Flank" = a file on each side of him, all in
+			-- front of the phone camera (row k: FlankFront + (k-1) x FlankRowBack studs back, negative = ahead; FlankSide +
+			-- (k-1) x FlankRowSide out). "Wedge" = the old formation behind him (RowBack / RowSide below).
+			Formation = "Flank",
+			FlankFront = -1,
+			FlankRowBack = 3,
+			FlankSide = 3.5,
+			FlankRowSide = 2.6,
 			HoldApproachStuds = 6,
 			HoldReleaseStuds = 10,
 			PlotPadStuds = 2,
