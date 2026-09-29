@@ -38,3 +38,23 @@ must_contain(_cbm_gc, 'return { Kind = "Robux", Text = "R$ " .. tostring(robux),
 must_contain(_cbm_gc, 'meta.Text = string.format("ROBUX · R$ %d · %s · Spd %d", pr, rowTip(def), def.Speed)', "CLAUDE-BUD 5a: Garage ROBUX badge")
 must_contain(_cbm_gc, "if catOk and rarOk and ownedOk and premiumListed(def) then", "CLAUDE-BUD 5a: premium rows only where the rollout is live")
 must_contain(_cbm_gc, ":PromptGamePassPurchase(Players.LocalPlayer, passId)", "CLAUDE-BUD 5a: the Garage prompts the pass (grant is the server's)")
+
+# ── 5b game passes: 2x Cash / VIP / Auto Collect are live already; + Bigger Army, VIP perks, Extra Garage (stub) ──
+_cbm_ss = "src/ServerScriptService/Server/Services/SoldierService.luau"
+_cbm_ms = "src/ServerScriptService/Server/Services/MonetizationService.luau"
+_cbm_vl = "src/ServerScriptService/Server/Modules/VIPLounge.luau"
+_cbm_fc = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/FeatureController.luau"
+for _k in ("DoubleCash", "VIP", "AutoCollect"):
+    (ok if re.search(r"\n\t\t" + _k + r" = \{\n\t\t\tId = [1-9]\d+,", read(_cbm_mc) or "") else bad)(f"CLAUDE-BUD 5b: {_k} game pass is live")
+must_contain(_cbm_mc, "\t\tBiggerArmy = {\n\t\t\tId = 0,", "CLAUDE-BUD 5b: Bigger Army pass (Id 0 until the owner creates it)")
+must_contain(_cbm_mc, "\t\tExtraGarageSlot = {\n\t\t\tId = 0,\n\t\t\tDisplayName = \"Extra Garage Slot\",\n\t\t\tRobuxPrice = 199,\n\t\t\tHideFromShop = true,", "CLAUDE-BUD 5b: Extra Garage Slot stays hidden until it is built")
+must_contain(_cbm_mc, "BiggerArmy = true, ExtraGarageSlot = true }", "CLAUDE-BUD 5b: new passes owner-only first (RolloutKeys)")
+must_contain(_cbm_mc, "\tVIPPerks = {\n\t\tRollout = \"owner\",", "CLAUDE-BUD 5b: VIP perks owner-only first")
+must_contain(_cbm_ss, "\tlocal passBonus = biggerArmyBonus(profile)", "CLAUDE-BUD 5b: Bigger Army adds army capacity")
+must_contain(_cbm_ms, "if MonetizationConfig.SkuLiveFor(player.UserId, \"BiggerArmy\") and ownsCached(player, \"BiggerArmy\") then", "CLAUDE-BUD 5b: Bigger Army mirrored only from real ownership (UserOwnsGamePassAsync cache)")
+must_contain(_cbm_ms, "local vip = MonetizationConfig.VIPPerksLiveFor(player.UserId) and ownsCached(player, \"VIP\")", "CLAUDE-BUD 5b: VIP tag only for a real VIP")
+must_contain(_cbm_ms, "return MonetizationConfig.VIPPerksLiveFor(pl.UserId) and ownsCached(pl, \"VIP\")", "CLAUDE-BUD 5b: lounge payout re-checks VIP on the server")
+must_contain(_cbm_vl, "if hold[uid] >= P.LoungeHoldSeconds and (last == nil or now - last >= P.LoungeCooldownSeconds) then", "CLAUDE-BUD 5b: lounge bonus once per cooldown")
+must_not_contain(_cbm_vl, "OnServerEvent", "CLAUDE-BUD 5b: lounge has no client -> server path")
+must_contain(_cbm_fc, "TextChatService.OnIncomingMessage = function(message: TextChatMessage)", "CLAUDE-BUD 5b: VIP chat tag")
+must_contain(_cbm_fc, "door.CanCollide = not vip", "CLAUDE-BUD 5b: VIP door opens on the VIP's own client only")

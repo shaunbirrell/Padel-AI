@@ -78,13 +78,23 @@ end
 	who bought the old +1 slot get +10 on their next state push. A one-time boolean — owning it never stacks. ]]
 local ARMY_EXPANSION_DEFAULT_BONUS = 10
 
-local function armyCapBonus(profile: any): number
-	if typeof(profile.Entitlements) ~= "table" or profile.Entitlements.ExtraSoldierSlot ~= true then
+-- claude-bud JOB 5b: the Bigger Army game pass (mirrored into Entitlements.BiggerArmy by MonetizationService)
+local function biggerArmyBonus(profile: any): number
+	if typeof(profile.Entitlements) ~= "table" or profile.Entitlements.BiggerArmy ~= true then
 		return 0
+	end
+	local pass: any = (MonetizationConfig.GamePasses :: any).BiggerArmy
+	return math.max(0, math.floor((if typeof(pass) == "table" then tonumber(pass.ArmyCapBonus) else nil) or 10))
+end
+
+local function armyCapBonus(profile: any): number
+	local passBonus = biggerArmyBonus(profile)
+	if typeof(profile.Entitlements) ~= "table" or profile.Entitlements.ExtraSoldierSlot ~= true then
+		return passBonus
 	end
 	local def: any = MonetizationConfig.DevProducts.ExtraSoldierSlot
 	local bonus = if typeof(def) == "table" then tonumber(def.ArmyCapBonus) else nil
-	return math.max(0, math.floor(bonus or ARMY_EXPANSION_DEFAULT_BONUS))
+	return math.max(0, math.floor(bonus or ARMY_EXPANSION_DEFAULT_BONUS)) + passBonus
 end
 
 local function maxSoldiers(profile: any): number

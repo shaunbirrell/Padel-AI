@@ -45,7 +45,7 @@ local MonetizationConfig = {
 		them and feel their effect; "all" = everyone; anything else = off (fail closed). ProcessReceipt still grants any
 		receipt Roblox delivers for these Ids (a paid receipt is never dropped). OFF must equal the old game. ]]
 	Rollout = "owner",
-	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true } :: { [string]: boolean },
+	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true, BiggerArmy = true, ExtraGarageSlot = true } :: { [string]: boolean },
 	GamePasses = {
 		VIP = {
 			Id = 1985475542,
@@ -161,6 +161,24 @@ local MonetizationConfig = {
 			VehicleIds = { "PremiumSkylance" },
 			Feature = "PremiumVehicles",
 			Description = "Robux-only interceptor jet",
+		},
+		-- claude-bud JOB 5b: Bigger Army pass (+ArmyCapBonus army capacity, mirrored into profile.Entitlements.BiggerArmy on
+		-- ownership so SoldierService's cap reads it). TODO(owner): create "Bigger Army" (game pass, 249 R$), paste the Id.
+		BiggerArmy = {
+			Id = 0,
+			DisplayName = "Bigger Army",
+			RobuxPrice = 249,
+			ArmyCapBonus = 10,
+			Description = "+10 soldiers in your army, forever",
+		},
+		-- claude-bud JOB 5b: TODO(dev + owner) Extra Garage Slot: a second vehicle out at once. NOT BUILT (VehicleService
+		-- tracks one active vehicle per player); HideFromShop until it is, so nobody can buy a perk that does not exist.
+		ExtraGarageSlot = {
+			Id = 0,
+			DisplayName = "Extra Garage Slot",
+			RobuxPrice = 199,
+			HideFromShop = true,
+			Description = "Keep a second vehicle out (coming soon)",
 		},
 		PV_Leviathan = {
 			Id = 0,
@@ -379,6 +397,21 @@ local MonetizationConfig = {
 		              and never prompts; default = the offer's own key
 		Pads are 7x7-stud floor triggers (no tap target); each label is stud-scaled, MaxDistance = LabelMaxDistance,
 		never AlwaysOnTop, tagged WorldLabelConfig.BaseLabelTag. The server decides ownership and "coming soon". ]]
+	--[[ claude-bud JOB 5b: VIP perks on top of the live VIP pass (+25 % cash, unchanged: live buyers paid for it). For a VIP
+		they are live for: a [VIP] chat tag (player attribute WE_VIPTag -> FeatureController's OnIncomingMessage) and the
+		VIP lounge near the plaza (Server/Modules/VIPLounge: a VIP-only door, a bonus pad paying LoungeCash once per
+		LoungeCooldownSeconds). Rollout "owner" = AdminConfig.IsPlaytestOwner only, "all", anything else = off. ]]
+	VIPPerks = {
+		Rollout = "owner",
+		ChatTag = "[VIP]",
+		Lounge = true,
+		LoungeX = -150,
+		LoungeZ = -430,
+		LoungeCash = 5000,
+		LoungeHoldSeconds = 2,
+		LoungeCooldownSeconds = 900,
+	},
+
 	PremiumPads = {
 		LabelMaxDistance = 20,
 		Slots = {
@@ -521,6 +554,17 @@ local MonetizationConfig = {
 		build_backfill = true, -- XP rebalance XP-L2: the one-time backfill grant (season x1.1 only; no pass check at join)
 	},
 }
+
+-- claude-bud JOB 5b: are the VIP perks (chat tag, lounge) live for this player (fail closed)
+function MonetizationConfig.VIPPerksLiveFor(userId: any): boolean
+	local mode = (MonetizationConfig :: any).VIPPerks.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
 
 -- claude-bud: is this SKU key on sale / effective for this player under Rollout. Keys outside RolloutKeys are always live.
 function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean

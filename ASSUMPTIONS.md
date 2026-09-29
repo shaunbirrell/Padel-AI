@@ -8863,3 +8863,19 @@ ds_territories.luau T3):
 - **Check:** `tools/checks/claude_bud_army.py` simulates the cells and the attack spots from the config: unique, at least 3 apart,
   every hold cell at least edge + pad + 4 outside the gate plane and off the gate lane.
 - Not verified in Roblox (no stand-in here); the owner's phone test decides.
+
+## 2026-09-29 — claude-bud JOB 5b: game passes
+- **Already live, unchanged:** 2x Cash (1982865711), VIP (1985475542, +25 % cash), Auto Collect (1985115501).
+  - The owner asked for VIP +10 % income. VIP already gives +25 % and buyers paid for that, so it is not reduced.
+- **Bigger Army** (new pass `BiggerArmy`, Id 0, 249 R$): +10 army capacity.
+  - When a player the rollout is live for owns it (the UserOwnsGamePassAsync cache), MonetizationService.ApplyPassPerks
+    mirrors it into `profile.Entitlements.BiggerArmy` (via GrantEntitlement) on join and on an in-game buy (OnPassOwned).
+  - SoldierService's `armyCapBonus` adds it; it stacks with the Army Expansion dev product (both +10).
+- **VIP perks** (`MonetizationConfig.VIPPerks`, Rollout "owner"):
+  - a gold [VIP] chat prefix (server attribute WE_VIPTag → TextChatService.OnIncomingMessage on every client);
+  - the VIP lounge at (-150, -430), just north of the Town, clear of every keep-out (checked with the worldfill checker), 8 parts:
+    - the door is solid for all and is non-colliding only on a VIP's own client;
+    - the gold pad pays $5,000 per 15 min per player to a VIP holding 2 s, with position, VIP ownership and cooldown all checked on the server.
+- **Extra Garage Slot** (`ExtraGarageSlot`, Id 0, 199 R$): **not built.** VehicleService keeps exactly one active vehicle
+  per player, and a second one touches spawn, health, seats and despawn. It stays HideFromShop so nobody can buy a
+  perk that does not exist. A dev task is listed in the handoff.

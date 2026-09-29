@@ -74,7 +74,41 @@ local function marker(kind: string, data: any)
 	end
 end
 
+-- claude-bud JOB 5b: VIP perks on this client (display / own movement only; the server decides every payout)
+local function vipPerks()
+	local Players = game:GetService("Players")
+	local TextChatService = game:GetService("TextChatService")
+	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+	local tag = tostring(((MonetizationConfig :: any).VIPPerks or {}).ChatTag or "[VIP]")
+	-- the [VIP] chat tag of any sender the server marked (WE_VIPTag), seen by everyone
+	pcall(function()
+		TextChatService.OnIncomingMessage = function(message: TextChatMessage)
+			local props = Instance.new("TextChatMessageProperties")
+			local src = message.TextSource
+			local sender = if src then Players:GetPlayerByUserId(src.UserId) else nil
+			if sender and sender:GetAttribute("WE_VIPTag") == true then
+				props.PrefixText = "<font color='#D4AF37'>" .. tag .. "</font> " .. message.PrefixText
+			end
+			return props
+		end
+	end)
+	-- the lounge door: open (non-colliding) on a VIP's own client only; 3 s poll (streaming-safe, no tree scans)
+	task.spawn(function()
+		local lp = Players.LocalPlayer
+		while lp.Parent do
+			local lounge = workspace:FindFirstChild("WE_VIPLounge")
+			local door = lounge and lounge:FindFirstChild("VIPDoor")
+			if door and door:IsA("BasePart") then
+				local vip = lp:GetAttribute("WE_VIPTag") == true
+				door.CanCollide = not vip
+				door.LocalTransparencyModifier = if vip then 0.5 else 0
+			end
+			task.wait(3)
+		end
+	end)
+end
 function FeatureController.Init()
+	vipPerks()
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if typeof(kind) ~= "string" then
 			return

@@ -50,6 +50,8 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | PV_Tidebreaker | Tidebreaker Assault Boat | 0 | 299 | hidden |
 | PV_Skylance | Skylance Interceptor | 0 | 899 | Garage (Robux-only jet, owner-only first; TODO create) |
 | PV_Leviathan | Leviathan Dreadnought | 0 | 1199 | Garage (Robux-only capital ship, owner-only first; TODO create) |
+| BiggerArmy | Bigger Army | 0 | 249 | Shop (+10 army cap; owner-only first; TODO create) |
+| ExtraGarageSlot | Extra Garage Slot | 0 | 199 | hidden (TODO: second active vehicle not built) |
 | RebirthBoost | Rebirth Boost | 0 | 199 | hidden |
 
 ### DevProducts
