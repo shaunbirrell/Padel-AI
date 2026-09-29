@@ -14,19 +14,19 @@ Then 3-way merge onto the current HEAD (`git merge-file`), insert the lane's Buy
 |---|---|---|---|
 | 01 | army-fix-ship | 4d26673 | **SHIPPED in v90** (Code Bot), owner-only behind `ArmyConfig.Rollout.Fix = "owner"`, merged 3-way onto phase-7-polish. Still open: the r1 re-measure (GATECAMP, UNDER, hall with guards down, T3 owner and non-owner) on a stand-in or device. The patch is kept for reference only. |
 | 02 | capture | e506c9c | **SHIPPED in v92** (Code Bot). PersistClaims=false, ReleaseOnLeave=true, StandingBar as Claude wrote. 3-way merge onto phase-7-polish HEAD db5d310; BuyPathStatic pins in tools/BuyPathStatic.py + tools/checks/codebot_v92.py. Phone test: notes/02-capture/phone_test.md (publish with Migrate to Latest Update). |
-| 03 (+03b base) | army lane B (checkpoints/garrisons) | capture fix-1 tree (= e506c9c + 03b) | Fix-3 passed both reviewers. It needs a rebase onto the shipped capture (02) and HEAD, then gates again. A stray "fix4" attempt was scratch and was not saved. |
-| 04 (+04b base) | army lane A (guard outside, follow when leaving, walk around walls) | e506c9c + old FIX + A0 (= 04b) | NOT shipped in v90. Code is written; tests T2/T3/T4/T10/T11/T12 and gates were **half-done**. It must now be rebased onto the v90 army fix (`Rollout.Fix`, `SquadOrdersService._FixLive`), not the old FIX. |
-| 05 | harbor (real boat + dock building) | e506c9c | **SHIPPED in v90** for everyone (visual; kill switch `DockKitConfig.Enabled = false`). Pins are in `tools/checks/codebot_v90_harbor.py`. |
-| 06 | faces (floating faces / soldier look) | e506c9c | **SHIPPED in v90** for everyone (client-only visual; `GuardHz = 0` / `LeadScreenFrac = 0` revert it). Pins are in `tools/checks/codebot_v90_faces.py`. |
-| 07 | ground2 (records only: rejected ground picks) | e506c9c | NOT_READY. It depends on the VKIT ground bodies (11). The five RETIRED rows from air2 are in `notes/07-ground2/`. |
-| 08 | air fix-2 (rotor scope, zoom clamp, isOwnDriveObject) | 4e07fc2 | **SHIPPED in v90**. Pins are in `tools/checks/codebot_v90_airfix2.py`. |
-| 09 | VKIT framework (Part-built vehicle bodies) | e506c9c | Done. It is also contained in 10, 11 and 12. |
-| 10 | VKIT air fix-1c | 4e07fc2 | Built and gated, waiting for review. It includes the framework. |
-| 11 | VKIT ground fix-2 | 4e07fc2 | **Half-done**: the code was written and the gates were running. It includes the framework and the air ChaseZoom hunk. |
-| 12 | VKIT naval fix-1b | e506c9c | Built and gated; deliverables were half-done. It includes the framework and the air fix-1b shared files. |
 
 10, 11 and 12 overlap: each carries its own copy of the framework files. Merge them in the order framework, air, ground, naval,
 keeping both sides' lane hunks (VehicleBodies/*.luau, VehicleBodyBuilder, VehicleConfig, VehicleDriveClient, BuyPathStatic).
 
 `notes/<lane>/` holds each lane's phone_test.md, owner_text.md and assumptions.md; `notes/army_design_spec.md` is the army design
 (lanes FIX, A0, A, B, C; D and E not built).
+
+## Retired 2026-09-29 (claude-bud JOB 9: "finish or remove cleanly, no half-built stuff")
+Removed from this folder; they are still in git history at commit e791323 (`git show e791323:handoff/wip/<file>`).
+| # | Patch | Why retired |
+|---|---|---|
+| 03 / 03b | army lane B (checkpoints / garrisons) | 48 commits stale, needs a rebase onto the shipped capture and the army fix; lane C, which consumes it, was never built |
+| 04 / 04b | army lane A (guard outside, follow, walk around walls) | tests and gates half-done, based on the old FIX; the live army (v90 Fix + Follow2 / Tidy) covers guard-outside and formation |
+| 07 | ground2 records | NOT_READY, depended on 11; its intent (reject the held truck picks) is applied by hand in VisualAssetConfig |
+| 09-12 | VKIT Part-built vehicle bodies (framework, air, ground, naval) | 45-48 commits stale, not owner-gated, +661 parts over main; 11 half-done, 12's deliverables half-done |
+`ArmyConfig.Rollout.March` (lane C's never-read flag) and its lane-C-only Text entries are removed from src.

@@ -60,3 +60,19 @@ for _root in ("src/StarterPlayer", "src/ReplicatedStorage"):
                     if re.search(r":FindFirstChild\([^)]*\)[:.][A-Za-z]", _code):
                         _q2_bad.append(f"{_p}:{_i} chained FindFirstChild")
 (ok if not _q2_bad else bad)(f"CLAUDE-BUD J8: streaming audit clean on client code ({_q2_bad[:5]})")
+
+# ── JOB 9 old WIP: finished or removed cleanly ──
+_q2_vac = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+_q2_v = read(_q2_vac) or ""
+must_not_contain(_q2_vac, "ModelAssetId = 16692908395", "CLAUDE-BUD J9: the real-world PT-boat body is gone")
+must_not_contain(_q2_vac, "ModelAssetId = 15838664806", "CLAUDE-BUD J9: the HELD gunboat body is not wired")
+for _k in ("PatrolBoat", "FastAttackCraft", "RiverBoat", "CoastCutter", "TorpedoBoat", "Gunboat", "MissileBoat", "MineLayer", "CoastalMonitor"):
+    must_contain(_q2_vac, "\t\t" + _k + " = { ModelAssetId = 0, Note = \"claude-bud J9: Part kit.", f"CLAUDE-BUD J9: {_k} back on the Part kit")
+(ok if "PendingAssetId = 8546141386" not in _q2_v and "PendingAssetId = 8455894899" not in _q2_v else bad)("CLAUDE-BUD J9: the failed truck picks (unit markings / 53 parts) left the rows")
+must_contain(_q2_vac, '\t\tFuelTanker = { ModelAssetId = 0, Note = "claude-bud J9: FINISHED as the Part kit', "CLAUDE-BUD J9: fuel tanker finished as the Part kit")
+_q2_ac = read("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau") or ""
+(ok if 'March = "owner"' not in _q2_ac and 'March = "TO %s"' not in _q2_ac else bad)("CLAUDE-BUD J9: the never-built lane C (March) is gone")
+must_contain("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau", "\t\tTidy = {\n\t\t\tRollout = \"owner\",", "CLAUDE-BUD J9: ATTACK marching = the finished Tidy rows / ring")
+import os as _q2_os2
+(ok if not any(_q2_os2.path.exists(_p) for _p in ("handoff/wip/09-vkit-framework_on_e506c9c.patch", "handoff/wip/12-vkit-naval_on_e506c9c.patch", "handoff/wip/04-army-laneA_on_oldFIX+A0.patch")) else bad)("CLAUDE-BUD J9: unfinished WIP patches retired (git history keeps them)")
+must_not_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "no underwater physics yet", "CLAUDE-BUD J9: no stub wording on the surface-only sub")

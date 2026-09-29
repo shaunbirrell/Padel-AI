@@ -1687,7 +1687,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			seatOffset = CFrame.new(0, 3.0 * s, 5.2 * s)
 			labelY = 6.0 * s
 		elseif kind == "Sub" then
-			-- Surface stub: low dark hull (no underwater physics yet)
+			-- Surface boat by design (claude-bud J9: subs run on the surface; no dive)
 			body.Size = Vector3.new(5 * s, 2.2 * s, 18 * s)
 			body.Color = Color3.fromRGB(30, 40, 48)
 			addPart(model, body, "Sail", Vector3.new(1.8 * s, 2.8 * s, 4 * s), CFrame.new(0, 2.4 * s, -1 * s), Color3.fromRGB(35, 45, 55), Enum.Material.Metal, nil, true)

@@ -8734,7 +8734,7 @@ def _a0_rules() -> None:
     ac = _a0_code(A0_AC)
     # 1. rollout shipping values (integrator decision: every part "owner" = the owner's playtest account only)
     vals = dict(re.findall(r'^\t\t(\w+) = "(\w+)",', _a0_block(ac, "Rollout"), re.M))
-    _a0_check(vals == {"Escort": "owner", "Army": "owner", "March": "owner", "Fix": "owner"},  # v90: + Fix (army despawn fix, owner first)
+    _a0_check(vals == {"Escort": "owner", "Army": "owner", "Fix": "owner"},  # v90: + Fix; claude-bud J9: March (lane C, never built) retired, see tools/checks/claude_bud_q2.py
               'ArmyConfig.Rollout ships Escort / Army / March = "owner" (the owner\'s playtest account only)',
               f"found {vals or 'no Rollout block'} in {A0_AC}")
     # 2. the gate: "all" = everyone, "owner" = AdminConfig.IsPlaytestOwner only, anything else = off (fail closed)

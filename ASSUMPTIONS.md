@@ -8978,3 +8978,26 @@ ds_territories.luau T3):
   - The earlier streaming2 lane (StreamPrefetch, bounded waits, atomic vehicle models) covers the rest.
   - `tools/checks/claude_bud_q2.py` now fails if client code gains a dot-indexed map path or a chained FindFirstChild.
   - Still needs a device test with the flag on in Studio before it is ever switched.
+
+## 2026-09-29 — claude-bud JOB 9: old WIP finished or removed cleanly
+- **Warship bodies:** 13 owner-only store hulls were live for the owner (BodyRollout "owner"); none has a WE_CHECK2 / ASSET_LICENSES record.
+  - REMOVED the two that break the rules: BODY_PATROL_BOAT 16692908395 (a real-world WW2 PT-boat design,
+    ASSET_LICENSES) and BODY_GUNBOAT 15838664806 (HELD in the owner check). PatrolBoat, FastAttackCraft, RiverBoat,
+    CoastCutter, TorpedoBoat, Gunboat, MissileBoat, MineLayer and CoastalMonitor are back on the Part kit (the premium
+    Tidebreaker, LookId TorpedoBoat, too). Code Bot's v87 pins for those two are retired in place.
+  - The other 11 stay owner-only. **The owner must run WE_CHECK2 on them before BodyRollout "all".**
+  - The VKIT Part-body patches (09-12, 45-48 commits stale, not gated, +661 parts, 11 and 12 half-done) are retired.
+- **Ground vehicle bodies:** the live Roblox-owned bodies (jeep, quad, buggy, trucks, van, APC family) are finished.
+  - REMOVED the two failed truck picks from 7 rows: 8546141386 (stencilled military unit markings: CLAUDE.md bans insignia)
+    and 8455894899 (53 parts > 40). They become plain Part-kit rows. The tool records (wire-asset-ids.py) are unchanged.
+  - VKIT ground (11) and the ground2 records patch (07) are retired.
+- **Water and boats:** live and complete (WaterConfig, Boat drive, WaterRule, harbor kit).
+  - The submarine's "stub" comment is reworded: it is surface-only by design.
+  - Left as a documented limitation: a clan-mate's boat can open the sea gate but the owner-only water rule pulls it back
+    out of the basin (ASSUMPTIONS :801). BridgeLayer wading stays owner-only until a phone test.
+- **ATTACK marching:** the finished owner-only ATTACK rows / target ring (Follow2.Tidy) is the march.
+  - REMOVED the never-built lane C: `ArmyConfig.Rollout.March` (no readers) and its lane-C-only Text entries.
+    The frozen A0 pin is updated in place (claude-bud comment) and a new pin is in claude_bud_q2.py.
+  - Army lanes A/B patches (03/03b/04/04b: stale, half-tested) are retired.
+- **Fuel tanker:** FINISHED as the Part kit (olive tank body) and the note says so. The rejected store picks are listed; none is wired.
+- All retired patches stay in git history at e791323. handoff/wip/README.md lists them.
