@@ -8810,3 +8810,10 @@ ds_territories.luau T3):
   front of their Barracks (plot-local -88, 110). The client puts a local "Army Upgrades / Barracks" prompt there
   (tap, no hold, 14 studs) that opens the Research panel on the Soldiers tab. Purchases are still
   ResearchService.Purchase (server price, cash, max level, save).
+
+## 2026-09-29 — v95 ship (Code Bot): Claude Bud JOB2 army tidy + JOB3 WorldFill + JOB4 features live
+- Shipped as WE_Build 95 from `claude/desktop-bud` tip 3355267 (aaa87f3..3355267).
+- Owner-only: Follow2.Tidy, SupplyDropConfig.Airdrop, DailyRewardConfig.AutoClaim, PlazaBountyConfig, ArmyUpgradeConfig.
+- Everyone: WorldFillConfig (kill switch Enabled=false).
+- Behaviour documented in the 2026-09-29 claude-bud JOB 2/3/4 sections above; no new product behaviour beyond those notes.
+- PreferMesh stays OFF. WE_Building* attributes untouched.

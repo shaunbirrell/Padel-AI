@@ -995,6 +995,33 @@ local ArmyConfig = {
 		BaseWaitOut = 12, -- the wait line: this far outside the plot's front edge (main gate) ...
 		BaseWaitGap = 5, -- ... beside the gate lane (MainGateWidth / 2 + this), never in it ...
 		BaseWaitSpacing = 4, -- ... then this apart, two staggered rows
+		--[[ claude-bud (2026-09-29, owner: "the army still walks into the base, soldiers bunch up and walk over each
+			other"): tidy follow, owner-only first. Off (Rollout not "owner"/"all" for him) = the v91 behaviour above.
+			* Hold: his army stops once he is within HoldApproachStuds OUTSIDE his plot edge (not 4 studs inside), and
+			  is released when he is HoldReleaseStuds out again. No follow goal of a unit outside his plot is ever inside
+			  it (+ PlotPadStuds): it is swapped for that unit's wait spot, so nobody crosses his gate or plot edge.
+			* Wait rows: both sides of the gate lane (MainGateWidth / 2 + WaitGap), PerRow per side per row, ColSpacing
+			  apart, RowSpacing deep from WaitOut outside the front edge; each soldier turns to face out on arrival.
+			* Fixed seats: each unit keeps its own seat number for life (the lowest free one when it joins), so a death
+			  never reshuffles the rest; wedge rows are RowBack / RowSide apart (> SeparationStuds, never inside each
+			  other); when he turns round, a row pair keeps its world sides (FlipHysteresisStuds) instead of crossing.
+			* Leaving: no far / stuck teleport for LeaveGraceSeconds after he leaves his base (they walk back into the
+			  wedge; the void rescue still runs). ]]
+		Tidy = {
+			Rollout = "owner",
+			HoldApproachStuds = 6,
+			HoldReleaseStuds = 10,
+			PlotPadStuds = 2,
+			WaitOut = 14,
+			WaitGap = 5,
+			PerRow = 4,
+			ColSpacing = 4,
+			RowSpacing = 4,
+			RowBack = 4,
+			RowSide = 3,
+			FlipHysteresisStuds = 1.5,
+			LeaveGraceSeconds = 8,
+		},
 		LogSeconds = 5,
 	},
 
@@ -1076,6 +1103,46 @@ return ArmyConfig
           </Properties>
         </Item>
         <Item class="ModuleScript" referent="10">
+          <Properties>
+            <string name="Name">ArmyUpgradeConfig</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 4.4 (2026-09-29): army upgrades at the Barracks. Soldier HP / damage upgrades already exist as the
+	Research "Soldiers" track (Body Armor = SoldierHealth, Marksman Training = SoldierDamage: cash, saved per player in
+	the profile's research levels, applied by SquadOrdersService). A second, parallel upgrade would stack power, so this
+	adds the missing SHOP: a prompt at the player's own Barracks ("Army Upgrades") that opens that track. Buying stays
+	ResearchService.Purchase (server: price, cash, max level, save). The server tells only players it is live for
+	where their Barracks prompt goes (FeaturePush "ArmyUpgrades"); the prompt is local to them.
+	Rollout "owner" = AdminConfig.IsPlaytestOwner only, "all", anything else = off (Research Lab only, as before).
+]]
+
+local AdminConfig = require(script.Parent.AdminConfig)
+
+local ArmyUpgradeConfig = {
+	Rollout = "owner",
+	Track = "Soldiers",
+	-- plot-local spot (BaseLayoutConfig frame): in front of the Barracks (Site -110, 110, Yaw 90), toward the plot centre
+	PromptX = -88,
+	PromptZ = 110,
+	PromptY = 3,
+	MaxActivationDistance = 14,
+}
+
+function ArmyUpgradeConfig.LiveFor(userId: any): boolean
+	local mode = ArmyUpgradeConfig.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
+
+return ArmyUpgradeConfig
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="11">
           <Properties>
             <string name="Name">BankRaidConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1193,7 +1260,7 @@ return BankRaidConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="11">
+        <Item class="ModuleScript" referent="12">
           <Properties>
             <string name="Name">BaseConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1425,7 +1492,7 @@ return BaseConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="12">
+        <Item class="ModuleScript" referent="13">
           <Properties>
             <string name="Name">BaseLayoutConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1550,7 +1617,7 @@ return BaseLayoutConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="13">
+        <Item class="ModuleScript" referent="14">
           <Properties>
             <string name="Name">BattlePassConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1676,7 +1743,7 @@ return BattlePassConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="14">
+        <Item class="ModuleScript" referent="15">
           <Properties>
             <string name="Name">BusinessConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2116,7 +2183,7 @@ return BusinessConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="15">
+        <Item class="ModuleScript" referent="16">
           <Properties>
             <string name="Name">ClanConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2137,7 +2204,7 @@ return ClanConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="16">
+        <Item class="ModuleScript" referent="17">
           <Properties>
             <string name="Name">ClanWarConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2164,7 +2231,7 @@ return ClanWarConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="17">
+        <Item class="ModuleScript" referent="18">
           <Properties>
             <string name="Name">CodesConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2200,7 +2267,7 @@ return CodesConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="18">
+        <Item class="ModuleScript" referent="19">
           <Properties>
             <string name="Name">CombatConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2403,7 +2470,7 @@ return CombatConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="19">
+        <Item class="ModuleScript" referent="20">
           <Properties>
             <string name="Name">CombatFairnessConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2558,7 +2625,7 @@ return CombatFairnessConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="20">
+        <Item class="ModuleScript" referent="21">
           <Properties>
             <string name="Name">CombatFeelConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2605,7 +2672,7 @@ return CombatFeelConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="21">
+        <Item class="ModuleScript" referent="22">
           <Properties>
             <string name="Name">ConsoleBuyConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2687,7 +2754,7 @@ return ConsoleBuyConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="22">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">DailyOpsConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2842,11 +2909,13 @@ return DailyOpsConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="23">
+        <Item class="ModuleScript" referent="24">
           <Properties>
             <string name="Name">DailyRewardConfig</string>
             <string name="Source"><![CDATA[--!strict
 --[[ 7-day login streak; day 7 resets streak after claim. Field names match MissionService. ]]
+
+local AdminConfig = require(script.Parent.AdminConfig)
 
 local DailyRewardConfig = {
 	Rewards = {
@@ -2860,13 +2929,32 @@ local DailyRewardConfig = {
 	},
 	StreakResetsAfterDay = 7,
 	MissedDayResetsStreak = true,
+	--[[ claude-bud JOB 4.2 (2026-09-29): the streak is claimed FOR the player DelaySeconds after the save loads (no
+		panel to find, no tap), through the same server claim (MissionService.ClaimDailyLogin: once per UTC day, saved
+		in the profile's DailyLogin), then one toast "Day N of 7: +$X. Tomorrow: $Y". Rollout "owner" =
+		AdminConfig.IsPlaytestOwner only, "all", anything else = off (claim from the Missions panel only, as before). ]]
+	AutoClaim = {
+		Rollout = "owner",
+		DelaySeconds = 8,
+	},
 }
+
+-- claude-bud: is auto-claim live for this player (fail closed)
+function DailyRewardConfig.AutoClaimLiveFor(userId: any): boolean
+	local mode = DailyRewardConfig.AutoClaim.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
 
 return DailyRewardConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">DevConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2931,7 +3019,7 @@ return DevConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="26">
           <Properties>
             <string name="Name">DockKitConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -3157,7 +3245,7 @@ return DockKitConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">EconomyConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -3281,7 +3369,7 @@ return EconomyConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">GameConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -3308,7 +3396,7 @@ return GameConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">GateDefenseConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -3534,7 +3622,7 @@ return GateDefenseConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">HudConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -4260,7 +4348,7 @@ return HudConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">LevelConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -4520,7 +4608,7 @@ return LevelConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">LootBoxConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -4544,7 +4632,7 @@ return LootBoxConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">ManualDropperConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -4651,7 +4739,7 @@ return ManualDropperConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">MissionConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -4914,7 +5002,7 @@ return MissionConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">MonetizationConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -5475,7 +5563,7 @@ return MonetizationConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">NationColorConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -5507,7 +5595,7 @@ return NationColorConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">NationConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -5962,7 +6050,7 @@ return NationConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">NationFlagIds</string>
             <string name="Source"><![CDATA[--!strict
@@ -5997,7 +6085,7 @@ return NationFlagIds
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">NotificationConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -6137,7 +6225,7 @@ return NotificationConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">NukeConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -6424,7 +6512,7 @@ return NukeConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">OilRigConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -6461,7 +6549,7 @@ return OilRigConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">OpsConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -7636,7 +7724,7 @@ return OpsConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">OrdersConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -7757,7 +7845,45 @@ return OrdersConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="44">
+          <Properties>
+            <string name="Name">PlazaBountyConfig</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 4.3 (2026-09-29): plaza bounty. When someone captures the Central Plaza, every OTHER player the
+	feature is live for gets a timed bounty: retake the plaza within WindowSeconds for Cash (server-side, paid by
+	Server/Modules/PlazaBounty from TerritoryService's capture). Anti-farm: the retaker must not be the bounty's holder,
+	each player earns at most once per EarnCooldownSeconds, and a capture of the plaza starts a new bounty only after
+	the previous one ended. The plaza gets the objective marker ("BOUNTY") for the window.
+	Rollout "owner" = AdminConfig.IsPlaytestOwner only (the owner is offered and can earn it), "all", anything else =
+	off (no bounty: the game as before).
+]]
+
+local AdminConfig = require(script.Parent.AdminConfig)
+
+local PlazaBountyConfig = {
+	Rollout = "owner",
+	ZoneId = "CentralPlaza",
+	WindowSeconds = 180,
+	Cash = 15000,
+	EarnCooldownSeconds = 600,
+}
+
+function PlazaBountyConfig.LiveFor(userId: any): boolean
+	local mode = PlazaBountyConfig.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
+
+return PlazaBountyConfig
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">PlotOilPumpConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -7794,7 +7920,7 @@ return PlotOilPumpConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">PremiumVehicleConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8028,7 +8154,7 @@ return PremiumVehicleConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">PrestigeConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8426,7 +8552,7 @@ return PrestigeConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">RaidConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8620,7 +8746,7 @@ return RaidConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">RebirthConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8936,7 +9062,7 @@ return RebirthConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">ResearchConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9362,7 +9488,7 @@ return ResearchConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">RigConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9542,7 +9668,7 @@ return RigConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">SeasonConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9563,7 +9689,7 @@ return SeasonConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">SoldierConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9629,7 +9755,7 @@ return SoldierConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">SoundConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9895,7 +10021,7 @@ return SoundConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">SpinnerConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9923,7 +10049,7 @@ return SpinnerConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">StreamingConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9957,7 +10083,7 @@ return StreamingConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">StructureVisualConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10458,7 +10584,7 @@ return StructureVisualConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">SupplyDropConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10471,6 +10597,8 @@ return StructureVisualConfig
 	parts + up to 4 dropped bags in Phase B = 497). LifetimeSeconds 120 > SpawnIntervalSeconds 90, so a crate
 	overlaps the next one for 30 s and MaxActive 2 is the real cap.
 ]]
+
+local AdminConfig = require(script.Parent.AdminConfig)
 
 local SupplyDropConfig = {
 	Enabled = true,
@@ -10488,13 +10616,44 @@ local SupplyDropConfig = {
 	CrateColor = Color3.fromRGB(210, 160, 55),
 	LidColor = Color3.fromRGB(180, 140, 50),
 	LabelLiftStuds = 3, -- label centre above the lid
+
+	--[[ claude-bud JOB 4.1 (2026-09-29): the parachute AIRDROP. Every IntervalSeconds (while a player it is live for is
+		in the server) one crate falls from DropHeight under a canopy (FallSeconds) onto a random open spot (the same
+		picker as the crates: event pads, else open ground), shows an objective marker to those players, and the FIRST
+		of them to hold ClaimHoldSeconds within ClaimRadius gets Cash (server-side, EconomyService.AddCash). Gone after
+		LifetimeSeconds. 3 parts while falling (crate, lid, canopy), 2 on the ground. Rollout "owner" =
+		AdminConfig.IsPlaytestOwner only, "all" = everyone, anything else = off (the game as before). ]]
+	Airdrop = {
+		Rollout = "owner",
+		FirstDelaySeconds = 60,
+		IntervalSeconds = 600,
+		DropHeight = 160,
+		FallSeconds = 12,
+		LifetimeSeconds = 300,
+		ClaimRadius = 12,
+		ClaimHoldSeconds = 2,
+		CashMin = 15000,
+		CashMax = 40000,
+		CanopyColor = Color3.fromRGB(96, 110, 70),
+	},
 }
+
+-- claude-bud: is the airdrop live for this player (fail closed)
+function SupplyDropConfig.AirdropLiveFor(userId: any): boolean
+	local mode = SupplyDropConfig.Airdrop.Rollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
 
 return SupplyDropConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">TerritoryConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10796,7 +10955,7 @@ return TerritoryConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">TrainingYardConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10929,7 +11088,7 @@ return TrainingYardConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">TutorialConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11223,7 +11382,7 @@ return TutorialConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">TycoonGuideConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11445,7 +11604,7 @@ return TycoonGuideConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">VehicleCombatConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11583,7 +11742,7 @@ return VehicleCombatConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">VehicleConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12588,7 +12747,7 @@ return VehicleConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">VehicleWeaponConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12818,7 +12977,7 @@ return VehicleWeaponConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">VisualAssetConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -14590,7 +14749,7 @@ return VisualAssetConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">WaterConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -14807,7 +14966,7 @@ return WaterConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">WeaponConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -15066,7 +15225,7 @@ return WeaponConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">WorldConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -16095,7 +16254,7 @@ return WorldConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">WorldDressConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -16330,7 +16489,134 @@ return WorldDressConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="71">
+          <Properties>
+            <string name="Name">WorldFillConfig</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 3 (2026-09-29, owner: "the map feels too empty"): world detail between the bases and round the Central
+	Plaza, placed by Server/Modules/WorldFill (called from MapDressing.Dress) into ONE Workspace folder, "WorldFill".
+
+	Everything is data here. World studs, north = -Z. WorldKits kits face local -Z; Yaw in degrees.
+	* Roads: flat 14-wide asphalt strips (no collision, top 0.625 like the world roads) from the four side-base gates
+	  (P1 / P2 / P5 / P6; P3 / P4 already sit on RoadX0) to RoadZ0, which runs into the Town and the plaza. Built before
+	  WorldDress, and reserved in its occupancy, so the travel dressing never lands on them.
+	* Bridges: two raised crossings over the P1 and P6 dock channels (the map's "river"), DeckBottomY above the water so
+	  boats still pass under; 7 parts each.
+	* Fields: small army positions between the bases (Templates), 57 parts Full / 28 Low each, every item a WorldKits kit
+	  (<= 8 parts, no scripts); Tier 2 items are Full quality only. Rocks and hills are Terrain (0 parts).
+	* Plaza: a light ring just outside the Town footprint (the Town's 512-stud circle has ~22 parts of headroom).
+	Every item is re-checked at build time against WorldDress.Blocked (plots, aprons, garage pads, roads, water, captures,
+	POIs, events, the bank, the dressing already placed) and skipped (logged) if blocked.
+
+	Planned parts: Full 388, Low 198 (roads 8 + bridges 14 + fields 6 x 57 + plaza 4 x 6; Low: Tier 1 only). With the world
+	at ~2,476 Full / ~1,679 Low that stays under WorldConfig.Budgets (2,900 Full / 1,900 Low; hard cap 3,100).
+	tools/checks/claude_bud_worldfill.py recomputes this from the table.
+	Enabled = false removes the folder (the game as before).
+]]
+
+export type FillItem = {
+	Kit: string, -- a WorldKits kit, "Rock" (Terrain: Kind + Radius)
+	X: number, -- offset from the field centre (turned by the field yaw)
+	Z: number,
+	Yaw: number?,
+	Tier: number, -- 1 = Low + Full, 2 = Full only
+	Opts: { [string]: any }?, -- WorldKits KitOpts (Variant, Count, Length, Scale)
+	Kind: string?, -- Rock: "outcrop" | "boulders" | "rubble"
+	Radius: number?, -- Rock radius
+}
+
+local WorldFillConfig = {
+	Enabled = true,
+	FolderName = "WorldFill",
+
+	Road = {
+		Width = 14,
+		Color = Color3.fromRGB(50, 52, 48),
+		ReserveStep = 12, -- one occupancy disc per this many studs along each strip ...
+		ReserveRadius = 13, -- ... of this radius (WorldDress road clearance)
+	},
+	-- { X0, Z0, X1, Z1 }: axis-aligned centre lines (one of X or Z equal). Each side gate's apron ends 60 studs out
+	-- (x = +-580); the spur runs to x = +-400 (outside the Town footprint + its 30 margin), then along Z to RoadZ0.
+	Roads = {
+		{ Name = "Fill_RoadP1a", X0 = -580, Z0 = -400, X1 = -393, Z1 = -400 },
+		{ Name = "Fill_RoadP1b", X0 = -400, Z0 = -407, X1 = -400, Z1 = -7 },
+		{ Name = "Fill_RoadP2a", X0 = -580, Z0 = 400, X1 = -393, Z1 = 400 },
+		{ Name = "Fill_RoadP2b", X0 = -400, Z0 = 407, X1 = -400, Z1 = 7 },
+		{ Name = "Fill_RoadP5a", X0 = 580, Z0 = -400, X1 = 393, Z1 = -400 },
+		{ Name = "Fill_RoadP5b", X0 = 400, Z0 = -407, X1 = 400, Z1 = -7 },
+		{ Name = "Fill_RoadP6a", X0 = 580, Z0 = 400, X1 = 393, Z1 = 400 },
+		{ Name = "Fill_RoadP6b", X0 = 400, Z0 = 407, X1 = 400, Z1 = 7 },
+	} :: { { Name: string, X0: number, Z0: number, X1: number, Z1: number } },
+
+	-- a bridge runs along Z at X, over a channel whose water spans Z0..Z1 (+ 6-stud banks)
+	Bridge = {
+		Width = 16,
+		DeckBottomY = 21.5, -- 20 studs over the water surface (1.5): every boat passes under
+		DeckThick = 1.2,
+		RampLen = 60,
+		RailH = 1.4,
+		Color = Color3.fromRGB(120, 116, 106),
+	},
+	Bridges = {
+		{ Name = "Fill_BridgeP1", X = -1050, Z0 = -554, Z1 = -502 }, -- P1 dock channel (z -548..-508)
+		{ Name = "Fill_BridgeP6", X = 1300, Z0 = 502, Z1 = 554 }, -- P6 dock channel (z 508..548)
+	} :: { { Name: string, X: number, Z0: number, Z1: number } },
+
+	Templates = {
+		-- an army position: tower, nest, bunker, wreck, fuel, crates (Tier 1) + trench, wire, ruin, trees (Tier 2)
+		Outpost = {
+			{ Kit = "Watchtower", X = 0, Z = 0, Yaw = 0, Tier = 1 },
+			{ Kit = "SandbagNest", X = 14, Z = -10, Yaw = 0, Tier = 1 },
+			{ Kit = "Bunker", X = -16, Z = -12, Yaw = 0, Tier = 1 },
+			{ Kit = "Wreck", X = 22, Z = 16, Yaw = 30, Tier = 1, Opts = { Variant = "tank" } },
+			{ Kit = "FuelTank", X = -24, Z = 14, Yaw = 0, Tier = 1, Opts = { Scale = 0.8 } },
+			{ Kit = "CrateStack", X = -12, Z = 24, Yaw = 15, Tier = 1, Opts = { Count = 3 } },
+			{ Kit = "Rock", X = 40, Z = -36, Tier = 1, Kind = "outcrop", Radius = 16 }, -- a low hill
+			{ Kit = "Rock", X = -42, Z = 38, Tier = 1, Kind = "boulders", Radius = 10 },
+			{ Kit = "SandbagLine", X = 0, Z = -26, Yaw = 0, Tier = 2, Opts = { Length = 30 } },
+			{ Kit = "WireFence", X = 2, Z = 38, Yaw = 0, Tier = 2, Opts = { Length = 48 } },
+			{ Kit = "Wreck", X = 32, Z = -22, Yaw = -40, Tier = 2, Opts = { Variant = "truck" } },
+			{ Kit = "DrumGroup", X = -32, Z = 26, Yaw = 0, Tier = 2, Opts = { Count = 3 } },
+			{ Kit = "RuinedHouse", X = -36, Z = -20, Yaw = 90, Tier = 2 },
+			{ Kit = "Revetment", X = 26, Z = 2, Yaw = 90, Tier = 2 }, -- trench wall
+			{ Kit = "DeadTree", X = 40, Z = 10, Tier = 2 },
+			{ Kit = "Joshua", X = -42, Z = 4, Tier = 2 },
+			{ Kit = "DeadTree", X = 8, Z = 46, Tier = 2 },
+		} :: { FillItem },
+		-- the plaza ring: one sandbag arc + tank trap pair per diagonal
+		PlazaPost = {
+			{ Kit = "SandbagArc", X = 0, Z = 0, Yaw = 0, Tier = 1 },
+			{ Kit = "TankTrap", X = 9, Z = 6, Yaw = 20, Tier = 2 },
+			{ Kit = "TankTrap", X = -9, Z = 6, Yaw = -20, Tier = 2 },
+			{ Kit = "Rock", X = 0, Z = 18, Tier = 1, Kind = "rubble", Radius = 8 },
+		} :: { FillItem },
+	},
+
+	-- field centres (world) and their yaw; kits face the field's -Z turned by Yaw
+	Fields = {
+		{ Id = "Q_NW", Template = "Outpost", X = -470, Z = -620, Yaw = 45 },
+		{ Id = "Q_NE", Template = "Outpost", X = 470, Z = -620, Yaw = -45 },
+		{ Id = "Q_SW", Template = "Outpost", X = -470, Z = 620, Yaw = 135 },
+		{ Id = "Q_SE", Template = "Outpost", X = 470, Z = 620, Yaw = -135 },
+		{ Id = "West", Template = "Outpost", X = -1150, Z = 400, Yaw = 90 },
+		{ Id = "East", Template = "Outpost", X = 1150, Z = -400, Yaw = -90 },
+		{ Id = "Plaza_NW", Template = "PlazaPost", X = -300, Z = -420, Yaw = 0 }, -- north of the Town (outside its footprint + 30), clear of RoadX0 and the spurs
+		{ Id = "Plaza_NE", Template = "PlazaPost", X = 300, Z = -420, Yaw = 0 },
+		{ Id = "Plaza_SW", Template = "PlazaPost", X = -300, Z = 420, Yaw = 180 },
+		{ Id = "Plaza_SE", Template = "PlazaPost", X = 300, Z = 420, Yaw = 180 },
+	} :: { { Id: string, Template: string, X: number, Z: number, Yaw: number } },
+
+	ItemSpacing = 1, -- min edge gap to anything already placed (WorldDress.Blocked Spacing)
+	MaxPartsFull = 400, -- a build that would pass this stops placing (the budget guard)
+	MaxPartsLow = 210,
+}
+
+return WorldFillConfig
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">WorldLabelConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -16399,7 +16685,7 @@ return WorldLabelConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">XPBalanceConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -16490,7 +16776,7 @@ return XPBalanceConfig
           </Properties>
         </Item>
       </Item>
-      <Item class="ModuleScript" referent="71">
+      <Item class="ModuleScript" referent="74">
         <Properties>
           <string name="Name">Constants</string>
           <string name="Source"><![CDATA[--!strict
@@ -16639,6 +16925,9 @@ Constants.RemoteNames = {
 	-- paid plate grab: (dropPoint: Vector3, amount: number, left: number, eta: number). Cosmetic: a lost packet loses
 	-- the effect, never money. Nobody listens on the server (no OnServerEvent).
 	DropperFx = "DropperFx",
+	-- claude-bud JOB 4/5: server -> one client, (kind: string, data: table): feature cues (airdrop marker, plaza bounty,
+	-- daily streak, offers). Owner-only features fire it only to players the feature is live for. No OnServerEvent.
+	FeaturePush = "FeaturePush",
 }
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v2" -- v55: intentional bump; fresh CreateDefault + StartingCash (kills stuck $0 v1 saves)
@@ -16687,7 +16976,7 @@ return Constants
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="72">
+      <Item class="ModuleScript" referent="75">
         <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[--!strict
@@ -16859,7 +17148,7 @@ return Remotes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="73">
+      <Item class="ModuleScript" referent="76">
         <Properties>
           <string name="Name">Types</string>
           <string name="Source"><![CDATA[--!strict
@@ -17265,11 +17554,11 @@ return {}
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="74">
+      <Item class="Folder" referent="77">
         <Properties>
           <string name="Name">Util</string>
         </Properties>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">ConsoleLocator</string>
             <string name="Source"><![CDATA[--!strict
@@ -17419,7 +17708,7 @@ return ConsoleLocator
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">NationTexture</string>
             <string name="Source"><![CDATA[--!strict
@@ -17584,7 +17873,7 @@ return NationTexture
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">PlotFrame</string>
             <string name="Source"><![CDATA[--!strict
@@ -17666,7 +17955,7 @@ return PlotFrame
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">TycoonMath</string>
             <string name="Source"><![CDATA[--!strict
@@ -18315,7 +18604,7 @@ return TycoonMath
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="82">
           <Properties>
             <string name="Name">UIUtil</string>
             <string name="Source"><![CDATA[--!strict
@@ -18864,7 +19153,7 @@ return UIUtil
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="83">
           <Properties>
             <string name="Name">WaterRule</string>
             <string name="Source"><![CDATA[--!strict
@@ -19165,7 +19454,7 @@ return WaterRule
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="81">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">WorldLabel</string>
             <string name="Source"><![CDATA[--!strict
@@ -19609,11 +19898,11 @@ return WorldLabel
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="82">
+      <Item class="Folder" referent="85">
         <Properties>
           <string name="Name">Vendor</string>
         </Properties>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">Shake</string>
             <string name="Source"><![CDATA[--!strict
@@ -20166,7 +20455,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">Spring</string>
             <string name="Source"><![CDATA[--!strict
@@ -20276,7 +20565,7 @@ return Spring
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">Trove</string>
             <string name="Source"><![CDATA[--!strict
@@ -21079,15 +21368,15 @@ return {
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="86">
+  <Item class="ServerScriptService" referent="89">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="87">
+    <Item class="Folder" referent="90">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="Script" referent="88">
+      <Item class="Script" referent="91">
         <Properties>
           <string name="Name">Bootstrap</string>
           <token name="RunContext">0</token>
@@ -21688,7 +21977,7 @@ print("[WAR EMPIRE] CHECKLIST: 1) resetmap MANDATORY if void/dead-space persists
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="89">
+      <Item class="Script" referent="92">
         <Properties>
           <string name="Name">EarlyRemotes</string>
           <token name="RunContext">0</token>
@@ -21761,7 +22050,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 94)
+		player:SetAttribute("WE_Build", 95)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -21790,11 +22079,11 @@ print("[WAR EMPIRE] EarlyRemotes v63: WE_Remotes + leaderstats seed ready")
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="90">
+      <Item class="Folder" referent="93">
         <Properties>
           <string name="Name">Modules</string>
         </Properties>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="94">
           <Properties>
             <string name="Name">ActivityAnchors</string>
             <string name="Source"><![CDATA[--!strict
@@ -22135,7 +22424,7 @@ return ActivityAnchors
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="92">
+        <Item class="ModuleScript" referent="95">
           <Properties>
             <string name="Name">AirBodyRig</string>
             <string name="Source"><![CDATA[--!strict
@@ -22741,7 +23030,7 @@ return AirBodyRig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="93">
+        <Item class="ModuleScript" referent="96">
           <Properties>
             <string name="Name">AirOrdnance</string>
             <string name="Source"><![CDATA[--!strict
@@ -23013,7 +23302,7 @@ return AirOrdnance
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="94">
+        <Item class="ModuleScript" referent="97">
           <Properties>
             <string name="Name">ArmyFollow</string>
             <string name="Source"><![CDATA[--!strict
@@ -23222,23 +23511,89 @@ local function ownerWalkSpeed(root: BasePart): number
 	return if hum then hum.WalkSpeed else 16
 end
 
-local function ownPlotInside(st: any, player: Player?, pos: Vector3): number?
+-- claude-bud: Follow2.Tidy (owner-only first): hold outside the plot, neat wait rows, fixed seats, no crossing
+local function tidyCfg(): { [string]: any }
+	local t = cfg().Tidy
+	return if typeof(t) == "table" then t else {}
+end
+
+local function tnum(key: string, default: number): number
+	local v = tidyCfg()[key]
+	return if typeof(v) == "number" then v else default
+end
+
+local function tidyLive(player: Player?): boolean
+	if player == nil then
+		return false
+	end
+	local r = tidyCfg().Rollout
+	return r == "all" or (r == "owner" and AdminConfig.IsPlaytestOwner(player.UserId) == true)
+end
+ArmyFollow.TidyLive = tidyLive
+
+-- his own plot id (nil: none) and a point's plot-local position in it
+local function ownPlotId(player: Player?): number?
 	if player == nil or deps.OwnPlotId == nil then
 		return nil
 	end
 	local id = deps.OwnPlotId(player)
-	if typeof(id) ~= "number" then
-		return nil
-	end
+	return if typeof(id) == "number" then id else nil
+end
+
+local function plotLocal(id: number, pos: Vector3): Vector3?
 	local c = PlotFrame.PlotPosition(id)
 	if c == nil then
 		return nil
 	end
-	local lp = PlotFrame.PlotCFrame(c):PointToObjectSpace(pos)
+	return PlotFrame.PlotCFrame(c):PointToObjectSpace(pos)
+end
+
+-- true when `pos` is inside plot `id` grown by `pad` studs
+local function inPlot(id: number, pos: Vector3, pad: number): boolean
+	local lp = plotLocal(id, pos)
+	if lp == nil then
+		return false
+	end
+	local half = BaseConfig.PlotSize.X * 0.5 + pad
+	return math.abs(lp.X) <= half and math.abs(lp.Z) <= half
+end
+
+local function ownPlotInside(st: any, player: Player?, pos: Vector3): number?
+	local id = ownPlotId(player)
+	if id == nil then
+		return nil
+	end
+	local lp = plotLocal(id, pos)
+	if lp == nil then
+		return nil
+	end
 	local half = BaseConfig.PlotSize.X * 0.5
 	local edge = math.max(math.abs(lp.X), math.abs(lp.Z))
-	local inside = if st._afInBase then edge <= half + num("BaseOutStuds", 2) else edge <= half - num("BaseInStuds", 4)
+	local inside: boolean
+	if st._afTidy then
+		-- claude-bud: hold as he reaches his edge from outside (the wedge behind him never follows him in)
+		inside = if st._afInBase then edge <= half + tnum("HoldReleaseStuds", 10) else edge <= half + tnum("HoldApproachStuds", 6)
+	else
+		inside = if st._afInBase then edge <= half + num("BaseOutStuds", 2) else edge <= half - num("BaseInStuds", 4)
+	end
 	return if inside then id else nil
+end
+
+-- claude-bud: tidy wait spot of seat `rank`: rows on both sides of the gate lane, facing out (plot-local +Z)
+local function tidyWaitSpot(plotId: number, rank: number): (Vector3, Vector3)
+	local half = BaseConfig.PlotSize.X * 0.5
+	local gateHalf = (tonumber(BaseLayoutConfig.MainGateWidth) or 14) * 0.5
+	local side = if rank % 2 == 1 then -1 else 1
+	local j = math.floor((rank - 1) / 2) -- index on its side
+	local perRow = math.max(1, math.floor(tnum("PerRow", 4)))
+	local col = j % perRow
+	local row = math.floor(j / perRow)
+	local x = side * (gateHalf + tnum("WaitGap", 5) + col * tnum("ColSpacing", 4))
+	local z = half + tnum("WaitOut", 14) + row * tnum("RowSpacing", 4)
+	local p = PlotFrame.LocalToWorld(plotId, x, z)
+	local out = PlotFrame.LocalToWorld(plotId, x, z + 1) - p
+	out = Vector3.new(out.X, 0, out.Z)
+	return p, if out.Magnitude > 1e-3 then out.Unit else Vector3.new(0, 0, 1)
 end
 
 local function waitSpot(plotId: number, rank: number): Vector3
@@ -23293,16 +23648,71 @@ local function plan(st: any, player: Player?, root: BasePart, units: { any }, no
 	table.sort(order, function(a, b)
 		return (a.Slot or 0) < (b.Slot or 0)
 	end)
-	for i, u in ipairs(order) do
-		u._afRank = i
+	st._afTidy = tidyLive(player)
+	if st._afTidy then
+		-- claude-bud: fixed seats for life; a dead / gone unit frees its seat, nobody else moves up
+		local taken: { [number]: any } = {}
+		for _, u in ipairs(order) do
+			local s = u._afSeat
+			if typeof(s) == "number" and taken[s] == nil then
+				taken[s] = u
+			else
+				u._afSeat = nil
+			end
+		end
+		for _, u in ipairs(order) do
+			if u._afSeat == nil then
+				local s = 1
+				while taken[s] ~= nil do
+					s += 1
+				end
+				u._afSeat = s
+				taken[s] = u
+			end
+			u._afRank = u._afSeat
+		end
+		st._afSeatMap = taken
+	else
+		for i, u in ipairs(order) do
+			u._afRank = i
+		end
+		st._afSeatMap = nil
 	end
 	-- own base
 	local plotId = ownPlotInside(st, player, pos)
 	local wasIn = st._afInBase
 	st._afInBase = plotId ~= nil
 	st._afPlot = plotId
+	st._afOwnPlot = ownPlotId(player)
+	if wasIn and not st._afInBase then
+		st._afLeftBaseAt = now -- claude-bud: the walk-back grace (no far / stuck teleport)
+	end
 	if st._afInBase ~= wasIn and player then
 		logLine("base" .. tostring(player.UserId), string.format("owner %d %s his base: army %s", player.UserId, if plotId then "entered" else "left", if plotId then "waits at the gate" else "follows"))
+	end
+	-- claude-bud: wedge row pairs keep their world sides when he turns round (no crossing through each other)
+	if st._afTidy and not st._afInBase and st._afSeatMap then
+		local dir: Vector3 = st._afDir or Vector3.new(0, 0, -1)
+		local right = Vector3.new(-dir.Z, 0, dir.X)
+		st._afFlip = st._afFlip or {}
+		local hyst = tnum("FlipHysteresisStuds", 1.5)
+		for s, u in pairs(st._afSeatMap) do
+			if s % 2 == 1 then
+				local mate = st._afSeatMap[s + 1]
+				local row = (s + 1) / 2
+				if mate and u.Root and u.Root.Parent and mate.Root and mate.Root.Parent then
+					-- seat s is the left one (side -1): flip when it stands clearly right of its mate
+					local diff = (u.Root.Position - mate.Root.Position):Dot(right)
+					if diff > hyst then
+						st._afFlip[row] = true
+					elseif diff < -hyst then
+						st._afFlip[row] = false
+					end
+				else
+					st._afFlip[row] = nil
+				end
+			end
+		end
 	end
 	refreshRayFilter(nil)
 end
@@ -23310,6 +23720,9 @@ end
 local function slotPoint(st: any, root: BasePart, rank: number): Vector3
 	if st._afInBase and st._afPlot then
 		local w = waitSpot(st._afPlot, rank)
+		if st._afTidy then
+			w = (tidyWaitSpot(st._afPlot, rank)) -- claude-bud: neat rows facing out
+		end
 		return Vector3.new(w.X, root.Position.Y, w.Z)
 	end
 	local dir: Vector3 = st._afDir or Vector3.new(0, 0, -1)
@@ -23318,6 +23731,14 @@ local function slotPoint(st: any, root: BasePart, rank: number): Vector3
 	local side = if rank % 2 == 1 then -1 else 1
 	local back = num("WedgeBack", 3) + row * num("RowBack", 3)
 	local lat = side * (num("WedgeSide", 2.5) + row * num("RowSide", 2.5))
+	if st._afTidy then
+		-- claude-bud: wider rows (never inside each other) and the row pair's kept world sides (no crossing)
+		if st._afFlip and st._afFlip[row] == true then
+			side = -side
+		end
+		back = num("WedgeBack", 3) + row * tnum("RowBack", 4)
+		lat = side * (num("WedgeSide", 2.5) + row * tnum("RowSide", 3))
+	end
 	local lead = (st._afVel or Vector3.zero) * num("LeadSeconds", 0.3)
 	local cap = num("LeadMaxStuds", 5)
 	if lead.Magnitude > cap then
@@ -23441,7 +23862,9 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 			return
 		end
 	end
-	if not seatedFast then
+	-- claude-bud (Tidy): just out of his base, they walk back into the wedge (no far / stuck teleport for a grace spell)
+	local walkBack = st._afTidy and not st._afInBase and now - (st._afLeftBaseAt or -math.huge) < tnum("LeaveGraceSeconds", 8)
+	if not seatedFast and not walkBack then
 		if st._afJumped and ownerD > num("JumpRegroupStuds", 40) and regroup(st, unit, root, now, "owner-jump") then
 			return
 		end
@@ -23485,6 +23908,18 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 		end
 	end
 	local goal = slot + push * num("SeparationGain", 3)
+	-- claude-bud (Tidy): a unit outside his plot never gets a goal inside it (it waits at its gate spot instead)
+	local ownPlot: number? = if st._afTidy then st._afOwnPlot else nil
+	local unitOutside = ownPlot ~= nil and not inPlot(ownPlot, pos, 0)
+	local pad = tnum("PlotPadStuds", 2)
+	local function keepOut(p: Vector3): Vector3
+		if unitOutside and ownPlot and inPlot(ownPlot, p, pad) then
+			local w = tidyWaitSpot(ownPlot, rank)
+			return Vector3.new(w.X, p.Y, w.Z)
+		end
+		return p
+	end
+	goal = keepOut(goal)
 
 	-- speed: never slower than his sprint when behind
 	local ownerPace = math.max(st._afWalk or 16, st._afSpeed or 0)
@@ -23504,6 +23939,19 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	speed = math.clamp(speed, 8, num("MaxSpeed", 50))
 	setSpeed(unit, speed)
 
+	-- claude-bud (Tidy): at its gate wait spot it stands still facing out, whatever he does inside
+	if st._afTidy and st._afInBase and st._afPlot and flatDist(pos, goal) <= num("ArriveStuds", 2) then
+		if not unit._afStand then
+			unit._afStand = true
+			unit.Humanoid:MoveTo(pos)
+			unit._afMoveGoal = pos
+			unit._afMoveAt = now
+			local _, out = tidyWaitSpot(st._afPlot, rank)
+			unit.Model:PivotTo(CFrame.lookAt(unit.Root.Position, unit.Root.Position + out)) -- turn on the spot only
+		end
+		unit._afPath = nil
+		return
+	end
 	-- arrive: stand in the slot while the owner stands
 	if d <= num("ArriveStuds", 2) and (st._afSpeed or 0) < 1 and push.Magnitude < 0.05 then
 		if not unit._afStand then
@@ -23534,20 +23982,20 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 			if wp.Action == Enum.PathWaypointAction.Jump then
 				unit.Humanoid.Jump = true
 			end
-			moveTo(unit, wp.Position, now)
+			moveTo(unit, keepOut(wp.Position), now)
 			return
 		end
 	end
 	requestPath(unit, pos, goal, now)
 	-- while the path is computed (or none exists): walk toward the owner's trail point = the owner himself
-	moveTo(unit, if st._afInBase then goal else root.Position - (st._afDir or Vector3.zero) * 4, now)
+	moveTo(unit, if st._afInBase then goal else keepOut(root.Position - (st._afDir or Vector3.zero) * 4), now)
 end
 
 return ArmyFollow
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="95">
+        <Item class="ModuleScript" referent="98">
           <Properties>
             <string name="Name">BaseLayout</string>
             <string name="Source"><![CDATA[--!strict
@@ -23696,7 +24144,7 @@ return BaseLayout
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="96">
+        <Item class="ModuleScript" referent="99">
           <Properties>
             <string name="Name">DesertFlora</string>
             <string name="Source"><![CDATA[--!strict
@@ -24038,7 +24486,7 @@ return DesertFlora
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="97">
+        <Item class="ModuleScript" referent="100">
           <Properties>
             <string name="Name">HollowBuildingBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -25299,11 +25747,11 @@ return HollowBuildingBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="98">
+        <Item class="Folder" referent="101">
           <Properties>
             <string name="Name">Installations</string>
           </Properties>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">Airfield</string>
               <string name="Source"><![CDATA[--!strict
@@ -25440,7 +25888,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">Checkpoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -25571,7 +26019,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">Helipad</string>
               <string name="Source"><![CDATA[--!strict
@@ -25679,7 +26127,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">MissileDefense</string>
               <string name="Source"><![CDATA[--!strict
@@ -25783,7 +26231,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">PowerStation</string>
               <string name="Source"><![CDATA[--!strict
@@ -25933,7 +26381,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="107">
             <Properties>
               <string name="Name">Radar</string>
               <string name="Source"><![CDATA[--!strict
@@ -26041,7 +26489,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">Watchtower</string>
               <string name="Source"><![CDATA[--!strict
@@ -26150,11 +26598,11 @@ end
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="106">
+        <Item class="Folder" referent="109">
           <Properties>
             <string name="Name">Interiors</string>
           </Properties>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">Armory</string>
               <string name="Source"><![CDATA[--!strict
@@ -26470,7 +26918,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">Barracks</string>
               <string name="Source"><![CDATA[--!strict
@@ -26683,7 +27131,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">CommandCenter</string>
               <string name="Source"><![CDATA[--!strict
@@ -26825,7 +27273,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">ResearchLab</string>
               <string name="Source"><![CDATA[--!strict
@@ -27221,7 +27669,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">SpecialForces</string>
               <string name="Source"><![CDATA[--!strict
@@ -27453,7 +27901,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">VehicleDepot</string>
               <string name="Source"><![CDATA[--!strict
@@ -27737,7 +28185,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">Warehouse</string>
               <string name="Source"><![CDATA[--!strict
@@ -28121,7 +28569,7 @@ end
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="114">
+        <Item class="ModuleScript" referent="117">
           <Properties>
             <string name="Name">MapDressing</string>
             <string name="Source"><![CDATA[--!strict
@@ -28653,6 +29101,15 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		end
 	end
 
+	-- claude-bud JOB 3: the world fill's connector roads, reserved in the occupancy before the travel dressing is placed
+	local wfill = getWorldModule("WorldFill")
+	if wfill then
+		local okR, errR = pcall(wfill.ReserveRoads, occ, wd)
+		if not okR then
+			warn("[MapDressing] WorldFill.ReserveRoads failed:", errR)
+		end
+	end
+
 	-- 2) the legacy quay kit, as-is (inside the reserved Port footprint) — only while the Port POI is not built
 	-- 7) Dockside — v70: re-laid round the South Docks harbour (water x -240..240, z 1364..1490). Piers stand in the
 	-- harbour off the quay (WE_AllowInWater); crates / drums / lights on the quay (z 1330..1360) beside them, never in
@@ -28718,6 +29175,14 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		end
 	end
 
+	-- claude-bud JOB 3: the world fill props (Workspace.WorldFill), after everything else so they avoid it all
+	if wfill then
+		local okF, errF = pcall(wfill.Build, quality, occ, wd, wk)
+		if not okF then
+			warn("[MapDressing] WorldFill.Build failed:", errF)
+		end
+	end
+
 	-- CastShadow is governed by H9 (WorldKits sets it only on parts >= 8 studs; Enforce clears small casters)
 	local partCount = 0
 	for _, d in ipairs(dressing:GetDescendants()) do
@@ -28732,7 +29197,7 @@ return MapDressing
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="115">
+        <Item class="ModuleScript" referent="118">
           <Properties>
             <string name="Name">MapSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -32109,7 +32574,7 @@ return MapSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="116">
+        <Item class="ModuleScript" referent="119">
           <Properties>
             <string name="Name">NationFlag</string>
             <string name="Source"><![CDATA[--!strict
@@ -32487,11 +32952,11 @@ return NationFlag
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="117">
+        <Item class="Folder" referent="120">
           <Properties>
             <string name="Name">POILayouts</string>
           </Properties>
-          <Item class="ModuleScript" referent="118">
+          <Item class="ModuleScript" referent="121">
             <Properties>
               <string name="Name">Frontier</string>
               <string name="Source"><![CDATA[--!strict
@@ -32691,7 +33156,7 @@ return Layouts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="119">
+          <Item class="ModuleScript" referent="122">
             <Properties>
               <string name="Name">Industry</string>
               <string name="Source"><![CDATA[--!strict
@@ -32956,7 +33421,7 @@ return Layouts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="120">
+          <Item class="ModuleScript" referent="123">
             <Properties>
               <string name="Name">Wilds</string>
               <string name="Source"><![CDATA[--!strict
@@ -33205,7 +33670,118 @@ return Layouts
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="121">
+        <Item class="ModuleScript" referent="124">
+          <Properties>
+            <string name="Name">PlazaBounty</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 4.3 (2026-09-29): the plaza bounty (Shared/Configs/PlazaBountyConfig). Server only. TerritoryService
+	calls PlazaBounty.OnCaptured(player, zoneId, position) right after a capture completes. Nothing the client sends
+	is read: the capture itself is TerritoryService's server-side capture.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+local PlazaBountyConfig = require(Shared.Configs.PlazaBountyConfig)
+local Constants = require(Shared.Constants)
+local Remotes = require(Shared.Remotes)
+
+local PlazaBounty = {}
+
+local deps: { [string]: any } = {}
+local bounty: { Holder: number, EndsAt: number, Serial: number, Pos: Vector3 }? = nil
+local serial = 0
+local lastEarned: { [number]: number } = {} -- userId -> os.clock() of the last bounty paid
+
+function PlazaBounty.Bind(d: { [string]: any })
+	deps = d
+end
+
+local function push(player: Player, data: { [string]: any })
+	local ev = Remotes.TryGetEvent(Constants.RemoteNames.FeaturePush)
+	if ev then
+		ev:FireClient(player, "Bounty", data)
+	end
+end
+
+local function notify(player: Player, msg: string, kind: string)
+	local ns = deps.NotificationService
+	if ns and ns.Notify then
+		ns.Notify(player, msg, kind, 5)
+	end
+end
+
+local function fmt(n: number): string
+	local s = tostring(math.floor(n))
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return (out:gsub("^,", ""))
+end
+
+local function endBounty()
+	if bounty == nil then
+		return
+	end
+	local holder = bounty.Holder
+	bounty = nil
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.UserId ~= holder and PlazaBountyConfig.LiveFor(p.UserId) then
+			push(p, { Show = false })
+		end
+	end
+end
+
+function PlazaBounty.OnCaptured(player: Player, zoneId: string, position: Vector3)
+	if zoneId ~= PlazaBountyConfig.ZoneId then
+		return
+	end
+	local now = os.clock()
+	local b = bounty
+	-- 1) a live bounty retaken by someone else: pay once (per-player cooldown), then it ends
+	if b and now < b.EndsAt and player.UserId ~= b.Holder and PlazaBountyConfig.LiveFor(player.UserId) then
+		local last = lastEarned[player.UserId]
+		if last == nil or now - last >= PlazaBountyConfig.EarnCooldownSeconds then
+			lastEarned[player.UserId] = now
+			local econ = deps.EconomyService
+			if econ and econ.AddCash then
+				econ.AddCash(player, PlazaBountyConfig.Cash, "plaza_bounty")
+			end
+			notify(player, "Bounty claimed! +$" .. fmt(PlazaBountyConfig.Cash), "Reward")
+		end
+		endBounty()
+	elseif b and now >= b.EndsAt then
+		endBounty()
+	end
+	-- 2) this capture starts a new bounty on the capturer (only once the last one is over)
+	if bounty ~= nil then
+		return
+	end
+	serial += 1
+	local mine = serial
+	bounty = { Holder = player.UserId, EndsAt = now + PlazaBountyConfig.WindowSeconds, Serial = mine, Pos = position }
+	local mins = math.floor(PlazaBountyConfig.WindowSeconds / 60)
+	local secs = PlazaBountyConfig.WindowSeconds % 60
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player and PlazaBountyConfig.LiveFor(p.UserId) then
+			push(p, { Show = true, X = position.X, Y = position.Y, Z = position.Z, Cash = PlazaBountyConfig.Cash })
+			notify(p, string.format("BOUNTY: retake the Central Plaza in %d:%02d for +$%s", mins, secs, fmt(PlazaBountyConfig.Cash)), "Info")
+		end
+	end
+	task.delay(PlazaBountyConfig.WindowSeconds, function()
+		if bounty and bounty.Serial == mine then
+			endBounty()
+		end
+	end)
+end
+
+-- lastEarned is kept for the server's life (a rejoin never resets the earn cooldown); one number per player
+
+return PlazaBounty
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="125">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -34138,7 +34714,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="122">
+        <Item class="ModuleScript" referent="126">
           <Properties>
             <string name="Name">Projectile</string>
             <string name="Source"><![CDATA[--!strict
@@ -34336,7 +34912,7 @@ return Projectile
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="123">
+        <Item class="ModuleScript" referent="127">
           <Properties>
             <string name="Name">RemoteGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -34404,7 +34980,7 @@ return RemoteGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="124">
+        <Item class="ModuleScript" referent="128">
           <Properties>
             <string name="Name">RemoteSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -34515,6 +35091,7 @@ local EVENTS = {
 	-- listens on the server: there is no Ops OnServerEvent)
 	Constants.RemoteNames.OpsState,
 	Constants.RemoteNames.OpsProgress,
+	Constants.RemoteNames.FeaturePush, -- claude-bud JOB 4/5: feature cues, server -> client only
 }
 
 -- v71 money (M2): UnreliableRemoteEvents (server → client cosmetic Fx; ordering and delivery not guaranteed)
@@ -34717,7 +35294,7 @@ return RemoteSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="125">
+        <Item class="ModuleScript" referent="129">
           <Properties>
             <string name="Name">RigBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -35140,7 +35717,7 @@ return RigBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="126">
+        <Item class="ModuleScript" referent="130">
           <Properties>
             <string name="Name">SessionLock</string>
             <string name="Source"><![CDATA[--!strict
@@ -35399,7 +35976,7 @@ return SessionLock
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="127">
+        <Item class="ModuleScript" referent="131">
           <Properties>
             <string name="Name">StreamPrefetch</string>
             <string name="Source"><![CDATA[--!strict
@@ -35669,7 +36246,7 @@ return StreamPrefetch
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="128">
+        <Item class="ModuleScript" referent="132">
           <Properties>
             <string name="Name">StructureKitBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -37326,7 +37903,7 @@ return StructureKitBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="129">
+        <Item class="ModuleScript" referent="133">
           <Properties>
             <string name="Name">StudioBuySmoke</string>
             <string name="Source"><![CDATA[--!strict
@@ -37617,7 +38194,7 @@ return StudioBuySmoke
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="130">
+        <Item class="ModuleScript" referent="134">
           <Properties>
             <string name="Name">TrainingYardBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -37828,7 +38405,7 @@ return TrainingYardBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="131">
+        <Item class="ModuleScript" referent="135">
           <Properties>
             <string name="Name">VehicleHealth</string>
             <string name="Source"><![CDATA[--!strict
@@ -38652,7 +39229,7 @@ return VehicleHealth
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="132">
+        <Item class="ModuleScript" referent="136">
           <Properties>
             <string name="Name">VehicleWaterGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -39511,7 +40088,7 @@ return VehicleWaterGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="133">
+        <Item class="ModuleScript" referent="137">
           <Properties>
             <string name="Name">Waterways</string>
             <string name="Source"><![CDATA[--!strict
@@ -40335,7 +40912,7 @@ return Waterways
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="134">
+        <Item class="ModuleScript" referent="138">
           <Properties>
             <string name="Name">WeaponAssetLoader</string>
             <string name="Source"><![CDATA[--!strict
@@ -40626,7 +41203,7 @@ return WeaponAssetLoader
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="135">
+        <Item class="ModuleScript" referent="139">
           <Properties>
             <string name="Name">WorldAtmosphere</string>
             <string name="Source"><![CDATA[--!strict
@@ -40909,7 +41486,7 @@ return WorldAtmosphere
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="136">
+        <Item class="ModuleScript" referent="140">
           <Properties>
             <string name="Name">WorldBounds</string>
             <string name="Source"><![CDATA[--!strict
@@ -41310,7 +41887,7 @@ return WorldBounds
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="137">
+        <Item class="ModuleScript" referent="141">
           <Properties>
             <string name="Name">WorldDress</string>
             <string name="Source"><![CDATA[--!strict
@@ -42981,7 +43558,258 @@ return WorldDress
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="138">
+        <Item class="ModuleScript" referent="142">
+          <Properties>
+            <string name="Name">WorldFill</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 3 (2026-09-29): the world fill (Shared/Configs/WorldFillConfig). One Workspace folder,
+	WorldFillConfig.FolderName, rebuilt with the dressing (MapDressing.Dress calls ReserveRoads after the POIs, so the
+	travel dressing avoids the new roads, and Build after the rest of the dressing, so the fill avoids everything).
+	Server only, run once per map build (no per-frame work). Every item is a WorldKits kit (<= 8 parts, no scripts), a
+	Terrain rock (0 parts) or a plain anchored part (roads, bridges); every one is re-checked with WorldDress.Blocked
+	against the shared occupancy and skipped (counted in the log line) when blocked. Tier 2 items build on Full only.
+	The build stops placing once MaxPartsFull / MaxPartsLow would be passed.
+]]
+
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local WorldFillConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs"):WaitForChild("WorldFillConfig"))
+
+local WorldFill = {}
+
+local GROUND_Y = 0.5 -- MapSetup.GROUND_TOP_Y (flat desert floor)
+
+local state = { Parts = 0, Skipped = 0, Folder = nil :: Folder? }
+
+local function folderFresh(): Folder
+	local old = Workspace:FindFirstChild(WorldFillConfig.FolderName)
+	if old then
+		old:Destroy()
+	end
+	local f = Instance.new("Folder")
+	f.Name = WorldFillConfig.FolderName
+	f.Parent = Workspace
+	return f
+end
+
+local function plain(name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material, collide: boolean, parent: Instance): BasePart
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Anchored = true
+	p.Size = size
+	p.CFrame = cf
+	p.Color = color
+	p.Material = material
+	p.CanCollide = collide
+	p.CanTouch = false
+	p.CastShadow = false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Parent = parent
+	return p
+end
+
+local function countParts(inst: Instance): number
+	local n = 0
+	for _, d in ipairs(inst:GetDescendants()) do
+		if d:IsA("BasePart") then
+			n += 1
+		end
+	end
+	return n
+end
+
+local function cap(full: boolean): number
+	return if full then WorldFillConfig.MaxPartsFull else WorldFillConfig.MaxPartsLow
+end
+
+--[[ Step A (after the POIs, before WorldDress): the connector roads, and their clearance reserved in `occ` so the travel
+	dressing never lands on them. Returns the parts built. ]]
+function WorldFill.ReserveRoads(occ: any, wd: any): number
+	state.Parts = 0
+	state.Skipped = 0
+	if WorldFillConfig.Enabled ~= true then
+		local old = Workspace:FindFirstChild(WorldFillConfig.FolderName)
+		if old then
+			old:Destroy()
+		end
+		state.Folder = nil
+		return 0
+	end
+	local folder = folderFresh()
+	state.Folder = folder
+	local roads = Instance.new("Folder")
+	roads.Name = "Roads"
+	roads.Parent = folder
+	local R = WorldFillConfig.Road
+	for _, r in ipairs(WorldFillConfig.Roads) do
+		local alongX = r.Z0 == r.Z1
+		local len = if alongX then math.abs(r.X1 - r.X0) else math.abs(r.Z1 - r.Z0)
+		local mx, mz = (r.X0 + r.X1) * 0.5, (r.Z0 + r.Z1) * 0.5
+		plain(
+			r.Name,
+			if alongX then Vector3.new(len, 0.15, R.Width) else Vector3.new(R.Width, 0.15, len),
+			CFrame.new(mx, GROUND_Y + 0.05, mz), -- top 0.625, like the world roads
+			R.Color,
+			Enum.Material.Asphalt,
+			false,
+			roads
+		)
+		state.Parts += 1
+		if occ and wd and wd.AddDisc then
+			local steps = math.max(1, math.floor(len / R.ReserveStep))
+			for i = 0, steps do
+				local t = i / steps
+				wd.AddDisc(occ, r.X0 + (r.X1 - r.X0) * t, r.Z0 + (r.Z1 - r.Z0) * t, R.ReserveRadius, "fillroad")
+			end
+		end
+	end
+	return state.Parts
+end
+
+-- one bridge: deck, 2 ramps, 2 rails, 2 bank piers (7 parts); both landings must be free
+local function buildBridge(b: any, folder: Instance, occ: any, wd: any): number
+	local B = WorldFillConfig.Bridge
+	local deckTop = B.DeckBottomY + B.DeckThick
+	local south, north = b.Z0 - B.RampLen, b.Z1 + B.RampLen
+	if occ and wd and wd.Blocked then
+		for _, z in ipairs({ south + B.Width * 0.5, north - B.Width * 0.5 }) do
+			local why = wd.Blocked(occ, b.X, z, B.Width * 0.5)
+			if why then
+				warn(string.format("[WorldFill] bridge %s skipped: landing blocked (%s)", b.Name, tostring(why)))
+				return 0
+			end
+		end
+	end
+	local m = Instance.new("Model")
+	m.Name = b.Name
+	local span = b.Z1 - b.Z0
+	local mid = (b.Z0 + b.Z1) * 0.5
+	plain("Deck", Vector3.new(B.Width, B.DeckThick, span), CFrame.new(b.X, B.DeckBottomY + B.DeckThick * 0.5, mid), B.Color, Enum.Material.Concrete, true, m)
+	local rise = deckTop - GROUND_Y
+	local ang = math.atan2(rise, B.RampLen)
+	local rampLen = math.sqrt(rise * rise + B.RampLen * B.RampLen)
+	local cy = GROUND_Y + rise * 0.5 - B.DeckThick * 0.5
+	-- south ramp climbs toward +Z (onto the deck), north ramp climbs toward -Z
+	plain("RampS", Vector3.new(B.Width, B.DeckThick, rampLen), CFrame.new(b.X, cy, b.Z0 - B.RampLen * 0.5) * CFrame.Angles(-ang, 0, 0), B.Color, Enum.Material.Concrete, true, m)
+	plain("RampN", Vector3.new(B.Width, B.DeckThick, rampLen), CFrame.new(b.X, cy, b.Z1 + B.RampLen * 0.5) * CFrame.Angles(ang, 0, 0), B.Color, Enum.Material.Concrete, true, m)
+	for _, s in ipairs({ -1, 1 }) do
+		plain("Rail", Vector3.new(0.6, B.RailH, span), CFrame.new(b.X + s * (B.Width * 0.5 - 0.3), deckTop + B.RailH * 0.5, mid), Color3.fromRGB(80, 78, 72), Enum.Material.Metal, true, m)
+	end
+	-- piers stand on the 6-stud bank slabs (Z0 / Z1 are the bank edges), never in the channel
+	local pierH = B.DeckBottomY - GROUND_Y
+	for _, z in ipairs({ b.Z0 + 1.5, b.Z1 - 1.5 }) do
+		plain("Pier", Vector3.new(B.Width - 2, pierH, 2), CFrame.new(b.X, GROUND_Y + pierH * 0.5, z), B.Color, Enum.Material.Concrete, true, m)
+	end
+	m:SetAttribute("WE_AllowInWater", true)
+	m.Parent = folder
+	if occ and wd and wd.AddDisc then
+		for z = south, north, 12 do
+			wd.AddDisc(occ, b.X, z, B.Width * 0.5, "fillbridge")
+		end
+	end
+	return 7
+end
+
+-- item offset (field frame) -> world x, z; kit yaw (degrees)
+local function toWorld(field: any, it: any): (number, number, number)
+	local a = math.rad(field.Yaw or 0)
+	local c, s = math.cos(a), math.sin(a)
+	-- CFrame.Angles(0, a, 0) turns local (x, z) to (x c + z s, -x s + z c)
+	local wx = field.X + it.X * c + it.Z * s
+	local wz = field.Z - it.X * s + it.Z * c
+	return wx, wz, (field.Yaw or 0) + (it.Yaw or 0)
+end
+
+--[[ Step B (after the dressing): bridges, fields and the plaza ring. `quality` "Full" | "Low". Returns (parts, skipped). ]]
+function WorldFill.Build(quality: string, occ: any, wd: any, wk: any): (number, number)
+	local folder = state.Folder
+	if WorldFillConfig.Enabled ~= true or folder == nil or folder.Parent == nil or wk == nil then
+		return 0, 0
+	end
+	local full = quality == "Full"
+	local limit = cap(full)
+
+	local bridges = Instance.new("Folder")
+	bridges.Name = "Bridges"
+	bridges.Parent = folder
+	for _, b in ipairs(WorldFillConfig.Bridges) do
+		if state.Parts + 7 <= limit then
+			local n = buildBridge(b, bridges, occ, wd)
+			state.Parts += n
+			if n == 0 then
+				state.Skipped += 1
+			end
+		end
+	end
+
+	local rng = wk.Rng(29092026)
+	for _, field in ipairs(WorldFillConfig.Fields) do
+		local items = (WorldFillConfig.Templates :: any)[field.Template]
+		if items then
+			local ff = Instance.new("Folder")
+			ff.Name = "Field_" .. field.Id
+			ff.Parent = folder
+			for i, it in ipairs(items) do
+				if it.Tier == 1 or full then
+					local wx, wz, yaw = toWorld(field, it)
+					if it.Kit == "Rock" then
+						local r = it.Radius or 10
+						local why = if occ and wd then wd.Blocked(occ, wx, wz, r) else nil
+						if why == nil then
+							pcall(wk.Rock, Vector3.new(wx, GROUND_Y, wz), it.Kind or "boulders", rng, { Radius = r })
+							if occ and wd then
+								wd.AddDisc(occ, wx, wz, r, "fillrock")
+							end
+						else
+							state.Skipped += 1
+						end
+					else
+						local fp = wk.Footprint(it.Kit, it.Opts)
+						local planned = if fp then fp.Parts else 8
+						local r = if fp then math.max(fp.X1 - fp.X0, fp.Z1 - fp.Z0) * 0.5 else 5
+						local why = if occ and wd then wd.Blocked(occ, wx, wz, r, { Spacing = WorldFillConfig.ItemSpacing }) else nil
+						if why ~= nil or state.Parts + planned > limit then
+							state.Skipped += 1
+						else
+							local cf = CFrame.new(wx, GROUND_Y, wz) * CFrame.Angles(0, math.rad(yaw), 0)
+							local model = wk.Place(it.Kit, cf, ff, {
+								Name = string.format("Fill_%s_%d_%s", field.Id, i, it.Kit),
+								Cluster = { Source = "fill", Kind = it.Kit, Anchor = "natural", AnchorX = wx, AnchorZ = wz, Tier = it.Tier },
+								Kit = it.Opts,
+							})
+							if model then
+								for _, d in ipairs(model:GetDescendants()) do
+									if d:IsA("Script") or d:IsA("LocalScript") then
+										d:Destroy() -- never scripts in world props
+									end
+								end
+								state.Parts += countParts(model)
+								if occ and wd then
+									wd.AddDisc(occ, wx, wz, r, "fill")
+								end
+							else
+								state.Skipped += 1
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	folder:SetAttribute("WE_FillParts", state.Parts)
+	folder:SetAttribute("WE_FillSkipped", state.Skipped)
+	print(string.format("[WAR EMPIRE] WorldFill: quality=%s parts=%d skipped=%d (cap %d)", string.lower(quality), state.Parts, state.Skipped, limit))
+	return state.Parts, state.Skipped
+end
+
+return WorldFill
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="143">
           <Properties>
             <string name="Name">WorldHygiene</string>
             <string name="Source"><![CDATA[--!strict
@@ -44240,7 +45068,7 @@ return WorldHygiene
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="139">
+        <Item class="ModuleScript" referent="144">
           <Properties>
             <string name="Name">WorldKits</string>
             <string name="Source"><![CDATA[--!strict
@@ -46330,7 +47158,7 @@ return WorldKits
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="140">
+        <Item class="ModuleScript" referent="145">
           <Properties>
             <string name="Name">WorldLabelPolicy</string>
             <string name="Source"><![CDATA[--!strict
@@ -46476,7 +47304,7 @@ return WorldLabelPolicy
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="141">
+        <Item class="ModuleScript" referent="146">
           <Properties>
             <string name="Name">WorldPOI</string>
             <string name="Source"><![CDATA[--!strict
@@ -47380,7 +48208,7 @@ return WorldPOI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="142">
+        <Item class="ModuleScript" referent="147">
           <Properties>
             <string name="Name">WorldTerrain</string>
             <string name="Source"><![CDATA[--!strict
@@ -48141,11 +48969,11 @@ return WorldTerrain
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="143">
+      <Item class="Folder" referent="148">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="144">
+        <Item class="ModuleScript" referent="149">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -48830,7 +49658,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="145">
+        <Item class="ModuleScript" referent="150">
           <Properties>
             <string name="Name">AirWeaponService</string>
             <string name="Source"><![CDATA[--!strict
@@ -49726,7 +50554,7 @@ return AirWeaponService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="146">
+        <Item class="ModuleScript" referent="151">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -49775,7 +50603,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="147">
+        <Item class="ModuleScript" referent="152">
           <Properties>
             <string name="Name">AntiExploitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -49896,7 +50724,7 @@ return AntiExploitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="148">
+        <Item class="ModuleScript" referent="153">
           <Properties>
             <string name="Name">BankRaidService</string>
             <string name="Source"><![CDATA[--!strict
@@ -50818,7 +51646,7 @@ return BankRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="149">
+        <Item class="ModuleScript" referent="154">
           <Properties>
             <string name="Name">BaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -52666,7 +53494,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 94)
+			player:SetAttribute("WE_Build", 95)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -52814,7 +53642,7 @@ return BaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="150">
+        <Item class="ModuleScript" referent="155">
           <Properties>
             <string name="Name">BattlePassService</string>
             <string name="Source"><![CDATA[--!strict
@@ -53173,7 +54001,7 @@ return BattlePassService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="151">
+        <Item class="ModuleScript" referent="156">
           <Properties>
             <string name="Name">BusinessService</string>
             <string name="Source"><![CDATA[--!strict
@@ -53727,7 +54555,7 @@ return BusinessService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="152">
+        <Item class="ModuleScript" referent="157">
           <Properties>
             <string name="Name">CaptureStipendService</string>
             <string name="Source"><![CDATA[--!strict
@@ -53834,7 +54662,7 @@ return CaptureStipendService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="153">
+        <Item class="ModuleScript" referent="158">
           <Properties>
             <string name="Name">ClanService</string>
             <string name="Source"><![CDATA[--!strict
@@ -54461,7 +55289,7 @@ return ClanService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="154">
+        <Item class="ModuleScript" referent="159">
           <Properties>
             <string name="Name">ClanWarService</string>
             <string name="Source"><![CDATA[--!strict
@@ -54920,7 +55748,7 @@ return ClanWarService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="155">
+        <Item class="ModuleScript" referent="160">
           <Properties>
             <string name="Name">CodesService</string>
             <string name="Source"><![CDATA[--!strict
@@ -55073,7 +55901,7 @@ return CodesService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="156">
+        <Item class="ModuleScript" referent="161">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -57974,7 +58802,7 @@ end
 return CombatService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="157">
+          <Item class="ModuleScript" referent="162">
             <Properties>
               <string name="Name">CombatAssist</string>
               <string name="Source"><![CDATA[--!strict
@@ -58195,7 +59023,7 @@ return CombatAssist
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="158">
+          <Item class="ModuleScript" referent="163">
             <Properties>
               <string name="Name">CombatDamage</string>
               <string name="Source"><![CDATA[--!strict
@@ -58319,7 +59147,7 @@ return CombatDamage
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="159">
+          <Item class="ModuleScript" referent="164">
             <Properties>
               <string name="Name">CombatFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -58557,7 +59385,7 @@ return CombatFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="160">
+          <Item class="ModuleScript" referent="165">
             <Properties>
               <string name="Name">CombatNPC</string>
               <string name="Source"><![CDATA[--!strict
@@ -59331,7 +60159,7 @@ return CombatNPC
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="161">
+          <Item class="ModuleScript" referent="166">
             <Properties>
               <string name="Name">CombatWeaponLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -59385,7 +60213,7 @@ return CombatWeaponLogic
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="162">
+        <Item class="ModuleScript" referent="167">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -59598,7 +60426,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 94)
+		player:SetAttribute("WE_Build", 95)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -59738,7 +60566,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=94",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=95",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -59916,7 +60744,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="163">
+        <Item class="ModuleScript" referent="168">
           <Properties>
             <string name="Name">EconomyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -60559,7 +61387,7 @@ return EconomyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="164">
+        <Item class="ModuleScript" referent="169">
           <Properties>
             <string name="Name">FallSafetyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -60672,7 +61500,7 @@ return FallSafetyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="165">
+        <Item class="ModuleScript" referent="170">
           <Properties>
             <string name="Name">GateDefenseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -63081,7 +63909,7 @@ return GateDefenseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="166">
+        <Item class="ModuleScript" referent="171">
           <Properties>
             <string name="Name">ManualDropperService</string>
             <string name="Source"><![CDATA[--!strict
@@ -63793,7 +64621,7 @@ return ManualDropperService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="167">
+        <Item class="ModuleScript" referent="172">
           <Properties>
             <string name="Name">MissileStrikeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -64520,7 +65348,7 @@ return MissileStrikeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="168">
+        <Item class="ModuleScript" referent="173">
           <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -65583,6 +66411,29 @@ function MissionService.Init(deps: { [string]: any })
 		ensureDaily(_profile)
 		MissionService.CheckAchievements(player)
 		MissionService.Push(player)
+		-- claude-bud JOB 4.2: auto-claim today's login reward (DailyRewardConfig.AutoClaim, owner-only first)
+		if DailyRewardConfig.AutoClaimLiveFor(player.UserId) then
+			task.delay(DailyRewardConfig.AutoClaim.DelaySeconds, function()
+				if player.Parent == nil then
+					return
+				end
+				local prof = DataService.GetProfile(player)
+				if prof == nil or prof.DailyLogin == nil or prof.DailyLogin.LastClaimDay == yyyymmdd(os.time()) then
+					return
+				end
+				local okClaim = MissionService.ClaimDailyLogin(player)
+				if okClaim and NotificationService then
+					local day = prof.DailyLogin.Streak
+					local nextDay = (day % DailyRewardConfig.StreakResetsAfterDay) + 1
+					local nextReward = DailyRewardConfig.Rewards[nextDay]
+					NotificationService.Notify(
+						player,
+						string.format("Login streak: day %d of %d. Tomorrow: $%d", day, DailyRewardConfig.StreakResetsAfterDay, if nextReward then nextReward.Cash else 0),
+						"Info"
+					)
+				end
+			end)
+		end
 	end)
 end
 
@@ -65590,7 +66441,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="169">
+        <Item class="ModuleScript" referent="174">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -67144,7 +67995,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="170">
+        <Item class="ModuleScript" referent="175">
           <Properties>
             <string name="Name">MoneyCollectorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -68518,7 +69369,7 @@ return MoneyCollectorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="171">
+        <Item class="ModuleScript" referent="176">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -69084,7 +69935,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="172">
+        <Item class="ModuleScript" referent="177">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -69157,7 +70008,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="173">
+        <Item class="ModuleScript" referent="178">
           <Properties>
             <string name="Name">OpsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -70330,7 +71181,7 @@ end
 return OpsService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="174">
+          <Item class="ModuleScript" referent="179">
             <Properties>
               <string name="Name">OpsCargo</string>
               <string name="Source"><![CDATA[--!strict
@@ -70803,7 +71654,7 @@ return OpsCargo
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="175">
+          <Item class="ModuleScript" referent="180">
             <Properties>
               <string name="Name">OpsDirector</string>
               <string name="Source"><![CDATA[--!strict
@@ -70951,7 +71802,7 @@ return OpsDirector
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="176">
+          <Item class="ModuleScript" referent="181">
             <Properties>
               <string name="Name">OpsGarrison</string>
               <string name="Source"><![CDATA[--!strict
@@ -71448,7 +72299,7 @@ return OpsGarrison
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="177">
+          <Item class="ModuleScript" referent="182">
             <Properties>
               <string name="Name">OpsKinds</string>
               <string name="Source"><![CDATA[--!strict
@@ -72277,7 +73128,7 @@ return OpsKinds
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="178">
+          <Item class="ModuleScript" referent="183">
             <Properties>
               <string name="Name">OpsRewards</string>
               <string name="Source"><![CDATA[--!strict
@@ -72575,7 +73426,7 @@ return OpsRewards
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="179">
+          <Item class="ModuleScript" referent="184">
             <Properties>
               <string name="Name">OpsSites</string>
               <string name="Source"><![CDATA[--!strict
@@ -73058,7 +73909,7 @@ return OpsSites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="180">
+          <Item class="ModuleScript" referent="185">
             <Properties>
               <string name="Name">OpsZones</string>
               <string name="Source"><![CDATA[--!strict
@@ -73247,7 +74098,7 @@ return OpsZones
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="181">
+        <Item class="ModuleScript" referent="186">
           <Properties>
             <string name="Name">PlotOilPumpService</string>
             <string name="Source"><![CDATA[--!strict
@@ -73689,7 +74540,7 @@ return PlotOilPumpService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="182">
+        <Item class="ModuleScript" referent="187">
           <Properties>
             <string name="Name">PremiumPadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -74113,7 +74964,7 @@ return PremiumPadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="183">
+        <Item class="ModuleScript" referent="188">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -74755,7 +75606,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="184">
+        <Item class="ModuleScript" referent="189">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -74807,7 +75658,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="185">
+        <Item class="ModuleScript" referent="190">
           <Properties>
             <string name="Name">ResearchService</string>
             <string name="Source"><![CDATA[--!strict
@@ -75226,6 +76077,23 @@ function ResearchService.Init(deps: { [string]: any })
 
 	sanityCheck()
 
+	-- claude-bud JOB 4.4: tell players ArmyUpgradeConfig is live for where their Barracks "Army Upgrades" prompt goes
+	if BaseService and BaseService.OnPlotReady then
+		local ArmyUpgradeConfig = require(ReplicatedStorage.Shared.Configs.ArmyUpgradeConfig)
+		local PlotFrame = require(ReplicatedStorage.Shared.Util.PlotFrame)
+		local Remotes = require(ReplicatedStorage.Shared.Remotes)
+		BaseService.OnPlotReady(function(player: Player, plotId: number)
+			if not ArmyUpgradeConfig.LiveFor(player.UserId) then
+				return
+			end
+			local p = PlotFrame.LocalToWorld(plotId, ArmyUpgradeConfig.PromptX, ArmyUpgradeConfig.PromptZ)
+			local ev = Remotes.TryGetEvent(Constants.RemoteNames.FeaturePush)
+			if ev and player.Parent then
+				ev:FireClient(player, "ArmyUpgrades", { X = p.X, Y = ArmyUpgradeConfig.PromptY, Z = p.Z, Track = ArmyUpgradeConfig.Track })
+			end
+		end)
+	end
+
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestResearch) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player, action: any, upgradeId: any)
 		if action == "Buy" then
@@ -75305,7 +76173,7 @@ return ResearchService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="186">
+        <Item class="ModuleScript" referent="191">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -75569,7 +76437,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="187">
+        <Item class="ModuleScript" referent="192">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -75973,7 +76841,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="188">
+        <Item class="ModuleScript" referent="193">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -76132,7 +77000,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="189">
+        <Item class="ModuleScript" referent="194">
           <Properties>
             <string name="Name">SquadOrdersService</string>
             <string name="Source"><![CDATA[--!strict
@@ -79500,7 +80368,7 @@ return SquadOrdersService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="190">
+        <Item class="ModuleScript" referent="195">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -79528,6 +80396,8 @@ local Constants = require(Shared.Constants)
 local SupplyDropConfig = require(Shared.Configs.SupplyDropConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local Remotes = require(Shared.Remotes) -- claude-bud JOB 4.1: FeaturePush (airdrop marker)
+local TweenService = game:GetService("TweenService")
 
 local SupplyDropService = {}
 
@@ -79541,6 +80411,8 @@ type DropRec = {
 	ClaimCash: number,
 	ExpiresAt: number,
 	ClaimProgress: { [number]: number }, -- userId -> hold seconds
+	Airdrop: boolean?, -- claude-bud JOB 4.1: a parachute airdrop (claimable only by players it is live for)
+	Landed: boolean?, -- airdrop: false while it falls (no claims)
 }
 
 local active: { [string]: DropRec } = {}
@@ -79642,12 +80514,28 @@ local function pickSpawnPosition(): Vector3
 	return Vector3.new(150, 1, 150)
 end
 
+-- claude-bud JOB 4.1: the airdrop marker, only to players the airdrop is live for
+local function pushAirdrop(data: { [string]: any })
+	local ev = Remotes.TryGetEvent(Constants.RemoteNames.FeaturePush)
+	if ev == nil then
+		return
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		if SupplyDropConfig.AirdropLiveFor(p.UserId) then
+			ev:FireClient(p, "Airdrop", data)
+		end
+	end
+end
+
 local function destroyDrop(id: string)
 	local rec = active[id]
 	if not rec then
 		return
 	end
 	active[id] = nil
+	if rec.Airdrop then
+		pushAirdrop({ Show = false })
+	end
 	if rec.Part and rec.Part.Parent then
 		rec.Part:Destroy()
 	end
@@ -79658,8 +80546,10 @@ local function spawnDrop()
 		return
 	end
 	local count = 0
-	for _ in pairs(active) do
-		count += 1
+	for _, r in pairs(active) do
+		if not r.Airdrop then -- claude-bud: the airdrop never takes a crate slot
+			count += 1
+		end
 	end
 	if count >= (SupplyDropConfig.MaxActive or 2) then
 		return
@@ -79730,7 +80620,11 @@ local function claim(player: Player, rec: DropRec)
 	destroyDrop(rec.Id)
 	EconomyService.AddCash(player, rec.ClaimCash, "supply_drop")
 	if NotificationService then
-		NotificationService.Notify(player, "Supply drop +$" .. formatCash(rec.ClaimCash), "Reward")
+		if rec.Airdrop then
+			NotificationService.Notify(player, "Airdrop +$" .. formatCash(rec.ClaimCash), "Reward") -- claude-bud JOB 4.1
+		else
+			NotificationService.Notify(player, "Supply drop +$" .. formatCash(rec.ClaimCash), "Reward")
+		end
 	end
 	if AnalyticsService then
 		AnalyticsService.Log(AnalyticsConfig.Events.SUPPLY_DROP_CLAIM, player.UserId, {
@@ -79759,17 +80653,26 @@ local function tickClaims(dt: number)
 	for _, rec in pairs(active) do
 		local pos = rec.Part.Position
 		local nearby: { [number]: boolean } = {}
+		local airdrop = rec.Airdrop == true
+		if airdrop and rec.Landed ~= true then
+			continue -- claude-bud: no claims while it falls
+		end
+		local r2 = if airdrop then (SupplyDropConfig.Airdrop.ClaimRadius or radius) else radius
+		local hold2 = if airdrop then (SupplyDropConfig.Airdrop.ClaimHoldSeconds or holdNeed) else holdNeed
 		for _, player in ipairs(Players:GetPlayers()) do
+			if airdrop and not SupplyDropConfig.AirdropLiveFor(player.UserId) then
+				continue -- claude-bud: an owner-only airdrop is claimable only by players it is live for
+			end
 			local char = player.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			local hum = char and char:FindFirstChildOfClass("Humanoid")
 			if hrp and hum and hum.Health > 0 then
 				local d = (hrp.Position - pos).Magnitude
-				if d <= radius then
+				if d <= r2 then
 					nearby[player.UserId] = true
 					local prog = (rec.ClaimProgress[player.UserId] or 0) + dt
 					rec.ClaimProgress[player.UserId] = prog
-					if prog >= holdNeed then
+					if prog >= hold2 then
 						claim(player, rec)
 						break
 					end
@@ -79785,12 +80688,140 @@ local function tickClaims(dt: number)
 	end
 end
 
+--[[ claude-bud JOB 4.1: one parachute airdrop (SupplyDropConfig.Airdrop). Server-built, 3 parts while it falls: the
+	anchored crate is tweened down; the lid and canopy are welded to it (unanchored) and follow. The canopy goes on
+	landing. Returns false when one is already active or nobody it is live for is here. ]]
+local function spawnAirdrop(): boolean
+	local A = SupplyDropConfig.Airdrop
+	for _, r in pairs(active) do
+		if r.Airdrop then
+			return false
+		end
+	end
+	local anyone = false
+	for _, p in ipairs(Players:GetPlayers()) do
+		if SupplyDropConfig.AirdropLiveFor(p.UserId) then
+			anyone = true
+			break
+		end
+	end
+	if not anyone then
+		return false
+	end
+	nextId += 1
+	local id = "airdrop_" .. tostring(nextId)
+	local ground = pickSpawnPosition()
+	local cash = math.random(A.CashMin, A.CashMax)
+	local size = SupplyDropConfig.CrateSize or Vector3.new(5, 4, 5)
+	local landed = CFrame.new(ground + Vector3.new(0, size.Y * 0.5, 0))
+	local crate = Instance.new("Part")
+	crate.Name = "Airdrop_" .. id
+	crate.Size = size
+	crate.CFrame = landed + Vector3.new(0, A.DropHeight, 0)
+	crate.Anchored = true
+	crate.CanCollide = true
+	crate.Color = SupplyDropConfig.CrateColor or Color3.fromRGB(210, 160, 55)
+	crate.Material = Enum.Material.Metal
+	crate.TopSurface = Enum.SurfaceType.Smooth
+	crate.BottomSurface = Enum.SurfaceType.Smooth
+	crate:SetAttribute("SupplyDropId", id)
+	crate:SetAttribute("ClaimCash", cash)
+	crate:SetAttribute("WE_Airdrop", true)
+	local function welded(name: string, psize: Vector3, offset: CFrame, color: Color3, mat: Enum.Material): BasePart
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = psize
+		p.CFrame = crate.CFrame * offset
+		p.Anchored = false
+		p.Massless = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Color = color
+		p.Material = mat
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = crate
+		w.Part1 = p
+		w.Parent = p
+		p.Parent = crate
+		return p
+	end
+	welded("Lid", Vector3.new(size.X * 0.92, 0.4, size.Z * 0.92), CFrame.new(0, size.Y * 0.5 + 0.1, 0), SupplyDropConfig.LidColor or Color3.fromRGB(180, 140, 50), Enum.Material.Metal)
+	local canopy = welded("Canopy", Vector3.new(14, 2, 14), CFrame.new(0, size.Y * 0.5 + 12, 0), A.CanopyColor, Enum.Material.Fabric)
+	crate.Parent = ensureFolder()
+	CollectionService:AddTag(crate, Constants.Tags.SupplyDrop)
+	local rec: DropRec = {
+		Id = id,
+		Part = crate,
+		ClaimCash = cash,
+		ExpiresAt = os.clock() + A.FallSeconds + A.LifetimeSeconds,
+		ClaimProgress = {},
+		Airdrop = true,
+		Landed = false,
+	}
+	active[id] = rec
+	pushAirdrop({ Show = true, X = ground.X, Y = ground.Y, Z = ground.Z, Cash = cash })
+	if NotificationService then
+		for _, p in ipairs(Players:GetPlayers()) do
+			if SupplyDropConfig.AirdropLiveFor(p.UserId) then
+				NotificationService.Notify(p, "Airdrop incoming! $" .. formatCash(cash), "Info")
+			end
+		end
+	end
+	local tw = TweenService:Create(crate, TweenInfo.new(A.FallSeconds, Enum.EasingStyle.Linear), { CFrame = landed })
+	tw.Completed:Connect(function()
+		if canopy.Parent then
+			canopy:Destroy()
+		end
+		if active[id] == rec then
+			rec.Landed = true
+			local bb = WorldLabel.Create(crate, "Airdrop", {
+				Name = "Label",
+				Sub = "$" .. formatCash(cash),
+				Color = Color3.fromRGB(255, 220, 120),
+				SubColor = Color3.fromRGB(110, 255, 90),
+				Offset = Vector3.new(0, size.Y * 0.5 + (SupplyDropConfig.LabelLiftStuds or 3), 0),
+				MaxDistance = 40,
+			})
+			bb.AlwaysOnTop = false -- the objective marker is the one AlwaysOnTop cue
+		end
+	end)
+	tw:Play()
+	return true
+end
+
 function SupplyDropService.Init(deps: { [string]: any })
 	EconomyService = deps.EconomyService
 	NotificationService = deps.NotificationService
 	AnalyticsService = deps.AnalyticsService
 
+	-- claude-bud JOB 4.1: the airdrop loop (a no-op tick while nobody it is live for is in the server)
+	task.spawn(function()
+		task.wait(SupplyDropConfig.Airdrop.FirstDelaySeconds)
+		while true do
+			local okA, spawned = pcall(spawnAirdrop)
+			if not okA then
+				warn("[SupplyDropService] airdrop failed:", spawned)
+			end
+			-- the full interval after a drop; a short re-check while nobody it is live for is here
+			task.wait(if okA and spawned == true then SupplyDropConfig.Airdrop.IntervalSeconds else 30)
+		end
+	end)
+
 	if not SupplyDropConfig.Enabled then
+		-- claude-bud: the airdrop still needs the claim tick
+		local acc = 0
+		RunService.Heartbeat:Connect(function(dt)
+			acc += dt
+			if acc >= 0.2 then
+				local step = acc
+				acc = 0
+				tickClaims(step)
+			end
+		end)
 		return
 	end
 
@@ -79822,7 +80853,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="191">
+        <Item class="ModuleScript" referent="196">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -79927,6 +80958,7 @@ local ClanWarService: any = nil
 
 local DataService: any = nil
 local _EconomyService: any = nil
+local PlazaBounty = require(script.Parent.Parent.Modules.PlazaBounty) -- claude-bud JOB 4.3
 local _XPService: any = nil
 local AnalyticsService: any = nil
 local RateLimitService: any = nil
@@ -80872,6 +81904,8 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	end
 	profile.Stats.TerritoriesCaptured += 1
 	syncProfileOwnership(player)
+	-- claude-bud JOB 4.3: the plaza bounty (PlazaBountyConfig; a no-op for other zones and while its Rollout is off)
+	pcall(PlazaBounty.OnCaptured, player, rt.Def.Id, rt.Def.Position)
 
 	-- F3 Empire Tax: recount from owned zones (stealable by re-capture); the toast names the TOTAL %
 	local incomeToastShown = false
@@ -81244,6 +82278,7 @@ function TerritoryService.Init(deps: { [string]: any })
 	ClanWarService = deps.ClanWarService
 	DataService = deps.DataService
 	_EconomyService = deps.EconomyService
+	PlazaBounty.Bind({ EconomyService = deps.EconomyService, NotificationService = deps.NotificationService }) -- claude-bud JOB 4.3
 	_XPService = deps.XPService
 	AnalyticsService = deps.AnalyticsService
 	RateLimitService = deps.RateLimitService
@@ -81402,7 +82437,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="192">
+          <Item class="ModuleScript" referent="197">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -81532,7 +82567,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="193">
+          <Item class="ModuleScript" referent="198">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -81609,7 +82644,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="194">
+          <Item class="ModuleScript" referent="199">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -81678,7 +82713,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="195">
+        <Item class="ModuleScript" referent="200">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -82152,7 +83187,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="196">
+        <Item class="ModuleScript" referent="201">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -82867,7 +83902,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="197">
+        <Item class="ModuleScript" referent="202">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -88158,7 +89193,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="198">
+        <Item class="ModuleScript" referent="203">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -90948,7 +91983,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="199">
+        <Item class="ModuleScript" referent="204">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -91361,19 +92396,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="200">
+  <Item class="StarterPlayer" referent="205">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="201">
+    <Item class="StarterPlayerScripts" referent="206">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="202">
+      <Item class="Folder" referent="207">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="203">
+        <Item class="LocalScript" referent="208">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -91518,6 +92553,7 @@ safeInit("ProducerLabels", safeRequire("ProducerLabels", Modules:WaitForChild("P
 safeInit("NextPadChevrons", safeRequire("NextPadChevrons", Modules:WaitForChild("NextPadChevrons", 5) :: Instance)) -- gold floor chevrons to the next pad on the own plot (TycoonGuideConfig.Chevrons.Enabled)
 safeInit("LabelGovernor", safeRequire("LabelGovernor", Modules:WaitForChild("LabelGovernor", 5) :: Instance)) -- at most 3 base labels on screen (WorldLabelConfig.BaseLabelGovernor.Enabled)
 safeInit("OpsController", safeRequire("OpsController", Controllers:WaitForChild("OpsController", 5) :: Instance)) -- W3s2 Phase B Jobs: JOBS rows, job card, hold pill (a no-op while OpsConfig.Enabled is false)
+safeInit("FeatureController", safeRequire("FeatureController", Controllers:WaitForChild("FeatureController", 5) :: Instance)) -- claude-bud JOB 4/5: FeaturePush cues (airdrop / bounty markers)
 safeInit("RigAnimator", safeRequire("RigAnimator", Modules:WaitForChild("RigAnimator", 5) :: Instance)) -- R-RIG: soldier animation, army escorts, far LOD (client only; a no-op while RigConfig.Enabled is false)
 safeInit("AircraftBodyClient", safeRequire("AircraftBodyClient", Modules:WaitForChild("AircraftBodyClient", 5) :: Instance)) -- air-looks: store aircraft rotors spin + seated chase camera (client only; nothing to do until a store aircraft body is live)
 
@@ -91525,11 +92561,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="204">
+        <Item class="Folder" referent="209">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="205">
+          <Item class="ModuleScript" referent="210">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -92200,7 +93236,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="206">
+          <Item class="ModuleScript" referent="211">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -92473,7 +93509,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="207">
+          <Item class="ModuleScript" referent="212">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -93174,7 +94210,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="208">
+          <Item class="ModuleScript" referent="213">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -95552,7 +96588,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="209">
+          <Item class="ModuleScript" referent="214">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -95929,7 +96965,103 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="210">
+          <Item class="ModuleScript" referent="215">
+            <Properties>
+              <string name="Name">FeatureController</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 4/5 (2026-09-29): client side of the server's FeaturePush cues (Constants.RemoteNames.FeaturePush,
+	server -> this client only; the server fires it only to players a feature is live for, so nothing here gates).
+	Display only: every reward is decided on the server.
+	  "Airdrop"  { Show = true, X, Y, Z, Cash } -> the one objective marker ("AIRDROP") to the landing spot
+	             { Show = false }               -> clears it if it is still the airdrop
+	  "Bounty"   { Show = true, X, Y, Z }       -> the objective marker ("BOUNTY") on the Central Plaza
+	             { Show = false }               -> clears it if it is still the bounty
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
+local Remotes = require(Shared.Remotes)
+local Constants = require(Shared.Constants)
+
+local FeatureController = {}
+
+-- claude-bud JOB 4.4: the local "Army Upgrades" prompt at the own Barracks (opens the Research Soldiers track)
+local upgradeAnchor: Attachment? = nil
+local function armyUpgrades(data: any)
+	if typeof(data) ~= "table" then
+		return
+	end
+	local x, y, z = tonumber(data.X), tonumber(data.Y), tonumber(data.Z)
+	if not (x and y and z) then
+		return
+	end
+	if upgradeAnchor then
+		upgradeAnchor:Destroy()
+	end
+	local a = Instance.new("Attachment")
+	a.Name = "WE_ArmyUpgradesPrompt"
+	a.WorldPosition = Vector3.new(x, y, z)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Army Upgrades"
+	prompt.ObjectText = "Barracks"
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 14
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = a
+	local track = if typeof(data.Track) == "string" then data.Track else "Soldiers"
+	prompt.Triggered:Connect(function()
+		local rc = script.Parent:FindFirstChild("ResearchController")
+		if rc and rc:IsA("ModuleScript") then
+			local ok, mod = pcall(require, rc)
+			if ok and type(mod) == "table" and type((mod :: any).Open) == "function" then
+				(mod :: any).Open(track)
+			end
+		end
+	end)
+	a.Parent = workspace.Terrain
+	upgradeAnchor = a
+end
+
+local LABELS = { Airdrop = "AIRDROP", Bounty = "BOUNTY" }
+
+local function marker(kind: string, data: any)
+	local label = LABELS[kind]
+	if label == nil or typeof(data) ~= "table" then
+		return
+	end
+	if data.Show == true then
+		local x, y, z = tonumber(data.X), tonumber(data.Y), tonumber(data.Z)
+		if x and y and z then
+			ObjectiveMarker.ShowWith({ Short = label, X = x, Y = y, Z = z }, { TimeoutSeconds = 300 })
+		end
+	else
+		local cur = ObjectiveMarker.Current()
+		if cur and cur.Short == label then
+			ObjectiveMarker.Clear()
+		end
+	end
+end
+
+function FeatureController.Init()
+	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if typeof(kind) ~= "string" then
+			return
+		end
+		if LABELS[kind] then
+			marker(kind, data)
+		elseif kind == "ArmyUpgrades" then
+			armyUpgrades(data)
+		end
+	end)
+end
+
+return FeatureController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="216">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -97788,7 +98920,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="211">
+          <Item class="ModuleScript" referent="217">
             <Properties>
               <string name="Name">MissileController</string>
               <string name="Source"><![CDATA[--!strict
@@ -99670,7 +100802,7 @@ return MissileController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="212">
+          <Item class="ModuleScript" referent="218">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -100614,7 +101746,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="213">
+          <Item class="ModuleScript" referent="219">
             <Properties>
               <string name="Name">NationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -102070,7 +103202,7 @@ return NationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="214">
+          <Item class="ModuleScript" referent="220">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -103175,7 +104307,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="215">
+          <Item class="ModuleScript" referent="221">
             <Properties>
               <string name="Name">OpsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -104068,7 +105200,7 @@ return OpsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="216">
+          <Item class="ModuleScript" referent="222">
             <Properties>
               <string name="Name">OrdersController</string>
               <string name="Source"><![CDATA[--!strict
@@ -104634,7 +105766,7 @@ return OrdersController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="217">
+          <Item class="ModuleScript" referent="223">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -105614,7 +106746,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="218">
+            <Item class="ModuleScript" referent="224">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -105779,7 +106911,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="219">
+            <Item class="ModuleScript" referent="225">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -105819,7 +106951,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="220">
+          <Item class="ModuleScript" referent="226">
             <Properties>
               <string name="Name">PromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -106734,7 +107866,7 @@ return PromptController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="221">
+          <Item class="ModuleScript" referent="227">
             <Properties>
               <string name="Name">ResearchController</string>
               <string name="Source"><![CDATA[--!strict
@@ -107830,7 +108962,7 @@ return ResearchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="222">
+          <Item class="ModuleScript" referent="228">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -108342,7 +109474,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="223">
+          <Item class="ModuleScript" referent="229">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -110132,7 +111264,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="224">
+          <Item class="ModuleScript" referent="230">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -111399,7 +112531,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="225">
+          <Item class="ModuleScript" referent="231">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -113035,7 +114167,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="226">
+          <Item class="ModuleScript" referent="232">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -113360,7 +114492,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="227">
+          <Item class="ModuleScript" referent="233">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -114724,7 +115856,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="228">
+          <Item class="ModuleScript" referent="234">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -117025,11 +118157,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="229">
+        <Item class="Folder" referent="235">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="230">
+          <Item class="ModuleScript" referent="236">
             <Properties>
               <string name="Name">AimTargets</string>
               <string name="Source"><![CDATA[--!strict
@@ -117572,7 +118704,7 @@ return AimTargets
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="231">
+          <Item class="ModuleScript" referent="237">
             <Properties>
               <string name="Name">AirWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -118224,7 +119356,7 @@ return AirWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="232">
+          <Item class="ModuleScript" referent="238">
             <Properties>
               <string name="Name">AircraftBodyClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -118555,7 +119687,7 @@ return AircraftBodyClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="233">
+          <Item class="ModuleScript" referent="239">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -119382,7 +120514,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="234">
+          <Item class="ModuleScript" referent="240">
             <Properties>
               <string name="Name">AudioHooks</string>
               <string name="Source"><![CDATA[--!strict
@@ -119914,7 +121046,7 @@ return AudioHooks
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="235">
+          <Item class="ModuleScript" referent="241">
             <Properties>
               <string name="Name">BusinessVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -121349,7 +122481,7 @@ return BusinessVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="236">
+          <Item class="ModuleScript" referent="242">
             <Properties>
               <string name="Name">CameraFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -121893,7 +123025,7 @@ return CameraFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="237">
+          <Item class="ModuleScript" referent="243">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -121961,7 +123093,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="238">
+          <Item class="ModuleScript" referent="244">
             <Properties>
               <string name="Name">ConsoleWaypoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -122275,7 +123407,7 @@ return ConsoleWaypoint
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="239">
+          <Item class="ModuleScript" referent="245">
             <Properties>
               <string name="Name">HudIcons</string>
               <string name="Source"><![CDATA[--!strict
@@ -122624,7 +123756,7 @@ return HudIcons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="240">
+          <Item class="ModuleScript" referent="246">
             <Properties>
               <string name="Name">HudLayout</string>
               <string name="Source"><![CDATA[--!strict
@@ -123941,7 +125073,7 @@ return HudLayout
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="241">
+          <Item class="ModuleScript" referent="247">
             <Properties>
               <string name="Name">LabelGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -124183,7 +125315,7 @@ return LabelGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="242">
+          <Item class="ModuleScript" referent="248">
             <Properties>
               <string name="Name">NextPadChevrons</string>
               <string name="Source"><![CDATA[--!strict
@@ -124671,7 +125803,7 @@ return NextPadChevrons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="243">
+          <Item class="ModuleScript" referent="249">
             <Properties>
               <string name="Name">ObjectiveMarker</string>
               <string name="Source"><![CDATA[--!strict
@@ -125130,7 +126262,7 @@ return ObjectiveMarker
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="244">
+          <Item class="ModuleScript" referent="250">
             <Properties>
               <string name="Name">OpsJobs</string>
               <string name="Source"><![CDATA[--!strict
@@ -125754,7 +126886,7 @@ return OpsJobs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="245">
+          <Item class="ModuleScript" referent="251">
             <Properties>
               <string name="Name">PanelShell</string>
               <string name="Source"><![CDATA[--!strict
@@ -126000,7 +127132,7 @@ return PanelShell
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="246">
+          <Item class="ModuleScript" referent="252">
             <Properties>
               <string name="Name">ProducerLabels</string>
               <string name="Source"><![CDATA[--!strict
@@ -126433,7 +127565,7 @@ return ProducerLabels
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="247">
+          <Item class="ModuleScript" referent="253">
             <Properties>
               <string name="Name">ProductionFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -127683,7 +128815,7 @@ return ProductionFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="248">
+          <Item class="ModuleScript" referent="254">
             <Properties>
               <string name="Name">ProgressPill</string>
               <string name="Source"><![CDATA[--!strict
@@ -127862,7 +128994,7 @@ return ProgressPill
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="249">
+          <Item class="ModuleScript" referent="255">
             <Properties>
               <string name="Name">RebirthConfirm</string>
               <string name="Source"><![CDATA[--!strict
@@ -128748,7 +129880,7 @@ return RebirthConfirm
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="250">
+          <Item class="ModuleScript" referent="256">
             <Properties>
               <string name="Name">RigAnimator</string>
               <string name="Source"><![CDATA[--!strict
@@ -129552,7 +130684,7 @@ return RigAnimator
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="251">
+          <Item class="ModuleScript" referent="257">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -129617,7 +130749,7 @@ return StudioSmokeClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="252">
+          <Item class="ModuleScript" referent="258">
             <Properties>
               <string name="Name">VehicleCombatClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -130307,7 +131439,7 @@ return VehicleCombatClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="253">
+          <Item class="ModuleScript" referent="259">
             <Properties>
               <string name="Name">VehicleDriveClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -134075,7 +135207,7 @@ return VehicleDriveClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="254">
+          <Item class="ModuleScript" referent="260">
             <Properties>
               <string name="Name">WeaponVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -136210,7 +137342,7 @@ return WeaponVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="255">
+          <Item class="ModuleScript" referent="261">
             <Properties>
               <string name="Name">WorldSpinners</string>
               <string name="Source"><![CDATA[--!strict
@@ -136351,7 +137483,7 @@ return WorldSpinners
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="256">
+  <Item class="Workspace" referent="262">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
