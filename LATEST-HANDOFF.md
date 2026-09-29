@@ -1,26 +1,30 @@
 <!-- Q2-START -->
-# WHERE I STOPPED â€” 2026-09-29 (Claude on Bud, claude/desktop-bud rebased on v98 08bcdf4)
-**PREMIUM job DONE and pushed:** the 6 Robux-only vehicles are clearly overpowered (owner-only through RolloutKeys; numbers in `VehicleConfig.Premium`).
-Queue 2 (jobs 6â€“11) was already done; see the summary below. Last run: BuyPathStatic PASS=5289 FAIL=0 (parse gate on), rojo build ok,
-luau-lsp no new errors. Not run: the headless world sim, the DataService harness, check_hud.py (not in the repo).
-
-## PREMIUM vehicles â€” what shipped
-- 1.4x the fastest and 2x the toughest cash vehicle of their family, x1.6 acceleration, x1.4â€“1.5 turning (unclamped speed).
-- Server-validated weapons for all six: a main gun (cannon / MG per vehicle) + homing missiles (lock â‰¤ 250 studs in a 30Â° cone,
-  turn-rate limited so they can be dodged, 5 s cooldown). Friendly fire is off; the shields and protections are obeyed.
-- Mobile FIRE / MISSILE buttons only while you drive one, a gold lock reticle, and a gold trail + ROBUX badge for everyone to see.
-
-## Phone tests (owner account; the premium vehicles spawn for you without the passes)
-1. Spawn the Warlord and the Razorfang next to a cash tank / buggy: visibly faster, quicker off the line, sharper turns.
-2. While driving one: FIRE and MISSILE appear bottom-right beside the drive buttons, never on the jump button or thumbstick. Get out: they vanish.
-3. Hold FIRE: tracers and hits on NPCs / an alt's vehicle. The Warlord's cannon splashes. A clan-mate and your own vehicles take no damage.
-4. Point at an alt within ~250 studs: a gold square locks on. MISSILE: it curves after them; a hard turn at speed can make it miss. It's ready again after 5 s.
-5. Skylance / Stormwing: cannon + missiles from the air; the old aircraft buttons don't show on them.
-6. Leviathan / Tidebreaker on the water: deck cannon / MG + missiles.
-7. A second account sees your gold trail and the ROBUX badge (within 40 studs); it can't spawn these vehicles.
-8. Spawn-protected / novice-shielded players take no damage from them.
-
+# WHERE I STOPPED — 2026-09-29 (Claude on Bud tip 3cf54f2) — QUEUE 2 + PREMIUM SHIPPED AS v100
+**Claude: do not redo queue 2 (JOB 6–11) or PREMIUM.** Code Bot shipped tip `3cf54f2` as WE_Build 100 on phase-7-polish.
+Jobs: [x] 6 Extra Garage Slot · [x] 7 first-5-minutes · [x] 8 mobile perf · [x] 9 old WIP · [x] 10 balance · [x] 11 juice · [x] PREMIUM weapons
+BuyPathStatic on tip was PASS=5289 FAIL=0. See v100 section below for pins / phone tests / migrate.
 <!-- Q2-END -->
+
+# v100 — 2026-09-29 ~14:00 Dublin (Code Bot, branch phase-7-polish, WE_Build 100)
+
+**Claude: do not redo / undo queue 2 (JOB 6–11) or PREMIUM.** Code Bot merged `origin/claude/desktop-bud` tip `3cf54f2` (ce0b5cc..3cf54f2; based on v98 `08bcdf4`) onto phase-7-polish (v99 `c32bd9a`) and published. v99 Creator Hub Ids + army/rifle fixes kept.
+
+- **JOB 9** (owner-only cleanup): old WIP finished or removed (real-world PT-boat / failed truck picks out; naval rows back on Part kits; unfinished handoff/wip patches retired; March lane C gone).
+- **JOB 10** (owner-only): `BalanceConfig` curve — pads pay back in minutes, income XP does not feed battle pass; first rebirth ~34 min (`tools/progression_sim.py`).
+- **JOB 11** (owner-only): juice — purchase burst, rebirth celebration banner, AIRSTRIKE button in HUD top stack (touch-safe sizes).
+- **PREMIUM** (owner-only): 6 Robux-only vehicles clearly overpowered (`VehicleConfig.Premium`); server-validated guns + homing missiles (`PremiumWeaponService` / `PremiumWeaponsClient`); mobile FIRE/MISSILE; gold trail + ROBUX badge.
+- Pins: `tools/checks/claude_bud_q2.py`, `claude_bud_premium.py`, `codebot_v99.py` (army/rifle/Ids), `codebot_v100.py`. PreferMesh stays OFF. WE_Building* untouched.
+- **Creator Hub Ids kept from v99:** PV_Skylance 2001602422 · PV_Stormwing 2001722392 · PV_Leviathan 2001398410 · PV_Tidebreaker 1999263465 · PV_Warlord 2001320428 · PV_Razorfang 2002484380 · BiggerArmy 2001734404 · ExtraGarageSlot 1999359549 · SoldierRefill 3715442523 · PlazaAirstrike 3715442542.
+- **Publish note for Shaun:** use **"Migrate to Latest Update"** (or shut down old servers) so JOB 9–11 + PREMIUM appear.
+
+**Phone tests for Shaun (owner account; a second account must see none of the owner-only items):**
+- **Balance:** pads feel worth buying (minutes payback); first rebirth around ~30–40 min; income does not power the battle pass.
+- **Juice:** buy a pad → short burst; rebirth → celebration banner in the top stack (not over controls); AIRSTRIKE button in top stack, big enough for a thumb.
+- **PREMIUM vehicles:** spawn Warlord / Razorfang next to cash tank / buggy — faster, tougher, snappier. While driving: FIRE + MISSILE bottom-right (not on jump/thumbstick); get out → gone. Hold FIRE hits NPCs/alt vehicles; clan/own vehicles take no damage. Gold lock ~250 studs → MISSILE curves; hard turn can dodge; 5 s cooldown. Skylance/Stormwing air; Leviathan/Tidebreaker water. Second account sees gold trail + ROBUX badge, cannot spawn. Spawn-protect / novice shield ignored damage.
+- **Regression:** army gate-hold + rifle re-tap holster still work (v99). Garage gold ROBUX rows + Hub Ids still prompt.
+- Migrate to Latest Update (or shut down old servers) before testing.
+
+---
 
 # v99 — 2026-09-29 ~13:50 Dublin (Code Bot, branch phase-7-polish, WE_Build 99)
 

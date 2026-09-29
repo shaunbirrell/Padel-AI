@@ -36,10 +36,11 @@ def _cb99_check(cond: bool, label: str) -> None:
 
 
 # ── build ──
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 99)', "CODEBOT v99: WE_Build=99 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 99)', "CODEBOT v99: WE_Build=99 BaseService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 99)', "CODEBOT v99: WE_Build=99 EarlyRemotes")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WE_Build=99", "CODEBOT v99: DataService profile-loaded log says WE_Build=99")
+#must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 99)', "CODEBOT v99: WE_Build=99 DataService")
+#must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 99)', "CODEBOT v99: WE_Build=99 BaseService")
+#must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 99)', "CODEBOT v99: WE_Build=99 EarlyRemotes")
+#must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WE_Build=99", "CODEBOT v99: DataService profile-loaded log says WE_Build=99")
+# v100 (Code Bot): WE_Build pins retired, superseded in tools/checks/codebot_v100.py
 
 # ── army: kill switches + gate hold / ATTACK seats kept ──
 must_contain(_cb99_ac, '\tFollow2 = {\n\t\tEnabled = true,\n\t\tRollout = "all",', "CODEBOT v99: Follow2 kill switch kept")
