@@ -10,6 +10,20 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [ ] 14 game-feel p
 
 <!-- Q2-END -->
 
+# v103 — 2026-09-29 ~14:35 Dublin (Code Bot, branch phase-7-polish, WE_Build 103) — JOB 13 ENGAGEMENT (owner-only)
+
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v103) before JOB 14/15.** Code Bot cherry-picked JOB 13 (`36779ce`)
+onto v102. Keep Codes / CashBoost; Engagement Double Cash events stack with the timed boost. Do not redo JOB 13.
+
+- **Engagement (owner-only, `EngagementConfig.Rollout` per feature):** weekly events (Plaza War Week / Airdrop Frenzy / Double Cash Weekend)
+  with HUD banner + countdown; OrderedDataStore leaderboards (richest / plaza captures / rebirths) on a Town Square board;
+  invite ($10k/friend, 5/day; friend gets $2.5k once); friends-in-server $500/min (max 3); comeback after 3+ days $25k.
+  Not in LaunchSafe yet — phone-test as owner, then flip Rollout per feature.
+- **Cash stack:** v102 `CashBoostMult` + JOB 13 `EngagementService.CashMult` both apply on non-exempt Cash.
+- Pins: `tools/checks/claude_bud_q3.py` + `tools/checks/codebot_v103.py`. BuyPathStatic FAIL=0, rojo build ok. PreferMesh OFF. WE_Building* untouched.
+- **Publish note for Shaun:** "Migrate to Latest Update" (or shut down old servers) so v103 appears.
+
+
 # v102 — 2026-09-29 ~15:00 Dublin (Code Bot, branch phase-7-polish, WE_Build 102) — REDEEM CODES (live for all)
 
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v102).** The rail now has 6 tiles (Shop · Rebirth · Army · Garage ·

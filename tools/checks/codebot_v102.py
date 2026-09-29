@@ -16,9 +16,9 @@ _cb102_SVC = _cb102_S + "Services/CodesService.luau"
 _cb102_CTL = _cb102_CL + "Controllers/CodesController.luau"
 
 # ── build ──
-for _f in (_cb102_S + "Services/DataService.luau", _cb102_S + "Services/BaseService.luau", _cb102_S + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 102)', "CODEBOT v102: WE_Build=102 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb102_S + "Services/DataService.luau", "WE_Build=102", "CODEBOT v102: DataService profile-loaded log says WE_Build=102")
+# v103 (Code Bot): retired, superseded in tools/checks/codebot_v103.py: #for _f in (_cb102_S + "Services/DataService.luau", _cb102_S + "Services/BaseService.luau", _cb102_S + "EarlyRemotes.server.luau"):
+# v103 (Code Bot): retired, superseded in tools/checks/codebot_v103.py: #    must_contain(_f, 'SetAttribute("WE_Build", 102)', "CODEBOT v102: WE_Build=102 " + _f.rsplit("/", 1)[-1])
+# v103 (Code Bot): retired, superseded in tools/checks/codebot_v103.py: #must_contain(_cb102_S + "Services/DataService.luau", "WE_Build=102", "CODEBOT v102: DataService profile-loaded log says WE_Build=102")
 
 # ── CodesConfig: server only, BUDSTUDIOS ──
 _cb102_C = read(_cb102_CFG) or ""

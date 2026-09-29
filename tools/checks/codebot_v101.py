@@ -46,17 +46,20 @@ for _f, _needle, _label in (
     must_contain(_cb101_C + _f, _needle, "CODEBOT v101: live for all: " + _label)
 must_contain(_cb101_C + "WorldFillConfig.luau", "local WorldFillConfig = {\n\tEnabled = true,", "CODEBOT v101: WorldFill on (world-wide, no per-player gate)")
 
-# no config value is still "owner" except the store bodies (left off on purpose, below)
+# no config value is still "owner" except the store bodies + EngagementConfig (v103 JOB 13, not LaunchSafe)
 import glob as _cb101_glob
 _cb101_left = []
 for _p in sorted(_cb101_glob.glob(_cb101_C + "*.luau")):
+    # v103: EngagementConfig ships owner-only (JOB 13); skip it like BodyRollout
+    if _p.rsplit("/", 1)[-1] == "EngagementConfig.luau":
+        continue
     for _ln in (read(_p) or "").split("\n"):
         _s = _ln.strip()
         if _s.startswith("--"):
             continue
         if _cb101_re.search(r'[^=~<>]=\s*"owner"', _s) and "BodyRollout" not in _s:
             _cb101_left.append(_p.rsplit("/", 1)[-1] + ": " + _s[:80])
-(ok if not _cb101_left else bad)(f"CODEBOT v101: no owner-only rollout value left in Shared/Configs (except BodyRollout) {_cb101_left}")
+(ok if not _cb101_left else bad)(f"CODEBOT v101: no owner-only rollout value left in Shared/Configs (except BodyRollout + EngagementConfig) {_cb101_left}")
 
 # ── 2. every RolloutKeys SKU has a real Id (a live item never prompts Id 0) ──
 _cb101_rk = _cb101_re.search(r"RolloutKeys = \{([^}]*)\}", _cb101_M)
