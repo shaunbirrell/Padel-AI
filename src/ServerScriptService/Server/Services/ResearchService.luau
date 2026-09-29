@@ -391,7 +391,8 @@ local function sanityCheck()
 			local prev = 0
 			for i = 1, def.MaxLevel do
 				local c = def.Costs[i]
-				if typeof(c) ~= "number" or c ~= c or c <= prev then
+				-- (claude-bud JOB 24: FlatCosts allows equal steps, e.g. one tower guard per level at one price)
+				if typeof(c) ~= "number" or c ~= c or c < prev or (c == prev and def.FlatCosts ~= true) then
 					problem = "costs not strictly increasing"
 					break
 				end

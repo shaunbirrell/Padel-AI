@@ -1974,6 +1974,53 @@ function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: num
 	return hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = true, NoCredit = credit ~= true })
 end
 
+--[[ claude-bud JOB 24 §2 (ArmyConfig.ArmyCombat): may an ATTACKING army of `owner` shoot player `victim`? The same rules
+	as the owner's own gun: PvP on, not himself, not a clan ally, the owner not under the novice shield, the victim not
+	spawn / novice shielded, alive. Returns (ok, reason): "ok" | "pvp_off" | "self" | "ally" | "owner_shielded" |
+	"protected" | "dead". A "protected" victim is shown to the attacker as Protected (SquadOrdersService). ]]
+function CombatService.UnitMayHitPlayer(owner: Player, victim: Player): (boolean, string)
+	if not GameConfig.PvPEnabled then
+		return false, "pvp_off"
+	end
+	if owner == victim then
+		return false, "self"
+	end
+	if isClanAlly(owner, victim) then
+		return false, "ally"
+	end
+	if not NS.allowsAttack(owner) then
+		return false, "owner_shielded"
+	end
+	local vState = combatStates[victim.UserId]
+	if (vState and clock() < vState.InvulnerableUntil) or NS.Active[victim.UserId] ~= nil then
+		return false, "protected"
+	end
+	local _, hum = characterParts(victim)
+	if hum == nil or hum.Health <= 0 then
+		return false, "dead"
+	end
+	return true, "ok"
+end
+
+--[[ claude-bud JOB 24 §2: one ATTACK army unit's hit on an enemy player (SquadOrdersService checked the line of sight and
+	rolled the hit chance; UnitMayHitPlayer is checked again here). Through hurtPlayer like any gun hit: the creator tag
+	credits the OWNER (cash, XP, MOST KILLS, the kill feed), the victim gets the hit / death feedback, the owner a hit
+	marker + damage number. Returns (dealt, killed, reason). ]]
+function CombatService.ApplyUnitPlayerHit(owner: Player, victim: Player, damage: number): (number, boolean, string)
+	if typeof(owner) ~= "Instance" or not owner:IsA("Player") or typeof(victim) ~= "Instance" or not victim:IsA("Player") then
+		return 0, false, "bad_args"
+	end
+	if typeof(damage) ~= "number" or not (damage > 0) or damage == math.huge then
+		return 0, false, "bad_damage"
+	end
+	local may, why = CombatService.UnitMayHitPlayer(owner, victim)
+	if not may then
+		return 0, false, why
+	end
+	local dealt, killed = hurtPlayer(owner, victim, damage, "Squad", { UnitShot = true })
+	return dealt, killed, if dealt > 0 then "ok" else "no_damage"
+end
+
 -- ── army lane A0 (SPEC-ARMY-FINAL §7.1): the escort's NPC reads + visible unit shots ─────────────────────────────
 --[[ One hostile list per squad think pass (SquadOrdersService), instead of a CollectionService:GetTagged("WE_NPC") per
 	unit. `out` is refilled IN PLACE (entries 1..n, the old tail cleared; no table is made) with the Model of every NPC

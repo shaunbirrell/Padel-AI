@@ -2,7 +2,49 @@
 
 local AnalyticsConfig = {
 	Enabled = true,
-	LogToOutput = true, -- MVP: print; swap sink later
+	LogToOutput = false, -- claude-bud JOB 24 §10: the Roblox sink below is live; Studio still prints every event
+	-- claude-bud JOB 24 §10: Roblox AnalyticsService (Creator Hub -> Analytics). Funnel = the onboarding steps (new
+	-- players only: FirstJoinUnix within FunnelNewPlayerSeconds; each step once, saved in profile.AnalyticsFunnel).
+	-- Economy = Cash sources / sinks, summed per reason and flushed every EconomyFlushSeconds (never per collect).
+	-- Custom = these events only, a few per player per minute at most (MaxCustomPerMinute + PerPlayer x players).
+	Roblox = {
+		Enabled = true,
+		FunnelNewPlayerSeconds = 900,
+		Funnel = {
+			{ Step = "Joined", Events = { "PLAYER_JOIN" } },
+			{ Step = "CollectedCash", Events = { "CASH_COLLECT" } },
+			{ Step = "FirstBuilding", Events = { "FIRST_UPGRADE", "UPGRADE_PURCHASED" } },
+			{ Step = "OpenedArmy", Events = { "ARMY_OPEN", "SOLDIER_RECRUIT" } },
+			{ Step = "FirstAttack", Events = { "ARMY_ATTACK" } },
+			{ Step = "FirstOutpost", Events = { "FIRST_OUTPOST", "TERRITORY_CAPTURED" } },
+			{ Step = "PurchasePrompt", Events = { "SHOP_PROMPT", "PREMIUM_VEHICLE_PROMPT" } },
+			{ Step = "FirstPurchase", Events = { "FIRST_PURCHASE", "PURCHASE_RECEIPT" } },
+		},
+		EconomyFlushSeconds = 60,
+		-- reason (prefix) -> Enum.AnalyticsEconomyTransactionType name; anything else = Gameplay
+		EconomyTypes = { upgrade_ = "Shop", weapon_ = "Shop", vehicle_ = "Shop", research_ = "Shop", recruit_ = "Shop", devproduct = "IAP",
+			daily = "TimedReward", premium_daily = "TimedReward", spinner = "TimedReward", code = "ContextualPurchase", onboarding = "Onboarding" },
+		-- in-house event -> Roblox custom event name (value = the Value prop, else 1; field 1 = the Field prop)
+		Custom = {
+			SHOP_OPEN = { Name = "ShopOpened" },
+			SHOP_PROMPT = { Name = "ProductPrompted", Field = "productKey" },
+			PROMPT_CLOSED = { Name = "PromptCancelled", Field = "kind" },
+			PURCHASE_RECEIPT = { Name = "RobuxPurchase", Value = "currencySpent", Field = "productKey" },
+			VEHICLE_SPAWNED = { Name = "VehicleSpawned", Field = "vehicle" },
+			MISSILE_STRIKE = { Name = "MissileLaunched" },
+			NUKE_LAUNCH = { Name = "NukeLaunched" },
+			CODE_REDEEM = { Name = "CodeRedeemed", Field = "code" },
+			TUTORIAL_SHOWN = { Name = "TipShown", Field = "tip" },
+			TUTORIAL_CLOSED = { Name = "TipClosed", Field = "tip" },
+			ARMY_ATTACK = { Name = "ArmyAttack" },
+			SESSION_END = { Name = "SessionLength", Value = "minutes", Field = "bucket" },
+		},
+		MaxCustomPerMinute = 100,
+		PerPlayerPerMinute = 10,
+		-- the client may report only these (RequestAnalyticsEvent; a few per minute per player)
+		ClientEvents = { ShopOpened = "SHOP_OPEN", ArmyOpened = "ARMY_OPEN", TipShown = "TUTORIAL_SHOWN", TipClosed = "TUTORIAL_CLOSED" },
+		ClientPerMinute = 12,
+	},
 	Events = {
 		PLAYER_JOIN = "PLAYER_JOIN",
 		PLAYER_LEAVE = "PLAYER_LEAVE",
@@ -91,6 +133,14 @@ local AnalyticsConfig = {
 		BAG_DROP = "BAG_DROP", -- the carrier died (or the deadline ran out: lost = true)
 		BAG_PICKUP = "BAG_PICKUP",
 		BAG_DELIVER = "BAG_DELIVER",
+		-- claude-bud JOB 24 §10: funnel / custom events
+		CASH_COLLECT = "CASH_COLLECT",
+		ARMY_OPEN = "ARMY_OPEN",
+		ARMY_ATTACK = "ARMY_ATTACK",
+		TUTORIAL_SHOWN = "TUTORIAL_SHOWN",
+		TUTORIAL_CLOSED = "TUTORIAL_CLOSED",
+		MISSILE_STRIKE = "MISSILE_STRIKE",
+		SESSION_END = "SESSION_END",
 	},
 }
 

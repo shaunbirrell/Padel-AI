@@ -552,6 +552,25 @@ local ArmyConfig = {
 		YawPublishDeg = 3, -- WE_FormYaw (its row's heading) is written only when it moved this much
 		LogSeconds = 5,
 	},
+	-- claude-bud JOB 24 §2 (docs/ARMY-ATTACK-ROOTCAUSE.md): an ATTACKING army (Follow3.AttackSteer) also fights enemy
+	-- PLAYERS and base defenders, server-side: the squad target may be an enemy player (CombatService.UnitMayHitPlayer:
+	-- PvP, clan ally, spawn / novice shields -> "Protected"), a gate / tower guard of a base that is not his or an ally's,
+	-- or a CombatService NPC; a soldier with no line of sight to a player standing behind a gate shoots the gate. Kills
+	-- are credited to the army owner (players: cash, XP, MOST KILLS; NPCs: as his own kills; guards: the JOB 20 guard
+	-- reward). Enabled = false: the army hits NPCs only, as v116.
+	ArmyCombat = {
+		Enabled = true,
+		TargetPlayers = true,
+		TargetGuards = true,
+		ShootGates = true,
+		PlayerDamageMult = 0.6, -- x OrdersConfig.AttackDamage (research-scaled) per soldier hit on a player
+		PlayerMaxDps = 40, -- per victim per army: a full army never deletes a player instantly (time to kill >= 2.5 s)
+		GuardDamageMult = 1,
+		GateDamageMult = 1,
+		CreditSteeredAttackKills = true, -- NPC kills by a steered ATTACK pay the owner (the 140-stud leash keeps him near)
+		ProtectedNoteSeconds = 8, -- "X is protected" to the attacker at most this often per victim
+		HitLogSeconds = 5, -- debug (/armydebug): the per-kind hit / miss / blocked counts, this often
+	},
 
 	Gate = {
 		-- The owner's FOLLOW units within RaidConfig.Defense.GateOpenRadius open his friendly gate, only while he is

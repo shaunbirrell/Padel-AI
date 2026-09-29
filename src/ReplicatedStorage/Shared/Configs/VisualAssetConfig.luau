@@ -1499,18 +1499,18 @@ local VisualAssetConfig = {
 
 	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
 	-- W1 CFG drop (paid): 0 is skipped, so TryAttachCollectorVisual tries the fallback, then the alts, then the Part kit
-	MoneyCollector = { ModelAssetId = 18220523228, Note = "owner pick: ATM by 0GColt (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
-	MoneyCollectorFallback = { ModelAssetId = 175462478, Note = "ATM fallback classic" } :: AssetRef,
+	MoneyCollector = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 18220523228 (75 parts > the 40-part cap (live); the Part kit look stays) - owner pick: ATM by 0GColt (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
+	MoneyCollectorFallback = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 175462478 (not authorized (live LoadAsset); the Part kit look stays) - ATM fallback classic" } :: AssetRef,
 	MoneyCollectorAlts = {
-		{ ModelAssetId = 90362241548850, Note = "ATM alt A" } :: AssetRef,
-		{ ModelAssetId = 76846072091295, Note = "ATM alt B" } :: AssetRef,
-		{ ModelAssetId = 35409899, Note = "ATM alt C" } :: AssetRef,
+		{ ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 90362241548850 (not authorized (live LoadAsset); the Part kit look stays) - ATM alt A" } :: AssetRef,
+		{ ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 76846072091295 (not authorized (live LoadAsset); the Part kit look stays) - ATM alt B" } :: AssetRef,
+		{ ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 35409899 (not authorized (live LoadAsset); the Part kit look stays) - ATM alt C" } :: AssetRef,
 	},
 	MoneyBagFX = { ModelAssetId = 38451313, Note = "Collect cash burst VFX (StripScripts)" } :: AssetRef,
 	VfxSparkles = { ModelAssetId = 4221608224, Note = "Collect/upgrade sparkles VFX" } :: AssetRef,
 	CashCrate = { ModelAssetId = 16803204916, Note = "Cash crate alt overlay" } :: AssetRef,
 	UpgradeFlag = { ModelAssetId = 1679839739, Note = "L5 structure flag pop" } :: AssetRef,
-	FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower PROP (not vehicle)" } :: AssetRef,
+	FloodlightTower = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 107381977457431 (not authorized (live LoadAsset); the Part kit look stays) - Floodlight tower PROP (not vehicle)" } :: AssetRef,
 	-- VehicleDepot showroom catalog (Part-kit podium remains fallback)
 	ShowroomPodium = { ModelAssetId = 5267267960, Note = "Showroom podium mesh" } :: AssetRef,
 	ShowroomPedestal = { ModelAssetId = 130578088310000, Note = "Showroom pedestal" } :: AssetRef,
@@ -1526,7 +1526,7 @@ local VisualAssetConfig = {
 		SandbagBarrier = { ModelAssetId = 12651656400, Note = "Warzone SandbagBarrier" } :: AssetRef,
 		SandbagWall = { ModelAssetId = 25733125, Note = "Warzone SandbagWall" } :: AssetRef,
 		ConcreteBarrier = { ModelAssetId = 2766525411, Note = "owner pick: road barrier by SiameseMouse (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
-		Crate = { ModelAssetId = 53591587, Note = "Warzone Crate" } :: AssetRef,
+		Crate = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 53591587 (not authorized (live LoadAsset); the Part kit look stays) - Warzone Crate" } :: AssetRef,
 		MilitaryCrate = { ModelAssetId = 2930926216, Note = "owner pick: Military Crates by XIArchangel (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		AmmoBox = { ModelAssetId = 16382915010, Note = "Warzone AmmoBox" } :: AssetRef,
 		OilBarrel = { ModelAssetId = 23153991, Note = "owner list: Roblox Smoking Barrel, whole model (4 parts), smoke removed (StripEffectsAssetIds)" } :: AssetRef,
@@ -1534,7 +1534,7 @@ local VisualAssetConfig = {
 		Tent = { ModelAssetId = 182529039, Note = "owner pick: Military Canvas Tent by Quenty (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		RadioAntenna = { ModelAssetId = 19277831, PendingAssetId = 1439808070, Note = "owner pick Antenna (Sereinmachy): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
 		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
-		FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower prefer" } :: AssetRef,
+		FloodlightTower = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 107381977457431 (not authorized (live LoadAsset); the Part kit look stays) - Floodlight tower prefer" } :: AssetRef,
 		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
 		Lantern = { ModelAssetId = 0, Note = "W1 CFG drop (extracted from another game) — Part kit host" } :: AssetRef,
 		TentAlt = { ModelAssetId = 3133150032, Note = "Tent alt if primary Tent fails" } :: AssetRef,
@@ -1562,7 +1562,7 @@ local VisualAssetConfig = {
 		Sandbags = { ModelAssetId = 15271872710, Note = "owner pick: SandBag Wall by Herbie778811 (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		Barrier = { ModelAssetId = 25733125, Note = "alias → SandbagWall" } :: AssetRef,
 		Cone = { ModelAssetId = 2766525411, Note = "owner pick: road barrier by SiameseMouse (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
-		Drum = { ModelAssetId = 53591587, Note = "alias → Crate" } :: AssetRef,
+		Drum = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 53591587 (not authorized (live LoadAsset); the Part kit look stays) - alias → Crate" } :: AssetRef,
 		Pallet = { ModelAssetId = 2930926216, Note = "owner pick: Military Crates by XIArchangel (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		CamoNet = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		CamoNetAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
@@ -1601,7 +1601,7 @@ local VisualAssetConfig = {
 	-- Tier 2: oil spectacle + map landmarks (REJECT Ultrapump 1837698074)
 	IndustrialProps = {
 		IndustrialPack = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit (oil spectacle)" } :: AssetRef,
-		OilPumpjack = { ModelAssetId = 15192621369, Note = "owner pick: Oil Rig / Pumpjack by sadfiacs (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
+		OilPumpjack = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 15192621369 (68 parts > the 40-part cap (live); the Part kit look stays) - owner pick: Oil Rig / Pumpjack by sadfiacs (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		OilPumpjackAlt = { ModelAssetId = 0, Note = "0 since 2026-09-25: 15192621369 (PlotOilPump) is the primary now (tools/wire-asset-ids.py)" } :: AssetRef,
 		RustyPipes = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit" } :: AssetRef,
 		OilBarrel = { ModelAssetId = 25623924, Note = "Oil barrel ring" } :: AssetRef,

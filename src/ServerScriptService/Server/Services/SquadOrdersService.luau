@@ -76,6 +76,7 @@ SquadOrdersService._AFOn = false
 local DataService: any = nil
 local SoldierService: any = nil
 local NotificationService: any = nil
+local AnalyticsService: any = nil -- claude-bud JOB 24 §10
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AntiExploitService: any = nil
@@ -2645,6 +2646,36 @@ end
 	  * attackAimOnly (per unit per think): when the gun is ready, the squad target if it is in its fire band and in
 	    sight (squadfair: line of sight), else the nearest hostile in its band it can see (pickShot); it faces what it
 	    shoots. It never walks: no ring seats, no chase, no MoveTo from here. ]]
+-- claude-bud JOB 24 §2: ArmyConfig.ArmyCombat (players / guards / gates for an attacking army)
+local function armyCombat(): any
+	local c = (ArmyConfig :: any).ArmyCombat
+	return if typeof(c) == "table" and c.Enabled == true then c else nil
+end
+
+local guardBuf: { any } = {}
+local protectedNoteAt: { [string]: number } = {}
+local function gateSvc(): any
+	local ok, m = pcall(function()
+		return require(script.Parent.GateDefenseService) :: any
+	end)
+	return if ok then m else nil
+end
+
+-- "X is protected" to the attacker (a victim the army may not shoot: spawn / novice shield), rate-limited per pair
+local function noteProtected(player: Player, victim: Player, why: string)
+	local ac = armyCombat()
+	if ac == nil or why ~= "protected" or NotificationService == nil then
+		return
+	end
+	local key = tostring(player.UserId) .. ":" .. tostring(victim.UserId)
+	local now = os.clock()
+	if now - (protectedNoteAt[key] or -math.huge) < (tonumber(ac.ProtectedNoteSeconds) or 8) then
+		return
+	end
+	protectedNoteAt[key] = now
+	pcall(NotificationService.Notify, player, victim.DisplayName .. " is Protected (shield)", "Warn")
+end
+
 local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
 	local f3 = (ArmyConfig :: any).Follow3
 	local reach = (tonumber(f3.AttackAggroStuds) or 120) + (tonumber(f3.AttackKeepExtraStuds) or 20)
@@ -2664,22 +2695,165 @@ local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
 	nearestHostile(centre, reach, false, player, attackCands, reach)
 	local cands: { { Key: any, Pos: Vector3 } } = {}
 	local roots: { [any]: BasePart } = {}
-	local function consider(h: Humanoid?, r: BasePart?)
+	local kinds: { [any]: string } = {}
+	local who: { [any]: Player } = {}
+	local function consider(h: Humanoid?, r: BasePart?, kind: string?, pl: Player?)
 		if h and r and h.Health > 0 and r.Parent ~= nil and not roots[h] and flatDist(r.Position, proot.Position) <= leash then
 			roots[h] = r
+			kinds[h] = kind or "NPC"
+			if pl then
+				who[h] = pl
+			end
 			table.insert(cands, { Key = h, Pos = r.Position })
 		end
 	end
 	for i = 1, attackCands.N do
-		consider(attackCands.Hum[i], attackCands.Root[i])
+		consider(attackCands.Hum[i], attackCands.Root[i], "NPC")
+	end
+	candReset(attackCands) -- hold no reference to the NPCs between thinks
+	-- JOB 24 §2: enemy players and base defenders are targets too (ArmyConfig.ArmyCombat)
+	local ac = armyCombat()
+	if ac and ac.TargetPlayers == true and CombatService and CombatService.UnitMayHitPlayer then
+		for _, pl in ipairs(Players:GetPlayers()) do
+			if pl ~= player then
+				local ch = pl.Character
+				local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+				local r = ch and ch:FindFirstChild("HumanoidRootPart")
+				if hum and r and r:IsA("BasePart") and hum.Health > 0 and flatDist(r.Position, centre) <= reach then
+					local okM, may, why = pcall(CombatService.UnitMayHitPlayer, player, pl)
+					if okM and may then
+						consider(hum, r, "Player", pl)
+					elseif okM then
+						noteProtected(player, pl, why)
+					end
+				end
+			end
+		end
+	end
+	if ac and ac.TargetGuards == true then
+		local gd = gateSvc()
+		if gd and gd.HostileGuards then
+			local okG = pcall(gd.HostileGuards, player, centre, reach, guardBuf)
+			if okG then
+				for _, g in ipairs(guardBuf) do
+					consider(g.Hum, g.Root, "Guard")
+				end
+			end
+			table.clear(guardBuf)
+		end
 	end
 	local cur = (st :: any)._acTarget
 	if cur and flatDist(cur.Root.Position, centre) <= reach then
-		consider(cur.Hum, cur.Root) -- (the current one counts even when more than candCap() others are nearer)
+		local stillOk = true
+		if cur.Kind == "Player" and cur.Player and CombatService and CombatService.UnitMayHitPlayer then
+			local okM, may = pcall(CombatService.UnitMayHitPlayer, player, cur.Player)
+			stillOk = okM and may == true
+		end
+		if stillOk then
+			consider(cur.Hum, cur.Root, cur.Kind, cur.Player) -- (the current one counts even when more than candCap() others are nearer)
+		end
 	end
-	candReset(attackCands) -- hold no reference to the NPCs between thinks
 	local key = FormationController.PickTarget(if cur then cur.Hum else nil, cands, centre, f3)
-	;(st :: any)._acTarget = if key and roots[key] then { Hum = key, Root = roots[key] } else nil
+	;(st :: any)._acTarget = if key and roots[key] then { Hum = key, Root = roots[key], Kind = kinds[key] or "NPC", Player = who[key] } else nil
+end
+
+-- JOB 24 §2: the per-army hit log (always counted; printed only for an owner with /armydebug on)
+SquadOrdersService.HitStats = {} :: { [string]: number }
+local hitLogAt: { [number]: number } = {}
+local function hitLog(player: Player, unit: SquadUnit, kind: string, targetName: string, damage: number, dealt: number, reason: string)
+	local k = kind .. ":" .. reason
+	SquadOrdersService.HitStats[k] = (SquadOrdersService.HitStats[k] or 0) + 1
+	local acm = SquadOrdersService._AC
+	if acm and acm.DebugFor and acm.DebugFor(player) then
+		print(string.format("[ArmyHit] %s S%02d -> %s %s dmg=%.1f dealt=%.1f %s", player.Name, tonumber(unit.Slot) or 0, kind, targetName, damage, dealt, reason))
+		local ac = armyCombat()
+		local now = os.clock()
+		if now - (hitLogAt[player.UserId] or -math.huge) >= (tonumber(ac and ac.HitLogSeconds) or 5) then
+			hitLogAt[player.UserId] = now
+			local parts = {}
+			for key, n in pairs(SquadOrdersService.HitStats) do
+				table.insert(parts, key .. "=" .. tostring(n))
+			end
+			table.sort(parts)
+			print("[ArmyHit] totals " .. table.concat(parts, " "))
+		end
+	end
+end
+
+-- JOB 24 §2: the first thing between a unit's eyes and `troot` when it is a gate barrier part (not a guard): the gate
+local function gateBlocking(player: Player, unit: SquadUnit, troot: BasePart): BasePart?
+	local eye = unit.Root.Position + Vector3.new(0, CombatFairnessConfig.NpcEyeHeight, 0)
+	local delta = troot.Position - eye
+	if delta.Magnitude < 1e-3 then
+		return nil
+	end
+	table.clear(losIgnore)
+	table.insert(losIgnore, unit.Model)
+	table.insert(losIgnore, ensureFolder())
+	if troot.Parent then
+		table.insert(losIgnore, troot.Parent)
+	end
+	if player.Character then
+		table.insert(losIgnore, player.Character :: Instance)
+	end
+	losParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true
+	losParams.FilterDescendantsInstances = losIgnore
+	local res = Workspace:Raycast(eye, delta, losParams)
+	table.clear(losIgnore)
+	local inst = res and res.Instance
+	if inst and inst:IsA("BasePart") and inst:GetAttribute("GateBarrier") == true and inst:GetAttribute("GateGuardPart") ~= true then
+		return inst
+	end
+	return nil
+end
+
+-- JOB 24 §2: one unit's shot at a PLAYER / GUARD / GATE part (the caller checked the line of sight, or the gate is what
+-- blocks it). The fire cooldown is spent, the hit chance rolled at the distance, the damage applied server-side:
+-- players through CombatService.ApplyUnitPlayerHit (PvP rules, owner credit), guards / gates through
+-- GateDefenseService.ApplyUnitDamage. Per-victim damage per second capped (ArmyCombat.PlayerMaxDps). Returns hit.
+local victimDps: { [string]: { At: number, Dealt: number } } = {}
+local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: BasePart, now: number): boolean
+	local ac = armyCombat()
+	if ac == nil or not unitReady(unit, now) then
+		return false
+	end
+	unit.LastFireAt = now
+	local kind = if part ~= tgt.Root and part:GetAttribute("GateGuardPart") ~= true then "Gate" else tgt.Kind
+	local name = if tgt.Player then tgt.Player.Name elseif kind == "Gate" then "gate" else "guard"
+	local base = (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage")
+	if rng:NextNumber() >= unitHitChance((part.Position - unit.Root.Position).Magnitude) then
+		hitLog(player, unit, kind, name, 0, 0, "miss")
+		return false
+	end
+	if kind == "Player" then
+		local dmg = base * (tonumber(ac.PlayerDamageMult) or 1)
+		local key = tostring(player.UserId) .. ":" .. tostring(tgt.Player.UserId)
+		local w = victimDps[key]
+		if w == nil or now - w.At >= 1 then
+			w = { At = now, Dealt = 0 }
+			victimDps[key] = w
+		end
+		local room = (tonumber(ac.PlayerMaxDps) or math.huge) - w.Dealt
+		if room <= 0 then
+			hitLog(player, unit, kind, name, dmg, 0, "dps_cap")
+			return false
+		end
+		dmg = math.min(dmg, room)
+		local ok, dealt, _killed, why = pcall(CombatService.ApplyUnitPlayerHit, player, tgt.Player, dmg)
+		local d = if ok then tonumber(dealt) or 0 else 0
+		w.Dealt += d
+		hitLog(player, unit, kind, name, dmg, d, if ok then tostring(why) else "error")
+		return d > 0
+	end
+	local gd = gateSvc()
+	if gd == nil or gd.ApplyUnitDamage == nil then
+		return false
+	end
+	local mult = if kind == "Gate" then tonumber(ac.GateDamageMult) or 1 else tonumber(ac.GuardDamageMult) or 1
+	local ok, landed = pcall(gd.ApplyUnitDamage, player, unit.Root.Position, part, base * mult)
+	local hit = ok and landed == true
+	hitLog(player, unit, kind, name, base * mult, if hit then base * mult else 0, if hit then "ok" elseif ok then "refused" else "error")
+	return hit
 end
 
 local function attackAimOnly(player: Player, st: SquadState, unit: SquadUnit, now: number)
@@ -2690,6 +2864,33 @@ local function attackAimOnly(player: Player, st: SquadState, unit: SquadUnit, no
 		return
 	end
 	local band = (OrdersConfig.AttackRange or 55) * 0.85 -- the fire band, as attackUnit
+	if tgt.Kind == "Player" or tgt.Kind == "Guard" then
+		-- JOB 24 §2: an enemy player / base defender: shoot it in sight, else the gate in the way (ShootGates)
+		if losCheckDue(unit, now) then
+			local d = (tgt.Root.Position - unit.Root.Position).Magnitude
+			if d <= band then
+				if unitHasLos(player, unit, tgt.Root) then
+					unit.LosBlocked = false
+					local firedAt = unit.LastFireAt
+					local hit = unitShootAt(player, unit, tgt, tgt.Root, now)
+					unitShotFx(player, unit, tgt.Root, firedAt, hit)
+				else
+					local ac = armyCombat()
+					local gate = if ac and ac.ShootGates == true and tgt.Kind == "Player" then gateBlocking(player, unit, tgt.Root) else nil
+					if gate then
+						local firedAt = unit.LastFireAt
+						local hit = unitShootAt(player, unit, tgt, gate, now)
+						unitShotFx(player, unit, gate, firedAt, hit)
+					else
+						hitLog(player, unit, tgt.Kind, if tgt.Player then tgt.Player.Name else "guard", 0, 0, "no_los")
+						losBlockedFor(unit, now)
+					end
+				end
+			end
+		end
+		faceYaw(unit.Root, tgt.Root.Position)
+		return
+	end
 	if losCheckDue(unit, now) then
 		nearestHostile(unit.Root.Position, band, false, player, attackCands, band) -- the in-band fallback candidates
 		local th, troot, rays = pickShot(player, unit, tgt.Hum, tgt.Root, band, attackCands, CombatFairnessConfig.UnitAttackRequireLos == true)
@@ -2699,7 +2900,11 @@ local function attackAimOnly(player: Player, st: SquadState, unit: SquadUnit, no
 			unit.AimRoot = if th ~= tgt.Hum then troot else nil
 			unit.AimHum = if th ~= tgt.Hum then th else nil
 			local firedAt = unit.LastFireAt
-			local hit = unitShoot(player, unit, th, now, CombatFairnessConfig.UnitKillCreditOnAttack == true)
+			-- JOB 24 §2: a steered ATTACK (leashed to him) is credited (ArmyCombat.CreditSteeredAttackKills)
+			local acc = armyCombat()
+			local credit = CombatFairnessConfig.UnitKillCreditOnAttack == true or (acc ~= nil and acc.CreditSteeredAttackKills == true)
+			local hit = unitShoot(player, unit, th, now, credit)
+			hitLog(player, unit, "NPC", th.Parent and th.Parent.Name or "npc", 0, 0, if hit then "hit" else "miss")
 			unitShotFx(player, unit, troot, firedAt, hit)
 		elseif rays > 0 then
 			losBlockedFor(unit, now)
@@ -3229,6 +3434,13 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 		and now - (st.OrderAt :: number) < (tonumber(CombatFairnessConfig.UnitRepeatOrderGraceSeconds) or 0)
 	st.OrderAt = now
 	st.Order = order :: OrderId
+	-- claude-bud JOB 24 §10: the Army funnel / custom events (an order = he used the Army; ATTACK = first attack)
+	if AnalyticsService and AnalyticsService.Log then
+		pcall(AnalyticsService.Log, "ARMY_OPEN", player.UserId, { order = order })
+		if order == "Attack" then
+			pcall(AnalyticsService.Log, "ARMY_ATTACK", player.UserId, {})
+		end
+	end
 	-- claude-bud JOB 7: the first ATTACK ends the first-minutes hint (TutorialService saves it)
 	do
 		local okT, tut = pcall(function(): any
@@ -3344,6 +3556,7 @@ function SquadOrdersService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	SoldierService = deps.SoldierService
 	NotificationService = deps.NotificationService
+	AnalyticsService = deps.AnalyticsService -- claude-bud JOB 24 §10
 	RateLimitService = deps.RateLimitService
 	RemoteSetup = deps.RemoteSetup
 	AntiExploitService = deps.AntiExploitService

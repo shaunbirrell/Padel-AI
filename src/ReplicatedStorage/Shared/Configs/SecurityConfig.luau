@@ -68,6 +68,7 @@ local SecurityConfig = {
 		RedeemCode = { "string:40" }, -- Code Bot v102: a RemoteFunction (CodesService); RequestRedeemCode is unused now (sink)
 		RequestSetNation = { "table" },
 		RequestClaimSpinner = {},
+		RequestAnalyticsEvent = { "string", "string?" }, -- claude-bud JOB 24 §10 (AnalyticsConfig.Roblox.ClientEvents only)
 		RequestResearch = { "string", "string?" },
 		RequestMissileStrike = { "table" },
 		VehicleDriveInput = { "table" },

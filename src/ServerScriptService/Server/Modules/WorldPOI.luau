@@ -342,9 +342,15 @@ local function isHostCluster(c: TownCluster): boolean
 	return true
 end
 
-local function note(ctx: Ctx, msg: string)
+-- claude-bud JOB 24 §4d: a skipped decoration (caps, a blocked spot) is the design, not an error: an info line (it
+-- still lands in ctx.Warnings for the stats). Only a missing activity host (anchors not stamped) warns (loud).
+local function note(ctx: Ctx, msg: string, loud: boolean?)
 	table.insert(ctx.Warnings, msg)
-	warn(msg)
+	if loud then
+		warn(msg)
+	else
+		print(msg)
+	end
 end
 
 local function skip(ctx: Ctx, what: string, why: string)
@@ -531,7 +537,8 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 			continue
 		end
 		local pParts, pLights = planned(c)
-		if row.Parts + pParts > partsCap or row.Lights + pLights > lightsCap then
+		-- (claude-bud JOB 24 §4d: the 1-part invisible ActivityHost is never capped out: its POI's job prompts need it)
+		if not isHostCluster(c) and (row.Parts + pParts > partsCap or row.Lights + pLights > lightsCap) then
 			skip(ctx, c.Id, string.format("caps: parts %d + %d > %d or lights %d + %d > %d", row.Parts, pParts, partsCap, row.Lights, pLights, lightsCap))
 			continue
 		end
@@ -565,8 +572,9 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 		elseif c.Street then
 			why = WorldDress.Blocked(occ, cx, cz, r, { AllowPOI = poi.Id, RoadClear = 0, RoadR = 0, AllowWater = c.InWater })
 		elseif hostOnly then
-			-- the invisible activity host (nothing to see or bump into): the default road test; may sit over an event anchor
-			why = WorldDress.Blocked(occ, cx, cz, r, { AllowPOI = poi.Id, SkipEvents = true })
+			-- the invisible activity host (nothing to see or bump into). claude-bud JOB 24 §4d (live: "3 anchor rows not
+			-- stamped (no ActivityHost cluster was built)"): no road / occupancy / budget test can refuse it any more
+			why = nil
 		elseif c.InWater == true then
 			why = WorldDress.Blocked(occ, cx, cz, r, { AllowPOI = poi.Id, RoadClear = T.RoadClear, AllowWater = true, SkipEvents = m.Marking })
 		else
@@ -576,8 +584,10 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 				why = WorldDress.Blocked(occ, cx, cz, r, { AllowPOI = poi.Id, RoadClear = T.RoadClear, SkipEvents = true })
 			end
 		end
-		why = why or m.RoadWhy or m.Outside or circleWhy(poi, cx, cz, r)
-		if why == nil and row.Parts + m.Parts > partsCap then
+		if not hostOnly then
+			why = why or m.RoadWhy or m.Outside or circleWhy(poi, cx, cz, r)
+		end
+		if why == nil and not hostOnly and row.Parts + m.Parts > partsCap then
 			why = string.format("budget %d + %d > %d", row.Parts, m.Parts, partsCap)
 		end
 		if why == nil and row.Lights + m.Lights > lightsCap then
@@ -741,7 +751,7 @@ local function stampAnchors(ctx: Ctx, rows: Rows)
 	end
 	if noHost > 0 then
 		local why = if rows.Layout then "no " .. A.HostKit .. " cluster was built" else "a Town row needs Requires (its host cluster)"
-		note(ctx, string.format("[WorldPOI] %s: %d anchor rows not stamped (%s)", poi.Id, noHost, why))
+		note(ctx, string.format("[WorldPOI] %s: %d anchor rows not stamped (%s)", poi.Id, noHost, why), true)
 	end
 end
 

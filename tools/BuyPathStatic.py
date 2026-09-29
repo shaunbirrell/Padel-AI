@@ -172,8 +172,8 @@ must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau
 
 
 # 9) Design competitive pass P0/P1 (ATM / WarzoneProps / showroom / HUD)
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "MoneyCollector = { ModelAssetId = 18220523228", "ATM hero prefer ID [owner pick 18220523228, 2026-09-25]")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "175462478", "ATM fallback ID")
+# claude-bud JOB 24 §4c: retired, superseded in tools/checks/claude_bud_job24b.py (live LoadAsset: not authorized / over the 40-part cap; the id is 0 and the Part kit look stays): #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "MoneyCollector = { ModelAssetId = 18220523228", "ATM hero prefer ID [owner pick 18220523228, 2026-09-25]")
+# claude-bud JOB 24 §4c: retired, superseded in tools/checks/claude_bud_job24b.py (live LoadAsset: not authorized / over the 40-part cap; the id is 0 and the Part kit look stays): #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "175462478", "ATM fallback ID")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "38451313", "MoneyBagFX ID")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "4221608224", "VfxSparkles ID")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "16803204916", "CashCrate ID")
@@ -222,7 +222,7 @@ must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "9129
 must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "3924234975", "No plastic Rthro CharacterAlt assignment")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "SupplyTruck = { ModelAssetId = 0", "SupplyTruck truck mesh")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "InfantryCarrier = {\n\t\t\tModelAssetId = 9076240315,", "InfantryCarrier APC [owner pick 9076240315, 2026-09-27; wc3: body scale + seats]")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FloodlightTower = { ModelAssetId = 107381977457431", "FloodlightTower prop")
+# claude-bud JOB 24 §4c: retired, superseded in tools/checks/claude_bud_job24b.py (live LoadAsset: not authorized / over the 40-part cap; the id is 0 and the Part kit look stays): #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FloodlightTower = { ModelAssetId = 107381977457431", "FloodlightTower prop")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "CharacterAlt = { ModelAssetId = 0", "CharacterAlt disabled")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "PlotFloorChevrons", "Plot floor chevrons to next pad")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/NotificationController.luau", "Purchase SUCCESSFUL", "High-contrast success toast styling")
@@ -779,7 +779,7 @@ must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 
 must_contain("src/ServerScriptService/Server/Modules/RigBuilder.luau", 'local torsoColor = colorOf("Vest", rootColor)', "R-RIG: each kind keeps its kit colours on the Soldier body")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "\tSpecialForces = { ModelAssetId = 0", "v41 SpecialForces")
 must_contain("src/ReplicatedStorage/Shared/Configs/SoldierConfig.luau", 'SpecialForces = "SpecialForces"', "v41 SF VisualKind")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "OilPumpjack = { ModelAssetId = 15192621369", "v41 OilPumpjack [owner pick 15192621369, 2026-09-25]")
+# claude-bud JOB 24 §4c: retired, superseded in tools/checks/claude_bud_job24b.py (live LoadAsset: not authorized / over the 40-part cap; the id is 0 and the Part kit look stays): #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "OilPumpjack = { ModelAssetId = 15192621369", "v41 OilPumpjack [owner pick 15192621369, 2026-09-25]")
 must_contain("src/ReplicatedStorage/Shared/Configs/PlotOilPumpConfig.luau", 'VisualPropKey = "OilPumpjack"', "v41 PlotOil uses OilPumpjack")
 must_contain("docs/DESIGN_FEATURE_WIRE_v40.md", "85138026", "v41 design wire doc present")
 # No-regress v41 critical safety

@@ -62,6 +62,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestDeclareClanWar,
 	Constants.RemoteNames.ClanWarStateUpdate,
 	Constants.RemoteNames.RequestRedeemCode,
+	Constants.RemoteNames.RequestAnalyticsEvent, -- claude-bud JOB 24 §10
 	Constants.RemoteNames.CodeStateUpdate,
 	Constants.RemoteNames.NationColorUpdate,
 	Constants.RemoteNames.RequestSetNation,

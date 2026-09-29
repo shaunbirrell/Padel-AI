@@ -232,6 +232,12 @@ local function place()
 end
 
 local function setOpen(value: boolean)
+	if value then
+		-- claude-bud JOB 24 §10: "Army opened" (a whitelisted analytics event; the server rate-limits it)
+		pcall(function()
+			Remotes.FireServer(Constants.RemoteNames.RequestAnalyticsEvent, "ArmyOpened")
+		end)
+	end
 	if value and not OrdersConfig.Enabled then
 		return
 	end
