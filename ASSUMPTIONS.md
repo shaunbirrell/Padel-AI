@@ -8783,3 +8783,12 @@ ds_territories.luau T3):
 - Added: 8 s after the save loads, the server claims it FOR a player the flag is live for (same function, so still once
   per day), then toasts "Login streak: day N of 7. Tomorrow: $X". A missed day still resets the streak (existing rule).
 - Assumed the owner wanted this streak made visible and automatic, not a second, parallel reward system.
+
+## 2026-09-29 — claude-bud JOB 4.3: plaza bounty (PlazaBountyConfig + Server/Modules/PlazaBounty, owner-only)
+- Hook: TerritoryService's completed capture calls `PlazaBounty.OnCaptured(player, zoneId, position)` (pcall), right
+  after the stats and ownership sync. Other zones do nothing.
+- A plaza capture starts a 180 s bounty on the capturer, but only if no bounty is running. Every other live player
+  gets a toast and the "BOUNTY" objective marker on the plaza. Another live player who completes a capture of the
+  plaza within the window gets $15,000 (server AddCash); the bounty ends and a new one starts on them.
+- Anti-farm: the holder can't earn their own bounty; each player earns at most once per 600 s (kept for the server's
+  life, so a rejoin doesn't reset it); the capture itself needs the normal 20 s server capture and protection period.

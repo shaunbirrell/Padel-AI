@@ -37,3 +37,17 @@ must_contain(_cbf_ms, "local okClaim = MissionService.ClaimDailyLogin(player)", 
 must_contain(_cbf_ms, "\tif daily.LastClaimDay == today then", "CLAUDE-BUD daily: one claim per UTC day")
 must_contain(_cbf_ms, "\tdaily.LastClaimDay = today\n\tdaily.LastClaimUnix = os.time()", "CLAUDE-BUD daily: the streak day is saved in the profile")
 must_contain(_cbf_ms, "\tDataService.MarkDirty(player)\n\tMissionService.Push(player)\n\treturn true, nil\nend\n\nfunction MissionService.Start", "CLAUDE-BUD daily: the claim marks the save dirty")
+
+# 4.3 plaza bounty
+_cbf_pbc = "src/ReplicatedStorage/Shared/Configs/PlazaBountyConfig.luau"
+_cbf_pb = "src/ServerScriptService/Server/Modules/PlazaBounty.luau"
+_cbf_ts = "src/ServerScriptService/Server/Services/TerritoryService/init.luau"
+must_contain(_cbf_pbc, 'local PlazaBountyConfig = {\n\tRollout = "owner",', "CLAUDE-BUD bounty: owner-only first")
+must_contain(_cbf_pbc, "\t\treturn AdminConfig.IsPlaytestOwner(userId)\n\tend\n\treturn false\nend", "CLAUDE-BUD bounty: LiveFor fails closed")
+must_contain(_cbf_ts, "\tprofile.Stats.TerritoriesCaptured += 1\n\tsyncProfileOwnership(player)\n\t-- claude-bud JOB 4.3", "CLAUDE-BUD bounty: hooked on the server's completed capture")
+must_contain(_cbf_ts, "pcall(PlazaBounty.OnCaptured, player, rt.Def.Id, rt.Def.Position)", "CLAUDE-BUD bounty: a bounty error never breaks a capture")
+must_contain(_cbf_pb, "if b and now < b.EndsAt and player.UserId ~= b.Holder and PlazaBountyConfig.LiveFor(player.UserId) then", "CLAUDE-BUD bounty: only another live player retaking in time is paid")
+must_contain(_cbf_pb, "if last == nil or now - last >= PlazaBountyConfig.EarnCooldownSeconds then", "CLAUDE-BUD bounty: per-player earn cooldown (anti-farm)")
+must_contain(_cbf_pb, 'econ.AddCash(player, PlazaBountyConfig.Cash, "plaza_bounty")', "CLAUDE-BUD bounty: cash granted on the server")
+must_not_contain(_cbf_pb, "OnServerEvent", "CLAUDE-BUD bounty: no client -> server path")
+must_contain(_cbf_fc, 'local LABELS = { Airdrop = "AIRDROP", Bounty = "BOUNTY" }', "CLAUDE-BUD bounty: plaza marker on the client")

@@ -100,6 +100,7 @@ local ClanWarService: any = nil
 
 local DataService: any = nil
 local _EconomyService: any = nil
+local PlazaBounty = require(script.Parent.Parent.Modules.PlazaBounty) -- claude-bud JOB 4.3
 local _XPService: any = nil
 local AnalyticsService: any = nil
 local RateLimitService: any = nil
@@ -1045,6 +1046,8 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	end
 	profile.Stats.TerritoriesCaptured += 1
 	syncProfileOwnership(player)
+	-- claude-bud JOB 4.3: the plaza bounty (PlazaBountyConfig; a no-op for other zones and while its Rollout is off)
+	pcall(PlazaBounty.OnCaptured, player, rt.Def.Id, rt.Def.Position)
 
 	-- F3 Empire Tax: recount from owned zones (stealable by re-capture); the toast names the TOTAL %
 	local incomeToastShown = false
@@ -1417,6 +1420,7 @@ function TerritoryService.Init(deps: { [string]: any })
 	ClanWarService = deps.ClanWarService
 	DataService = deps.DataService
 	_EconomyService = deps.EconomyService
+	PlazaBounty.Bind({ EconomyService = deps.EconomyService, NotificationService = deps.NotificationService }) -- claude-bud JOB 4.3
 	_XPService = deps.XPService
 	AnalyticsService = deps.AnalyticsService
 	RateLimitService = deps.RateLimitService
