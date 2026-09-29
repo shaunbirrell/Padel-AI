@@ -174,6 +174,9 @@ local function ensurePurchaseHook(folder: Folder)
 		if _purchaseHookedInstance ~= hookedEv then
 			return
 		end
+		if not require(script.Parent.RemoteGate).Check(player, Constants.RemoteNames.RequestPurchaseUpgrade, payload) then -- claude-bud JOB 15
+			return
+		end
 		local sid = if typeof(payload) == "table" then tostring((payload :: any).StructureId) else tostring(payload)
 		print(string.format("[RemoteSetup] OnServerEvent RequestPurchaseUpgrade %s → %s handler=%s", player.Name, sid, tostring(_purchaseHandler ~= nil)))
 		if _purchaseHandler then
@@ -190,6 +193,34 @@ local function ensurePurchaseHook(folder: Folder)
 		end
 	end)
 	print("[RemoteSetup] RequestPurchaseUpgrade OnServerEvent hooked on WE_Remotes." .. name)
+end
+
+-- claude-bud JOB 15 (SecurityConfig): remotes with a client -> server handler have a Schemas entry; every other
+-- RemoteEvent / UnreliableRemoteEvent here gets ONE sink listener (and the gate forgets a player who leaves)
+local _sunk: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local _gateForget = false
+local function sinkClientOnly(folder: Folder)
+	local okS, SecurityConfig = pcall(require, ReplicatedStorage.Shared.Configs.SecurityConfig)
+	local okG, RemoteGate = pcall(require, script.Parent.RemoteGate)
+	if not okS or not okG then
+		return
+	end
+	local schemas = (SecurityConfig :: any).Schemas
+	for _, child in ipairs(folder:GetChildren()) do
+		if (child:IsA("RemoteEvent") or child:IsA("UnreliableRemoteEvent")) and schemas[child.Name] == nil and not _sunk[child] then
+			_sunk[child] = true
+			local remoteName = child.Name
+			;(child :: any).OnServerEvent:Connect(function(player: Player)
+				(RemoteGate :: any).Sink(player, remoteName)
+			end)
+		end
+	end
+	if not _gateForget then
+		_gateForget = true
+		game:GetService("Players").PlayerRemoving:Connect(function(p: Player)
+			(RemoteGate :: any).Forget(p.UserId)
+		end)
+	end
 end
 
 function RemoteSetup.Init(): Folder
@@ -250,6 +281,9 @@ function RemoteSetup.Init(): Folder
 
 	-- v62: hook purchase OnServerEvent on the SAME instance clients FireServer
 	ensurePurchaseHook(folder :: Folder)
+	-- claude-bud JOB 15: a remote the client must never fire (server pushes, unused requests) gets a sink listener, so
+	-- a fire there is logged / counted as a bad request (RemoteGate.Sink) instead of queueing unheard
+	sinkClientOnly(folder :: Folder)
 
 	if not _initialized then
 		_initialized = true

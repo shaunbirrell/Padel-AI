@@ -856,6 +856,9 @@ function AirWeaponService.Init(deps: { [string]: any })
 	if remote and remote:IsA("RemoteEvent") then
 		local ev = remote :: RemoteEvent
 		ev.OnServerEvent:Connect(function(player: Player, payload: any)
+			if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestVehicleFire", payload) then -- claude-bud JOB 15: rate ceiling + argument schema
+				return
+			end
 			local ok, res = pcall(function()
 				AirWeaponService.RequestFire(player, payload)
 			end)

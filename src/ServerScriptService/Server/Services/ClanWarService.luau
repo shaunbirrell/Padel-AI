@@ -407,6 +407,9 @@ function ClanWarService.Init(deps: { [string]: any })
 
 	local declareRemote = RemoteSetup.Get(Constants.RemoteNames.RequestDeclareClanWar) :: RemoteEvent
 	declareRemote.OnServerEvent:Connect(function(player: Player, defenderClanId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestDeclareClanWar", defenderClanId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "clan_war_declare", 1, 1) then
 			if AntiExploitService and AntiExploitService.Strike then
 				AntiExploitService.Strike(player, "clan_war_declare_rate")

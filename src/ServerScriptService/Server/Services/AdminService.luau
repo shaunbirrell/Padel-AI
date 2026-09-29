@@ -260,6 +260,9 @@ function AdminService.Init(deps: { [string]: any })
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestAdminCommand) :: RemoteEvent
 
 	remote.OnServerEvent:Connect(function(player: Player, command: any, arg1: any, arg2: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestAdminCommand", command, arg1, arg2) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "admin", 2, 4) then
 			return
 		end

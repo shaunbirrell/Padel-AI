@@ -697,6 +697,9 @@ function MissileStrikeService.Init(deps: { [string]: any })
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestMissileStrike)
 	if remote and remote:IsA("RemoteEvent") then
 		(remote :: RemoteEvent).OnServerEvent:Connect(function(player: Player, payload: any)
+			if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestMissileStrike", payload) then -- claude-bud JOB 15: rate ceiling + argument schema
+				return
+			end
 			xpcall(MissileStrikeService.HandleRequest, function(err)
 				warn("[MissileStrike] request failed", player.UserId, err)
 			end, player, payload)

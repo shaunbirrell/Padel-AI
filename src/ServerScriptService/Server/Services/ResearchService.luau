@@ -433,6 +433,9 @@ function ResearchService.Init(deps: { [string]: any })
 
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestResearch) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player, action: any, upgradeId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestResearch", action, upgradeId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if action == "Buy" then
 			if RateLimitService and not RateLimitService.Allow(player, "research_buy", ResearchConfig.BuyRate, ResearchConfig.BuyBurst) then
 				if NotificationService and NotificationService.NotifyThrottled then

@@ -95,3 +95,13 @@ if _q3_luau:
     _r14b = _q3_sp.run([_q3_sys.executable, str(ROOT / "tools" / "gamefeel_test.py")], capture_output=True, text=True, timeout=120, env=dict(_q3_os.environ, LUAU=_q3_luau))
     _last = (_r14b.stdout.strip().splitlines() or ["?"])[-1]
     (ok if _r14b.returncode == 0 else bad)("CLAUDE-BUD J14: GameFeelService executed (kill feed, merged vehicle numbers, raid report; owner-only) " + _last)
+
+# ── claude-bud JOB 15: anti-exploit sweep (RemoteGate + SecurityConfig) ──
+must_contain("src/ReplicatedStorage/Shared/Configs/SecurityConfig.luau", '\t\tRollout = "owner",', "CLAUDE-BUD J15: gate enforced owner-only first")
+must_contain("src/ReplicatedStorage/Shared/Configs/SecurityConfig.luau", '\t\tOthers = "observe", -- "observe" | "off"', "CLAUDE-BUD J15: everyone else observe-only (logs, never drops)")
+must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "\tsinkClientOnly(folder :: Folder)", "CLAUDE-BUD J15: push-only remotes get a sink listener")
+_r15 = _q3_sp.run([_q3_sys.executable, str(ROOT / "tools" / "remote_audit.py")], capture_output=True, text=True, timeout=60)
+(ok if _r15.returncode == 0 else bad)("CLAUDE-BUD J15: remote audit (every handler gated + schema; every client-fired remote has a schema) " + (_r15.stdout.strip().splitlines() or ["?"])[-1])
+if _q3_luau:
+    _r15b = _q3_sp.run([_q3_sys.executable, str(ROOT / "tools" / "remotegate_test.py")], capture_output=True, text=True, timeout=120, env=dict(_q3_os.environ, LUAU=_q3_luau))
+    (ok if _r15b.returncode == 0 else bad)("CLAUDE-BUD J15: RemoteGate executed (schemas, ceilings, throttled logs, flood kick, observe) " + (_r15b.stdout.strip().splitlines() or ["?"])[-1])

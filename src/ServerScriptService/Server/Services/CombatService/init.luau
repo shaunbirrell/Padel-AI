@@ -2771,6 +2771,9 @@ function CombatService.Init(deps: { [string]: any })
 
 	local equipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestEquipWeapon) :: RemoteEvent
 	equipRemote.OnServerEvent:Connect(function(player: Player, weaponId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestEquipWeapon", weaponId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "equip_weapon", CombatConfig.EquipRemoteRate, CombatConfig.EquipRemoteBurst) then
 			return
 		end
@@ -2784,6 +2787,9 @@ function CombatService.Init(deps: { [string]: any })
 	-- profile, ownership, UnlockLevel and spends WeaponConfig.CostCash via EconomyService.SpendCash.
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseWeapon) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, weaponId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPurchaseWeapon", weaponId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "buy_weapon", CombatConfig.PurchaseWeaponRate, CombatConfig.PurchaseWeaponBurst) then
 			return
 		end
@@ -2795,12 +2801,18 @@ function CombatService.Init(deps: { [string]: any })
 
 	local fireRemote = RemoteSetup.Get(Constants.RemoteNames.RequestFire) :: RemoteEvent
 	fireRemote.OnServerEvent:Connect(function(player: Player, payload: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestFire", payload) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		CombatService.RequestFire(player, payload)
 	end)
 
 	-- W2 (contracts §2.3): drawn / holstered (WE_GunOut); a non-boolean is ignored without a strike
 	local drawnRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSetDrawn) :: RemoteEvent
 	drawnRemote.OnServerEvent:Connect(function(player: Player, drawn: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestSetDrawn", drawn) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "set_drawn", CombatFeelConfig.Drawn.RemoteRate, CombatFeelConfig.Drawn.RemoteBurst) then
 			return
 		end
@@ -2812,6 +2824,9 @@ function CombatService.Init(deps: { [string]: any })
 
 	local reloadRemote = RemoteSetup.Get(Constants.RemoteNames.RequestReload) :: RemoteEvent
 	reloadRemote.OnServerEvent:Connect(function(player: Player)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestReload") then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "reload", CombatConfig.ReloadRemoteRate, CombatConfig.ReloadRemoteBurst) then
 			return
 		end

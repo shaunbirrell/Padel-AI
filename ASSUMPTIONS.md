@@ -9181,3 +9181,21 @@ ds_territories.luau T3):
   - There is no HUD viewport harness in this repo (check_hud.py is not here), so the top-stack placement at
     800×360 / 844×390 needs the phone test.
 - All four features are owner-only via `GameFeelConfig.Rollout` and not in LaunchSafe yet.
+
+## 2026-09-29 — claude-bud JOB 15: anti-exploit sweep (SecurityConfig + RemoteGate)
+- **What was already there:** every handler already had its own RateLimitService key and most had type checks, plus
+  AntiExploitService strikes (decay, kick at 10). All of that is kept.
+- **New:** `RemoteGate.Check` is the first line of all 37 client → server handlers plus GetPlayerState and the
+  RequestPurchaseUpgrade hook:
+  - a per-remote rate ceiling set ABOVE each handler's own limit, so real play never meets it;
+  - an argument schema (`SecurityConfig.Schemas`) matched to the client's FireServer calls: types, string length,
+    finite numbers / Vector3, tables ≤ 16 keys and ≤ 2 deep, no Instances, no extra arguments.
+- Remotes the client must never fire (pushes, unused requests) get one sink listener; a fire there is a bad request.
+- Bad requests are logged once per 10 s per player, with counts, and ignored. A kick happens only after 600
+  rejected requests in 60 s.
+- **Rollout:** enforced for the owner only (`RemoteGate.Rollout = "owner"`). Everyone else runs in "observe": the same
+  checks run and are logged as "would reject", but nothing is dropped or kicked, so play is unchanged.
+  - Next step: read the live server logs for "would reject" lines, then set Rollout = "all".
+- **Checks:**
+  - `tools/remote_audit.py` (static): every handler is gated and has a schema; every remote the client fires has a schema.
+  - `tools/remotegate_test.py` (Luau CLI, real module): 37/37.

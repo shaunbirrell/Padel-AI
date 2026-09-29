@@ -345,6 +345,9 @@ function SoldierService.Init(deps: { [string]: any })
 
 	local recruitRemote = RemoteSetup.Get(Constants.RemoteNames.RequestRecruitSoldiers) :: RemoteEvent
 	recruitRemote.OnServerEvent:Connect(function(player: Player, amount: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestRecruitSoldiers", amount) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		-- v69: fast taps are normal play — drop extras with a throttled toast, never an AntiExploit strike
 		if not RateLimitService.Allow(player, "soldier_recruit", TAP_RATE, TAP_BURST) then
 			slowDownToast(player, "recruit")
@@ -367,6 +370,9 @@ function SoldierService.Init(deps: { [string]: any })
 
 	local dismissRemote = RemoteSetup.Get(Constants.RemoteNames.RequestDismissSoldiers) :: RemoteEvent
 	dismissRemote.OnServerEvent:Connect(function(player: Player, amount: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestDismissSoldiers", amount) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "soldier_dismiss", TAP_RATE, TAP_BURST) then
 			slowDownToast(player, "dismiss")
 			return

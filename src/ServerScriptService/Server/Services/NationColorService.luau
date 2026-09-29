@@ -442,6 +442,9 @@ local function acceptLater(player: Player, profile: any)
 end
 
 local function onRequest(player: Player, payload: any)
+	if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestSetNation", payload) then -- claude-bud JOB 15: rate ceiling + argument schema
+		return
+	end
 	if not RateLimitService.Allow(player, "RequestSetNation", NationConfig.RequestRate, NationConfig.RequestBurst) then
 		return
 	end

@@ -3265,6 +3265,9 @@ function SquadOrdersService.Init(deps: { [string]: any })
 
 	local orderRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSquadOrder) :: RemoteEvent
 	orderRemote.OnServerEvent:Connect(function(player: Player, orderId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestSquadOrder", orderId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		local rate = OrdersConfig.OrderRatePerSec or 2
 		local burst = OrdersConfig.OrderBurst or 4
 		if not RateLimitService.Allow(player, "squad_order", rate, burst) then

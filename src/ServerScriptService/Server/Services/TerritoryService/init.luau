@@ -1454,6 +1454,9 @@ function TerritoryService.Init(deps: { [string]: any })
 
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestCaptureTerritory) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player, territoryId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestCaptureTerritory", territoryId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "capture_territory", 1, 2) then
 			return
 		end

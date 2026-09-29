@@ -440,6 +440,9 @@ function PremiumWeaponService.Init(d: { [string]: any })
 	end
 	if req and req:IsA("RemoteEvent") then
 		(req :: RemoteEvent).OnServerEvent:Connect(function(player: Player, action: any, aim: any)
+			if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPremiumWeapon", action, aim) then -- claude-bud JOB 15: rate ceiling + argument schema
+				return
+			end
 			local rl = d.RateLimitService
 			if rl and not rl.Allow(player, "premium_weapon", P.MaxRequestHz, P.MaxRequestHz) then
 				return

@@ -2,7 +2,7 @@
 # WHERE I STOPPED — 2026-09-29 (Claude on Bud tip 9b30223) — JOB 13 SHIPPED IN v103 (owner-only)
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v103) before new work.** Code Bot cherry-picked JOB 13 (`36779ce`)
 into WE_Build 103. Keep v102 Codes / CashBoost; do not rebuild a codes system. Engagement is owner-only (not LaunchSafe).
-Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [ ] 15 anti-exploit sweep
+Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [x] 15 anti-exploit sweep
 
 - J13 (owner-only, `EngagementConfig.Rollout` per feature): weekly events (Plaza War Week / Airdrop Frenzy / Double Cash Weekend) with a HUD banner and countdown;
   leaderboards (richest / plaza captures / rebirths) on a Town Square board; invite reward ($10k per new friend, 5/day; the friend gets $2.5k);
@@ -15,6 +15,11 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
   it's you); drive a tank and let an alt shoot it (red numbers + metal clank); fire the premium missile near a jeep
   (hit marker); let the alt hit your gate then wait 20 s (BASE DEFENDED), and rob your ATM (YOU WERE RAIDED -$N);
   check that nothing covers the thumbstick, jump or the AIRSTRIKE button at 800x360.
+
+- J15: RemoteGate on every client->server remote (rate ceiling + argument schema; sink on push-only remotes).
+  Enforced for the owner, observe-only for everyone else. Read the live server logs for "[RemoteGate] would reject";
+  if they are quiet after a few days, set SecurityConfig.RemoteGate.Rollout = "all". Phone test: play normally for
+  10 min (drive, shoot, buy, army orders, premium weapons) and check that nothing stops working.
 
 ## Launch readiness (JOB 12)
 **To open sales to everyone:** set `MonetizationConfig.LaunchAll = true` (one line). That makes every gate marked "yes" below live for everyone,

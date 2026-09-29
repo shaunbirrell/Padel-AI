@@ -5269,6 +5269,9 @@ function VehicleService.Init(deps: { [string]: any })
 
 	local spawnRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSpawnVehicle) :: RemoteEvent
 	spawnRemote.OnServerEvent:Connect(function(player: Player, vehicleId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestSpawnVehicle", vehicleId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "spawn_vehicle", 1, 2) then
 			if NotificationService then
 				NotificationService.Notify(player, "Spawn too fast — wait a moment", "Warn", 2)
@@ -5286,6 +5289,9 @@ function VehicleService.Init(deps: { [string]: any })
 
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseVehicle) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, vehicleId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPurchaseVehicle", vehicleId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "buy_vehicle", 2, 3) then
 			return
 		end
@@ -5303,6 +5309,9 @@ function VehicleService.Init(deps: { [string]: any })
 
 	local despawnRemote = RemoteSetup.Get(Constants.RemoteNames.RequestDespawnVehicle) :: RemoteEvent
 	despawnRemote.OnServerEvent:Connect(function(player: Player)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestDespawnVehicle") then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "despawn_vehicle", 2, 3) then
 			return
 		end
@@ -5311,6 +5320,9 @@ function VehicleService.Init(deps: { [string]: any })
 
 	local driveRemote = RemoteSetup.Get(Constants.RemoteNames.VehicleDriveInput) :: RemoteEvent
 	driveRemote.OnServerEvent:Connect(function(player: Player, msg: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "VehicleDriveInput", msg) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		handleDriveInput(player, msg)
 	end)
 
