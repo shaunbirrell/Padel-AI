@@ -1,4 +1,40 @@
 <!-- Q2-START -->
+## v120 (Code Bot Roblox, 2026-09-29 ~23:55 Dublin): Army Soldier body for the army + base/tower guards LIVE — place version 118
+- Owner asked for this as "v119"; Claude-watch shipped v119 (JOB 24c+25, place version 117) at 23:45 while this was in flight, so it went out as **WE_Build 120**, rebased on `a05d034`.
+- **Asset:** "Army Soldier" 7703684779 (@Ca_zr, free, owned by shaunie6 since 2026-09-29, so live LoadAsset works). It is an R6 Humanoid rig with 6 Motor6D (RootJoint, Neck, 2 shoulders, 2 hips) and classic 1x2x1 block limbs. The look is Shirt 1718367929 + Pants 1837155389 (image ids) + a MulticamFAST helmet (mesh 5608666819, 2103 tris at LOD0).
+  - The file holds 67 parts in total, all dropped: an M4 of 26 unions, a pistol, a knife, a grenade, 8 MeshParts. The ~40.7k tris were almost all those guns.
+  - It has 6 Scripts (Soldier AI, Animate, Sounds, voicelines, BloodSplat, ColorScript) and 9 RemoteEvents. Nothing suspicious: no require / getfenv / loadstring / HttpService; "KICK" is a melee TODO.
+  - All 15 scripts and remotes are stripped before baking (`stripRigHazards`, whatever StripScripts says).
+- **Wiring:**
+  - `VisualAssetConfig.SoldierAssetId = 7703684779` / `SoldierFallbackAssetId = 187790284` (locals `SOLDIER_ASSET_ID` / `SOLDIER_FALLBACK_ID`).
+  - `Characters.Squad` / `Guard` / `GateGuard` = the new rig, `Headwear = "Beret"` (the file's helmet).
+  - Hostile Infantry / HeavyInfantry / Worker / Bank / OilRig / Fort guards / CampCommander keep 187790284, so enemies read differently.
+  - Fallback: `rigIdOf` switches a row to FallbackAssetId once the preferred id failed for good (not authorized, permanent error, retries exhausted, or BakeTemplate refused it). Waiting hosts get it through `rigFallback` → `flushRigPending`.
+- **RigBuilder:**
+  - BakeTemplate now refuses files with no Humanoid or a non-R6 rig.
+  - Headwear pick prefers helmet / beret / cap / hat (`RigConfig.Cloth.HeadwearPrefer`). It measures the offset from the file's own head when the file's HeadWeld holds a different hat.
+  - Block-limb bodies keep their Shirt / Pants ids. `PaintCloth` paints the standard 585x559 template regions onto the limb faces as 23 `Texture`s named WE_Cloth, tinted 30 % toward the kit colours.
+  - There is no Humanoid in WE_Rig (catalog rule; the hit / aim code reads a Humanoid under a limb's model).
+  - Headless-verified with an Open Cloud Luau task on the live place: bake + attach give 8 rig parts, 23 cloth Textures, 6 motors, an Animator and no Humanoid. 187790284 bakes exactly as before.
+- **Animation:** unchanged pipeline (RigAnimator Hold / Idle / Walk / Aim on the standard R6 joints; Follow3.Steer / AttackSteer / ArmyCombat untouched). Kit Rifle stays in the R6 grip.
+- **Phone LOD (RigAnimator):**
+  - Cloth bodies get the far look: kit-colour blocks with cloth and helmet hidden outside the pick (same MaxAnimated 24 / MaxMeshedStatic 8 / 22 escorts).
+  - `helmetBudget` pays every meshed body first: 60 tris per cloth body, 1530 per Roblox body. It then shows helmets in pick order (own army first) only while the total stays ≤ `Budget.MaxMeshedTriangles` 85000.
+  - Worst case: 54 x 60 + 38 helmets x 2103 ≈ 83k. Figures past the cap show their kit head without a helmet. Stats: `HelmetsOn` / `HelmetsOff` / `MeshedTris`.
+- **Kill switches:**
+  - `SOLDIER_ASSET_ID = 187790284` (whole v118 body back).
+  - `RigConfig.Cloth.Enabled = false` (plain blocks).
+  - `Cloth.TintAlpha` (0 = pure camo).
+- **Risk to eyeball:** the Texture UV mapping (offset from each face's top-left) was not visually checked. If a limb shows the wrong patch, flip `Cloth.Enabled` off and report.
+- Pins: `tools/checks/codebot_v120.py` (37 checks). Retired codebot_v119 WE_Build pins and BuyPathStatic Squad=187790284 pin. BuyPathStatic PASS=6380 FAIL=0; rojo ok.
+- **Phone tests (owner):**
+  1. Your army (and its escorts) walk and shoot in digital camo + FAST helmet, with no sliding and the rifle in hand.
+  2. Your gate / tower guards wear the same body.
+  3. Enemy NPCs still wear the old Roblox Soldier.
+  4. From far away, soldiers turn into kit-colour blocks.
+  5. FPS with a full army + escorts is like v119.
+  6. Output shows `[VisualAssetService] rig 7703684779: stripped 15 script(s) / remote(s)` and no "rig refused".
+
 ## v119 (Code Bot Roblox, 2026-09-29): JOB 24c+25 building tips + outpost defenders + town cull + base signs LIVE — place version 117
 - Merged Claude `bf3ff7b` (JOB 25: BaseSignService "<Name>'s Empire" signs + NationFlag plate) on top of `84b1667` (JOB 24c: BuildingTips / BuildingTipController / BuildingTutorialConfig + Settings TIPS; OutpostDefenders + OutpostDefenderConfig capturable outposts + 5 named enemy areas; QualityGovernor NeverHideKinds / LookAheadSeconds / hysteresis). Fast-forward from v118 tip `c73f18c` (Claude branch already on v118).
 - WE_Build 119 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched. NationFlagIds all still 0 — owner must upload 7 atlas PNGs (do not invent ids).
