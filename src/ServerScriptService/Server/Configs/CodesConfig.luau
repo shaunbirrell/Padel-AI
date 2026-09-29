@@ -48,6 +48,12 @@ local CodesConfig = {
 			DisplayName = "Bud Studios",
 			Rewards = { Cash = 50000, CashBoostMinutes = 30 },
 		},
+		BUDSQUAD = {
+			Active = true,
+			Expires = nil,
+			DisplayName = "Bud Studios Discord",
+			Rewards = { Cash = 25000 },
+		},
 		-- pre-launch sample codes, retired for launch (flip Active = true to bring one back)
 		WARFOUNDING = {
 			Active = false,

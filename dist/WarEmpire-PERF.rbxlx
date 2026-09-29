@@ -22667,6 +22667,12 @@ local CodesConfig = {
 			DisplayName = "Bud Studios",
 			Rewards = { Cash = 50000, CashBoostMinutes = 30 },
 		},
+		BUDSQUAD = {
+			Active = true,
+			Expires = nil,
+			DisplayName = "Bud Studios Discord",
+			Rewards = { Cash = 25000 },
+		},
 		-- pre-launch sample codes, retired for launch (flip Active = true to bring one back)
 		WARFOUNDING = {
 			Active = false,
@@ -22761,7 +22767,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 104)
+		player:SetAttribute("WE_Build", 105)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -54973,7 +54979,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 104)
+			player:SetAttribute("WE_Build", 105)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -62082,7 +62088,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 104)
+		player:SetAttribute("WE_Build", 105)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -62223,7 +62229,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=104",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=105",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)

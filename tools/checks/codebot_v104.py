@@ -10,9 +10,10 @@ _cb104_EC = _cb104_SH + "Configs/EngagementConfig.luau"
 _cb104_ES = _cb104_S + "Services/EngagementService.luau"
 
 # ── build ──
-for _f in (_cb104_S + "Services/DataService.luau", _cb104_S + "Services/BaseService.luau", _cb104_S + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 104)', "CODEBOT v104: WE_Build=104 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb104_S + "Services/DataService.luau", "WE_Build=104", "CODEBOT v104: DataService profile-loaded log says WE_Build=104")
+# v105 (Code Bot): retired build pins, superseded in tools/checks/codebot_v105.py:
+#for _f in (_cb104_S + "Services/DataService.luau", _cb104_S + "Services/BaseService.luau", _cb104_S + "EarlyRemotes.server.luau"):
+#    must_contain(_f, 'SetAttribute("WE_Build", 104)', "CODEBOT v104: WE_Build=104 " + _f.rsplit("/", 1)[-1])
+#must_contain(_cb104_S + "Services/DataService.luau", "WE_Build=104", "CODEBOT v104: DataService profile-loaded log says WE_Build=104")
 
 # ── every JOB 13 rollout is "all" ──
 _cb104_e = read(_cb104_EC) or ""
