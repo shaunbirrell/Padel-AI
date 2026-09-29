@@ -8,6 +8,45 @@ Jobs: [x] 6 Extra Garage Slot Â· [x] 7 first-5-minutes tutorial Â· [x] 8 mob
 
 <!-- Q2-END -->
 
+# v99 — 2026-09-29 ~13:50 Dublin (Code Bot, branch phase-7-polish, WE_Build 99)
+
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v99) BEFORE you touch any army or weapon code**
+(`ArmyFollow.luau`, `SquadOrdersService.luau`, `ArmyConfig.luau` Follow2, `CombatController.luau`, `CameraFx.luau`,
+`WeaponVisuals.luau`, `HudConfig.luau` Hotbar). v99 is **not** a merge of your JOB 9–11 (`22032ae..2028147` are still
+only on Bud, left for the normal watch). Expect small conflicts in `tools/checks/claude_bud_money.py` and
+`claude_bud_q2.py`: v99 changed your "Id 0 until created" pins to the real Ids — keep the v99 Ids.
+
+**Creator Hub Ids now wired (owner created them; `tools/wire-monetization-ids.py`; prices unchanged; RolloutKeys unchanged = owner-only):**
+PV_Skylance 2001602422 (899) · PV_Stormwing 2001722392 (999) · PV_Leviathan 2001398410 (1199) · PV_Tidebreaker 1999263465 (299) ·
+PV_Warlord 2001320428 (799) · PV_Razorfang 2002484380 (199) · BiggerArmy 2001734404 (249) · ExtraGarageSlot 1999359549 (199) ·
+DevProducts SoldierRefill 3715442523 (49) · PlazaAirstrike 3715442542 (79). `docs/LIVE_PLACE.md` table updated.
+ProcessReceipt checked (no change needed): unknown Id → NotProcessedYet; ProcessedReceipts makes it idempotent; the grant banks
+`SoldierRefills` / `AirstrikeCharges` (1 per receipt), marks processed, saves, then PurchaseGranted.
+
+**Army (Bug 1: blobs / overlaps / snap-backs / stuck, owner-only via Follow2):**
+- Two controllers on one Humanoid: the escort fight and ArmyFollow both drove MoveTo; stale follow state after a fight/HOLD/
+  death made the stuck timer fire at once → teleport back. Now `ArmyFollow.Release` on every hand-off and a fresh state on re-acquire.
+- Two yaw owners: AutoRotate vs NPCFaceGyro. Now AutoRotate off while following, one rate-limited facing (TurnRateDeg 300).
+- Shared fallback point around buildings → every unit now gets its own point toward its own slot; paths kept 12 studs / 2 s,
+  no walking back to passed waypoints.
+- Formation turns rate-limited (no 180° swings); seats kept on deaths (compaction only after 4 s); regroup far = 100 studs for 3 s,
+  staged stuck (repath 3 s → side step + jump 6 s → reposition 10 s, behind you, out of view); vehicle speed no longer counts
+  as a jump; smooth catch-up speed; collision group `ArmyNPCs` set at spawn for every order.
+
+**Rifle (Bug 2: can't put it away):** there are no Roblox Tools; the tap on the selected hotbar slot now holsters on touch
+(`HudConfig.Hotbar.TouchTapHolsters = true`), getting shot no longer re-draws it for 4 s after a holster, death holsters,
+recoil is zeroed and the reload track stopped when holstered.
+
+- Pins: `tools/checks/codebot_v99.py`. BuyPathStatic PASS=5322 FAIL=0. PreferMesh stays OFF. WE_Building* untouched.
+- **Publish note for Shaun:** use **"Migrate to Latest Update"** so v99 appears.
+
+**Phone tests for Shaun (owner account):** army with 3 and with 15+: walk, sprint, sharp turns, run in circles, round buildings,
+into and out of the base, run far away, stand still (no blob, no overlap, no snap-back). Rifle: equip, re-tap to put away,
+swap to another slot and back, respawn, die while holding. Buy each pass + both dev products once (refill fills the army;
+airstrike charge shows / fires at the plaza); a second account must not see the owner-only items.
+
+---
+
 # v98 — 2026-09-29 ~13:25 Dublin (Code Bot, branch phase-7-polish, WE_Build 98)
 
 **Claude: do not redo / undo JOB 6–8.** Code Bot merged `origin/claude/desktop-bud` tip `e791323` (fc85a35..e791323) onto phase-7-polish and published.

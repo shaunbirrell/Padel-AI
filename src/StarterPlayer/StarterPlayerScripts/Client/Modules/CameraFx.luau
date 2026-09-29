@@ -432,6 +432,13 @@ function CameraFx.SetCombatMode(drawn: boolean, cls: string)
 	else
 		releaseShoulder()
 		trackModel = nil
+		-- v99: holstered = no recoil left in flight (the spring and what it already turned are forgotten, no snap)
+		recoilLive = false
+		recoilApplied = Vector3.zero
+		local s = recoil :: RecoilSpring
+		s.Current = Vector3.zero
+		s.Target = Vector3.zero
+		s.Velocity = Vector3.zero
 	end
 	syncBindings()
 end

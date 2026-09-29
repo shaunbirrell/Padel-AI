@@ -42,16 +42,16 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | ExtraPlotCosmetic | Elite Base Theme | 1983357731 | 79 | hidden |
 | AutoCollect | Auto Collect | 1985115501 | 99 | Shop + red ATM pad |
 | ImpulseSpeed | Speed Pass | 1998656357 | 5 | Shop + death offer; owner-only while `MonetizationConfig.Rollout = "owner"` |
-| PV_Razorfang | Razorfang GT Interceptor | 0 | 199 | hidden |
+| PV_Razorfang | Razorfang GT Interceptor | 2002484380 | 199 | hidden |
 | PV_Bastion | Bastion Gun Truck | 0 | 399 | hidden |
-| PV_Warlord | Warlord Siege Tank | 0 | 799 | hidden |
+| PV_Warlord | Warlord Siege Tank | 2001320428 | 799 | hidden |
 | PV_MotorPool | Premium Motor Pool | 0 | 1099 | hidden |
-| PV_Stormwing | Stormwing Gunship | 0 | 999 | hidden |
-| PV_Tidebreaker | Tidebreaker Assault Boat | 0 | 299 | hidden |
-| PV_Skylance | Skylance Interceptor | 0 | 899 | Garage (Robux-only jet, owner-only first; TODO create) |
-| PV_Leviathan | Leviathan Dreadnought | 0 | 1199 | Garage (Robux-only capital ship, owner-only first; TODO create) |
-| BiggerArmy | Bigger Army | 0 | 249 | Shop (+10 army cap; owner-only first; TODO create) |
-| ExtraGarageSlot | Extra Garage Slot | 0 | 199 | Shop gold ROBUX row (+1 vehicle slot; owner-only first; TODO create) |
+| PV_Stormwing | Stormwing Gunship | 2001722392 | 999 | hidden |
+| PV_Tidebreaker | Tidebreaker Assault Boat | 1999263465 | 299 | hidden |
+| PV_Skylance | Skylance Interceptor | 2001602422 | 899 | Garage (Robux-only jet, owner-only first; Id wired v99) |
+| PV_Leviathan | Leviathan Dreadnought | 2001398410 | 1199 | Garage (Robux-only capital ship, owner-only first; Id wired v99) |
+| BiggerArmy | Bigger Army | 2001734404 | 249 | Shop (+10 army cap; owner-only first; Id wired v99) |
+| ExtraGarageSlot | Extra Garage Slot | 1999359549 | 199 | Shop gold ROBUX row (+1 vehicle slot; owner-only first; Id wired v99) |
 | RebirthBoost | Rebirth Boost | 0 | 199 | hidden |
 
 ### DevProducts
@@ -75,8 +75,8 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | StarterBundle | Commander Starter Pack | 3713839505 | 149 | Shop + one offer after the tutorial |
 | Nuke | Nuke | 0 | 19 | hidden |
 | NukeBundle3 | Nuke x3 | 0 | 49 | hidden |
-| SoldierRefill | Instant Army Refill | 0 | 49 | Shop / army prompt (owner-only first; TODO create) |
-| PlazaAirstrike | Plaza Airstrike | 0 | 79 | Shop / plaza button (owner-only first; TODO create) |
+| SoldierRefill | Instant Army Refill | 3715442523 | 49 | Shop / army prompt (owner-only first; Id wired v99) |
+| PlazaAirstrike | Plaza Airstrike | 3715442542 | 79 | Shop / plaza button (owner-only first; Id wired v99) |
 | RebirthKeepBase | Keep-Base Rebirth | 3714663721 | 50 | Rebirth panel only (SoldFrom), never the Shop list; owner-only while Rollout = "owner" |
 
 ### New items (owner's 11 features) — created 2026-09-28, Ids wired (claude-bud)

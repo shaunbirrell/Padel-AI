@@ -4,7 +4,7 @@ _q2_vs = "src/ServerScriptService/Server/Services/VehicleService.luau"
 _q2_sc = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau"
 
 # ── JOB 6 Extra Garage Slot ──
-must_contain(_q2_mc, "\t\tExtraGarageSlot = {\n\t\t\tId = 0,\n\t\t\tDisplayName = \"Extra Garage Slot\",\n\t\t\tRobuxPrice = 199,\n\t\t\tDescription =", "CLAUDE-BUD J6: Extra Garage Slot pass, Id 0 until wired")
+must_contain(_q2_mc, "\t\tExtraGarageSlot = {\n\t\t\tId = 1999359549,\n\t\t\tDisplayName = \"Extra Garage Slot\",\n\t\t\tRobuxPrice = 199,\n\t\t\tDescription =", "CLAUDE-BUD J6: Extra Garage Slot pass, v99: Creator Hub Id wired")
 must_contain(_q2_mc, "ExtraGarageSlot = true", "CLAUDE-BUD J6: owner-only first (RolloutKeys)")
 must_contain(_q2_vs, "if not MC.SkuLiveFor(player.UserId, \"ExtraGarageSlot\") then", "CLAUDE-BUD J6: the slot is rollout-gated")
 must_contain(_q2_vs, "and MonetizationService.PlayerOwnsGamePass(player, \"ExtraGarageSlot\") == true", "CLAUDE-BUD J6: the slot needs the real pass (server)")

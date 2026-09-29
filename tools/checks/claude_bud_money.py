@@ -46,7 +46,7 @@ _cbm_vl = "src/ServerScriptService/Server/Modules/VIPLounge.luau"
 _cbm_fc = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/FeatureController.luau"
 for _k in ("DoubleCash", "VIP", "AutoCollect"):
     (ok if re.search(r"\n\t\t" + _k + r" = \{\n\t\t\tId = [1-9]\d+,", read(_cbm_mc) or "") else bad)(f"CLAUDE-BUD 5b: {_k} game pass is live")
-must_contain(_cbm_mc, "\t\tBiggerArmy = {\n\t\t\tId = 0,", "CLAUDE-BUD 5b: Bigger Army pass (Id 0 until the owner creates it)")
+must_contain(_cbm_mc, "\t\tBiggerArmy = {\n\t\t\tId = 2001734404,", "CLAUDE-BUD 5b: Bigger Army pass (v99: Creator Hub Id wired)")
 must_contain(_cbm_mc, "BiggerArmy = true, ExtraGarageSlot = true, SoldierRefill", "CLAUDE-BUD 5b: new passes owner-only first (RolloutKeys)")
 must_contain(_cbm_mc, "\tVIPPerks = {\n\t\tRollout = \"owner\",", "CLAUDE-BUD 5b: VIP perks owner-only first")
 must_contain(_cbm_ss, "\tlocal passBonus = biggerArmyBonus(profile)", "CLAUDE-BUD 5b: Bigger Army adds army capacity")
@@ -63,8 +63,8 @@ _cbm_pa = "src/ServerScriptService/Server/Modules/PlazaAirstrike.luau"
 _cbm_mcs = read(_cbm_mc) or ""
 _cbm_cash = [int(x) for x in re.findall(r"Cash(?:Small|Medium|Large|Mega) = \{ Id = (\d+),", _cbm_mcs)]
 (ok if len(_cbm_cash) == 4 and all(i > 0 for i in _cbm_cash) else bad)(f"CLAUDE-BUD 5c: 4 cash pack tiers live ({len(_cbm_cash)})")
-must_contain(_cbm_mc, "\t\tSoldierRefill = {\n\t\t\tId = 0,", "CLAUDE-BUD 5c: army refill product (Id 0 until created)")
-must_contain(_cbm_mc, "\t\tPlazaAirstrike = {\n\t\t\tId = 0,", "CLAUDE-BUD 5c: plaza airstrike product (Id 0 until created)")
+must_contain(_cbm_mc, "\t\tSoldierRefill = {\n\t\t\tId = 3715442523,", "CLAUDE-BUD 5c: army refill product (v99: Creator Hub Id wired)")
+must_contain(_cbm_mc, "\t\tPlazaAirstrike = {\n\t\t\tId = 3715442542,", "CLAUDE-BUD 5c: plaza airstrike product (v99: Creator Hub Id wired)")
 must_contain(_cbm_mc, "SoldierRefill = true, PlazaAirstrike = true }", "CLAUDE-BUD 5c: owner-only first (RolloutKeys)")
 must_contain(_cbm_mc, "\t\tGrantSoldierRefills = {\n\t\t\tField = \"SoldierRefills\",", "CLAUDE-BUD 5c: refill banked in ProcessReceipt (whitelisted counter, saved before PurchaseGranted)")
 must_contain(_cbm_mc, "\t\tGrantAirstrikes = {\n\t\t\tField = \"AirstrikeCharges\",", "CLAUDE-BUD 5c: airstrike banked in ProcessReceipt")

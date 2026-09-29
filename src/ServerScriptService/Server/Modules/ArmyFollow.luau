@@ -35,6 +35,36 @@
 	     BaseOutStuds hysteresis) his units wait spread out just outside his main gate (plot-local z = PlotSize / 2 +
 	     BaseWaitOut, x beside the gate lane, never in it), and fall back into the wedge when he comes out.
 	Every regroup and every unit removal is logged (rate-limited) with its reason.
+
+	v99 (Code Bot, owner 2026-09-29: "they fall far behind, vanish, reappear, the whole group suddenly catches up, they
+	bunch into a blob; worst when sprinting / round buildings"). Root causes found in this module + SquadOrdersService:
+	  * TWO controllers on one Humanoid: the escort fight (SquadOrdersService.escortUnit) moves a unit with its own
+	    MoveTo while ArmyFollow sleeps, but ArmyFollow's throttle / stuck / far bookkeeping stayed from before the
+	    fight: after it, the stale goal was never re-sent (the unit stood still up to ReissueSeconds) and the stale
+	    stuck window (3 s old) fired at once = a TELEPORT back into the wedge (the snap-back). Same after HOLD /
+	    ATTACK / RETREAT, the owner's death or a vehicle ride. Now: ONE owner per unit. ArmyFollow.Release(unit)
+	    whenever another controller takes it; a think gap > ThinkGapReset re-acquires with fresh state.
+	  * The yaw had two owners too: Humanoid.AutoRotate against the NPCFaceGyro that stayed at its spawn / last shot
+	    yaw. The unit (and its client escort file, a rigid 7-12 stud arm, RigConfig.Escort.Offsets) swung about =
+	    the blob / overlap on turns. Now ArmyFollow drives the gyro (AutoRotate off while it controls the unit).
+	  * Blocked line (round buildings): every unit waiting for its path walked to ONE shared point (4 studs behind
+	    the owner) = the blob; a path was dropped as soon as its end was 8 studs off the slot (every think at a
+	    run) and a waypoint passed between thinks was walked back to. Now each unit walks to its own point, a path
+	    is kept PathKeepSeconds / PathKeepStuds, passed waypoints are skipped.
+	  * Formation direction snapped to the raw velocity every think (a sharp turn swung the whole wedge 180 degrees
+	    at once). Now slots are the player's root CFrame (facing) turned at most TurnRateDeg per second,
+	    CFrame:PointToWorldSpace of each unit's own offset.
+	  * Slots: rank = index for non-Tidy owners (a death re-ranked everyone). Now every squad keeps persistent
+	    unique seats; they are compacted only after the army size changed (SeatCompactSeconds).
+	  * Regroup was quick (FarStuds 70 from the slot for 1 s; stuck 3 s) and landed IN the slot, 7 studs behind
+	    him, in the phone camera's view. Now: far = FarStuds 100 for FarSeconds 3; stuck is staged (repath at
+	    StuckSeconds, an alternate point at StuckAltSeconds, the reposition only at StuckTeleportSeconds); the spot
+	    is its own slot pushed RegroupBehindStuds further back (behind the camera), never within
+	    RegroupMinOwnerStuds of him. A seated owner (vehicle) is never an "owner jump".
+	  * Speed stepped from x1.08 to x1.35 at CatchUpStartStuds (a lurch); now it ramps over CatchUpRampStuds and
+	    changes at most SpeedUpPerThink / SpeedDownPerThink per think.
+	  * Collision group "ArmyNPCs" (was WE_Squad, set on the first FOLLOW think only): registered at Init, set at
+	    spawn for every order; never collides with itself, still collides with Default (world, players).
 ]]
 
 local Players = game:GetService("Players")
@@ -52,7 +82,7 @@ local PlotFrame = require(Shared.Util.PlotFrame)
 
 local ArmyFollow = {}
 
-ArmyFollow.Group = "WE_Squad"
+ArmyFollow.Group = "ArmyNPCs" -- v99: the army NPC group (was WE_Squad); set at spawn for every unit
 
 local deps: { [string]: any } = {}
 local groupReady = false
@@ -114,8 +144,10 @@ local function ensureGroup()
 			PhysicsService:RegisterCollisionGroup(ArmyFollow.Group)
 		end
 		PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, ArmyFollow.Group, false)
+		PhysicsService:CollisionGroupSetCollidable(ArmyFollow.Group, "Default", true) -- the world and the players
 	end)
 end
+ArmyFollow.EnsureGroup = ensureGroup
 
 local function flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
@@ -141,6 +173,17 @@ local function prepUnit(unit: any)
 	unit.Model.DescendantAdded:Connect(function(d)
 		if d:IsA("BasePart") then
 			d.CollisionGroup = ArmyFollow.Group
+			-- v99: a late rig part joins the assembly; the server keeps owning it (no ownership flip to a client)
+			task.defer(function()
+				local r = unit.Root
+				if r and r.Parent and r:IsDescendantOf(Workspace) then
+					pcall(function()
+						if r:GetNetworkOwnershipAuto() then
+							r:SetNetworkOwner(nil)
+						end
+					end)
+				end
+			end)
 		end
 	end)
 	local hum: Humanoid = unit.Humanoid
@@ -162,6 +205,43 @@ local function prepUnit(unit: any)
 	end)
 end
 ArmyFollow.PrepUnit = prepUnit
+
+-- v99: ONE movement controller per unit. ArmyFollow owns a FOLLOW unit's MoveTo, WalkSpeed and yaw only while it
+-- thinks it; the escort fight / HOLD / ATTACK / RETREAT call Release first. Fresh state on every (re)acquire: no stale
+-- goal, path, stuck window or far timer survives a spell under another controller.
+local function resetMotion(unit: any)
+	unit._afMoveGoal = nil
+	unit._afMoveAt = nil
+	unit._afPath = nil
+	unit._afStand = false
+	unit._afProgPos = nil
+	unit._afProgAt = nil
+	unit._afFarSince = nil
+	unit._afStuck = 0
+	unit._afAlt = nil
+	unit._afSpeedCur = nil
+end
+
+function ArmyFollow.Release(unit: any)
+	if unit._afCtl then
+		unit._afCtl = false
+		resetMotion(unit)
+		pcall(function()
+			unit.Humanoid.AutoRotate = true
+		end)
+	end
+end
+
+local function acquire(unit: any, now: number)
+	if not unit._afCtl or now - (unit._afThinkAt or -math.huge) > num("ThinkGapReset", 1.2) then
+		resetMotion(unit)
+		unit._afCtl = true
+		pcall(function()
+			unit.Humanoid.AutoRotate = false -- the NPCFaceGyro turns it (faceTo): one yaw owner
+		end)
+	end
+	unit._afThinkAt = now
+end
 
 function ArmyFollow.LogRemoval(unit: any, reason: string)
 	ArmyFollow.Stats.Removed += 1
@@ -429,6 +509,52 @@ local function waitSpot(plotId: number, rank: number): Vector3
 	return PlotFrame.LocalToWorld(plotId, x, z)
 end
 
+-- v99: `cur` turned toward `want` (flat unit vectors) by at most `maxRad`
+local function turnToward(cur: Vector3, want: Vector3, maxRad: number): Vector3
+	local a = math.atan2(cur.X, cur.Z)
+	local b = math.atan2(want.X, want.Z)
+	local d = (b - a + math.pi) % (2 * math.pi) - math.pi
+	if math.abs(d) <= maxRad then
+		return want
+	end
+	local r = a + (if d > 0 then maxRad else -maxRad)
+	return Vector3.new(math.sin(r), 0, math.cos(r))
+end
+
+--[[ v99: seats are reassigned ONLY when the army size changed: once the living count has been the same for
+	SeatCompactSeconds and a seat above that count exists (a hole after a death / trim), the units are renumbered
+	1..n keeping their order (each moves at most up into the next free seat, nobody swaps sides at random). ]]
+local function compactSeats(st: any, order: { any }, now: number)
+	local n = #order
+	if st._afSeatN ~= n then
+		st._afSeatN = n
+		st._afSeatNAt = now
+		return
+	end
+	if now - (st._afSeatNAt or now) < num("SeatCompactSeconds", 4) then
+		return
+	end
+	local hole = false
+	for _, u in ipairs(order) do
+		if typeof(u._afSeat) == "number" and u._afSeat > n then
+			hole = true
+			break
+		end
+	end
+	if not hole then
+		return
+	end
+	local bySeat = table.clone(order)
+	table.sort(bySeat, function(a, b)
+		return (a._afSeat or math.huge) < (b._afSeat or math.huge)
+	end)
+	for i, u in ipairs(bySeat) do
+		u._afSeat = i
+	end
+	st._afFlip = nil
+	logLine("compact" .. tostring(st), string.format("army of %d: seats compacted after a size change", n))
+end
+
 local function plan(st: any, player: Player?, root: BasePart, units: { any }, now: number)
 	if st._afPlanAt == now then
 		return
@@ -439,9 +565,13 @@ local function plan(st: any, player: Player?, root: BasePart, units: { any }, no
 	local dt = now - (st._afLastAt or now)
 	local vel = Vector3.zero
 	local jumped = false
+	local hum = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
+	st._afSeated = hum ~= nil and (hum.Sit or hum.SeatPart ~= nil)
 	if lastPos and dt > 0.05 and dt < 2 then
 		vel = flat(pos - lastPos) / dt
-		if vel.Magnitude > num("OwnerJumpSpeed", 60) then
+		-- v99: only on foot is a very fast move a jump (teleport / respawn); a fast vehicle is real speed (before, it
+		-- zeroed his speed, dropped the vehicle defer and teleported the army every TeleportCooldown behind him)
+		if not st._afSeated and vel.Magnitude > num("OwnerJumpSpeed", 60) then
 			jumped = true
 			vel = Vector3.zero
 		end
@@ -449,21 +579,36 @@ local function plan(st: any, player: Player?, root: BasePart, units: { any }, no
 	st._afLastPos = pos
 	st._afLastAt = now
 	st._afJumped = jumped
-	local hum = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
-	st._afSeated = hum ~= nil and (hum.Sit or hum.SeatPart ~= nil)
 	local speed = vel.Magnitude
 	st._afSpeed = (st._afSpeed or 0) * 0.4 + speed * 0.6
 	st._afVel = vel
 	st._afWalk = ownerWalkSpeed(root)
-	-- facing: his move direction; standing, his look (re-aimed only past FacingTurnDeg)
-	local want: Vector3 = if speed >= 2 then vel.Unit else flat(root.CFrame.LookVector)
-	if want.Magnitude < 1e-3 then
-		want = Vector3.new(0, 0, -1)
+	-- facing (v99): his root CFrame's look (his move direction when he backs away), turned at most TurnRateDeg per
+	-- second (a sharp turn swings the wedge round smoothly, never 180 degrees in one think); standing, re-aimed only
+	-- once he turned past FacingTurnDeg (no swirl on the spot), then turned all the way
+	local look = flat(root.CFrame.LookVector)
+	look = if look.Magnitude > 1e-3 then look.Unit else Vector3.new(0, 0, -1)
+	local want: Vector3 = look
+	if speed >= 2 and look:Dot(vel.Unit) < 0 then
+		want = vel.Unit
 	end
-	want = want.Unit
 	local cur: Vector3? = st._afDir
-	if cur == nil or speed >= 2 or cur:Dot(want) < math.cos(math.rad(num("FacingTurnDeg", 35))) then
+	local tdt = math.clamp(now - (st._afDirAt or now), 0, 0.6)
+	st._afDirAt = now
+	if cur == nil or jumped then
 		st._afDir = want
+		st._afTurning = false
+	else
+		if speed >= 2 or cur:Dot(want) < math.cos(math.rad(num("FacingTurnDeg", 35))) then
+			st._afTurning = true
+		end
+		if st._afTurning then
+			local nd = turnToward(cur, want, math.rad(num("TurnRateDeg", 300)) * tdt)
+			st._afDir = nd
+			if speed < 2 and nd:Dot(want) > math.cos(math.rad(2)) then
+				st._afTurning = false
+			end
+		end
 	end
 	-- rank by SquadSlot (stable)
 	local order = table.clone(units)
@@ -471,16 +616,14 @@ local function plan(st: any, player: Player?, root: BasePart, units: { any }, no
 		return (a.Slot or 0) < (b.Slot or 0)
 	end)
 	st._afTidy = tidyLive(player)
-	if st._afTidy then
+	do
+		-- v99: EVERY squad keeps persistent unique seats (was: Tidy only; the rest ranked by index, so one death
+		-- re-ranked the whole wedge and every unit crossed to a new spot). Compacted only after the size changed.
+		compactSeats(st, order, now)
 		assignSeats(st, order)
 		for _, u in ipairs(order) do
 			u._afRank = u._afSeat
 		end
-	else
-		for i, u in ipairs(order) do
-			u._afRank = i
-		end
-		st._afSeatMap = nil
 	end
 	-- own base
 	local plotId = ownPlotInside(st, player, pos)
@@ -530,7 +673,6 @@ local function slotPoint(st: any, root: BasePart, rank: number): Vector3
 		return Vector3.new(w.X, root.Position.Y, w.Z)
 	end
 	local dir: Vector3 = st._afDir or Vector3.new(0, 0, -1)
-	local right = Vector3.new(-dir.Z, 0, dir.X)
 	local row = math.ceil(rank / 2)
 	local side = if rank % 2 == 1 then -1 else 1
 	local back = num("WedgeBack", 3) + row * num("RowBack", 3)
@@ -548,22 +690,37 @@ local function slotPoint(st: any, root: BasePart, rank: number): Vector3
 	if lead.Magnitude > cap then
 		lead = lead.Unit * cap
 	end
-	return root.Position - dir * back + right * lat + lead
+	-- v99: this unit's own offset (x = side, z = back) in his facing frame (root position, turned by st._afDir)
+	local frame = CFrame.lookAt(root.Position, root.Position + dir)
+	return frame:PointToWorldSpace(Vector3.new(lat, 0, back)) + lead
 end
 ArmyFollow.SlotPoint = slotPoint
 
 -- ── teleport (regroup): one PivotTo of the same unit, to a clear spot behind the owner ─────────────────────────
+--[[ v99: the reposition spot is the unit's OWN slot, first pushed RegroupBehindStuds further back (behind the phone
+	camera, ~12.5 studs behind him: it runs in instead of popping up in view), then half that, then the slot itself,
+	then points behind him on its own side line. Never within RegroupMinOwnerStuds of him (never on top of him). ]]
 local function spotFor(st: any, root: BasePart, rank: number): CFrame?
 	local dir: Vector3 = st._afDir or Vector3.new(0, 0, -1)
-	local cands = { slotPoint(st, root, rank) }
+	local slot = slotPoint(st, root, rank)
+	local cands: { Vector3 } = {}
 	if not st._afInBase then
+		local behind = num("RegroupBehindStuds", 16)
+		table.insert(cands, slot - dir * behind)
+		table.insert(cands, slot - dir * behind * 0.5)
+	end
+	table.insert(cands, slot)
+	if not st._afInBase then
+		local right = Vector3.new(-dir.Z, 0, dir.X)
+		local lat = (slot - root.Position):Dot(right)
 		for _, b in ipairs({ 8, 12, 5, 16 }) do
-			table.insert(cands, root.Position - dir * b)
+			table.insert(cands, root.Position - dir * b + right * lat)
 		end
 	end
+	local minOwner = num("RegroupMinOwnerStuds", 6)
 	for _, c in ipairs(cands) do
 		local g = groundAt(c, root.Position.Y)
-		if g and math.abs(g.Y - root.Position.Y) < 14 and (st._afInBase or clearLine(root.Position, g + Vector3.new(0, 1.8, 0))) then
+		if g and flatDist(g, root.Position) >= minOwner and math.abs(g.Y - root.Position.Y) < 14 and (st._afInBase or clearLine(root.Position, g + Vector3.new(0, 1.8, 0))) then
 			local p = g + Vector3.new(0, num("StandHeight", 3.2), 0)
 			return CFrame.lookAt(p, p + dir)
 		end
@@ -591,6 +748,8 @@ local function regroup(st: any, unit: any, root: BasePart, now: number, why: str
 	unit._afProgPos = cf.Position
 	unit._afProgAt = now
 	unit._afFarSince = nil
+	unit._afStuck = 0
+	unit._afAlt = nil
 	ArmyFollow.Stats.Regroup += 1
 	logLine("rg" .. tostring(unit.OwnerUserId) .. why, string.format("regroup unit %s (%s) owner %s", tostring(unit.Id), why, tostring(unit.OwnerUserId)))
 	return true
@@ -598,8 +757,32 @@ end
 
 local function setSpeed(unit: any, s: number)
 	local hum: Humanoid = unit.Humanoid
+	unit._afSpeedCur = s
 	if math.abs(hum.WalkSpeed - s) >= 1 then
 		hum.WalkSpeed = s
+		unit.Speed = s -- v99: SquadOrdersService's WalkSpeed cache stays true (its setSpeed skips equal writes)
+	end
+end
+
+-- v99: the one yaw writer while ArmyFollow controls the unit (AutoRotate is off): the NPCFaceGyro's target, written
+-- only past 4 degrees of change (no property write per think); an escort that just shot keeps its aim for
+-- FaceAfterShotSeconds
+local function faceTo(unit: any, dir: Vector3, now: number)
+	if now - (tonumber(unit.LastFireAt) or 0) < num("FaceAfterShotSeconds", 1.2) then
+		return
+	end
+	local f = flat(dir)
+	if f.Magnitude < 1e-3 then
+		return
+	end
+	f = f.Unit
+	local gyro = unit.Root:FindFirstChild("NPCFaceGyro")
+	if gyro and gyro:IsA("BodyGyro") then
+		-- compared with the gyro's own target (another writer, e.g. the escort's faceYaw, may have turned it)
+		if flat(gyro.CFrame.LookVector):Dot(f) > math.cos(math.rad(4)) then
+			return
+		end
+		gyro.CFrame = CFrame.lookAt(Vector3.zero, f)
 	end
 end
 
@@ -636,7 +819,7 @@ local function requestPath(unit: any, from: Vector3, to: Vector3, now: number)
 		unit._afPathBusy = false
 		if ok and path and path.Status == Enum.PathStatus.Success then
 			local wps = path:GetWaypoints()
-			unit._afPath = { Points = wps, I = math.min(2, #wps), Goal = to }
+			unit._afPath = { Points = wps, I = math.min(2, #wps), Goal = to, At = os.clock() }
 		else
 			unit._afPath = nil
 			unit._afPathFail = os.clock()
@@ -650,7 +833,8 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	if not unit.Alive or unit.Humanoid.Health <= 0 or unit.Root.Parent == nil then
 		return
 	end
-	prepUnit(unit)
+	prepUnit(unit) -- (v99: already done at spawn; a no-op here)
+	acquire(unit, now) -- v99: this unit's one movement controller from here until Release
 	plan(st, player, root, st.Units, now)
 	local pos = unit.Root.Position
 	local rank = unit._afRank or 1
@@ -675,26 +859,56 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 		if st._afJumped and ownerD > num("JumpRegroupStuds", 40) and regroup(st, unit, root, now, "owner-jump") then
 			return
 		end
-		local far = if st._afInBase then num("BaseFarStuds", 140) else num("FarStuds", 70)
+		-- v99: the emergency reposition only when EXTREMELY far (FarStuds 100 from its slot for FarSeconds 3);
+		-- falling behind is handled by the catch-up speed, never by a teleport or a new unit
+		local far = if st._afInBase then num("BaseFarStuds", 140) else num("FarStuds", 100)
 		if d > far then
 			unit._afFarSince = unit._afFarSince or now
-			if now - unit._afFarSince >= num("FarSeconds", 1) and regroup(st, unit, root, now, "far") then
+			if now - unit._afFarSince >= num("FarSeconds", 3) and regroup(st, unit, root, now, "far") then
 				return
 			end
 		else
 			unit._afFarSince = nil
 		end
-		-- stuck: it wants to move (goal further than StuckGoalStuds) but has moved less than StuckStuds in StuckSeconds
+		-- stuck (v99, staged): it wants to move (goal further than StuckGoalStuds) but has moved less than StuckStuds:
+		-- StuckSeconds -> a fresh path now; StuckAltSeconds -> an alternate point beside it (+ a jump);
+		-- StuckTeleportSeconds -> the reposition (the final fallback)
 		local pp: Vector3? = unit._afProgPos
-		if pp == nil or d <= num("StuckGoalStuds", 6) then
+		if pp == nil or d <= num("StuckGoalStuds", 6) or flatDist(pos, pp) >= num("StuckStuds", 3) then
 			unit._afProgPos = pos
 			unit._afProgAt = now
-		elseif flatDist(pos, pp) >= num("StuckStuds", 3) then
-			unit._afProgPos = pos
-			unit._afProgAt = now
-		elseif now - (unit._afProgAt or now) >= num("StuckSeconds", 3) and d > num("StuckMinStuds", 10) then
-			if regroup(st, unit, root, now, "stuck") then
-				return
+			unit._afStuck = 0
+		elseif d > num("StuckMinStuds", 10) then
+			local since = now - (unit._afProgAt or now)
+			if since >= num("StuckTeleportSeconds", 10) then
+				if regroup(st, unit, root, now, "stuck") then
+					return
+				end
+			elseif since >= num("StuckAltSeconds", 6) and (unit._afStuck or 0) < 2 then
+				unit._afStuck = 2
+				local to = flat(slot - pos)
+				to = if to.Magnitude > 1e-3 then to.Unit else Vector3.new(0, 0, -1)
+				local side = Vector3.new(-to.Z, 0, to.X) * num("StuckAltStuds", 6)
+				local first = if rank % 2 == 1 then -1 else 1
+				local alt: Vector3? = nil
+				for _, sgn in ipairs({ first, -first }) do
+					local c = pos + side * sgn + to * 2
+					if clearLine(pos, c) then
+						alt = c
+						break
+					end
+				end
+				if alt then
+					unit._afAlt = { P = alt, Until = now + num("StuckAltHoldSeconds", 2.5) }
+					unit._afPath = nil
+					unit.Humanoid.Jump = true
+					logLine("alt" .. tostring(unit.OwnerUserId), string.format("unit %s stuck %.1f s: alternate point", tostring(unit.Id), since))
+				end
+			elseif since >= num("StuckSeconds", 3) and (unit._afStuck or 0) < 1 then
+				unit._afStuck = 1
+				unit._afPath = nil
+				unit._afPathAt = -math.huge -- one repath now (the per-unit cooldown is skipped once)
+				requestPath(unit, pos, slot, now)
 			end
 		end
 	else
@@ -714,7 +928,13 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 			end
 		end
 	end
-	local goal = slot + push * num("SeparationGain", 3)
+	-- v99: the push is capped (SeparationMaxStuds): neighbours step apart, the goal never jumps round the slot
+	local pushOff = push * num("SeparationGain", 3)
+	local maxPush = num("SeparationMaxStuds", 3)
+	if pushOff.Magnitude > maxPush then
+		pushOff = pushOff.Unit * maxPush
+	end
+	local goal = slot + pushOff
 	-- claude-bud (Tidy): a unit outside his plot never gets a goal inside it (it waits at its gate spot instead)
 	local ownPlot: number? = if st._afTidy then st._afOwnPlot else nil
 	local unitOutside = ownPlot ~= nil and not inPlot(ownPlot, pos, 0)
@@ -737,13 +957,23 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	local speed: number
 	if st._afInBase then
 		speed = base * 1.25
-	elseif d > num("CatchUpStartStuds", 5) then
-		local cap = math.max(ownerPace * num("CatchUpMaxMult", 1.8), num("CatchUpMin", 34))
-		speed = math.min(cap, ownerPace * num("CatchUpMult", 1.35) + (d - num("CatchUpStartStuds", 5)) * num("CatchUpPerStud", 0.6))
 	else
-		speed = math.max(base, ownerPace * num("MatchMult", 1.08))
+		-- v99: one continuous curve (was a step from x MatchMult to x CatchUpMult at CatchUpStartStuds): his pace x
+		-- MatchMult in the slot, ramping to x CatchUpMult over CatchUpRampStuds, then + CatchUpPerStud per stud
+		-- further behind, capped at max(his pace x CatchUpMaxMult, CatchUpMin); back to normal once in formation
+		local start = num("CatchUpStartStuds", 5)
+		local ramp = math.max(1, num("CatchUpRampStuds", 10))
+		local t = math.clamp((d - start) / ramp, 0, 1)
+		local mm = num("MatchMult", 1.08)
+		local mult = mm + (num("CatchUpMult", 1.35) - mm) * t
+		local cap = math.max(ownerPace * num("CatchUpMaxMult", 1.8), num("CatchUpMin", 34))
+		speed = math.max(base, ownerPace * mult + math.max(0, d - start - ramp) * num("CatchUpPerStud", 0.6))
+		speed = math.min(cap, speed)
 	end
 	speed = math.clamp(speed, 8, num("MaxSpeed", 50))
+	-- v99: smooth: at most SpeedUpPerThink faster / SpeedDownPerThink slower than the last think
+	local curSpeed = tonumber(unit._afSpeedCur) or unit.Humanoid.WalkSpeed
+	speed = math.clamp(speed, curSpeed - num("SpeedDownPerThink", 6), curSpeed + num("SpeedUpPerThink", 8))
 	setSpeed(unit, speed)
 
 	-- claude-bud (Tidy): at its gate wait spot it stands still facing out, whatever he does inside
@@ -755,10 +985,14 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 			unit._afMoveAt = now
 			local _, out = tidyWaitSpot(st._afPlot, rank)
 			unit.Model:PivotTo(CFrame.lookAt(unit.Root.Position, unit.Root.Position + out)) -- turn on the spot only
+			faceTo(unit, out, now) -- v99: the gyro holds that facing (it no longer pulls back to a stale yaw)
 		end
 		unit._afPath = nil
 		return
 	end
+	-- v99: facing: toward its goal while it runs to catch up, else his facing (so its client escort file points
+	-- where the formation points and never swings through its neighbours)
+	faceTo(unit, if d > num("FaceMoveStuds", 8) then goal - pos else (st._afDir or Vector3.new(0, 0, -1)), now)
 	-- arrive: stand in the slot while the owner stands
 	if d <= num("ArriveStuds", 2) and (st._afSpeed or 0) < 1 and push.Magnitude < 0.05 then
 		if not unit._afStand then
@@ -807,6 +1041,15 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 		moveTo(unit, via, now)
 		return
 	end
+	-- v99 stuck stage 2: the alternate point beside it, for a short spell
+	local alt = unit._afAlt
+	if alt then
+		if now < alt.Until and flatDist(pos, alt.P) > 1.5 then
+			moveTo(unit, keepOut(alt.P), now)
+			return
+		end
+		unit._afAlt = nil
+	end
 	-- movement: straight while it sees the slot, a throttled path only when blocked
 	if clearLine(pos, goal) then
 		unit._afPath = nil
@@ -814,11 +1057,19 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 		return
 	end
 	local path = unit._afPath
-	if path and flatDist(path.Goal, goal) <= num("PathKeepStuds", 8) and path.I <= #path.Points then
+	-- v99: a path is kept while its end is within PathKeepStuds of the slot OR it is younger than PathKeepSeconds (at
+	-- a run the slot moved > 8 studs every think and the path was dropped each time)
+	if path and (flatDist(path.Goal, goal) <= num("PathKeepStuds", 12) or now - (path.At or 0) < num("PathKeepSeconds", 2)) and path.I <= #path.Points then
 		local wp = path.Points[path.I]
-		if flatDist(pos, wp.Position) < 3 then
-			path.I += 1
-			wp = path.Points[path.I]
+		-- v99: skip every waypoint already reached or passed between thinks (never walk back to one)
+		while wp do
+			local nxt = path.Points[path.I + 1]
+			if flatDist(pos, wp.Position) < 3 or (nxt ~= nil and flatDist(pos, nxt.Position) < flatDist(wp.Position, nxt.Position)) then
+				path.I += 1
+				wp = path.Points[path.I]
+			else
+				break
+			end
 		end
 		if wp then
 			if wp.Action == Enum.PathWaypointAction.Jump then
@@ -829,8 +1080,11 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 		end
 	end
 	requestPath(unit, pos, goal, now)
-	-- while the path is computed (or none exists): walk toward the owner's trail point = the owner himself
-	moveTo(unit, if st._afInBase then goal else keepOut(root.Position - (st._afDir or Vector3.zero) * 4), now)
+	-- while the path is computed (or none exists), v99: each unit walks to its OWN point, half-way from him to its
+	-- slot when it can see that (else the slot itself). Before, every unit walked to the SAME point 4 studs behind
+	-- him = the blob round buildings.
+	local mid = root.Position + (slot - root.Position) * 0.5
+	moveTo(unit, if st._afInBase then goal else keepOut(if clearLine(pos, mid) then mid else goal), now)
 end
 
 return ArmyFollow

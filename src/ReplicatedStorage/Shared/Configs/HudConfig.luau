@@ -446,6 +446,10 @@ HudConfig.Hotbar = {
 	NameSize = 20,
 	NameSizeDesktop = 16, -- 14.4 real px at 720p
 	TapSelectedHolsters = true, -- tap / press the drawn weapon's slot again → holster
+	-- v99 (owner 2026-09-29, "the rifle can't be put away"): a finger TAP on the drawn slot holsters too (was false:
+	-- on phones only a 0.5 s long-press did, and nobody found it). The long-press still works.
+	TouchTapHolsters = true,
+	HolsterAutoDrawGraceSeconds = 4, -- v99: AutoDrawOnDamage waits this long after the player holstered by hand
 	DrawnOnSpawn = false, -- you spawn holstered: clicks go to the world (droppers, consoles), not the gun
 	AutoDrawOnDamage = true, -- taking damage from a player/NPC draws the last weapon
 	HideWhen = { "Driving", "Dead", "Modal" },

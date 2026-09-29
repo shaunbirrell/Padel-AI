@@ -1980,6 +1980,18 @@ function WeaponVisuals.SetLocalWeapon(weaponId: string?, drawn: boolean)
 		if bar then
 			HudLayout.RefreshVisibility(bar)
 		end
+		-- v99: holstered mid-reload: the reload track stops with the gun (the hold track stops in syncLocalGun)
+		local rid = tonumber(FX.Anims and FX.Anims.Reload) or 0
+		local an = if rid > 0 then animatorOf(player.Character) else nil
+		local set = if an then trackCache[an] else nil
+		local rt = if set then set.Tracks[tostring(math.floor(rid))] else nil
+		if rt then
+			pcall(function()
+				if rt.IsPlaying then
+					rt:Stop(0.1)
+				end
+			end)
+		end
 	end
 	if not syncLocalGun() then
 		retryBuild()

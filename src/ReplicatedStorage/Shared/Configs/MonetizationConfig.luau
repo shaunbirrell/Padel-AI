@@ -99,7 +99,7 @@ local MonetizationConfig = {
 		-- (WE_Feature_PremiumVehicles); the generic Shop pass loop must skip VehicleIds passes (M3/M6 Garage sells
 		-- them). BundlePassKeys = other passes that also unlock the car; HideIfOwnsAny hides the bundle row.
 		PV_Razorfang = {
-			Id = 0,
+			Id = 2002484380,
 			DisplayName = "Razorfang GT Interceptor",
 			RobuxPrice = 199,
 			VehicleIds = { "PremiumRazorfang" },
@@ -118,7 +118,7 @@ local MonetizationConfig = {
 			Description = "Premium gun truck that carries up to 9 soldiers", -- J22
 		},
 		PV_Warlord = {
-			Id = 0,
+			Id = 2001320428,
 			DisplayName = "Warlord Siege Tank",
 			RobuxPrice = 799,
 			VehicleIds = { "PremiumWarlord" },
@@ -137,7 +137,7 @@ local MonetizationConfig = {
 			Description = "All 3 premium ground vehicles",
 		},
 		PV_Stormwing = { -- M6b (after helicopter flight is verified on a phone)
-			Id = 0,
+			Id = 2001722392,
 			DisplayName = "Stormwing Gunship",
 			RobuxPrice = 999,
 			VehicleIds = { "PremiumStormwing" },
@@ -145,7 +145,7 @@ local MonetizationConfig = {
 			Description = "Premium attack helicopter",
 		},
 		PV_Tidebreaker = { -- M6b (after waterways / boats)
-			Id = 0,
+			Id = 1999263465,
 			DisplayName = "Tidebreaker Assault Boat",
 			RobuxPrice = 299,
 			VehicleIds = { "PremiumTidebreaker" },
@@ -155,7 +155,7 @@ local MonetizationConfig = {
 		-- claude-bud JOB 5a: Robux-only jet and capital ship (VehicleConfig Premium defs). TODO(owner): create on the Creator
 		-- Hub, then paste the Ids (tools/wire-monetization-ids.py). Id 0 = hidden everywhere, nothing prompts.
 		PV_Skylance = {
-			Id = 0,
+			Id = 2001602422,
 			DisplayName = "Skylance Interceptor",
 			RobuxPrice = 899,
 			VehicleIds = { "PremiumSkylance" },
@@ -165,7 +165,7 @@ local MonetizationConfig = {
 		-- claude-bud JOB 5b: Bigger Army pass (+ArmyCapBonus army capacity, mirrored into profile.Entitlements.BiggerArmy on
 		-- ownership so SoldierService's cap reads it). TODO(owner): create "Bigger Army" (game pass, 249 R$), paste the Id.
 		BiggerArmy = {
-			Id = 0,
+			Id = 2001734404,
 			DisplayName = "Bigger Army",
 			RobuxPrice = 249,
 			ArmyCapBonus = 10,
@@ -176,13 +176,13 @@ local MonetizationConfig = {
 		-- _Parked). TODO(owner): create "Extra Garage Slot" (game pass, 199 R$), paste the Id. Owner-only (RolloutKeys);
 		-- GarageSlot.OwnerTest gives the playtest owner the slot before the Id exists.
 		ExtraGarageSlot = {
-			Id = 0,
+			Id = 1999359549,
 			DisplayName = "Extra Garage Slot",
 			RobuxPrice = 199,
 			Description = "+1 vehicle slot: keep a second vehicle out",
 		},
 		PV_Leviathan = {
-			Id = 0,
+			Id = 2001398410,
 			DisplayName = "Leviathan Dreadnought",
 			RobuxPrice = 1199,
 			VehicleIds = { "PremiumLeviathan" },
@@ -354,7 +354,7 @@ local MonetizationConfig = {
 		-- product, 79 R$), then paste the Ids. Both bank a saved counter in ProcessReceipt (CounterGrants below), spent
 		-- by the server (SoldierService.ConsumeRefills / Server/Modules/PlazaAirstrike). Owner-only first (RolloutKeys).
 		SoldierRefill = {
-			Id = 0,
+			Id = 3715442523,
 			DisplayName = "Instant Army Refill",
 			RobuxPrice = 49,
 			Cash = 0,
@@ -363,7 +363,7 @@ local MonetizationConfig = {
 			Description = "Fill your army to its cap right now",
 		},
 		PlazaAirstrike = {
-			Id = 0,
+			Id = 3715442542,
 			DisplayName = "Plaza Airstrike",
 			RobuxPrice = 79,
 			Cash = 0,

@@ -9,11 +9,17 @@
 	  You spawn HOLSTERED (HudConfig.Hotbar.DrawnOnSpawn). Tap a hotbar slot / press 1-4 to draw that weapon
 	  (RequestEquipWeapon when it is not the equipped one). Holstering:
 	    mouse / keyboard   click / press the drawn slot again (Hotbar.TapSelectedHolsters)
-	    touch              LONG-PRESS the drawn slot (HOLSTER_HOLD_SECONDS, 0.5 s). A quick re-tap of the drawn slot
-	                       keeps it drawn (TOUCH_TAP_HOLSTERS = false), so a panicked re-tap never hides FIRE
-	                       (mobile plan merge gate #5 / T16)
+	    touch              v99 (owner 2026-09-29, "the rifle can't be put away"): TAP the drawn slot again
+	                       (Hotbar.TouchTapHolsters = true; was false = a re-tap kept it drawn, so on a phone only a
+	                       0.5 s long-press holstered and nobody found it). The long-press still holsters too.
+	  One authoritative state: `drawn` + the server's equipped weapon (currentWeaponId). Another slot swaps weapons
+	  (still drawn, only ever one weapon out). Holster (W2.holster) = stop firing, Humanoid:UnequipTools() (no Tool
+	  is ever left in the hand), then the feel modules reset: gun model + hold / reload tracks, shoulder camera
+	  offset + AutoRotate, aim help, recoil spring; the reticle, FIRE / RELOAD and the ammo readout hide on Drawn.
 	  Taking damage (CombatHitFeedback "Damaged", or the humanoid's health dropping) auto-draws the last weapon
-	  (Hotbar.AutoDrawOnDamage). Published HudLayout flags: Drawn, Reloading, Hurt, RecentCombat.
+	  (Hotbar.AutoDrawOnDamage), v99: except within Hotbar.HolsterAutoDrawGraceSeconds of a holster by the player
+	  (before, being shot re-drew the rifle the instant it was put away). Death holsters at once; every new life
+	  starts holstered. Published HudLayout flags: Drawn, Reloading, Hurt, RecentCombat.
 
 	HOLSTERED FIRE (touch only; merge gate #5 / G14)
 	  While holstered, a 4 Hz scan (ARMED_SCAN_HZ, never faster) looks for a hostile the player can SEE: another
@@ -134,6 +140,7 @@ type FeelState = {
 	HumWaitChar: Instance?, -- the character that wait belongs to
 	HumWaitSerial: number, -- bumped whenever that wait ends (a pending streaming-off give-up checks it)
 	HpStacked: boolean, -- the health bar sits in the top-centre stack (seated, HudConfig.Health.Seated)
+	HolsterAt: number, -- v99: when the player last holstered by hand (the auto-draw-on-damage grace)
 }
 local Feel: FeelState
 do
@@ -179,6 +186,7 @@ do
 		HumWaitChar = nil,
 		HumWaitSerial = 0,
 		HpStacked = false,
+		HolsterAt = -math.huge,
 	}
 end
 local W2 = {} -- W2 helper functions (defined below, as table fields for the same register reason)
@@ -607,7 +615,9 @@ local function onDamaged()
 	markCombat()
 	flashEdge()
 	-- ambush: draw the last weapon (not from a seat — combat is hidden there and Q/1-4 belong to the vehicle)
-	if HB.AutoDrawOnDamage and not drawn and not seatedNow() and not HudLayout.GetFlag("Dead") then
+	if HB.AutoDrawOnDamage and not drawn and not seatedNow() and not HudLayout.GetFlag("Dead")
+		and clock() - Feel.HolsterAt >= (tonumber(HB_ANY.HolsterAutoDrawGraceSeconds) or 4) -- v99: not right after a holster
+	then
 		setDrawn(true)
 	end
 end
@@ -712,7 +722,8 @@ local function equip(id: string)
 end
 
 -- retapHolsters: keys 1-4 and mouse clicks use Hotbar.TapSelectedHolsters; a finger tap uses TOUCH_TAP_HOLSTERS
--- (off: on touch only a long-press on the drawn slot holsters, see makeSlot)
+-- (v99: on by default, a tap on the drawn slot holsters; the long-press in makeSlot holsters too)
+-- the drawn weapon's slot again -> holster (unarmed); another slot -> swap (still drawn); holstered -> draw
 local function selectSlot(i: number, retapHolsters: boolean)
 	local id = slotIds[i]
 	if not id then
@@ -721,7 +732,7 @@ local function selectSlot(i: number, retapHolsters: boolean)
 	local active = activeWeaponId()
 	if drawn and id == active then
 		if retapHolsters then
-			setDrawn(false)
+			W2.holster()
 		end
 		return
 	end
@@ -755,12 +766,28 @@ local function cycleWeapon(delta: number)
 	end
 end
 
+-- v99: the player put the weapon away (a re-tap / re-press of its slot, the long-press, DPadUp, Holster())
+function W2.holster()
+	Feel.HolsterAt = clock()
+	setDrawn(false)
+end
+
 setDrawn = function(on: boolean)
 	local changed = drawn ~= on
 	if changed then
 		drawn = on
 		if not on then
 			stopFiring()
+		end
+	end
+	if not on then
+		-- v99: unarmed means unarmed: no Tool left in the hand (returned to the Backpack); the gun model, tracks,
+		-- camera offset, aim help and recoil reset in syncFeel below (publishDrawn)
+		local hum = humanoid
+		if hum and hum.Parent then
+			pcall(function()
+				hum:UnequipTools()
+			end)
 		end
 	end
 	if on then
@@ -981,7 +1008,7 @@ local function makeSlot(parent: Frame, i: number): Slot
 				return -- long-press on another weapon's slot: the release draws / switches as a tap
 			end
 			sl.LongFired = true
-			setDrawn(false)
+			W2.holster()
 		end)
 	end)
 	btn.InputEnded:Connect(function(io: InputObject)
@@ -2167,7 +2194,7 @@ function CombatController.IsDrawn(): boolean
 end
 
 function CombatController.Holster()
-	setDrawn(false)
+	W2.holster()
 end
 
 function CombatController.Draw()
@@ -2250,7 +2277,11 @@ function CombatController.Init()
 				stopFiring()
 			end
 			if name == "Dead" then
-				publishDrawn()
+				if on and drawn then
+					setDrawn(false) -- v99: death holsters at once (one state; the next life starts holstered too)
+				else
+					publishDrawn()
+				end
 			end
 			if name == "Driving" then
 				refreshBound()
@@ -2302,7 +2333,11 @@ function CombatController.Init()
 		elseif kc == GP.Next then
 			cycleWeapon(1)
 		elseif kc == GP.DrawHolster then
-			setDrawn(not drawn)
+			if drawn then
+				W2.holster()
+			else
+				setDrawn(true)
+			end
 		end
 	end)
 

@@ -892,6 +892,9 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 		PlotSince = 0,
 		StopHeld = false,
 	}
+	-- v99: every unit, every order, from its first frame: the ArmyNPCs collision group (never collides with another
+	-- soldier, still with the world and players), no trip / ragdoll states, server network ownership kept
+	SquadOrdersService._AF.PrepUnit(unit)
 
 	humanoid.Died:Connect(function()
 		if not unit.Alive then
@@ -2633,6 +2636,7 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 	local order = st.Order
 	local playerRoot = characterRoot(player)
 	if order ~= "Follow" then
+		SquadOrdersService._AF.Release(unit) -- v99: HOLD / ATTACK / RETREAT drive it now (one controller per unit)
 		SquadOrdersService._PaceSpeed(unit, 0) -- v85 FollowPace: back to UnitWalkSpeed outside FOLLOW
 	end
 
@@ -2654,6 +2658,9 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 				followCtx.Live = false
 				followCtx.Moving = false
 				if fought and not moving then
+					-- v99: the escort fight moved it (its own MoveTo): ArmyFollow lets go, and takes it back with fresh
+					-- state (no stale goal / stuck window = no snap-back teleport right after the fight)
+					SquadOrdersService._AF.Release(unit)
 					return
 				end
 			end
@@ -3247,6 +3254,7 @@ function SquadOrdersService.Init(deps: { [string]: any })
 	end
 
 	ensureFolder()
+	SquadOrdersService._AF.EnsureGroup() -- v99: the ArmyNPCs collision group exists before the first unit spawns
 	SquadOrdersService._AF.Bind({ -- v91 ArmyFollow
 		Folder = ensureFolder,
 		OwnPlotId = ownPlotId,
