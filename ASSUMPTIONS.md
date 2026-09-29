@@ -8738,3 +8738,30 @@ ds_territories.luau T3):
 - Not covered: the escort walk (while he stands near a hostile) and ATTACK / HOLD orders are unchanged.
   Units spawned inside the base walk out to their seats.
 - Not verified in Roblox. Needs the owner's phone test.
+
+## 2026-09-29 — claude-bud JOB 3: fill the map (WorldFillConfig + Server/Modules/WorldFill → Workspace.WorldFill)
+- **Budget-first:** the world outside bases is about 2,476 Full / 1,679 Low parts (caps 2,900 / 1,900, hard cap 3,100), and the
+  Town's busiest 512-stud circle has about 22 parts of headroom.
+  - The fill plans 388 Full / 198 Low, so the totals come to about 2,864 / 1,877.
+  - The plaza ring is light (4 posts x 6 parts, placed north and south of the Town, outside its footprint + 30).
+  - Rocks and "hills" are Terrain (WorldKits.Rock, 0 parts).
+  - The build also stops at MaxPartsFull 400 / MaxPartsLow 210.
+- **Where** (all world studs; the static check proves every item clear of the keep-outs):
+  - 4 connector roads, 2 strips each, flat, non-colliding, top 0.625 like the world roads. They run from the P1/P2/P5/P6
+    gate aprons (x ±580) to x ±400, then along Z to RoadZ0, which runs into the Town and the plaza. P3 and P4 already sit on RoadX0.
+  - 2 bridges over the P1 (x -1050) and P6 (x 1300) dock channels. There is no river, so these are the "river crossing".
+    The deck bottom is at Y 21.5 (20 over the water), the piers stand on the bank slabs, and boats pass under.
+  - 6 army positions at (±470, ±620), (-1150, 400) and (1150, -400). Each has a watchtower, sandbag nest, bunker, tank
+    wreck, fuel tank and crates (Tier 1), plus a sandbag line, wire, truck wreck, drums, ruined house, trench revetment and
+    trees (Tier 2), plus 2 Terrain rock groups.
+  - 4 plaza posts: sandbag arc + 2 tank traps + rubble.
+- **Order in MapDressing.Dress:** POIs → WorldFill.ReserveRoads (roads + 13-stud discs in the shared occupancy, so the
+  travel dressing avoids them) → Dockside → WorldDress → cull → hygiene → WorldFill.Build. Every kit and rock is
+  re-checked with WorldDress.Blocked (Spacing 1) and skipped, and counted, if blocked. The log line is
+  `[WAR EMPIRE] WorldFill: quality=... parts=... skipped=...`; the folder also carries the attributes WE_FillParts / WE_FillSkipped.
+- **Side effect:** because the roads are reserved before WorldDress, a few road-rhythm clusters that used to sit where the
+  connectors now run move or drop. The dressing count can only go down.
+- **Phones:** Studio skips all dressing (StudioSkipWorldDressing), so the fill appears only on live and in ForceDress runs.
+  No lights, no Neon, no SurfaceGuis, and no scripts (any are stripped). Tier 2 builds only on Full.
+- World geometry cannot be owner-only (same as v90 runway). Kill switch: `WorldFillConfig.Enabled = false` removes the folder.
+- Not measured in Roblox: the real part count and the busiest-circle numbers need the headless stand-in, which is not in this repo, or a live server log.
