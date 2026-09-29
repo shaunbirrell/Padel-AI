@@ -7325,13 +7325,13 @@ return NationConfig
 
 local NationFlagIds = {
 	Atlas = {
-		Europe = 0,
-		Americas = 0,
-		Asia = 0,
-		Africa = 0,
-		MiddleEast = 0,
-		Oceania = 0,
-		Review = 0,
+		Europe = 117922087338795,
+		Americas = 129834397528036,
+		Asia = 114871762121221,
+		Africa = 132455042605948,
+		MiddleEast = 88221072001528,
+		Oceania = 82459247862229,
+		Review = 98381294373531,
 	} :: { [string]: number },
 	Flags = {
 	} :: { [string]: number },
@@ -25152,7 +25152,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 121)
+		player:SetAttribute("WE_Build", 122)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -61912,7 +61912,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 121)
+			player:SetAttribute("WE_Build", 122)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -69502,7 +69502,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 121)
+		player:SetAttribute("WE_Build", 122)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -69643,7 +69643,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=121",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=122",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)

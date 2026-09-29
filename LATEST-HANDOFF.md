@@ -1,4 +1,13 @@
 <!-- Q2-START -->
+## v122 (Code Bot Roblox, 2026-09-30 ~00:30 Dublin): real nation flags wired — place version 120
+- Wired the 7 JOB 25 flag atlases (uploaded by shaunie6 via Creator Hub as IMAGE assets) with `tools/wire-nation-flag-ids.py` into `NationFlagIds.Atlas`: Europe 117922087338795, Americas 129834397528036, Asia 114871762121221, Africa 132455042605948, MiddleEast 88221072001528, Oceania 82459247862229, Review 98381294373531. National flags only (flag-icons). **WE_Build 122**. PreferMesh OFF; WE_Building* untouched.
+- All atlases non-zero → `LiveRequiresArt` lets the nation picker open by itself for everyone after this publish.
+- Moderation: thumbnails API reports state `Completed` for all 7 ids at ship time (not Pending/Blocked).
+- **Pins:** `tools/checks/codebot_v122.py` (WE_Build 122 + the 7 atlas ids). Retired codebot_v121 WE_Build pins; bumped BuyPathStatic / codebot_v110 / codebot_v113 frozen WE_Build pins to 122.
+- **Checks:** BuyPathStatic PASS=6423 FAIL=0; rojo → dist/WarEmpire-PERF.rbxlx (+ WarEmpire.rbxlx copy); Open Cloud HTTP 200 `versionNumber=120`. Code commit `db06299`.
+- **Phone tests (owner):** restart servers / Migrate to Latest Update; nation picker shows real flags (check one per region incl. Review: AF, SA, KE…); base flagpole shows your flag; a flag in each region crops to the right cell (not a neighbour). If a flag shows as colour tile, that atlas may still be in moderation.
+- **Fallback:** if an atlas crop looks wrong, per-nation `Flags["IE"] = <image id>` via the same script.
+
 ## v121 (Code Bot Roblox, 2026-09-30 ~00:19 Dublin): JOB 26+27 stronger army + player armour + town cull LIVE — place version 119
 - Fast-forward merged Claude `d0ea486` (JOB 26) + `bf799fe` (JOB 27) onto phase-7 tip `54f3aef` (v120). Code Bot bump commit `6ee87c8`. **WE_Build 121**. PreferMesh OFF; WE_Building* untouched.
 - **JOB 26 — stronger army + buyable player armour**
