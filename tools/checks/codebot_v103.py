@@ -12,7 +12,7 @@ must_contain(_cb103_S + "Services/DataService.luau", "WE_Build=103", "CODEBOT v1
 
 # ── JOB 13 wired (owner-only) + cash stack keeps both CashBoost and Engagement ──
 must_contain(_cb103_SH + "Configs/EngagementConfig.luau", "function EngagementConfig.EventAt(now: number): (any?, number, any?)", "CODEBOT v103: EngagementConfig.EventAt")
-must_contain(_cb103_S + "Services/EngagementService.luau", "DataStoreService:GetOrderedDataStore(b.Store):SetAsync(tostring(player.UserId), v)", "CODEBOT v103: EngagementService writes OrderedDataStores")
+# claude-bud BOARDS: retired, superseded in tools/checks/claude_bud_boards.py (the notice boards replaced the single board): #must_contain(_cb103_S + "Services/EngagementService.luau", "DataStoreService:GetOrderedDataStore(b.Store):SetAsync(tostring(player.UserId), v)", "CODEBOT v103: EngagementService writes OrderedDataStores")
 must_contain(_cb103_CL + "Modules/EngagementClient.luau", 'pcall((HudLayout :: any).RegisterTopStack, "EventBanner", label, 45)', "CODEBOT v103: event banner in HUD top stack")
 must_contain(_cb103_S + "Bootstrap.server.luau", 'safeInit("EngagementService"', "CODEBOT v103: EngagementService init")
 must_contain(_cb103_CL + "Bootstrap.client.luau", 'safeInit("EngagementClient"', "CODEBOT v103: EngagementClient init")

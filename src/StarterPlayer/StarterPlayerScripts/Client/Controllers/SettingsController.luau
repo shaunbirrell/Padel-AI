@@ -360,6 +360,23 @@ function SettingsController.Init()
 	end)
 	y += TAP + 14
 
+	-- claude-bud BOARDS: hide / show yourself on the TOP SUPPORTERS notice board (saved on the server, which
+	-- removes your entry when hidden); the label follows the server's WE_SupporterOptOut attribute
+	section("LEADERBOARDS")
+	local supBtn = button("SupporterBoard", "Supporter board: SHOWN", UDim.new(0, 16), UDim.new(1, -32))
+	local function refreshSup()
+		local hidden = player:GetAttribute("WE_SupporterOptOut") == true
+		supBtn.Text = if hidden then "Supporter board: HIDDEN" else "Supporter board: SHOWN"
+		supBtn.BackgroundColor3 = if hidden then Constants.Colors.Background else Constants.Colors.Accent
+	end
+	supBtn.Activated:Connect(function()
+		AudioController.PlayClick()
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestBoardSetting, player:GetAttribute("WE_SupporterOptOut") ~= true)
+	end)
+	player:GetAttributeChangedSignal("WE_SupporterOptOut"):Connect(refreshSup)
+	refreshSup()
+	y += TAP + 14
+
 	-- Supply spinner (the Missions panel has the same claim row; this section stays per spec §3.7)
 	section("SUPPLY SPINNER")
 	local spinnerBtn = button("SpinnerClaim", "SUPPLY SPINNER — Claim free Cash/Gold", UDim.new(0, 16), UDim.new(1, -32))

@@ -40,7 +40,8 @@ def server_handlers():
             is_handler = (re.search(r"OnServerEvent:Connect\(function\(player", code)
                           or re.search(r"OnServerInvoke = function\(player", code)
                           or "local function onRequest(player: Player, payload: any)" in code
-                          or "local function handlePurchaseRemote(" in code)
+                          or "local function handlePurchaseRemote(" in code
+                          or "local function onBoardSetting(player: Player" in code)
             if not is_handler:
                 continue
             nxt = "\n".join(lines[n + 1: n + 6])

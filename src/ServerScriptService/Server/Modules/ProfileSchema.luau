@@ -197,6 +197,21 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	profile.ReferredBy = if typeof(profile.ReferredBy) == "number" and profile.ReferredBy > 0 then math.floor(profile.ReferredBy) else nil
 	profile.InviteDay = nonNegInt(profile.InviteDay)
 	profile.InviteCount = nonNegInt(profile.InviteCount)
+	-- claude-bud BOARDS: the notice boards' own counters (validated kills, the week, the biggest army)
+	if typeof(profile.LB) ~= "table" then
+		profile.LB = nil
+	else
+		local lb = profile.LB
+		lb.Week = if typeof(lb.Week) == "string" and #lb.Week <= 8 then lb.Week else nil
+		lb.Kills = nonNegInt(lb.Kills)
+		lb.KillsW = nonNegInt(lb.KillsW)
+		lb.PlazaBase = nonNegInt(lb.PlazaBase)
+		lb.ArmyMax = nonNegInt(lb.ArmyMax)
+		lb.Seeded = if lb.Seeded == true then true else nil
+	end
+	if typeof(profile.Settings) == "table" and profile.Settings.SupporterBoardOptOut ~= true then
+		profile.Settings.SupporterBoardOptOut = nil
+	end
 	if profile.GroupRewardClaimed ~= true then
 		profile.GroupRewardClaimed = nil -- claude-bud JOB 5e: true once the group reward was paid
 	end

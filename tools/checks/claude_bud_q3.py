@@ -18,8 +18,8 @@ must_contain("src/ServerScriptService/Server/Services/SupplyDropService.luau", "
 must_contain("src/ServerScriptService/Server/Modules/PlazaBounty.luau", 'econ.AddCash(player, math.floor(PlazaBountyConfig.Cash * mult), "plaza_bounty")', "CLAUDE-BUD J13: Plaza War Week multiplies the bounty")
 for _b in ("WE_LB_Cash_v1", "WE_LB_Plaza_v1", "WE_LB_Rebirths_v1"):
     must_contain(_q3_ec, _b, f"CLAUDE-BUD J13: leaderboard store {_b}")
-must_contain(_q3_es, "DataStoreService:GetOrderedDataStore(b.Store):SetAsync(tostring(player.UserId), v)", "CLAUDE-BUD J13: scores written to OrderedDataStores (pcall)")
-must_contain(_q3_es, "DataStoreService:GetOrderedDataStore(b.Store):GetSortedAsync(false, E.TopN)", "CLAUDE-BUD J13: top N read (pcall)")
+# claude-bud BOARDS: retired, superseded in tools/checks/claude_bud_boards.py (the notice boards replaced the single board): #must_contain(_q3_es, "DataStoreService:GetOrderedDataStore(b.Store):SetAsync(tostring(player.UserId), v)", "CLAUDE-BUD J13: scores written to OrderedDataStores (pcall)")
+# claude-bud BOARDS: retired, superseded in tools/checks/claude_bud_boards.py (the notice boards replaced the single board): #must_contain(_q3_es, "DataStoreService:GetOrderedDataStore(b.Store):GetSortedAsync(false, E.TopN)", "CLAUDE-BUD J13: top N read (pcall)")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "st.PlazaCaptures = (tonumber(st.PlazaCaptures) or 0) + 1", "CLAUDE-BUD J13: plaza captures counted for the board")
 must_contain(_q3_es, "if ref == nil or ref <= 0 or ref == player.UserId or profile.ReferredBy ~= nil then", "CLAUDE-BUD J13: an invite pays once per invited account (never self)")
 must_contain(_q3_es, "local room = math.max(0, E.InviteDailyCap - (tonumber(profile.InviteCount) or 0))", "CLAUDE-BUD J13: inviter rewards capped per day")
@@ -28,7 +28,7 @@ must_contain(_q3_es, "if prev == nil or prev <= 0 or os.time() - prev < E.Comeba
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", ";(profile :: any).PrevJoinUnix = profile.LastJoinUnix", "CLAUDE-BUD J13: the previous join is kept for the comeback check")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", 'game:GetService("SocialService"):PromptGameInvite(lp)', "CLAUDE-BUD J13: invite through Roblox's social prompt")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/EngagementClient.luau", 'pcall((HudLayout :: any).RegisterTopStack, "EventBanner", label, 45)', "CLAUDE-BUD J13: event banner in the HUD top stack")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/EngagementClient.luau", "sg.MaxDistance = 80", "CLAUDE-BUD J13: board SurfaceGui MaxDistance <= 80")
+# claude-bud BOARDS: retired, superseded in tools/checks/claude_bud_boards.py (the notice boards replaced the single board): #must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/EngagementClient.luau", "sg.MaxDistance = 80", "CLAUDE-BUD J13: board SurfaceGui MaxDistance <= 80")
 # the schedule, executed with the Luau CLI when available (Saturday = weekend event on, Wednesday = weekend event off)
 _q3_luau = _q3_os.environ.get("LUAU")
 if not _q3_luau and _q3_os.environ.get("LUAU_COMPILE"):

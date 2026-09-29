@@ -694,6 +694,14 @@ local function confirmPassPurchase(player: Player, passKey: string, passId: numb
 			-- purchase has no receipt, so the exact Robux amount is unknown)
 			local def = MonetizationConfig.GamePasses[passKey]
 			local price = nonNegInt(def and def.RobuxPrice)
+			-- claude-bud BOARDS: the real price (Roblox's PriceInRobux for this pass), the config price only as a fallback;
+			-- counted once, here, after UserOwnsGamePassAsync confirmed the purchase
+			local okP, info = pcall(function()
+				return MarketplaceService:GetProductInfo(passId, Enum.InfoType.GamePass)
+			end)
+			if okP and typeof(info) == "table" and tonumber((info :: any).PriceInRobux) then
+				price = nonNegInt((info :: any).PriceInRobux)
+			end
 			local source = intentSource(player.UserId, "GP:" .. passKey)
 			local profile = DataService and DataService.GetProfile(player)
 			local first = false

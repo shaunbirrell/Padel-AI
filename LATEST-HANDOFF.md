@@ -2,7 +2,7 @@
 # WHERE I STOPPED — 2026-09-29 (Claude on Bud tip 9b30223) — JOB 13 SHIPPED IN v103 (owner-only)
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v103) before new work.** Code Bot cherry-picked JOB 13 (`36779ce`)
 into WE_Build 103. Keep v102 Codes / CashBoost; do not rebuild a codes system. Engagement is owner-only (not LaunchSafe).
-Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [x] 15 anti-exploit sweep
+Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel polish · [x] 15 anti-exploit sweep · [x] BOARDS (Town Centre notice boards)
 
 - J13 (owner-only, `EngagementConfig.Rollout` per feature): weekly events (Plaza War Week / Airdrop Frenzy / Double Cash Weekend) with a HUD banner and countdown;
   leaderboards (richest / plaza captures / rebirths) on a Town Square board; invite reward ($10k per new friend, 5/day; the friend gets $2.5k);
@@ -20,6 +20,14 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
   Enforced for the owner, observe-only for everyone else. Read the live server logs for "[RemoteGate] would reject";
   if they are quiet after a few days, set SecurityConfig.RemoteGate.Rollout = "all". Phone test: play normally for
   10 min (drive, shoot, buy, army orders, premium weapons) and check that nothing stops working.
+
+- BOARDS (live for ALL, LeaderboardConfig): 6 Town Centre notice boards on the square's south edge: MOST KILLS (all-time /
+  this week, alternating), RICHEST, TOP SUPPORTERS (Robux, opt-out in Settings), PLAZA CONQUEROR (weekly), REBIRTH KINGS,
+  TOP ARMY; a crown for each weekly #1. Phone tests (956x440 + a small phone): stand ~30 studs from the row and read the
+  names; walk up to a board and check the gold "You: #.. · .." line; at night the spotlights come on; kill an alt 4
+  times in 10 min: only 3 count (after the next write, <= 90 s + <= 75 s refresh); Settings > LEADERBOARDS > Supporter
+  board: HIDDEN removes you from TOP SUPPORTERS on the next refresh; buy something cheap and check TOP SUPPORTERS.
+  Boards fill only on a live server (DataStores): Studio shows "loading…" / "no entries yet".
 
 ## Launch readiness (JOB 12)
 **To open sales to everyone:** set `MonetizationConfig.LaunchAll = true` (one line). That makes every gate marked "yes" below live for everyone,
