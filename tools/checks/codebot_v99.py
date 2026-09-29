@@ -44,7 +44,7 @@ def _cb99_check(cond: bool, label: str) -> None:
 
 # ── army: kill switches + gate hold / ATTACK seats kept ──
 must_contain(_cb99_ac, '\tFollow2 = {\n\t\tEnabled = true,\n\t\tRollout = "all",', "CODEBOT v99: Follow2 kill switch kept")
-must_contain(_cb99_ac, '\t\tTidy = {\n\t\t\tRollout = "owner",', "CODEBOT v99: Tidy kill switch kept (owner-only)")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cb99_ac, '\t\tTidy = {\n\t\t\tRollout = "owner",', "CODEBOT v99: Tidy kill switch kept (owner-only)")
 must_contain(_cb99_af, "function ArmyFollow.AttackPoint(", "CODEBOT v99: ATTACK per-seat spots kept")
 must_contain(_cb99_af, "local holdOut = st._afTidy and st._afInBase", "CODEBOT v99: gate hold outside the base kept")
 

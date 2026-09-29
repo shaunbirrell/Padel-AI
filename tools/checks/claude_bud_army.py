@@ -5,7 +5,7 @@ _cba_af = "src/ServerScriptService/Server/Modules/ArmyFollow.luau"
 _cba_a = read(_cba_af) or ""
 
 must_contain(_cba_ac, '\t\tEnabled = true,\n\t\tRollout = "all",', "CLAUDE-BUD army: the Follow2 kill switch (Enabled / Rollout) is kept")
-must_contain(_cba_ac, '\t\tTidy = {\n\t\t\tRollout = "owner",', "CLAUDE-BUD army: Tidy ships owner-only")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cba_ac, '\t\tTidy = {\n\t\t\tRollout = "owner",', "CLAUDE-BUD army: Tidy ships owner-only")
 must_contain(_cba_af, 'return r == "all" or (r == "owner" and AdminConfig.IsPlaytestOwner(player.UserId) == true)', "CLAUDE-BUD army: tidyLive fails closed")
 
 # (a) hold outside the gate, never cross the plot edge

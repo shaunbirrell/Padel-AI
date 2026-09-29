@@ -1011,7 +1011,7 @@ local VehicleConfig = {
 			-- for the rollout named here ("owner" = the playtest owner's own vehicles, AdminConfig.IsPlaytestOwner; "all" =
 			-- everyone; anything else = nobody). Server-authoritative (VehicleWaterGuard kindOf); the driver's client follows
 			-- the server's WE_WaterState "Wade".
-			AmphibiousRollout = { BridgeLayer = "owner" } :: { [string]: string },
+			AmphibiousRollout = { BridgeLayer = "all" } :: { [string]: string },
 			WadeSpeedFrac = 0.4,
 		},
 	},

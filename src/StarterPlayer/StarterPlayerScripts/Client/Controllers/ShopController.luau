@@ -1000,10 +1000,9 @@ function ShopController.Init()
 		-- claude-bud JOB 6: Robux features (Extra Garage Slot, Robux-only vehicles) get a gold ROBUX row. While the Id
 		-- is 0 it shows SOON (only where the rollout is live); a tap is the Shop's "Coming soon", never a prompt.
 		local robuxFeature = key == "ExtraGarageSlot" or typeof(def.VehicleIds) == "table"
-		if robuxFeature and (tonumber(def.Id) or 0) == 0 and MonetizationConfig.SkuLiveFor(Players.LocalPlayer.UserId, key) then
-			addRow("ROBUX · " .. tostring(def.DisplayName or key), tostring(def.Description or ""), function()
-				promptGamePass(key, openSource)
-			end, "SOON", "Pass_" .. key, true)
+		-- v101 (Code Bot): with every rollout "all", an Id 0 Robux feature (PV_Bastion / PV_MotorPool until the owner
+		-- creates them) gets no row for anyone (was a SOON row); it appears once its Id is pasted.
+		if robuxFeature and (tonumber(def.Id) or 0) == 0 then
 			continue
 		end
 		-- F8: an Id 0 pass (the Speed Pass until the owner creates it) gets no row at all: it appears, with no

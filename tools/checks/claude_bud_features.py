@@ -15,7 +15,7 @@ must_contain(_cbf_rs, "Constants.RemoteNames.FeaturePush, -- claude-bud JOB 4/5"
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau", 'safeInit("FeatureController"', "CLAUDE-BUD features: FeatureController starts")
 
 # 4.1 airdrop
-must_contain(_cbf_sdc, '\tAirdrop = {\n\t\tRollout = "owner",', "CLAUDE-BUD airdrop: owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cbf_sdc, '\tAirdrop = {\n\t\tRollout = "owner",', "CLAUDE-BUD airdrop: owner-only first")
 must_contain(_cbf_sdc, "\t\tIntervalSeconds = 600,", "CLAUDE-BUD airdrop: every 10 minutes")
 must_contain(_cbf_sdc, "\t\treturn AdminConfig.IsPlaytestOwner(userId)\n\tend\n\treturn false\nend", "CLAUDE-BUD airdrop: AirdropLiveFor fails closed")
 must_contain(_cbf_sds, "if airdrop and not SupplyDropConfig.AirdropLiveFor(player.UserId) then", "CLAUDE-BUD airdrop: only players it is live for can claim")
@@ -28,7 +28,7 @@ must_contain(_cbf_fc, 'ObjectiveMarker.ShowWith({ Short = label, X = x, Y = y, Z
 # 4.2 daily login reward: auto-claimed through the existing server claim (once per UTC day, saved in DailyLogin)
 _cbf_drc = "src/ReplicatedStorage/Shared/Configs/DailyRewardConfig.luau"
 _cbf_ms = "src/ServerScriptService/Server/Services/MissionService.luau"
-must_contain(_cbf_drc, '\tAutoClaim = {\n\t\tRollout = "owner",', "CLAUDE-BUD daily: auto-claim owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cbf_drc, '\tAutoClaim = {\n\t\tRollout = "owner",', "CLAUDE-BUD daily: auto-claim owner-only first")
 must_contain(_cbf_drc, "\t\treturn AdminConfig.IsPlaytestOwner(userId)\n\tend\n\treturn false\nend", "CLAUDE-BUD daily: AutoClaimLiveFor fails closed")
 _cbf_days = [int(x) for x in re.findall(r"\{ Day = \d+, Cash = (\d+),", read(_cbf_drc) or "")]
 (ok if len(_cbf_days) == 7 and all(b > a for a, b in zip(_cbf_days, _cbf_days[1:])) else bad)(f"CLAUDE-BUD daily: 7-day streak with rising cash {_cbf_days}")
@@ -42,7 +42,7 @@ must_contain(_cbf_ms, "\tDataService.MarkDirty(player)\n\tMissionService.Push(pl
 _cbf_pbc = "src/ReplicatedStorage/Shared/Configs/PlazaBountyConfig.luau"
 _cbf_pb = "src/ServerScriptService/Server/Modules/PlazaBounty.luau"
 _cbf_ts = "src/ServerScriptService/Server/Services/TerritoryService/init.luau"
-must_contain(_cbf_pbc, 'local PlazaBountyConfig = {\n\tRollout = "owner",', "CLAUDE-BUD bounty: owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cbf_pbc, 'local PlazaBountyConfig = {\n\tRollout = "owner",', "CLAUDE-BUD bounty: owner-only first")
 must_contain(_cbf_pbc, "\t\treturn AdminConfig.IsPlaytestOwner(userId)\n\tend\n\treturn false\nend", "CLAUDE-BUD bounty: LiveFor fails closed")
 must_contain(_cbf_ts, "\tprofile.Stats.TerritoriesCaptured += 1\n\tsyncProfileOwnership(player)\n\t-- claude-bud JOB 4.3", "CLAUDE-BUD bounty: hooked on the server's completed capture")
 must_contain(_cbf_ts, "pcall(PlazaBounty.OnCaptured, player, rt.Def.Id, rt.Def.Position)", "CLAUDE-BUD bounty: a bounty error never breaks a capture")
@@ -56,7 +56,7 @@ must_contain(_cbf_fc, 'local LABELS = { Airdrop = "AIRDROP", Bounty = "BOUNTY" }
 _cbf_auc = "src/ReplicatedStorage/Shared/Configs/ArmyUpgradeConfig.luau"
 _cbf_rsv = "src/ServerScriptService/Server/Services/ResearchService.luau"
 _cbf_rc = "src/ReplicatedStorage/Shared/Configs/ResearchConfig.luau"
-must_contain(_cbf_auc, 'local ArmyUpgradeConfig = {\n\tRollout = "owner",', "CLAUDE-BUD army upgrades: owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cbf_auc, 'local ArmyUpgradeConfig = {\n\tRollout = "owner",', "CLAUDE-BUD army upgrades: owner-only first")
 must_contain(_cbf_auc, "\t\treturn AdminConfig.IsPlaytestOwner(userId)\n\tend\n\treturn false\nend", "CLAUDE-BUD army upgrades: LiveFor fails closed")
 must_contain(_cbf_rsv, "if not ArmyUpgradeConfig.LiveFor(player.UserId) then\n\t\t\t\treturn\n\t\t\tend", "CLAUDE-BUD army upgrades: the prompt spot goes only to live players")
 must_contain(_cbf_fc, "(mod :: any).Open(track)", "CLAUDE-BUD army upgrades: the Barracks prompt opens the Soldiers track")

@@ -65,9 +65,9 @@ local AdminConfig = require(script.Parent.AdminConfig)
 local ArmyConfig = {
 	-- ── Rollout (lane A0 builds the gate; lanes A / C read it) ─────────────────────────────────────────────────────
 	Rollout = {
-		Escort = "owner", -- lane A0: bank fix / defend / focus fire / side-step / visible unit shots
-		Army = "owner", -- lane A: guard line, follow outside, movement
-		Fix = "owner", -- v90 (Code Bot): the army despawn fix (Follow / Recover / Gate blocks); "all" once the owner has phone-tested it
+		Escort = "all", -- v101 (was "owner") -- lane A0: bank fix / defend / focus fire / side-step / visible unit shots
+		Army = "all", -- v101 (was "owner") -- lane A: guard line, follow outside, movement
+		Fix = "all", -- v101 (was "owner") -- v90 (Code Bot): the army despawn fix (Follow / Recover / Gate blocks); "all" once the owner has phone-tested it
 	},
 
 	-- ── Escort (FOLLOW; SPEC-ARMY-FINAL §7.1 / §7.2) ──────────────────────────────────────────────────────────────
@@ -198,7 +198,7 @@ local ArmyConfig = {
 		-- ThreatKeepCatchUp = true drops only the lead near a hostile (not shipped). ThreatStuds = 0 = off.
 		ThreatStuds = 55,
 		ThreatApproachOnly = true,
-		ThreatStandingFor = "owner", -- "off" | "owner" | "all": keep it equal to lane A0's Rollout.Escort
+		ThreatStandingFor = "all", -- v101 (equal to Rollout.Escort) -- "off" | "owner" | "all": keep it equal to lane A0's Rollout.Escort
 		ThreatKeepCatchUp = false,
 		-- A unit on the player's trail (OrdersConfig.FollowPath) that finds no walkable trail point keeps walking to the
 		-- last one it had instead of straight at its slot behind a wall (the doorway stranding). false = e506c9c.
@@ -362,7 +362,7 @@ local ArmyConfig = {
 			* Leaving: no far / stuck teleport for LeaveGraceSeconds after he leaves his base (they walk back into the
 			  wedge; the void rescue still runs). ]]
 		Tidy = {
-			Rollout = "owner",
+			Rollout = "all", -- v101
 			HoldApproachStuds = 6,
 			HoldReleaseStuds = 10,
 			PlotPadStuds = 2,

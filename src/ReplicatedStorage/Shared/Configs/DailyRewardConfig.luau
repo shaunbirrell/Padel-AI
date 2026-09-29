@@ -20,13 +20,16 @@ local DailyRewardConfig = {
 		in the profile's DailyLogin), then one toast "Day N of 7: +$X. Tomorrow: $Y". Rollout "owner" =
 		AdminConfig.IsPlaytestOwner only, "all", anything else = off (claim from the Missions panel only, as before). ]]
 	AutoClaim = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		DelaySeconds = 8,
 	},
 }
 
 -- claude-bud: is auto-claim live for this player (fail closed)
 function DailyRewardConfig.AutoClaimLiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("DailyAutoClaim") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = DailyRewardConfig.AutoClaim.Rollout
 	if mode == "all" then
 		return true

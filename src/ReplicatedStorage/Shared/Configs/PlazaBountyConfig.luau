@@ -12,7 +12,7 @@
 local AdminConfig = require(script.Parent.AdminConfig)
 
 local PlazaBountyConfig = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	ZoneId = "CentralPlaza",
 	WindowSeconds = 180,
 	Cash = 15000,
@@ -20,6 +20,9 @@ local PlazaBountyConfig = {
 }
 
 function PlazaBountyConfig.LiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("PlazaBounty") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = PlazaBountyConfig.Rollout
 	if mode == "all" then
 		return true

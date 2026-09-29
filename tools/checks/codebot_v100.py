@@ -4,10 +4,10 @@
 import re as _cb100_re
 
 # ── build ──
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 100)', "CODEBOT v100: WE_Build=100 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 100)', "CODEBOT v100: WE_Build=100 BaseService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 100)', "CODEBOT v100: WE_Build=100 EarlyRemotes")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WE_Build=100", "CODEBOT v100: DataService profile-loaded log says WE_Build=100")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 100)', "CODEBOT v100: WE_Build=100 DataService")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 100)', "CODEBOT v100: WE_Build=100 BaseService")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 100)', "CODEBOT v100: WE_Build=100 EarlyRemotes")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WE_Build=100", "CODEBOT v100: DataService profile-loaded log says WE_Build=100")
 
 # ── v99 Creator Hub Ids kept (do not regress to Id 0) ──
 _cb100_mc = "src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau"
@@ -27,8 +27,8 @@ must_contain("src/ReplicatedStorage/Shared/Configs/HudConfig.luau", "\tTouchTapH
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau", "HolsterAutoDrawGraceSeconds", "CODEBOT v100: holster grace kept")
 
 # ── JOB 9 / 10 / 11 + PREMIUM key needles ──
-must_contain("src/ReplicatedStorage/Shared/Configs/BalanceConfig.luau", 'Rollout = "owner"', "CODEBOT v100: BalanceConfig owner-only")
-must_contain("src/ReplicatedStorage/Shared/Configs/JuiceConfig.luau", 'Rollout = "owner"', "CODEBOT v100: JuiceConfig owner-only")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain("src/ReplicatedStorage/Shared/Configs/BalanceConfig.luau", 'Rollout = "owner"', "CODEBOT v100: BalanceConfig owner-only")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain("src/ReplicatedStorage/Shared/Configs/JuiceConfig.luau", 'Rollout = "owner"', "CODEBOT v100: JuiceConfig owner-only")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/Juice.luau", "burst(J)", "CODEBOT v100: Juice purchase burst")
 must_contain("src/ServerScriptService/Server/Services/PremiumWeaponService.luau", "PremiumWeaponService", "CODEBOT v100: PremiumWeaponService present")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/PremiumWeaponsClient.luau", "PremiumWeaponsClient", "CODEBOT v100: PremiumWeaponsClient present")

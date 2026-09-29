@@ -6,7 +6,7 @@ _cbud_pp = "src/ServerScriptService/Server/Services/PlotOilPumpService.luau"
 _cbud_ps = "src/ServerScriptService/Server/Services/PrestigeService.luau"
 _cbud_sc = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau"
 
-must_contain(_cbud_mc, '\tRollout = "owner",\n', "CLAUDE-BUD: MonetizationConfig.Rollout is owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cbud_mc, '\tRollout = "owner",\n', "CLAUDE-BUD: MonetizationConfig.Rollout is owner-only first")
 must_contain(_cbud_mc, "RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true, BiggerArmy = true, ExtraGarageSlot = true, SoldierRefill = true, PlazaAirstrike = true }", "CLAUDE-BUD: the 3 gated SKU keys")
 must_contain(_cbud_mc, "function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean", "CLAUDE-BUD: SkuLiveFor helper")
 must_contain(_cbud_mc, "return AdminConfig.IsPlaytestOwner(userId)", "CLAUDE-BUD: owner mode uses IsPlaytestOwner")
@@ -14,7 +14,7 @@ must_contain(_cbud_mc, "\t\t\tId = 1998656357,\n\t\t\tDisplayName = \"Speed Pass
 must_contain(_cbud_mc, "\t\tRebirthKeepBase = {\n\t\t\tId = 3714663721,", "CLAUDE-BUD: Keep-Base Rebirth Id")
 must_contain(_cbud_mc, "\t\tGoldenPumpjack = {\n\t\t\tId = 3714663783,", "CLAUDE-BUD: Golden Pumpjacks Id")
 must_contain(_cbud_mc, "IncomeMult = 1.5,", "CLAUDE-BUD: Golden Pumpjacks income multiplier in config")
-must_contain(_cbud_mc, '(MonetizationConfig.Rollout == "all" or not (MonetizationConfig.RolloutKeys :: any)[offer.Key])', "CLAUDE-BUD: world pads skip gated SKUs until Rollout=all")
+must_contain(_cbud_mc, '(MonetizationConfig.Rollout == "all" or MonetizationConfig.Launched("Sales") or not (MonetizationConfig.RolloutKeys :: any)[offer.Key])', "CLAUDE-BUD: world pads skip gated SKUs until Rollout=all")
 
 must_contain(_cbud_ms, "MonetizationConfig.SkuLiveFor(player.UserId, passKey) and ownsCached(player, passKey)", "CLAUDE-BUD: Speed Pass counts only when live for the player")
 must_contain(_cbud_ms, "if not MonetizationConfig.SkuLiveFor(player.UserId, productKey :: string) then", "CLAUDE-BUD: dev product intent gated")

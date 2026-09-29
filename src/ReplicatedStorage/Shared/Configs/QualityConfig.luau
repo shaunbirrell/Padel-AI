@@ -15,7 +15,7 @@
 ]]
 
 local QualityConfig = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	SmallScreenShortSide = 480,
 	LowFpsBelow = 28,
 	LowFpsSeconds = 8,
@@ -30,6 +30,9 @@ local QualityConfig = {
 }
 
 function QualityConfig.LiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("QualityTier") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = QualityConfig.Rollout
 	if mode == "all" then
 		return true

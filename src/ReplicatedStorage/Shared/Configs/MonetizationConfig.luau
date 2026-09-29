@@ -44,7 +44,29 @@ local MonetizationConfig = {
 	--[[ claude-bud: rollout of the three Robux SKUs in RolloutKeys. "owner" = only AdminConfig.IsPlaytestOwner can buy
 		them and feel their effect; "all" = everyone; anything else = off (fail closed). ProcessReceipt still grants any
 		receipt Roblox delivers for these Ids (a paid receipt is never dropped). OFF must equal the old game. ]]
-	Rollout = "owner",
+	Rollout = "all", -- v101 (Code Bot, owner 2026-09-29: "enable everything for all players"): every RolloutKeys SKU on sale to everyone
+	--[[ claude-bud JOB 12: the launch switch. LaunchAll = true makes every gate named in LaunchSafe live for EVERYONE at
+		once (as if its Rollout were "all"), and turns off the playtest owner's shortcuts on the Robux path (premium vehicle
+		spawn without the pass, the Extra Garage Slot test, premium weapons), so he buys like anyone else. Gates NOT in
+		LaunchSafe (the BalanceConfig curve, the army rollouts, the aircraft / rebirth weapon lanes, the store vehicle
+		bodies, Bridge Layer wading) keep their own switches: see LATEST-HANDOFF "Launch readiness". false = today. ]]
+	LaunchAll = false,
+	LaunchSafe = {
+		Sales = true, -- MonetizationConfig.Rollout over RolloutKeys: the 13 Robux products (+ premium vehicle weapons)
+		VIPPerks = true,
+		Placement = true,
+		Retention = true,
+		Airdrop = true,
+		DailyAutoClaim = true,
+		PlazaBounty = true,
+		ArmyUpgrades = true,
+		GuardsFightBack = true,
+		NpcUnstick = true,
+		BagLos = true,
+		FirstMinutes = true,
+		QualityTier = true,
+		Juice = true,
+	} :: { [string]: boolean },
 	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true, BiggerArmy = true, ExtraGarageSlot = true, SoldierRefill = true, PlazaAirstrike = true } :: { [string]: boolean },
 	GamePasses = {
 		VIP = {
@@ -451,7 +473,7 @@ local MonetizationConfig = {
 		UNREWARDED favorite prompt (Roblox rules forbid rewards for favorites / likes). Roblox Premium members get
 		PremiumDailyCash once per UTC day (server MembershipType check), which keeps them playing (Premium Payouts). ]]
 	Retention = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		GroupId = 0,
 		GroupCash = 10000,
 		PremiumDailyCash = 2500,
@@ -467,7 +489,7 @@ local MonetizationConfig = {
 		  StarterLimitedHours: the Commander Starter Pack is offered only within this many hours of the first join,
 		  and its toast shows the time left (a real limit, never a fake timer). ]]
 	Placement = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		CantAffordVehicle = true,
 		AfterRebirth = true,
 		ArmyWiped = true,
@@ -479,7 +501,7 @@ local MonetizationConfig = {
 		VIP lounge near the plaza (Server/Modules/VIPLounge: a VIP-only door, a bonus pad paying LoungeCash once per
 		LoungeCooldownSeconds). Rollout "owner" = AdminConfig.IsPlaytestOwner only, "all", anything else = off. ]]
 	VIPPerks = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		ChatTag = "[VIP]",
 		Lounge = true,
 		LoungeX = -150,
@@ -632,8 +654,16 @@ local MonetizationConfig = {
 	},
 }
 
+-- claude-bud JOB 12: is the launch switch on for this gate (LaunchAll and the gate is in LaunchSafe)
+function MonetizationConfig.Launched(gate: string): boolean
+	return (MonetizationConfig :: any).LaunchAll == true and (MonetizationConfig :: any).LaunchSafe[gate] == true
+end
+
 -- claude-bud JOB 5e: is retention (free Shop rows, group reward, Premium bonus) live for this player (fail closed)
 function MonetizationConfig.RetentionLiveFor(userId: any): boolean
+	if MonetizationConfig.Launched("Retention") then
+		return true
+	end
 	local mode = (MonetizationConfig :: any).Retention.Rollout
 	if mode == "all" then
 		return true
@@ -645,6 +675,9 @@ end
 
 -- claude-bud JOB 5d: are the placement prompts live for this player (fail closed)
 function MonetizationConfig.PlacementLiveFor(userId: any): boolean
+	if MonetizationConfig.Launched("Placement") then
+		return true
+	end
 	local mode = (MonetizationConfig :: any).Placement.Rollout
 	if mode == "all" then
 		return true
@@ -656,6 +689,9 @@ end
 
 -- claude-bud JOB 5b: are the VIP perks (chat tag, lounge) live for this player (fail closed)
 function MonetizationConfig.VIPPerksLiveFor(userId: any): boolean
+	if MonetizationConfig.Launched("VIPPerks") then
+		return true
+	end
 	local mode = (MonetizationConfig :: any).VIPPerks.Rollout
 	if mode == "all" then
 		return true
@@ -669,6 +705,9 @@ end
 function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean
 	if not (MonetizationConfig.RolloutKeys :: any)[key] then
 		return true
+	end
+	if MonetizationConfig.Launched("Sales") then
+		return true -- claude-bud JOB 12
 	end
 	local mode = MonetizationConfig.Rollout :: any
 	if mode == "all" then
@@ -692,7 +731,7 @@ function MonetizationConfig.LivePadOffer(slot: PremiumPadSlot): PremiumPadOffer?
 			typeof(def) == "table"
 			and typeof(def.Id) == "number"
 			and def.Id ~= 0
-			and (MonetizationConfig.Rollout == "all" or not (MonetizationConfig.RolloutKeys :: any)[offer.Key])
+			and (MonetizationConfig.Rollout == "all" or MonetizationConfig.Launched("Sales") or not (MonetizationConfig.RolloutKeys :: any)[offer.Key])
 		then
 			return offer
 		end

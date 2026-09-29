@@ -340,6 +340,7 @@ end
 local function bagInSight(player: Player, part: BasePart): boolean
 	local mode = (OpsConfig.Cargo :: any).PickupLosRollout
 	local live = mode == "all" or (mode == "owner" and AdminConfig.IsPlaytestOwner(player.UserId))
+		or (require(Shared.Configs.MonetizationConfig) :: any).Launched("BagLos") -- claude-bud JOB 12
 	if not live then
 		return true
 	end

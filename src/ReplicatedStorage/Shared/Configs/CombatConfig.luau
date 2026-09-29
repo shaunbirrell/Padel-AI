@@ -165,7 +165,7 @@ local CombatConfig = {
 		(DamageMult x its Damage). Rollout is per unit owner: "owner" = AdminConfig.IsPlaytestOwner only, "all", anything
 		else = off (today's game: NPCs never hurt squad units). ]]
 	GuardsFightBack = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		MemorySeconds = 8,
 		DamageMult = 1,
 	},
@@ -175,7 +175,7 @@ local CombatConfig = {
 		SidestepStuds to one side (alternating) for DetourSeconds, then resumes the chase. Rollout per target (the player
 		or the unit owner): "owner" / "all" / off (today's straight MoveTo only). ]]
 	NpcUnstick = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		StuckSeconds = 1.5,
 		MinProgressStuds = 1,
 		SidestepStuds = 8,
@@ -185,6 +185,10 @@ local CombatConfig = {
 
 -- claude-bud: is a GuardsFightBack / NpcUnstick block live for this user id (fail closed)
 function CombatConfig.LiveFor(block: any, userId: any): boolean
+	local gate = if block == CombatConfig.GuardsFightBack then "GuardsFightBack" elseif block == CombatConfig.NpcUnstick then "NpcUnstick" else nil
+	if gate and (require(script.Parent.MonetizationConfig) :: any).Launched(gate) then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = if typeof(block) == "table" then block.Rollout else nil
 	if mode == "all" then
 		return true

@@ -23,7 +23,7 @@ local BaseConfig = require(script.Parent.BaseConfig)
 local EconomyConfig = require(script.Parent.EconomyConfig)
 
 local BalanceConfig = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	FirstRebirthMinutes = { Min = 25, Max = 40 },
 	PaybackMinutes = { 2, 3, 6, 12, 25 } :: { number },
 	IncomeXP = {

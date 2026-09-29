@@ -48,7 +48,7 @@ for _k in ("DoubleCash", "VIP", "AutoCollect"):
     (ok if re.search(r"\n\t\t" + _k + r" = \{\n\t\t\tId = [1-9]\d+,", read(_cbm_mc) or "") else bad)(f"CLAUDE-BUD 5b: {_k} game pass is live")
 must_contain(_cbm_mc, "\t\tBiggerArmy = {\n\t\t\tId = 2001734404,", "CLAUDE-BUD 5b: Bigger Army pass (v99: Creator Hub Id wired)")
 must_contain(_cbm_mc, "BiggerArmy = true, ExtraGarageSlot = true, SoldierRefill", "CLAUDE-BUD 5b: new passes owner-only first (RolloutKeys)")
-must_contain(_cbm_mc, "\tVIPPerks = {\n\t\tRollout = \"owner\",", "CLAUDE-BUD 5b: VIP perks owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cbm_mc, "\tVIPPerks = {\n\t\tRollout = \"owner\",", "CLAUDE-BUD 5b: VIP perks owner-only first")
 must_contain(_cbm_ss, "\tlocal passBonus = biggerArmyBonus(profile)", "CLAUDE-BUD 5b: Bigger Army adds army capacity")
 must_contain(_cbm_ms, "if MonetizationConfig.SkuLiveFor(player.UserId, \"BiggerArmy\") and ownsCached(player, \"BiggerArmy\") then", "CLAUDE-BUD 5b: Bigger Army mirrored only from real ownership (UserOwnsGamePassAsync cache)")
 must_contain(_cbm_ms, "local vip = MonetizationConfig.VIPPerksLiveFor(player.UserId) and ownsCached(player, \"VIP\")", "CLAUDE-BUD 5b: VIP tag only for a real VIP")
@@ -87,7 +87,7 @@ _cbm_ps = "src/ServerScriptService/Server/Services/PrestigeService.luau"
 _cbm_so = "src/ServerScriptService/Server/Services/SquadOrdersService.luau"
 must_contain("src/ReplicatedStorage/Shared/Configs/HudConfig.luau", "DockShop", "CLAUDE-BUD 5d: the HUD has a Shop tile")
 must_contain(_cbm_mc, "\tPremiumPads = {", "CLAUDE-BUD 5d: gamepass pads at each base (PremiumPads)")
-must_contain(_cbm_mc, "\tPlacement = {\n\t\tRollout = \"owner\",", "CLAUDE-BUD 5d: moment prompts owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cbm_mc, "\tPlacement = {\n\t\tRollout = \"owner\",", "CLAUDE-BUD 5d: moment prompts owner-only first")
 must_contain(_cbm_ms, "if key == nil or not MonetizationService.ClaimSoftOfferSlot(player) then", "CLAUDE-BUD 5d: every moment prompt spends the soft-offer budget (not spammy)")
 must_contain(_cbm_ms, "if dc and (tonumber(dc.Id) or 0) ~= 0 and not ownsCached(player, \"DoubleCash\") then", "CLAUDE-BUD 5d: never offers a pass already owned")
 must_contain(_cbm_ps, "pcall(MonetizationService.OfferMoment, player, \"rebirth\")", "CLAUDE-BUD 5d: prompt after a rebirth")
@@ -99,7 +99,7 @@ must_contain(_cbm_sc, "function ShopController.PromptDevProduct(productKey: stri
 must_not_contain(_cbm_fc, "PromptProductPurchase", "CLAUDE-BUD 5d: FeatureController never prompts Marketplace directly")
 
 # ── 5e retention: free Shop rows (daily, airdrop), group reward (server IsInGroupAsync), Premium daily bonus ──
-must_contain(_cbm_mc, "\tRetention = {\n\t\tRollout = \"owner\",\n\t\tGroupId = 0,", "CLAUDE-BUD 5e: retention owner-only first; group id TODO (0 = hidden)")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cbm_mc, "\tRetention = {\n\t\tRollout = \"owner\",\n\t\tGroupId = 0,", "CLAUDE-BUD 5e: retention owner-only first; group id TODO (0 = hidden)")
 must_contain(_cbm_sc, "task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestClaimDailyReward)", "CLAUDE-BUD 5e: daily reward in the Shop (server claim)")
 must_contain(_cbm_sc, 'addRow("FREE · Airdrop"', "CLAUDE-BUD 5e: airdrop in the Shop")
 must_contain(_cbm_ms, "return player:IsInGroupAsync(R.GroupId)", "CLAUDE-BUD 5e: group reward checked on the server")

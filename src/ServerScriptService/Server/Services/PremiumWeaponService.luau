@@ -89,7 +89,8 @@ local function drivenPremium(player: Player): (Model?, any, BasePart?)
 	if prem == nil or typeof(prem.Gun) ~= "string" then
 		return nil, nil, nil
 	end
-	if not (MonetizationConfig.SkuLiveFor(player.UserId, tostring(prem.PassKey)) or AdminConfig.IsPlaytestOwner(player.UserId)) then
+	local ownerTest = AdminConfig.IsPlaytestOwner(player.UserId) and (MonetizationConfig :: any).LaunchAll ~= true -- claude-bud JOB 12
+	if not (MonetizationConfig.SkuLiveFor(player.UserId, tostring(prem.PassKey)) or ownerTest) then
 		return nil, nil, nil
 	end
 	return model, def, seat

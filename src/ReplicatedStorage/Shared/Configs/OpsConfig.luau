@@ -241,7 +241,7 @@ local OpsConfig = {
 		-- claude-bud (2026-09-29, CP-9 E4): the server also needs a clear line from the picker's head to the bag, so a bag
 		-- dropped inside the bank hall cannot be taken through its 7.8-stud back wall. "owner" = AdminConfig.IsPlaytestOwner
 		-- only, "all" = everyone, anything else = off (distance check only, as before).
-		PickupLosRollout = "owner",
+		PickupLosRollout = "all", -- v101 (Ops itself stays off)
 		PickerMult = 0.6, -- a picker who is not the grabber gets this share (fresh deadline)
 		MaxHandoffs = 3, -- the 4th drop destroys it
 		MaxBagsInWorld = 3, -- carried + dropped, all sites: busiest 512-stud circle 493 static + 4 crate parts + 3 bags = 500 (cap 500)

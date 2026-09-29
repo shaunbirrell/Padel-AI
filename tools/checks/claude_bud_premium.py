@@ -37,7 +37,7 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "a.W
 for _need, _label in (
     ('if seat == nil or seat.Name ~= "DriverSeat" or hum == nil or hum.Health <= 0 then', "only the driver fires"),
     ('if model == nil or model:GetAttribute("OwnerUserId") ~= player.UserId then', "only his own vehicle"),
-    ("if not (MonetizationConfig.SkuLiveFor(player.UserId, tostring(prem.PassKey)) or AdminConfig.IsPlaytestOwner(player.UserId)) then", "rollout / pass gate (owner-only first)"),
+    ("if not (MonetizationConfig.SkuLiveFor(player.UserId, tostring(prem.PassKey)) or ownerTest) then", "rollout / pass gate (owner-only first; no owner shortcut at launch)"),
     ('if rl and not rl.Allow(player, "premium_weapon", P.MaxRequestHz, P.MaxRequestHz) then', "remote rate limit"),
     ("if t - (lastFire[model] or -math.huge) < 0.9 / math.max(0.1, gun.FireRate) then", "gun fire rate"),
     ("if t - (lastMissile[model] or -math.huge) < M.Cooldown then", "missile cooldown"),

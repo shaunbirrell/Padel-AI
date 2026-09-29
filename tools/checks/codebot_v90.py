@@ -14,7 +14,7 @@ _cb90_svc = "src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau"
 _cb90_af = "src/ServerScriptService/Server/Modules/Installations/Airfield.luau"
 
 # 01 army fix: owner-only (Rollout.Fix), v85 FollowPace stays for everyone else
-must_contain(_cb90_army, '\t\tFix = "owner",', "CODEBOT v90: ArmyConfig.Rollout.Fix is owner-only")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cb90_army, '\t\tFix = "owner",', "CODEBOT v90: ArmyConfig.Rollout.Fix is owner-only")
 must_contain(_cb90_sos, 'SquadOrdersService._FixLive = st ~= nil and ArmyConfig.LiveFor("Fix", player.UserId)', "CODEBOT v90: the army fix is live per owner (LiveFor Fix) in the think pass")
 if (read(_cb90_sos) or "").count("SquadOrdersService._FixLive = false") >= 3:
     ok("CODEBOT v90: _FixLive is reset after each owner and after the loop (never leaks to the next player)")
@@ -69,7 +69,7 @@ must_contain(_cb90_af, "\tlocal S = math.clamp((tonumber(ictx.W) or 58) / 58, 1,
 must_contain(_cb90_af, "\t\tlocal tx, tz, th = halfW - 5.5, 9, 18\n", "CODEBOT v90: the control tower stays at the foundation edge, clear of the wider hangar")
 
 # answer 5: the Bridge Layer wades across water, owner-only, decided on the server
-must_contain(_cb90_vc, '\t\t\tAmphibiousRollout = { BridgeLayer = "owner" } :: { [string]: string },', "CODEBOT v90: the Bridge Layer is a rollout wader (owner-only)")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_cb90_vc, '\t\t\tAmphibiousRollout = { BridgeLayer = "owner" } :: { [string]: string },', "CODEBOT v90: the Bridge Layer is a rollout wader (owner-only)")
 must_contain(_cb90_wg, 'if gate == "owner" and typeof(owner) == "Instance" and owner:IsA("Player") and AdminConfig.IsPlaytestOwner(owner.UserId) == true then', "CODEBOT v90: the server decides the wader by the vehicle's owner")
 must_contain(_cb90_vdc, 'or d.WaterServer == "Wade", -- v90', "CODEBOT v90: the driver's client follows the server's Wade state")
 must_contain(_cb90_vc, "\t\t\tAmphibious = { AmphibiousAPC = true } :: { [string]: boolean },", "CODEBOT v90: the Amphibious APC stays a wader for everyone")

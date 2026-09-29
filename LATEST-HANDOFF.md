@@ -1,9 +1,31 @@
 <!-- Q2-START -->
-# WHERE I STOPPED — 2026-09-29 (Claude on Bud tip 3cf54f2) — QUEUE 2 + PREMIUM SHIPPED AS v100
-**Claude: do not redo queue 2 (JOB 6–11) or PREMIUM.** Code Bot shipped tip `3cf54f2` as WE_Build 100 on phase-7-polish.
-Jobs: [x] 6 Extra Garage Slot · [x] 7 first-5-minutes · [x] 8 mobile perf · [x] 9 old WIP · [x] 10 balance · [x] 11 juice · [x] PREMIUM weapons
-BuyPathStatic on tip was PASS=5289 FAIL=0. See v100 section below for pins / phone tests / migrate.
+# WHERE I STOPPED — 2026-09-29 (Claude on Bud tip fe22e41) — JOB 12 SHIPPED IN v101; ROLLOUTS ARE NOW "all"
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v101) before new work.** Code Bot cherry-picked JOB 12 (`fe22e41`)
+into WE_Build 101 and flipped every owner-only rollout to "all" (LaunchAll stays false; see the v101 section below).
+Jobs: [x] 12 launch readiness · [ ] 13 bring players back · [ ] 14 game-feel polish · [ ] 15 anti-exploit sweep
 <!-- Q2-END -->
+
+# v101 — 2026-09-29 ~14:30 Dublin (Code Bot, branch phase-7-polish, WE_Build 101) — ROLLOUTS ARE NOW "all"
+
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v101) BEFORE any new work.** Every owner-only rollout is now
+`"all"` (owner: "enable everything for ALL players now"). v101 contains your JOB 12 (`fe22e41`, cherry-picked; on rebase git
+drops it as already applied — if LATEST-HANDOFF.md conflicts keep phase-7-polish's). `MonetizationConfig.LaunchAll` stays
+**false** on purpose: each gate's own Rollout is "all", and the owner keeps his UserId-only test shortcuts. Do not set any
+gate back to "owner"; new features may still ship owner-only first under their own new key.
+
+- **Live for everyone:** all 13 Robux SKUs (Speed Pass, Keep-Base Rebirth, Golden Pumpjacks, 6 premium vehicles + their guns,
+  Bigger Army, Extra Garage Slot, Army Refill, Plaza Airstrike), VIP perks, purchase prompts at moments, retention rows + Premium
+  daily perk, airdrop, daily auto-claim, plaza bounty, army upgrades, guards fight back, NpcUnstick, bag LOS, first-minutes
+  tutorial, QualityGovernor, juice, balance curve + income XP, army Escort / Army / Fix / ThreatStandingFor / Follow2 / Tidy,
+  Bridge Layer wading. WorldFill was already world-wide.
+- **Still off:** StreamingEnabled, OpsConfig.Enabled, RebirthConfig.ZonesLive / WeaponsLive, AircraftWeaponConfig.WeaponsLive,
+  XP backfill, PreferMesh, VisualAssetConfig.BodyRollout (11 hulls need the owner's WE_CHECK2 run).
+- **Id 0 hidden:** PV_Bastion / PV_MotorPool (and every Id 0 product) have no Shop row or prompt for anyone.
+- Pins: `tools/checks/codebot_v101.py` (+ `tools/v101_gate_test.py`, Luau-executed gates for a non-owner account). Old
+  "owner-only first" pins retired with a `# v101 ... superseded` prefix. PreferMesh OFF. WE_Building* untouched.
+- **Publish note for Shaun:** "Migrate to Latest Update" (or shut down old servers) so v101 appears.
+
+---
 
 # v100 — 2026-09-29 ~14:00 Dublin (Code Bot, branch phase-7-polish, WE_Build 100)
 

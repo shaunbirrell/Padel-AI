@@ -10,4 +10,4 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "Ex
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "VehicleService._HasExtraSlot", "CODEBOT v98: Extra Garage Slot helper")
 must_contain("src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau", "TutorialConfig.FirstMinutes", "CODEBOT v98: FirstMinutes tutorial config")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/QualityGovernor.luau", "QualityGovernor", "CODEBOT v98: QualityGovernor module")
-must_contain("src/ReplicatedStorage/Shared/Configs/QualityConfig.luau", 'Rollout = "owner"', "CODEBOT v98: QualityConfig owner-only")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain("src/ReplicatedStorage/Shared/Configs/QualityConfig.luau", 'Rollout = "owner"', "CODEBOT v98: QualityConfig owner-only")

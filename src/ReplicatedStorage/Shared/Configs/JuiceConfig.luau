@@ -11,7 +11,7 @@
 ]]
 
 local JuiceConfig = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	Burst = {
 		Seconds = 1.1,
 		RingStuds = 12,
@@ -26,6 +26,9 @@ local JuiceConfig = {
 }
 
 function JuiceConfig.LiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("Juice") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = JuiceConfig.Rollout
 	if mode == "all" then
 		return true

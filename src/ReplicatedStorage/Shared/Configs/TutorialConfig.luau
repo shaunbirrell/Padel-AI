@@ -294,7 +294,7 @@ end
 	    hint; profile.FirstAttackDone is saved on the server when he first orders ATTACK (never shown again).
 	Rollout "owner" = AdminConfig.IsPlaytestOwner only, "all", anything else = off (the tutorial exactly as before). ]]
 TutorialConfig.FirstMinutes = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	WelcomeText = "Welcome, Commander! Follow the gold line to your base.",
 	WelcomeDelaySeconds = 3,
 	AttackHintText = "Tap ATTACK to send your army at enemies",
@@ -303,6 +303,9 @@ TutorialConfig.FirstMinutes = {
 }
 
 function TutorialConfig.FirstMinutesLiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("FirstMinutes") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = TutorialConfig.FirstMinutes.Rollout
 	if mode == "all" then
 		return true

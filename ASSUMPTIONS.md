@@ -9075,3 +9075,34 @@ ds_territories.luau T3):
 - **Look:** a gold trail and a ROBUX badge (WorldLabel, MaxDistance 40) on every premium vehicle, seen by everyone.
 - Effects: one UnreliableRemoteEvent (PremiumWeaponFx) for tracers and explosions (visual Explosion: no pressure, no joints).
 - **Balance note:** these are pay-to-win by design now (owner's call). The rollout stays owner-only until he flips RolloutKeys to all.
+
+## 2026-09-29 — claude-bud JOB 12: launch readiness (MonetizationConfig.LaunchAll, ships false)
+- **One switch:** `LaunchAll` + `LaunchSafe` (a gate list) + `MonetizationConfig.Launched(gate)`. Every "safe" gate's LiveFor checks
+  Launched first (configs require MonetizationConfig lazily inside the function: no load-order cycles). The launch gates are
+  Sales, VIPPerks, Placement, Retention, Airdrop, DailyAutoClaim, PlazaBounty, ArmyUpgrades, GuardsFightBack, NpcUnstick,
+  BagLos, FirstMinutes, QualityTier and Juice.
+- **Not in LaunchSafe (separate owner decisions):** the BalanceConfig curve, the ArmyConfig rollouts (ArmyConfig is pinned to require
+  only AdminConfig and was rewritten in v99), the aircraft / rebirth weapon lanes, the store vehicle bodies and Bridge Layer wading.
+- **The owner's shortcuts on the Robux path end at launch:** premium vehicle spawn without the pass, the GarageSlot.OwnerTest, and the premium
+  weapons owner bypass. DataService's playtest auto-grant of CASH vehicles is kept (testing convenience; it is not a Robux path).
+- **Verified:**
+  - Executed: tools/launch_gate_test.py loads the real config sources in the Luau CLI and checks owner vs non-owner, LaunchAll off / on (90 checks).
+  - Static: tools/launch_audit.py, for every pass / product, checks the Id, the prompt site, the server grant and persistence, plus the shared
+    receipt rules.
+  - Not verified here: a live Robux purchase on the Roblox servers (needs the owner's phone and a second account).
+
+## 2026-09-29 — Code Bot v101: every rollout "all" (owner: "enable everything for ALL players now")
+- **Took claude-bud JOB 12 (`fe22e41`)** into phase-7-polish (LaunchAll switch, launch_audit / launch_gate_test). LaunchAll stays
+  **false**: v101 flips each gate's own Rollout to "all" instead, so the owner keeps his UserId-only (470626172) test shortcuts
+  (premium vehicle spawn without the pass, Extra Garage Slot test, premium weapons, cash floor, all vehicles / level 100). Those
+  shortcuts check `AdminConfig.IsPlaytestOwner` (an exact UserId match) and never reach another account.
+- **Now "all":** MonetizationConfig.Rollout (13 RolloutKeys SKUs, all with real Ids), VIPPerks, Placement, Retention (incl. the
+  Premium daily perk; group row hidden while GroupId = 0), airdrop, daily auto-claim, plaza bounty, army upgrades, guards fight
+  back, NpcUnstick, bag-pickup LOS (Ops itself stays off), tutorial first minutes, QualityGovernor, juice, the BalanceConfig curve
+  + income XP, ArmyConfig Rollout Escort / Army / Fix + Follow.ThreatStandingFor + Follow2.Tidy (Follow2 was already "all"),
+  Bridge Layer wading. WorldFill was already on for everyone.
+- **Balance curve and saves:** computed from the saved BaseUpgrades levels, never writes a profile; for every structure and business
+  level it pays at least the old income (checked in codebot_v101.py). Income XP only adds XP. Nothing is reset or devalued.
+- **Id 0 stays hidden:** the Shop's gold ROBUX "SOON" row for Id 0 passes (PV_Bastion, PV_MotorPool) is gone for everyone.
+- **Left off:** StreamingEnabled, OpsConfig.Enabled, RebirthConfig.ZonesLive / WeaponsLive, AircraftWeaponConfig.WeaponsLive,
+  XP backfill, PreferMesh, VisualAssetConfig.BodyRollout (11 hulls have no WE_CHECK2 / licence record).

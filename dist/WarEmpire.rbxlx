@@ -724,9 +724,9 @@ local AdminConfig = require(script.Parent.AdminConfig)
 local ArmyConfig = {
 	-- ── Rollout (lane A0 builds the gate; lanes A / C read it) ─────────────────────────────────────────────────────
 	Rollout = {
-		Escort = "owner", -- lane A0: bank fix / defend / focus fire / side-step / visible unit shots
-		Army = "owner", -- lane A: guard line, follow outside, movement
-		Fix = "owner", -- v90 (Code Bot): the army despawn fix (Follow / Recover / Gate blocks); "all" once the owner has phone-tested it
+		Escort = "all", -- v101 (was "owner") -- lane A0: bank fix / defend / focus fire / side-step / visible unit shots
+		Army = "all", -- v101 (was "owner") -- lane A: guard line, follow outside, movement
+		Fix = "all", -- v101 (was "owner") -- v90 (Code Bot): the army despawn fix (Follow / Recover / Gate blocks); "all" once the owner has phone-tested it
 	},
 
 	-- ── Escort (FOLLOW; SPEC-ARMY-FINAL §7.1 / §7.2) ──────────────────────────────────────────────────────────────
@@ -857,7 +857,7 @@ local ArmyConfig = {
 		-- ThreatKeepCatchUp = true drops only the lead near a hostile (not shipped). ThreatStuds = 0 = off.
 		ThreatStuds = 55,
 		ThreatApproachOnly = true,
-		ThreatStandingFor = "owner", -- "off" | "owner" | "all": keep it equal to lane A0's Rollout.Escort
+		ThreatStandingFor = "all", -- v101 (equal to Rollout.Escort) -- "off" | "owner" | "all": keep it equal to lane A0's Rollout.Escort
 		ThreatKeepCatchUp = false,
 		-- A unit on the player's trail (OrdersConfig.FollowPath) that finds no walkable trail point keeps walking to the
 		-- last one it had instead of straight at its slot behind a wall (the doorway stranding). false = e506c9c.
@@ -1021,7 +1021,7 @@ local ArmyConfig = {
 			* Leaving: no far / stuck teleport for LeaveGraceSeconds after he leaves his base (they walk back into the
 			  wedge; the void rescue still runs). ]]
 		Tidy = {
-			Rollout = "owner",
+			Rollout = "all", -- v101
 			HoldApproachStuds = 6,
 			HoldReleaseStuds = 10,
 			PlotPadStuds = 2,
@@ -1142,7 +1142,7 @@ return ArmyConfig
 local AdminConfig = require(script.Parent.AdminConfig)
 
 local ArmyUpgradeConfig = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	Track = "Soldiers",
 	-- plot-local spot (BaseLayoutConfig frame): in front of the Barracks (Site -110, 110, Yaw 90), toward the plot centre
 	PromptX = -88,
@@ -1152,6 +1152,9 @@ local ArmyUpgradeConfig = {
 }
 
 function ArmyUpgradeConfig.LiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("ArmyUpgrades") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = ArmyUpgradeConfig.Rollout
 	if mode == "all" then
 		return true
@@ -1193,7 +1196,7 @@ local BaseConfig = require(script.Parent.BaseConfig)
 local EconomyConfig = require(script.Parent.EconomyConfig)
 
 local BalanceConfig = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	FirstRebirthMinutes = { Min = 25, Max = 40 },
 	PaybackMinutes = { 2, 3, 6, 12, 25 } :: { number },
 	IncomeXP = {
@@ -2533,7 +2536,7 @@ local CombatConfig = {
 		(DamageMult x its Damage). Rollout is per unit owner: "owner" = AdminConfig.IsPlaytestOwner only, "all", anything
 		else = off (today's game: NPCs never hurt squad units). ]]
 	GuardsFightBack = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		MemorySeconds = 8,
 		DamageMult = 1,
 	},
@@ -2543,7 +2546,7 @@ local CombatConfig = {
 		SidestepStuds to one side (alternating) for DetourSeconds, then resumes the chase. Rollout per target (the player
 		or the unit owner): "owner" / "all" / off (today's straight MoveTo only). ]]
 	NpcUnstick = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		StuckSeconds = 1.5,
 		MinProgressStuds = 1,
 		SidestepStuds = 8,
@@ -2553,6 +2556,10 @@ local CombatConfig = {
 
 -- claude-bud: is a GuardsFightBack / NpcUnstick block live for this user id (fail closed)
 function CombatConfig.LiveFor(block: any, userId: any): boolean
+	local gate = if block == CombatConfig.GuardsFightBack then "GuardsFightBack" elseif block == CombatConfig.NpcUnstick then "NpcUnstick" else nil
+	if gate and (require(script.Parent.MonetizationConfig) :: any).Launched(gate) then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = if typeof(block) == "table" then block.Rollout else nil
 	if mode == "all" then
 		return true
@@ -3030,13 +3037,16 @@ local DailyRewardConfig = {
 		in the profile's DailyLogin), then one toast "Day N of 7: +$X. Tomorrow: $Y". Rollout "owner" =
 		AdminConfig.IsPlaytestOwner only, "all", anything else = off (claim from the Missions panel only, as before). ]]
 	AutoClaim = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		DelaySeconds = 8,
 	},
 }
 
 -- claude-bud: is auto-claim live for this player (fail closed)
 function DailyRewardConfig.AutoClaimLiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("DailyAutoClaim") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = DailyRewardConfig.AutoClaim.Rollout
 	if mode == "all" then
 		return true
@@ -4464,7 +4474,7 @@ return HudConfig
 ]]
 
 local JuiceConfig = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	Burst = {
 		Seconds = 1.1,
 		RingStuds = 12,
@@ -4479,6 +4489,9 @@ local JuiceConfig = {
 }
 
 function JuiceConfig.LiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("Juice") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = JuiceConfig.Rollout
 	if mode == "all" then
 		return true
@@ -5195,7 +5208,29 @@ local MonetizationConfig = {
 	--[[ claude-bud: rollout of the three Robux SKUs in RolloutKeys. "owner" = only AdminConfig.IsPlaytestOwner can buy
 		them and feel their effect; "all" = everyone; anything else = off (fail closed). ProcessReceipt still grants any
 		receipt Roblox delivers for these Ids (a paid receipt is never dropped). OFF must equal the old game. ]]
-	Rollout = "owner",
+	Rollout = "all", -- v101 (Code Bot, owner 2026-09-29: "enable everything for all players"): every RolloutKeys SKU on sale to everyone
+	--[[ claude-bud JOB 12: the launch switch. LaunchAll = true makes every gate named in LaunchSafe live for EVERYONE at
+		once (as if its Rollout were "all"), and turns off the playtest owner's shortcuts on the Robux path (premium vehicle
+		spawn without the pass, the Extra Garage Slot test, premium weapons), so he buys like anyone else. Gates NOT in
+		LaunchSafe (the BalanceConfig curve, the army rollouts, the aircraft / rebirth weapon lanes, the store vehicle
+		bodies, Bridge Layer wading) keep their own switches: see LATEST-HANDOFF "Launch readiness". false = today. ]]
+	LaunchAll = false,
+	LaunchSafe = {
+		Sales = true, -- MonetizationConfig.Rollout over RolloutKeys: the 13 Robux products (+ premium vehicle weapons)
+		VIPPerks = true,
+		Placement = true,
+		Retention = true,
+		Airdrop = true,
+		DailyAutoClaim = true,
+		PlazaBounty = true,
+		ArmyUpgrades = true,
+		GuardsFightBack = true,
+		NpcUnstick = true,
+		BagLos = true,
+		FirstMinutes = true,
+		QualityTier = true,
+		Juice = true,
+	} :: { [string]: boolean },
 	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true, BiggerArmy = true, ExtraGarageSlot = true, SoldierRefill = true, PlazaAirstrike = true } :: { [string]: boolean },
 	GamePasses = {
 		VIP = {
@@ -5602,7 +5637,7 @@ local MonetizationConfig = {
 		UNREWARDED favorite prompt (Roblox rules forbid rewards for favorites / likes). Roblox Premium members get
 		PremiumDailyCash once per UTC day (server MembershipType check), which keeps them playing (Premium Payouts). ]]
 	Retention = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		GroupId = 0,
 		GroupCash = 10000,
 		PremiumDailyCash = 2500,
@@ -5618,7 +5653,7 @@ local MonetizationConfig = {
 		  StarterLimitedHours: the Commander Starter Pack is offered only within this many hours of the first join,
 		  and its toast shows the time left (a real limit, never a fake timer). ]]
 	Placement = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		CantAffordVehicle = true,
 		AfterRebirth = true,
 		ArmyWiped = true,
@@ -5630,7 +5665,7 @@ local MonetizationConfig = {
 		VIP lounge near the plaza (Server/Modules/VIPLounge: a VIP-only door, a bonus pad paying LoungeCash once per
 		LoungeCooldownSeconds). Rollout "owner" = AdminConfig.IsPlaytestOwner only, "all", anything else = off. ]]
 	VIPPerks = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		ChatTag = "[VIP]",
 		Lounge = true,
 		LoungeX = -150,
@@ -5783,8 +5818,16 @@ local MonetizationConfig = {
 	},
 }
 
+-- claude-bud JOB 12: is the launch switch on for this gate (LaunchAll and the gate is in LaunchSafe)
+function MonetizationConfig.Launched(gate: string): boolean
+	return (MonetizationConfig :: any).LaunchAll == true and (MonetizationConfig :: any).LaunchSafe[gate] == true
+end
+
 -- claude-bud JOB 5e: is retention (free Shop rows, group reward, Premium bonus) live for this player (fail closed)
 function MonetizationConfig.RetentionLiveFor(userId: any): boolean
+	if MonetizationConfig.Launched("Retention") then
+		return true
+	end
 	local mode = (MonetizationConfig :: any).Retention.Rollout
 	if mode == "all" then
 		return true
@@ -5796,6 +5839,9 @@ end
 
 -- claude-bud JOB 5d: are the placement prompts live for this player (fail closed)
 function MonetizationConfig.PlacementLiveFor(userId: any): boolean
+	if MonetizationConfig.Launched("Placement") then
+		return true
+	end
 	local mode = (MonetizationConfig :: any).Placement.Rollout
 	if mode == "all" then
 		return true
@@ -5807,6 +5853,9 @@ end
 
 -- claude-bud JOB 5b: are the VIP perks (chat tag, lounge) live for this player (fail closed)
 function MonetizationConfig.VIPPerksLiveFor(userId: any): boolean
+	if MonetizationConfig.Launched("VIPPerks") then
+		return true
+	end
 	local mode = (MonetizationConfig :: any).VIPPerks.Rollout
 	if mode == "all" then
 		return true
@@ -5820,6 +5869,9 @@ end
 function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean
 	if not (MonetizationConfig.RolloutKeys :: any)[key] then
 		return true
+	end
+	if MonetizationConfig.Launched("Sales") then
+		return true -- claude-bud JOB 12
 	end
 	local mode = MonetizationConfig.Rollout :: any
 	if mode == "all" then
@@ -5843,7 +5895,7 @@ function MonetizationConfig.LivePadOffer(slot: PremiumPadSlot): PremiumPadOffer?
 			typeof(def) == "table"
 			and typeof(def.Id) == "number"
 			and def.Id ~= 0
-			and (MonetizationConfig.Rollout == "all" or not (MonetizationConfig.RolloutKeys :: any)[offer.Key])
+			and (MonetizationConfig.Rollout == "all" or MonetizationConfig.Launched("Sales") or not (MonetizationConfig.RolloutKeys :: any)[offer.Key])
 		then
 			return offer
 		end
@@ -7096,7 +7148,7 @@ local OpsConfig = {
 		-- claude-bud (2026-09-29, CP-9 E4): the server also needs a clear line from the picker's head to the bag, so a bag
 		-- dropped inside the bank hall cannot be taken through its 7.8-stud back wall. "owner" = AdminConfig.IsPlaytestOwner
 		-- only, "all" = everyone, anything else = off (distance check only, as before).
-		PickupLosRollout = "owner",
+		PickupLosRollout = "all", -- v101 (Ops itself stays off)
 		PickerMult = 0.6, -- a picker who is not the grabber gets this share (fresh deadline)
 		MaxHandoffs = 3, -- the 4th drop destroys it
 		MaxBagsInWorld = 3, -- carried + dropped, all sites: busiest 512-stud circle 493 static + 4 crate parts + 3 bags = 500 (cap 500)
@@ -8163,7 +8215,7 @@ return OrdersConfig
 local AdminConfig = require(script.Parent.AdminConfig)
 
 local PlazaBountyConfig = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	ZoneId = "CentralPlaza",
 	WindowSeconds = 180,
 	Cash = 15000,
@@ -8171,6 +8223,9 @@ local PlazaBountyConfig = {
 }
 
 function PlazaBountyConfig.LiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("PlazaBounty") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = PlazaBountyConfig.Rollout
 	if mode == "all" then
 		return true
@@ -8875,7 +8930,7 @@ return PrestigeConfig
 ]]
 
 local QualityConfig = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	SmallScreenShortSide = 480,
 	LowFpsBelow = 28,
 	LowFpsSeconds = 8,
@@ -8890,6 +8945,9 @@ local QualityConfig = {
 }
 
 function QualityConfig.LiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("QualityTier") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = QualityConfig.Rollout
 	if mode == "all" then
 		return true
@@ -10975,7 +11033,7 @@ local SupplyDropConfig = {
 		LifetimeSeconds. 3 parts while falling (crate, lid, canopy), 2 on the ground. Rollout "owner" =
 		AdminConfig.IsPlaytestOwner only, "all" = everyone, anything else = off (the game as before). ]]
 	Airdrop = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		FirstDelaySeconds = 60,
 		IntervalSeconds = 600,
 		DropHeight = 160,
@@ -10991,6 +11049,9 @@ local SupplyDropConfig = {
 
 -- claude-bud: is the airdrop live for this player (fail closed)
 function SupplyDropConfig.AirdropLiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("Airdrop") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = SupplyDropConfig.Airdrop.Rollout
 	if mode == "all" then
 		return true
@@ -11738,7 +11799,7 @@ end
 	    hint; profile.FirstAttackDone is saved on the server when he first orders ATTACK (never shown again).
 	Rollout "owner" = AdminConfig.IsPlaytestOwner only, "all", anything else = off (the tutorial exactly as before). ]]
 TutorialConfig.FirstMinutes = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	WelcomeText = "Welcome, Commander! Follow the gold line to your base.",
 	WelcomeDelaySeconds = 3,
 	AttackHintText = "Tap ATTACK to send your army at enemies",
@@ -11747,6 +11808,9 @@ TutorialConfig.FirstMinutes = {
 }
 
 function TutorialConfig.FirstMinutesLiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("FirstMinutes") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = TutorialConfig.FirstMinutes.Rollout
 	if mode == "all" then
 		return true
@@ -13136,7 +13200,7 @@ local VehicleConfig = {
 			-- for the rollout named here ("owner" = the playtest owner's own vehicles, AdminConfig.IsPlaytestOwner; "all" =
 			-- everyone; anything else = nobody). Server-authoritative (VehicleWaterGuard kindOf); the driver's client follows
 			-- the server's WE_WaterState "Wade".
-			AmphibiousRollout = { BridgeLayer = "owner" } :: { [string]: string },
+			AmphibiousRollout = { BridgeLayer = "all" } :: { [string]: string },
 			WadeSpeedFrac = 0.4,
 		},
 	},
@@ -22505,7 +22569,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 100)
+		player:SetAttribute("WE_Build", 101)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -54667,7 +54731,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 100)
+			player:SetAttribute("WE_Build", 101)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -61605,7 +61669,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 100)
+		player:SetAttribute("WE_Build", 101)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -61745,7 +61809,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=100",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=101",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -71733,6 +71797,7 @@ end
 local function bagInSight(player: Player, part: BasePart): boolean
 	local mode = (OpsConfig.Cargo :: any).PickupLosRollout
 	local live = mode == "all" or (mode == "owner" and AdminConfig.IsPlaytestOwner(player.UserId))
+		or (require(Shared.Configs.MonetizationConfig) :: any).Launched("BagLos") -- claude-bud JOB 12
 	if not live then
 		return true
 	end
@@ -76438,7 +76503,8 @@ local function drivenPremium(player: Player): (Model?, any, BasePart?)
 	if prem == nil or typeof(prem.Gun) ~= "string" then
 		return nil, nil, nil
 	end
-	if not (MonetizationConfig.SkuLiveFor(player.UserId, tostring(prem.PassKey)) or AdminConfig.IsPlaytestOwner(player.UserId)) then
+	local ownerTest = AdminConfig.IsPlaytestOwner(player.UserId) and (MonetizationConfig :: any).LaunchAll ~= true -- claude-bud JOB 12
+	if not (MonetizationConfig.SkuLiveFor(player.UserId, tostring(prem.PassKey)) or ownerTest) then
 		return nil, nil, nil
 	end
 	return model, def, seat
@@ -89311,7 +89377,7 @@ function VehicleService._HasExtraSlot(player: Player): boolean
 	if not MC.SkuLiveFor(player.UserId, "ExtraGarageSlot") then
 		return false
 	end
-	if MC.GarageSlot and MC.GarageSlot.OwnerTest == true and VehicleService._IsPlaytestOwner(player) then
+	if MC.GarageSlot and MC.GarageSlot.OwnerTest == true and MC.LaunchAll ~= true and VehicleService._IsPlaytestOwner(player) then
 		return true
 	end
 	return MonetizationService ~= nil
@@ -90766,8 +90832,9 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	local premiumFree = false
 	if premium ~= nil then
 		local passKey = tostring(premium.PassKey)
-		local isOwner = VehicleService._IsPlaytestOwner(player)
 		local MonetizationConfig = require(Shared.Configs.MonetizationConfig) :: any -- (required here: the module is at the 200-local limit)
+		-- claude-bud JOB 12: at launch the owner buys the pass like everyone (no playtest shortcut)
+		local isOwner = VehicleService._IsPlaytestOwner(player) and MonetizationConfig.LaunchAll ~= true
 		if not isOwner and not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then
 			return false, "UnknownVehicle"
 		end
@@ -112820,10 +112887,9 @@ function ShopController.Init()
 		-- claude-bud JOB 6: Robux features (Extra Garage Slot, Robux-only vehicles) get a gold ROBUX row. While the Id
 		-- is 0 it shows SOON (only where the rollout is live); a tap is the Shop's "Coming soon", never a prompt.
 		local robuxFeature = key == "ExtraGarageSlot" or typeof(def.VehicleIds) == "table"
-		if robuxFeature and (tonumber(def.Id) or 0) == 0 and MonetizationConfig.SkuLiveFor(Players.LocalPlayer.UserId, key) then
-			addRow("ROBUX · " .. tostring(def.DisplayName or key), tostring(def.Description or ""), function()
-				promptGamePass(key, openSource)
-			end, "SOON", "Pass_" .. key, true)
+		-- v101 (Code Bot): with every rollout "all", an Id 0 Robux feature (PV_Bastion / PV_MotorPool until the owner
+		-- creates them) gets no row for anyone (was a SOON row); it appears once its Id is pasted.
+		if robuxFeature and (tonumber(def.Id) or 0) == 0 then
 			continue
 		end
 		-- F8: an Id 0 pass (the Speed Pass until the owner creates it) gets no row at all: it appears, with no

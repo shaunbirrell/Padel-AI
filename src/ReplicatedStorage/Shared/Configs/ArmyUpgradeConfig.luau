@@ -12,7 +12,7 @@
 local AdminConfig = require(script.Parent.AdminConfig)
 
 local ArmyUpgradeConfig = {
-	Rollout = "owner",
+	Rollout = "all", -- v101
 	Track = "Soldiers",
 	-- plot-local spot (BaseLayoutConfig frame): in front of the Barracks (Site -110, 110, Yaw 90), toward the plot centre
 	PromptX = -88,
@@ -22,6 +22,9 @@ local ArmyUpgradeConfig = {
 }
 
 function ArmyUpgradeConfig.LiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("ArmyUpgrades") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = ArmyUpgradeConfig.Rollout
 	if mode == "all" then
 		return true

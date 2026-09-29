@@ -3381,7 +3381,7 @@ function VehicleService._HasExtraSlot(player: Player): boolean
 	if not MC.SkuLiveFor(player.UserId, "ExtraGarageSlot") then
 		return false
 	end
-	if MC.GarageSlot and MC.GarageSlot.OwnerTest == true and VehicleService._IsPlaytestOwner(player) then
+	if MC.GarageSlot and MC.GarageSlot.OwnerTest == true and MC.LaunchAll ~= true and VehicleService._IsPlaytestOwner(player) then
 		return true
 	end
 	return MonetizationService ~= nil
@@ -4836,8 +4836,9 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	local premiumFree = false
 	if premium ~= nil then
 		local passKey = tostring(premium.PassKey)
-		local isOwner = VehicleService._IsPlaytestOwner(player)
 		local MonetizationConfig = require(Shared.Configs.MonetizationConfig) :: any -- (required here: the module is at the 200-local limit)
+		-- claude-bud JOB 12: at launch the owner buys the pass like everyone (no playtest shortcut)
+		local isOwner = VehicleService._IsPlaytestOwner(player) and MonetizationConfig.LaunchAll ~= true
 		if not isOwner and not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then
 			return false, "UnknownVehicle"
 		end

@@ -35,7 +35,7 @@ local SupplyDropConfig = {
 		LifetimeSeconds. 3 parts while falling (crate, lid, canopy), 2 on the ground. Rollout "owner" =
 		AdminConfig.IsPlaytestOwner only, "all" = everyone, anything else = off (the game as before). ]]
 	Airdrop = {
-		Rollout = "owner",
+		Rollout = "all", -- v101
 		FirstDelaySeconds = 60,
 		IntervalSeconds = 600,
 		DropHeight = 160,
@@ -51,6 +51,9 @@ local SupplyDropConfig = {
 
 -- claude-bud: is the airdrop live for this player (fail closed)
 function SupplyDropConfig.AirdropLiveFor(userId: any): boolean
+	if (require(script.Parent.MonetizationConfig) :: any).Launched("Airdrop") then
+		return true -- claude-bud JOB 12: MonetizationConfig.LaunchAll
+	end
 	local mode = SupplyDropConfig.Airdrop.Rollout
 	if mode == "all" then
 		return true

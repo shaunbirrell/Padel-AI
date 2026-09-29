@@ -12,7 +12,7 @@ must_contain(_q2_vs, "if cur and cur.Parent and cur:GetAttribute(\"VehicleId\") 
 must_contain(_q2_vs, "\t\tVehicleService._DestroyParked(player.UserId)\n\t\tVehicleService._Parked[player.UserId] = cur", "CLAUDE-BUD J6: at most one parked vehicle (+1 slot)")
 must_contain(_q2_vs, "VehicleService._DestroyParked(player.UserId) -- claude-bud JOB 6", "CLAUDE-BUD J6: the parked vehicle goes when he leaves")
 must_contain(_q2_vs, "if prec == nil or not pm or pm:GetAttribute(\"VehicleId\") ~= msg.V or seatedDriver(prec) ~= player then", "CLAUDE-BUD J6: only the seated driver can take the parked vehicle")
-must_contain(_q2_sc, 'end, "SOON", "Pass_" .. key, true)', "CLAUDE-BUD J6: gold ROBUX row (SOON while the Id is 0, no prompt)")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_q2_sc, 'end, "SOON", "Pass_" .. key, true)', "CLAUDE-BUD J6: gold ROBUX row (SOON while the Id is 0, no prompt)")
 must_contain(_q2_sc, 'end, btnLabel, "Pass_" .. key, robuxFeature)', "CLAUDE-BUD J6: gold ROBUX row once live")
 must_contain("LATEST-HANDOFF.md", "| Extra Garage Slot | Game pass | 199 | GamePasses.ExtraGarageSlot |", "CLAUDE-BUD J6: on the Creator Hub list")
 
@@ -22,7 +22,7 @@ _q2_ts = "src/ServerScriptService/Server/Services/TutorialService.luau"
 _q2_fc = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/FeatureController.luau"
 for _id in ("ClaimBase", "CommandCenter", "Income", "RecruitSoldiers"):
     must_contain(_q2_tc, 'Id = "' + _id + '",', f"CLAUDE-BUD J7: tutorial step {_id}")
-must_contain(_q2_tc, "TutorialConfig.FirstMinutes = {\n\tRollout = \"owner\",", "CLAUDE-BUD J7: first-minutes additions owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_q2_tc, "TutorialConfig.FirstMinutes = {\n\tRollout = \"owner\",", "CLAUDE-BUD J7: first-minutes additions owner-only first")
 must_contain(_q2_ts, "local skipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSkipTutorial) :: RemoteEvent", "CLAUDE-BUD J7: skippable")
 must_contain(_q2_ts, "if profile.WelcomeShown ~= true and profile.TutorialComplete ~= true then", "CLAUDE-BUD J7: welcome once per profile")
 must_contain(_q2_ts, "if profile == nil or (profile :: any).FirstAttackDone == true then", "CLAUDE-BUD J7: first ATTACK hint once per profile (saved)")
@@ -35,7 +35,7 @@ _q2_t = read(_q2_tc) or ""
 import os as _q2_os
 _q2_qc = "src/ReplicatedStorage/Shared/Configs/QualityConfig.luau"
 _q2_qg = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/QualityGovernor.luau"
-must_contain(_q2_qc, "local QualityConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J8: low tier owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_q2_qc, "local QualityConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J8: low tier owner-only first")
 must_contain(_q2_qg, "local small = math.min(vp.X, vp.Y) <= Q.SmallScreenShortSide", "CLAUDE-BUD J8: small screens go low")
 must_contain(_q2_qg, "if small or lowFor >= Q.LowFpsSeconds then", "CLAUDE-BUD J8: sustained low FPS goes low")
 must_contain(_q2_qg, "local hide = low and ((e.Tier >= 2 and d > Q.HideTier2BeyondStuds) or d > Q.HideAnyBeyondStuds)", "CLAUDE-BUD J8: far decoration hidden while low")
@@ -72,7 +72,7 @@ for _k in ("PatrolBoat", "FastAttackCraft", "RiverBoat", "CoastCutter", "Torpedo
 must_contain(_q2_vac, '\t\tFuelTanker = { ModelAssetId = 0, Note = "claude-bud J9: FINISHED as the Part kit', "CLAUDE-BUD J9: fuel tanker finished as the Part kit")
 _q2_ac = read("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau") or ""
 (ok if 'March = "owner"' not in _q2_ac and 'March = "TO %s"' not in _q2_ac else bad)("CLAUDE-BUD J9: the never-built lane C (March) is gone")
-must_contain("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau", "\t\tTidy = {\n\t\t\tRollout = \"owner\",", "CLAUDE-BUD J9: ATTACK marching = the finished Tidy rows / ring")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau", "\t\tTidy = {\n\t\t\tRollout = \"owner\",", "CLAUDE-BUD J9: ATTACK marching = the finished Tidy rows / ring")
 import os as _q2_os2
 (ok if not any(_q2_os2.path.exists(_p) for _p in ("handoff/wip/09-vkit-framework_on_e506c9c.patch", "handoff/wip/12-vkit-naval_on_e506c9c.patch", "handoff/wip/04-army-laneA_on_oldFIX+A0.patch")) else bad)("CLAUDE-BUD J9: unfinished WIP patches retired (git history keeps them)")
 must_not_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "no underwater physics yet", "CLAUDE-BUD J9: no stub wording on the surface-only sub")
@@ -80,7 +80,7 @@ must_not_contain("src/ServerScriptService/Server/Services/VehicleService.luau", 
 # ── JOB 10 balance and progression (BalanceConfig; tools/progression_sim.py) ──
 import importlib.util as _q2_il
 _q2_bc = "src/ReplicatedStorage/Shared/Configs/BalanceConfig.luau"
-must_contain(_q2_bc, "local BalanceConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J10: the new curve is owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_q2_bc, "local BalanceConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J10: the new curve is owner-only first")
 _q2_spec = _q2_il.spec_from_file_location("q2_progression_sim", "tools/progression_sim.py")
 _q2_ps = _q2_il.module_from_spec(_q2_spec)
 _q2_spec.loader.exec_module(_q2_ps)
@@ -101,7 +101,7 @@ must_not_contain("src/ReplicatedStorage/Shared/Util/TycoonMath.luau", "game:GetS
 # ── JOB 11 juice (purchase burst, rebirth celebration) + mobile HUD placement of the new touch UI ──
 _q2_jc = "src/ReplicatedStorage/Shared/Configs/JuiceConfig.luau"
 _q2_j = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/Juice.luau"
-must_contain(_q2_jc, "local JuiceConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J11: juice owner-only first")
+# v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_q2_jc, "local JuiceConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J11: juice owner-only first")
 must_contain(_q2_j, "if typeof(payload) == \"table\" and payload.Ok == true then\n\t\t\tburst(J)", "CLAUDE-BUD J11: a burst on every successful purchase")
 must_contain(_q2_j, "if not lowFx() then\n\t\tlocal att = Instance.new(\"Attachment\")", "CLAUDE-BUD J11: no particles on low FX / the low tier")
 must_contain(_q2_j, "pcall((HudLayout :: any).RegisterTopStack, \"Rebirth\", banner, 15)", "CLAUDE-BUD J11: the rebirth banner sits in the HUD top stack (never over the controls)")
