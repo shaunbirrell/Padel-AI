@@ -1,5 +1,5 @@
 <!-- Q2-START -->
-## v116 (Code Bot Roblox, 2026-09-29): JOB 23 army formation Steer LIVE — place version TBD
+## v116 (Code Bot Roblox, 2026-09-29): JOB 23 army formation Steer LIVE — place version 114
 - Merged Claude `46fe085` (JOB 23: one steered block Follow3.Steer / FormationController.SteerFrames). Fast-forward from a95c2a8.
 - WE_Build 116 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched.
 - Pins: `tools/checks/claude_bud_armyj23.py` + `tools/checks/codebot_v116.py` (WE_Build 116). Retired WE_Build=115 pins in codebot_v115_army / bumped v110/v113/BuyPathStatic frozen pins.
