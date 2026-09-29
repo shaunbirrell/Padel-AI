@@ -89,3 +89,17 @@ for _n in range(2, 61):
         _cba_worst = min(_cba_worst, _d)
 (ok if _cba_worst >= 3 else bad)(f"CLAUDE-BUD army fix: ATTACK spots unique and >= 3 studs apart for squads of 2..60 (min {_cba_worst:.2f})")
 must_contain(_cba_so, "\tif af and af.TidyLive and af.AttackPoint and af.TidyLive(player) then", "CLAUDE-BUD army fix: ATTACK formation behind the Tidy kill switch")
+
+# ── claude-bud (owner: "the army is still glitchy and despawns when walking"): Flank formation in front of the camera ──
+_cba_fl = {k: float(v) for k, v in re.findall(r"\t\t\t(Flank\w+) = (-?[\d.]+),", read(_cba_ac) or "")}
+must_contain(_cba_ac, '\t\t\tFormation = "Flank",', "CLAUDE-BUD army: Flank formation on (\"Wedge\" = the old one)")
+must_contain(_cba_af, 'back = tnum("FlankFront", -1) + (row - 1) * tnum("FlankRowBack", 3)', "CLAUDE-BUD army: flank rows")
+if len(_cba_fl) == 4:
+    _rows = 4  # OrdersConfig.MaxFieldUnits 5 + ResearchConfig SquadExpansion 3 = 8 units = 4 rows
+    _last_back = _cba_fl["FlankFront"] + (_rows - 1) * _cba_fl["FlankRowBack"]
+    _nb = (_cba_fl["FlankRowBack"] ** 2 + _cba_fl["FlankRowSide"] ** 2) ** 0.5
+    (ok if _last_back <= 10 else bad)(f"CLAUDE-BUD army: the last flank row is {_last_back} studs back (<= 10: in front of a ~12-15 stud phone camera)")
+    (ok if _nb > _cba_sep and 2 * _cba_fl["FlankSide"] > _cba_sep else bad)(f"CLAUDE-BUD army: flank neighbours {_nb:.2f} studs apart, files {2 * _cba_fl['FlankSide']} apart (> SeparationStuds {_cba_sep})")
+    (ok if _cba_fl["FlankRowSide"] >= 2 else bad)("CLAUDE-BUD army: each flank row on its own side line (escort files never land on a soldier)")
+else:
+    bad(f"CLAUDE-BUD army: flank numbers missing {_cba_fl}")

@@ -684,6 +684,15 @@ local function slotPoint(st: any, root: BasePart, rank: number): Vector3
 		end
 		back = num("WedgeBack", 3) + row * tnum("RowBack", 4)
 		lat = side * (num("WedgeSide", 2.5) + row * tnum("RowSide", 3))
+		-- claude-bud (owner: "the army is still glitchy and despawns when walking"): the wedge trails 7-19 studs
+		-- behind him plus the catch-up lag, i.e. AT or BEHIND the phone camera (~12-15 studs back): the back rows leave
+		-- the view (and the camera guard hides one filling the screen) while he walks, and pop back when he stops.
+		-- Flank: a file on each side of him from FlankFront (ahead) back FlankRowBack per row, each row FlankRowSide
+		-- further out (its client escort file ahead of it never lands on another soldier). All in front of the camera.
+		if tidyCfg().Formation == "Flank" then
+			back = tnum("FlankFront", -1) + (row - 1) * tnum("FlankRowBack", 3)
+			lat = side * (tnum("FlankSide", 3.5) + (row - 1) * tnum("FlankRowSide", 2.6))
+		end
 	end
 	local lead = (st._afVel or Vector3.zero) * num("LeadSeconds", 0.3)
 	local cap = num("LeadMaxStuds", 5)

@@ -10,6 +10,10 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [x] 14 game-feel p
 - PreferMesh stays OFF. WE_Building* untouched. Never bump WE_Build / publish (Code Bot only).
 
 - Phone tests (956x440 + a small phone): stand ~30 studs from the Town Centre south edge and read the 6 board names; walk up and check the gold "You: #.. · .." line; at night spotlights on; kill an alt 4 times in 10 min (only 3 count after write/refresh); Settings > LEADERBOARDS > Supporter board HIDDEN removes you from TOP SUPPORTERS; buy something cheap and check TOP SUPPORTERS. Boards fill only on a live server (DataStores).
+- ARMY (owner: "still glitchy and despawns when walking"): the wedge trailed behind the phone camera; now a Flank
+  formation (a file each side of you, last row 8 studs back). Phone test: walk, run and sprint through town with 5+
+  soldiers: they stay on screen beside you, no vanish / pop-in; stop and turn round: no swirl; enter your base: they
+  still wait at the gate. If it's worse: ArmyConfig.Follow2.Tidy.Formation = "Wedge" restores the old one.
 
 <!-- Q2-END -->
 
