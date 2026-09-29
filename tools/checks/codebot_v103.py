@@ -6,9 +6,9 @@ _cb103_CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 _cb103_SH = "src/ReplicatedStorage/Shared/"
 
 # ── build ──
-for _f in (_cb103_S + "Services/DataService.luau", _cb103_S + "Services/BaseService.luau", _cb103_S + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 103)', "CODEBOT v103: WE_Build=103 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb103_S + "Services/DataService.luau", "WE_Build=103", "CODEBOT v103: DataService profile-loaded log says WE_Build=103")
+# v104 (Code Bot): retired, superseded in tools/checks/codebot_v104.py: #for _f in (_cb103_S + "Services/DataService.luau", _cb103_S + "Services/BaseService.luau", _cb103_S + "EarlyRemotes.server.luau"):
+# v104 (Code Bot): retired, superseded in tools/checks/codebot_v104.py: #    must_contain(_f, 'SetAttribute("WE_Build", 103)', "CODEBOT v103: WE_Build=103 " + _f.rsplit("/", 1)[-1])
+# v104 (Code Bot): retired, superseded in tools/checks/codebot_v104.py: #must_contain(_cb103_S + "Services/DataService.luau", "WE_Build=103", "CODEBOT v103: DataService profile-loaded log says WE_Build=103")
 
 # ── JOB 13 wired (owner-only) + cash stack keeps both CashBoost and Engagement ──
 must_contain(_cb103_SH + "Configs/EngagementConfig.luau", "function EngagementConfig.EventAt(now: number): (any?, number, any?)", "CODEBOT v103: EngagementConfig.EventAt")

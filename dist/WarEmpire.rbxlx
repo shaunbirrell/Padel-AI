@@ -3445,7 +3445,7 @@ return EconomyConfig
             <string name="Source"><![CDATA[--!strict
 --[[
 	claude-bud JOB 13 (2026-09-29): bring players back (Server/Services/EngagementService + Client/Modules/EngagementClient).
-	Everything owner-only first (Rollout per feature); every reward is decided and paid on the server.
+	v103 shipped owner-only; v104 (Code Bot) sets every Rollout to "all". Every reward is decided and paid on the server.
 	  * Events: a weekly rotation from the Events table. Week n (UTC, weeks since Epoch Monday) runs Events[n % #Events];
 	    Window "Weekend" = Friday 00:00 to Monday 00:00 UTC, "Week" = the whole week. Effects: CashMult (passive / pay
 	    reasons, on top of everything), AirdropIntervalSeconds (the airdrop comes faster), PlazaBountyMult. A HUD banner
@@ -3455,18 +3455,23 @@ return EconomyConfig
 	    (client-built, only shown to players it is live for).
 	  * Invite: the Shop's "Invite friends" row opens Roblox's invite prompt (SocialService). A new player who joins through
 	    an invite (JoinData.ReferredByPlayerId) gets WelcomeCash once; the inviter gets InviteCash per new friend (at most
-	    InviteDailyCap a day), right away when in the same server or on his next join (DataStore queue).
-	  * Friends: every FriendsTickSeconds, FriendsCashPerTick per friend in the server (at most FriendsCap friends).
-	  * Comeback: away ComebackDays or more (since the last join) -> ComebackCash once on the join.
+	    InviteDailyCap a day), right away when in the same server or on his next join (DataStore queue). v104: only for a
+	    brand-new account (InviteNewPlayerSeconds) that is a real Roblox friend of the inviter, on a saved profile.
+	  * Friends: every FriendsTickSeconds, FriendsCashPerTick per friend in the server (at most FriendsCap friends, at most
+	    FriendsDailyCap a day).
+	  * Comeback: away ComebackDays or more (since the last join) -> ComebackCash once per absence on the join.
+	  v104: the reward reasons (invite_welcome / invite_reward / friends_bonus / comeback) are multiplier-exempt, so the
+	  amounts and caps here are exactly what is paid.
 ]]
 
 local EngagementConfig = {
+	-- v104 (Code Bot, owner 2026-09-29: "switch ALL of JOB 13 on for all players"): every feature live for everyone
 	Rollout = {
-		Events = "owner",
-		Leaderboards = "owner",
-		Invite = "owner",
-		Friends = "owner",
-		Comeback = "owner",
+		Events = "all",
+		Leaderboards = "all",
+		Invite = "all",
+		Friends = "all",
+		Comeback = "all",
 	} :: { [string]: string },
 
 	Events = {
@@ -3483,6 +3488,8 @@ local EngagementConfig = {
 	WriteSeconds = 300,
 	ReadSeconds = 300,
 	TopN = 10,
+	WriteMinGapSeconds = 60, -- v104: at most one board write per player per minute (leave / rejoin spam cannot flood the budget)
+	WriteBudgetFloor = 20, -- v104: skip a write while this server's sorted-store write budget is below this
 	BoardX = -112, -- Town Square's north-east corner (the square is 90 x 90 at (-150, 150)), facing the square
 	BoardZ = 112,
 
@@ -3490,13 +3497,17 @@ local EngagementConfig = {
 	InviteCash = 10000,
 	InviteDailyCap = 5,
 	InviteQueueStore = "WE_InviteRewards_v1",
+	InviteNewPlayerSeconds = 900, -- v104: the invited account must be brand new here (first join at most 15 min ago)
+	-- v104: and the inviter must be a real Roblox friend of the invited account (IsFriendsWithAsync; a failed check pays nothing)
 
 	FriendsTickSeconds = 60,
 	FriendsCashPerTick = 500,
 	FriendsCap = 3,
+	FriendsDailyCap = 30000, -- v104: at most $30,000 a day (UTC) from the friends bonus per player (saved: rejoining never resets it)
 
 	ComebackDays = 3,
 	ComebackCash = 25000,
+	-- v104: paid once per absence (profile.ComebackPaidFor = the previous join it paid for) and saved right away
 }
 
 function EngagementConfig.LiveFor(feature: string, userId: any): boolean
@@ -5876,6 +5887,11 @@ local MonetizationConfig = {
 		atm_raid = true,
 		plot_oil = true, -- plot pump PendingCash via AccruePendingCash
 		ops = true, -- W3s2 Jobs: fixed job pay (OpsConfig.Rewards), never pass-multiplied
+		-- v104 (Code Bot): JOB 13 engagement rewards are fixed amounts (EngagementConfig), so their caps are the real caps
+		invite_welcome = true,
+		invite_reward = true,
+		friends_bonus = true,
+		comeback = true,
 	},
 	XPMultExemptReasons = {
 		admin = true,
@@ -10171,15 +10187,19 @@ return SeasonConfig
             <string name="Source"><![CDATA[--!strict
 --[[
 	Code Bot v102: social / community text shown in-game (the Codes panel).
-	No URLs in-game: Roblox only allows off-platform links through its own approved social-link UI, so the Discord
-	invite stays a placeholder here and is never shown. Put the real invite on the experience page's Social Links.
+	v104 (Code Bot, owner 2026-09-29): the real Bud Studios Discord invite. In-game it is PLAIN TEXT only
+	(DiscordInviteText in a TextLabel: never a button, never a TextBox, never clickable), and only for a player whose
+	PolicyService AllowedExternalLinkReferences lists "Discord" (Roblox's rule for naming off-platform socials);
+	everyone else sees just DiscordText. Also add the invite in Creator Hub -> Social Links (the clickable one).
 ]]
 
 local SocialConfig = {
 	-- the line under the Redeem button in the Codes panel
 	DiscordText = "Join Bud Studios Discord for free codes!",
-	-- placeholder only: NOT displayed in-game (add the invite in Creator Hub → Social Links instead)
-	DiscordInvite = "",
+	-- v104: the Bud Studios server (config / Creator Hub Social Links); never shown in-game as a link
+	DiscordInvite = "https://discord.gg/tkjA2DFBmZ",
+	-- v104: what the Codes panel shows (plain text, no scheme), policy-gated
+	DiscordInviteText = "Discord: discord.gg/tkjA2DFBmZ",
 }
 
 return SocialConfig
@@ -22741,7 +22761,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 103)
+		player:SetAttribute("WE_Build", 104)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -35204,6 +35224,11 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	profile.ReferredBy = if typeof(profile.ReferredBy) == "number" and profile.ReferredBy > 0 then math.floor(profile.ReferredBy) else nil
 	profile.InviteDay = nonNegInt(profile.InviteDay)
 	profile.InviteCount = nonNegInt(profile.InviteCount)
+	-- v104 (Code Bot): friends-bonus daily cap + comeback once-per-absence bookkeeping
+	profile.FriendsDay = nonNegInt(profile.FriendsDay)
+	profile.FriendsPaid = nonNegInt(profile.FriendsPaid)
+	profile.ComebackPaidFor = nonNegInt(profile.ComebackPaidFor)
+	profile.ComebackPaidAt = nonNegInt(profile.ComebackPaidAt)
 	if profile.GroupRewardClaimed ~= true then
 		profile.GroupRewardClaimed = nil -- claude-bud JOB 5e: true once the group reward was paid
 	end
@@ -54948,7 +54973,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 103)
+			player:SetAttribute("WE_Build", 104)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -62057,7 +62082,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 103)
+		player:SetAttribute("WE_Build", 104)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -62198,7 +62223,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=103",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=104",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -63049,7 +63074,16 @@ return EconomyService
 --[[
 	claude-bud JOB 13 (2026-09-29): events, leaderboards, invite / friends / comeback rewards (Shared/Configs/EngagementConfig).
 	Server only. Every reward is paid here with EconomyService.AddCash and every DataStore call is pcall'd (a failure
-	skips that write / read, never a player's session). Owner-only first through EngagementConfig.LiveFor per feature.
+	skips that write / read, never a player's session). Gated per feature by EngagementConfig.LiveFor ("all" since v104).
+	v104 (Code Bot) exploit guards for the all-players rollout:
+	  * invite: only a saved profile (DataService.IsLoaded), a brand-new account (InviteNewPlayerSeconds since FirstJoinUnix)
+	    that is a real Roblox friend of the inviter (IsFriendsWithAsync, a failed check pays nothing); ReferredBy is saved
+	    right away; the inviter stays capped at InviteDailyCap a day.
+	  * friends: at most FriendsCap friends per tick and FriendsDailyCap a day (profile.FriendsDay / FriendsPaid, saved).
+	  * leaderboards: one write per player per WriteMinGapSeconds (kept across leave / rejoin in this server), unchanged
+	    scores are not rewritten, a write waits while the server's sorted-store budget is low; admin accounts
+	    (AdminConfig.UserIds / the playtest owner, whose Cash is a playtest floor) never appear on a board.
+	  * comeback: once per absence (profile.ComebackPaidFor), only on a saved profile, saved right away.
 ]]
 
 local Players = game:GetService("Players")
@@ -63067,6 +63101,52 @@ local E: any = EngagementConfig
 local deps: { [string]: any } = {}
 local friendsOf: { [number]: { [number]: boolean } } = {}
 local nameCache: { [number]: string } = {}
+local lastBoardWrite: { [number]: number } = {} -- v104: os.clock() of each user's last board write (survives leave / rejoin)
+local lastBoardScores: { [number]: { [string]: number } } = {} -- v104: what was last written per user and board
+
+local function adminConfig(): any
+	local ok, AC = pcall(require, Shared.Configs.AdminConfig)
+	return if ok then AC else nil
+end
+
+-- v104: admin / playtest accounts (their Cash is a playtest floor) are kept off the public boards
+local function isBoardExcluded(uid: number): boolean
+	local AC = adminConfig()
+	if AC == nil then
+		return false
+	end
+	if AC.IsPlaytestOwner and AC.IsPlaytestOwner(uid) then
+		return true
+	end
+	for _, id in ipairs(AC.UserIds or {}) do
+		if tonumber(id) == uid then
+			return true
+		end
+	end
+	return false
+end
+
+-- v104: a reward that must stick is only paid on a profile that will be saved (a session-only profile would pay again)
+local function persistent(player: Player): boolean
+	local DS = deps.DataService
+	return DS ~= nil and DS.IsLoaded ~= nil and DS.IsLoaded(player) == true
+end
+
+local function saveNow(player: Player)
+	local DS = deps.DataService
+	if DS and DS.MarkDirty then
+		DS.MarkDirty(player)
+	end
+	if DS and DS.SaveProfile then
+		task.spawn(function()
+			pcall(DS.SaveProfile, player)
+		end)
+	end
+end
+
+local function utcDay(): number
+	return tonumber(os.date("!%Y%m%d")) or 0
+end
 
 local function live(feature: string, player: Player): boolean
 	return EngagementConfig.LiveFor(feature, player.UserId)
@@ -63133,21 +63213,46 @@ local function scoresOf(profile: any): { [string]: number }
 	}
 end
 
+local function writeBudgetOk(): boolean
+	local ok, budget = pcall(function()
+		return DataStoreService:GetRequestBudgetForRequestType(Enum.DataStoreRequestType.SetIncrementSortedAsync)
+	end)
+	if not ok or typeof(budget) ~= "number" then
+		return true -- no budget API (tests): the per-player gap still throttles
+	end
+	return budget >= (tonumber(E.WriteBudgetFloor) or 0)
+end
+
 local function writeScores(player: Player)
 	if not live("Leaderboards", player) then
 		return
 	end
-	local profile = deps.DataService and deps.DataService.GetProfile(player)
-	if profile == nil then
+	local uid = player.UserId
+	if isBoardExcluded(uid) then
 		return
 	end
+	local now = os.clock()
+	local last = lastBoardWrite[uid]
+	if last ~= nil and now - last < (tonumber(E.WriteMinGapSeconds) or 60) then
+		return -- v104: throttled (one write per player per WriteMinGapSeconds)
+	end
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil or not persistent(player) then
+		return
+	end
+	lastBoardWrite[uid] = now
 	local s = scoresOf(profile)
+	local prev = lastBoardScores[uid] or {}
+	lastBoardScores[uid] = prev
 	for _, b in ipairs(E.Boards) do
 		local v = s[b.Id]
-		if v then
-			pcall(function()
+		if v and prev[b.Id] ~= v and writeBudgetOk() then
+			local okW = pcall(function()
 				DataStoreService:GetOrderedDataStore(b.Store):SetAsync(tostring(player.UserId), v)
 			end)
+			if okW then
+				prev[b.Id] = v
+			end
 		end
 	end
 end
@@ -63175,13 +63280,13 @@ local function readBoards()
 	end
 	for _, b in ipairs(E.Boards) do
 		local ok, pages = pcall(function()
-			return DataStoreService:GetOrderedDataStore(b.Store):GetSortedAsync(false, E.TopN)
+			return DataStoreService:GetOrderedDataStore(b.Store):GetSortedAsync(false, math.min(100, E.TopN + 5))
 		end)
 		if ok and pages then
 			local rows = {}
 			for _, entry in ipairs(pages:GetCurrentPage()) do
 				local uid = tonumber(entry.key)
-				if uid then
+				if uid and not isBoardExcluded(uid) and #rows < E.TopN then -- v104: admin / playtest scores never shown
 					table.insert(rows, { N = nameOf(uid), V = entry.value })
 				end
 			end
@@ -63213,7 +63318,7 @@ local function claimQueuedInvites(player: Player, profile: any)
 end
 
 function EngagementService._PayInviter(inviter: Player, profile: any, count: number)
-	local today = tonumber(os.date("!%Y%m%d")) or 0
+	local today = utcDay()
 	if tonumber(profile.InviteDay) ~= today then
 		profile.InviteDay = today
 		profile.InviteCount = 0
@@ -63236,12 +63341,29 @@ local function onReferral(player: Player, profile: any)
 	if ref == nil or ref <= 0 or ref == player.UserId or profile.ReferredBy ~= nil then
 		return
 	end
+	ref = math.floor(ref)
 	if not EngagementConfig.LiveFor("Invite", ref) then
+		return
+	end
+	-- v104: a saved profile only (a session-only default would pay the inviter again on every failed load)
+	if not persistent(player) then
+		return
+	end
+	-- v104: a brand-new account only (an old account joining through a link is not a new friend)
+	local first = tonumber(profile.FirstJoinUnix) or 0
+	if first <= 0 or os.time() - first > (tonumber(E.InviteNewPlayerSeconds) or 900) then
+		return
+	end
+	-- v104: the inviter must really be this account's Roblox friend (a failed / errored check pays nothing)
+	local okF, isFriend = pcall(function()
+		return player:IsFriendsWithAsync(ref)
+	end)
+	if not okF or isFriend ~= true or player.Parent == nil or profile.ReferredBy ~= nil then
 		return
 	end
 	profile.ReferredBy = ref -- once per account, ever
 	pay(player, E.WelcomeCash, "invite_welcome")
-	deps.DataService.MarkDirty(player)
+	saveNow(player) -- v104: ReferredBy is on disk before the inviter is paid
 	notify(player, string.format("Welcome! Your friend's invite: +$%d", E.WelcomeCash), "Reward")
 	local inviter = Players:GetPlayerByUserId(ref)
 	local iprof = inviter and deps.DataService.GetProfile(inviter)
@@ -63264,8 +63386,18 @@ local function onComeback(player: Player, profile: any)
 	if prev == nil or prev <= 0 or os.time() - prev < E.ComebackDays * 86400 then
 		return
 	end
+	-- v104: once per absence (the previous join it paid for is kept) and only on a profile that will be saved
+	if not persistent(player) or tonumber(profile.ComebackPaidFor) == prev then
+		return
+	end
+	local lastPaid = tonumber(profile.ComebackPaidAt) or 0
+	if lastPaid > 0 and os.time() - lastPaid < E.ComebackDays * 86400 then
+		return
+	end
+	profile.ComebackPaidFor = prev
+	profile.ComebackPaidAt = os.time()
 	pay(player, E.ComebackCash, "comeback")
-	deps.DataService.MarkDirty(player)
+	saveNow(player)
 	notify(player, string.format("Welcome back, Commander! +$%d", E.ComebackCash), "Reward")
 end
 
@@ -63302,7 +63434,7 @@ function EngagementService.Init(d: { [string]: any })
 			end
 			onComeback(player, profile)
 			onReferral(player, profile)
-			if live("Invite", player) then
+			if live("Invite", player) and persistent(player) then
 				claimQueuedInvites(player, profile)
 			end
 			if live("Events", player) or live("Leaderboards", player) then
@@ -63335,8 +63467,21 @@ function EngagementService.Init(d: { [string]: any })
 							end
 						end
 						n = math.min(n, E.FriendsCap)
-						if n > 0 then
-							pay(p, E.FriendsCashPerTick * n, "friends_bonus")
+						local prof = if n > 0 and deps.DataService then deps.DataService.GetProfile(p) else nil
+						if prof then
+							-- v104: at most FriendsDailyCap a day (UTC), counted in the saved profile
+							local today = utcDay()
+							if tonumber(prof.FriendsDay) ~= today then
+								prof.FriendsDay = today
+								prof.FriendsPaid = 0
+							end
+							local room = math.max(0, (tonumber(E.FriendsDailyCap) or 0) - (tonumber(prof.FriendsPaid) or 0))
+							local amount = math.min(room, E.FriendsCashPerTick * n)
+							if amount > 0 then
+								prof.FriendsPaid = (tonumber(prof.FriendsPaid) or 0) + amount
+								pay(p, amount, "friends_bonus")
+								deps.DataService.MarkDirty(p)
+							end
 						end
 					end
 				end
@@ -97164,11 +97309,14 @@ return BaseController
 	Text box + REDEEM → Remotes RedeemCode (RemoteFunction, CodesService validates + rate-limits) → the result line
 	(Success / AlreadyUsed / Invalid / Expired / RateLimited). Shows the running 2x Cash boost from the player
 	attribute WE_CashBoostUntil. The Discord line comes from SocialConfig.DiscordText (no link in-game).
+	v104: under it SocialConfig.DiscordInviteText as plain text (a TextLabel, never clickable), only when
+	PolicyService AllowedExternalLinkReferences lists "Discord" for this player (a failed check shows nothing).
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local PolicyService = game:GetService("PolicyService")
 
 -- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
 local CodesController = {}
@@ -97365,7 +97513,7 @@ function CodesController.Init()
 	local headerH = TAP + 8
 	local textH = PanelShell.Text(16) + 10
 	local resultH = PanelShell.Text(16) * 2 + 12 -- two lines of result text
-	local panelH = headerH + TAP + GAP + TAP + GAP + resultH + textH + textH + 20
+	local panelH = headerH + TAP + GAP + TAP + GAP + resultH + textH + textH + textH + 20 -- v104: + the Discord invite text row
 
 	local panel = Instance.new("Frame")
 	panel.Name = "Panel"
@@ -97448,6 +97596,32 @@ function CodesController.Init()
 	y += textH
 
 	label("Discord", SocialConfig.DiscordText, 16, Constants.Colors.GoldBright, y, textH, panel)
+	y += textH
+
+	-- v104: the Discord invite as plain text (TextLabel only), for players Roblox allows Discord references for
+	local inviteLabel = label("DiscordInvite", "", 16, Constants.Colors.GoldBright, y, textH, panel)
+	inviteLabel.Visible = false
+	task.spawn(function()
+		local inviteText = (SocialConfig :: any).DiscordInviteText
+		if typeof(inviteText) ~= "string" or inviteText == "" then
+			return
+		end
+		local okP, info = pcall(function()
+			return PolicyService:GetPolicyInfoForPlayerAsync(player)
+		end)
+		local allowed = false
+		if okP and typeof(info) == "table" and typeof((info :: any).AllowedExternalLinkReferences) == "table" then
+			for _, ref in ipairs((info :: any).AllowedExternalLinkReferences) do
+				if ref == "Discord" then
+					allowed = true
+				end
+			end
+		end
+		if allowed then
+			inviteLabel.Text = inviteText
+			inviteLabel.Visible = true
+		end
+	end)
 
 	shell = PanelShell.Attach({
 		Id = PANEL_ID,

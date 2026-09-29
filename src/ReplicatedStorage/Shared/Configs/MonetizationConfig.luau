@@ -645,6 +645,11 @@ local MonetizationConfig = {
 		atm_raid = true,
 		plot_oil = true, -- plot pump PendingCash via AccruePendingCash
 		ops = true, -- W3s2 Jobs: fixed job pay (OpsConfig.Rewards), never pass-multiplied
+		-- v104 (Code Bot): JOB 13 engagement rewards are fixed amounts (EngagementConfig), so their caps are the real caps
+		invite_welcome = true,
+		invite_reward = true,
+		friends_bonus = true,
+		comeback = true,
 	},
 	XPMultExemptReasons = {
 		admin = true,

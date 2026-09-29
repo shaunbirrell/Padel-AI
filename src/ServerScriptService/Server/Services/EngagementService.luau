@@ -2,7 +2,16 @@
 --[[
 	claude-bud JOB 13 (2026-09-29): events, leaderboards, invite / friends / comeback rewards (Shared/Configs/EngagementConfig).
 	Server only. Every reward is paid here with EconomyService.AddCash and every DataStore call is pcall'd (a failure
-	skips that write / read, never a player's session). Owner-only first through EngagementConfig.LiveFor per feature.
+	skips that write / read, never a player's session). Gated per feature by EngagementConfig.LiveFor ("all" since v104).
+	v104 (Code Bot) exploit guards for the all-players rollout:
+	  * invite: only a saved profile (DataService.IsLoaded), a brand-new account (InviteNewPlayerSeconds since FirstJoinUnix)
+	    that is a real Roblox friend of the inviter (IsFriendsWithAsync, a failed check pays nothing); ReferredBy is saved
+	    right away; the inviter stays capped at InviteDailyCap a day.
+	  * friends: at most FriendsCap friends per tick and FriendsDailyCap a day (profile.FriendsDay / FriendsPaid, saved).
+	  * leaderboards: one write per player per WriteMinGapSeconds (kept across leave / rejoin in this server), unchanged
+	    scores are not rewritten, a write waits while the server's sorted-store budget is low; admin accounts
+	    (AdminConfig.UserIds / the playtest owner, whose Cash is a playtest floor) never appear on a board.
+	  * comeback: once per absence (profile.ComebackPaidFor), only on a saved profile, saved right away.
 ]]
 
 local Players = game:GetService("Players")
@@ -20,6 +29,52 @@ local E: any = EngagementConfig
 local deps: { [string]: any } = {}
 local friendsOf: { [number]: { [number]: boolean } } = {}
 local nameCache: { [number]: string } = {}
+local lastBoardWrite: { [number]: number } = {} -- v104: os.clock() of each user's last board write (survives leave / rejoin)
+local lastBoardScores: { [number]: { [string]: number } } = {} -- v104: what was last written per user and board
+
+local function adminConfig(): any
+	local ok, AC = pcall(require, Shared.Configs.AdminConfig)
+	return if ok then AC else nil
+end
+
+-- v104: admin / playtest accounts (their Cash is a playtest floor) are kept off the public boards
+local function isBoardExcluded(uid: number): boolean
+	local AC = adminConfig()
+	if AC == nil then
+		return false
+	end
+	if AC.IsPlaytestOwner and AC.IsPlaytestOwner(uid) then
+		return true
+	end
+	for _, id in ipairs(AC.UserIds or {}) do
+		if tonumber(id) == uid then
+			return true
+		end
+	end
+	return false
+end
+
+-- v104: a reward that must stick is only paid on a profile that will be saved (a session-only profile would pay again)
+local function persistent(player: Player): boolean
+	local DS = deps.DataService
+	return DS ~= nil and DS.IsLoaded ~= nil and DS.IsLoaded(player) == true
+end
+
+local function saveNow(player: Player)
+	local DS = deps.DataService
+	if DS and DS.MarkDirty then
+		DS.MarkDirty(player)
+	end
+	if DS and DS.SaveProfile then
+		task.spawn(function()
+			pcall(DS.SaveProfile, player)
+		end)
+	end
+end
+
+local function utcDay(): number
+	return tonumber(os.date("!%Y%m%d")) or 0
+end
 
 local function live(feature: string, player: Player): boolean
 	return EngagementConfig.LiveFor(feature, player.UserId)
@@ -86,21 +141,46 @@ local function scoresOf(profile: any): { [string]: number }
 	}
 end
 
+local function writeBudgetOk(): boolean
+	local ok, budget = pcall(function()
+		return DataStoreService:GetRequestBudgetForRequestType(Enum.DataStoreRequestType.SetIncrementSortedAsync)
+	end)
+	if not ok or typeof(budget) ~= "number" then
+		return true -- no budget API (tests): the per-player gap still throttles
+	end
+	return budget >= (tonumber(E.WriteBudgetFloor) or 0)
+end
+
 local function writeScores(player: Player)
 	if not live("Leaderboards", player) then
 		return
 	end
-	local profile = deps.DataService and deps.DataService.GetProfile(player)
-	if profile == nil then
+	local uid = player.UserId
+	if isBoardExcluded(uid) then
 		return
 	end
+	local now = os.clock()
+	local last = lastBoardWrite[uid]
+	if last ~= nil and now - last < (tonumber(E.WriteMinGapSeconds) or 60) then
+		return -- v104: throttled (one write per player per WriteMinGapSeconds)
+	end
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil or not persistent(player) then
+		return
+	end
+	lastBoardWrite[uid] = now
 	local s = scoresOf(profile)
+	local prev = lastBoardScores[uid] or {}
+	lastBoardScores[uid] = prev
 	for _, b in ipairs(E.Boards) do
 		local v = s[b.Id]
-		if v then
-			pcall(function()
+		if v and prev[b.Id] ~= v and writeBudgetOk() then
+			local okW = pcall(function()
 				DataStoreService:GetOrderedDataStore(b.Store):SetAsync(tostring(player.UserId), v)
 			end)
+			if okW then
+				prev[b.Id] = v
+			end
 		end
 	end
 end
@@ -128,13 +208,13 @@ local function readBoards()
 	end
 	for _, b in ipairs(E.Boards) do
 		local ok, pages = pcall(function()
-			return DataStoreService:GetOrderedDataStore(b.Store):GetSortedAsync(false, E.TopN)
+			return DataStoreService:GetOrderedDataStore(b.Store):GetSortedAsync(false, math.min(100, E.TopN + 5))
 		end)
 		if ok and pages then
 			local rows = {}
 			for _, entry in ipairs(pages:GetCurrentPage()) do
 				local uid = tonumber(entry.key)
-				if uid then
+				if uid and not isBoardExcluded(uid) and #rows < E.TopN then -- v104: admin / playtest scores never shown
 					table.insert(rows, { N = nameOf(uid), V = entry.value })
 				end
 			end
@@ -166,7 +246,7 @@ local function claimQueuedInvites(player: Player, profile: any)
 end
 
 function EngagementService._PayInviter(inviter: Player, profile: any, count: number)
-	local today = tonumber(os.date("!%Y%m%d")) or 0
+	local today = utcDay()
 	if tonumber(profile.InviteDay) ~= today then
 		profile.InviteDay = today
 		profile.InviteCount = 0
@@ -189,12 +269,29 @@ local function onReferral(player: Player, profile: any)
 	if ref == nil or ref <= 0 or ref == player.UserId or profile.ReferredBy ~= nil then
 		return
 	end
+	ref = math.floor(ref)
 	if not EngagementConfig.LiveFor("Invite", ref) then
+		return
+	end
+	-- v104: a saved profile only (a session-only default would pay the inviter again on every failed load)
+	if not persistent(player) then
+		return
+	end
+	-- v104: a brand-new account only (an old account joining through a link is not a new friend)
+	local first = tonumber(profile.FirstJoinUnix) or 0
+	if first <= 0 or os.time() - first > (tonumber(E.InviteNewPlayerSeconds) or 900) then
+		return
+	end
+	-- v104: the inviter must really be this account's Roblox friend (a failed / errored check pays nothing)
+	local okF, isFriend = pcall(function()
+		return player:IsFriendsWithAsync(ref)
+	end)
+	if not okF or isFriend ~= true or player.Parent == nil or profile.ReferredBy ~= nil then
 		return
 	end
 	profile.ReferredBy = ref -- once per account, ever
 	pay(player, E.WelcomeCash, "invite_welcome")
-	deps.DataService.MarkDirty(player)
+	saveNow(player) -- v104: ReferredBy is on disk before the inviter is paid
 	notify(player, string.format("Welcome! Your friend's invite: +$%d", E.WelcomeCash), "Reward")
 	local inviter = Players:GetPlayerByUserId(ref)
 	local iprof = inviter and deps.DataService.GetProfile(inviter)
@@ -217,8 +314,18 @@ local function onComeback(player: Player, profile: any)
 	if prev == nil or prev <= 0 or os.time() - prev < E.ComebackDays * 86400 then
 		return
 	end
+	-- v104: once per absence (the previous join it paid for is kept) and only on a profile that will be saved
+	if not persistent(player) or tonumber(profile.ComebackPaidFor) == prev then
+		return
+	end
+	local lastPaid = tonumber(profile.ComebackPaidAt) or 0
+	if lastPaid > 0 and os.time() - lastPaid < E.ComebackDays * 86400 then
+		return
+	end
+	profile.ComebackPaidFor = prev
+	profile.ComebackPaidAt = os.time()
 	pay(player, E.ComebackCash, "comeback")
-	deps.DataService.MarkDirty(player)
+	saveNow(player)
 	notify(player, string.format("Welcome back, Commander! +$%d", E.ComebackCash), "Reward")
 end
 
@@ -255,7 +362,7 @@ function EngagementService.Init(d: { [string]: any })
 			end
 			onComeback(player, profile)
 			onReferral(player, profile)
-			if live("Invite", player) then
+			if live("Invite", player) and persistent(player) then
 				claimQueuedInvites(player, profile)
 			end
 			if live("Events", player) or live("Leaderboards", player) then
@@ -288,8 +395,21 @@ function EngagementService.Init(d: { [string]: any })
 							end
 						end
 						n = math.min(n, E.FriendsCap)
-						if n > 0 then
-							pay(p, E.FriendsCashPerTick * n, "friends_bonus")
+						local prof = if n > 0 and deps.DataService then deps.DataService.GetProfile(p) else nil
+						if prof then
+							-- v104: at most FriendsDailyCap a day (UTC), counted in the saved profile
+							local today = utcDay()
+							if tonumber(prof.FriendsDay) ~= today then
+								prof.FriendsDay = today
+								prof.FriendsPaid = 0
+							end
+							local room = math.max(0, (tonumber(E.FriendsDailyCap) or 0) - (tonumber(prof.FriendsPaid) or 0))
+							local amount = math.min(room, E.FriendsCashPerTick * n)
+							if amount > 0 then
+								prof.FriendsPaid = (tonumber(prof.FriendsPaid) or 0) + amount
+								pay(p, amount, "friends_bonus")
+								deps.DataService.MarkDirty(p)
+							end
 						end
 					end
 				end

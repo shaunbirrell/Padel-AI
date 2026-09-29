@@ -8,8 +8,9 @@ _q3_es = "src/ServerScriptService/Server/Services/EngagementService.luau"
 # ── JOB 13 bring players back ──
 _q3_e = read(_q3_ec) or ""
 _q3_ro = re.search(r"\tRollout = \{(.*?)\n\t\}", _q3_e, re.S)
-(ok if _q3_ro and set(re.findall(r'(\w+) = "owner"', _q3_ro.group(1))) == {"Events", "Leaderboards", "Invite", "Friends", "Comeback"} else bad)(
-    "CLAUDE-BUD J13: events / leaderboards / invite / friends / comeback ship owner-only")
+# v104 (Code Bot): moved pin (owner-only -> "all", owner 2026-09-29); the all-players pin is in tools/checks/codebot_v104.py
+(ok if _q3_ro and set(re.findall(r'(\w+) = "(?:owner|all)"', _q3_ro.group(1))) == {"Events", "Leaderboards", "Invite", "Friends", "Comeback"} else bad)(
+    "CLAUDE-BUD J13: events / leaderboards / invite / friends / comeback each have a Rollout (owner-only in v103, all in v104)")
 (ok if len(re.findall(r'\{ Id = "\w+", Name = "[A-Z ]+", Window = "(?:Weekend|Week)"', _q3_e)) >= 3 else bad)("CLAUDE-BUD J13: a weekly event rotation from a data table (3+ events)")
 must_contain(_q3_ec, "function EngagementConfig.EventAt(now: number): (any?, number, any?)", "CLAUDE-BUD J13: the schedule is one pure function (server + client banner)")
 must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "mult *= (ES :: any).CashMult(player)", "CLAUDE-BUD J13: Double Cash events apply in the cash stack")
@@ -18,7 +19,8 @@ must_contain("src/ServerScriptService/Server/Modules/PlazaBounty.luau", 'econ.Ad
 for _b in ("WE_LB_Cash_v1", "WE_LB_Plaza_v1", "WE_LB_Rebirths_v1"):
     must_contain(_q3_ec, _b, f"CLAUDE-BUD J13: leaderboard store {_b}")
 must_contain(_q3_es, "DataStoreService:GetOrderedDataStore(b.Store):SetAsync(tostring(player.UserId), v)", "CLAUDE-BUD J13: scores written to OrderedDataStores (pcall)")
-must_contain(_q3_es, "DataStoreService:GetOrderedDataStore(b.Store):GetSortedAsync(false, E.TopN)", "CLAUDE-BUD J13: top N read (pcall)")
+# v104 (Code Bot): moved pin (reads TopN + 5 so admin rows can be dropped; the new pin is in tools/checks/codebot_v104.py)
+must_contain(_q3_es, "DataStoreService:GetOrderedDataStore(b.Store):GetSortedAsync(false, math.min(100, E.TopN + 5))", "CLAUDE-BUD J13: top N read (pcall)")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "st.PlazaCaptures = (tonumber(st.PlazaCaptures) or 0) + 1", "CLAUDE-BUD J13: plaza captures counted for the board")
 must_contain(_q3_es, "if ref == nil or ref <= 0 or ref == player.UserId or profile.ReferredBy ~= nil then", "CLAUDE-BUD J13: an invite pays once per invited account (never self)")
 must_contain(_q3_es, "local room = math.max(0, E.InviteDailyCap - (tonumber(profile.InviteCount) or 0))", "CLAUDE-BUD J13: inviter rewards capped per day")

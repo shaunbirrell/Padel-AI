@@ -197,6 +197,11 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	profile.ReferredBy = if typeof(profile.ReferredBy) == "number" and profile.ReferredBy > 0 then math.floor(profile.ReferredBy) else nil
 	profile.InviteDay = nonNegInt(profile.InviteDay)
 	profile.InviteCount = nonNegInt(profile.InviteCount)
+	-- v104 (Code Bot): friends-bonus daily cap + comeback once-per-absence bookkeeping
+	profile.FriendsDay = nonNegInt(profile.FriendsDay)
+	profile.FriendsPaid = nonNegInt(profile.FriendsPaid)
+	profile.ComebackPaidFor = nonNegInt(profile.ComebackPaidFor)
+	profile.ComebackPaidAt = nonNegInt(profile.ComebackPaidAt)
 	if profile.GroupRewardClaimed ~= true then
 		profile.GroupRewardClaimed = nil -- claude-bud JOB 5e: true once the group reward was paid
 	end

@@ -7,11 +7,14 @@
 	Text box + REDEEM → Remotes RedeemCode (RemoteFunction, CodesService validates + rate-limits) → the result line
 	(Success / AlreadyUsed / Invalid / Expired / RateLimited). Shows the running 2x Cash boost from the player
 	attribute WE_CashBoostUntil. The Discord line comes from SocialConfig.DiscordText (no link in-game).
+	v104: under it SocialConfig.DiscordInviteText as plain text (a TextLabel, never clickable), only when
+	PolicyService AllowedExternalLinkReferences lists "Discord" for this player (a failed check shows nothing).
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local PolicyService = game:GetService("PolicyService")
 
 -- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
 local CodesController = {}
@@ -208,7 +211,7 @@ function CodesController.Init()
 	local headerH = TAP + 8
 	local textH = PanelShell.Text(16) + 10
 	local resultH = PanelShell.Text(16) * 2 + 12 -- two lines of result text
-	local panelH = headerH + TAP + GAP + TAP + GAP + resultH + textH + textH + 20
+	local panelH = headerH + TAP + GAP + TAP + GAP + resultH + textH + textH + textH + 20 -- v104: + the Discord invite text row
 
 	local panel = Instance.new("Frame")
 	panel.Name = "Panel"
@@ -291,6 +294,32 @@ function CodesController.Init()
 	y += textH
 
 	label("Discord", SocialConfig.DiscordText, 16, Constants.Colors.GoldBright, y, textH, panel)
+	y += textH
+
+	-- v104: the Discord invite as plain text (TextLabel only), for players Roblox allows Discord references for
+	local inviteLabel = label("DiscordInvite", "", 16, Constants.Colors.GoldBright, y, textH, panel)
+	inviteLabel.Visible = false
+	task.spawn(function()
+		local inviteText = (SocialConfig :: any).DiscordInviteText
+		if typeof(inviteText) ~= "string" or inviteText == "" then
+			return
+		end
+		local okP, info = pcall(function()
+			return PolicyService:GetPolicyInfoForPlayerAsync(player)
+		end)
+		local allowed = false
+		if okP and typeof(info) == "table" and typeof((info :: any).AllowedExternalLinkReferences) == "table" then
+			for _, ref in ipairs((info :: any).AllowedExternalLinkReferences) do
+				if ref == "Discord" then
+					allowed = true
+				end
+			end
+		end
+		if allowed then
+			inviteLabel.Text = inviteText
+			inviteLabel.Visible = true
+		end
+	end)
 
 	shell = PanelShell.Attach({
 		Id = PANEL_ID,

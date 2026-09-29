@@ -78,10 +78,10 @@ must_contain(_cb102_CTL, "PanelShell.Attach({", "CODEBOT v102: Codes panel uses 
 must_contain(_cb102_CTL, "box.TextSize = PanelShell.Text(22)", "CODEBOT v102: phone-size text box")
 must_not_contain(_cb102_CTL, "Remotes.GetEvent(", "CODEBOT v102: CodesController never blocks on Remotes.GetEvent")
 must_contain(_cb102_SH + "Configs/SocialConfig.luau", '\tDiscordText = "Join Bud Studios Discord for free codes!",', "CODEBOT v102: SocialConfig.DiscordText")
-must_contain(_cb102_SH + "Configs/SocialConfig.luau", '\tDiscordInvite = "",', "CODEBOT v102: Discord invite left as an empty placeholder")
-for _f in (_cb102_CTL, _cb102_SH + "Configs/SocialConfig.luau"):
-    _t = read(_f) or ""
-    (bad if _cb102_re.search(r"https?://|discord\.gg|discord\.com/invite", _t) else ok)("CODEBOT v102: no URL in-game (%s)" % _f.rsplit("/", 1)[-1])
+# v104 (Code Bot): retired, superseded in tools/checks/codebot_v104.py: #must_contain(_cb102_SH + "Configs/SocialConfig.luau", '\tDiscordInvite = "",', "CODEBOT v102: Discord invite left as an empty placeholder")
+# v104 (Code Bot): retired, superseded in tools/checks/codebot_v104.py: #for _f in (_cb102_CTL, _cb102_SH + "Configs/SocialConfig.luau"):
+# v104 (Code Bot): retired, superseded in tools/checks/codebot_v104.py: #    _t = read(_f) or ""
+# v104 (Code Bot): retired, superseded in tools/checks/codebot_v104.py: #    (bad if _cb102_re.search(r"https?://|discord\.gg|discord\.com/invite", _t) else ok)("CODEBOT v102: no URL in-game (%s)" % _f.rsplit("/", 1)[-1])
 must_contain(_cb102_CL + "Controllers/SettingsController.luau", 'button("Redeem", "ENTER A CODE"', "CODEBOT v102: Settings REDEEM CODE opens the Codes panel")
 
 # ── standing rules ──
