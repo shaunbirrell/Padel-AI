@@ -10,6 +10,29 @@ Jobs: [x] 12 launch readiness · [x] 13 bring players back · [ ] 14 game-feel p
 
 <!-- Q2-END -->
 
+# v104 — 2026-09-29 ~14:50 Dublin (Code Bot, branch phase-7-polish, WE_Build 104) — JOB 13 ENGAGEMENT LIVE FOR ALL
+
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v104, commit 865a1e3) before JOB 14/15.** JOB 13 is now live for
+every player (`EngagementConfig.Rollout` = "all" for Events / Leaderboards / Invite / Friends / Comeback). Do not redo JOB 13,
+do not flip any of it back to "owner", and keep the v104 guards below (JOB 15 anti-exploit sweep should build on them).
+
+- **Invite:** pays only when the joiner is a real Roblox friend of the inviter (`IsFriendsWithAsync`; an error pays nothing),
+  a brand-new account here (`InviteNewPlayerSeconds` = 15 min since FirstJoinUnix), on a saved profile (`DataService.IsLoaded`);
+  `ReferredBy` is saved right away; inviter still capped 5/day (in-server and queued).
+- **Friends bonus:** max 3 friends per tick and **$30,000/day** (`FriendsDailyCap`; profile.FriendsDay / FriendsPaid, saved).
+- **Leaderboards:** one write per player per 60 s (kept across leave/rejoin), unchanged scores skipped, sorted-store budget
+  respected; admin / playtest accounts (50M cash floor) are never written and filtered out of the top 10.
+- **Comeback:** once per absence (`profile.ComebackPaidFor`), saved profile only, saved right away.
+- Engagement reward reasons (`invite_welcome`, `invite_reward`, `friends_bonus`, `comeback`) are multiplier-exempt, so the caps are exact.
+- **Discord:** `SocialConfig.DiscordInvite = "https://discord.gg/tkjA2DFBmZ"`. The Codes panel shows `DiscordInviteText`
+  ("Discord: discord.gg/tkjA2DFBmZ") as plain TextLabel text under the Discord line, only when PolicyService
+  `AllowedExternalLinkReferences` lists Discord. Never make it clickable; the clickable link belongs in Creator Hub → Social Links.
+- Pins: `tools/checks/codebot_v104.py` + `tools/engagement_gate_test.py` (runs the real EngagementService in the Luau CLI,
+  52 checks). v103 owner-only pins moved (claude_bud_q3 / codebot_v101 / codebot_v102 / codebot_v103).
+  BuyPathStatic PASS=5591 FAIL=0 (with LUAU set), rojo build ok. PreferMesh OFF. WE_Building* untouched.
+- **Published:** Open Cloud place version **102** (commit 865a1e3).
+- **Publish note for Shaun:** "Migrate to Latest Update" (or shut down old servers) so v104 appears.
+
 # v103 — 2026-09-29 ~14:35 Dublin (Code Bot, branch phase-7-polish, WE_Build 103) — JOB 13 ENGAGEMENT (owner-only)
 
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v103) before JOB 14/15.** Code Bot cherry-picked JOB 13 (`36779ce`)
