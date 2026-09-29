@@ -1,4 +1,14 @@
 <!-- Q2-START -->
+## v119 (Code Bot Roblox, 2026-09-29): JOB 24c+25 building tips + outpost defenders + town cull + base signs LIVE — place version TBD
+- Merged Claude `bf3ff7b` (JOB 25: BaseSignService "<Name>'s Empire" signs + NationFlag plate) on top of `84b1667` (JOB 24c: BuildingTips / BuildingTipController / BuildingTutorialConfig + Settings TIPS; OutpostDefenders + OutpostDefenderConfig capturable outposts + 5 named enemy areas; QualityGovernor NeverHideKinds / LookAheadSeconds / hysteresis). Fast-forward from v118 tip `c73f18c` (Claude branch already on v118).
+- WE_Build 119 in BaseService / DataService / EarlyRemotes (+ DataService log). PreferMesh OFF; WE_Building* untouched. NationFlagIds all still 0 — owner must upload 7 atlas PNGs (do not invent ids).
+- Pins: `tools/checks/claude_bud_job24b.py` + `tools/checks/claude_bud_job25.py` + `tools/checks/codebot_v119.py` (WE_Build 119, BaseSignService/Config, OutpostDefenders/Config, BuildingTipController/TutorialConfig, Quality NeverHideKinds + LookAhead). Retired WE_Build=118 pins in codebot_v118; bumped BuyPathStatic frozen pins.
+- Checks: BuyPathStatic PASS=6346 FAIL=0; rojo build ok.
+- Kill switches: `BaseSignConfig.Enabled = false`; `OutpostDefenderConfig.Enabled = false`; `BuildingTutorialConfig.Enabled = false`; Settings TIPS off.
+- **Phone tests (owner):** (1) join — your sign shows headshot + "<name>'s Empire" with LV · REBIRTH · ARMY; empty plot = UNCLAIMED; (2) another player's base shows theirs; (3) change flag at flagpole — sign plate follows (colour until atlases uploaded); (4) buy a new building — one "NEW: X UNLOCKED" card with OK / SHOW ME; Settings → TIPS off / show tips again; (5) walk to North Ridge — defenders shoot; capture blocked until they are down; (6) drive fastest vehicle through town — no building vanishes; (7) Follow + AttackSteer + army PvP still feel like v118.
+- **OWNER STEP (not Code Bot):** upload 7 PNGs in `assets/flags/` as Images, then `tools/wire-nation-flag-ids.py` with the ids. Leaderboard flags / auto IP country / outpost flags remain owner decisions (not shipped).
+- **NEXT for Claude:** rebase `claude/desktop-bud` onto phase-7-polish (v119). Await phone verdict before further sign/defender/cull work.
+
 ## claude-bud JOB 25 (2026-09-29): "<Name>'s Empire" base signs + real flags status (branch `claude/desktop-bud`)
 - **What already existed (nations spec):**
   - a 200-nation roster (UN + 7), a picker with search, flag art from lipis/flag-icons (MIT) rendered into 7 atlases
