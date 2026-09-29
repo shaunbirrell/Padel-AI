@@ -45,7 +45,7 @@ local MonetizationConfig = {
 		them and feel their effect; "all" = everyone; anything else = off (fail closed). ProcessReceipt still grants any
 		receipt Roblox delivers for these Ids (a paid receipt is never dropped). OFF must equal the old game. ]]
 	Rollout = "owner",
-	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true, BiggerArmy = true, ExtraGarageSlot = true } :: { [string]: boolean },
+	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true, BiggerArmy = true, ExtraGarageSlot = true, SoldierRefill = true, PlazaAirstrike = true } :: { [string]: boolean },
 	GamePasses = {
 		VIP = {
 			Id = 1985475542,
@@ -349,6 +349,27 @@ local MonetizationConfig = {
 		-- PrestigeConfig.KeepBase); a token that cannot be used yet is banked and never expires. Sold only from the
 		-- Rebirth panel (SoldFrom), never from the Shop list. Id = 0 until the owner creates it: the Rebirth panel
 		-- shows SOON and never prompts. Paste the Id only after the double prestige multiplier (B1) is fixed.
+		-- claude-bud JOB 5c: TODO(owner) create "Instant Army Refill" (dev product, 49 R$) and "Plaza Airstrike" (dev
+		-- product, 79 R$), then paste the Ids. Both bank a saved counter in ProcessReceipt (CounterGrants below), spent
+		-- by the server (SoldierService.ConsumeRefills / Server/Modules/PlazaAirstrike). Owner-only first (RolloutKeys).
+		SoldierRefill = {
+			Id = 0,
+			DisplayName = "Instant Army Refill",
+			RobuxPrice = 49,
+			Cash = 0,
+			Gold = 0,
+			GrantSoldierRefills = 1,
+			Description = "Fill your army to its cap right now",
+		},
+		PlazaAirstrike = {
+			Id = 0,
+			DisplayName = "Plaza Airstrike",
+			RobuxPrice = 79,
+			Cash = 0,
+			Gold = 0,
+			GrantAirstrikes = 1,
+			Description = "One airstrike on the Central Plaza (3 s warning, never lethal)",
+		},
 		RebirthKeepBase = {
 			Id = 3714663721,
 			DisplayName = "Keep-Base Rebirth",
@@ -379,6 +400,27 @@ local MonetizationConfig = {
 			Attribute = "WE_KeepBaseRebirths",
 			MaxPerReceipt = 1,
 		},
+		-- claude-bud JOB 5c: army refill tokens (spent at once by SoldierService.ConsumeRefills; on join if a crash came first)
+		GrantSoldierRefills = {
+			Field = "SoldierRefills",
+			Attribute = "WE_SoldierRefills",
+			MaxPerReceipt = 1,
+		},
+		-- claude-bud JOB 5c: plaza airstrike charges (spent by Server/Modules/PlazaAirstrike)
+		GrantAirstrikes = {
+			Field = "AirstrikeCharges",
+			Attribute = "WE_AirstrikeCharges",
+			MaxPerReceipt = 1,
+		},
+	},
+	-- claude-bud JOB 5c: Plaza Airstrike balance (Server/Modules/PlazaAirstrike)
+	PlazaAirstrikeTuning = {
+		UseRangeStuds = 220,
+		WarnSeconds = 3,
+		Damage = 35,
+		MinHealthLeft = 1,
+		ServerCooldownSeconds = 120,
+		PlayerCooldownSeconds = 300,
 	},
 	-- v71 money (M1, D2): one-time thank-you for players who bought the old 249 R$ Starter Bundle: Auto Collect on
 	-- their next join. Entitlements[Flag] marks it done (set even when they already owned Auto Collect).

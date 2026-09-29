@@ -242,6 +242,31 @@ function SoldierService.Dismiss(player: Player, amount: any): (boolean, string?)
 	return true, nil
 end
 
+--[[ claude-bud JOB 5c: spend the saved refill tokens (MonetizationConfig.CounterGrants.GrantSoldierRefills, banked in
+	ProcessReceipt): each one fills the army to its cap. Called after the grant is saved and on join (a crash between
+	the save and this call keeps the token, so a paid refill is never lost). Server only. ]]
+function SoldierService.ConsumeRefills(player: Player)
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	local tokens = math.max(0, math.floor(tonumber((profile :: any).SoldierRefills) or 0))
+	if tokens < 1 then
+		return
+	end
+	local cap = maxSoldiers(profile)
+	;(profile :: any).SoldierRefills = 0
+	profile.Soldiers = math.max(tonumber(profile.Soldiers) or 0, cap)
+	pcall(function()
+		player:SetAttribute("WE_SoldierRefills", 0)
+	end)
+	DataService.MarkDirty(player)
+	pushState(player)
+	if NotificationService then
+		NotificationService.Notify(player, string.format("Army refilled: %d/%d", profile.Soldiers, cap), "Reward")
+	end
+end
+
 function SoldierService.Push(player: Player)
 	pushState(player)
 end

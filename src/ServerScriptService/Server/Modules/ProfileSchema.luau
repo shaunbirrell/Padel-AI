@@ -184,6 +184,8 @@ local TUTORIAL_ORDER_VERSION = currentTutorialOrderVersion()
 --   StarterOutpostTaken   boolean; missing = false (F10 first Home Outpost capture)
 local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShieldDone: any)
 	profile.KeepBaseRebirths = nonNegInt(profile.KeepBaseRebirths)
+	profile.SoldierRefills = nonNegInt(profile.SoldierRefills) -- claude-bud JOB 5c (ProcessReceipt only; SoldierService spends)
+	profile.AirstrikeCharges = nonNegInt(profile.AirstrikeCharges) -- claude-bud JOB 5c (ProcessReceipt only; PlazaAirstrike spends)
 	if rawTutorialOrder == nil then
 		profile.TutorialOrderVersion = 1
 	else

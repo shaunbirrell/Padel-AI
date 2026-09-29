@@ -48,7 +48,7 @@ for _k in ("DoubleCash", "VIP", "AutoCollect"):
     (ok if re.search(r"\n\t\t" + _k + r" = \{\n\t\t\tId = [1-9]\d+,", read(_cbm_mc) or "") else bad)(f"CLAUDE-BUD 5b: {_k} game pass is live")
 must_contain(_cbm_mc, "\t\tBiggerArmy = {\n\t\t\tId = 0,", "CLAUDE-BUD 5b: Bigger Army pass (Id 0 until the owner creates it)")
 must_contain(_cbm_mc, "\t\tExtraGarageSlot = {\n\t\t\tId = 0,\n\t\t\tDisplayName = \"Extra Garage Slot\",\n\t\t\tRobuxPrice = 199,\n\t\t\tHideFromShop = true,", "CLAUDE-BUD 5b: Extra Garage Slot stays hidden until it is built")
-must_contain(_cbm_mc, "BiggerArmy = true, ExtraGarageSlot = true }", "CLAUDE-BUD 5b: new passes owner-only first (RolloutKeys)")
+must_contain(_cbm_mc, "BiggerArmy = true, ExtraGarageSlot = true, SoldierRefill", "CLAUDE-BUD 5b: new passes owner-only first (RolloutKeys)")
 must_contain(_cbm_mc, "\tVIPPerks = {\n\t\tRollout = \"owner\",", "CLAUDE-BUD 5b: VIP perks owner-only first")
 must_contain(_cbm_ss, "\tlocal passBonus = biggerArmyBonus(profile)", "CLAUDE-BUD 5b: Bigger Army adds army capacity")
 must_contain(_cbm_ms, "if MonetizationConfig.SkuLiveFor(player.UserId, \"BiggerArmy\") and ownsCached(player, \"BiggerArmy\") then", "CLAUDE-BUD 5b: Bigger Army mirrored only from real ownership (UserOwnsGamePassAsync cache)")
@@ -58,3 +58,26 @@ must_contain(_cbm_vl, "if hold[uid] >= P.LoungeHoldSeconds and (last == nil or n
 must_not_contain(_cbm_vl, "OnServerEvent", "CLAUDE-BUD 5b: lounge has no client -> server path")
 must_contain(_cbm_fc, "TextChatService.OnIncomingMessage = function(message: TextChatMessage)", "CLAUDE-BUD 5b: VIP chat tag")
 must_contain(_cbm_fc, "door.CanCollide = not vip", "CLAUDE-BUD 5b: VIP door opens on the VIP's own client only")
+
+# ── 5c dev products: 4 cash tiers live already; + Instant Army Refill, Plaza Airstrike (no build timers exist) ──
+_cbm_pa = "src/ServerScriptService/Server/Modules/PlazaAirstrike.luau"
+_cbm_mcs = read(_cbm_mc) or ""
+_cbm_cash = [int(x) for x in re.findall(r"Cash(?:Small|Medium|Large|Mega) = \{ Id = (\d+),", _cbm_mcs)]
+(ok if len(_cbm_cash) == 4 and all(i > 0 for i in _cbm_cash) else bad)(f"CLAUDE-BUD 5c: 4 cash pack tiers live ({len(_cbm_cash)})")
+must_contain(_cbm_mc, "\t\tSoldierRefill = {\n\t\t\tId = 0,", "CLAUDE-BUD 5c: army refill product (Id 0 until created)")
+must_contain(_cbm_mc, "\t\tPlazaAirstrike = {\n\t\t\tId = 0,", "CLAUDE-BUD 5c: plaza airstrike product (Id 0 until created)")
+must_contain(_cbm_mc, "SoldierRefill = true, PlazaAirstrike = true }", "CLAUDE-BUD 5c: owner-only first (RolloutKeys)")
+must_contain(_cbm_mc, "\t\tGrantSoldierRefills = {\n\t\t\tField = \"SoldierRefills\",", "CLAUDE-BUD 5c: refill banked in ProcessReceipt (whitelisted counter, saved before PurchaseGranted)")
+must_contain(_cbm_mc, "\t\tGrantAirstrikes = {\n\t\t\tField = \"AirstrikeCharges\",", "CLAUDE-BUD 5c: airstrike banked in ProcessReceipt")
+must_contain(_cbm_ss, "function SoldierService.ConsumeRefills(player: Player)", "CLAUDE-BUD 5c: refill spent on the server")
+must_contain(_cbm_ms, "pcall(SoldierService.ConsumeRefills, player) -- claude-bud JOB 5c: a refill banked before a crash", "CLAUDE-BUD 5c: a banked refill is spent on join (never lost)")
+must_contain(_cbm_pa, "local dmg = math.min(T.Damage, math.max(0, hum.Health - T.MinHealthLeft))", "CLAUDE-BUD 5c: airstrike never lethal")
+must_contain(_cbm_pa, "if p ~= player then", "CLAUDE-BUD 5c: airstrike never hits its caller")
+must_contain(_cbm_pa, "if now < serverReadyAt then", "CLAUDE-BUD 5c: one airstrike per server per cooldown")
+must_contain(_cbm_pa, "if profile == nil or (tonumber(profile.AirstrikeCharges) or 0) < 1 then", "CLAUDE-BUD 5c: needs a paid charge (server)")
+must_contain(_cbm_pa, "if not MonetizationConfig.SkuLiveFor(player.UserId, \"PlazaAirstrike\") then", "CLAUDE-BUD 5c: airstrike rollout-gated")
+must_contain(_cbm_pa, "deps.RateLimitService.Allow(player, \"plaza_airstrike\", 1, 2)", "CLAUDE-BUD 5c: airstrike remote rate-limited")
+_cbm_t = re.search(r"PlazaAirstrikeTuning = \{(.*?)\n\t\},", _cbm_mcs, re.S)
+_cbm_tv = dict((k, float(v)) for k, v in re.findall(r"(\w+) = ([\d.]+)", _cbm_t.group(1))) if _cbm_t else {}
+(ok if _cbm_tv.get("Damage", 999) <= 50 and _cbm_tv.get("WarnSeconds", 0) >= 2 and _cbm_tv.get("ServerCooldownSeconds", 0) >= 60 and _cbm_tv.get("MinHealthLeft", 0) >= 1 else bad)(
+    f"CLAUDE-BUD 5c: airstrike balanced (<= 50 dmg, >= 2 s warning, >= 60 s server cooldown, non-lethal) {_cbm_tv}")

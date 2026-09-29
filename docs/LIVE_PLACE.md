@@ -75,6 +75,8 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | StarterBundle | Commander Starter Pack | 3713839505 | 149 | Shop + one offer after the tutorial |
 | Nuke | Nuke | 0 | 19 | hidden |
 | NukeBundle3 | Nuke x3 | 0 | 49 | hidden |
+| SoldierRefill | Instant Army Refill | 0 | 49 | Shop / army prompt (owner-only first; TODO create) |
+| PlazaAirstrike | Plaza Airstrike | 0 | 79 | Shop / plaza button (owner-only first; TODO create) |
 | RebirthKeepBase | Keep-Base Rebirth | 3714663721 | 50 | Rebirth panel only (SoldFrom), never the Shop list; owner-only while Rollout = "owner" |
 
 ### New items (owner's 11 features) — created 2026-09-28, Ids wired (claude-bud)

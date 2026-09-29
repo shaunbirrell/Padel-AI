@@ -943,6 +943,25 @@ function MonetizationService.Init(deps: { [string]: any })
 		end
 	end)
 
+	-- claude-bud JOB 5c: a saved army refill is spent right after its receipt is saved; the plaza airstrike remote
+	MonetizationService.OnGranted(function(player: Player, productKey: string)
+		if productKey == "SoldierRefill" and SoldierService and SoldierService.ConsumeRefills then
+			SoldierService.ConsumeRefills(player)
+		end
+	end)
+	do
+		local okA, strike = pcall(function(): any
+			return require(script.Parent.Parent.Modules.PlazaAirstrike)
+		end)
+		if okA and strike then
+			pcall(strike.Start, {
+				DataService = DataService,
+				NotificationService = NotificationService,
+				RateLimitService = RateLimitService,
+				RemoteSetup = RemoteSetup,
+			})
+		end
+	end
 	-- claude-bud JOB 5b: pass perks when a pass is bought in-game; the VIP lounge (VIPPerks.Lounge)
 	MonetizationService.OnPassOwned(function(player: Player, _passKey: string)
 		MonetizationService.ApplyPassPerks(player)
@@ -988,6 +1007,9 @@ function MonetizationService.Init(deps: { [string]: any })
 			-- F8: the character can spawn before the pass cache and the profile are ready; apply the speed now
 			applySpeedBoostToCharacter(player)
 			MonetizationService.ApplyPassPerks(player) -- claude-bud JOB 5b: Bigger Army mirror, VIP tag
+			if SoldierService and SoldierService.ConsumeRefills then
+				pcall(SoldierService.ConsumeRefills, player) -- claude-bud JOB 5c: a refill banked before a crash
+			end
 
 			-- v71 money (M1): display-only counter attributes (e.g. WE_Nukes); never read back by the server
 			local counterSpecs = (MonetizationConfig :: any).CounterGrants

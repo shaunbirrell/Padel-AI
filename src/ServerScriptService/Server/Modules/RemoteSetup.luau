@@ -107,6 +107,7 @@ local EVENTS = {
 	Constants.RemoteNames.OpsState,
 	Constants.RemoteNames.OpsProgress,
 	Constants.RemoteNames.FeaturePush, -- claude-bud JOB 4/5: feature cues, server -> client only
+	Constants.RemoteNames.RequestPlazaAirstrike, -- claude-bud JOB 5c: client -> server, rate-limited (PlazaAirstrike)
 }
 
 -- v71 money (M2): UnreliableRemoteEvents (server → client cosmetic Fx; ordering and delivery not guaranteed)

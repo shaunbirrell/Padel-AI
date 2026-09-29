@@ -8879,3 +8879,21 @@ ds_territories.luau T3):
 - **Extra Garage Slot** (`ExtraGarageSlot`, Id 0, 199 R$): **not built.** VehicleService keeps exactly one active vehicle
   per player, and a second one touches spawn, health, seats and despawn. It stays HideFromShop so nobody can buy a
   perk that does not exist. A dev task is listed in the handoff.
+
+## 2026-09-29 — claude-bud JOB 5c: dev products
+- **Already live:** cash packs in 4 tiers (49 / 149 / 399 / 799 R$ → $10k / 50k / 200k / 2M).
+- **Skip build timer: not applicable.** Upgrades are instant (BaseService.PurchaseUpgrade spends cash; no timers exist).
+  Nothing was added, so nobody can buy a skip for a wait that doesn't exist.
+- **Instant Army Refill** (`SoldierRefill`, Id 0, 49 R$):
+  - The receipt banks `profile.SoldierRefills` through the whitelisted CounterGrants (saved before PurchaseGranted).
+  - The OnGranted listener (after the save) and the join path call `SoldierService.ConsumeRefills`: army = cap, tokens spent.
+  - A crash between the save and the refill keeps the token for the next join.
+- **Plaza Airstrike** (`PlazaAirstrike`, Id 0, 79 R$): the receipt banks `profile.AirstrikeCharges`. It's used from an AIRSTRIKE button
+  that shows only with a charge within 220 studs of the plaza. `RequestPlazaAirstrike` is rate-limited, and the server checks
+  the rollout, the charge, distance, a 120 s server cooldown and a 300 s player cooldown.
+  - Everyone in the zone gets a 3 s warning toast, then everyone else inside the 70-stud capture zone takes 35 damage,
+    never below 1 HP. Spawn-protected and novice players are skipped; there is no kill credit and the capture timer is untouched.
+  - Assumed "balanced" means a strong disruption, never a paid kill.
+- New remote: `RequestPlazaAirstrike` (client → server, no args). ProfileSchema sanitises both counters.
+- The luau-lsp errors listed in CombatService / VisualAssetService / AirBodyRig are pre-existing (26 at HEAD). They only
+  show because the new PlazaAirstrike module requires CombatService.
