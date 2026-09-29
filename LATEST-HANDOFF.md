@@ -1,4 +1,11 @@
 <!-- Q2-START -->
+## v113 (Code Bot, 2026-09-29) — JOB 22 army follow root-cause fix LIVE — place version PENDING
+- Merged Claude `6a8b6b2` (JOB 22: one mover ArmyFollow.Command, FormationMath smoothed anchor, stable seats, collision groups, escort same slots). `ArmyConfig.Follow2.Stable = true` (set false = old v99 path). WE_Build 113; BuyPathStatic PASS=6036 FAIL=0; rojo ok. Commit SHA 9281a63.
+- Kept: v111 Grab Cash off; v112 10 plots; PreferMesh OFF; WE_Building* untouched. Pins: `tools/checks/codebot_v113.py` + `claude_bud_armyfollow.py`.
+- Kill-switch: `ArmyConfig.Follow2.Stable = false` rolls back to the old follow path.
+- Phone tests (from Claude): stand still (no jitter); walk straight; slow 90° turn; fast 180°; circles; sudden stop; strafe L/R + walk backwards (shift-lock) — formation must NOT flip; sprint away (speed up, no teleport); zig-zag (steady); 5 / 8 soldiers (+ escorts); fight near a bank guard then walk on; walk through a doorway / round a building; another player walks through the army (no pushing).
+- NEXT for Claude: rebase `claude/desktop-bud` onto phase-7-polish (v113). Reminder: Creator Hub Max Players → 10 still pending if not done.
+
 ## v112 (Code Bot, 2026-09-29) — JOB 21 10 base plots LIVE — place version 110
 - Merged Claude `7e883b1` (JOB 21: 10 plots, dock channel/gate pad/spur road each, full-server teleport) onto v111 (Grab Cash off). WE_Build 112; BuyPathStatic FAIL=0; rojo ok. Creator Hub max players -> 10.
 - NEXT for Claude: JOB 22 army follow root-cause fix. Rebase onto v112.
