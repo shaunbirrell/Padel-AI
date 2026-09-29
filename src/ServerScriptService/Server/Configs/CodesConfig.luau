@@ -9,6 +9,7 @@
 	  2. Rewards (any mix; leave out what you don't want):
 	       Cash = 50000               Cash, paid exactly (never multiplied by VIP / 2x Cash / rebirth)
 	       Gold = 5                   Gold
+	       XP = 500                   XP (claude-bud JOB 24 §9)
 	       CashBoostMinutes = 30      a timed 2x Cash boost (real minutes from the redeem; redeeming another boost
 	                                  code while one runs adds the minutes on top)
 	  3. Active = true to switch it on, false to switch it off (players then see "This code has expired").
@@ -20,6 +21,7 @@
 export type CodeRewards = {
 	Cash: number?,
 	Gold: number?,
+	XP: number?, -- claude-bud JOB 24 §9
 	CashBoostMinutes: number?,
 }
 
@@ -53,6 +55,19 @@ local CodesConfig = {
 			Expires = nil,
 			DisplayName = "Bud Studios Discord",
 			Rewards = { Cash = 25000 },
+		},
+		-- claude-bud JOB 24 §9: launch codes for the Discord (one per player, server-validated like the rest)
+		WAREMPIRE = {
+			Active = true,
+			Expires = nil, -- e.g. "2026-12-31" to end it
+			DisplayName = "War Empire launch",
+			Rewards = { Cash = 30000, CashBoostMinutes = 15 },
+		},
+		ATTACK = {
+			Active = true,
+			Expires = nil,
+			DisplayName = "Attack!",
+			Rewards = { Cash = 10000, XP = 500 },
 		},
 		-- pre-launch sample codes, retired for launch (flip Active = true to bring one back)
 		WARFOUNDING = {

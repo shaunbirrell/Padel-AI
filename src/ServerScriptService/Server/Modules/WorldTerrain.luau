@@ -666,16 +666,20 @@ function WorldTerrain.Plan(cfg: TerrainCfg?, phase: number?): { Prim }
 	-- keep-outs are asserted here too: a violating primitive is dropped, never filled
 	local kept: { Prim } = {}
 	local dropped = 0
+	local firstDrop: string? = nil
 	for _, p in ipairs(plan) do
 		local v = primViolation(p, c)
 		if v then
 			dropped += 1
-			if dropped <= 5 then
-				warn("[WAR EMPIRE] WorldTerrain: dropped " .. p.Run .. "/" .. p.Tag .. " " .. v)
-			end
+			firstDrop = firstDrop or (p.Run .. "/" .. p.Tag .. " " .. v)
 		else
 			table.insert(kept, p)
 		end
+	end
+	if dropped > 0 then
+		-- claude-bud JOB 24 §4b: intended (the keep-out safety net: corner-fan skirt / corner blocks whose rotated
+		-- bounds graze the ring canal box are dropped, never filled). One info line per plan, not 5 warnings per boot
+		print(string.format("[WAR EMPIRE] WorldTerrain: %d keep-out prims dropped (first: %s)", dropped, tostring(firstDrop)))
 	end
 	if #kept > c.MaxPrims then
 		warn(string.format("[WAR EMPIRE] WorldTerrain: plan has %d prims (cap %d); trimming boulders", #kept, c.MaxPrims))
@@ -715,7 +719,11 @@ function WorldTerrain.Build(plan: { Prim }?, opts: BuildOpts?): (number, number,
 		if c.ClearOnRegen then
 			terrain:Clear()
 		end
-		terrain.Decoration = c.Decoration
+		-- claude-bud JOB 24 §4b (live: "build failed: Decoration is not a valid member of Terrain"): the property is not
+		-- scriptable on live servers, and the throw aborted the WHOLE terrain build. Best effort only.
+		pcall(function()
+			terrain.Decoration = c.Decoration
+		end)
 		for _, mc in ipairs(c.Colors) do
 			terrain:SetMaterialColor(mc.Material, mc.Color)
 		end

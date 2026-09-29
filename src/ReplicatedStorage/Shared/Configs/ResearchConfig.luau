@@ -37,6 +37,8 @@ export type UpgradeDef = {
 	EffectText: string, -- string.format(EffectText, FormatAmount(...)) e.g. "%s weapon damage"
 	Note: string?,
 	Enabled: boolean,
+	RebirthScale: number?, -- claude-bud JOB 20: price x (1 + RebirthScale x rebirths)
+	FlatCosts: boolean?, -- claude-bud JOB 24: every level costs the same (e.g. one tower guard per level)
 }
 
 export type ResearchLock = { Code: string, Text: string } -- Code: "Disabled" | "Maxed" | "NeedStructure" | "NeedLab"
@@ -78,6 +80,11 @@ ResearchConfig.StatIds = {
 	"VehicleArmor",
 	"TurretDamage",
 	"SquadSize",
+	-- claude-bud JOB 24 §4a (live: "disabling GuardArmor / GuardRoster / TowerGuards: unknown Stat"): the JOB 20 guard stats
+	-- (GuardConfig.HealthStat / CountStat, BaseGuards hiredCount)
+	"GuardHP",
+	"GuardCount",
+	"TowerGuards",
 }
 
 ResearchConfig.Tracks = {
@@ -322,6 +329,7 @@ ResearchConfig.Upgrades = {
 		MaxLevel = 4,
 		Costs = { 25000, 25000, 25000, 25000 }, -- = GuardConfig.Tower.BaseCost
 		RebirthScale = 0.5, -- = GuardConfig.Tower.PerRebirth
+		FlatCosts = true, -- (one tower guard per level, the same price each: ResearchService's sanity check allows it)
 		LabLevels = { 0, 0, 0, 0 }, -- no Research Lab needed: the Watchtowers are
 		EffectText = "%s tower guards on your corner towers",
 		Enabled = true,

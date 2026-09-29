@@ -1502,7 +1502,9 @@ end
 --[[ v69 F3 order: (1) sane amount + attacker alive and close to the hit part, (2) a defense on that plot and the
 	attacker is not an ally, (3) a guard part → that guard's humanoid takes the damage, (4) else the gate barrier
 	(still false while breached or down). Called by CombatService for any hit on a GateBarrier-attributed part. ]]
-function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amount: number, _weaponId: string?): boolean
+-- claude-bud JOB 24 §2: `fromPos` = the shooting ARMY unit's position (ApplyUnitDamage): the reach is measured from it
+-- instead of the attacker's character (an army fights at range from its owner); every other rule is the same
+local function applyDamageFrom(attacker: Player, hitPart: BasePart, amount: number, _weaponId: string?, fromPos: Vector3?): boolean
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 or amount == math.huge then
 		return false
 	end
@@ -1525,7 +1527,7 @@ function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amo
 	if airReach ~= nil and airReach > maxDist then
 		maxDist = airReach
 	end
-	if (root.Position - hitPart.Position).Magnitude > maxDist then
+	if ((fromPos or root.Position) - hitPart.Position).Magnitude > maxDist then
 		return false
 	end
 	local plotId = hitPart:GetAttribute("PlotId")
@@ -1584,6 +1586,47 @@ function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amo
 		breachGate(def)
 	end
 	return true
+end
+
+function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amount: number, _weaponId: string?): boolean
+	return applyDamageFrom(attacker, hitPart, amount, _weaponId, nil)
+end
+
+-- claude-bud JOB 24 §2 (ArmyConfig.ArmyCombat): an attacking army unit's hit on a gate guard / tower guard / the gate,
+-- credited to its owner (alive). Same rules as a player's hit; the reach is from the unit.
+function GateDefenseService.ApplyUnitDamage(owner: Player, fromPos: Vector3, hitPart: BasePart, amount: number): boolean
+	if typeof(fromPos) ~= "Vector3" then
+		return false
+	end
+	return applyDamageFrom(owner, hitPart, amount, "Squad", fromPos)
+end
+
+-- claude-bud JOB 24 §2: the living gate guards and tower guards of every base that is NOT this player's or an ally's,
+-- within `radius` (flat) of `centre`: `out` refilled with { Hum, Root, Kind = "Guard" }. Returns the count.
+function GateDefenseService.HostileGuards(player: Player, centre: Vector3, radius: number, out: { any }): number
+	table.clear(out)
+	local function near(r: BasePart): boolean
+		local dx, dz = r.Position.X - centre.X, r.Position.Z - centre.Z
+		return dx * dx + dz * dz <= radius * radius
+	end
+	for _, def in pairs(defenses) do
+		if def.OwnerUserId ~= player.UserId and not GateDefenseService.IsAlly(def.OwnerUserId, player) then
+			for _, g in ipairs(def.Guards) do
+				if g.Alive and g.Humanoid.Health > 0 and g.Root.Parent ~= nil and near(g.Root) then
+					table.insert(out, { Hum = g.Humanoid, Root = g.Root, Kind = "Guard" })
+				end
+			end
+			local bg = (GateDefenseService :: any)._BG
+			if bg and bg.Live() and bg.TowerUnits then
+				for _, g in ipairs(bg.TowerUnits(def.PlotId)) do
+					if g.Alive and g.Humanoid.Health > 0 and g.Root.Parent ~= nil and near(g.Root) then
+						table.insert(out, { Hum = g.Humanoid, Root = g.Root, Kind = "Guard" })
+					end
+				end
+			end
+		end
+	end
+	return #out
 end
 
 function GateDefenseService.TryRepair(player: Player, plotId: number): boolean

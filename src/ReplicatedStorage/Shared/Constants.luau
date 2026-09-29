@@ -83,6 +83,7 @@ Constants.RemoteNames = {
 	RequestDeclareClanWar = "RequestDeclareClanWar",
 	ClanWarStateUpdate = "ClanWarStateUpdate",
 	RequestRedeemCode = "RequestRedeemCode",
+	RequestAnalyticsEvent = "RequestAnalyticsEvent", -- claude-bud JOB 24 §10: a whitelisted UI event (AnalyticsService)
 	CodeStateUpdate = "CodeStateUpdate",
 	-- Code Bot v102: RemoteFunction. Client -> server (code: string) -> { Result = "Success" | "AlreadyUsed" | "Invalid"
 	-- | "Expired" | "RateLimited" | "NotReady", Message: string }. Server validates + rate-limits (CodesService).

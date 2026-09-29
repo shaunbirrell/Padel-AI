@@ -398,6 +398,12 @@ function DataService.RemovePersistedProfile(userId: number): (boolean, string?)
 	return true, nil
 end
 
+-- claude-bud JOB 24 §4d (live: "DataStore request was added to queue" on player_470626172): a key written twice within
+-- ~6 s queues. Purchase saves (ProcessReceipt) and the leave save always write; the autosave skips a player whose
+-- profile was written within AutosaveSkipRecentSeconds (it is saved next cycle).
+local lastWriteAt: { [number]: number } = {}
+local AUTOSAVE_SKIP_RECENT = 10
+
 local function writeProfile(userId: number, profile: PlayerProfile, releaseLock: boolean?): boolean
 	local ds = getDataStore()
 	if not ds then
@@ -407,6 +413,7 @@ local function writeProfile(userId: number, profile: PlayerProfile, releaseLock:
 		return true -- nothing to persist (Studio without API access)
 	end
 	local snapshot = ProfileSchema.DeepCopy(profile)
+	lastWriteAt[userId] = os.clock() -- claude-bud JOB 24 §4d
 	local ok, err = retryAsync("SetAsync", function()
 		ds:SetAsync(keyFor(userId), snapshot)
 	end)
@@ -492,7 +499,8 @@ function DataService.Init()
 		while true do
 			task.wait(Constants.AutosaveIntervalSeconds)
 			for _, player in ipairs(Players:GetPlayers()) do
-				if dirty[player.UserId] and profiles[player.UserId] then
+				local recent = os.clock() - (lastWriteAt[player.UserId] or -math.huge) < AUTOSAVE_SKIP_RECENT
+				if dirty[player.UserId] and profiles[player.UserId] and not recent then
 					DataService.SaveProfile(player, false)
 				end
 			end

@@ -430,6 +430,12 @@ end
 
 -- source: the purchase source of this open (F2: "hud_plus" from the cash "+"); a fresh open without one is "shop"
 local function setOpen(open: boolean, source: string?)
+	if open and not menuOpen then
+		-- claude-bud JOB 24 §10: "shop opened" (a whitelisted analytics event; the server rate-limits it)
+		pcall(function()
+			Remotes.FireServer(Constants.RemoteNames.RequestAnalyticsEvent, "ShopOpened")
+		end)
+	end
 	if open then
 		openSource = source or (if menuOpen then openSource else "shop")
 	end

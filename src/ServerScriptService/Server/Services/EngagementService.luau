@@ -265,24 +265,72 @@ local function setCrown(p: Player, label: string?)
 		end
 		return
 	end
-	if head == nil or old ~= nil then
+	if head == nil then
 		return
+	end
+	-- claude-bud JOB 24 §11: what the crown is for, under it ("#1 MOST KILLS this week"); rebuilt when the board changes
+	local sub = "#1 " .. string.upper(label) .. " this week"
+	if old ~= nil then
+		local l = old:FindFirstChild("WE_CrownLabel")
+		if l and l:IsA("TextLabel") and l.Text == sub then
+			return
+		end
+		old:Destroy()
 	end
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_Crown"
-	bb.Size = UDim2.fromScale(2.4, 2.4)
-	bb.StudsOffset = Vector3.new(0, 2.6, 0)
+	bb.Size = UDim2.fromScale(5, 3.4)
+	bb.StudsOffset = Vector3.new(0, 3, 0)
 	bb.MaxDistance = LB.CrownMaxDistance
 	bb.LightInfluence = 0
 	local t = Instance.new("TextLabel")
-	t.Size = UDim2.fromScale(1, 1)
+	t.Size = UDim2.fromScale(1, 0.68)
 	t.BackgroundTransparency = 1
 	t.TextScaled = true
 	t.Font = Enum.Font.GothamBlack
 	t.TextColor3 = Color3.fromRGB(255, 205, 60)
 	t.Text = "👑"
 	t.Parent = bb
+	local l = Instance.new("TextLabel")
+	l.Name = "WE_CrownLabel"
+	l.Position = UDim2.fromScale(0, 0.7)
+	l.Size = UDim2.fromScale(1, 0.3)
+	l.BackgroundColor3 = Color3.fromRGB(20, 22, 18)
+	l.BackgroundTransparency = 0.25
+	l.TextScaled = true
+	l.Font = Enum.Font.GothamBold
+	l.TextColor3 = Color3.fromRGB(255, 215, 110)
+	l.Text = sub
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0.3, 0)
+	c.Parent = l
+	l.Parent = bb
 	bb.Parent = head
+end
+
+-- claude-bud JOB 24 §11: a one-time note to the player who takes a weekly #1 (once per board per week, saved in his
+-- profile so another server does not repeat it). Owner / admin are never on the boards, so never crowned.
+local function crownNote(p: Player, label: string, unix: number)
+	local profile = deps.DataService and deps.DataService.GetProfile(p)
+	if profile == nil then
+		return
+	end
+	local week = os.date("!%Y-%W", unix)
+	local key = week .. ":" .. label
+	local seen = (profile :: any).CrownNotes
+	if typeof(seen) ~= "table" or seen.Week ~= week then
+		seen = { Week = week }
+		;(profile :: any).CrownNotes = seen
+	end
+	if seen[key] then
+		return
+	end
+	seen[key] = true
+	pcall(deps.DataService.MarkDirty, p)
+	local ns = deps.NotificationService
+	if ns and ns.Notify then
+		pcall(ns.Notify, p, "You're #1 on " .. label .. " this week! Keep it to keep your crown.", "Reward")
+	end
 end
 
 -- ONE server-wide fetch per board, published for every client; ranks for the players in this server
@@ -353,6 +401,9 @@ local function readBoards()
 	crowned = leaders
 	for _, p in ipairs(Players:GetPlayers()) do
 		pcall(setCrown, p, crowned[p.UserId])
+		if crowned[p.UserId] then
+			pcall(crownNote, p, crowned[p.UserId], unix)
+		end
 	end
 end
 

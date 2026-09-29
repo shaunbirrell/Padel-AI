@@ -344,6 +344,26 @@ function EconomyService.Push(player: Player)
 	end
 end
 
+-- claude-bud JOB 24 §10: Cash sources / sinks to the analytics sink (summed and flushed there; never yields, never throws)
+local analyticsMod: any = nil
+local function analytics(): any
+	if analyticsMod == nil then
+		local ok, m = pcall(function()
+			return require(script.Parent.AnalyticsService) :: any
+		end)
+		analyticsMod = if ok then m else false
+	end
+	return if analyticsMod then analyticsMod else nil
+end
+local function analyticsEconomy(player: Player, flow: string, amount: number, balance: number, reason: string?)
+	pcall(function()
+		local a = analytics()
+		if a and a.Economy then
+			a.Economy(player, flow, amount, balance, reason)
+		end
+	end)
+end
+
 function EconomyService.AddCash(player: Player, amount: number, reason: string?): boolean
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
 		return false
@@ -357,6 +377,7 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	local granted = applyCashMult(player, profile, amount, reason)
 	profile.Cash = math.clamp(profile.Cash + granted, EconomyConfig.MinCash, EconomyConfig.MaxCash)
 	profile.Stats.TotalCashEarned += granted
+	analyticsEconomy(player, "Source", granted, profile.Cash, reason) -- claude-bud JOB 24 §10
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	noteSteadyIncome(player, reason, granted) -- v72 WE_IncomePerSec (display only; no-op while the guide is off)
@@ -404,6 +425,13 @@ function EconomyService.CollectPendingCash(player: Player): number
 	-- Pending already had mult applied at accrue; grant with exempt reason
 	profile.Cash = math.clamp(profile.Cash + pending, EconomyConfig.MinCash, EconomyConfig.MaxCash)
 	profile.Stats.TotalCashEarned += pending
+	analyticsEconomy(player, "Source", pending, profile.Cash, "collect") -- claude-bud JOB 24 §10
+	pcall(function()
+		local a = analytics()
+		if a and a.Log then
+			a.Log("CASH_COLLECT", player.UserId, { amount = pending })
+		end
+	end)
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	if MissionService and MissionService.TrackProgress then
@@ -479,6 +507,7 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 			return false, "InsufficientCash"
 		end
 		profile.Cash = have - amount
+		analyticsEconomy(player, "Sink", amount, profile.Cash, _reason) -- claude-bud JOB 24 §10
 		pcall(function()
 			getDataService().MarkDirty(player)
 		end)

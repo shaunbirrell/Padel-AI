@@ -32,6 +32,7 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AnalyticsService: any = nil
+local XPService: any = nil
 
 export type RedeemResult = {
 	Result: string,
@@ -187,6 +188,10 @@ local function rewardText(r: any): string
 	if gold > 0 then
 		table.insert(parts, string.format("%d Gold", gold))
 	end
+	local xp = math.floor(tonumber(r.XP) or 0)
+	if xp > 0 then
+		table.insert(parts, string.format("%s XP", commas(xp)))
+	end
 	local mins = math.floor(tonumber(r.CashBoostMinutes) or 0)
 	if mins > 0 then
 		table.insert(parts, string.format("%d min %gx Cash", mins, CodesConfig.CashBoostMult))
@@ -243,6 +248,10 @@ function CodesService.Redeem(player: Player, rawCode: any): RedeemResult
 	if mins > 0 then
 		CodesService.GrantCashBoost(player, mins, CodesConfig.CashBoostMult)
 	end
+	local xp = math.floor(tonumber(r.XP) or 0) -- claude-bud JOB 24 §9
+	if xp > 0 and XPService and XPService.AddXP then
+		pcall(XPService.AddXP, player, xp, "code")
+	end
 
 	-- persist now (once per code per player, so this is a handful of saves per player, ever)
 	task.spawn(function()
@@ -276,6 +285,7 @@ function CodesService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	RemoteSetup = deps.RemoteSetup
 	AnalyticsService = deps.AnalyticsService
+	XPService = deps.XPService -- claude-bud JOB 24 §9 (code XP rewards)
 
 	local perMin = math.max(1, CodesConfig.TriesPerMinute)
 	local fn = RemoteSetup.Get(Constants.RemoteNames.RedeemCode) :: RemoteFunction

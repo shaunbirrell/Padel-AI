@@ -587,6 +587,21 @@ function BaseGuards.ThinkTowers(def: any, tnow: number, H: any)
 	end
 end
 
+-- claude-bud JOB 24 §2: the living tower guards of a plot (the attacking army's target scan)
+function BaseGuards.TowerUnits(plotId: number): { any }
+	local out = {}
+	local st = towerState[plotId]
+	if st then
+		for _, slot in pairs(st.Slots) do
+			local g = slot.Unit
+			if g and g.Alive then
+				table.insert(out, g)
+			end
+		end
+	end
+	return out
+end
+
 -- a player's hit on a tower guard part (GateDefenseService.ApplyDamage): true when it landed
 function BaseGuards.DamageTower(def: any, hitPart: BasePart, amount: number, attacker: Player): boolean
 	local st = towerState[def.PlotId]
