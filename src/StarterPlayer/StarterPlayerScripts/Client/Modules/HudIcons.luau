@@ -14,7 +14,7 @@
 	masks (gear hole, ring centres, clipboard rows, cart slots) are painted with it (default HudConfig PillBg).
 	"Cash" has its own fixed greens and a 42:32 box (HudConfig.CashPill.IconSize).
 
-	Kinds: Cart Cycle Helmet Car Clipboard Gear Cash Shield Crosshair Arrow Plus Up Down Close Chevron Dot Flag
+	Kinds: Cart Cycle Helmet Car Clipboard Gear Cash Shield Crosshair Arrow Plus Up Down Close Chevron Dot Flag Gift
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -200,6 +200,16 @@ SHAPES.Dot = { box(0.2, 0.2, 0.6, 0.6, "Ink", 0.5) }
 SHAPES.Flag = {
 	box(0.2, 0.08, 0.1, 0.84, "Ink", 0.5), -- pole
 	box(0.3, 0.12, 0.52, 0.38, "Ink", 0.12), -- cloth
+}
+
+-- Code Bot v102: the Codes rail tile — a gift box (lid, box, ribbon, two bow loops)
+SHAPES.Gift = {
+	box(0.14, 0.44, 0.72, 0.48, "Ink", 0.12), -- box
+	box(0.08, 0.3, 0.84, 0.16, "Ink", 0.25), -- lid
+	box(0.08, 0.455, 0.84, 0.035, "Fill"), -- lid seam
+	box(0.445, 0.3, 0.11, 0.62, "Fill"), -- ribbon
+	{ x = 0.37, y = 0.2, w = 0.2, h = 0.13, role = "Ink", r = 0.5, rot = 30 }, -- bow loops
+	{ x = 0.63, y = 0.2, w = 0.2, h = 0.13, role = "Ink", r = 0.5, rot = -30 },
 }
 
 local KINDS: { string } = {}

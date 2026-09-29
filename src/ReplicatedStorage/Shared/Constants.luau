@@ -84,6 +84,9 @@ Constants.RemoteNames = {
 	ClanWarStateUpdate = "ClanWarStateUpdate",
 	RequestRedeemCode = "RequestRedeemCode",
 	CodeStateUpdate = "CodeStateUpdate",
+	-- Code Bot v102: RemoteFunction. Client -> server (code: string) -> { Result = "Success" | "AlreadyUsed" | "Invalid"
+	-- | "Expired" | "RateLimited" | "NotReady", Message: string }. Server validates + rate-limits (CodesService).
+	RedeemCode = "RedeemCode",
 	NationColorUpdate = "NationColorUpdate",
 	-- Nations (cosmetic country flag): client -> server Types.NationRequestPayload { Action = "pick" | "later", Id?,
 	-- Source }. Replies go to that player only on NationColorUpdate. The server validates everything (rate limit,

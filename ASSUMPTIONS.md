@@ -9106,3 +9106,25 @@ ds_territories.luau T3):
 - **Id 0 stays hidden:** the Shop's gold ROBUX "SOON" row for Id 0 passes (PV_Bastion, PV_MotorPool) is gone for everyone.
 - **Left off:** StreamingEnabled, OpsConfig.Enabled, RebirthConfig.ZonesLive / WeaponsLive, AircraftWeaponConfig.WeaponsLive,
   XP backfill, PreferMesh, VisualAssetConfig.BodyRollout (11 hulls have no WE_CHECK2 / licence record).
+
+## 2026-09-29 — Code Bot v102: redeem codes for launch (live for all players)
+- **One code system:** the old `CodesService` / Settings box (RemoteEvent `RequestRedeemCode`, no result to the client) is
+  replaced by the `RedeemCode` RemoteFunction with explicit results. `RequestRedeemCode` still exists in RemoteSetup but has no
+  handler now (nothing fires it).
+- **Server-only config:** `CodesConfig` moved from ReplicatedStorage to `Server/Configs` (clients could read the code list).
+  The Settings placeholder and `CodeStateUpdate` no longer name any code.
+- **Retired samples:** WARFOUNDING / BUILDCONQUER were dev samples ("rotate for live seasons"); launch starts with BUDSTUDIOS, so
+  they are `Active = false` (answer "Expired"). Flip `Active = true` to bring one back.
+- **Timed boost (new, the one system):** there was no timed boost before (2x Cash was a permanent game pass). `profile.CashBoost
+  = { Until, Mult }` is applied by `EconomyService.CashBoostMult` inside the non-exempt multiplier stack, so it multiplies with
+  VIP / 2x Cash / prestige / season / empire tax. Real-time minutes (wall clock), not play time — simplest to explain and it
+  cannot be paused to bank it. Stacking adds minutes, capped 24 h ahead.
+- **Results:** Success, AlreadyUsed, Invalid, Expired, plus RateLimited (6th try in a minute) and NotReady (profile not loaded).
+  AlreadyUsed is checked before Expired, so a player who redeemed a code that later expired sees "already redeemed".
+  A bad `Expires` string makes the code expired (never live forever) and warns in the server log.
+- **Rail:** Codes is a 6th rail tile (owner request). 956x440 fits one column; 844x390 / 800x360 wrap it to a 2nd column
+  (layoutRail's existing rule). The BuyPathStatic tile-count pin moved from 5 to 5 + Codes.
+- **Discord:** only text in-game (`SocialConfig.DiscordText`); `SocialConfig.DiscordInvite` is an unused placeholder (Roblox
+  only allows off-platform links through its own Social Links).
+- **Verified:** tools/codes_gate_test.py (real CodesService + RateLimitService + CashBoostMult + ensureCodesFields in the Luau CLI,
+  37 checks), BuyPathStatic FAIL=0 with codebot_v102.py, rojo build. Not verified here: the panel on a real phone (owner test).

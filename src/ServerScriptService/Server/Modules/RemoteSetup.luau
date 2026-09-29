@@ -127,7 +127,12 @@ end
 
 local FUNCTIONS = {
 	Constants.RemoteNames.GetPlayerState,
+	Constants.RemoteNames.RedeemCode, -- Code Bot v102: CodesService (redeem codes)
 }
+local FUNCTION_SET: { [string]: boolean } = {}
+for _, name in ipairs(FUNCTIONS) do
+	FUNCTION_SET[name] = true
+end
 
 local _initialized = false
 local _purchaseHandler: ((Player, any) -> ())? = nil
@@ -276,7 +281,7 @@ function RemoteSetup.Get(name: string): Instance
 		warn("[RemoteSetup] Get created missing UnreliableRemoteEvent:", name)
 		return uev
 	end
-	if name == Constants.RemoteNames.GetPlayerState then
+	if FUNCTION_SET[name] then
 		local fn = Instance.new("RemoteFunction")
 		fn.Name = name
 		fn.Parent = folder

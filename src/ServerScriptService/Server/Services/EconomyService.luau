@@ -10,6 +10,7 @@
 	  5. Empire Tax (F3): × (1 + EmpireTaxPct / 100). EmpireTaxPct = OutpostIncomeStacks x MultPerStack (10 %) plus
 	     StarterPct (5 %) while the player holds their OWN Home Outpost, capped at MaxStacks x MultPerStack (50 %).
 	     Stacks recount from owned territories (contested / stealable); a Home Outpost is never a stack.
+	  6. Code Bot v102 timed Cash boost (redeem codes): × EconomyService.CashBoostMult(profile) while it runs.
 	Passive income accrues to PendingCash (Money Collector); CollectPendingCash grants Cash.
 	ATM raid transfers PendingCash thief←victim without re-applying multipliers.
 
@@ -218,8 +219,25 @@ local function cashMultFor(player: Player, profile: any, reason: string?): numbe
 		if SeasonService and SeasonService.GetCashMult then
 			mult *= SeasonService.GetCashMult()
 		end
+		-- Code Bot v102: timed 2x Cash boost from a redeem code (CodesService writes profile.CashBoost)
+		mult *= EconomyService.CashBoostMult(profile)
 	end
 	return mult
+end
+
+-- Code Bot v102: the running timed Cash boost (profile.CashBoost = { Until = os.time() end, Mult }), else 1.
+-- The ONE timed boost: codes grant it (CodesService.GrantCashBoost); anything else that wants a timed 2x reuses it.
+function EconomyService.CashBoostMult(profile: any): number
+	local b = if typeof(profile) == "table" then profile.CashBoost else nil
+	if typeof(b) ~= "table" then
+		return 1
+	end
+	local untilUnix = tonumber(b.Until) or 0
+	local m = tonumber(b.Mult) or 1
+	if untilUnix <= os.time() or m ~= m or m <= 1 then
+		return 1
+	end
+	return math.min(m, 10)
 end
 
 local function applyCashMult(player: Player, profile: any, amount: number, reason: string?): number

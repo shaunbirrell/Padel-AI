@@ -236,6 +236,9 @@ HudConfig.Rail = {
 		{ Id = "Army", Name = "DockArmy", Label = "Army", Icon = "Helmet", Accent = Color3.fromRGB(72, 220, 96), Fill = Color3.fromRGB(16, 58, 28), Key = Enum.KeyCode.Y },
 		{ Id = "Garage", Name = "DockGarage", Label = "Garage", Icon = "Car", Accent = Color3.fromRGB(40, 212, 200), Fill = Color3.fromRGB(8, 52, 56), Key = Enum.KeyCode.G },
 		{ Id = "Missions", Name = "DockMissions", Label = "Missions", Icon = "Clipboard", Accent = Color3.fromRGB(255, 150, 32), Fill = Color3.fromRGB(80, 42, 6), Key = Enum.KeyCode.M },
+		-- Code Bot v102: redeem codes (CodesController). No key. 6th tile: fits one column on 956x440; on 844x390 /
+		-- 800x360 layoutRail wraps it to the top of a 2nd column (same wrap rule as before)
+		{ Id = "Codes", Name = "DockCodes", Label = "Codes", Icon = "Gift", Accent = Color3.fromRGB(255, 214, 72), Fill = Color3.fromRGB(74, 58, 8) },
 	},
 	Badge = {
 		Size = 26, -- v circle at the tile's top-right corner (AnchorPoint 0.5,0.5 at (1,-Inset.X,0,Inset.Y))
@@ -254,6 +257,7 @@ HudConfig.Rail = {
 		Army = nil, -- the count lives in the Army popover header, not on the HUD
 		Garage = "NewVehicle", -- "!" when a vehicle was bought/unlocked and not spawned yet (clears on Garage open)
 		Missions = "Claimables", -- count = completed-unclaimed missions + claimable daily login + (spinner READY ? 1 : 0)
+		Codes = nil, -- Code Bot v102: no badge
 	},
 	HideWhen = { "Driving", "Dead" },
 }

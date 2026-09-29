@@ -13,10 +13,10 @@ _cb101_mc = _cb101_C + "MonetizationConfig.luau"
 _cb101_M = read(_cb101_mc) or ""
 
 # ── build ──
-for _f in ("src/ServerScriptService/Server/Services/DataService.luau", "src/ServerScriptService/Server/Services/BaseService.luau",
-           "src/ServerScriptService/Server/EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 101)', "CODEBOT v101: WE_Build=101 " + _f.rsplit("/", 1)[-1])
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WE_Build=101", "CODEBOT v101: DataService profile-loaded log says WE_Build=101")
+# v102 (Code Bot): retired, superseded in tools/checks/codebot_v102.py: #for _f in ("src/ServerScriptService/Server/Services/DataService.luau", "src/ServerScriptService/Server/Services/BaseService.luau",
+# v102 (Code Bot): retired, superseded in tools/checks/codebot_v102.py: #           "src/ServerScriptService/Server/EarlyRemotes.server.luau"):
+# v102 (Code Bot): retired, superseded in tools/checks/codebot_v102.py: #    must_contain(_f, 'SetAttribute("WE_Build", 101)', "CODEBOT v101: WE_Build=101 " + _f.rsplit("/", 1)[-1])
+# v102 (Code Bot): retired, superseded in tools/checks/codebot_v102.py: #must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WE_Build=101", "CODEBOT v101: DataService profile-loaded log says WE_Build=101")
 
 # ── 1. every listed gate ships "all" (no owner-only gate left on a live item) ──
 for _f, _needle, _label in (

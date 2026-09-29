@@ -114,7 +114,8 @@ export type PlayerProfile = {
 	RebirthUnlocks: { [string]: boolean },
 	Soldiers: number,
 	NationColorId: string?,
-	RedeemedCodes: { [string]: boolean },
+	RedeemedCodes: { [string]: any }, -- Code Bot v102: CODE -> redeem os.time() (true on pre-v102 saves)
+	CashBoost: { Until: number, Mult: number }?, -- Code Bot v102: timed Cash boost from codes
 	LastSpinnerClaimUnix: number,
 	Vehicles: { [string]: boolean },
 	Weapons: { [string]: boolean },

@@ -3,7 +3,60 @@
 **Claude: rebase `claude/desktop-bud` onto phase-7-polish (v101) before new work.** Code Bot cherry-picked JOB 12 (`fe22e41`)
 into WE_Build 101 and flipped every owner-only rollout to "all" (LaunchAll stays false; see the v101 section below).
 Jobs: [x] 12 launch readiness · [ ] 13 bring players back · [ ] 14 game-feel polish · [ ] 15 anti-exploit sweep
+**Code Bot v102 (after v101): redeem codes shipped (see v102 below). Rebase onto v102; do not rebuild a codes system.**
 <!-- Q2-END -->
+
+# v102 — 2026-09-29 ~15:00 Dublin (Code Bot, branch phase-7-polish, WE_Build 102) — REDEEM CODES (live for all)
+
+**Claude: rebase `claude/desktop-bud` onto phase-7-polish (v102).** The rail now has 6 tiles (Shop · Rebirth · Army · Garage ·
+Missions · **Codes**); the BuyPathStatic "5 rail tiles" pin was moved to "5 + Codes". Any timed 2x Cash you add must reuse
+`profile.CashBoost` / `EconomyService.CashBoostMult` (the one timed boost), not a second system.
+
+- **Codes (live for everyone, no owner gate):** "Codes" rail tile (gift icon) → Codes panel: text box, REDEEM, result line,
+  "2x CASH BOOST ACTIVE mm:ss left" while a boost runs, and "Join Bud Studios Discord for free codes!"
+  (`SocialConfig.DiscordText`; `SocialConfig.DiscordInvite = ""` is a placeholder and is never shown, so no URL in-game).
+  Settings → REDEEM CODE → "ENTER A CODE" opens the same panel.
+- **Server:** `CodesService` answers the `RedeemCode` RemoteFunction with Success / AlreadyUsed / Invalid / Expired
+  (+ RateLimited / NotReady): 5 tries per player per minute, case and spaces ignored, letters/digits/_ only, the code is marked
+  in `profile.RedeemedCodes` before anything is paid, then the profile is saved. Code Cash is multiplier-exempt (reason
+  `code`), so BUDSTUDIOS pays exactly $50,000; its 30 min 2x boost multiplies every non-exempt Cash earning (income,
+  collection, kills…) and stacks with VIP / 2x Cash like the other multipliers. The minutes are real time from the redeem
+  (they keep running while the player is offline); a second boost code adds its minutes on top (max 24 h ahead).
+- **CodesConfig moved to the server** (`src/ServerScriptService/Server/Configs/CodesConfig.luau`) so exploiters cannot read the
+  list. The pre-launch samples WARFOUNDING / BUILDCONQUER are kept but `Active = false` (players see "expired").
+- Pins: `tools/checks/codebot_v102.py` + `tools/codes_gate_test.py` (runs the real CodesService in the Luau CLI, 37 checks).
+  PreferMesh OFF. WE_Building* untouched.
+- **Publish note for Shaun:** "Migrate to Latest Update" (or shut down old servers) so v102 appears.
+
+## How to add a new code (owner)
+1. Open `src/ServerScriptService/Server/Configs/CodesConfig.luau` (the steps are also written at the top of that file).
+2. Copy the BUDSTUDIOS block and change the key, e.g.:
+   ```lua
+   	RAID1000 = {
+   		Active = true,
+   		Expires = "2026-10-31", -- end of that day UTC; or "2026-10-31T18:00:00Z"; or nil = never
+   		DisplayName = "1000 Raids",
+   		Rewards = { Cash = 25000, Gold = 5, CashBoostMinutes = 15 }, -- any mix of Cash / Gold / CashBoostMinutes
+   	},
+   ```
+   The key is what players type (any case; spaces ignored; letters, digits and _ only, at most 32 characters).
+3. To switch a code off early: `Active = false`. Players who already redeemed it keep their reward.
+4. Ask Code Bot to ship (or: `python3 tools/BuyPathStatic.py` must end FAIL=0, `rojo build -o dist/WarEmpire-PERF.rbxlx`,
+   `tools/publish-opencloud.sh`), then "Migrate to Latest Update". Codes only change with a publish.
+
+**Phone test for Shaun (any account, the second account too):**
+- Tap **Codes** on the left rail (on the smallest phones it sits at the top of a 2nd column next to Shop). The panel opens
+  centred; the text box, REDEEM and the ✕ are easy to hit; the Discord line shows with no link.
+- Type `budstudios` → green "Redeemed! You got $50,000 + 30 min 2x Cash." Cash jumps by exactly $50,000, the panel shows
+  "2x CASH BOOST ACTIVE 29:59 left", and income / collections pay double while it runs.
+- REDEEM again (try `BudStudios`) → orange "You've already redeemed this code." Leave the game, rejoin → still already used;
+  the boost timer keeps counting down.
+- Type `hello` → red "That code doesn't exist." Type `WARFOUNDING` → orange "This code has expired."
+- Tap REDEEM 6 times fast with junk → "Too many tries. Wait a minute and try again."
+- Settings (gear) → REDEEM CODE → ENTER A CODE opens the same panel. Tapping outside the panel closes it.
+
+---
+
 
 # v101 — 2026-09-29 ~14:30 Dublin (Code Bot, branch phase-7-polish, WE_Build 101) — ROLLOUTS ARE NOW "all"
 

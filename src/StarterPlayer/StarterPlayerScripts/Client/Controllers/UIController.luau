@@ -63,6 +63,22 @@ do
 	end
 end
 
+-- Code Bot v102: the Codes panel (redeem codes). Required defensively like NationController: a broken Codes panel
+-- must never take the other panels or the rail down (the Codes tile is then simply left out).
+local CodesController: any = nil
+do
+	local mod = script.Parent:FindFirstChild("CodesController")
+	if mod and mod:IsA("ModuleScript") then
+		local req: any = require
+		local ok, res = pcall(req, mod)
+		if ok and typeof(res) == "table" then
+			CodesController = res
+		else
+			warn("[WAR EMPIRE] CodesController failed to load — Codes panel off:", res)
+		end
+	end
+end
+
 -- Every panel HudLayout keeps exclusive (spec §3.8). A controller that registers itself wins; UIController files a
 -- Fallback registration (IsOpen / Close) for the rest. "Orders" = the Army popover (OrdersController).
 local PANELS: { { Id: string, Controller: any } } = {
@@ -79,6 +95,9 @@ local PANELS: { { Id: string, Controller: any } } = {
 }
 if NationController then
 	table.insert(PANELS, { Id = "Nation", Controller = NationController }) -- nations: the country picker
+end
+if CodesController then
+	table.insert(PANELS, { Id = "Codes", Controller = CodesController }) -- Code Bot v102: redeem codes
 end
 
 local function panelController(id: string): any
@@ -192,6 +211,9 @@ function UIController.Init()
 	if NationController and typeof(NationController.Init) == "function" then
 		safeInit("Nation", NationController.Init) -- nations: join picker (auto-open) + flagpole / Settings opener
 	end
+	if CodesController and typeof(CodesController.Init) == "function" then
+		safeInit("Codes", CodesController.Init) -- Code Bot v102: redeem codes panel (rail tile + Settings)
+	end
 	safeInit("Panels", registerPanels)
 
 	-- Rail / gear / cash + press: the opener, ONE click sound, no toast (the panel opening is the feedback).
@@ -215,10 +237,10 @@ function UIController.Init()
 		dockPress("Settings", SettingsController.Toggle, "Settings")
 	end)
 
-	-- Left rail (spec §3.2): Shop · Rebirth · Army · Garage · Missions. Labels, icons and colours come from
+	-- Left rail (spec §3.2): Shop · Rebirth · Army · Garage · Missions (+ Codes, Code Bot v102). Labels, icons and colours come from
 	-- HudConfig.Rail.Tiles; v69's 7-tile dock ({ Name = "DockMissions", Label = "MISSIONS" } …, BASE, SETTINGS)
 	-- is gone — Base opens from B / the Command Center terminal, Settings from the TopStrip gear.
-	HUDController.BindActionBar({
+	local railActions: { any } = {
 		{
 			Id = "Shop",
 			Name = "DockShop",
@@ -268,8 +290,19 @@ function UIController.Init()
 				dockPress("Missions", MissionController.Toggle, "Missions")
 			end,
 		},
-	})
-	print("[WAR EMPIRE] UIController: rail bound (Shop/Rebirth/Army/Garage/Missions) + TopStrip gear")
+	}
+	-- Code Bot v102: Codes tile (live for all players; left out only if the panel failed to load)
+	if CodesController and typeof(CodesController.Toggle) == "function" then
+		table.insert(railActions, {
+			Id = "Codes",
+			Name = "DockCodes",
+			OnClick = function()
+				dockPress("Codes", CodesController.Toggle, "Codes")
+			end,
+		})
+	end
+	HUDController.BindActionBar(railActions)
+	print("[WAR EMPIRE] UIController: rail bound (Shop/Rebirth/Army/Garage/Missions/Codes) + TopStrip gear")
 
 	-- v68: item terminals inside walk-in buildings (server HollowBuildingBuilder + Interiors/*) carry the
 	-- panel to open in the prompt attribute WE_OpenPanel. Keep this list in sync with the interior checker.
@@ -287,6 +320,9 @@ function UIController.Init()
 	-- nations: the flagpole prompt (server, WE_OpenPanel = "Nation", WE_OpenTab = "flagpole") opens the picker
 	if NationController and typeof(NationController.Open) == "function" then
 		panelOpeners.Nation = NationController.Open
+	end
+	if CodesController and typeof(CodesController.Open) == "function" then
+		panelOpeners.Codes = CodesController.Open -- Code Bot v102
 	end
 	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, who: Player)
 		if who ~= Players.LocalPlayer then

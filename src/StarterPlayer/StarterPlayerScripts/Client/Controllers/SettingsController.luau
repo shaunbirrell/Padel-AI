@@ -342,31 +342,20 @@ function SettingsController.Init()
 		y += changeH + 14
 	end
 
-	-- Promo codes (server-validated, once each)
+	-- Redeem codes (Code Bot v102): the Codes panel owns the text box + result line (Remotes RedeemCode, server
+	-- validated, once each). This row just opens it (the Codes rail tile does the same).
 	section("REDEEM CODE")
-	local redeemW = if isTouch then 170 else 120
-	local codeBox = Instance.new("TextBox")
-	codeBox.Name = "CodeBox"
-	codeBox.Position = UDim2.fromOffset(16, y)
-	codeBox.Size = UDim2.new(1, -(32 + redeemW + GAP), 0, TAP)
-	codeBox.BackgroundColor3 = Constants.Colors.Background
-	codeBox.Font = Enum.Font.GothamMedium
-	codeBox.TextSize = PanelShell.Text(14)
-	codeBox.TextColor3 = Constants.Colors.Text
-	codeBox.PlaceholderText = "WARFOUNDING / BUILDCONQUER"
-	codeBox.PlaceholderColor3 = Constants.Colors.Muted
-	codeBox.Text = ""
-	codeBox.ClearTextOnFocus = false
-	codeBox.BorderSizePixel = 0
-	UIUtil.Corner(codeBox, 8)
-	codeBox.Parent = body
-	local redeemBtn = button("Redeem", "REDEEM", UDim.new(1, -(16 + redeemW)), UDim.new(0, redeemW))
+	local redeemBtn = button("Redeem", "ENTER A CODE", UDim.new(0, 16), UDim.new(1, -32))
 	redeemBtn.Activated:Connect(function()
 		AudioController.PlayClick()
-		local code = codeBox.Text
-		if code and #code > 0 then
-			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestRedeemCode, code)
-			codeBox.Text = ""
+		local mod = script.Parent:FindFirstChild("CodesController")
+		if mod and mod:IsA("ModuleScript") then
+			local req: any = require
+			local ok, codes = pcall(req, mod)
+			if ok and typeof(codes) == "table" and typeof(codes.Open) == "function" then
+				setOpen(false)
+				codes.Open()
+			end
 		end
 	end)
 	y += TAP + 14

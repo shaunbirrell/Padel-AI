@@ -523,6 +523,34 @@ local function ensureBuildXPFields(profile: any)
 	profile.BuildXP = { Owed = math.min(nonNegInt(owed), pool), AtPrestige = nonNegInt(profile.Prestige) }
 end
 
+-- Code Bot v102: redeem codes (idempotent; no DataVersion bump, like ensureFeatureFields).
+--   RedeemedCodes  { [CODE] = os.time() of the redeem | true (pre-v102 saves) }: string keys up to 32 chars only,
+--                  junk values dropped; a code stays redeemed forever (once per player, across rebirths)
+--   CashBoost      { Until = os.time() end (0 = none), Mult >= 1 }: the timed Cash boost codes grant
+local function ensureCodesFields(profile: any)
+	local rc = profile.RedeemedCodes
+	local clean: { [string]: any } = {}
+	if typeof(rc) == "table" then
+		for k, v in pairs(rc) do
+			if typeof(k) == "string" and #k > 0 and #k <= 32 then
+				if v == true then
+					clean[k] = true
+				elseif typeof(v) == "number" and v == v and v > 0 and v < MAX_COUNTER then
+					clean[k] = math.floor(v)
+				end
+			end
+		end
+	end
+	profile.RedeemedCodes = clean
+	local b = profile.CashBoost
+	local untilUnix = if typeof(b) == "table" then nonNegInt(b.Until) else 0
+	local mult = if typeof(b) == "table" then tonumber(b.Mult) else nil
+	if mult == nil or mult ~= mult or mult < 1 or mult > 10 then
+		mult = 1
+	end
+	profile.CashBoost = { Until = untilUnix, Mult = mult }
+end
+
 function ProfileSchema.CreateDefault(): PlayerProfile
 	local now = os.time()
 	return {
@@ -539,7 +567,8 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		RebirthUnlocks = {},
 		Soldiers = SoldierConfig.StartingSoldiers,
 		NationColorId = nil,
-		RedeemedCodes = {},
+		RedeemedCodes = {}, -- Code Bot v102: CODE -> os.time() of the redeem (older saves: true); see ensureCodesFields
+		CashBoost = { Until = 0, Mult = 1 }, -- Code Bot v102: timed Cash boost from codes (EconomyService.CashBoostMult)
 		LastSpinnerClaimUnix = 0,
 		Vehicles = {
 			[VehicleConfig.StarterVehicle] = true,
@@ -888,6 +917,8 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	ensureOpsFields(profile, os.time())
 	-- XP rebalance: one-time build-XP backfill snapshot for saves that predate it (idempotent; no version bump)
 	ensureBuildXPFields(profile)
+	-- Code Bot v102: redeemed codes + the timed Cash boost (idempotent; no version bump)
+	ensureCodesFields(profile)
 
 	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
 	if typeof(profile.BaseUpgrades) ~= "table" then
