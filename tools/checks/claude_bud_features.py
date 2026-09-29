@@ -51,3 +51,15 @@ must_contain(_cbf_pb, "if last == nil or now - last >= PlazaBountyConfig.EarnCoo
 must_contain(_cbf_pb, 'econ.AddCash(player, PlazaBountyConfig.Cash, "plaza_bounty")', "CLAUDE-BUD bounty: cash granted on the server")
 must_not_contain(_cbf_pb, "OnServerEvent", "CLAUDE-BUD bounty: no client -> server path")
 must_contain(_cbf_fc, 'local LABELS = { Airdrop = "AIRDROP", Bounty = "BOUNTY" }', "CLAUDE-BUD bounty: plaza marker on the client")
+
+# 4.4 army upgrades at the Barracks (the existing Soldiers research: cash, saved per player; no second power stack)
+_cbf_auc = "src/ReplicatedStorage/Shared/Configs/ArmyUpgradeConfig.luau"
+_cbf_rsv = "src/ServerScriptService/Server/Services/ResearchService.luau"
+_cbf_rc = "src/ReplicatedStorage/Shared/Configs/ResearchConfig.luau"
+must_contain(_cbf_auc, 'local ArmyUpgradeConfig = {\n\tRollout = "owner",', "CLAUDE-BUD army upgrades: owner-only first")
+must_contain(_cbf_auc, "\t\treturn AdminConfig.IsPlaytestOwner(userId)\n\tend\n\treturn false\nend", "CLAUDE-BUD army upgrades: LiveFor fails closed")
+must_contain(_cbf_rsv, "if not ArmyUpgradeConfig.LiveFor(player.UserId) then\n\t\t\t\treturn\n\t\t\tend", "CLAUDE-BUD army upgrades: the prompt spot goes only to live players")
+must_contain(_cbf_fc, "(mod :: any).Open(track)", "CLAUDE-BUD army upgrades: the Barracks prompt opens the Soldiers track")
+must_contain(_cbf_rsv, "function ResearchService.Purchase(player: Player, upgradeId: any): (boolean, string?)", "CLAUDE-BUD army upgrades: buying stays the server's ResearchService.Purchase")
+must_contain(_cbf_rc, '\t\tStat = "SoldierHealth",', "CLAUDE-BUD army upgrades: soldier HP upgrade exists")
+must_contain(_cbf_rc, '\t\tStat = "SoldierDamage",', "CLAUDE-BUD army upgrades: soldier damage upgrade exists")

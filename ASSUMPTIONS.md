@@ -8792,3 +8792,12 @@ ds_territories.luau T3):
   plaza within the window gets $15,000 (server AddCash); the bounty ends and a new one starts on them.
 - Anti-farm: the holder can't earn their own bounty; each player earns at most once per 600 s (kept for the server's
   life, so a rejoin doesn't reset it); the capture itself needs the normal 20 s server capture and protection period.
+
+## 2026-09-29 — claude-bud JOB 4.4: army upgrades at the Barracks (ArmyUpgradeConfig, owner-only)
+- Soldier HP and damage upgrades already exist as the Research "Soldiers" track: Body Armor = SoldierHealth, Marksman
+  Training = SoldierDamage, +10 %/level x5, cash $2.5k–240k, saved per player, applied by SquadOrdersService.researchMult.
+  A second, parallel upgrade system would stack power (pay-to-win drift), so I assumed the ask is to buy them AT THE BARRACKS.
+- Added: when a live player's plot is ready, ResearchService pushes (FeaturePush "ArmyUpgrades") the world spot in
+  front of their Barracks (plot-local -88, 110). The client puts a local "Army Upgrades / Barracks" prompt there
+  (tap, no hold, 14 studs) that opens the Research panel on the Soldiers tab. Purchases are still
+  ResearchService.Purchase (server price, cash, max level, save).
