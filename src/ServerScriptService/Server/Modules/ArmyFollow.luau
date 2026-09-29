@@ -204,23 +204,89 @@ local function ownerWalkSpeed(root: BasePart): number
 	return if hum then hum.WalkSpeed else 16
 end
 
-local function ownPlotInside(st: any, player: Player?, pos: Vector3): number?
+-- claude-bud: Follow2.Tidy (owner-only first): hold outside the plot, neat wait rows, fixed seats, no crossing
+local function tidyCfg(): { [string]: any }
+	local t = cfg().Tidy
+	return if typeof(t) == "table" then t else {}
+end
+
+local function tnum(key: string, default: number): number
+	local v = tidyCfg()[key]
+	return if typeof(v) == "number" then v else default
+end
+
+local function tidyLive(player: Player?): boolean
+	if player == nil then
+		return false
+	end
+	local r = tidyCfg().Rollout
+	return r == "all" or (r == "owner" and AdminConfig.IsPlaytestOwner(player.UserId) == true)
+end
+ArmyFollow.TidyLive = tidyLive
+
+-- his own plot id (nil: none) and a point's plot-local position in it
+local function ownPlotId(player: Player?): number?
 	if player == nil or deps.OwnPlotId == nil then
 		return nil
 	end
 	local id = deps.OwnPlotId(player)
-	if typeof(id) ~= "number" then
-		return nil
-	end
+	return if typeof(id) == "number" then id else nil
+end
+
+local function plotLocal(id: number, pos: Vector3): Vector3?
 	local c = PlotFrame.PlotPosition(id)
 	if c == nil then
 		return nil
 	end
-	local lp = PlotFrame.PlotCFrame(c):PointToObjectSpace(pos)
+	return PlotFrame.PlotCFrame(c):PointToObjectSpace(pos)
+end
+
+-- true when `pos` is inside plot `id` grown by `pad` studs
+local function inPlot(id: number, pos: Vector3, pad: number): boolean
+	local lp = plotLocal(id, pos)
+	if lp == nil then
+		return false
+	end
+	local half = BaseConfig.PlotSize.X * 0.5 + pad
+	return math.abs(lp.X) <= half and math.abs(lp.Z) <= half
+end
+
+local function ownPlotInside(st: any, player: Player?, pos: Vector3): number?
+	local id = ownPlotId(player)
+	if id == nil then
+		return nil
+	end
+	local lp = plotLocal(id, pos)
+	if lp == nil then
+		return nil
+	end
 	local half = BaseConfig.PlotSize.X * 0.5
 	local edge = math.max(math.abs(lp.X), math.abs(lp.Z))
-	local inside = if st._afInBase then edge <= half + num("BaseOutStuds", 2) else edge <= half - num("BaseInStuds", 4)
+	local inside: boolean
+	if st._afTidy then
+		-- claude-bud: hold as he reaches his edge from outside (the wedge behind him never follows him in)
+		inside = if st._afInBase then edge <= half + tnum("HoldReleaseStuds", 10) else edge <= half + tnum("HoldApproachStuds", 6)
+	else
+		inside = if st._afInBase then edge <= half + num("BaseOutStuds", 2) else edge <= half - num("BaseInStuds", 4)
+	end
 	return if inside then id else nil
+end
+
+-- claude-bud: tidy wait spot of seat `rank`: rows on both sides of the gate lane, facing out (plot-local +Z)
+local function tidyWaitSpot(plotId: number, rank: number): (Vector3, Vector3)
+	local half = BaseConfig.PlotSize.X * 0.5
+	local gateHalf = (tonumber(BaseLayoutConfig.MainGateWidth) or 14) * 0.5
+	local side = if rank % 2 == 1 then -1 else 1
+	local j = math.floor((rank - 1) / 2) -- index on its side
+	local perRow = math.max(1, math.floor(tnum("PerRow", 4)))
+	local col = j % perRow
+	local row = math.floor(j / perRow)
+	local x = side * (gateHalf + tnum("WaitGap", 5) + col * tnum("ColSpacing", 4))
+	local z = half + tnum("WaitOut", 14) + row * tnum("RowSpacing", 4)
+	local p = PlotFrame.LocalToWorld(plotId, x, z)
+	local out = PlotFrame.LocalToWorld(plotId, x, z + 1) - p
+	out = Vector3.new(out.X, 0, out.Z)
+	return p, if out.Magnitude > 1e-3 then out.Unit else Vector3.new(0, 0, 1)
 end
 
 local function waitSpot(plotId: number, rank: number): Vector3
@@ -275,16 +341,71 @@ local function plan(st: any, player: Player?, root: BasePart, units: { any }, no
 	table.sort(order, function(a, b)
 		return (a.Slot or 0) < (b.Slot or 0)
 	end)
-	for i, u in ipairs(order) do
-		u._afRank = i
+	st._afTidy = tidyLive(player)
+	if st._afTidy then
+		-- claude-bud: fixed seats for life; a dead / gone unit frees its seat, nobody else moves up
+		local taken: { [number]: any } = {}
+		for _, u in ipairs(order) do
+			local s = u._afSeat
+			if typeof(s) == "number" and taken[s] == nil then
+				taken[s] = u
+			else
+				u._afSeat = nil
+			end
+		end
+		for _, u in ipairs(order) do
+			if u._afSeat == nil then
+				local s = 1
+				while taken[s] ~= nil do
+					s += 1
+				end
+				u._afSeat = s
+				taken[s] = u
+			end
+			u._afRank = u._afSeat
+		end
+		st._afSeatMap = taken
+	else
+		for i, u in ipairs(order) do
+			u._afRank = i
+		end
+		st._afSeatMap = nil
 	end
 	-- own base
 	local plotId = ownPlotInside(st, player, pos)
 	local wasIn = st._afInBase
 	st._afInBase = plotId ~= nil
 	st._afPlot = plotId
+	st._afOwnPlot = ownPlotId(player)
+	if wasIn and not st._afInBase then
+		st._afLeftBaseAt = now -- claude-bud: the walk-back grace (no far / stuck teleport)
+	end
 	if st._afInBase ~= wasIn and player then
 		logLine("base" .. tostring(player.UserId), string.format("owner %d %s his base: army %s", player.UserId, if plotId then "entered" else "left", if plotId then "waits at the gate" else "follows"))
+	end
+	-- claude-bud: wedge row pairs keep their world sides when he turns round (no crossing through each other)
+	if st._afTidy and not st._afInBase and st._afSeatMap then
+		local dir: Vector3 = st._afDir or Vector3.new(0, 0, -1)
+		local right = Vector3.new(-dir.Z, 0, dir.X)
+		st._afFlip = st._afFlip or {}
+		local hyst = tnum("FlipHysteresisStuds", 1.5)
+		for s, u in pairs(st._afSeatMap) do
+			if s % 2 == 1 then
+				local mate = st._afSeatMap[s + 1]
+				local row = (s + 1) / 2
+				if mate and u.Root and u.Root.Parent and mate.Root and mate.Root.Parent then
+					-- seat s is the left one (side -1): flip when it stands clearly right of its mate
+					local diff = (u.Root.Position - mate.Root.Position):Dot(right)
+					if diff > hyst then
+						st._afFlip[row] = true
+					elseif diff < -hyst then
+						st._afFlip[row] = false
+					end
+				else
+					st._afFlip[row] = nil
+				end
+			end
+		end
 	end
 	refreshRayFilter(nil)
 end
@@ -292,6 +413,9 @@ end
 local function slotPoint(st: any, root: BasePart, rank: number): Vector3
 	if st._afInBase and st._afPlot then
 		local w = waitSpot(st._afPlot, rank)
+		if st._afTidy then
+			w = (tidyWaitSpot(st._afPlot, rank)) -- claude-bud: neat rows facing out
+		end
 		return Vector3.new(w.X, root.Position.Y, w.Z)
 	end
 	local dir: Vector3 = st._afDir or Vector3.new(0, 0, -1)
@@ -300,6 +424,14 @@ local function slotPoint(st: any, root: BasePart, rank: number): Vector3
 	local side = if rank % 2 == 1 then -1 else 1
 	local back = num("WedgeBack", 3) + row * num("RowBack", 3)
 	local lat = side * (num("WedgeSide", 2.5) + row * num("RowSide", 2.5))
+	if st._afTidy then
+		-- claude-bud: wider rows (never inside each other) and the row pair's kept world sides (no crossing)
+		if st._afFlip and st._afFlip[row] == true then
+			side = -side
+		end
+		back = num("WedgeBack", 3) + row * tnum("RowBack", 4)
+		lat = side * (num("WedgeSide", 2.5) + row * tnum("RowSide", 3))
+	end
 	local lead = (st._afVel or Vector3.zero) * num("LeadSeconds", 0.3)
 	local cap = num("LeadMaxStuds", 5)
 	if lead.Magnitude > cap then
@@ -423,7 +555,9 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 			return
 		end
 	end
-	if not seatedFast then
+	-- claude-bud (Tidy): just out of his base, they walk back into the wedge (no far / stuck teleport for a grace spell)
+	local walkBack = st._afTidy and not st._afInBase and now - (st._afLeftBaseAt or -math.huge) < tnum("LeaveGraceSeconds", 8)
+	if not seatedFast and not walkBack then
 		if st._afJumped and ownerD > num("JumpRegroupStuds", 40) and regroup(st, unit, root, now, "owner-jump") then
 			return
 		end
@@ -467,6 +601,18 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 		end
 	end
 	local goal = slot + push * num("SeparationGain", 3)
+	-- claude-bud (Tidy): a unit outside his plot never gets a goal inside it (it waits at its gate spot instead)
+	local ownPlot: number? = if st._afTidy then st._afOwnPlot else nil
+	local unitOutside = ownPlot ~= nil and not inPlot(ownPlot, pos, 0)
+	local pad = tnum("PlotPadStuds", 2)
+	local function keepOut(p: Vector3): Vector3
+		if unitOutside and ownPlot and inPlot(ownPlot, p, pad) then
+			local w = tidyWaitSpot(ownPlot, rank)
+			return Vector3.new(w.X, p.Y, w.Z)
+		end
+		return p
+	end
+	goal = keepOut(goal)
 
 	-- speed: never slower than his sprint when behind
 	local ownerPace = math.max(st._afWalk or 16, st._afSpeed or 0)
@@ -486,6 +632,19 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 	speed = math.clamp(speed, 8, num("MaxSpeed", 50))
 	setSpeed(unit, speed)
 
+	-- claude-bud (Tidy): at its gate wait spot it stands still facing out, whatever he does inside
+	if st._afTidy and st._afInBase and st._afPlot and flatDist(pos, goal) <= num("ArriveStuds", 2) then
+		if not unit._afStand then
+			unit._afStand = true
+			unit.Humanoid:MoveTo(pos)
+			unit._afMoveGoal = pos
+			unit._afMoveAt = now
+			local _, out = tidyWaitSpot(st._afPlot, rank)
+			unit.Model:PivotTo(CFrame.lookAt(unit.Root.Position, unit.Root.Position + out)) -- turn on the spot only
+		end
+		unit._afPath = nil
+		return
+	end
 	-- arrive: stand in the slot while the owner stands
 	if d <= num("ArriveStuds", 2) and (st._afSpeed or 0) < 1 and push.Magnitude < 0.05 then
 		if not unit._afStand then
@@ -516,13 +675,13 @@ function ArmyFollow.Unit(player: Player?, st: any, unit: any, root: BasePart, no
 			if wp.Action == Enum.PathWaypointAction.Jump then
 				unit.Humanoid.Jump = true
 			end
-			moveTo(unit, wp.Position, now)
+			moveTo(unit, keepOut(wp.Position), now)
 			return
 		end
 	end
 	requestPath(unit, pos, goal, now)
 	-- while the path is computed (or none exists): walk toward the owner's trail point = the owner himself
-	moveTo(unit, if st._afInBase then goal else root.Position - (st._afDir or Vector3.zero) * 4, now)
+	moveTo(unit, if st._afInBase then goal else keepOut(root.Position - (st._afDir or Vector3.zero) * 4), now)
 end
 
 return ArmyFollow

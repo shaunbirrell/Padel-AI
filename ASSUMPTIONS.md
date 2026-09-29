@@ -8719,3 +8719,22 @@ ds_territories.luau T3):
   - OFF: the same straight MoveTo as before.
 - **Frozen squadfair pins untouched:** the ApplyUnitHit signature and the pcall line are byte-identical, via the pending-shooter handoff.
 - Not verified in Roblox: the headless stand-in is not in the repo. Needs a device test.
+
+## 2026-09-29 — claude-bud JOB 2: army holds outside the gate, fixed seats, no crossing (ArmyConfig.Follow2.Tidy, owner-only)
+- **Why it still walked in (v91):** the base hold began only when the owner was 4 studs INSIDE his plot. By then his wedge
+  had followed him through the gate, and nothing kept a goal out of the plot. Ranks were re-sorted every think (a death
+  reshuffled everyone). When he turned round, the left and right columns swapped sides and walked through each other
+  (the squad group doesn't collide, so they overlapped). The wait line was a zig-zag and soldiers kept their walk facing.
+- **Tidy (Rollout "owner"; Follow2.Enabled / Rollout stay the kill switch; OFF = v91 byte-for-byte paths):**
+  - (a) The hold starts when he is within HoldApproachStuds 6 OUTSIDE his edge and releases at 10 out. A unit outside his
+    plot never gets a goal inside plot + 2 (the slot, path waypoints and the trail fallback all go through keepOut).
+    Wait rows: 4 per side per row, 4 apart, 4 deep, starting 14 studs out, gate lane + 5 kept clear. Each soldier
+    turns to face out once, on arrival (a turn in place, not a move).
+  - (b) Seats are for life (lowest free seat on join; a death frees only its own). Wedge rows are 4 back / 3 side
+    (5 studs between neighbours, above SeparationStuds 3.5). A row pair keeps its world sides when he turns (1.5-stud
+    hysteresis), so they never cross.
+  - (c) For 8 s after he leaves his base there is no far / stuck / owner-jump teleport; they run back into the wedge
+    with the v91 catch-up speeds. The void rescue still runs.
+- Not covered: the escort walk (while he stands near a hostile) and ATTACK / HOLD orders are unchanged.
+  Units spawned inside the base walk out to their seats.
+- Not verified in Roblox. Needs the owner's phone test.
