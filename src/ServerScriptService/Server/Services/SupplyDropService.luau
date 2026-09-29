@@ -23,6 +23,8 @@ local Constants = require(Shared.Constants)
 local SupplyDropConfig = require(Shared.Configs.SupplyDropConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local Remotes = require(Shared.Remotes) -- claude-bud JOB 4.1: FeaturePush (airdrop marker)
+local TweenService = game:GetService("TweenService")
 
 local SupplyDropService = {}
 
@@ -36,6 +38,8 @@ type DropRec = {
 	ClaimCash: number,
 	ExpiresAt: number,
 	ClaimProgress: { [number]: number }, -- userId -> hold seconds
+	Airdrop: boolean?, -- claude-bud JOB 4.1: a parachute airdrop (claimable only by players it is live for)
+	Landed: boolean?, -- airdrop: false while it falls (no claims)
 }
 
 local active: { [string]: DropRec } = {}
@@ -137,12 +141,28 @@ local function pickSpawnPosition(): Vector3
 	return Vector3.new(150, 1, 150)
 end
 
+-- claude-bud JOB 4.1: the airdrop marker, only to players the airdrop is live for
+local function pushAirdrop(data: { [string]: any })
+	local ev = Remotes.TryGetEvent(Constants.RemoteNames.FeaturePush)
+	if ev == nil then
+		return
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		if SupplyDropConfig.AirdropLiveFor(p.UserId) then
+			ev:FireClient(p, "Airdrop", data)
+		end
+	end
+end
+
 local function destroyDrop(id: string)
 	local rec = active[id]
 	if not rec then
 		return
 	end
 	active[id] = nil
+	if rec.Airdrop then
+		pushAirdrop({ Show = false })
+	end
 	if rec.Part and rec.Part.Parent then
 		rec.Part:Destroy()
 	end
@@ -153,8 +173,10 @@ local function spawnDrop()
 		return
 	end
 	local count = 0
-	for _ in pairs(active) do
-		count += 1
+	for _, r in pairs(active) do
+		if not r.Airdrop then -- claude-bud: the airdrop never takes a crate slot
+			count += 1
+		end
 	end
 	if count >= (SupplyDropConfig.MaxActive or 2) then
 		return
@@ -225,7 +247,11 @@ local function claim(player: Player, rec: DropRec)
 	destroyDrop(rec.Id)
 	EconomyService.AddCash(player, rec.ClaimCash, "supply_drop")
 	if NotificationService then
-		NotificationService.Notify(player, "Supply drop +$" .. formatCash(rec.ClaimCash), "Reward")
+		if rec.Airdrop then
+			NotificationService.Notify(player, "Airdrop +$" .. formatCash(rec.ClaimCash), "Reward") -- claude-bud JOB 4.1
+		else
+			NotificationService.Notify(player, "Supply drop +$" .. formatCash(rec.ClaimCash), "Reward")
+		end
 	end
 	if AnalyticsService then
 		AnalyticsService.Log(AnalyticsConfig.Events.SUPPLY_DROP_CLAIM, player.UserId, {
@@ -254,17 +280,26 @@ local function tickClaims(dt: number)
 	for _, rec in pairs(active) do
 		local pos = rec.Part.Position
 		local nearby: { [number]: boolean } = {}
+		local airdrop = rec.Airdrop == true
+		if airdrop and rec.Landed ~= true then
+			continue -- claude-bud: no claims while it falls
+		end
+		local r2 = if airdrop then (SupplyDropConfig.Airdrop.ClaimRadius or radius) else radius
+		local hold2 = if airdrop then (SupplyDropConfig.Airdrop.ClaimHoldSeconds or holdNeed) else holdNeed
 		for _, player in ipairs(Players:GetPlayers()) do
+			if airdrop and not SupplyDropConfig.AirdropLiveFor(player.UserId) then
+				continue -- claude-bud: an owner-only airdrop is claimable only by players it is live for
+			end
 			local char = player.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			local hum = char and char:FindFirstChildOfClass("Humanoid")
 			if hrp and hum and hum.Health > 0 then
 				local d = (hrp.Position - pos).Magnitude
-				if d <= radius then
+				if d <= r2 then
 					nearby[player.UserId] = true
 					local prog = (rec.ClaimProgress[player.UserId] or 0) + dt
 					rec.ClaimProgress[player.UserId] = prog
-					if prog >= holdNeed then
+					if prog >= hold2 then
 						claim(player, rec)
 						break
 					end
@@ -280,12 +315,140 @@ local function tickClaims(dt: number)
 	end
 end
 
+--[[ claude-bud JOB 4.1: one parachute airdrop (SupplyDropConfig.Airdrop). Server-built, 3 parts while it falls: the
+	anchored crate is tweened down; the lid and canopy are welded to it (unanchored) and follow. The canopy goes on
+	landing. Returns false when one is already active or nobody it is live for is here. ]]
+local function spawnAirdrop(): boolean
+	local A = SupplyDropConfig.Airdrop
+	for _, r in pairs(active) do
+		if r.Airdrop then
+			return false
+		end
+	end
+	local anyone = false
+	for _, p in ipairs(Players:GetPlayers()) do
+		if SupplyDropConfig.AirdropLiveFor(p.UserId) then
+			anyone = true
+			break
+		end
+	end
+	if not anyone then
+		return false
+	end
+	nextId += 1
+	local id = "airdrop_" .. tostring(nextId)
+	local ground = pickSpawnPosition()
+	local cash = math.random(A.CashMin, A.CashMax)
+	local size = SupplyDropConfig.CrateSize or Vector3.new(5, 4, 5)
+	local landed = CFrame.new(ground + Vector3.new(0, size.Y * 0.5, 0))
+	local crate = Instance.new("Part")
+	crate.Name = "Airdrop_" .. id
+	crate.Size = size
+	crate.CFrame = landed + Vector3.new(0, A.DropHeight, 0)
+	crate.Anchored = true
+	crate.CanCollide = true
+	crate.Color = SupplyDropConfig.CrateColor or Color3.fromRGB(210, 160, 55)
+	crate.Material = Enum.Material.Metal
+	crate.TopSurface = Enum.SurfaceType.Smooth
+	crate.BottomSurface = Enum.SurfaceType.Smooth
+	crate:SetAttribute("SupplyDropId", id)
+	crate:SetAttribute("ClaimCash", cash)
+	crate:SetAttribute("WE_Airdrop", true)
+	local function welded(name: string, psize: Vector3, offset: CFrame, color: Color3, mat: Enum.Material): BasePart
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = psize
+		p.CFrame = crate.CFrame * offset
+		p.Anchored = false
+		p.Massless = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Color = color
+		p.Material = mat
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = crate
+		w.Part1 = p
+		w.Parent = p
+		p.Parent = crate
+		return p
+	end
+	welded("Lid", Vector3.new(size.X * 0.92, 0.4, size.Z * 0.92), CFrame.new(0, size.Y * 0.5 + 0.1, 0), SupplyDropConfig.LidColor or Color3.fromRGB(180, 140, 50), Enum.Material.Metal)
+	local canopy = welded("Canopy", Vector3.new(14, 2, 14), CFrame.new(0, size.Y * 0.5 + 12, 0), A.CanopyColor, Enum.Material.Fabric)
+	crate.Parent = ensureFolder()
+	CollectionService:AddTag(crate, Constants.Tags.SupplyDrop)
+	local rec: DropRec = {
+		Id = id,
+		Part = crate,
+		ClaimCash = cash,
+		ExpiresAt = os.clock() + A.FallSeconds + A.LifetimeSeconds,
+		ClaimProgress = {},
+		Airdrop = true,
+		Landed = false,
+	}
+	active[id] = rec
+	pushAirdrop({ Show = true, X = ground.X, Y = ground.Y, Z = ground.Z, Cash = cash })
+	if NotificationService then
+		for _, p in ipairs(Players:GetPlayers()) do
+			if SupplyDropConfig.AirdropLiveFor(p.UserId) then
+				NotificationService.Notify(p, "Airdrop incoming! $" .. formatCash(cash), "Info")
+			end
+		end
+	end
+	local tw = TweenService:Create(crate, TweenInfo.new(A.FallSeconds, Enum.EasingStyle.Linear), { CFrame = landed })
+	tw.Completed:Connect(function()
+		if canopy.Parent then
+			canopy:Destroy()
+		end
+		if active[id] == rec then
+			rec.Landed = true
+			local bb = WorldLabel.Create(crate, "Airdrop", {
+				Name = "Label",
+				Sub = "$" .. formatCash(cash),
+				Color = Color3.fromRGB(255, 220, 120),
+				SubColor = Color3.fromRGB(110, 255, 90),
+				Offset = Vector3.new(0, size.Y * 0.5 + (SupplyDropConfig.LabelLiftStuds or 3), 0),
+				MaxDistance = 40,
+			})
+			bb.AlwaysOnTop = false -- the objective marker is the one AlwaysOnTop cue
+		end
+	end)
+	tw:Play()
+	return true
+end
+
 function SupplyDropService.Init(deps: { [string]: any })
 	EconomyService = deps.EconomyService
 	NotificationService = deps.NotificationService
 	AnalyticsService = deps.AnalyticsService
 
+	-- claude-bud JOB 4.1: the airdrop loop (a no-op tick while nobody it is live for is in the server)
+	task.spawn(function()
+		task.wait(SupplyDropConfig.Airdrop.FirstDelaySeconds)
+		while true do
+			local okA, spawned = pcall(spawnAirdrop)
+			if not okA then
+				warn("[SupplyDropService] airdrop failed:", spawned)
+			end
+			-- the full interval after a drop; a short re-check while nobody it is live for is here
+			task.wait(if okA and spawned == true then SupplyDropConfig.Airdrop.IntervalSeconds else 30)
+		end
+	end)
+
 	if not SupplyDropConfig.Enabled then
+		-- claude-bud: the airdrop still needs the claim tick
+		local acc = 0
+		RunService.Heartbeat:Connect(function(dt)
+			acc += dt
+			if acc >= 0.2 then
+				local step = acc
+				acc = 0
+				tickClaims(step)
+			end
+		end)
 		return
 	end
 

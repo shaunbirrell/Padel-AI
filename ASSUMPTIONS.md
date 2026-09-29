@@ -8765,3 +8765,14 @@ ds_territories.luau T3):
   No lights, no Neon, no SurfaceGuis, and no scripts (any are stripped). Tier 2 builds only on Full.
 - World geometry cannot be owner-only (same as v90 runway). Kill switch: `WorldFillConfig.Enabled = false` removes the folder.
 - Not measured in Roblox: the real part count and the busiest-circle numbers need the headless stand-in, which is not in this repo, or a live server log.
+
+## 2026-09-29 — claude-bud JOB 4.1: parachute airdrop (SupplyDropConfig.Airdrop, owner-only)
+- The existing 90 s ground crates (everyone) are unchanged. The airdrop is separate and never takes a crate slot.
+- Every 600 s, while a player it is live for is in the server (it re-checks every 30 s otherwise):
+  - One crate (2 parts + a canopy while falling) is tweened down 160 studs in 12 s onto `pickSpawnPosition()`
+    (event pads, else open ground).
+  - Players it is live for get a toast and the one objective marker ("AIRDROP", FeaturePush → FeatureController).
+  - The first of them to stand within 12 studs for 2 s after landing gets $15,000–40,000 via `EconomyService.AddCash`
+    (the server decides everything). It is gone after 300 s.
+- Owner-only means only owner-live players see the marker and can claim; other players see a crate they cannot claim.
+- New shared remote: `FeaturePush` (server → client only, no OnServerEvent), used by the JOB 4/5 cues.
