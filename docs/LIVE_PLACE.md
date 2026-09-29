@@ -48,6 +48,8 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | PV_MotorPool | Premium Motor Pool | 0 | 1099 | hidden |
 | PV_Stormwing | Stormwing Gunship | 0 | 999 | hidden |
 | PV_Tidebreaker | Tidebreaker Assault Boat | 0 | 299 | hidden |
+| PV_Skylance | Skylance Interceptor | 0 | 899 | Garage (Robux-only jet, owner-only first; TODO create) |
+| PV_Leviathan | Leviathan Dreadnought | 0 | 1199 | Garage (Robux-only capital ship, owner-only first; TODO create) |
 | RebirthBoost | Rebirth Boost | 0 | 199 | hidden |
 
 ### DevProducts

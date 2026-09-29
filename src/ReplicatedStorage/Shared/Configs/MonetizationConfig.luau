@@ -45,7 +45,7 @@ local MonetizationConfig = {
 		them and feel their effect; "all" = everyone; anything else = off (fail closed). ProcessReceipt still grants any
 		receipt Roblox delivers for these Ids (a paid receipt is never dropped). OFF must equal the old game. ]]
 	Rollout = "owner",
-	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true } :: { [string]: boolean },
+	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true, PV_Skylance = true, PV_Stormwing = true, PV_Leviathan = true, PV_Tidebreaker = true, PV_Warlord = true, PV_Razorfang = true } :: { [string]: boolean },
 	GamePasses = {
 		VIP = {
 			Id = 1985475542,
@@ -105,7 +105,6 @@ local MonetizationConfig = {
 			VehicleIds = { "PremiumRazorfang" },
 			BundlePassKeys = { "PV_MotorPool" },
 			Feature = "PremiumVehicles",
-			HideFromShop = true,
 			Description = "Premium armored car with twin hood machine guns",
 		},
 		PV_Bastion = {
@@ -125,7 +124,6 @@ local MonetizationConfig = {
 			VehicleIds = { "PremiumWarlord" },
 			BundlePassKeys = { "PV_MotorPool" },
 			Feature = "PremiumVehicles",
-			HideFromShop = true,
 			Description = "Premium heavy tank with a siege cannon",
 		},
 		PV_MotorPool = {
@@ -144,7 +142,6 @@ local MonetizationConfig = {
 			RobuxPrice = 999,
 			VehicleIds = { "PremiumStormwing" },
 			Feature = "PremiumVehicles",
-			HideFromShop = true,
 			Description = "Premium attack helicopter",
 		},
 		PV_Tidebreaker = { -- M6b (after waterways / boats)
@@ -153,8 +150,25 @@ local MonetizationConfig = {
 			RobuxPrice = 299,
 			VehicleIds = { "PremiumTidebreaker" },
 			Feature = "PremiumVehicles",
-			HideFromShop = true,
 			Description = "Premium assault boat",
+		},
+		-- claude-bud JOB 5a: Robux-only jet and capital ship (VehicleConfig Premium defs). TODO(owner): create on the Creator
+		-- Hub, then paste the Ids (tools/wire-monetization-ids.py). Id 0 = hidden everywhere, nothing prompts.
+		PV_Skylance = {
+			Id = 0,
+			DisplayName = "Skylance Interceptor",
+			RobuxPrice = 899,
+			VehicleIds = { "PremiumSkylance" },
+			Feature = "PremiumVehicles",
+			Description = "Robux-only interceptor jet",
+		},
+		PV_Leviathan = {
+			Id = 0,
+			DisplayName = "Leviathan Dreadnought",
+			RobuxPrice = 1199,
+			VehicleIds = { "PremiumLeviathan" },
+			Feature = "PremiumVehicles",
+			Description = "Robux-only dreadnought",
 		},
 		-- v71 money (M1): Rebirth Boost (J13: +15% Cash per Rebirth instead of +10%, 1.5x starting Cash; no Gold x2).
 		-- RebirthConfig.Boost.GamePassKey. Id = 0 until created (OFF sale until the M7b/M7d publish).

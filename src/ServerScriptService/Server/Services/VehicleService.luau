@@ -4712,6 +4712,9 @@ function VehicleService.Purchase(player: Player, vehicleId: any): (boolean, stri
 	if not def then
 		return false, "UnknownVehicle"
 	end
+	if (def :: any).Premium ~= nil then
+		return false, "RobuxOnly" -- claude-bud JOB 5a: a premium vehicle is never sold for cash (its game pass only)
+	end
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return false, "NoProfile"
@@ -4773,6 +4776,29 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	if not profile then
 		return false, "NoProfile"
 	end
+	-- claude-bud JOB 5a: a premium (Robux-only) vehicle spawns only for a player its game pass is live for AND who owns
+	-- the pass (checked every spawn, so a lost pass stops it); pass owners skip the repair wait (free respawn)
+	local premium: any = (def :: any).Premium
+	local premiumFree = false
+	if premium ~= nil then
+		local passKey = tostring(premium.PassKey)
+		local isOwner = VehicleService._IsPlaytestOwner(player)
+		local MonetizationConfig = require(Shared.Configs.MonetizationConfig) :: any -- (required here: the module is at the 200-local limit)
+		if not isOwner and not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then
+			return false, "UnknownVehicle"
+		end
+		local owns = MonetizationService ~= nil
+			and MonetizationService.PlayerOwnsGamePass ~= nil
+			and MonetizationService.PlayerOwnsGamePass(player, passKey) == true
+		if not owns and not isOwner then
+			return false, "NeedsPass"
+		end
+		premiumFree = owns and (require(Shared.Configs.PremiumVehicleConfig) :: any).FreeRespawn == true
+		if not profile.Vehicles[vehicleId] then
+			profile.Vehicles[vehicleId] = true -- shown as owned in the Garage; the pass check above stays the gate
+			DataService.MarkDirty(player)
+		end
+	end
 	if not profile.Vehicles[vehicleId] then
 		if VehicleService._IsPlaytestOwner(player) then
 			-- v81: owner playtest owns every vehicle (DataService writes them at load; heal a late / missed write)
@@ -4797,8 +4823,8 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			return false, presErr
 		end
 	end
-	if VehicleService._VehicleHealth.RepairLeft(player.UserId, vehicleId) > 0 then
-		return false, "Repairing" -- W2: destroyed → that id is locked for Destroy.RepairSeconds
+	if not premiumFree and VehicleService._VehicleHealth.RepairLeft(player.UserId, vehicleId) > 0 then
+		return false, "Repairing" -- W2: destroyed → that id is locked for Destroy.RepairSeconds (claude-bud: pass owners respawn free)
 	end
 	if cooldownLeft(player.UserId, player) > 0 then
 		return false, "Cooldown"

@@ -811,6 +811,16 @@ end
 
 -- The vehicle's own ref, else its KitFamilyFallback ref (the whole ref: ChildName / Fit travel with the id).
 local function resolveVehicleRef(vehicleId: string, kitFamily: string?): AssetRef?
+	-- claude-bud JOB 5a: a Robux-only clone (VehicleConfig Premium* rows) wears its base vehicle's body (LookId)
+	do
+		local okV, VC = pcall(function(): any
+			return require(ReplicatedStorage.Shared.Configs.VehicleConfig)
+		end)
+		local vdef = if okV and VC and VC.Vehicles then VC.Vehicles[vehicleId] else nil
+		if vdef and typeof(vdef.LookId) == "string" then
+			vehicleId = vdef.LookId
+		end
+	end
 	local vehicles = VisualAssetConfig.Vehicles :: any
 	local ref = vehicles[vehicleId]
 	if refId(ref) > 0 then

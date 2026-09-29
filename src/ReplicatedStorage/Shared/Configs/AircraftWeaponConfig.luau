@@ -266,6 +266,8 @@ local AircraftWeaponConfig = {
 		StrikeBomber = "Bomber",
 		HeavyBomber = "Bomber",
 		StrategicBomber = "Bomber",
+		PremiumSkylance = "Fighter", -- claude-bud JOB 5a: the Robux-only clones keep their base's loadout
+		PremiumStormwing = "AttackHeli",
 	} :: { [string]: string },
 
 	-- never armed (listed so a new aircraft must be placed on purpose; a test checks every Air id is in one list)

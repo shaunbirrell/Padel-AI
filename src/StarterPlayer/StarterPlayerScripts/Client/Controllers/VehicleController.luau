@@ -42,6 +42,7 @@ local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local VehicleConfig = require(Shared.Configs.VehicleConfig)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig) -- claude-bud JOB 5a: Robux-only vehicles
 
 local HudConfig = require(Shared.Configs.HudConfig)
 
@@ -111,6 +112,7 @@ local rarityColors: { [string]: Color3 } = {
 	Rare = Color3.fromRGB(80, 140, 220),
 	Epic = Color3.fromRGB(170, 90, 220),
 	Legendary = Color3.fromRGB(230, 170, 60),
+	Premium = Color3.fromRGB(255, 205, 60), -- claude-bud JOB 5a: Robux-only (gold)
 }
 
 -- rows currently on screen: every row's action button, and the owned (spawn / cooldown) subset
@@ -127,7 +129,31 @@ local STRUCTURE_SHORT: { [string]: string } =
 local STRUCTURE_LONG: { [string]: string } =
 	{ VehicleDepot = "Vehicle Depot", Helipad = "Helipad", Airfield = "Airfield", Dock = "Dock" }
 local KIND_RANK: { [string]: number } =
-	{ Despawn = 0, Repairing = 1, Cooldown = 1, Spawn = 1, Claim = 2, Buy = 2, CantAfford = 3, Locked = 4 }
+	{ Despawn = 0, Repairing = 1, Cooldown = 1, Spawn = 1, Robux = 2, Claim = 2, Buy = 2, CantAfford = 3, Locked = 4 }
+
+-- claude-bud JOB 5a: a Robux-only vehicle's pass (nil for a cash vehicle), its R$ price and whether this player has it
+local function premiumPass(def: any): (string?, number, boolean)
+	local prem = if typeof(def) == "table" then def.Premium else nil
+	if typeof(prem) ~= "table" or typeof(prem.PassKey) ~= "string" then
+		return nil, 0, false
+	end
+	local key = prem.PassKey :: string
+	local pass = (MonetizationConfig.GamePasses :: any)[key]
+	local robux = if typeof(pass) == "table" then (tonumber(pass.RobuxPrice) or 0) else 0
+	local lp = Players.LocalPlayer
+	local owns = lp ~= nil and lp:GetAttribute("WE_Ent_" .. key) == true
+	return key, robux, owns
+end
+
+-- a Robux-only vehicle is listed only while its pass is live for this player (MonetizationConfig.Rollout)
+local function premiumListed(def: any): boolean
+	local key = premiumPass(def)
+	if key == nil then
+		return true
+	end
+	local lp = Players.LocalPlayer
+	return lp ~= nil and MonetizationConfig.SkuLiveFor(lp.UserId, key)
+end
 
 local function addCorner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -233,6 +259,14 @@ function VehicleController._RowState(id: string, def: VehicleDef, ctx: RowCtx): 
 			return { Kind = "Cooldown", Text = string.format("%ds", math.max(1, math.floor(cd + 0.5))), Enabled = false }
 		end
 		return { Kind = "Spawn", Text = "SPAWN", Enabled = true }
+	end
+	-- claude-bud JOB 5a: a Robux-only vehicle is bought with its game pass only (never cash); a pass owner spawns it
+	local passKey, robux, ownsPass = premiumPass(def)
+	if passKey ~= nil then
+		if ownsPass then
+			return { Kind = "Spawn", Text = "SPAWN", Enabled = true }
+		end
+		return { Kind = "Robux", Text = "R$ " .. tostring(robux), Enabled = true }
 	end
 	local reason = VehicleController._LockReason(def, ctx.Gates)
 	if reason then
@@ -342,7 +376,7 @@ local function sortedIds(): { string }
 		local catOk = filterCategory == "All" or cat == filterCategory
 		local rarOk = filterRarity == "All" or rar == filterRarity
 		local ownedOk = not filterOwnedOnly or ownedMap[id] == true
-		if catOk and rarOk and ownedOk then
+		if catOk and rarOk and ownedOk and premiumListed(def) then
 			table.insert(ids, id)
 			rank[id] = KIND_RANK[VehicleController._RowState(id, def, ctx).Kind] or 5
 		end
@@ -431,6 +465,8 @@ local function paintButton(btn: TextButton, id: string, st: RowState)
 		wrapped = true
 	elseif kind == "CantAfford" then
 		bg, fg = Constants.Colors.Gunmetal, Constants.Colors.Gold
+	elseif kind == "Robux" then
+		bg, fg = Constants.Colors.Gold, Color3.fromRGB(20, 20, 20) -- claude-bud JOB 5a: the gold Robux button
 	end
 	if (kind == "Buy" or kind == "Claim" or kind == "CantAfford") and (buyingUntil[id] or 0) > os.clock() then
 		text = "BUYING…"
@@ -528,6 +564,19 @@ local function onRowTap(id: string)
 		fireSpawn(id)
 	elseif kind == "Locked" then
 		setStatus(VehicleController._LockDetail(def, gates) or (def.DisplayName .. " is locked"))
+	elseif kind == "Robux" then
+		-- claude-bud JOB 5a: prompt the vehicle's game pass (the server never grants from this; ownership is re-checked)
+		local passKey = premiumPass(def)
+		local pass = if passKey then (MonetizationConfig.GamePasses :: any)[passKey] else nil
+		local passId = if typeof(pass) == "table" then (tonumber(pass.Id) or 0) else 0
+		if passKey == nil or passId == 0 then
+			setStatus(def.DisplayName .. ": coming soon")
+		else
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseGamePass, passKey, "garage")
+			pcall(function()
+				game:GetService("MarketplaceService"):PromptGamePassPurchase(Players.LocalPlayer, passId)
+			end)
+		end
 	elseif (buyingUntil[id] or 0) > os.clock() then
 		setStatus("Buying " .. def.DisplayName .. "…")
 	elseif kind == "CantAfford" then
@@ -745,6 +794,12 @@ local function rebuild()
 				def.Speed,
 				req
 			)
+			local pk, pr = premiumPass(def)
+			if pk ~= nil then
+				-- claude-bud JOB 5a: the gold ROBUX badge + price (no cash price for a Robux-only vehicle)
+				meta.Text = string.format("ROBUX · R$ %d · %s · Spd %d", pr, rowTip(def), def.Speed)
+				meta.TextColor3 = Constants.Colors.Gold
+			end
 			meta.Parent = row
 
 			local btn = Instance.new("TextButton")

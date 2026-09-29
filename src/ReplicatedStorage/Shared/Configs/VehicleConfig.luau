@@ -128,6 +128,19 @@ local N = function(l: number): { StructureId: string, Level: number }
 	return { StructureId = "Dock", Level = l }
 end
 
+--[[ claude-bud JOB 5a (2026-09-29): ROBUX-ONLY vehicles (the Premium* rows in Vehicles). Each clones the best cash
+	vehicle of its role (same kit; LookId = its store body / colours) and is only slightly stronger (about +5 % HP and
+	armour, +3 % speed; tools/checks/claude_bud_money.py compares). Bought ONLY with its own game pass
+	(Premium.PassKey, MonetizationConfig.GamePasses): VehicleService.Purchase refuses cash for any def with Premium,
+	RequestSpawn needs the pass and the rollout (MonetizationConfig.SkuLiveFor), pass owners skip the repair wait.
+	CostCash 0 is never "free": the Premium check comes first. UnlockLevel 1, no prestige; the spawn structure at L1. ]]
+local function P(d: VehicleDef, passKey: string, lookId: string): VehicleDef
+	local x: any = d
+	x.Premium = { PassKey = passKey }
+	x.LookId = lookId
+	return d
+end
+
 local VehicleConfig = {
 	Vehicles = {
 		-- ═══ GROUND — early wheeled ═══
@@ -414,6 +427,13 @@ local VehicleConfig = {
 			"NavalCapital",
 			{ Struct = N(5), Scale = 1.7, Prestige = 15, RebirthFlag = "EmpireFleet" }
 		),
+		-- claude-bud JOB 5a: Robux-only (see P above); base in the comment
+		PremiumSkylance = P(V("PremiumSkylance", "Skylance Interceptor", "Air", "Premium", 1, 714, 139, 1, 23, 0, "JetFighter", { Struct = A(1), Scale = 1.05 }), "PV_Skylance", "InterceptorJet"),
+		PremiumStormwing = P(V("PremiumStormwing", "Stormwing Gunship", "Air", "Premium", 1, 1155, 77, 2, 40, 0, "HeliAttack", { Struct = H(1), Scale = 1.1 }), "PV_Stormwing", "StealthHeli"),
+		PremiumLeviathan = P(V("PremiumLeviathan", "Leviathan Dreadnought", "Naval", "Premium", 1, 4200, 31, 10, 210, 0, "NavalCapital", { Struct = N(1), Scale = 1.55 }), "PV_Leviathan", "Battleship"),
+		PremiumTidebreaker = P(V("PremiumTidebreaker", "Tidebreaker Assault Boat", "Naval", "Premium", 1, 504, 60, 3, 29, 0, "NavalPatrol", { Struct = N(1), Scale = 0.88 }), "PV_Tidebreaker", "TorpedoBoat"),
+		PremiumWarlord = P(V("PremiumWarlord", "Warlord Siege Tank", "Ground", "Premium", 1, 3780, 19, 4, 210, 0, "TrackedMBT", { Struct = D(1), Scale = 1.6 }), "PV_Warlord", "FortressTank"),
+		PremiumRazorfang = P(V("PremiumRazorfang", "Razorfang GT Interceptor", "Ground", "Premium", 1, 315, 70, 2, 21, 0, "WheeledLight", { Struct = D(1), Scale = 0.85 }), "PV_Razorfang", "ReconBuggy"),
 	} :: { [string]: VehicleDef },
 
 	Categories = { "Ground", "Air", "Naval" } :: { VehicleCategory },

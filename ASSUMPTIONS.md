@@ -8817,3 +8817,24 @@ ds_territories.luau T3):
 - Everyone: WorldFillConfig (kill switch Enabled=false).
 - Behaviour documented in the 2026-09-29 claude-bud JOB 2/3/4 sections above; no new product behaviour beyond those notes.
 - PreferMesh stays OFF. WE_Building* attributes untouched.
+## 2026-09-29 — claude-bud JOB 5a: Robux-only vehicles (owner-only via MonetizationConfig.RolloutKeys)
+- **Picked** (the best cash vehicle of each role). Each is cloned as a Premium row, not converted, so cash buyers keep their vehicles:
+  - jet: InterceptorJet (fastest) → PremiumSkylance, pass PV_Skylance 899 R$ (new)
+  - heli: StealthHeli (top attack heli) → PremiumStormwing, PV_Stormwing 999 R$
+  - boats: Battleship (capital) → PremiumLeviathan, PV_Leviathan 1199 R$ (new); TorpedoBoat (fastest) → PremiumTidebreaker, PV_Tidebreaker 299 R$
+  - ground: FortressTank (heaviest) → PremiumWarlord, PV_Warlord 799 R$; ReconBuggy (fastest) → PremiumRazorfang, PV_Razorfang 199 R$
+  - The existing PremiumVehicleConfig names are reused. PV_Bastion and PV_MotorPool stay hidden and unused.
+- **Stats:** +5 % HP and armour, +3 % speed over the base, the same seats and kit. The same store body and colours
+  come through LookId (resolved in VisualAssetService.resolveVehicleRef). The aircraft get their base's loadout.
+  UnlockLevel 1, no prestige; the spawn structure (Airfield / Helipad / Dock / Depot) is needed at L1.
+  - Assumed "slightly stronger" means about 5 %: a paid shortcut past prestige gates, not a power gap.
+- **Server:**
+  - `VehicleService.Purchase` refuses any Premium def ("RobuxOnly") before any cash logic.
+  - `RequestSpawn` needs the rollout (SkuLiveFor) and `MonetizationService.PlayerOwnsGamePass`, checked every spawn.
+  - Pass owners skip the post-destruction repair wait (`PremiumVehicleConfig.FreeRespawn`). Respawns never cost cash for anyone anyway.
+  - The playtest owner can spawn them without the pass (the existing owner auto-grant).
+- **Client (Garage):** a premium row is listed only where the rollout is live. It shows a gold "ROBUX · R$ N" line,
+  a Premium rarity chip and a gold "R$ N" button that prompts the pass (intent source "garage"); owners see SPAWN
+  (the WE_Ent_<pass> attribute). The 6 PV passes are no longer HideFromShop, so the Shop pass list shows them once their Ids are pasted.
+- VehicleService is at Luau's 200-local limit, so the new requires there are inline. Weapons on ground and naval
+  vehicles still do not exist (the inventory found no ground/naval weapon service); the premium boats and tanks are armour/HP/speed only, like their bases.

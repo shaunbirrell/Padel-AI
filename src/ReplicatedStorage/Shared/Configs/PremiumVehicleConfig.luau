@@ -41,6 +41,8 @@ local GOLD = Color3.fromRGB(255, 200, 70) -- premium pinstripes / rims / turret 
 
 local PremiumVehicleConfig = {
 	Enabled = true,
+	-- claude-bud JOB 5a: a pass owner's premium vehicle skips the post-destruction repair wait (VehicleService.RequestSpawn)
+	FreeRespawn = true,
 
 	Lineup = {
 		{
