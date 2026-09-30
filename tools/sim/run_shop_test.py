@@ -10,10 +10,12 @@
 4. PERKS: SyncPerks sets WE_PerkDoubleHP / WE_PerkSuperSoldiers from ownership only while live.
 5. SPEED STAND (the real ShopOverhaulService + PurchaseStands.Retarget): a live owner's Speed stand sells Speed Boost
    (attributes, price chip, prompt), back to the config offer when he leaves.
-6. CONFIG: the three new passes at Id 0 with their prices; War Chest implies the four; VIP shown at 349 only through
+6. CONFIG: the three new passes at their Creator Hub Ids (v140) with their prices; War Chest implies the four; VIP shown at 349 only through
    OverhaulRobuxPrice (the live price stays until the owner reprices); vip_supply exempt.
 7. RECEIPT ORDER (static, MonetizationService): the pack lookup comes before the first grant mutation and re-checks the
    player / profile after it.
+8. RENDER (codebot_v140, run_shop_render_test.py): the real ShopController rows (cash packs render; the cash + scrolls
+   to the Mega row; the new passes owner-first).
 Run: LUAU=path/to/luau(.exe) python tools/sim/run_shop_test.py   (exit 1 on any failure)"""
 import os
 import subprocess
@@ -149,9 +151,9 @@ S.SyncSpeedStand(4, nil)
 check(top:GetAttribute("OfferKind") == "GamePass" and top:GetAttribute("OfferKey") == "ImpulseSpeed", "owner left: back to the config's first live offer (Speed Pass)")
 
 -- ── 6. config ──
-for k, p in pairs({ WarChest = 799, SuperSoldiers = 349, DoubleHP = 199 }) do
+for k, v in pairs({ WarChest = { 2002640637, 799 }, SuperSoldiers = { 1998231741, 349 }, DoubleHP = { 2002214665, 199 } }) do
   local d = MC.GamePasses[k]
-  check(d ~= nil and d.Id == 0 and d.RobuxPrice == p and d.OverhaulShop == true, k .. ": Id 0, R$ " .. p)
+  check(d ~= nil and d.Id == v[1] and d.RobuxPrice == v[2] and d.OverhaulShop == true, k .. ": Id " .. v[1] .. ", R$ " .. v[2])
 end
 check(table.concat(MC.GamePasses.WarChest.Implies, ",") == "DoubleCash,AutoCollect,VIP,BiggerArmy", "War Chest implies 2x Cash, Auto Collect, VIP, Bigger Army")
 check(MC.GamePasses.VIP.RobuxPrice == 199 and MC.GamePasses.VIP.OverhaulRobuxPrice == 349 and MC.GamePasses.VIP.Id == 1985475542, "VIP: 349 shown while live; 199 until the owner reprices")
@@ -184,6 +186,15 @@ luau = os.environ.get("LUAU", "luau")
 r = subprocess.run([luau, path], capture_output=True, text=True)
 out = r.stdout.strip()
 print(out if os.environ.get("VERBOSE") else ("\n".join(l for l in out.splitlines() if l.startswith("FAIL") or l.startswith("SHOP TEST") or l.startswith("  ")) or out))
-if r.returncode != 0 or fails:
+if r.returncode != 0:
     print(r.stderr.strip()[-2500:])
+    fails.append("shop test")
+
+# codebot_v140: 8. RENDER - the real ShopController.Init builds List_Supply (owner + another player): every cash pack row
+# renders, the JOB 36 passes are owner-first, and the cash "+" scrolls to the Mega row (tools/sim/run_shop_render_test.py)
+import run_shop_render_test  # noqa: E402
+
+if not (run_shop_render_test.run(470626172) & run_shop_render_test.run(9)):
+    fails.append("shop render")
+if fails:
     sys.exit(1)

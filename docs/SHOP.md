@@ -31,13 +31,13 @@ Every pass row reads **PERMANENT**.
 
 | Key | Name | R$ | Id | Grants | Sold where |
 |---|---|---|---|---|---|
-| `WarChest` | War Chest | 799 | **0** | Counts as owning 2x Cash + Auto Collect + VIP + Bigger Army | Shop (overhaul); hidden once all four are owned |
+| `WarChest` | War Chest | 799 | 2002640637 | Counts as owning 2x Cash + Auto Collect + VIP + Bigger Army | Shop (overhaul); hidden once all four are owned |
 | `DoubleCash` | 2x Cash | 149 | 1982865711 | x2 Cash earnings | Shop (BEST VALUE), yellow Supply Depot stand, offers |
 | `VIP` | VIP | 199 → **349** (overhaul) | 1985475542 | +25 % Cash. Overhaul: +50 % Cash, a daily supply crate (~10 min of income), the VIP lounge, the [VIP] chat tag and a gold chat name | Shop, VIP offer |
 | `AutoCollect` | Auto Collect | 99 | 1985115501 | Empties the ATM automatically | Shop, red Supply Depot stand |
 | `BiggerArmy` | Bigger Army | 249 | 2001734404 | +10 army cap (stacks with Army Expansion) | Shop, army-wiped offer (overhaul) |
-| `SuperSoldiers` | Super Soldiers | 349 | **0** | +25 % army damage and soldier HP (the per-player army damage cap stays) | Shop (overhaul) |
-| `DoubleHP` | Double HP | 199 | **0** | x2 player MaxHealth (armour adds on top) | Shop (overhaul) |
+| `SuperSoldiers` | Super Soldiers | 349 | 1998231741 | +25 % army damage and soldier HP (the per-player army damage cap stays) | Shop (overhaul) |
+| `DoubleHP` | Double HP | 199 | 2002214665 | x2 player MaxHealth (armour adds on top) | Shop (overhaul) |
 | `DoubleXP` | Double XP | 99 | 1982487698 | x2 XP | Shop |
 | `ImpulseSpeed` | Speed Pass | 99 | 1998656357 | x1.5 walk speed | Old shop and the death offer. Overhaul: out of the Shop (Speed Boost sells speed); owners keep x1.5 |
 | `ExtraGarageSlot` | Extra Garage Slot | 199 | 1999359549 | +1 vehicle out | Shop (gold row) |
@@ -81,7 +81,9 @@ Every pass row reads **PERMANENT**.
 | `AutoCollect` / `DoubleCash` / `VIPBoost` | (product twins of the passes) | — | **0** | — | Hidden (the passes cover them) |
 
 ## Ids and prices the owner must set
-- Create the three new passes and paste their Ids: `WarChest` 799, `SuperSoldiers` 349, `DoubleHP` 199.
+- ~~Create the three new passes~~ Done 2026-09-30 (codebot_v140, WE_Build 140): `WarChest` 2002640637 (799), `SuperSoldiers`
+  1998231741 (349), `DoubleHP` 2002214665 (199). Verified on universe 10767159222, on sale, prices match. Still owner-first
+  (`ShopOverhaulConfig.Live.OwnerFirst = true`) until the owner says launch.
 - The six `PG_*` guns and `PG_ArmoryPass`: see JOB 35.
 - **VIP:** set the pass price to **349 R$** on the Creator Hub, then launch the overhaul. The shop shows 349 only while
   the overhaul is live; Roblox always charges the Creator Hub price.

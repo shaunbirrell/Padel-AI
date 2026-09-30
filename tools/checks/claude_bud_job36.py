@@ -47,9 +47,9 @@ _AR = _j36_code(_SV + "Services/ArmourService.luau")
 
 _j36("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- only UserId 470626172" in _SOC and "RetentionConfig.Live(ShopOverhaulConfig.Live, userId)" in _SOC,
      "one owner-first kill switch (ShopOverhaulConfig.Live)")
-# new passes Id 0; no live Id or price changed
-for _k, _p in (("WarChest", 799), ("SuperSoldiers", 349), ("DoubleHP", 199)):
-    _j36(("\t\t%s = {\n\t\t\tId = 0,\n" % _k) in _MCF and ("RobuxPrice = %d," % _p) in _MCF, "%s: Id 0 (hidden, never prompted), R$ %d" % (_k, _p))
+# new passes: real Creator Hub Ids (codebot_v140, universe 10767159222); no live Id or price changed
+for _k, _id, _p in (("WarChest", 2002640637, 799), ("SuperSoldiers", 1998231741, 349), ("DoubleHP", 2002214665, 199)):
+    _j36(("\t\t%s = {\n\t\t\tId = %d,\n" % (_k, _id)) in _MCF and ("RobuxPrice = %d," % _p) in _MCF, "%s: Id %d, R$ %d" % (_k, _id, _p))
 _j36("\t\tVIP = {\n\t\t\tId = 1985475542,\n\t\t\tDisplayName = \"VIP\",\n\t\t\tRobuxPrice = 199," in _MCF and "OverhaulRobuxPrice = 349," in _MCF,
      "VIP: 349 shown while live (OverhaulRobuxPrice); the live 199 stays until the owner reprices on the Creator Hub")
 for _k, _id in (("CashSmall", 3713838744), ("CashMedium", 3713838815), ("CashLarge", 3713838888), ("CashMega", 3713838952)):

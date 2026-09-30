@@ -410,6 +410,21 @@ local function selectTab(name: string)
 	queueRefresh()
 end
 
+-- codebot_v140 (owner bug "cash packs gone"): the JOB 36 overhaul order puts the cash packs after ~30 pass rows
+-- (ShopOverhaulConfig.Order), but the cash "+" still scrolled to the TOP ("CashMega is first"), so the packs were never
+-- on screen. The Mega row's canvas Y = the heights (WE_RowH) of every visible row sorted before it + the list padding.
+local LIST_PAD = 6
+local function rowCanvasY(list: Instance, row: GuiObject): number
+	local y = 0
+	for _, c in ipairs(list:GetChildren()) do
+		if c ~= row and c:IsA("GuiObject") and c.Visible ~= false and c.LayoutOrder < row.LayoutOrder then
+			local h = tonumber(c:GetAttribute("WE_RowH"))
+			y += (h or c.AbsoluteSize.Y) + LIST_PAD
+		end
+	end
+	return y
+end
+
 local function highlightCashMegaRow()
 	local list = shopListFrame
 	if not list then
@@ -425,9 +440,9 @@ local function highlightCashMegaRow()
 	stroke.Parent = row
 	stroke.Color = Constants.Colors.Gold
 	stroke.Thickness = 2.5
-	-- Scroll to top (CashMega is first)
+	-- codebot_v140: scroll to the Mega row wherever the order puts it (was: to the top, "CashMega is first")
 	if list:IsA("ScrollingFrame") then
-		list.CanvasPosition = Vector2.new(0, 0)
+		list.CanvasPosition = Vector2.new(0, rowCanvasY(list, row))
 	end
 	task.delay(4, function()
 		if row.Parent then
@@ -760,13 +775,14 @@ function ShopController.Init()
 		l.Visible = name == activeTab
 		l.Parent = panel
 		local lay = Instance.new("UIListLayout")
-		lay.Padding = UDim.new(0, 6)
+		lay.Padding = UDim.new(0, LIST_PAD)
 		lay.SortOrder = Enum.SortOrder.LayoutOrder
 		lay.Parent = l
 		local n = Instance.new("TextLabel")
 		n.Name = "Note"
 		n.BackgroundTransparency = 1
 		n.Size = UDim2.new(1, -8, 0, noteSize * 2 + 6)
+		n:SetAttribute("WE_RowH", noteSize * 2 + 6) -- codebot_v140: rowCanvasY
 		n.Font = Enum.Font.GothamMedium
 		n.TextSize = noteSize
 		n.TextWrapped = true
@@ -805,6 +821,7 @@ function ShopController.Init()
 		row.BackgroundColor3 = if isHero then HERO_ROW_BG else Constants.Colors.Background
 		row.BorderSizePixel = 0
 		row.LayoutOrder = layoutOrder
+		row:SetAttribute("WE_RowH", rowH) -- codebot_v140: rowCanvasY (the cash "+" scrolls to the Mega row)
 		row.Parent = parentList
 		corner(row, 8)
 		if isHero then

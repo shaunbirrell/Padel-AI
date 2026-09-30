@@ -766,16 +766,6 @@ local function ensureNPCFolder(): Folder
 	return folder
 end
 
-local function aliveNPCCount(): number
-	local n = 0
-	for _, rec in pairs(npcRecords) do
-		if rec.Alive then
-			n += 1
-		end
-	end
-	return n
-end
-
 local function destroyNPC(rec: NPCRecord)
 	rec.Alive = false
 	npcRecords[rec.Id] = nil
@@ -985,8 +975,13 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame, opts: NPCSpawnOpts?
 	local isSpecial = table.find(CombatConfig.SpecialNPCTypes, tid) ~= nil or o.OverCap
 	local cap = CombatConfig.MaxActiveNPCs or 18
 	-- Special guards may exceed soft field pool by SpecialOverCap (+4) so bank always gets guards
-	if aliveNPCCount() >= (if isSpecial then cap + CombatConfig.SpecialOverCap else cap) then
-		print(string.format("[CombatService] SpawnNPC blocked at cap alive=%d tid=%s", aliveNPCCount(), tostring(tid)))
+	-- codebot_v140 (owner bug "Too many enemies around" at his own base): the regular gate compared the TOTAL alive
+	-- count (OverCap outpost defenders, up to OutpostDefenderConfig.MaxTotal 20, + bank guards) with the regular cap 18,
+	-- so defenders awake near the player filled the regular budget and every mission / garrison / field spawn failed.
+	-- The contract (NPCCounts, lane N) is Regular <= cap and Total <= cap + SpecialOverCap: count each against its own.
+	local counts = CombatService.NPCCounts()
+	if (if isSpecial then counts.Total >= cap + CombatConfig.SpecialOverCap else counts.Regular >= cap) then
+		print(string.format("[CombatService] SpawnNPC blocked at cap regular=%d total=%d tid=%s", counts.Regular, counts.Total, tostring(tid)))
 		return nil
 	end
 	local def = CombatConfig.NPCTypes[tid]

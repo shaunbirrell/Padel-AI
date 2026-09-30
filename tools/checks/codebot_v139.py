@@ -20,9 +20,7 @@ def _rd139(p):
 
 _S139 = "src/ServerScriptService/Server/"
 _C139 = "src/ReplicatedStorage/Shared/Configs/"
-for _f in (_S139 + "Services/DataService.luau", _S139 + "Services/BaseService.luau", _S139 + "EarlyRemotes.server.luau"):
-    _cb139('SetAttribute("WE_Build", 139)' in _rd139(_f), "CODEBOT v139: WE_Build=139 " + _f.rsplit("/", 1)[-1])
-_cb139("WE_Build=139" in _rd139(_S139 + "Services/DataService.luau"), "CODEBOT v139: DataService profile-loaded log says WE_Build=139")
+# v140 (Code Bot Roblox): the WE_Build=139 pins are superseded in tools/checks/codebot_v140.py (WE_Build=140).
 
 _SOC = _rd139(_C139 + "ShopOverhaulConfig.luau")
 _cb139("Enabled = true" in _SOC and "OwnerFirst = true" in _SOC, "CODEBOT v139: ShopOverhaulConfig Live Enabled + OwnerFirst=true")
@@ -34,8 +32,7 @@ for _k, _price in (("WarChest", 799), ("SuperSoldiers", 349), ("DoubleHP", 199))
     _cb139((_k + " = {") in _MON, "CODEBOT v139: MonetizationConfig has " + _k)
     # Id 0 block nearby
     import re as _re139
-    m = _re139.search(rf"{_k}\s*=\s*\{{[^}}]*?Id\s*=\s*(\d+)", _MON, _re139.S)
-    _cb139(m is not None and m.group(1) == "0", "CODEBOT v139: " + _k + " Id = 0 (hidden until owner pastes)")
+    # v140: the Id = 0 pin is superseded in tools/checks/codebot_v140.py (real Creator Hub Ids).
     m2 = _re139.search(rf"{_k}\s*=\s*\{{[^}}]*?RobuxPrice\s*=\s*(\d+)", _MON, _re139.S)
     _cb139(m2 is not None and int(m2.group(1)) == _price, "CODEBOT v139: " + _k + " RobuxPrice=" + str(_price))
 

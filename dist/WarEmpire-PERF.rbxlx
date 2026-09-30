@@ -5287,7 +5287,13 @@ HudConfig.CombatFx = {
 	TargetBar = { Seconds = 2.5, Width = 120, Height = 6, NamePx = 14 }, -- real px, under the reticle
 	Haptics = { Enabled = true, Hit = 0.2, Kill = 0.5 }, -- touch only (HapticService)
 	-- Roblox-owned animation ids (docs/ASSET_SHORTLIST.md §3.4, creator Roblox); 0 disables
-	Anims = { Hold = { Rifle = 3972151362, Pistol = 507768375, Launcher = 3972164452 }, Reload = 3972131105 },
+	-- A Hold id is played Looped at normal speed (WeaponVisuals.playHold), so it must be a real idle loop. Never
+	-- 3972164452 (the Weapons Kit "RifleAim"): that is a pitch-scrub pose sheet (t = 0 aims 80° down, t = 1 level,
+	-- t = 2 aims 80° up; the kit freezes it and sets TimePosition from the camera pitch) that keys the Waist
+	-- (UpperTorso ~50° twist, -73° -> +28° pitch). Looped it swept the torso and the launcher from down to near
+	-- vertical every 2 s and snapped back: the RPG / launcher wobble (owner report 2026-09-30). The launchers use
+	-- RifleHold (arms only; its UpperTorso pose has Weight 0, t = 0 and t = 2 are the same pose).
+	Anims = { Hold = { Rifle = 3972151362, Pistol = 507768375, Launcher = 3972151362 }, Reload = 3972131105 },
 	-- gun placement in the hand (device tuning knob; zero = the Roblox Tool default: barrel along the
 	-- RightGripAttachment's -Z, top along its +Y). Handle = grip * Rotation(deg, X/Y/Z order) * Offset(studs).
 	Grip = { RotationDeg = Vector3.zero, OffsetStuds = Vector3.zero },
@@ -6535,10 +6541,10 @@ local MonetizationConfig = {
 			OverhaulRobuxPrice = 349,
 			OverhaulDescription = "+50% Cash, daily supply crate, VIP lounge, gold name",
 		},
-		-- claude-bud JOB 36: new passes (ShopOverhaulConfig). Id 0 = hidden, never prompted. TODO(owner): create each on
-		-- the Creator Hub and paste the Id. Implies = passes this one counts as owning (MonetizationService marks them owned).
+		-- claude-bud JOB 36: new passes (ShopOverhaulConfig). codebot_v140 (2026-09-30): owner created them on the Creator
+		-- Hub (universe 10767159222, on sale, prices match); Ids wired. Implies = passes this one counts as owning.
 		WarChest = {
-			Id = 0,
+			Id = 2002640637,
 			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
 			DisplayName = "War Chest",
 			RobuxPrice = 799,
@@ -6547,7 +6553,7 @@ local MonetizationConfig = {
 			Description = "2x Cash + Auto Collect + VIP + Bigger Army",
 		},
 		SuperSoldiers = {
-			Id = 0,
+			Id = 1998231741,
 			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
 			DisplayName = "Super Soldiers",
 			RobuxPrice = 349,
@@ -6555,7 +6561,7 @@ local MonetizationConfig = {
 			Description = "+25% army damage and soldier health",
 		},
 		DoubleHP = {
-			Id = 0,
+			Id = 2002214665,
 			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
 			DisplayName = "Double HP",
 			RobuxPrice = 199,
@@ -27939,7 +27945,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 139)
+		player:SetAttribute("WE_Build", 140)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -67168,7 +67174,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 139)
+			player:SetAttribute("WE_Build", 140)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -70935,16 +70941,6 @@ local function ensureNPCFolder(): Folder
 	return folder
 end
 
-local function aliveNPCCount(): number
-	local n = 0
-	for _, rec in pairs(npcRecords) do
-		if rec.Alive then
-			n += 1
-		end
-	end
-	return n
-end
-
 local function destroyNPC(rec: NPCRecord)
 	rec.Alive = false
 	npcRecords[rec.Id] = nil
@@ -71154,8 +71150,13 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame, opts: NPCSpawnOpts?
 	local isSpecial = table.find(CombatConfig.SpecialNPCTypes, tid) ~= nil or o.OverCap
 	local cap = CombatConfig.MaxActiveNPCs or 18
 	-- Special guards may exceed soft field pool by SpecialOverCap (+4) so bank always gets guards
-	if aliveNPCCount() >= (if isSpecial then cap + CombatConfig.SpecialOverCap else cap) then
-		print(string.format("[CombatService] SpawnNPC blocked at cap alive=%d tid=%s", aliveNPCCount(), tostring(tid)))
+	-- codebot_v140 (owner bug "Too many enemies around" at his own base): the regular gate compared the TOTAL alive
+	-- count (OverCap outpost defenders, up to OutpostDefenderConfig.MaxTotal 20, + bank guards) with the regular cap 18,
+	-- so defenders awake near the player filled the regular budget and every mission / garrison / field spawn failed.
+	-- The contract (NPCCounts, lane N) is Regular <= cap and Total <= cap + SpecialOverCap: count each against its own.
+	local counts = CombatService.NPCCounts()
+	if (if isSpecial then counts.Total >= cap + CombatConfig.SpecialOverCap else counts.Regular >= cap) then
+		print(string.format("[CombatService] SpawnNPC blocked at cap regular=%d total=%d tid=%s", counts.Regular, counts.Total, tostring(tid)))
 		return nil
 	end
 	local def = CombatConfig.NPCTypes[tid]
@@ -75070,7 +75071,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 139)
+		player:SetAttribute("WE_Build", 140)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -75212,7 +75213,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=139",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=140",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -96131,7 +96132,7 @@ function SiteActivityService.Init(d: { [string]: any })
 		elseif action == "start" and typeof(id) == "string" then
 			local ok, why = start(player, id)
 			if not ok then
-				local copy = ({ Busy = "Finish your current activity first", Cooldown = "Not ready yet", AreaBusy = "Too many enemies around; try soon", NoSite = "That site is not on this map" } :: { [string]: string })[why or ""]
+				local copy = ({ Busy = "Finish your current activity first", Cooldown = "Not ready yet", AreaBusy = "The battlefield is full right now; try again soon", NoSite = "That site is not on this map" } :: { [string]: string })[why or ""]
 				if copy then
 					notify(player, copy, "Warn")
 				end
@@ -135909,6 +135910,21 @@ local function selectTab(name: string)
 	queueRefresh()
 end
 
+-- codebot_v140 (owner bug "cash packs gone"): the JOB 36 overhaul order puts the cash packs after ~30 pass rows
+-- (ShopOverhaulConfig.Order), but the cash "+" still scrolled to the TOP ("CashMega is first"), so the packs were never
+-- on screen. The Mega row's canvas Y = the heights (WE_RowH) of every visible row sorted before it + the list padding.
+local LIST_PAD = 6
+local function rowCanvasY(list: Instance, row: GuiObject): number
+	local y = 0
+	for _, c in ipairs(list:GetChildren()) do
+		if c ~= row and c:IsA("GuiObject") and c.Visible ~= false and c.LayoutOrder < row.LayoutOrder then
+			local h = tonumber(c:GetAttribute("WE_RowH"))
+			y += (h or c.AbsoluteSize.Y) + LIST_PAD
+		end
+	end
+	return y
+end
+
 local function highlightCashMegaRow()
 	local list = shopListFrame
 	if not list then
@@ -135924,9 +135940,9 @@ local function highlightCashMegaRow()
 	stroke.Parent = row
 	stroke.Color = Constants.Colors.Gold
 	stroke.Thickness = 2.5
-	-- Scroll to top (CashMega is first)
+	-- codebot_v140: scroll to the Mega row wherever the order puts it (was: to the top, "CashMega is first")
 	if list:IsA("ScrollingFrame") then
-		list.CanvasPosition = Vector2.new(0, 0)
+		list.CanvasPosition = Vector2.new(0, rowCanvasY(list, row))
 	end
 	task.delay(4, function()
 		if row.Parent then
@@ -136259,13 +136275,14 @@ function ShopController.Init()
 		l.Visible = name == activeTab
 		l.Parent = panel
 		local lay = Instance.new("UIListLayout")
-		lay.Padding = UDim.new(0, 6)
+		lay.Padding = UDim.new(0, LIST_PAD)
 		lay.SortOrder = Enum.SortOrder.LayoutOrder
 		lay.Parent = l
 		local n = Instance.new("TextLabel")
 		n.Name = "Note"
 		n.BackgroundTransparency = 1
 		n.Size = UDim2.new(1, -8, 0, noteSize * 2 + 6)
+		n:SetAttribute("WE_RowH", noteSize * 2 + 6) -- codebot_v140: rowCanvasY
 		n.Font = Enum.Font.GothamMedium
 		n.TextSize = noteSize
 		n.TextWrapped = true
@@ -136304,6 +136321,7 @@ function ShopController.Init()
 		row.BackgroundColor3 = if isHero then HERO_ROW_BG else Constants.Colors.Background
 		row.BorderSizePixel = 0
 		row.LayoutOrder = layoutOrder
+		row:SetAttribute("WE_RowH", rowH) -- codebot_v140: rowCanvasY (the cash "+" scrolls to the Mega row)
 		row.Parent = parentList
 		corner(row, 8)
 		if isHero then

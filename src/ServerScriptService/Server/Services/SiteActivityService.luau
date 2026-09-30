@@ -604,7 +604,7 @@ function SiteActivityService.Init(d: { [string]: any })
 		elseif action == "start" and typeof(id) == "string" then
 			local ok, why = start(player, id)
 			if not ok then
-				local copy = ({ Busy = "Finish your current activity first", Cooldown = "Not ready yet", AreaBusy = "Too many enemies around; try soon", NoSite = "That site is not on this map" } :: { [string]: string })[why or ""]
+				local copy = ({ Busy = "Finish your current activity first", Cooldown = "Not ready yet", AreaBusy = "The battlefield is full right now; try again soon", NoSite = "That site is not on this map" } :: { [string]: string })[why or ""]
 				if copy then
 					notify(player, copy, "Warn")
 				end

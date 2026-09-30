@@ -80,10 +80,10 @@ local MonetizationConfig = {
 			OverhaulRobuxPrice = 349,
 			OverhaulDescription = "+50% Cash, daily supply crate, VIP lounge, gold name",
 		},
-		-- claude-bud JOB 36: new passes (ShopOverhaulConfig). Id 0 = hidden, never prompted. TODO(owner): create each on
-		-- the Creator Hub and paste the Id. Implies = passes this one counts as owning (MonetizationService marks them owned).
+		-- claude-bud JOB 36: new passes (ShopOverhaulConfig). codebot_v140 (2026-09-30): owner created them on the Creator
+		-- Hub (universe 10767159222, on sale, prices match); Ids wired. Implies = passes this one counts as owning.
 		WarChest = {
-			Id = 0,
+			Id = 2002640637,
 			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
 			DisplayName = "War Chest",
 			RobuxPrice = 799,
@@ -92,7 +92,7 @@ local MonetizationConfig = {
 			Description = "2x Cash + Auto Collect + VIP + Bigger Army",
 		},
 		SuperSoldiers = {
-			Id = 0,
+			Id = 1998231741,
 			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
 			DisplayName = "Super Soldiers",
 			RobuxPrice = 349,
@@ -100,7 +100,7 @@ local MonetizationConfig = {
 			Description = "+25% army damage and soldier health",
 		},
 		DoubleHP = {
-			Id = 0,
+			Id = 2002214665,
 			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
 			DisplayName = "Double HP",
 			RobuxPrice = 199,

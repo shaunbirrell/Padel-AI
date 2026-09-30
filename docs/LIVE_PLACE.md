@@ -54,9 +54,9 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | BiggerArmy | Bigger Army | 2001734404 | 249 | Shop (+10 army cap; owner-only first; Id wired v99) |
 | ExtraGarageSlot | Extra Garage Slot | 1999359549 | 199 | Shop gold ROBUX row (+1 vehicle slot; owner-only first; Id wired v99) |
 | RebirthBoost | Rebirth Boost | 0 | 199 | hidden |
-| WarChest | War Chest | 0 | 799 | Shop (JOB 36 overhaul, owner-first): counts as 2x Cash + Auto Collect + VIP + Bigger Army |
-| SuperSoldiers | Super Soldiers | 0 | 349 | Shop (JOB 36 overhaul): +25% army damage and soldier HP |
-| DoubleHP | Double HP | 0 | 199 | Shop (JOB 36 overhaul): x2 max health |
+| WarChest | War Chest | 2002640637 | 799 | Shop (JOB 36 overhaul, owner-first): counts as 2x Cash + Auto Collect + VIP + Bigger Army |
+| SuperSoldiers | Super Soldiers | 1998231741 | 349 | Shop (JOB 36 overhaul): +25% army damage and soldier HP |
+| DoubleHP | Double HP | 2002214665 | 199 | Shop (JOB 36 overhaul): x2 max health |
 | PG_Sovereign | Sovereign Gold Pistol | 2002154652 | 99 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
 | PG_Quake | Quake Grenade Launcher | 2003492417 | 249 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
 | PG_Longshot | Longshot Sniper | 2003180431 | 299 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
