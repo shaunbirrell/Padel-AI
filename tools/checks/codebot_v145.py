@@ -1,0 +1,74 @@
+# Code Bot Roblox v145 (2026-09-30): JOB 38 army orders fix (owner phone test: "Sending my army to a location they
+# don't go and attack"). Routes start at the ARMY block (not the owner inside his walled base: NoPath through the
+# closed gate -> "No route" + HOLD); the lead is placed Standoff along the route; the gap is measured past the
+# block's standoff; RETURN goes to his gate while he is inside his base; a failed middle leg tries the rest whole.
+# Live state kept: ArmyOrders OwnerFirst=true; ShopOverhaul + CheckpointGuard OwnerFirst=false; VIP 199; pass Ids;
+# RPG hold 3972151362; WeaponsLive; FastTravel removed; PreferMesh OFF; WE_Building* untouched; WE_Build 145.
+import os as _os145
+import re as _re145
+import subprocess as _sp145
+from pathlib import Path as _P145
+
+
+def _cb145(cond, label):
+	if "ok" in globals() and "bad" in globals():
+		(ok if cond else bad)(label)
+	else:
+		print(("PASS " if cond else "FAIL ") + label)
+		if not cond:
+			raise SystemExit(1)
+
+
+def _rd145(p):
+	q = _P145(p)
+	return q.read_text(encoding="utf-8") if q.is_file() else ""
+
+
+_S145 = "src/ServerScriptService/Server/"
+_C145 = "src/ReplicatedStorage/Shared/Configs/"
+for _f in (_S145 + "Services/DataService.luau", _S145 + "Services/BaseService.luau", _S145 + "EarlyRemotes.server.luau"):
+	_cb145('SetAttribute("WE_Build", 145)' in _rd145(_f), "CODEBOT v145: WE_Build=145 " + _f.rsplit("/", 1)[-1])
+_cb145("WE_Build=145" in _rd145(_S145 + "Services/DataService.luau"), "CODEBOT v145: DataService profile-loaded log says WE_Build=145")
+
+# the fix
+_AP = _rd145(_S145 + "Modules/ArmyPlan.luau")
+_AR = _rd145(_S145 + "Modules/ArmyRoute.luau")
+_ACt = _rd145(_S145 + "Modules/ArmyController.luau")
+_cb145("local start = if c then c else plan.Lead" in _AP and "ArmyRoute.PointAlong(start, route, standoff)" in _AP,
+	"CODEBOT v145: an army route starts at the block (not the owner) and the lead is placed Standoff along it")
+_cb145("setDest(plan, plan.Dest :: Vector3, Vector3.new(centre.X, plan.Lead.Y, centre.Z))" not in _AP,
+	"CODEBOT v145: the stuck re-plan never puts the lead back onto the block (it walked backwards)")
+_cb145("centre = centre + toLead.Unit * math.min(standoffOf(plan.Squad), toLead.Magnitude)" in _AP,
+	"CODEBOT v145: the lead waits only while the block is LeadMaxGap past its own standoff")
+_cb145("function ArmyController.Standoff(st: any): number" in _ACt, "CODEBOT v145: ArmyController.Standoff (FirstRowStuds + half depth, radius + bubble)")
+_cb145("local function returnDest(plan: Plan): Vector3" in _AP and "plan.ReturnGate = true" in _AP,
+	"CODEBOT v145: RETURN goes to his gate spot while he is inside his base / cannot be reached")
+_cb145("if got == nil and li < #legs then" in _AR and "got = compute(start, to)" in _AR,
+	"CODEBOT v145: a failed middle leg tries the rest of the way as one path")
+_code = "\n".join(l.split("--", 1)[0] for l in _re145.sub(r"--\[\[.*?\]\]", "", _AP + "\n" + _AR, flags=_re145.S).splitlines())
+_cb145(not any(w in _code for w in ("PivotTo", "TeleportService", "Root.CFrame =", ":MoveTo(")),
+	"CODEBOT v145: no teleport / PivotTo / forced MoveTo in ArmyPlan / ArmyRoute")
+_cb145("MarchSpeed = 14," in _rd145(_C145 + "ArmyOrdersConfig.luau") and "LeadMaxGap = 18," in _rd145(_C145 + "ArmyOrdersConfig.luau"),
+	"CODEBOT v145: march speed / gap unchanged (no faster catch-up)")
+_luau = _os145.environ.get("LUAU") or str(_P145.home() / ".local/bin/luau")
+if _P145(_luau).is_file():
+	_r = _sp145.run(["python3", "tools/sim/run_army_march_test.py"], capture_output=True, text=True, env=dict(_os145.environ, LUAU=_luau))
+	_cb145(_r.returncode == 0 and "ARMY MARCH TEST: 0 failed" in _r.stdout,
+		"CODEBOT v145: run_army_march_test (real ArmyPlan + ArmyController + Formation + SoldierController) 0 failed")
+	_r2 = _sp145.run(["python3", "tools/sim/run_army_orders_test.py"], capture_output=True, text=True, env=dict(_os145.environ, LUAU=_luau))
+	_cb145(_r2.returncode == 0, "CODEBOT v145: run_army_orders_test 0 failed")
+
+# live state kept
+_AOC = _rd145(_C145 + "ArmyOrdersConfig.luau")
+_cb145("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _AOC, "CODEBOT v145: ArmyOrdersConfig OwnerFirst stays true")
+_cb145("OwnerFirst = false, -- codebot_v142 launch" in _rd145(_C145 + "ShopOverhaulConfig.luau"), "CODEBOT v145: ShopOverhaul stays OwnerFirst=false")
+_cb145("OwnerFirst = false, -- codebot_v142 launch" in _rd145(_C145 + "CheckpointGuardConfig.luau"), "CODEBOT v145: CheckpointGuard stays OwnerFirst=false")
+_cb145("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _rd145(_C145 + "EndgameConfig.luau"), "CODEBOT v145: EndgameConfig stays OwnerFirst=true")
+_cb145("PreferMeshWhenAssetIdSet = false" in _rd145(_C145 + "StructureVisualConfig.luau"), "CODEBOT v145: PreferMesh stays OFF")
+_cb145("FastTravelEnabled = false" in _rd145(_C145 + "MapConfig.luau"), "CODEBOT v145: fast travel stays REMOVED")
+try:
+	_wb = _sp145.run(["git", "diff", "--name-only", "aa7f88e"], capture_output=True, text=True).stdout
+	_cb145(not any("WE_Building" in l for l in _wb.splitlines()), "CODEBOT v145: no WE_Building* file touched since v144 tip")
+	_cb145(not any(l.startswith(_C145) for l in _wb.splitlines()), "CODEBOT v145: no config changed since v144 tip (VIP / pass Ids / RPG hold / WeaponsLive untouched)")
+except Exception:
+	pass

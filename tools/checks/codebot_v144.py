@@ -22,9 +22,7 @@ def _rd144(p):
 
 _S144 = "src/ServerScriptService/Server/"
 _C144 = "src/ReplicatedStorage/Shared/Configs/"
-for _f in (_S144 + "Services/DataService.luau", _S144 + "Services/BaseService.luau", _S144 + "EarlyRemotes.server.luau"):
-	_cb144('SetAttribute("WE_Build", 144)' in _rd144(_f), "CODEBOT v144: WE_Build=144 " + _f.rsplit("/", 1)[-1])
-_cb144("WE_Build=144" in _rd144(_S144 + "Services/DataService.luau"), "CODEBOT v144: DataService profile-loaded log says WE_Build=144")
+# v145 (Code Bot Roblox): the WE_Build=144 pins are superseded in tools/checks/codebot_v145.py (WE_Build=145).
 
 _EC = _rd144(_C144 + "EndgameConfig.luau")
 _cb144("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _EC, "CODEBOT v144: EndgameConfig.Live Enabled + OwnerFirst=true (await Studio §11)")
