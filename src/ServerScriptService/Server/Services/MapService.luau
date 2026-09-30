@@ -44,7 +44,7 @@ local function live(userId: number): boolean
 end
 
 -- ── the shared snapshot (rebuilt at most every RefreshSeconds) ────────────────────────────────────────────────────
-type Shared = { At: number, Bases: { any }, Outposts: { any }, Drops: { any }, Jobs: { any } }
+type Shared = { At: number, Bases: { any }, Outposts: { any }, Drops: { any }, Jobs: { any }, Sites: { any } }
 local snap: Shared? = nil
 
 local function zoneInfo(): { [string]: { O: string, U: number, C: string? } }
@@ -111,7 +111,17 @@ local function rebuild(): Shared
 			end
 		end
 	end
-	local fresh: Shared = { At = now, Bases = bases, Outposts = outposts, Drops = drops, Jobs = jobs }
+	-- claude-bud JOB 31: the named sites (their real, placed positions: Modules/WorldSites)
+	local sites = {}
+	local okW, WS = pcall(function(): any
+		return require(script.Parent.Parent.Modules.WorldSites)
+	end)
+	if okW and WS and WS.List then
+		for _, st in ipairs(WS.List()) do
+			table.insert(sites, { Id = st.Id, N = st.Name, K = st.Kind, X = math.floor(st.X), Z = math.floor(st.Z), R = st.R })
+		end
+	end
+	local fresh: Shared = { At = now, Bases = bases, Outposts = outposts, Drops = drops, Jobs = jobs, Sites = sites }
 	snap = fresh
 	return fresh
 end
@@ -149,6 +159,7 @@ function MapService.Live(player: Player): { [string]: any }?
 		Outposts = outposts,
 		Drops = s.Drops,
 		Jobs = s.Jobs,
+		Sites = s.Sites, -- claude-bud JOB 31
 		Bank = { X = math.floor(BankRaidConfig.Position.X), Z = math.floor(BankRaidConfig.Position.Z) },
 	}
 end

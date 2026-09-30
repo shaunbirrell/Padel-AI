@@ -53,6 +53,9 @@ local AnalyticsConfig = {
 			OFFLINE_EARNED = { Name = "OfflineEarned", Value = "cash", Field = "hours" },
 			NOTIF_OPTIN = { Name = "NotificationOptIn", Field = "result" },
 			STREAK_DAY = { Name = "StreakDay", Value = "day" },
+			-- claude-bud JOB 31: site activities
+			ACTIVITY_START = { Name = "ActivityStarted", Field = "activity" },
+			ACTIVITY_DONE = { Name = "ActivityFinished", Value = "seconds", Field = "activity" },
 		},
 		MaxCustomPerMinute = 100,
 		PerPlayerPerMinute = 10,
@@ -161,6 +164,8 @@ local AnalyticsConfig = {
 		OFFLINE_EARNED = "OFFLINE_EARNED",
 		NOTIF_OPTIN = "NOTIF_OPTIN",
 		STREAK_DAY = "STREAK_DAY",
+		ACTIVITY_START = "ACTIVITY_START",
+		ACTIVITY_DONE = "ACTIVITY_DONE",
 	},
 }
 

@@ -9561,7 +9561,21 @@ ds_territories.luau T3):
 - **Pin priority:** a manual pin ignores later mission / job / airdrop targets until it ends. The ignored targets do not
   come back by themselves: tap GO again.
 - **Fast travel:** REMOVED in v127 (Code Bot) at the owner's request. The map is tap-to-pin only; players walk or
-  drive to the pin. Do not re-add fast travel (codebot_v127.py fails the build if it comes back).
+  drive to the pin. Do not re-add fast travel (codebot_v127/v128.py fails the build if it comes back).
 - **"Missions" on the map:** the job spots from OpsService's GO targets (camps, posts, uplinks, cargo). They are the
   same points the Missions GO buttons use.
 - **Rail:** it grows to 7 tiles (wraps 5 + 2 on short phones). The frozen 6-tile pin is retired with a replacement.
+
+## 2026-09-30 — claude-bud JOB 31: real detail + fill the map
+- **No store models:** no Code Bot asset IDs came with this job and store models need the owner's WE_CHECK2, so all
+  detail is built from Parts. The IDs can still replace kits later through VisualAssetConfig overlays.
+- **Budget:** CLAUDE.md says world budgets must not grow, but the owner asked to fill the map and detail the props.
+  Growth is capped instead: 240 parts (sites) + 900 (detail extras). The small ones are culled on LOW-tier phones.
+  This is an owner decision to confirm; lowering `MaxExtraParts` or `WorldSitesConfig.MaxParts` shrinks it.
+- **World switches:** detail and sites are world-wide (the world is built once for everyone), so they have kill
+  switches, not owner-first. The garrisons and activities are owner-first.
+- **"Enemy patrols":** leashed garrisons that move inside their site, not squads walking between sites (no roaming AI
+  exists yet).
+- **"Rooftop sniper":** uses the Overwatch tower deck. JOB 32's enterable plaza roofs can host a second one.
+- **"Capture the depot":** the new Kestrel Supply Depot (clear the guards, then hold 30 s), not the West Depot outpost
+  (that is a territory capture and already pays).

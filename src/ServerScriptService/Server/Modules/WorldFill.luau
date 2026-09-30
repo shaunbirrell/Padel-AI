@@ -585,6 +585,12 @@ function WorldFill.Build2(quality: string, occ: any, wd: any, wk: any): (number,
 	folder:SetAttribute("WE_Fill2Parts", fill2.Parts)
 	folder:SetAttribute("WE_Fill2Skipped", fill2.Skipped)
 	print(string.format("[WAR EMPIRE] WorldFill2: quality=%s parts=%d skipped=%d cells=%s filled=%s (cap %d)", string.lower(quality), fill2.Parts, fill2.Skipped, tostring(if okC then cells else "?"), tostring(if okC then filled else "?"), fill2.Limit))
+	-- claude-bud JOB 31: the detailed props' extra parts over the plain kits (WorldDetailConfig.MaxExtraParts caps them)
+	local ds = (wk :: any).DetailStats
+	if typeof(ds) == "table" then
+		folder:SetAttribute("WE_DetailExtra", ds.Extra)
+		print(string.format("[WorldDetail] detailed kits=%d extra=%d plain-after-cap=%d (cap %s)", ds.Kits, ds.Extra, ds.Plain, tostring(require(game:GetService("ReplicatedStorage").Shared.Configs.WorldDetailConfig).MaxExtraParts)))
+	end
 	return fill2.Parts, fill2.Skipped
 end
 

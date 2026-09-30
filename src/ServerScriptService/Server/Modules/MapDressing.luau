@@ -608,6 +608,14 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			warn("[MapDressing] WorldFill.Build failed:", errF)
 		end
 	end
+	-- claude-bud JOB 31: the named sites in the open desert (Workspace.WorldFill.Sites), after the fill so they avoid it
+	local wsites = getWorldModule("WorldSites")
+	if wsites and wk then
+		local okS, errS = pcall(wsites.Build, quality, wk)
+		if not okS then
+			warn("[MapDressing] WorldSites.Build failed:", errS)
+		end
+	end
 	-- claude-bud JOB 17: the night lights (Workspace.WE_NightLights; outside the dressing folders / light budget above)
 	local nl = getWorldModule("NightLights")
 	if nl then

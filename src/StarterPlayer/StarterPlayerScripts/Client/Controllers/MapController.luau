@@ -57,6 +57,7 @@ local HudConfig = require(Shared.Configs.HudConfig)
 local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
 local RetentionConfig = require(Shared.Configs.RetentionConfig)
 local MapAreas = require(Shared.Util.MapAreas)
+local SiteActivityConfig = require(Shared.Configs.SiteActivityConfig) -- claude-bud JOB 31
 
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
@@ -264,10 +265,49 @@ local function myRoot(): BasePart?
 	return if r and r:IsA("BasePart") then r else nil
 end
 
+-- claude-bud JOB 31: a named site = a zone (scale-sized, pooled) with its label
+local function siteZone(st: any)
+	local layer = liveLayer
+	if layer == nil then
+		return
+	end
+	local key = "Site" .. tostring(st.Id)
+	seen[key] = true
+	local f: GuiObject? = pool[key]
+	if not f then
+		local fr = Instance.new("Frame")
+		fr.Name = key
+		fr.BorderSizePixel = 0
+		fr.BackgroundColor3 = C.Site
+		fr.BackgroundTransparency = 0.45
+		fr.AnchorPoint = Vector2.new(0.5, 0.5)
+		fr.ZIndex = 7
+		corner(fr, UDim.new(0.5, 0))
+		local su = (tonumber(st.R) or 40) * 2.6 / (E.X1 - E.X0) -- drawn a little larger than the site: a tap target
+		fr.Size = UDim2.fromScale(su, su * (E.X1 - E.X0) / (E.Z1 - E.Z0))
+		local l = text(fr, string.upper(tostring(st.N or st.Id)), 16, C.Text)
+		l.Name = "Tag"
+		l.AnchorPoint = Vector2.new(0.5, 0)
+		l.Position = UDim2.new(0.5, 0, 1, 1)
+		l.Size = UDim2.fromOffset(200, PanelShell.Text(16) + 2)
+		l.ZIndex = 9
+		fr.Parent = layer
+		pool[key] = fr
+		f = fr
+	end
+	local u, v = toUV(st.X, st.Z)
+	local ff = f :: GuiObject
+	ff.Position = UDim2.fromScale(u, v)
+	ff.Visible = true
+end
+
 local function paint()
 	table.clear(seen)
 	local live = lastLive
 	if typeof(live) == "table" then
+		for _, st in ipairs(live.Sites or {}) do
+			siteZone(st)
+		end
 		if typeof(live.Bank) == "table" then
 			mark("Bank", live.Bank.X, live.Bank.Z, C.Bank, 26, "$", nil)
 		end
@@ -377,6 +417,29 @@ local function selectArea(a: MapAreas.Area, x: number, z: number)
 	showCard(a.Name, lines, true)
 end
 
+local function selectSite(st: any)
+	selected = { Kind = "Site", Id = tostring(st.Id), X = st.X, Z = st.Z }
+	local lines: { string } = { MapConfig.SiteKindInfo[st.K] or "Site" }
+	local acts: { string } = {}
+	for _, d in ipairs(SiteActivityConfig.Activities) do
+		local here = d.Site == st.Id
+		for _, s2 in ipairs(d.Sites or {}) do
+			here = here or s2 == st.Id
+		end
+		if here then
+			table.insert(acts, d.Title)
+		end
+	end
+	if #acts > 0 then
+		table.insert(lines, "Activity: " .. table.concat(acts, ", "))
+		table.insert(lines, "Start it from Missions")
+	end
+	if SiteActivityConfig.Garrisons.Sites[st.Id] then
+		table.insert(lines, "Enemies: posted soldiers")
+	end
+	showCard(tostring(st.N or st.Id), lines, true, nil)
+end
+
 local function selectBase(b: any)
 	selected = { Kind = "Base", Id = tostring(b.P), X = b.X, Z = b.Z }
 	local title = if b.Mine then "Your base" elseif typeof(b.N) == "string" then b.N else "Unclaimed base"
@@ -430,6 +493,15 @@ local function onTap(pos: Vector2)
 		for _, b in ipairs(live.Bases or {}) do
 			if math.sqrt((b.X - x) ^ 2 + (b.Z - z) ^ 2) * pxPerStud <= 22 then
 				selectBase(b)
+				return
+			end
+		end
+	end
+	-- 2b. a named site (claude-bud JOB 31)
+	if typeof(live) == "table" then
+		for _, st in ipairs(live.Sites or {}) do
+			if math.sqrt((st.X - x) ^ 2 + (st.Z - z) ^ 2) <= (tonumber(st.R) or 40) * 1.3 then
+				selectSite(st)
 				return
 			end
 		end

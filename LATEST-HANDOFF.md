@@ -1,4 +1,116 @@
 <!-- Q2-START -->
+## v128 (Code Bot Roblox, 2026-09-30): ship claude-bud JOB 31 real prop detail + 8 sites + activities — FAST TRAVEL STILL OFF — OwnerFirst
+- Cherry-picked Claude `ca9d294` (JOB 31) onto phase-7-polish (v127 tip `8b75615`). **WE_Build 128**. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged).
+- **Fast travel stays REMOVED** (v127 owner request). Kept `MapConfig.FastTravelEnabled = false`; no `RequestFastTravel`, no TRAVEL button, no MapService teleport handler. Took JOB 31 `SiteKindInfo` + site map overlays only. `codebot_v128.py` pins WE_Build 128 + no-fast-travel.
+- **JOB 31 shipped OwnerFirst** (UserId 470626172 + Studio): WorldDetailConfig, WorldSitesConfig, SiteActivityConfig. Flip OwnerFirst false after Shaun signs off phone / FPS tests.
+- New: WorldDetailConfig + detailed WorldKits; WorldSitesConfig + WorldSites (8 sites); SiteActivityConfig + SiteActivityService (5 activities); MissionController ACTIVITIES; MapController site zones; checks `claude_bud_job31.py` + sim tests.
+- **Pins:** `tools/checks/claude_bud_job31.py` + sim tests; `tools/checks/codebot_v128.py` (WE_Build 128, no-fast-travel, PreferMesh OFF, OwnerFirst retained). Retired codebot_v127 WE_Build pins; BuyPathStatic / v110 / v113 WE_Build pins bumped to 128. **BuyPathStatic PASS=6585 FAIL=0**; kit detail 0 failed; sites 0 failed; rojo ok.
+- Do **not** re-add fast travel. Do **not** turn PreferMesh on. Do **not** touch WE_Building*.
+- **Phone tests (owner account; Migrate to Latest Update):** see JOB 31 list below (tank wreck detail, 8 map sites, ACTIVITIES START, sniper deck, supply cache, 2-player garrison wake, FPS note).
+
+## claude-bud JOB 31 (2026-09-30): real detail + fill the map (branch `claude/desktop-bud`)
+**1. Audit.** Every world prop outside the bases is a plain-Part WorldKits builder. The worst offenders:
+
+| Prop | Plain build |
+|---|---|
+| Tank wreck | 5 boxes |
+| Truck wreck | 5 |
+| Field gun | 3 |
+| Sandbag line | 1 block per 5 studs |
+| Jersey barrier | 1 box |
+| Watchtower | 8 |
+| Bunker | 3 |
+| Tent | 3 |
+
+Only the car wreck, crates, the town buildings and flora have Roblox-made mesh overlays. No Code Bot asset IDs were
+supplied for this job, so everything below is properly built from Parts (our own designs, no store models).
+
+**2. Detail** (`WorldDetailConfig`; `WorldKits.Add` builds these instead of the plain kits):
+
+| Prop | Parts | What's in it |
+|---|---|---|
+| Tank wreck | 21 | hull + sloped glacis, 2 tracks, 6 road wheels, 2 fenders, turret + bustle + mantlet, barrel + muzzle brake, hatch, jerry can, a thrown track link |
+| Truck wreck | 15 | chassis, 5 wheels, bed, sides, fallen tailgate, cab, windscreen, hood, grille, bumper |
+| Field gun | 10 | |
+| Sandbags | 2 courses | lines, arcs, and the nest (which adds an MG on a tripod and an ammo box) |
+| Jersey barrier | 5 | the real sloped profile |
+| Watchtower | 14 | cross braces, side rails, deck sandbags |
+| Bunker | 9 | concrete roof, firing slits, roof sandbags, vent; the runtime door is kept |
+| Tent | 7 | ridge pole, groundsheet, crate |
+
+- **Budget:** the planner (Footprint) and every section cap still count the plain kit, and Add returns the plain count,
+  so no layout or cap moves.
+- **Growth ceiling:** the extra parts come out of ONE allowance, `MaxExtraParts` = 900. When it is spent, the rest build
+  plain. Live log: `[WorldDetail] detailed kits=N extra=N`; attribute `Workspace.WorldFill.WE_DetailExtra`.
+- **Kill switch:** `WorldDetailConfig.Enabled = false` builds exactly the old kits.
+
+**3. Fill the map** (`WorldSitesConfig` + `Modules/WorldSites`, built right after WorldFill)
+- **8 named sites** (fictional names) between the plaza, the bases and the POIs:
+  - 2 camps (Camp Viper, Dust Camp);
+  - Dry Well Village (ruins + well);
+  - Pump Station 7 (pumpjacks, fuel tank, pipes);
+  - Kestrel Supply Depot (containers, crates, fence);
+  - Hawk Checkpoint;
+  - Overwatch Ridge (sniper tower, bunker);
+  - Anvil Scrapyard (tank wrecks).
+- **Placement:** each site stands only on clear ground: no parts inside its radius (roads, buildings and props block),
+  at least 200 studs from every base, outside every named area, on dry land. Otherwise it searches rings up to 260
+  studs.
+- **Budget:** capped at 240 plain parts; 177 are planned.
+- **On the world map:** the sites show as labelled zones with a card listing their activities.
+
+**4. Activities + enemy patrols** (`SiteActivityConfig` + `SiteActivityService`, OwnerFirst)
+- The Missions panel has a new **ACTIVITIES** section (START / GO, time left, reward):
+
+  | Activity | What you do | Limit | Reward |
+  |---|---|---|---|
+  | Clear Camp Viper | kill 4 soldiers | 4 min | $6k |
+  | Capture Kestrel Depot | clear 3 guards, then hold the zone 30 s | | $8k |
+  | Defend the Convoy | hold Hawk Checkpoint through 3 waves; leaving for 8 s fails it | | $7k |
+  | Find the Supply Cache | a crate hidden at a random site; only you can open it, close by | | $4k + 5 gold |
+  | Rooftop Sniper | 5 posted targets 90-150 studs from the Overwatch tower; only kills made **on the deck** count, and an off-deck kill stands a new target up | | $7.5k |
+
+- One activity at a time per player, with 7-10 min cooldowns. START points the GO line at the site.
+- **Garrisons:** posted soldiers at the camps, the ridge and the scrapyard. They wake when an owner-first player is
+  within 250, sleep beyond 380, stay leashed to the site, and respawn 3 min after being cleared. They use normal NPC
+  slots, never the over-cap.
+- A truly roaming patrol between sites (new AI) is NOT built: see NEXT.
+
+**5. Phone performance**
+- The detailed props and site decor are small decor, so QualityGovernor still hides them beyond 220-320 studs on the
+  LOW tier.
+- Buildings and structures (towers, camps, ruins, checkpoints) are never culled (the JOB 27 rule and NeverHideKinds).
+- The part increase is capped: at most 240 (sites) + 900 (detail extras).
+- **NOT measured:** FPS on a low-end phone profile needs a device. Studio's emulator is not a phone.
+
+**Checks**
+- tools/checks/claude_bud_job31.py (16 pins).
+- `tools/sim/run_kit_detail_test.py`: runs the REAL WorldKits in the Luau CLI and checks, for every detailed kit:
+  - the exact part counts;
+  - Add returning the plain count;
+  - road-side collidables at z >= 0 and nothing below the floor;
+  - the footprint within 2.5 studs of the plain one;
+  - the allowance and kill-switch fallbacks.
+- `tools/sim/run_sites_test.py` (115 checks):
+  - REAL WorldSites placement: all 8 sites clear of plots and areas, every cluster <= 64 across, 177 parts;
+  - REAL SiteActivityService on stubs: pays once, cooldown, sniper deck rule, cache owner and distance rule, convoy
+    zone fail, NPC cleanup.
+- BuyPathStatic PASS=6545 FAIL=0; remote audit OK; rojo ok; no new LSP errors.
+
+**Test ON HIS PHONE**
+1. Drive to the desert tank wreck (a Fill2 tank yard, or Fort Ironclad): it reads as a tank (tracks, wheels, turret,
+   barrel). Sandbags have two courses, jersey barriers are sloped, watchtowers are braced.
+2. Open the map: 8 new orange-ish zones with names. Tap Camp Viper: the card says "Activity: Clear Camp Viper".
+3. **Missions → ACTIVITIES → START "Clear Camp Viper"**: the GO line points there. Kill the 4 soldiers: "+$6,000".
+   START again shows the cooldown.
+4. **Rooftop Sniper:** climb the Overwatch tower ladder. Shoot targets from the deck (they count), then one from the
+   ground: a new target stands up. 5 deck kills pays.
+5. **Find the Supply Cache:** follow GO to the site and search for a green crate. Hold Open to get "+$4,000". A 2nd
+   player cannot open it.
+6. **2 players:** player 2 walking into Camp Viper gets shot by the garrison only after player 1 (owner) woke it (owner
+   first).
+7. Note FPS in the desert before and after on a mid-range phone.
+
 ## v127 (Code Bot Roblox, 2026-09-30 ~09:45 Dublin): ship claude-bud JOB 30 world map + areas + tap-to-pin — FAST TRAVEL REMOVED (owner request) — place version 125
 - Merged Claude `3471f3d` (JOB 30) into phase-7-polish (v126 tip `a9e1135`). **WE_Build 127**. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged).
 - **Fast travel is REMOVED at Shaun's request.** He wants tap-to-pin only, so players can see where they want to go and then get there themselves. **Claude must NOT re-add fast travel** in any form: no TRAVEL button, no teleport remote, no hint or tutorial copy.

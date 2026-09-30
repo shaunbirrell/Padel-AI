@@ -63,6 +63,7 @@ local BaseSignService = safeRequire("BaseSignService", Services.BaseSignService)
 local ArmourService = safeRequire("ArmourService", Services.ArmourService) -- claude-bud JOB 26
 local RetentionService = safeRequire("RetentionService", Services.RetentionService) -- claude-bud JOB 29
 local MapService = safeRequire("MapService", Services.MapService) -- claude-bud JOB 30
+local SiteActivityService = safeRequire("SiteActivityService", Services.SiteActivityService) -- claude-bud JOB 31
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
@@ -574,7 +575,8 @@ safeInit("CodesService", CodesService, deps)
 safeInit("BuildingTips", BuildingTips, deps) -- claude-bud JOB 24 §5: "NEW BUILDING" cards (after BaseService)
 safeInit("BaseSignService", BaseSignService, deps) -- claude-bud JOB 25: "<Name>'s Empire" signs (after BaseService + GateDefenseService)
 safeInit("ArmourService", ArmourService, deps) -- claude-bud JOB 26: personal armour (bonus max health)
-safeInit("MapService", MapService, deps) -- claude-bud JOB 30: the world map feed, no fast travel (v127) (after BaseSign / Ops / Clan / Vehicle)
+safeInit("MapService", MapService, deps) -- claude-bud JOB 30: the world map feed, no fast travel (v127/v128) (after BaseSign / Ops / Clan / Vehicle)
+safeInit("SiteActivityService", SiteActivityService, deps) -- claude-bud JOB 31: site garrisons + activities (after Combat)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)
 safeInit("PremiumWeaponService", PremiumWeaponService, deps) -- claude-bud PREMIUM: Robux-only vehicle weapons (server-validated)

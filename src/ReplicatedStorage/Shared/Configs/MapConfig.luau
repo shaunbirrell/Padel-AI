@@ -64,10 +64,21 @@ local MapConfig = {
 		Text = Color3.fromRGB(230, 225, 205),
 		Muted = Color3.fromRGB(160, 155, 135),
 		Accent = Color3.fromRGB(235, 195, 90),
+		Site = Color3.fromRGB(190, 120, 70), -- claude-bud JOB 31: the named sites (WorldSitesConfig)
 	},
-	--[[ Code Bot v127: fast travel is REMOVED at the owner's request (Shaun wants tap-to-pin only, so players see where
+	-- claude-bud JOB 31: what each site kind is (the card's first line)
+	SiteKindInfo = {
+		camp = "Enemy camp",
+		village = "Ruined village",
+		oil = "Pump station",
+		depot = "Supply depot",
+		checkpoint = "Road checkpoint",
+		overwatch = "Sniper ridge",
+		tankyard = "Tank scrapyard",
+	} :: { [string]: string },
+	--[[ Code Bot v127/v128: fast travel is REMOVED at the owner's request (Shaun wants tap-to-pin only, so players see where
 		to go and get there themselves). There is no remote, no server handler and no TRAVEL button; the flag stays false
-		and codebot_v127.py fails the build if any of that comes back. Do not re-add fast travel. ]]
+		and codebot_v127/v128.py fails the build if any of that comes back. Do not re-add fast travel. ]]
 	FastTravelEnabled = false,
 }
 

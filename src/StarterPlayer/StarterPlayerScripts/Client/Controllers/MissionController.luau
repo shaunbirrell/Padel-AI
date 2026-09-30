@@ -35,6 +35,8 @@ local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
 local StreakStrip = require(script.Parent.Parent.Modules.StreakStrip) -- claude-bud JOB 29
+local SiteActivityConfig = require(Shared.Configs.SiteActivityConfig) -- claude-bud JOB 31
+local RetentionConfig = require(Shared.Configs.RetentionConfig) -- claude-bud JOB 31
 
 local MissionController = {}
 
@@ -508,6 +510,42 @@ function MissionController.JobsChanged()
 	end
 end
 
+-- claude-bud JOB 31: ACTIVITIES (SiteActivityService's FeaturePush "Activities"; the server decides everything)
+local actState: any = nil
+local actActive: string? = nil -- the id this client points the marker at
+local function activitiesLive(): boolean
+	return RetentionConfig.Live(SiteActivityConfig, player.UserId)
+end
+local function onActivities(data: any)
+	actState = data
+	local nowActive: any = nil
+	for _, r in ipairs((data and data.List) or {}) do
+		if r.State == "Active" then
+			nowActive = r
+		end
+	end
+	if nowActive and actActive ~= nowActive.Id then
+		-- a run started: point the ONE objective marker at the site (a manual map pin still wins)
+		ObjectiveMarker.ShowWith({ Short = nowActive.Short, X = nowActive.X, Y = nowActive.Y, Z = nowActive.Z }, { ArriveStuds = 20, TimeoutSeconds = math.max(10, tonumber(nowActive.Left) or 300) })
+		actActive = nowActive.Id
+	elseif nowActive == nil and actActive ~= nil then
+		local cur = ObjectiveMarker.Current()
+		if cur and not ObjectiveMarker.Pinned() then
+			for _, d in ipairs(SiteActivityConfig.Activities) do
+				if d.Id == actActive and cur.Short == d.Short then
+					ObjectiveMarker.Clear()
+				end
+			end
+		end
+		actActive = nil
+	end
+end
+
+local closePanel: () -> () = function() end -- set after setOpen (START / GO close the panel)
+local function fmtLeft(n: number): string
+	return string.format("%d:%02d", math.floor(n / 60), n % 60)
+end
+
 local function refresh()
 	if not listFrame then
 		return
@@ -569,6 +607,102 @@ local function refresh()
 			l.TextTruncate = Enum.TextTruncate.AtEnd
 			l.Text = text
 			l.Parent = row
+		end
+	end
+
+	-- claude-bud JOB 31: ACTIVITIES rows (one right-hand button each: START / GO; cooldowns show the time)
+	if activitiesLive() and typeof(actState) == "table" and typeof(actState.List) == "table" and #actState.List > 0 then
+		local tS, dS = PanelShell.Text(14), PanelShell.Text(11)
+		local ui = MissionConfig.Ui
+		local bW = if isTouch then ui.ButtonW else ui.DesktopButtonW
+		local bH = if isTouch then math.max(ui.ButtonH, PanelShell.TouchMinV()) else PanelShell.TouchMinV()
+		local rH = math.max(bH + 12, 6 + tS + 4 + dS + 6 + dS + 10)
+		local head = Instance.new("TextLabel")
+		head.Name = "ActivitiesHeader"
+		head.LayoutOrder = -95
+		head.BackgroundTransparency = 1
+		head.Size = UDim2.new(1, -8, 0, tS + 8)
+		head.Font = Enum.Font.GothamBlack
+		head.TextSize = tS
+		head.TextXAlignment = Enum.TextXAlignment.Left
+		head.TextColor3 = Constants.Colors.Gold
+		head.Text = "ACTIVITIES"
+		head.Parent = listFrame
+		for i, r in ipairs(actState.List) do
+			local row = Instance.new("Frame")
+			row.Name = "Activity_" .. tostring(r.Id)
+			row.LayoutOrder = -94 + i
+			row.Size = UDim2.new(1, -8, 0, rH)
+			row.BackgroundColor3 = Constants.Colors.Background
+			row.BorderSizePixel = 0
+			row.Parent = listFrame
+			corner(row, 8)
+			if r.State == "Active" then
+				local st = Instance.new("UIStroke")
+				st.Color = Constants.Colors.Gold
+				st.Thickness = 2
+				st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+				st.Parent = row
+			end
+			local t = Instance.new("TextLabel")
+			t.BackgroundTransparency = 1
+			t.Position = UDim2.fromOffset(10, 6)
+			t.Size = UDim2.new(1, -(bW + 28), 0, tS + 2)
+			t.Font = Enum.Font.GothamBold
+			t.TextSize = tS
+			t.TextXAlignment = Enum.TextXAlignment.Left
+			t.TextColor3 = Constants.Colors.Text
+			t.TextTruncate = Enum.TextTruncate.AtEnd
+			t.Text = tostring(r.Title)
+			t.Parent = row
+			local dsc = Instance.new("TextLabel")
+			dsc.BackgroundTransparency = 1
+			dsc.Position = UDim2.fromOffset(10, 6 + tS + 4)
+			dsc.Size = UDim2.new(1, -(bW + 28), 0, dS + 2)
+			dsc.Font = Enum.Font.GothamMedium
+			dsc.TextSize = dS
+			dsc.TextXAlignment = Enum.TextXAlignment.Left
+			dsc.TextColor3 = Constants.Colors.Muted
+			dsc.TextTruncate = Enum.TextTruncate.AtEnd
+			dsc.Text = if r.State == "Active" then string.format("%s · %s left", tostring(r.Progress or ""), fmtLeft(tonumber(r.Left) or 0)) else tostring(r.Desc)
+			dsc.Parent = row
+			local rw = Instance.new("TextLabel")
+			rw.BackgroundTransparency = 1
+			rw.Position = UDim2.fromOffset(10, 6 + tS + 4 + dS + 6)
+			rw.Size = UDim2.new(1, -(bW + 28), 0, dS + 2)
+			rw.Font = Enum.Font.GothamBold
+			rw.TextSize = dS
+			rw.TextXAlignment = Enum.TextXAlignment.Left
+			rw.TextColor3 = Constants.Colors.Gold
+			rw.Text = string.format("★ $%s + %dXP", commas(tonumber(r.Cash) or 0), tonumber(r.XP) or 0)
+			rw.Parent = row
+			local id = tostring(r.Id)
+			if r.State == "Ready" then
+				local b = rowButton(row, "StartButton", "START", Constants.Colors.Accent, Constants.Colors.Text, bW, bH)
+				b.Activated:Connect(function()
+					pcall(AudioController.PlayClick)
+					fire(Constants.RemoteNames.RequestSiteActivity, "start", id)
+					closePanel()
+				end)
+			elseif r.State == "Active" then
+				local b = rowButton(row, "GoButton", "GO", Constants.Colors.XP, Constants.Colors.TextDark, bW, bH)
+				b.Activated:Connect(function()
+					pcall(AudioController.PlayClick)
+					ObjectiveMarker.ShowWith({ Short = r.Short, X = r.X, Y = r.Y, Z = r.Z }, { ArriveStuds = 20, TimeoutSeconds = math.max(10, tonumber(r.Left) or 300) })
+					closePanel()
+				end)
+			else
+				local tag = Instance.new("TextLabel")
+				tag.AnchorPoint = Vector2.new(1, 0.5)
+				tag.Position = UDim2.new(1, -8, 0.5, 0)
+				tag.Size = UDim2.fromOffset(bW, tS + 8)
+				tag.BackgroundTransparency = 1
+				tag.Font = Enum.Font.GothamBold
+				tag.TextSize = tS
+				tag.TextColor3 = Constants.Colors.Muted
+				tag.Text = if r.State == "Cooldown" then fmtLeft(tonumber(r.Left) or 0) else "BUSY"
+				tag.Parent = row
+			end
 		end
 	end
 
@@ -728,12 +862,19 @@ local function setOpen(open: boolean)
 		sh.Sync(open)
 	end
 	if open then
+		if activitiesLive() then
+			fire(Constants.RemoteNames.RequestSiteActivity, "list") -- claude-bud JOB 31: fresh ACTIVITIES rows
+		end
 		refresh()
 		local list = listFrame
 		if list and jobsFrame then
 			list.CanvasPosition = Vector2.new(0, 0) -- the JOBS rows are the first thing you see
 		end
 	end
+end
+
+closePanel = function()
+	setOpen(false)
 end
 
 -- GO: point the one objective marker at the nearest target, then get the panel out of the way
@@ -927,6 +1068,16 @@ function MissionController.Init()
 		state = payload
 		if menuOpen then
 			refresh()
+		end
+	end)
+
+	-- claude-bud JOB 31: ACTIVITIES state (and the GO marker when a run starts / ends)
+	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if kind == "Activities" and typeof(data) == "table" then
+			onActivities(data)
+			if menuOpen then
+				refresh()
+			end
 		end
 	end)
 

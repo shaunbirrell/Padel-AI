@@ -85,6 +85,7 @@ local Workspace = game:GetService("Workspace")
 
 local Configs = ReplicatedStorage.Shared.Configs
 local WorldConfig = require(Configs.WorldConfig)
+local WorldDetailConfig = require(Configs.WorldDetailConfig) -- claude-bud JOB 31: detailed props (kill switch)
 local WorldTerrain = require(script.Parent.WorldTerrain)
 local WorldLabel = require(ReplicatedStorage.Shared.Util.WorldLabel)
 
@@ -1510,6 +1511,237 @@ local function seedOf(cf: CFrame, opts: KitOpts): number
 	return math.floor(p.X * 7.31 + p.Z * 13.7 + 104729) % 2147483647
 end
 
+-- ── claude-bud JOB 31: DETAILED builds (WorldDetailConfig) ─────────────────────────────────────────────────────────
+-- Same frame, footprint and road-side rule as the plain kit (collidable parts at local z >= 0 for the road-side kits),
+-- more shape. Each returns false for a variant it does not detail (the plain builder then runs). Exact part counts:
+-- WorldKits.DetailSpecs (the headless kit test checks them).
+local Detail: { [string]: (b: B) -> boolean } = {}
+
+local function wheelZ(b: B, name: string, x: number, y: number, z: number, d: number, t: number, color: Color3)
+	-- a wheel on an axle along Z (a Cylinder's axis is X: turned 90 about Y); never collides (the track / body does)
+	put(b, name, Vector3.new(t, d, d), CFrame.new(x, y, z) * rotY(90), color, M.CorrodedMetal, false, false, Enum.PartType.Cylinder)
+end
+
+Detail.Wreck = function(b: B): boolean
+	local v = b.Opts.Variant or "truck"
+	local burnt, rust, dark = PAL.Burnt, PAL.Rust, PAL.SteelDark
+	local cm = M.CorrodedMetal
+	if v == "tank" then
+		-- 21 parts. Long axis X, gun toward -X; tracks z 0 .. 1.3 and 5.3 .. 6.6 (collide), wheels / fenders outside
+		for _, z in ipairs({ 0.65, 5.95 }) do
+			put(b, "WreckTankTrack", Vector3.new(9.6, 1.6, 1.3), CFrame.new(0, 0.8, z), burnt, cm, true)
+			put(b, "WreckTankFender", Vector3.new(10, 0.25, 1.5), CFrame.new(0.2, 1.72, z) * rotZ(if z < 1 then 3 else -2), rust, cm, false)
+		end
+		for _, x in ipairs({ -3, 0, 3 }) do
+			wheelZ(b, "WreckTankWheel", x, 0.8, -0.1, 1.5, 0.5, dark)
+			wheelZ(b, "WreckTankWheel", x, 0.8, 6.7, 1.5, 0.5, dark)
+		end
+		put(b, "WreckTankHull", Vector3.new(9, 1.4, 4.0), CFrame.new(0.2, 1.3, 3.3), rust, cm, true)
+		-- sloped glacis plate at the front (a wedge, its slope toward -X)
+		put(b, "WreckTankGlacis", Vector3.new(4.0, 1.3, 1.8), CFrame.new(-5.2, 1.25, 3.3) * rotY(90), rust, cm, true, false, Enum.PartType.Wedge)
+		put(b, "WreckTankDeck", Vector3.new(3, 0.4, 3.6), CFrame.new(3.2, 2.2, 3.3) * rotZ(-3), burnt, cm, false)
+		local tcf = CFrame.new(0.3, 2.75, 3.3) * rotY(22)
+		put(b, "WreckTankTurret", Vector3.new(4, 1.5, 3.6), tcf, burnt, cm, true)
+		put(b, "WreckTankBustle", Vector3.new(1.6, 1.1, 2.6), tcf * CFrame.new(2.7, -0.1, 0), rust, cm, false)
+		put(b, "WreckTankMantlet", Vector3.new(0.8, 1.0, 1.6), tcf * CFrame.new(-2.3, 0, 0), dark, M.Metal, false)
+		local gun = tcf * CFrame.new(-2.6, 0.1, 0) * rotZ(-5)
+		put(b, "WreckTankBarrel", Vector3.new(6, 0.5, 0.5), gun * CFrame.new(-3, 0, 0), burnt, cm, false, false, Enum.PartType.Cylinder)
+		put(b, "WreckTankMuzzle", Vector3.new(0.7, 0.75, 0.75), gun * CFrame.new(-6.2, 0, 0), dark, M.Metal, false, false, Enum.PartType.Cylinder)
+		local hatch = tcf * CFrame.new(0.8, 0.9, 0.6)
+		put(b, "WreckTankHatch", Vector3.new(0.3, 1.2, 1.2), hatch * rotZ(90), dark, M.Metal, false, false, Enum.PartType.Cylinder)
+		put(b, "WreckTankCan", Vector3.new(0.9, 1.2, 0.5), CFrame.new(3.9, 2.9, 1.6) * rotY(8), PAL.DrumOlive, M.Metal, false)
+		put(b, "WreckTankLink", Vector3.new(3, 0.3, 1.2), CFrame.new(-6.4, 0.15, 0.9) * rotY(25), burnt, cm, false)
+		return true
+	elseif v == "gun" then
+		-- 10 parts: shield, split trail, axle + 2 wheels, cradle, barrel, recuperator, a shell crate
+		put(b, "WreckGunShield", Vector3.new(0.3, 2.6, 3.4), CFrame.new(-1.2, 1.5, 3.0) * rotY(4), rust, cm, true)
+		put(b, "WreckGunTrail", Vector3.new(5.5, 0.5, 0.6), CFrame.new(1.9, 0.3, 2.2) * rotY(16), burnt, cm, true)
+		put(b, "WreckGunTrail", Vector3.new(5.5, 0.5, 0.6), CFrame.new(1.9, 0.3, 3.8) * rotY(-16), burnt, cm, true)
+		put(b, "WreckGunAxle", Vector3.new(0.4, 0.4, 3.8), CFrame.new(-0.6, 1.0, 3.0), dark, M.Metal, false)
+		wheelZ(b, "WreckGunWheel", -0.6, 1.0, 1.0, 2.0, 0.5, dark)
+		wheelZ(b, "WreckGunWheel", -0.6, 1.0, 5.0, 2.0, 0.5, dark)
+		put(b, "WreckGunCradle", Vector3.new(2.4, 0.7, 0.9), CFrame.new(-1.6, 1.9, 3.0) * rotZ(-10), burnt, cm, false)
+		put(b, "WreckGunBarrel", Vector3.new(5.2, 0.5, 0.5), CFrame.new(-4.3, 2.35, 3.0) * rotZ(-10), burnt, cm, false, false, Enum.PartType.Cylinder)
+		put(b, "WreckGunRecoil", Vector3.new(2.4, 0.35, 0.35), CFrame.new(-2.4, 2.45, 3.0) * rotZ(-10), dark, M.Metal, false, false, Enum.PartType.Cylinder)
+		put(b, "WreckGunCrate", Vector3.new(1.4, 0.8, 0.9), CFrame.new(2.6, 0.4, 5.3) * rotY(12), PAL.CrateOlive, M.Wood, true)
+		return true
+	elseif v == "truck" then
+		-- 15 parts: chassis, 5 of 6 wheels (one burnt off), bed floor + 2 sides + a fallen tailgate, cab, windscreen
+		-- frame, hood, grille, bumper
+		put(b, "WreckTruckChassis", Vector3.new(14, 0.5, 3.4), CFrame.new(0, 1.35, 2.2), dark, cm, true)
+		for _, w in ipairs({ { -5.6, -0.05 }, { -5.6, 4.45 }, { 1.5, -0.05 }, { 1.5, 4.45 }, { 4.5, 4.45 } }) do
+			wheelZ(b, "WreckTruckWheel", w[1], 1.1, w[2], 2.2, 0.8, PAL.SteelDark)
+		end
+		put(b, "WreckTruckBed", Vector3.new(9, 0.4, 4.4), CFrame.new(2.95, 1.8, 2.2), burnt, cm, true)
+		put(b, "WreckTruckSide", Vector3.new(9, 1.2, 0.25), CFrame.new(2.95, 2.6, 0.15), rust, cm, true)
+		put(b, "WreckTruckSide", Vector3.new(9, 1.2, 0.25), CFrame.new(2.95, 2.6, 4.25) * rotX(6), rust, cm, true)
+		put(b, "WreckTruckTailgate", Vector3.new(0.25, 1.2, 4.4), CFrame.new(7.9, 1.1, 2.2) * rotZ(-35), rust, cm, false)
+		put(b, "WreckTruckCab", Vector3.new(3.6, 3.0, 4.2), CFrame.new(-3.45, 3.1, 2.2), rust, cm, true)
+		put(b, "WreckTruckGlass", Vector3.new(0.2, 1.3, 3.6), CFrame.new(-5.3, 3.9, 2.2) * rotZ(8), PAL.Window, M.Glass, false)
+		put(b, "WreckTruckHood", Vector3.new(2.2, 1.6, 4.0), CFrame.new(-6.35, 2.4, 2.2) * rotZ(6), burnt, cm, true)
+		put(b, "WreckTruckGrille", Vector3.new(0.2, 1.2, 3.0), CFrame.new(-7.5, 2.2, 2.2), PAL.Steel, M.Metal, false)
+		put(b, "WreckTruckBumper", Vector3.new(0.5, 0.4, 4.2), CFrame.new(-7.7, 1.4, 2.2) * rotY(4), dark, M.Metal, false)
+		return true
+	end
+	return false -- "car": the plain build + its Roblox-made mesh overlay
+end
+
+-- 2 parts per 5 studs: a wide bottom course and a narrower top course (the plain line is one block per 5 studs)
+Detail.SandbagLine = function(b: B): boolean
+	local n = math.clamp(math.floor((b.Opts.Length or 5) / 5 + 0.5), 1, 8)
+	for i = 1, n do
+		local x = (i - (n + 1) * 0.5) * 5
+		local yaw = if i % 2 == 0 then 1.5 else -1.5
+		put(b, "Sandbag", Vector3.new(5, 1.1, 1.7), CFrame.new(x, 0.55, 0.97) * rotY(yaw), PAL.Sandbag, M.Sand, true)
+		put(b, "Sandbag", Vector3.new(4.6, 0.9, 1.35), CFrame.new(x + 0.2, 1.55, 0.95) * rotY(-yaw), PAL.SandbagLight, M.Sand, true)
+	end
+	return true
+end
+
+Detail.SandbagArc = function(b: B): boolean
+	for _, s in ipairs({ -1, 1 }) do
+		local cf = CFrame.new(1.65 * s, 0, 1.3) * rotY(-20 * s)
+		put(b, "SandbagArc", Vector3.new(3.6, 1.1, 1.4), cf * CFrame.new(0, 0.55, 0), PAL.Sandbag, M.Sand, true)
+		put(b, "SandbagArc", Vector3.new(3.2, 0.9, 1.15), cf * CFrame.new(0, 1.55, 0.05), PAL.SandbagLight, M.Sand, true)
+	end
+	return true
+end
+
+-- 10 parts: two courses on the front and both sides, an MG on a tripod, an ammo box
+Detail.SandbagNest = function(b: B): boolean
+	put(b, "SandbagFront", Vector3.new(6, 1.1, 1.5), CFrame.new(0, 0.55, 0.8), PAL.Sandbag, M.Sand, true)
+	put(b, "SandbagFront", Vector3.new(5.6, 0.95, 1.25), CFrame.new(0, 1.55, 0.85), PAL.SandbagLight, M.Sand, true)
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "SandbagSide", Vector3.new(1.5, 1.1, 4.2), CFrame.new(3.7 * s, 0.55, 2.9), PAL.SandbagLight, M.Sand, true)
+		put(b, "SandbagSide", Vector3.new(1.25, 0.95, 3.8), CFrame.new(3.7 * s, 1.55, 3.0), PAL.Sandbag, M.Sand, true)
+	end
+	put(b, "NestTripod", Vector3.new(0.9, 1.1, 0.9), CFrame.new(0, 2.55, 1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "NestTurret", Vector3.new(0.7, 0.6, 1.8), CFrame.new(0, 3.35, 1.3), PAL.SteelDark, M.Metal, false)
+	put(b, "NestBarrel", Vector3.new(2.6, 0.22, 0.22), CFrame.new(0, 3.4, -0.9) * rotY(90), PAL.SteelDark, M.Metal, false, false, Enum.PartType.Cylinder)
+	put(b, "NestAmmo", Vector3.new(0.9, 0.6, 0.5), CFrame.new(1.6, 2.3, 1.7) * rotY(10), PAL.DrumOlive, M.Metal, false)
+	return true
+end
+
+-- 5 parts: the real jersey profile (wide foot, sloped skirts both sides, upright web, cap); z 0 .. 1.1 as the plain one
+Detail.Jersey = function(b: B): boolean
+	local c, cm = PAL.ConcreteLight, M.Concrete
+	put(b, "JerseyBarrier", Vector3.new(4.5, 0.45, 1.1), CFrame.new(0, 0.225, 0.55), c, cm, true)
+	put(b, "JerseySkirt", Vector3.new(4.5, 0.75, 0.3), CFrame.new(0, 0.82, 0.25), c, cm, true, false, Enum.PartType.Wedge)
+	put(b, "JerseySkirt", Vector3.new(4.5, 0.75, 0.3), CFrame.new(0, 0.82, 0.85) * rotY(180), c, cm, true, false, Enum.PartType.Wedge)
+	put(b, "JerseyWeb", Vector3.new(4.5, 1.25, 0.4), CFrame.new(0, 1.43, 0.55), c, cm, true)
+	put(b, "JerseyCap", Vector3.new(4.5, 0.15, 0.46), CFrame.new(0, 2.12, 0.55), PAL.Concrete, cm, false)
+	return true
+end
+
+-- 14 parts: 4 legs, 3 cross braces (the back face keeps the ladder clear), deck, front wall + 2 side rails, a sandbag
+-- row on the deck, roof, ladder
+Detail.Watchtower = function(b: B): boolean
+	local deckY = KC.WatchtowerDeckY
+	local roofY = deckY + TOWER_HEADROOM
+	for _, c in ipairs({ { -3.9, -3.9 }, { 3.9, -3.9 }, { -3.9, 3.9 }, { 3.9, 3.9 } }) do
+		put(b, "TowerLeg", Vector3.new(0.8, roofY, 0.8), CFrame.new(c[1], roofY * 0.5, c[2]), PAL.WoodDark, M.Wood, true)
+	end
+	local rise = deckY - 2
+	local len = math.sqrt(7.8 * 7.8 + rise * rise)
+	local ang = math.deg(math.atan2(rise, 7.8))
+	put(b, "TowerBrace", Vector3.new(len, 0.35, 0.3), CFrame.new(0, 1 + rise * 0.5, -3.9) * rotZ(ang), PAL.Wood, M.Wood, false)
+	put(b, "TowerBrace", Vector3.new(len, 0.35, 0.3), CFrame.new(-3.9, 1 + rise * 0.5, 0) * rotY(90) * rotZ(-ang), PAL.Wood, M.Wood, false)
+	put(b, "TowerBrace", Vector3.new(len, 0.35, 0.3), CFrame.new(3.9, 1 + rise * 0.5, 0) * rotY(90) * rotZ(ang), PAL.Wood, M.Wood, false)
+	put(b, "TowerDeck", Vector3.new(9, 0.6, 6.5), CFrame.new(0, deckY - 0.3, -1.25), PAL.Wood, M.WoodPlanks, true)
+	put(b, "TowerWall", Vector3.new(9, 3.4, 0.4), CFrame.new(0, deckY + 1.7, -4.3), PAL.Wood, M.WoodPlanks, true)
+	put(b, "TowerRail", Vector3.new(0.3, 1.2, 6.2), CFrame.new(-4.3, deckY + 0.6, -1.3), PAL.WoodDark, M.Wood, true)
+	put(b, "TowerRail", Vector3.new(0.3, 1.2, 6.2), CFrame.new(4.3, deckY + 0.6, -1.3), PAL.WoodDark, M.Wood, true)
+	put(b, "TowerSandbags", Vector3.new(7.6, 0.9, 1.0), CFrame.new(0, deckY + 0.45, -3.5), PAL.Sandbag, M.Sand, true)
+	put(b, "TowerRoof", Vector3.new(9, 0.5, 9), CFrame.new(0, roofY + 0.25, 0), PAL.SteelDark, M.Metal, false, true)
+	truss(b, "TowerLadder", deckY + 2, CFrame.new(0, (deckY + 2) * 0.5, 3), PAL.SteelDark)
+	return true
+end
+
+-- 9 parts: mound, concrete roof slab, facade, blast door (the runtime door keeps its name), 2 firing slits, 2 roof
+-- sandbag rows, a vent pipe
+Detail.Bunker = function(b: B): boolean
+	put(b, "BunkerBody", Vector3.new(18, 7, 11), CFrame.new(0, 3.5, 5.5), PAL.Sandbag, M.Ground, true, true)
+	put(b, "BunkerRoof", Vector3.new(12, 0.8, 6), CFrame.new(0, 7.4, 4.2), PAL.Concrete, M.Concrete, true)
+	put(b, "BunkerFacade", Vector3.new(10, 5.6, 0.3), CFrame.new(0, 2.8, -0.15), PAL.Concrete, M.Concrete, true)
+	runtimeDoor(put(b, "BunkerDoor", Vector3.new(4.4, 4.4, 0.2), CFrame.new(0, 2.2, -0.4), PAL.Hazard, M.DiamondPlate, true))
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "BunkerSlit", Vector3.new(2.2, 0.5, 0.35), CFrame.new(3.6 * s, 4.4, -0.25), PAL.SteelDark, M.Metal, false)
+		put(b, "BunkerSandbags", Vector3.new(4.6, 1.0, 1.4), CFrame.new(3.6 * s, 8.3, 1.8) * rotY(3 * s), PAL.SandbagLight, M.Sand, true)
+	end
+	vcyl(b, "BunkerVent", 5.5, 7, 8, 2.2, 0.8, PAL.SteelDark, M.Metal, false)
+	return true
+end
+
+-- 7 parts: 2 canvas panels, front and back poles, the ridge pole, a groundsheet, a supply crate inside
+Detail.Tent = function(b: B): boolean
+	local half, h, t = 3.8, 4.8, 0.2
+	local a = math.atan2(h, half)
+	local L = math.sqrt(half * half + h * h)
+	local cy = (L * math.sin(a) + t * math.cos(a)) * 0.5
+	put(b, "TentCanvas", Vector3.new(L, t, 9), CFrame.new(-half * 0.5, cy, 0) * rotZ(math.deg(a)), PAL.Canvas, M.Fabric, true)
+	put(b, "TentCanvas", Vector3.new(L, t, 9), CFrame.new(half * 0.5, cy, 0) * rotZ(-math.deg(a)), PAL.Canvas:Lerp(PAL.WoodDark, 0.15), M.Fabric, true)
+	put(b, "TentPole", Vector3.new(0.3, h, 0.3), CFrame.new(0, h * 0.5, -4.3), PAL.WoodDark, M.Wood, false)
+	put(b, "TentPole", Vector3.new(0.3, h, 0.3), CFrame.new(0, h * 0.5, 4.3), PAL.WoodDark, M.Wood, false)
+	put(b, "TentRidge", Vector3.new(9, 0.25, 0.25), CFrame.new(0, h + 0.05, 0) * rotY(90), PAL.WoodDark, M.Wood, false, false, Enum.PartType.Cylinder)
+	put(b, "TentFloor", Vector3.new(7.2, 0.1, 8.6), CFrame.new(0, 0.05, 0), PAL.Canvas:Lerp(PAL.Sandbag, 0.5), M.Fabric, false)
+	put(b, "TentCrate", Vector3.new(1.4, 1.2, 1.4), CFrame.new(1.4, 0.6, 1.2) * rotY(18), PAL.CrateOlive, M.Wood, true)
+	return true
+end
+
+-- exact part counts of the detailed builds (per unit for SandbagLine), checked by the headless kit test
+WorldKits.DetailSpecs = {
+	Wreck = { tank = 21, truck = 15, gun = 10 },
+	SandbagLine = 2,
+	SandbagArc = 4,
+	SandbagNest = 10,
+	Jersey = 5,
+	Watchtower = 14,
+	Bunker = 9,
+	Tent = 7,
+} :: { [string]: any }
+
+-- the running tally of detail parts beyond the plain kits (WorldDetailConfig.MaxExtraParts caps it)
+WorldKits.DetailStats = { Kits = 0, Extra = 0, Plain = 0 }
+
+local function detailWanted(kitId: string, o: KitOpts): boolean
+	local cfg: any = WorldDetailConfig
+	if cfg.Enabled ~= true or Detail[kitId] == nil or (o :: any).NoDetail == true then
+		return false
+	end
+	local k = cfg.Kits[kitId]
+	if typeof(k) == "table" then
+		return k[o.Variant or "truck"] == true
+	end
+	return k == true
+end
+
+-- claude-bud JOB 31: build the detailed kit into b when wanted and the world allowance has room; true = built
+local function tryDetail(kitId: string, b: B): boolean
+	if not detailWanted(kitId, b.Opts) then
+		return false
+	end
+	local plain = WorldKits.Footprint(kitId, b.Opts)
+	local plainN = if plain then plain.Parts else 0
+	local before = #b.Parts
+	if not Detail[kitId](b) then
+		return false
+	end
+	local extra = (#b.Parts - before) - plainN
+	local cap = math.max(0, tonumber((WorldDetailConfig :: any).MaxExtraParts) or 0)
+	if WorldKits.DetailStats.Extra + extra > cap then
+		-- the allowance is spent: undo this detailed build; the plain one runs instead
+		for i = #b.Parts, before + 1, -1 do
+			b.Parts[i]:Destroy()
+			b.Parts[i] = nil
+		end
+		WorldKits.DetailStats.Plain += 1
+		return false
+	end
+	WorldKits.DetailStats.Extra += extra
+	WorldKits.DetailStats.Kits += 1
+	return true
+end
+
 function WorldKits.Add(cluster: Model, kitId: string, cf: CFrame, opts: KitOpts?): number
 	local s = WorldKits.Specs[kitId]
 	local builder = Builders[kitId]
@@ -1522,6 +1754,13 @@ function WorldKits.Add(cluster: Model, kitId: string, cf: CFrame, opts: KitOpts?
 	end
 	local o: KitOpts = opts or {}
 	local b: B = { Cluster = cluster, CF = cf, Opts = o, Parts = {}, Rng = WorldKits.Rng(seedOf(cf, o)), Overlays = {} }
+	-- claude-bud JOB 31: the detailed build when WorldDetailConfig wants it and its allowance has room. It returns the
+	-- PLAIN count, so every caller's budget and cap (planned from Footprint, which stays plain) is unchanged; the
+	-- extra parts are counted once, in WorldKits.DetailStats.Extra (<= MaxExtraParts)
+	if tryDetail(kitId, b) then
+		local plain = WorldKits.Footprint(kitId, o)
+		return if plain then plain.Parts else #b.Parts
+	end
 	builder(b)
 	if #b.Overlays > 0 then
 		local list = pendingMesh[cluster]
