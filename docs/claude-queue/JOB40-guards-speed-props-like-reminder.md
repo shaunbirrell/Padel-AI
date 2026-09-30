@@ -122,6 +122,7 @@ TESTS (part D): tools/sim/run_rate_prompt_test.py (the real service with a fake 
 ---
 
 == E. BASE OWNER MARKER, VISIBLE FROM ANYWHERE (added by Shaun 2026-09-30 13:27) ==
+APPROVED by owner 2026-09-30: visible from anywhere on the map. (Shaun confirmed 14:44 Dublin: the base owner marker is the ONE approved exception to the world-labels-within-40-studs rule; see RULE EXCEPTION below.)
 Owner: "Above each occupied base, show a clean marker with the owner's name, flag and rebirth rank, visible from anywhere on the map."
 
 WHAT EXISTS (reuse, do not duplicate):
