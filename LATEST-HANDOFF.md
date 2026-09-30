@@ -1,4 +1,19 @@
 <!-- Q2-START -->
+## v132 (Code Bot Roblox, 2026-09-30 ~12:05 Dublin): STORE-PROPS - Creator Store picks wired (owner-first) - place version 130
+- **WE_Build 132**. Code commit `a44fdde` (+ dist `e01d856`). Open Cloud HTTP 200 `versionNumber=130`. PreferMesh OFF; WE_Building* untouched; fast travel stays REMOVED.
+- **Probe (Open Cloud Luau, InsertService:LoadAsset): 80 / 80 picks load; none "not authorized".** Parts + sizes per id in `docs/PROP-ASSETS.md`.
+- **Wired: 62 / 80** via NEW `Shared/Configs/StorePropsConfig.luau` (ids, categories, placement rows, budgets, flags) + NEW `Services/StorePropsService.luau` (loads each once, strips scripts/humanoids/sounds/prompts/movers/joints, anchors, CanTouch off, no shadows < 8 studs, no collision < 1.2, caps lights, bottom-centre pivot, ground-ray + overlap + road + base-clearance checks, nothing floats).
+  - **World (57 ids, 213 copies, ~7,978 parts; cap 9,000):** Workspace.WorldFill.StoreProps at JOB 31 sites/areas: office 12423243620 + hospital in Crossroads Town, army base 11530941074 at the Armory, military base 8388537872 at Dust Camp, ruined apartment 447143432 in the Ruins, desert house 16365964601 at Dry Well, camp/desert dressing at Camp Viper, Pump Seven, Kestrel, Hawk, Overwatch, Anvil. All off roads and >= 330 studs from bases.
+  - **Rebirth zones (25 ids):** for the plot owner at L1+ the Part clusters are swapped for store models (tank factory 8878478175, silo complex 4784051512, refinery 4669786564, etc.) on the yard, with Yard + Console kept. Any layout/budget check that fails keeps the Part build. EastYard (Elite Barracks) keeps its Part build plus dressing (the store barracks 8637034739 is a plain block).
+  - **Not placed (18):** rejected 2473378608, 3117530492, 2580028799 (Tool); left for JOB 37 Checkpoint (spec uses Parts) 11989298499, 12125769119, 9404286622, 8279648205; over budget or worse than the Part build 14243660153, 12734850183, 12922051897, 15362548171, 7210304938, 2955329464, 9064883345, 7649697954, 9370327334, 182529039, 8637034739.
+- **Flags:** `StorePropsConfig.Enabled` (kill switch), `OwnerFirst = true` (only when the owner is in the server / owns the plot), live kill with Workspace attribute `WE_StorePropsOff = true`. **To launch:** set `OwnerFirst = false` after the owner OKs it.
+- **Claude collision:** no edits to RebirthZoneBuilder, RebirthZoneService, WorldSites, WorldKits (JOB 35-38 safe). CLAUDE.md: store props live in StorePropsConfig and must not be removed.
+- **Checks:** BuyPathStatic PASS=6729 FAIL=0 (codebot_v132: 48 pins); live Open Cloud harness: 213 world copies 0 floating, 7 zones x 3 levels clean; rojo ok.
+- **Phone tests (Migrate to Latest Update, as owner):**
+  1. Drive to Crossroads Town: the 4-floor office and hospital stand on the ground next to the roads (not on them); Camp Viper has tents/crates/sandbags.
+  2. Visit Dust Camp and the Armory: the military base / army base compounds sit flat on the sand, with nothing floating or clipping.
+  3. Build or upgrade Tank Factory (West Yard): L1-2 shows the store garage and tanks, L3 the factory; the BUILD console still works; Silo / Refinery the same.
+  4. FPS stays OK while you move around the map; if anything looks wrong, set `WE_StorePropsOff` on Workspace (or Enabled=false) and the Part builds return.
 ## v131 (Code Bot Roblox, 2026-09-30 ~11:18 Dublin): ship claude-bud JOB 33 rebirth overhaul + JOB 34 achievements — LAUNCHED FOR EVERYONE — FAST TRAVEL STILL OFF — MAP-REDESIGN KEPT — place version 129
 - **WE_Build 131**. Code commit `7dd1667`. Open Cloud HTTP 200 `versionNumber=129`. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged). Fast travel stays REMOVED (`MapConfig.FastTravelEnabled = false`). MAP-REDESIGN (v129) kept.
 - **FF-merge** `origin/claude/desktop-bud` tips `f763276` (JOB 33) + `50d19b8` (JOB 34) onto phase-7-polish (was `b23f7f7` v130).
