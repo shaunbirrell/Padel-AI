@@ -4,6 +4,9 @@
 - After JOB 34 is finished and pushed, do JOB 35 then JOB 36 exactly as written in
   [`docs/claude-queue/JOB35-36-shop-and-guns.md`](docs/claude-queue/JOB35-36-shop-and-guns.md), one at a time, same
   rules. No fast travel.
+- After JOB 36 is finished and pushed, do JOB 37 (real road checkpoint: detail + killable guards) exactly as written in
+  [`docs/claude-queue/JOB37-checkpoint.md`](docs/claude-queue/JOB37-checkpoint.md), same rules. If any JOB 31 work is
+  still unfinished, it may fold into JOB 37 (JOB 31 itself shipped in v128).
 - **No fast travel, ever:** it was removed in v127 at the owner's request. The map is tap-to-pin only (see
   `tools/checks/codebot_v127.py`).
 
