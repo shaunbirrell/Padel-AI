@@ -1,4 +1,16 @@
 <!-- Q2-START -->
+## v135 (Code Bot Roblox, 2026-09-30 ~14:00 Dublin): ship claude-bud JOB 35 premium guns armory — OWNER-FIRST (pass Ids still 0) — place version TBD
+- **WE_Build 135**. Cherry-pick `4c2b10a` + `4ec656d` from `origin/claude/desktop-bud` onto phase-7-polish (after v134). PreferMesh OFF; WE_Building* untouched; fast travel stays REMOVED.
+- **Flags (per Claude handoff):** `PremiumGunsConfig.Live.Enabled = true`, `OwnerFirst = true`, `OwnerTestGrant = true`. Pass Ids (`PG_*`) stay **0** — Shop hides gold rows; armory cases show SOON / never prompt until the owner pastes Ids. **To launch for everyone:** set `OwnerFirst = false` and paste the 7 pass Ids in MonetizationConfig.
+- **What ships:** 6 premium guns (Sovereign / Quake / Longshot / Havoc / Thunderhead / Tempest) + Armory Pass; GunMechanics (burst/spin/charge/pierce/headshot); Longshot scope; base armory 7 glass cases west of Supply Depot; Shop gold rows when Ids live; PremiumGunService grants on pass own.
+- **Checks:** BuyPathStatic PASS=6807 FAIL=0; `claude_bud_job35` 28 pins; `run_armory_test.py` 0 failed; `codebot_v135` pins; rojo ok.
+- **Phone tests (Migrate to Latest Update, as owner shaunie6):**
+  1. Walk west of Supply Depot: 7 glass cases + ARMORY sign; boards SOON or OWNED (owner test grant).
+  2. Tap a case: Equip the gun; hotbar shows it.
+  3. Longshot: SCOPE button (above RELOAD) — zoom levels, vignette, exit on RELOAD.
+  4. Havoc: hold FIRE — barrel spins, shots after ~0.5s.
+  5. Tempest: hold to charge, release; 2-player pierce + PvP protection still holds (novice shield / pvp off).
+  6. Non-owner join: no armory / no grants (OwnerFirst).
 ## claude-bud JOB 35 (2026-09-30): premium guns armory (branch `claude/desktop-bud`)
 **Flags:** `PremiumGunsConfig.Live` (`Enabled`, `OwnerFirst = true`).
 - **Off:** no armory, no grants, no gold rows. The six guns stay in WeaponConfig, unowned and unsold.

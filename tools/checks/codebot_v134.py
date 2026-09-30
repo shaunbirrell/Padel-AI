@@ -34,9 +34,10 @@ def _block134(src, key):
 
 
 _S134 = "src/ServerScriptService/Server/"
-for _f in (_S134 + "Services/DataService.luau", _S134 + "Services/BaseService.luau", _S134 + "EarlyRemotes.server.luau"):
-    _cb134('SetAttribute("WE_Build", 134)' in _rd134(_f), "CODEBOT v134: WE_Build=134 " + _f.rsplit("/", 1)[-1])
-_cb134("WE_Build=134" in _rd134(_S134 + "Services/DataService.luau"), "CODEBOT v134: DataService profile-loaded log says WE_Build=134")
+# v135 (Code Bot Roblox): retired WE_Build pins, superseded in tools/checks/codebot_v135.py
+# for _f in (_S134 + "Services/DataService.luau", _S134 + "Services/BaseService.luau", _S134 + "EarlyRemotes.server.luau"):
+#     _cb134('SetAttribute("WE_Build", 134)' in _rd134(_f), "CODEBOT v134: WE_Build=134 " + _f.rsplit("/", 1)[-1])
+# _cb134("WE_Build=134" in _rd134(_S134 + "Services/DataService.luau"), "CODEBOT v134: DataService profile-loaded log says WE_Build=134")
 
 # ── the 5 badge ids ──
 _AC = _rd134("src/ReplicatedStorage/Shared/Configs/AchievementConfig.luau")
