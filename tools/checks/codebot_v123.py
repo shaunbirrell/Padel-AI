@@ -69,7 +69,7 @@ for _f in _army_files:
     _cb123(not _bad, "CODEBOT v123: no player movement write in " + _f.rsplit("/", 1)[-1] + (" " + str(_bad) if _bad else ""))
     _cb123(_re123.search(r"WalkSpeed\s*=\s*0\b", _c) is None, "CODEBOT v123: no WalkSpeed = 0 in " + _f.rsplit("/", 1)[-1])
 # every server WalkSpeed write to a PLAYER goes through the tagged setter; every player PivotTo is tagged
-must_contain(_cb123_S + "Services/MonetizationService.luau", 'MoveDebug).SetWalkSpeed(hum, base * mult, "MonetizationService.SpeedBoost")', "CODEBOT v123: Speed Pass WalkSpeed via the tagged setter")
+# v126 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v126.py (speed x1.4 / x1.6, paid speed applied after other writers): #must_contain(_cb123_S + "Services/MonetizationService.luau", 'MoveDebug).SetWalkSpeed(hum, base * mult, "MonetizationService.SpeedBoost")', "CODEBOT v123: Speed Pass WalkSpeed via the tagged setter")
 _cb123("hum.WalkSpeed = base * mult" not in _code(_rd(_cb123_S + "Services/MonetizationService.luau")), "CODEBOT v123: no untagged Speed Pass write")
 for _f, _tag in (("Modules/StreamPrefetch.luau", "StreamPrefetch.Place"), ("Services/CombatService/init.luau", "CombatService.TeleportToBase"),
                  ("Services/VehicleService.luau", "VehicleService.ExitSpot"), ("Modules/VehicleWaterGuard.luau", "VehicleWaterGuard.placeRider"),

@@ -1095,8 +1095,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 125)', "v110 WE_Build=110 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 125)', "v110 WE_Build=110 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 126)', "v110 WE_Build=110 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 126)', "v110 WE_Build=110 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1161,7 +1161,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 125)', "v110 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 126)', "v110 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1234,9 +1234,9 @@ must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau
 must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 125)', "v110 WE_Build=110 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 125)', "v110 WE_Build=110 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 125)', "v110 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 126)', "v110 WE_Build=110 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 126)', "v110 WE_Build=110 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 126)', "v110 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1263,9 +1263,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 125)', "v110 WE_Build=110 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 125)', "v110 WE_Build=110 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 125)', "v110 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 126)', "v110 WE_Build=110 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 126)', "v110 WE_Build=110 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 126)', "v110 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1318,9 +1318,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService is nil before BaseService.Init", "v66 Bootstrap warns (no assert) on nil deps.DataService")
 must_not_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "assert(deps.DataService", "v66 Bootstrap has no fatal DataService assert")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 125)', "v110 WE_Build=110 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 125)', "v110 WE_Build=110 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 125)', "v110 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 126)', "v110 WE_Build=110 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 126)', "v110 WE_Build=110 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 126)', "v110 EarlyRemotes WE_Build")
 # Keep v64 hardenings
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")
@@ -2687,8 +2687,8 @@ must_not_contain(_E_UPS, 'Instance.new("SurfaceGui")', "fb2 Helipad console line
 
 # --- Owner's 11 features, lane K1 contracts (proposed; Z merges) ---
 must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'ImpulseSpeed = {', 'K1: F8 Speed Pass config ImpulseSpeed exists (never named SpeedBoost)')
-must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'WalkSpeedMult = 1.15,', 'K1: F8 Speed Pass x1.15')
-must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'WalkSpeedMult = 1.25, -- F8', 'K1: F8 Speed Boost product x1.25 from config (not hard-coded)')
+# v126 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v126.py (speed x1.4 / x1.6, paid speed applied after other writers): #must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'WalkSpeedMult = 1.15,', 'K1: F8 Speed Pass x1.15')
+# v126 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v126.py (speed x1.4 / x1.6, paid speed applied after other writers): #must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'WalkSpeedMult = 1.25, -- F8', 'K1: F8 Speed Boost product x1.25 from config (not hard-coded)')
 must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'DeathSpeedOffer = {', 'K1: F8 one death offer per session under its own key')
 must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'PassKey = "ImpulseSpeed",', 'K1: F8 death offer sells the Speed Pass')
 must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'SkipIfOwnsAny = { "ImpulseSpeed", "SpeedBoost" } :: { string },', 'K1: F8 no death offer to owners of either speed SKU')
@@ -2772,7 +2772,7 @@ must_not_contain('src/ServerScriptService/Server/Services/MonetizationService.lu
 # claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'if m > best and ownsCached(player, passKey) then', 'M: F8 owning both speed SKUs gives the max, never the product')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'local mult = MonetizationService.SpeedMultFor(player)', 'M: F8 walk speed applied from SpeedMultFor')
 # v123 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v123.py (the tagged MoveDebug.SetWalkSpeed(hum, base * mult, ...)): #must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'hum.WalkSpeed = base * mult', 'M: F8 WalkSpeed = DefaultWalkSpeed x SpeedMultFor')
-must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'SetWalkSpeed(hum, base * mult,', 'M: F8 WalkSpeed = DefaultWalkSpeed x SpeedMultFor (v123 tagged setter)')
+# v126 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v126.py (speed x1.4 / x1.6, paid speed applied after other writers): #must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'SetWalkSpeed(hum, base * mult,', 'M: F8 WalkSpeed = DefaultWalkSpeed x SpeedMultFor (v123 tagged setter)')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'MonetizationService.OnPassOwned(function(player: Player, passKey: string)', 'M: F8 Speed Pass applies when it flips to owned (join / refresh / purchase)')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', '-- F8: the character can spawn before the pass cache and the profile are ready; apply the speed now', 'M: F8 speed applied after the profile load (spawn-before-load race)')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'function MonetizationService.TryDeathSpeedOffer(victim: Player): boolean', 'M: F8 TryDeathSpeedOffer API (cross-lane)')
@@ -9230,10 +9230,11 @@ def _army_fix_pins() -> None:
     else:
         bad(f"army fix: Follow.ThreatStuds must be > 0 and <= CombatFairnessConfig.EscortEngageRadius (got {ts} / {er}); 130 slowed the army on every camp / checkpoint approach, behind the phone camera")
     mult, maxs = _af_num(cu, "SpeedMult"), _af_num(cu, "MaxSpeed")
-    if mult is not None and maxs is not None and 1.0 < mult <= 1.6 and 20 <= maxs <= 30:
-        ok(f"army fix: CatchUp SpeedMult {mult} / MaxSpeed {maxs} (keeps up with an owner at 16 / 18.4 / 20)")
+    # v126 (Code Bot Roblox): MaxSpeed range 20..30 -> 20..40 (Speed Boost x1.6 = 25.6; 25.6 x 1.5 = 38.4)
+    if mult is not None and maxs is not None and 1.0 < mult <= 1.6 and 20 <= maxs <= 40:
+        ok(f"army fix: CatchUp SpeedMult {mult} / MaxSpeed {maxs} (keeps up with an owner at 16 / 22.4 / 25.6)")
     else:
-        bad(f"army fix: CatchUp SpeedMult must be in (1, 1.6] and MaxSpeed in [20, 30] (got {mult} / {maxs})")
+        bad(f"army fix: CatchUp SpeedMult must be in (1, 1.6] and MaxSpeed in [20, 40] (got {mult} / {maxs})")
     # 2) a unit model is removed only on the lifecycle paths: Humanoid.Died (spawnUnit), the SyncArmy not-living cull and
     #    trim, clearSquad on OrdersConfig.Enabled = false (SyncArmy) and on PlayerRemoving (Init). Nothing else.
     spans = _af_fn_spans(so)

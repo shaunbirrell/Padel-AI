@@ -577,7 +577,7 @@ function ShopController.Init()
 					local title = "Back stronger: " .. name
 					local sub = desc or "Boost after death"
 					if k == speedPassKey then
-						-- F8 copy: "Run faster" / "Speed Pass  +15% forever" / "GET R$ 5" (from the config values).
+						-- F8 copy: "Run faster" / "Speed Pass  +40% forever" / "GET R$ 99" (from the config values).
 						-- No Cash Pack Mega highlight after this offer (M1: no 799 R$ push after a death).
 						local mult = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
 						title = "Run faster"

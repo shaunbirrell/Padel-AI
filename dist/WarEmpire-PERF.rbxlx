@@ -940,7 +940,7 @@ local ArmyConfig = {
 			Enabled = true,
 			StartStuds = 6,
 			SpeedMult = 1.5,
-			MaxSpeed = 28,
+			MaxSpeed = 40, -- v126: was 28; the Speed Boost owner walks 25.6 (x1.6), 25.6 x 1.5 = 38.4
 			-- ship: the pace comes from his speed smoothed over passes (weight PaceSmooth per 0.4 s pass) and moves only in
 			-- PaceStep studs/s steps: every Humanoid.WalkSpeed write replicates to every client, and a client-owned
 			-- character's replicated position jitters (stand-in, +-0.4 studs per step: 20 writes/s per army at step 0).
@@ -1101,7 +1101,7 @@ local ArmyConfig = {
 		CatchUpMult = 1.35,
 		CatchUpPerStud = 0.6,
 		CatchUpMaxMult = 1.8,
-		CatchUpMin = 34, -- the catch-up cap is never under this (a boosted sprint is 20)
+		CatchUpMin = 34, -- the catch-up cap is never under this (v126: Speed Pass 22.4, Speed Boost 25.6; x1.8 = 46 -> MaxSpeed 50)
 		MaxSpeed = 50,
 		SpeedUpPerThink = 8, -- v99: WalkSpeed rises at most this much per think (0.4 s) ...
 		SpeedDownPerThink = 6, -- ... and falls at most this much (smooth catch-up, no lurch)
@@ -3185,7 +3185,7 @@ local ConsoleBuyConfig = {
 
 	-- Server check, horizontal: |HRP - buy point centre|xz <= (ConsolePromptDistance | PadPromptDistance) + ServerSlack.
 	-- The client BUY box (WorldPromptController CONSOLE_MARGIN 5) reaches 8.5 studs horizontally, so the slack covers
-	-- 9.5 studs of the server's HRP trailing the client: 0.59 s at WalkSpeed 16, 0.47 s with the Speed Boost (20).
+	-- 9.5 studs of the server's HRP trailing the client: 0.59 s at WalkSpeed 16, 0.37 s with the v126 Speed Boost (25.6).
 	ServerSlack = 8,
 	-- Server check, vertical: |HRP.Y - buy point centre.Y|. Covers the client BUY box (-4.7 .. +9.7) and a jump at the
 	-- console (+8.5); refuses the upper floor of a two-storey walk-in (+14.1 above a ground-floor console).
@@ -6211,8 +6211,8 @@ local MonetizationConfig = {
 			Id = 1998656357,
 			DisplayName = "Speed Pass",
 			RobuxPrice = 99, -- 2026-09-29 owner repriced 5 -> 99 in Creator Hub
-			WalkSpeedMult = 1.15,
-			Description = "Run 15% faster, forever",
+			WalkSpeedMult = 1.4, -- v126 (owner: the speed barely felt faster): was 1.15 (16 -> 18.4); now 16 -> 22.4
+			Description = "Run 40% faster, forever",
 		},
 		-- v71 money (M1): premium Robux vehicles (plan §2.2, PremiumVehicleConfig.Lineup PassKey). Id = 0 until the
 		-- owner creates each pass (Item for Sale OFF until the M6 publish, J3). HideFromShop until M3's feature gate
@@ -6407,8 +6407,8 @@ local MonetizationConfig = {
 			Gold = 0,
 			GrantEntitlement = "SpeedBoost",
 			OneTime = true, -- v69: permanent boolean flag
-			WalkSpeedMult = 1.25, -- F8: was MonetizationService SPEED_BOOST_MULT; the Speed Pass is 1.15
-			Description = "Permanent move-speed boost",
+			WalkSpeedMult = 1.6, -- v126 (owner: "barely makes me faster"): was 1.25 (16 -> 20); now 16 -> 25.6. Speed Pass 1.4
+			Description = "Run 60% faster, forever",
 		},
 		-- Cosmetic oil pump gold dress. v71 money (M0): one-time Developer Product (J29), 49 R$.
 		-- F9 (owner's 11 features): lights up when the Id is pasted. While Id = 0 the Shop skips the row (it skips
@@ -25365,7 +25365,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 125)
+		player:SetAttribute("WE_Build", 126)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -62641,7 +62641,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 125)
+			player:SetAttribute("WE_Build", 126)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -70267,7 +70267,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 125)
+		player:SetAttribute("WE_Build", 126)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -70409,7 +70409,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=125",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=126",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -77525,7 +77525,7 @@ return MissionService
 	a whitelisted `source` on RequestPurchase*. Offers: none before the tutorial is complete, the Starter Pack gate
 	TrySoftOfferStarterBundle (TutorialService schedules it), no Speed Boost / death Cash Mega pop-ups, D8 budget.
 	Owner's 11 features, lane M (spec_f11 F7 / F8): SpeedMultFor (the highest WalkSpeedMult among the speed SKUs the
-	player owns: Speed Pass x1.15, Speed Boost x1.25; never multiplied together), re-applied on respawn, on load and
+	player owns: Speed Pass x1.4, Speed Boost x1.6 (v126); never multiplied together), re-applied on respawn, on load and
 	when a speed pass flips to owned; TryDeathSpeedOffer (the one death offer, MonetizationConfig.DeathSpeedOffer).
 	The Keep-Base Rebirth receipt needs no branch of its own: CounterGrants.GrantKeepBaseRebirths banks the token,
 	it is saved before PurchaseGranted, and PrestigeService runs the rebirth from OnGranted (never in the receipt).
@@ -77606,7 +77606,7 @@ local sessionStartAt: { [number]: number } = {}
 -- F8: the death speed offer was sent this session (userId -> true; cleared on PlayerRemoving)
 local deathSpeedSent: { [number]: boolean } = {}
 -- F8: sanity cap on a WalkSpeedMult config value (a typo must never launch players across the map)
-local MAX_WALK_SPEED_MULT = 2
+local MAX_WALK_SPEED_MULT = 1.75 -- v126: Speed Boost x1.6 fits under it (16 -> 25.6; the cap = 28)
 
 -- Whole number >= 0; junk (nil, strings, NaN, inf, negatives) becomes 0.
 local function nonNegInt(value: any): number
@@ -77971,8 +77971,8 @@ local function isSpeedKey(key: string): boolean
 end
 
 --[[ F8 (owner's 11 features): the walk-speed multiplier for this player = the HIGHEST WalkSpeedMult among the speed
-	SKUs they own (GamePasses.ImpulseSpeed x1.15, DevProducts.SpeedBoost x1.25), never the product of them: owning
-	both gives x1.25. 1 when none is owned. A pass whose Id is 0 is never owned outside Studio mocks. Never yields. ]]
+	SKUs they own (GamePasses.ImpulseSpeed x1.4, DevProducts.SpeedBoost x1.6; v126), never the product of them: owning
+	both gives x1.6. 1 when none is owned. A pass whose Id is 0 is never owned outside Studio mocks. Never yields. ]]
 function MonetizationService.SpeedMultFor(player: Player): number
 	local best = 1
 	if typeof(player) ~= "Instance" or not player:IsA("Player") then
@@ -77995,6 +77995,33 @@ function MonetizationService.SpeedMultFor(player: Player): number
 end
 
 -- SpeedBoost / Speed Pass: permanent move speed on the current character (F8: SpeedMultFor, the max of the owned SKUs)
+--[[ v126 (owner: "the Speed Boost barely makes me faster"): the paid multiplier is applied AFTER any other writer.
+	Today MonetizationService is the only server writer of a player's WalkSpeed (no armour / gun / combat slowdown).
+	The guard below keeps it that way for the future: when anything else writes this Humanoid's WalkSpeed (value X,
+	not the value this service wrote last) the paid speed becomes min(X x mult, cap) (0 stays 0, a slow stays a
+	slow but still mult x faster than an unpaid player under the same slow). Leaving a seat (vehicle exit) re-applies.
+	One guard per Humanoid (a respawn gets a fresh Humanoid and a fresh guard). ]]
+local speedGuarded: { [Humanoid]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local speedWritten: { [Humanoid]: number } = setmetatable({}, { __mode = "k" }) :: any
+local speedBase: { [Humanoid]: number } = setmetatable({}, { __mode = "k" }) :: any
+
+local function writePaidSpeed(player: Player, hum: Humanoid, base: number, who: string)
+	local mult = MonetizationService.SpeedMultFor(player)
+	if mult <= 1 then
+		return -- nothing owned: WalkSpeed stays what the game set
+	end
+	local GameConfig = require(Shared.Configs.GameConfig)
+	local default = tonumber(GameConfig.DefaultWalkSpeed) or 16
+	local want = math.min(math.max(0, base) * mult, default * MAX_WALK_SPEED_MULT)
+	speedBase[hum] = base
+	speedWritten[hum] = want
+	if math.abs(hum.WalkSpeed - want) < 0.01 then
+		return
+	end
+	-- v123 /movedebug: the tagged setter (the only server write to a player's WalkSpeed)
+	require(script.Parent.Parent.Modules.MoveDebug).SetWalkSpeed(hum, want, who)
+end
+
 local function applySpeedBoostToCharacter(player: Player)
 	local character = player.Character
 	if not character then
@@ -78004,14 +78031,32 @@ local function applySpeedBoostToCharacter(player: Player)
 	if not hum then
 		return
 	end
-	local mult = MonetizationService.SpeedMultFor(player)
-	if mult <= 1 then
+	if MonetizationService.SpeedMultFor(player) <= 1 then
 		return -- nothing owned: WalkSpeed stays the game default
 	end
 	local GameConfig = require(Shared.Configs.GameConfig)
-	local base = tonumber(GameConfig.DefaultWalkSpeed) or 16
-	-- v123 /movedebug: the tagged setter (the only server write to a player's WalkSpeed)
-	require(script.Parent.Parent.Modules.MoveDebug).SetWalkSpeed(hum, base * mult, "MonetizationService.SpeedBoost")
+	local default = tonumber(GameConfig.DefaultWalkSpeed) or 16
+	writePaidSpeed(player, hum, speedBase[hum] or default, "MonetizationService.SpeedBoost")
+	if speedGuarded[hum] then
+		return
+	end
+	speedGuarded[hum] = true
+	-- another writer changed WalkSpeed: apply the paid multiplier on top of ITS value
+	hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+		local wrote = speedWritten[hum]
+		if wrote ~= nil and math.abs(hum.WalkSpeed - wrote) < 0.01 then
+			return -- our own write
+		end
+		if player.Parent and player.Character == character then
+			writePaidSpeed(player, hum, hum.WalkSpeed, "MonetizationService.SpeedBoost(after other writer)")
+		end
+	end)
+	-- vehicle / chair exit: re-apply (defensive; a seat does not change WalkSpeed today)
+	hum.Seated:Connect(function(active: boolean)
+		if not active and player.Parent and player.Character == character then
+			writePaidSpeed(player, hum, speedBase[hum] or default, "MonetizationService.SpeedBoost(seat exit)")
+		end
+	end)
 end
 
 function MonetizationService.SetMockGamePassOwned(player: Player, passKey: string, owned: boolean)
@@ -124856,7 +124901,7 @@ function ShopController.Init()
 					local title = "Back stronger: " .. name
 					local sub = desc or "Boost after death"
 					if k == speedPassKey then
-						-- F8 copy: "Run faster" / "Speed Pass  +15% forever" / "GET R$ 5" (from the config values).
+						-- F8 copy: "Run faster" / "Speed Pass  +40% forever" / "GET R$ 99" (from the config values).
 						-- No Cash Pack Mega highlight after this offer (M1: no 799 R$ push after a death).
 						local mult = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
 						title = "Run faster"

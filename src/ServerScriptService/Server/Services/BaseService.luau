@@ -1954,7 +1954,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 125)
+			player:SetAttribute("WE_Build", 126)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then

@@ -29,7 +29,7 @@ local ConsoleBuyConfig = {
 
 	-- Server check, horizontal: |HRP - buy point centre|xz <= (ConsolePromptDistance | PadPromptDistance) + ServerSlack.
 	-- The client BUY box (WorldPromptController CONSOLE_MARGIN 5) reaches 8.5 studs horizontally, so the slack covers
-	-- 9.5 studs of the server's HRP trailing the client: 0.59 s at WalkSpeed 16, 0.47 s with the Speed Boost (20).
+	-- 9.5 studs of the server's HRP trailing the client: 0.59 s at WalkSpeed 16, 0.37 s with the v126 Speed Boost (25.6).
 	ServerSlack = 8,
 	-- Server check, vertical: |HRP.Y - buy point centre.Y|. Covers the client BUY box (-4.7 .. +9.7) and a jump at the
 	-- console (+8.5); refuses the upper floor of a two-storey walk-in (+14.1 above a ground-floor console).

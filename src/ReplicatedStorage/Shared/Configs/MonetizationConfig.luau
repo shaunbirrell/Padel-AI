@@ -113,8 +113,8 @@ local MonetizationConfig = {
 			Id = 1998656357,
 			DisplayName = "Speed Pass",
 			RobuxPrice = 99, -- 2026-09-29 owner repriced 5 -> 99 in Creator Hub
-			WalkSpeedMult = 1.15,
-			Description = "Run 15% faster, forever",
+			WalkSpeedMult = 1.4, -- v126 (owner: the speed barely felt faster): was 1.15 (16 -> 18.4); now 16 -> 22.4
+			Description = "Run 40% faster, forever",
 		},
 		-- v71 money (M1): premium Robux vehicles (plan §2.2, PremiumVehicleConfig.Lineup PassKey). Id = 0 until the
 		-- owner creates each pass (Item for Sale OFF until the M6 publish, J3). HideFromShop until M3's feature gate
@@ -309,8 +309,8 @@ local MonetizationConfig = {
 			Gold = 0,
 			GrantEntitlement = "SpeedBoost",
 			OneTime = true, -- v69: permanent boolean flag
-			WalkSpeedMult = 1.25, -- F8: was MonetizationService SPEED_BOOST_MULT; the Speed Pass is 1.15
-			Description = "Permanent move-speed boost",
+			WalkSpeedMult = 1.6, -- v126 (owner: "barely makes me faster"): was 1.25 (16 -> 20); now 16 -> 25.6. Speed Pass 1.4
+			Description = "Run 60% faster, forever",
 		},
 		-- Cosmetic oil pump gold dress. v71 money (M0): one-time Developer Product (J29), 49 R$.
 		-- F9 (owner's 11 features): lights up when the Id is pasted. While Id = 0 the Shop skips the row (it skips

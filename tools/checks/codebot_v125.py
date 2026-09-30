@@ -23,8 +23,8 @@ def _cb125(cond, label):
 
 _S125 = "src/ServerScriptService/Server/"
 for _f in (_S125 + "Services/DataService.luau", _S125 + "Services/BaseService.luau", _S125 + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 125)', "CODEBOT v125: WE_Build=125 " + _f.rsplit("/", 1)[-1])
-must_contain(_S125 + "Services/DataService.luau", "WE_Build=125", "CODEBOT v125: DataService profile-loaded log says WE_Build=125")
+    pass  # v126 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v126.py: #must_contain(_f, 'SetAttribute("WE_Build", 125)', "CODEBOT v125: WE_Build=125 " + _f.rsplit("/", 1)[-1])
+# v126 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v126.py: #must_contain(_S125 + "Services/DataService.luau", "WE_Build=125", "CODEBOT v125: DataService profile-loaded log says WE_Build=125")
 
 # JOB 29 retention still OwnerFirst; PreferMesh stays OFF; WE_Building* untouched (pin presence only)
 _rc = _P125("src/ReplicatedStorage/Shared/Configs/RetentionConfig.luau").read_text(encoding="utf-8")

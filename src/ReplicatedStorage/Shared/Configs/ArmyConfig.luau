@@ -169,7 +169,7 @@ local ArmyConfig = {
 			Enabled = true,
 			StartStuds = 6,
 			SpeedMult = 1.5,
-			MaxSpeed = 28,
+			MaxSpeed = 40, -- v126: was 28; the Speed Boost owner walks 25.6 (x1.6), 25.6 x 1.5 = 38.4
 			-- ship: the pace comes from his speed smoothed over passes (weight PaceSmooth per 0.4 s pass) and moves only in
 			-- PaceStep studs/s steps: every Humanoid.WalkSpeed write replicates to every client, and a client-owned
 			-- character's replicated position jitters (stand-in, +-0.4 studs per step: 20 writes/s per army at step 0).
@@ -330,7 +330,7 @@ local ArmyConfig = {
 		CatchUpMult = 1.35,
 		CatchUpPerStud = 0.6,
 		CatchUpMaxMult = 1.8,
-		CatchUpMin = 34, -- the catch-up cap is never under this (a boosted sprint is 20)
+		CatchUpMin = 34, -- the catch-up cap is never under this (v126: Speed Pass 22.4, Speed Boost 25.6; x1.8 = 46 -> MaxSpeed 50)
 		MaxSpeed = 50,
 		SpeedUpPerThink = 8, -- v99: WalkSpeed rises at most this much per think (0.4 s) ...
 		SpeedDownPerThink = 6, -- ... and falls at most this much (smooth catch-up, no lurch)
