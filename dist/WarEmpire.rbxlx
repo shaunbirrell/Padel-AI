@@ -1105,7 +1105,7 @@ local ArmyConfig = {
 			Enabled = true,
 			Seconds = 0.4, -- = OrdersConfig.ThinkInterval
 			MaxStuds = 4,
-			MaxOwnerSpeed = 40, -- studs/s; faster owner moves are jumps (no lead)
+			MaxOwnerSpeed = 48, -- studs/s; faster owner moves are jumps (no lead). claude-bud JOB 40: was 40 (= the new top run speed)
 			DropOnSlowdown = 0.5,
 			StopHoldStuds = 2,
 			StopHoldSeconds = 1.5, -- ...only right after he stopped (a unit walking back later still does)
@@ -1119,7 +1119,7 @@ local ArmyConfig = {
 			Enabled = true,
 			StartStuds = 6,
 			SpeedMult = 1.5,
-			MaxSpeed = 40, -- v126: was 28; the Speed Boost owner walks 25.6 (x1.6), 25.6 x 1.5 = 38.4
+			MaxSpeed = 60, -- claude-bud JOB 40: 40 x 1.5 (was 40). v126: was 28; the Speed Boost owner walks 25.6 (x1.6), 25.6 x 1.5 = 38.4
 			-- ship: the pace comes from his speed smoothed over passes (weight PaceSmooth per 0.4 s pass) and moves only in
 			-- PaceStep studs/s steps: every Humanoid.WalkSpeed write replicates to every client, and a client-owned
 			-- character's replicated position jitters (stand-in, +-0.4 studs per step: 20 writes/s per army at step 0).
@@ -1281,7 +1281,7 @@ local ArmyConfig = {
 		CatchUpPerStud = 0.6,
 		CatchUpMaxMult = 1.8,
 		CatchUpMin = 34, -- the catch-up cap is never under this (v126: Speed Pass 22.4, Speed Boost 25.6; x1.8 = 46 -> MaxSpeed 50)
-		MaxSpeed = 50,
+		MaxSpeed = 58, -- claude-bud JOB 40: was 50 (the fallback path also stays above a 40 runner)
 		SpeedUpPerThink = 8, -- v99: WalkSpeed rises at most this much per think (0.4 s) ...
 		SpeedDownPerThink = 6, -- ... and falls at most this much (smooth catch-up, no lurch)
 		ArriveStuds = 2,
@@ -1467,7 +1467,7 @@ local ArmyConfig = {
 		CatchUpPerStud = 0.9, -- catching up: WalkSpeed = its slot's pace + this per stud from its slot ...
 		CatchUpMaxMult = 1.8, -- ... capped at max(his pace x this, CatchUpMin), never over MaxSpeed
 		CatchUpMin = 30,
-		MaxSpeed = 46, -- v133 (Code Bot): was 40; the x2 Speed Boost owner runs 32 (the block: max(FormMaxSpeed, his
+		MaxSpeed = 58, -- claude-bud JOB 40: x1.45 of the 40-stud/s Speed Boost owner (v133: 46 for 32). v133 (Code Bot): was 40; the x2 Speed Boost owner runs 32 (the block: max(FormMaxSpeed, his
 		-- speed x FormSpeedMult) = 40): 46 keeps a soldier's catch-up headroom over his pace (x1.45, as at 25.6)
 		MinSpeed = 8,
 		SpeedUpPerTick = 6, -- WalkSpeed changes at most this much per tick up ...
@@ -5462,6 +5462,7 @@ return GateDefenseConfig
 local GuardConfig = {
 	Enabled = true,
 
+
 	RespawnSeconds = 45,
 	LeashStuds = 60,
 	ReturnAfterSeconds = 8,
@@ -5473,6 +5474,32 @@ local GuardConfig = {
 	MaxShootersPerBase = 6,
 	UnitTargets = true, -- enemy army units are targets too
 	UnitTag = "WE_SquadUnit",
+	--[[ claude-bud JOB 40 part A (2026-09-30): REAL BASE GUARDS at every guard post inside a live plot (the rear-gate
+		and sea-gate statues become armed, animated, killable guards; Modules/BaseGuards state machine IDLE / ALERT /
+		ATTACK / RETURN / DEAD) and THE ONE hostility rule for every base defence (CombatService.UnitMayHitPlayer /
+		ArmyHostility; hits through CombatService). Owner-first by the BASE OWNER: a plot whose owner is not live keeps
+		today's statues, gate guards and turrets exactly (their old checks included). ]]
+	Posts = {
+		Enabled = true,
+		OwnerFirst = true, -- only UserId 470626172's base (+ Studio) until Code Bot sets false = every base
+		StatuePatterns = { "^GateGuard_%a+[LR]$", "^GateGuard_Sea%d*$" }, -- MapSetup's rear-gate / sea-gate statues
+		ModelPrefix = "BaseGuard_",
+		AlertStuds = 80, -- a hostile outside the plot this close to the post (with line of sight) is noticed
+		ReactionSeconds = 0.5, -- ALERT -> ATTACK
+		AlertForgetSeconds = 3, -- ALERT with the target lost this long -> RETURN
+		TurnDegPerSec = 360,
+		FireRate = 1.2,
+		Damage = 10,
+		Range = 90,
+		LeashStuds = 45,
+		Health = 150, -- the statue's value
+		RegenAfterSeconds = 5, -- HP back to full once at the post and out of combat this long
+		RespawnSeconds = 45,
+		RespawnRetrySeconds = 2, -- a player standing on the post delays the respawn
+		RespawnClearStuds = 4,
+		ProtectCollectorRadius = 40, -- tier 2 of the target pick (near the ATM)
+	},
+
 
 	-- Defenses research (ResearchConfig): HP multiplier and extra guards
 	HealthStat = "GuardHP",
@@ -5517,6 +5544,46 @@ local GuardConfig = {
 }
 
 -- pure: the hire price of a tower guard for a player with `rebirths` rebirths
+-- claude-bud JOB 40: the post guards + the one rule are live for this BASE OWNER
+function GuardConfig.PostsLiveFor(ownerUserId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live((GuardConfig :: any).Posts, ownerUserId)
+end
+
+--[[ claude-bud JOB 40: the post guard state machine's decision (pure; tests call it). s = the current state,
+	c = { Target: boolean (a hostile picked this tick), Since: seconds in this state, LostFor: seconds since the target
+	was last seen, FromPost: studs from the post, AtPost: boolean, Dead: boolean }. Returns the next state. ]]
+function GuardConfig.PostNext(s: string, c: { [string]: any }): string
+	local P: any = (GuardConfig :: any).Posts
+	if c.Dead then
+		return "DEAD"
+	end
+	if s == "DEAD" then
+		return "IDLE" -- a respawned guard starts idle at its post
+	end
+	if (tonumber(c.FromPost) or 0) > P.LeashStuds then
+		return "RETURN"
+	end
+	if s == "IDLE" then
+		return if c.Target then "ALERT" else "IDLE"
+	elseif s == "ALERT" then
+		if not c.Target and (tonumber(c.LostFor) or 0) >= P.AlertForgetSeconds then
+			return "RETURN"
+		end
+		return if c.Target and (tonumber(c.Since) or 0) >= P.ReactionSeconds then "ATTACK" else "ALERT"
+	elseif s == "ATTACK" then
+		if not c.Target and (tonumber(c.LostFor) or 0) >= (GuardConfig :: any).ReturnAfterSeconds then
+			return "RETURN"
+		end
+		return "ATTACK"
+	elseif s == "RETURN" then
+		if c.Target and (tonumber(c.FromPost) or 0) < P.LeashStuds - 5 then
+			return "ALERT"
+		end
+		return if c.AtPost then "IDLE" else "RETURN"
+	end
+	return "IDLE"
+end
+
 function GuardConfig.TowerCost(rebirths: number): number
 	local T = GuardConfig.Tower
 	local r = math.max(0, math.floor(tonumber(rebirths) or 0))
@@ -7518,7 +7585,8 @@ local MonetizationConfig = {
 			DisplayName = "Speed Pass",
 			RobuxPrice = 99, -- 2026-09-29 owner repriced 5 -> 99 in Creator Hub
 			WalkSpeedMult = 1.5, -- v133 (owner: "still not fast"): was 1.4 (v126, 16 -> 22.4); now 16 -> 24
-			Description = "Run 50% faster, forever",
+			WalkSpeedMultV2 = 1.75, -- claude-bud JOB 40 (SpeedV2 live): 16 -> 28, "Run 75% faster"
+			-- Description: set below from MonetizationConfig.SpeedText (one source for every speed string)
 		},
 		-- v71 money (M1): premium Robux vehicles (plan §2.2, PremiumVehicleConfig.Lineup PassKey). Id = 0 until the
 		-- owner creates each pass (Item for Sale OFF until the M6 publish, J3). HideFromShop until M3's feature gate
@@ -7781,7 +7849,8 @@ local MonetizationConfig = {
 			GrantEntitlement = "SpeedBoost",
 			OneTime = true, -- v69: permanent boolean flag
 			WalkSpeedMult = 2.0, -- v133 (owner: "still not fast"): was 1.6 (v126, 16 -> 25.6); now 16 -> 32. Speed Pass 1.5
-			Description = "Run 2x faster, forever",
+			WalkSpeedMultV2 = 2.5, -- claude-bud JOB 40 (SpeedV2 live): 16 -> 40, "Run 2.5x faster"
+			-- Description: set below from MonetizationConfig.SpeedText
 		},
 		-- Cosmetic oil pump gold dress. v71 money (M0): one-time Developer Product (J29), 49 R$.
 		-- F9 (owner's 11 features): lights up when the Id is pasted. While Id = 0 the Shop skips the row (it skips
@@ -8256,6 +8325,74 @@ function MonetizationConfig.PadOwnedKeys(slot: PremiumPadSlot): { string }
 	local offer = MonetizationConfig.LivePadOffer(slot)
 	return if offer then { offer.Key } else {}
 end
+
+--[[ claude-bud JOB 40 part B: SPEED, with text that cannot go stale. SpeedV2 (owner-first) switches the speed SKUs to
+	their WalkSpeedMultV2 (Speed Pass x1.75 = 28, Speed Boost x2.5 = 40; owning both = the higher); off = x1.5 / x2 as
+	today. Every speed string comes from SpeedText (the Descriptions below, the stands, the Shop rows, the death card,
+	the Speed Boost toast). MaxWalkSpeedMult is the sanity cap MonetizationService applies (it was a local 2.0). Robux
+	prices and Ids are unchanged. ]]
+local cfg: any = MonetizationConfig
+cfg.SpeedV2 = {
+	Enabled = true,
+	OwnerFirst = true, -- only UserId 470626172 (+ Studio) until Code Bot sets false = everyone
+}
+cfg.MaxWalkSpeedMult = 2.5
+
+function cfg.SpeedV2LiveFor(userId: any): boolean
+	local b = cfg.SpeedV2
+	if b.Enabled ~= true then
+		return false
+	end
+	if b.OwnerFirst ~= true then
+		return true
+	end
+	local okR, RS = pcall(function(): any
+		return game:GetService("RunService")
+	end)
+	if okR and RS and RS:IsStudio() then
+		return true
+	end
+	return AdminConfig.IsPlaytestOwner(userId)
+end
+
+-- "Run 75% faster" (x < 2) / "Run 2x faster" / "Run 2.5x faster" (x >= 2); forever adds ", forever"
+function cfg.SpeedText(mult: number, forever: boolean?): string
+	local m = tonumber(mult) or 1
+	local s
+	if m < 2 then
+		s = string.format("Run %d%% faster", math.floor((m - 1) * 100 + 0.5))
+	elseif math.abs(m - math.floor(m + 0.5)) < 0.001 then
+		s = string.format("Run %dx faster", math.floor(m + 0.5))
+	else
+		s = string.format("Run %sx faster", (string.gsub(string.format("%.2f", m), "0+$", "")))
+	end
+	return if forever then s .. ", forever" else s
+end
+
+-- a speed SKU's multiplier for this player (V2 while live; nil userId = today's)
+function cfg.SpeedMultOf(def: any, userId: any): number
+	if typeof(def) ~= "table" then
+		return 1
+	end
+	if userId ~= nil and typeof(def.WalkSpeedMultV2) == "number" and cfg.SpeedV2LiveFor(userId) then
+		return def.WalkSpeedMultV2
+	end
+	return tonumber(def.WalkSpeedMult) or 1
+end
+
+-- the description a player should read for a SKU (speed SKUs from SpeedText, everything else its Description)
+function cfg.DescFor(def: any, userId: any): string?
+	if typeof(def) ~= "table" then
+		return nil
+	end
+	if typeof(def.WalkSpeedMult) == "number" and def.WalkSpeedMult > 1 then
+		return cfg.SpeedText(cfg.SpeedMultOf(def, userId), true)
+	end
+	return if typeof(def.Description) == "string" then def.Description else nil
+end
+
+cfg.GamePasses.ImpulseSpeed.Description = cfg.SpeedText(cfg.GamePasses.ImpulseSpeed.WalkSpeedMult, true)
+cfg.DevProducts.SpeedBoost.Description = cfg.SpeedText(cfg.DevProducts.SpeedBoost.WalkSpeedMult, true)
 
 return MonetizationConfig
 ]]></string>
@@ -29152,7 +29289,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 149)
+		player:SetAttribute("WE_Build", 150)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -33802,6 +33939,62 @@ local function areFriends(a: number, b: number): boolean
 	return false
 end
 
+-- claude-bud JOB 40 part A: THE one rule (CombatService.UnitMayHitPlayer / ArmyHostility) for a live base owner
+local function combat(): any?
+	return deps.CombatService
+end
+
+local function oneRuleLive(ownerUserId: number): boolean
+	return GuardConfig.PostsLiveFor(ownerUserId)
+end
+
+-- may this base's defences shoot player p? (live: the one rule; the 4 s spawn grace only spares, never adds)
+function BaseGuards.PlayerHostileOneRule(ownerUserId: number, p: Player, H: any): boolean
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	local cs = combat()
+	if owner == nil or cs == nil or cs.UnitMayHitPlayer == nil then
+		return false
+	end
+	local ok = cs.UnitMayHitPlayer(owner, p)
+	if not ok then
+		return false
+	end
+	return not (H and H.InSpawnGrace and H.InSpawnGrace(p))
+end
+
+-- may this base's defences shoot the soldiers of unitOwner? (ArmyHostility; a shielded base owner fires at nobody)
+function BaseGuards.UnitHostileOneRule(ownerUserId: number, unitOwner: number): boolean
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	local uo = Players:GetPlayerByUserId(unitOwner)
+	local cs = combat()
+	if owner == nil or uo == nil or cs == nil or cs.ArmyHostility == nil then
+		return false
+	end
+	local ok = cs.ArmyHostility(owner, uo)
+	if not ok then
+		return false
+	end
+	local why = if cs.PvPBlockReason then cs.PvPBlockReason(owner, uo) else nil
+	return why ~= "owner_shielded"
+end
+
+-- GateDefenseService's AutoGun / gate-guard hits and attacker checks (it never holds CombatService: the join hotfix)
+function BaseGuards.DefenceHit(owner: Player, victim: Player, amount: number, kind: string): (number, boolean, string)
+	local cs = combat()
+	if cs == nil or cs.ApplyDefenceHit == nil then
+		return 0, false, "no_combat"
+	end
+	return cs.ApplyDefenceHit(owner, victim, amount, kind)
+end
+
+function BaseGuards.AttackerMay(attacker: Player, owner: Player): (boolean, string)
+	local cs = combat()
+	if cs == nil or cs.ArmyHostility == nil then
+		return true, "ok"
+	end
+	return cs.ArmyHostility(attacker, owner)
+end
+
 -- a player the base must never shoot: the owner, his clan (H.IsAlly), his friends
 local function friendlyPlayer(ownerUserId: number, p: Player, H: any): boolean
 	return p.UserId == ownerUserId or H.IsAlly(ownerUserId, p) or areFriends(ownerUserId, p.UserId)
@@ -33818,8 +34011,10 @@ end
 -- every hostile with inside == true (in the plot) or inside == false (outside it, within range of `from`)
 local function hostiles(def: any, H: any, inside: boolean, from: Vector3, range: number): { Target }
 	local out: { Target } = {}
+	local live = oneRuleLive(def.OwnerUserId) -- JOB 40: the one rule (off = JOB 20's owner / clan / friends / grace)
 	for _, p in ipairs(Players:GetPlayers()) do
-		if not friendlyPlayer(def.OwnerUserId, p, H) and not H.InSpawnGrace(p) then
+		local hostile = if live then BaseGuards.PlayerHostileOneRule(def.OwnerUserId, p, H) else (not friendlyPlayer(def.OwnerUserId, p, H) and not H.InSpawnGrace(p))
+		if hostile then
 			local char = p.Character
 			local hum = char and char:FindFirstChildOfClass("Humanoid")
 			local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -33834,7 +34029,8 @@ local function hostiles(def: any, H: any, inside: boolean, from: Vector3, range:
 	if C.UnitTargets then
 		for _, m in ipairs(CollectionService:GetTagged(C.UnitTag)) do
 			local uo = m:GetAttribute("OwnerUserId")
-			if m:IsA("Model") and typeof(uo) == "number" and not friendlyUnitOwner(def.OwnerUserId, uo, H) then
+			local unitHostile = typeof(uo) == "number" and (if live then BaseGuards.UnitHostileOneRule(def.OwnerUserId, uo) else not friendlyUnitOwner(def.OwnerUserId, uo, H))
+			if m:IsA("Model") and unitHostile then
 				local hum = m:FindFirstChildOfClass("Humanoid")
 				local root = m:FindFirstChild("HumanoidRootPart")
 				if hum and root and root:IsA("BasePart") and hum.Health > 0 then
@@ -33887,6 +34083,36 @@ local function hurt(def: any, t: Target, amount: number, sourceId: string, H: an
 	end
 	win.Taken += amt
 	local owner = Players:GetPlayerByUserId(def.OwnerUserId)
+	if oneRuleLive(def.OwnerUserId) then
+		-- JOB 40: through CombatService (the rule re-checked at every shot; the creator tag credits the owner)
+		local cs = combat()
+		if owner == nil or cs == nil then
+			return 0
+		end
+		if t.Kind == "Player" then
+			local victim = t.Player :: Player
+			if not BaseGuards.PlayerHostileOneRule(def.OwnerUserId, victim, H) then
+				return 0
+			end
+			local okD, dealt = pcall(cs.ApplyDefenceHit, owner, victim, amt, sourceId)
+			if okD and typeof(dealt) == "number" and dealt > 0 then
+				pcall(H.Alert, def.PlotId, def.OwnerUserId, victim)
+				BaseGuards._Log(def, "[BaseGuardHit] from=%s to=%s dmg=%d hp=%d", sourceId, victim.Name, dealt, t.Humanoid.Health)
+				return dealt
+			end
+			return 0
+		end
+		if not BaseGuards.UnitHostileOneRule(def.OwnerUserId, t.OwnerUserId) then
+			return 0
+		end
+		local before = t.Humanoid.Health
+		pcall(cs.ApplyHit, owner, t.Root, amt, { WeaponId = sourceId, UnitShot = true, Quiet = true })
+		local dealt = math.max(0, before - t.Humanoid.Health)
+		if t.Humanoid.Health <= 0 and dealt > 0 and not isPrivateServer() and GuardConfig.AllowPair(pairLog, owner.UserId, t.OwnerUserId, now) then
+			reward(owner, C.Rewards.UnitKillCash, C.Rewards.UnitKillXP, "guard_unit_kill")
+		end
+		return dealt
+	end
 	if t.Kind == "Player" then
 		local victim = t.Player :: Player
 		if H.InSpawnGrace(victim) then
@@ -33973,8 +34199,254 @@ local function leashed(def: any, g: any, goal: Vector3, H: any): Vector3
 	return H.ClampInside(def, goal)
 end
 
+-- claude-bud JOB 40: /armydebug lines for a live base (only while its owner has WE_ArmyDebug on; 1 per 0.5 s per base)
+local logAt: { [number]: number } = {}
+function BaseGuards._Log(def: any, fmt: string, ...: any)
+	local owner = Players:GetPlayerByUserId(def.OwnerUserId)
+	if owner == nil or owner:GetAttribute("WE_ArmyDebug") ~= true then
+		return
+	end
+	local t = os.clock()
+	if t - (logAt[def.PlotId] or 0) < 0.5 then
+		return
+	end
+	logAt[def.PlotId] = t
+	print(string.format(fmt, ...))
+end
+
+-- the post guard's target: the raider of this plot first, then near the ATM, then the nearest; players before units
+local function pickPostTarget(def: any, g: any, H: any): (Target?, number)
+	local P = C.Posts
+	local pos = g.Root.Position
+	local cands: { Target } = hostiles(def, H, true, pos, math.huge)
+	for _, t in ipairs(hostiles(def, H, false, g.PostCf.Position, P.AlertStuds)) do
+		if H.HasLos(pos, t.Root.Position, { g.Model, def.Folder, t.Root.Parent :: Instance }) then
+			table.insert(cands, t)
+		end
+	end
+	local best: Target? = nil
+	local bestScore = math.huge
+	local bestD = math.huge
+	for _, t in ipairs(cands) do
+		local d = (t.Root.Position - pos).Magnitude
+		local tier = 3
+		if t.Player and (t.Player :: Player):GetAttribute("WE_RaidingPlot") == def.PlotId then
+			tier = 1
+		elseif def.CollectorPos and (t.Root.Position - def.CollectorPos).Magnitude <= P.ProtectCollectorRadius then
+			tier = 2
+		end
+		local score = tier * 100000 + (if t.Kind == "Unit" then 50000 else 0) + d
+		if score < bestScore then
+			best, bestScore, bestD = t, score, d
+		end
+	end
+	return best, bestD
+end
+
+--[[ claude-bud JOB 40 part A: one POST guard, one think (the state machine; GuardConfig.PostNext decides, this acts).
+	IDLE at the post facing out; ALERT faces the hostile for ReactionSeconds; ATTACK fires with line of sight on every
+	shot (FireRate / Damage / Range, the hit chance, the one rule re-checked in hurt), moving only to regain sight,
+	never past LeashStuds from the post or out of the plot; RETURN walks back (a path when blocked, never a teleport);
+	HP back to full only at the post after RegenAfterSeconds out of combat. DEAD / respawn = GateDefenseService's. ]]
+function BaseGuards.ThinkPost(def: any, g: any, tnow: number, H: any)
+	local P = C.Posts
+	local ps = g._ps
+	if ps == nil then
+		ps = { State = "IDLE", Since = tnow, SeenAt = -math.huge, HurtAt = -math.huge, LastHp = g.Humanoid.Health }
+		g._ps = ps
+	end
+	local st: any = ps
+	local dead = not g.Alive or g.Humanoid.Health <= 0 or not g.Root.Parent
+	if g.Humanoid.Health < st.LastHp then
+		st.HurtAt = tnow
+	end
+	st.LastHp = g.Humanoid.Health
+	local pos = if dead then g.PostCf.Position else g.Root.Position
+	local post = g.PostCf.Position
+	local fromPost = Vector3.new(pos.X - post.X, 0, pos.Z - post.Z).Magnitude
+	local t: Target?, d = nil, math.huge
+	if not dead then
+		t, d = pickPostTarget(def, g, H)
+	end
+	if t then
+		st.SeenAt = tnow
+		st.Target = t
+	end
+	local nextS = GuardConfig.PostNext(st.State, {
+		Dead = dead,
+		Target = t ~= nil,
+		Since = tnow - st.Since,
+		LostFor = tnow - st.SeenAt,
+		FromPost = fromPost,
+		AtPost = fromPost <= 2,
+	})
+	if nextS ~= st.State then
+		st.State = nextS
+		st.Since = tnow
+		g.Model:SetAttribute("WE_GuardState", nextS)
+	end
+	if dead then
+		return
+	end
+	BaseGuards._Log(def, "[BaseGuard] plot=%s post=%s state=%s target=%s dist=%d", tostring(def.PlotId), tostring(g.PostName), st.State, if t then (if t.Player then (t.Player :: Player).Name else "unit") else "-", if t then math.floor(d) else -1)
+	if st.State == "IDLE" then
+		g.Humanoid:MoveTo(pos)
+		H.FaceYaw(g.Root, post + g.PostCf.LookVector * 10)
+		if g.Humanoid.Health < g.Humanoid.MaxHealth and tnow - st.HurtAt >= P.RegenAfterSeconds then
+			g.Humanoid.Health = g.Humanoid.MaxHealth -- the post regen (the guard NPC, never a player)
+		end
+	elseif st.State == "ALERT" then
+		g.Humanoid:MoveTo(pos)
+		if t then
+			H.FaceYaw(g.Root, t.Root.Position)
+		end
+	elseif st.State == "ATTACK" then
+		if t == nil then
+			g.Humanoid:MoveTo(pos)
+			return
+		end
+		local tt = t :: Target
+		H.FaceYaw(g.Root, tt.Root.Position)
+		local sees = H.HasLos(pos, tt.Root.Position, { g.Model, def.Folder, tt.Root.Parent :: Instance })
+		if sees then
+			g._bgPath = nil
+			g.Humanoid:MoveTo(if d > P.Range * 0.85 then leashed(def, g, tt.Root.Position, H) else pos)
+		else
+			local path = g._bgPath
+			if path and path.I <= #path.Points then
+				local wp = path.Points[path.I]
+				if (pos - wp.Position).Magnitude < 3 then
+					path.I += 1
+				end
+				g.Humanoid:MoveTo(leashed(def, g, wp.Position, H))
+			else
+				requestPath(g, leashed(def, g, tt.Root.Position, H), tnow)
+			end
+		end
+		local interval = 1 / math.max(P.FireRate, 0.1)
+		if sees and d <= P.Range and tnow - g.LastFireAt >= interval and claimShooter(def, tnow) then
+			g.LastFireAt = tnow
+			if rng:NextNumber() <= hitChance(d, P.Range) then
+				hurt(def, tt, P.Damage * BaseGuards.PostDamageMult(def.OwnerUserId, H), "BaseGuard", H)
+			end
+			pcall(H.ShotFx, def, g, pos, tt.Root.Position)
+		end
+	elseif st.State == "RETURN" then
+		local blocked = not H.HasLos(pos, post, { g.Model, def.Folder })
+		if blocked then
+			local path = g._bgPath
+			if path and path.I <= #path.Points then
+				local wp = path.Points[path.I]
+				if (pos - wp.Position).Magnitude < 3 then
+					path.I += 1
+				end
+				g.Humanoid:MoveTo(wp.Position)
+			else
+				requestPath(g, post, tnow)
+			end
+		else
+			g._bgPath = nil
+			g.Humanoid:MoveTo(post)
+		end
+	end
+end
+
+-- the post guard's damage multiplier: Research TurretDamage x the JOB 39 Turret Guns, capped at MaxMult (3)
+function BaseGuards.PostDamageMult(ownerUserId: number, H: any): number
+	local r = H.ResearchMult(ownerUserId)
+	local eg = deps.EndgameService
+	if eg and eg.TurretDmgMult then
+		local ok, m = pcall(eg.TurretDmgMult, ownerUserId, r)
+		if ok and typeof(m) == "number" then
+			return m
+		end
+	end
+	return r
+end
+
+-- the post guards' HP: Posts.Health x Research GuardHP (min 3) x the JOB 39 Gate & Walls (+12 % a level), <= x3
+function BaseGuards.AfterSpawnPost(g: any, ownerUserId: number)
+	local P = C.Posts
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	local m = 1
+	local rs = deps.ResearchService
+	if owner and rs and rs.GetBonus then
+		local ok, v = pcall(rs.GetBonus, owner, C.HealthStat)
+		if ok and typeof(v) == "number" and v == v then
+			m = math.clamp(v, 1, 3)
+		end
+	end
+	local eg = deps.EndgameService
+	if eg and eg.DefenceLevelFor then
+		local ok, L = pcall(eg.DefenceLevelFor, ownerUserId, "Gate")
+		if ok and typeof(L) == "number" then
+			m *= 1 + 0.12 * L
+		end
+	end
+	m = math.min(m, 3)
+	g.Humanoid.MaxHealth = math.floor(P.Health * m + 0.5)
+	g.Humanoid.Health = g.Humanoid.MaxHealth -- AfterSpawn only
+	g.Model:SetAttribute("WE_GuardState", "IDLE")
+end
+
+-- the statues this live plot's posts replace: parked in ServerStorage while live, put back when the plot clears
+local parked: { [number]: { { Name: string, CF: CFrame, Model: Model, Parent: Instance } } } = {}
+function BaseGuards.CollectPosts(plotFolder: Instance, plotId: number): { { Name: string, CF: CFrame } }
+	local list = parked[plotId]
+	if list == nil then
+		local found = {}
+		local store = game:GetService("ServerStorage"):FindFirstChild("WE_ParkedStatues")
+		if store == nil then
+			local f = Instance.new("Folder")
+			f.Name = "WE_ParkedStatues"
+			f.Parent = game:GetService("ServerStorage")
+			store = f
+		end
+		for _, m in ipairs(plotFolder:GetDescendants()) do -- once per plot sync (claim / walls), never per frame
+			if m:IsA("Model") and m:GetAttribute("GateGuard") ~= true and m:GetAttribute("NPCType") == "Guard" then
+				local match = false
+				for _, pat in ipairs(C.Posts.StatuePatterns) do
+					if string.match(m.Name, pat) then
+						match = true
+					end
+				end
+				if match and m.Parent then
+					table.insert(found, { Name = m.Name, CF = m:GetPivot(), Model = m, Parent = m.Parent :: Instance })
+				end
+			end
+		end
+		for _, r in ipairs(found) do
+			r.Model.Parent = store
+		end
+		parked[plotId] = found
+		list = found
+	end
+	local out = {}
+	for _, r in ipairs(list :: any) do
+		table.insert(out, { Name = r.Name, CF = r.CF })
+	end
+	return out
+end
+
+function BaseGuards.RestoreStatues(plotId: number)
+	local list = parked[plotId]
+	if list == nil then
+		return
+	end
+	for _, r in ipairs(list) do
+		if r.Parent and r.Parent.Parent then
+			r.Model.Parent = r.Parent
+		end
+	end
+	parked[plotId] = nil
+end
+
 --[[ One gate / extra guard, one think. Returns true (GateDefenseService's old think is skipped). ]]
 function BaseGuards.ThinkGuard(def: any, g: any, stats: any, tnow: number, H: any): boolean
+	if g.IsPost == true then
+		BaseGuards.ThinkPost(def, g, tnow, H) -- JOB 40: the post guards' state machine
+		return true
+	end
 	if not g.Alive or g.Humanoid.Health <= 0 or not g.Root.Parent then
 		return true
 	end
@@ -47037,11 +47509,11 @@ export type StandOpts = {
 }
 
 -- price + name + benefit, from MonetizationConfig only
-function PurchaseStands.OfferInfo(kind: string, key: string): (number, string, string)
+function PurchaseStands.OfferInfo(kind: string, key: string, userId: number?): (number, string, string)
 	local def: any = if kind == "GamePass" then (MonetizationConfig.GamePasses :: any)[key] else (MonetizationConfig.DevProducts :: any)[key]
 	local price = if typeof(def) == "table" then tonumber(def.RobuxPrice) or 0 else 0
 	local name = if typeof(def) == "table" and typeof(def.DisplayName) == "string" then def.DisplayName else key
-	local desc = if typeof(def) == "table" and typeof(def.Description) == "string" then def.Description else ""
+	local desc = (MonetizationConfig :: any).DescFor(def, userId) or "" -- claude-bud JOB 40: speed text from the helper
 	return price, name, desc
 end
 
@@ -70649,7 +71121,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 149)
+			player:SetAttribute("WE_Build", 150)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -76364,6 +76836,24 @@ function CombatService.ApplyUnitPlayerHit(owner: Player, victim: Player, damage:
 	return dealt, killed, if dealt > 0 then "ok" else "no_damage"
 end
 
+-- claude-bud JOB 40 part A: a base defence's hit on a player (post / gate / tower guards, AutoGuns of a live base):
+-- THE same rule as the owner's army (UnitMayHitPlayer, re-checked here) and the same hurtPlayer (the creator tag credits
+-- the base owner; the kill feed names the defence kind). Returns (dealt, killed, reason).
+function CombatService.ApplyDefenceHit(owner: Player, victim: Player, damage: number, kind: string?): (number, boolean, string)
+	if typeof(owner) ~= "Instance" or not owner:IsA("Player") or typeof(victim) ~= "Instance" or not victim:IsA("Player") then
+		return 0, false, "bad_args"
+	end
+	if typeof(damage) ~= "number" or not (damage > 0) or damage == math.huge then
+		return 0, false, "bad_damage"
+	end
+	local may, why = CombatService.UnitMayHitPlayer(owner, victim)
+	if not may then
+		return 0, false, why
+	end
+	local dealt, killed = hurtPlayer(owner, victim, damage, if typeof(kind) == "string" then kind else "BaseGuard", { UnitShot = true })
+	return dealt, killed, if dealt > 0 then "ok" else "no_damage"
+end
+
 -- ── army lane A0 (SPEC-ARMY-FINAL §7.1): the escort's NPC reads + visible unit shots ─────────────────────────────
 --[[ One hostile list per squad think pass (SquadOrdersService), instead of a CollectionService:GetTagged("WE_NPC") per
 	unit. `out` is refilled IN PLACE (entries 1..n, the old tail cleared; no table is made) with the Model of every NPC
@@ -79071,7 +79561,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 149)
+		player:SetAttribute("WE_Build", 150)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -79213,7 +79703,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=149",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=150",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -80284,6 +80774,11 @@ function EndgameService.TurretDmgMult(userId: number, research: number): number
 		return research
 	end
 	return math.min(research * (1 + g * EndgameConfig.Defence.GunsPct / 100), maxMult())
+end
+
+-- claude-bud JOB 40: a Defence track level for a base owner (0 while the part is not live), for the post guards
+function EndgameService.DefenceLevelFor(userId: number, track: string): number
+	return defOf(userId, track)
 end
 
 function EndgameService.ExtraNests(userId: number): number
@@ -83710,6 +84205,7 @@ local Constants = require(Shared.Constants)
 local GateDefenseConfig = require(Shared.Configs.GateDefenseConfig)
 local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
 local RaidConfig = require(Shared.Configs.RaidConfig)
+local GuardConfig = require(Shared.Configs.GuardConfig) -- claude-bud JOB 40 part A (Posts / the one rule)
 local HudConfig = require(Shared.Configs.HudConfig)
 local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
 local AircraftWeaponConfig = require(Shared.Configs.AircraftWeaponConfig) -- aircraft weapon reach (ApplyDamage)
@@ -84105,6 +84601,10 @@ local function clearDefense(plotId: number)
 		if t.Model and t.Model.Parent then
 			t.Model:Destroy()
 		end
+	end
+	local bgR = (GateDefenseService :: any)._BG -- claude-bud JOB 40: the parked statues come back (OFF == OLD for the plot)
+	if bgR and bgR.RestoreStatues then
+		pcall(bgR.RestoreStatues, plotId)
 	end
 	if def.Folder and def.Folder.Parent then
 		def.Folder:Destroy()
@@ -84628,6 +85128,11 @@ function GateDefenseService.IsAlly(ownerUserId: number, player: Player): boolean
 end
 
 local function isEnemyPlayer(ownerUserId: number, player: Player): boolean
+	-- claude-bud JOB 40 part A: a live base owner's defences use THE one rule (off = the old ally check)
+	local bgMod = (GateDefenseService :: any)._BG
+	if bgMod and bgMod.PlayerHostileOneRule and GuardConfig.PostsLiveFor(ownerUserId) then
+		return bgMod.PlayerHostileOneRule(ownerUserId, player, (GateDefenseService :: any)._H)
+	end
 	return not GateDefenseService.IsAlly(ownerUserId, player)
 end
 
@@ -84917,6 +85422,17 @@ local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceM
 	local char = player.Character
 	local srcOwner = sourceModel:GetAttribute("OwnerUserId")
 	if char and (char:GetAttribute("FriendlySquad") or (srcOwner ~= nil and char:GetAttribute("OwnerUserId") == srcOwner)) then
+		return
+	end
+	-- claude-bud JOB 40 part A: a live base's AutoGun / gate guard hits through CombatService (the one rule, credited)
+	local liveOwner = if typeof(srcOwner) == "number" and GuardConfig.PostsLiveFor(srcOwner) then Players:GetPlayerByUserId(srcOwner) else nil
+	if liveOwner then
+		local bgH = (GateDefenseService :: any)._BG -- BaseGuards holds CombatService (never a dep here: the join hotfix)
+		if bgH and bgH.DefenceHit then
+			pcall(bgH.DefenceHit, liveOwner, player, amount, if sourceModel:GetAttribute("GateGuard") == true then "BaseGuard" else "AutoGun")
+		end
+		local d0 = if plotId ~= nil then defenses[plotId] else nil
+		alertBaseUnderAttack(plotId, if d0 then d0.OwnerUserId else (srcOwner :: number), player)
 		return
 	end
 	hum:TakeDamage(amount)
@@ -85293,6 +85809,20 @@ local function applyDamageFrom(attacker: Player, hitPart: BasePart, amount: numb
 	end
 	if GateDefenseService.IsAlly(def.OwnerUserId, attacker) then
 		return false
+	end
+	-- claude-bud JOB 40 part A: a live base: the attacker needs the same rule the other way round (ArmyHostility)
+	if GuardConfig.PostsLiveFor(def.OwnerUserId) then
+		local owner = Players:GetPlayerByUserId(def.OwnerUserId)
+		local bgH = (GateDefenseService :: any)._BG -- BaseGuards holds CombatService (the join hotfix)
+		if owner and bgH and bgH.AttackerMay then
+			local may, why = bgH.AttackerMay(attacker, owner)
+			if not may then
+				if why == "protected" and NotificationService then
+					pcall(NotificationService.Notify, attacker, owner.DisplayName .. "'s base is Protected (new-player shield)", "Warn")
+				end
+				return false
+			end
+		end
 	end
 	graceFrom[attacker.UserId] = nil -- attacking the defenses ends the spawn grace
 
@@ -85720,7 +86250,24 @@ respawnGuard = function(plotId: number, slot: number, ownerUserId: number, def: 
 	if not idx or not stats or not def.Folder.Parent then
 		return
 	end
+	local deadAny: any = dead
+	if deadAny.IsPost == true then
+		-- claude-bud JOB 40: never respawn on top of a player (retry every RespawnRetrySeconds)
+		for _, p in ipairs(Players:GetPlayers()) do
+			local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+			if r and r:IsA("BasePart") and (r.Position - dead.PostCf.Position).Magnitude < GuardConfig.Posts.RespawnClearStuds then
+				task.delay(GuardConfig.Posts.RespawnRetrySeconds, respawnGuard, plotId, slot, ownerUserId, def, dead)
+				return
+			end
+		end
+	end
 	local g = spawnGuardModel(ownerUserId, slot, dead.PostCf, stats, def.Folder, plotId)
+	if deadAny.IsPost == true then
+		local gu: any = g
+		gu.IsPost = true
+		gu.PostName = deadAny.PostName
+		g.Model.Name = GuardConfig.Posts.ModelPrefix .. tostring(deadAny.PostName)
+	end
 	-- the spawn can yield (catalog visual): drop it if the plot was rebuilt / struck meanwhile
 	if defenses[plotId] ~= def or isDown(def) or def.Guards[idx] ~= dead or not def.Folder.Parent then
 		g.Alive = false
@@ -85731,7 +86278,9 @@ respawnGuard = function(plotId: number, slot: number, ownerUserId: number, def: 
 	end
 	def.Guards[idx] = g
 	local bgMod = (GateDefenseService :: any)._BG -- claude-bud JOB 20: the research HP multiplier on every respawn
-	if bgMod and bgMod.Live() then
+	if bgMod and (g :: any).IsPost == true and bgMod.AfterSpawnPost then
+		bgMod.AfterSpawnPost(g, ownerUserId) -- claude-bud JOB 40: the post guard's HP
+	elseif bgMod and bgMod.Live() then
 		bgMod.AfterSpawn(g, ownerUserId)
 	end
 end
@@ -85843,6 +86392,19 @@ local function syncPlotNow(plotId: number)
 				local g = spawnGuardModel(ownerUserId, 2 + k, at, stats, folder, plotId)
 				g.Model:SetAttribute("OwnerUserId", ownerUserId)
 				bgMod.AfterSpawn(g, ownerUserId)
+				table.insert(guards, g)
+			end
+		end
+		-- claude-bud JOB 40 part A: every guard post inside a live plot gets a real guard (the statue is parked)
+		if bgMod and bgMod.CollectPosts and GuardConfig.PostsLiveFor(ownerUserId) then
+			for k, post in ipairs(bgMod.CollectPosts(plotFolder, plotId)) do
+				local g = spawnGuardModel(ownerUserId, 10 + k, post.CF, stats, folder, plotId)
+				local gu: any = g
+				gu.IsPost = true
+				gu.PostName = post.Name
+				g.Model.Name = GuardConfig.Posts.ModelPrefix .. post.Name
+				g.Model:SetAttribute("OwnerUserId", ownerUserId)
+				bgMod.AfterSpawnPost(g, ownerUserId)
 				table.insert(guards, g)
 			end
 		end
@@ -89381,7 +89943,9 @@ local sessionStartAt: { [number]: number } = {}
 -- F8: the death speed offer was sent this session (userId -> true; cleared on PlayerRemoving)
 local deathSpeedSent: { [number]: boolean } = {}
 -- F8: sanity cap on a WalkSpeedMult config value (a typo must never launch players across the map)
-local MAX_WALK_SPEED_MULT = 2.0 -- v133: Speed Boost x2 fits under it (16 -> 32; the cap = 32). v126 was 1.75 (28)
+-- claude-bud JOB 40: the sanity cap lives in config now (MonetizationConfig.MaxWalkSpeedMult 2.5 = 40: the x2.5 Speed
+-- Boost fits; today's x1.5 / x2 are unchanged under it). v133 was a local 2.0; v126 1.75.
+local MAX_WALK_SPEED_MULT = tonumber((MonetizationConfig :: any).MaxWalkSpeedMult) or 2.0
 
 -- Whole number >= 0; junk (nil, strings, NaN, inf, negatives) becomes 0.
 local function nonNegInt(value: any): number
@@ -89741,8 +90305,9 @@ local function ownsSkuCached(player: Player, key: string): boolean
 end
 
 -- F8: WalkSpeedMult of one config entry (1 when missing or junk; capped at MAX_WALK_SPEED_MULT)
-local function walkSpeedMultOf(def: any): number
-	local m = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
+local function walkSpeedMultOf(def: any, userId: number?): number
+	-- claude-bud JOB 40: the SKU's V2 multiplier while SpeedV2 is live for the player (else WalkSpeedMult)
+	local m = if typeof(def) == "table" then (if userId ~= nil then (MonetizationConfig :: any).SpeedMultOf(def, userId) else tonumber(def.WalkSpeedMult)) else nil
 	if m == nil or m ~= m or m <= 1 then
 		return 1
 	end
@@ -89771,14 +90336,14 @@ function MonetizationService.SpeedMultFor(player: Player): number
 		return best
 	end
 	for passKey, def in pairs(MonetizationConfig.GamePasses :: any) do
-		local m = walkSpeedMultOf(def)
+		local m = walkSpeedMultOf(def, player.UserId)
 		-- claude-bud: the Speed Pass counts only while MonetizationConfig.Rollout is live for this player
 		if m > best and MonetizationConfig.SkuLiveFor(player.UserId, passKey) and ownsCached(player, passKey) then
 			best = m
 		end
 	end
 	for productKey, def in pairs(MonetizationConfig.DevProducts :: any) do
-		local m = walkSpeedMultOf(def)
+		local m = walkSpeedMultOf(def, player.UserId)
 		if m > best and ownsSkuCached(player, productKey) then
 			best = m
 		end
@@ -145600,18 +146165,16 @@ function ShopController.Init()
 						then (MonetizationConfig.GamePasses :: any)[k]
 						else (MonetizationConfig.DevProducts :: any)[k]
 					local robux = if typeof(def) == "table" then tonumber(def.RobuxPrice) else nil
-					local desc = if typeof(def) == "table" and typeof(def.Description) == "string" then def.Description else nil
+					local desc = (MonetizationConfig :: any).DescFor(def, player.UserId) -- claude-bud JOB 40: speed text from the helper
 					local title = "Back stronger: " .. name
 					local sub = desc or "Boost after death"
 					if k == speedPassKey or (k == ShopOverhaulConfig.DeathOfferProduct and ShopOverhaulConfig.LiveFor(player.UserId)) then
 						-- claude-bud JOB 36: the overhaul's death offer is Speed Boost (same "Run faster" copy)
 						-- F8 copy: "Run faster" / "Speed Pass  +40% forever" / "GET R$ 99" (from the config values).
 						-- No Cash Pack Mega highlight after this offer (M1: no 799 R$ push after a death).
-						local mult = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
+						local mult = (MonetizationConfig :: any).SpeedMultOf(def, player.UserId)
 						title = "Run faster"
-						sub = if mult and mult > 1
-							then string.format("%s  +%d%% forever", name, math.floor((mult - 1) * 100 + 0.5))
-							else name
+						sub = if mult > 1 then string.format("%s  %s", name, (MonetizationConfig :: any).SpeedText(mult, true)) else name -- JOB 40: the helper
 					else
 						pendingCashMegaHighlight = true -- v35: CashMega highlight if the shop opens next
 					end
@@ -145923,11 +146486,11 @@ function ShopController.Init()
 		end
 		local robux = tonumber(def.RobuxPrice) or 0
 		local stub = false -- kept for "coming soon" path if ever re-enabled
-		local sub = def.Description or ""
+		local sub = (MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or "" -- claude-bud JOB 40
 		if def.GrantsBattlePassPremium then
 			sub = "Unlocks Battle Pass Premium (ProcessReceipt only)"
 		elseif def.GrantEntitlement then
-			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement)))
+			sub = ((MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or ("Grants " .. tostring(def.GrantEntitlement)))
 		elseif def.Cash and def.Cash > 0 then
 			sub = "+$" .. formatCash(packCash(key, def)) .. " Cash" -- claude-bud JOB 36: the live amount
 		elseif def.Gold and def.Gold > 0 then
@@ -146092,7 +146655,7 @@ function ShopController.Init()
 		if robuxFeature then
 			passTitle = "ROBUX · " .. name -- claude-bud JOB 6: the gold Robux row
 		end
-		local passSub = tostring(def.Description or "")
+		local passSub = tostring((MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or "") -- claude-bud JOB 40
 		if overhaul then -- claude-bud JOB 36: PERMANENT on every pass; BEST VALUE on 2x Cash; gold armory rows
 			passSub = ShopOverhaulConfig.PermanentPrefix .. tostring(def.OverhaulDescription or def.Description or "")
 			if key == ShopOverhaulConfig.BestValueKey then
@@ -146620,7 +147183,7 @@ function ShopController.Init()
 			return showOffer({
 				Key = "SpeedBoostToast",
 				Title = tostring(p.DisplayName or def.DisplayName or "Speed Boost"),
-				Sub = if typeof(def.Description) == "string" and def.Description ~= "" then def.Description else "Run faster across the map",
+				Sub = (MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or "Run faster across the map", -- claude-bud JOB 40
 				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
 				OnGet = function()
 					promptDevProduct("SpeedBoost", "offer")
