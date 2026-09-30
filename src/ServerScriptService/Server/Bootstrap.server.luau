@@ -67,6 +67,7 @@ local SiteActivityService = safeRequire("SiteActivityService", Services.SiteActi
 local RebirthZoneService = safeRequire("RebirthZoneService", Services.RebirthZoneService) -- claude-bud JOB 33
 local NukeService = safeRequire("NukeService", Services.NukeService) -- claude-bud JOB 33
 local AchievementService = safeRequire("AchievementService", Services.AchievementService) -- claude-bud JOB 34
+local StorePropsService = safeRequire("StorePropsService", Services.StorePropsService) -- Code Bot STORE-PROPS v132 (DO NOT REMOVE)
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
@@ -115,6 +116,7 @@ local deps: { [string]: any } = {
 	RebirthZoneService = RebirthZoneService, -- claude-bud JOB 33
 	NukeService = NukeService, -- claude-bud JOB 33
 	AchievementService = AchievementService, -- claude-bud JOB 34: achievements, chat shout-outs, badges
+	StorePropsService = StorePropsService, -- Code Bot STORE-PROPS v132
 	BaseSignService = BaseSignService, -- claude-bud JOB 30: the map uses the sign's "<Name>'s Empire" (TitleFor)
 	BattlePassService = BattlePassService,
 	SoldierService = SoldierService,
@@ -586,6 +588,7 @@ safeInit("SiteActivityService", SiteActivityService, deps) -- claude-bud JOB 31:
 safeInit("RebirthZoneService", RebirthZoneService, deps) -- claude-bud JOB 33: rebirth zones, effects, rank
 safeInit("NukeService", NukeService, deps) -- claude-bud JOB 33: the silo nukes (after Combat / RebirthZone)
 safeInit("AchievementService", AchievementService, deps) -- claude-bud JOB 34: achievements (after Soldier / Mission / Economy)
+safeInit("StorePropsService", StorePropsService, deps) -- Code Bot STORE-PROPS v132: Creator Store props (after RebirthZone; lazy, never blocks)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)
 safeInit("PremiumWeaponService", PremiumWeaponService, deps) -- claude-bud PREMIUM: Robux-only vehicle weapons (server-validated)

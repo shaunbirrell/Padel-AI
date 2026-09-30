@@ -27,8 +27,8 @@ def _code131(p):
 
 _S131 = "src/ServerScriptService/Server/"
 for _f in (_S131 + "Services/DataService.luau", _S131 + "Services/BaseService.luau", _S131 + "EarlyRemotes.server.luau"):
-    _cb131('SetAttribute("WE_Build", 131)' in _rd131(_f), "CODEBOT v131: WE_Build=131 " + _f.rsplit("/", 1)[-1])
-_cb131("WE_Build=131" in _rd131(_S131 + "Services/DataService.luau"), "CODEBOT v131: DataService profile-loaded log says WE_Build=131")
+    pass  # v132 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v132.py: #_cb131('SetAttribute("WE_Build", 131)' in _rd131(_f), "CODEBOT v131: WE_Build=131 " + _f.rsplit("/", 1)[-1])
+# v132 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v132.py: #_cb131("WE_Build=131" in _rd131(_S131 + "Services/DataService.luau"), "CODEBOT v131: DataService profile-loaded log says WE_Build=131")
 
 _RC131 = _rd131("src/ReplicatedStorage/Shared/Configs/RebirthConfig.luau")
 _cb131("\tZonesLive = true," in _RC131 and "\tWeaponsLive = true," in _RC131,

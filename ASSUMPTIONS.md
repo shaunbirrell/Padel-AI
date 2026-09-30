@@ -9627,3 +9627,31 @@ ds_territories.luau T3):
   no chat), so launching to everyone does not flood chat.
 - **Owner-first chat:** while owner-first, the owner's lines still go to everyone in the server, as the brief asks.
 - **Badges:** none were created (Code Bot, `docs/BADGES.md`); every BadgeId is 0.
+
+## 2026-09-30 — Code Bot STORE-PROPS (v132): the owner's Creator Store props wired in
+- **Load check:** all 80 picks load live (Open Cloud Luau, InsertService:LoadAsset on the place); none "not authorized".
+- **Wired:** 62 of 80 (57 in the world, 25 in the rebirth zones, some both). Not placed: 3 rejected (2473378608
+  contains an "m4 sherman" real-tank replica; 3117530492's mesh is "Volga (Metro 2033)"; 2580028799 is a Tool with
+  one flat part), the 4 checkpoint pieces (JOB 37 is our own Part design by spec), and 11 over the part / decal budget
+  or worse than our Part build (8637034739, the plain barracks block). Full list: docs/PROP-ASSETS.md.
+- **CLAUDE.md store rules:** the <= 40 parts / <= 20k tris / WE_CHECK2 origin rules are not applied to this owner-picked
+  set; server budgets replace them (world 9,000 parts, a plot's zones 7,200, all zones 16,000, one model 2,300). The
+  origin (mesh uploader) check was not run.
+- **World placement:** additive: nothing existing is removed or moved. Copies go round the JOB 31 sites and inside the
+  named areas on open level ground, off roads, clear of every part, >= 330 studs from every plot centre (so a
+  rebirth annex slot is never blocked). A roof row needs a town building whose visible roof is flush with its
+  HouseCollider. Rows that find no spot are skipped and logged, never forced.
+- **Owner-first for the world:** the world is one shared build, so while OwnerFirst the world props are placed once the
+  owner (or a Studio tester) is in the server, and then everyone in that server sees them. The zone visuals are only
+  on the owner's plot.
+- **Rebirth zones:** a store layout swaps the whole Part complex (the yard and console stay) at the levels it covers;
+  if a template fails, the layout does not fit or the budget is spent, the Part build stays. The Part build shows for
+  a moment until the (pre-loaded) templates swap in. Elite Barracks keeps its Part barracks (the store one is a plain
+  block) and only gets store dressing.
+- **Scale:** several store models are miniatures or giants (the silo complex is 26 studs, the refinery 37, the ruined
+  building 631, the factory 242), so each row has its own scale, chosen to fit the 74 x 60 annex yard or the site.
+- **Cleaning:** scripts, humanoids, sounds, prompts, particles, movers, joints and loose attachments are removed;
+  seats are disabled; every part is anchored with CanTouch off; lights capped at 2 and shadowless; detail under
+  0.2 studs dropped; parts under 8 studs cast no shadow; under 1.2 studs no collision.
+- **Not changed:** RebirthZoneBuilder / RebirthZoneService / WorldSites / WorldKits (Claude's queued jobs), WE_Building*,
+  PreferMesh (OFF), VisualAssetConfig, fast travel (still removed).

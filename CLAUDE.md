@@ -11,6 +11,12 @@
   to breach gates / guards / turrets, raid fairness) exactly as written in
   [`docs/claude-queue/JOB38-army-attack-orders.md`](docs/claude-queue/JOB38-army-attack-orders.md), same rules. Owner-first
   flag, no teleport / PivotTo in marches, no fast travel.
+- **Store props (Code Bot STORE-PROPS, v132): DO NOT REMOVE.** The owner's Creator Store buildings / props live in
+  `Shared/Configs/StorePropsConfig.luau` (placed by `Services/StorePropsService.luau`; list in
+  [`docs/PROP-ASSETS.md`](docs/PROP-ASSETS.md)). They dress the JOB 31 sites / named areas and swap in as the JOB 33
+  rebirth zone upgrade visuals (the Part build stays as the fallback). Do not delete the config, its rows or the
+  service; do not name your own parts `Store_*`; keep new builds clear of `Workspace.WorldFill.StoreProps`. The
+  service does not modify RebirthZoneBuilder / RebirthZoneService: it only reads the `Zone_<Id>` folders they build.
 - **No fast travel, ever:** it was removed in v127 at the owner's request. The map is tap-to-pin only (see
   `tools/checks/codebot_v127.py`).
 
