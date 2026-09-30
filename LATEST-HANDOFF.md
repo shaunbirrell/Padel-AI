@@ -1,5 +1,5 @@
 <!-- Q2-START -->
-## v142 (Code Bot Roblox, 2026-09-30 ~16:55 Dublin): JOB 36 shop overhaul + JOB 37 checkpoint guards LIVE FOR EVERYONE (owner 16:24) — place version 140
+## v142 (Code Bot Roblox, 2026-09-30 ~16:38 Dublin): JOB 36 shop overhaul + JOB 37 checkpoint guards LIVE FOR EVERYONE (owner 16:24) — place version 140
 - **WE_Build 142**. Code + dist commit `52d0905`. Open Cloud HTTP 200 `versionNumber=140`. Nothing from `origin/claude/desktop-bud` merged (its new JOB 38 `0150edf` / `128ff9d` is NOT shipped).
 - **Flags:** `ShopOverhaulConfig.Live.OwnerFirst = false`; `CheckpointGuardConfig.Live.OwnerFirst = false` (guards, cleared bonus, map rows, and the daily "Checkpoint" objective through `LiveForAll()`). Kill switches (`Enabled`) kept.
 - **VIP price:** the Creator Hub stays **199** (owner has NOT approved 349). `MonetizationConfig.GamePasses.VIP.OverhaulRobuxPrice` 349 → **199** (the one display value), so the Shop shows "199 R$". No other price changed (codebot_v142 diffs every RobuxPrice against v141). The overhaul VIP perks (+50 % cash, daily crate, gold name) now come with the 199 pass. **To charge 349 later:** owner sets 349 on the Creator Hub first, then Code Bot sets OverhaulRobuxPrice = 349.
