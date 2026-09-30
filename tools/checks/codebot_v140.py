@@ -22,9 +22,7 @@ def _rd140(p):
 
 _S140 = "src/ServerScriptService/Server/"
 _C140 = "src/ReplicatedStorage/Shared/Configs/"
-for _f in (_S140 + "Services/DataService.luau", _S140 + "Services/BaseService.luau", _S140 + "EarlyRemotes.server.luau"):
-    _cb140('SetAttribute("WE_Build", 140)' in _rd140(_f), "CODEBOT v140: WE_Build=140 " + _f.rsplit("/", 1)[-1])
-_cb140("WE_Build=140" in _rd140(_S140 + "Services/DataService.luau"), "CODEBOT v140: DataService profile-loaded log says WE_Build=140")
+# v141 (Code Bot Roblox): the WE_Build=140 pins are superseded in tools/checks/codebot_v141.py (WE_Build=141).
 
 _SOC = _rd140(_C140 + "ShopOverhaulConfig.luau")
 _cb140("Enabled = true" in _SOC and "OwnerFirst = true" in _SOC, "CODEBOT v140: ShopOverhaulConfig stays Enabled + OwnerFirst=true")
