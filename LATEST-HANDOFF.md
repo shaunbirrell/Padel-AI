@@ -1,4 +1,12 @@
 <!-- Q2-START -->
+## v155 PUBLISHED (Code Bot Roblox, 2026-10-01 00:12 Dublin): Open Cloud place version 153 — JOB 40E base owner name tags live for everyone
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **155**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":153}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Flag:** `BaseMarkerConfig.Live.OwnerFirst = false` (everyone). Endgame, ArmyOrders, GuardConfig.Posts, SpeedV2 and StorePropsConfig OwnerFirst remain true.
+- **Build pins:** BaseService, DataService (attribute + profile log), and EarlyRemotes all report WE_Build=155.
+- **Checks:** BuyPathStatic PASS=7352 FAIL=0; codebot_v155 passes; rojo build completed and the two dist artifacts were copied identically.
+- **Commits:** phase-7-polish `635aef7` (source, checks and dist); claude/desktop-bud merge `440bbd9`.
+- **Queue NEXT:** JOB 41 then JOB 42. Do not restart servers.
+
 ## v154 PUBLISHED (Code Bot Roblox, 2026-09-30 23:47 Dublin): Open Cloud place version 152 — JOB 40E FIX slim high base-owner tags (owner-first)
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **154**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":152}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Cherry-pick only** (not a bud-branch merge): `0f210ab` JOB 40E fix -> `d071c03` on phase-7. Kept phase-7 v153 sales-fix / WE_Build work intact.
