@@ -1,4 +1,14 @@
 <!-- Q2-START -->
+## v146 PUBLISHED (Code Bot Roblox, 2026-09-30 21:18 Dublin): Open Cloud place version 144 — JOB 39 phase 2 Base Tier + Defence OWNER-FIRST
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **146**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":144}`. Cherry-pick only of `9e15f27` (not a bud-branch merge — bud was behind on the JOB 38 army fix). Owner-first so Shaun can phone-test; §11 Studio proof still owed before `OwnerFirst=false`.
+- **What ships (owner-first):** Base Tier 1..5 (Fort..Capital, real Part builds, nests, soldiers, gate HP) + Defence tree (Plating / Guns / Gate / Vault) + Engineering Bureau stand + instant rebuild. `EndgameConfig.Parts.BaseTier` + `Defence` = true; `Live.OwnerFirst` still true.
+- **Commits:** `b558b7e` cherry-pick of `9e15f27`, `b97bbfb` WE_Build 146 + `tools/checks/codebot_v146.py`, `b72863c` dist rebuild; this handoff.
+- **Checks:** BuyPathStatic PASS=7104 FAIL=0; claude_bud_job39 PASS; run_endgame_test 0 failed; codebot_v146 PASS; rojo deterministic (2 builds identical). PreferMesh OFF; WE_Building* untouched.
+- **Live state kept:** Endgame OwnerFirst=true; ArmyOrders OwnerFirst=true; ShopOverhaul + CheckpointGuard OwnerFirst=false; VIP 199; pass Ids; RPG hold; WeaponsLive=true; FastTravel removed; PreferMesh OFF. JOB 38 army routes-start-at-block (v145) still on phase-7.
+- **Servers:** not restarted. Owner: "Migrate to Latest Update" (or rejoin a fresh server) to get v146 / place 144.
+- **Phone tests (Migrate to Latest Update, as shaunie6):** see PHASE 2 section below (HQ Upgrade → Fort..Capital look; ENGINEERS Defences; rebuild after breach; EMPIRE rows + PIN).
+- **Next:** Studio §11 proof still owed; do NOT set Endgame OwnerFirst=false until owner asks. Claude already pushed phase 3 tip `1cd39a6` on desktop-bud (Elite Training) — not in this ship; Code Bot can cherry-pick next. JOBs 40–42 still queued.
+
 ## claude-bud JOB 39 PHASE 2 (2026-09-30): BASE TIER + DEFENCE TREE + Engineering Bureau + instant rebuild (branch `claude/desktop-bud`)
 Owner-first (`EndgameConfig.Parts.BaseTier` / `Defence` now true; `Live.OwnerFirst` still true). Per CONTINUE-NOW.md the
 §11 Studio proof is owed later, not blocking. Off / not live: every gate / turret / loot / soldier number is the old one
