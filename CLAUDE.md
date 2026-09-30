@@ -22,6 +22,13 @@
   SEND ARMY, and a big-win rate prompt with NO reward) exactly as written in
   [`docs/claude-queue/JOB41-first-minutes-retention.md`](docs/claude-queue/JOB41-first-minutes-retention.md). Owner-first
   flags, no fast travel, servers stay at 10 players.
+- After JOB 41 is finished and pushed, do JOB 42 (TIME-based cash packs that scale with the player's income: 15 min
+  25 R$, 30 min 49 R$, 1 h 89 R$, 2 h 159 R$, 4 h 279 R$, NO 1-day / 7-day; rows "4 HOURS OF CASH" + the live $ amount
+  computed server-side at receipt time; BEST VALUE on 4h; floors for new players; new Ids 0 until Code Bot creates them;
+  old S / M / L / Mega kept in config but hidden once the time packs are live; the JOB 41 Recruit Pack cash = the
+  30-min pack amount, still 49 R$) exactly as written in
+  [`docs/claude-queue/JOB42-time-cash-packs.md`](docs/claude-queue/JOB42-time-cash-packs.md). Owner-first flag with a
+  kill switch, no publish.
 - **Store props (Code Bot STORE-PROPS, v132): DO NOT REMOVE.** The owner's Creator Store buildings / props live in
   `Shared/Configs/StorePropsConfig.luau` (placed by `Services/StorePropsService.luau`; list in
   [`docs/PROP-ASSETS.md`](docs/PROP-ASSETS.md)). They dress the JOB 31 sites / named areas and swap in as the JOB 33
