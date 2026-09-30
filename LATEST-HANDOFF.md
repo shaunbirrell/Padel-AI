@@ -1,5 +1,5 @@
 <!-- Q2-START -->
-## v125 (Code Bot Roblox, 2026-09-30 ~09:15 Dublin): ship JOB 29 retention (FastStart, offline earnings, streak tomorrow, notif opt-in) — place version TBD
+## v125 (Code Bot Roblox, 2026-09-30 ~09:15 Dublin): ship JOB 29 retention (FastStart, offline earnings, streak tomorrow, notif opt-in) — place version 123
 - Fast-forward merged Claude `8cad44d` (JOB 29) onto phase-7 tip `a5b4ae0` (v124). **WE_Build 125**. PreferMesh OFF; WE_Building* untouched. **OwnerFirst retained** (`RetentionConfig.Live` — UserId 470626172 + Studio); do not flip to everyone until Shaun signs off phone tests.
 - **JOB 29 — retention (OwnerFirst)**
   - **FastStart:** new players land ~7 studs at their Command Center console with a gold arrow; first BUILD pays +$1,500 once (`StarterPayoutDone`); `WE_Onboarding` holds nation picker / streak / welcome-back until CC done or 60 s. Funnel extended to 14 `AnalyticsService.Onboard` steps + `OnboardingSeconds`.
@@ -8,7 +8,7 @@
   - **Notifications:** opt-in 25 s after tutorial or Settings → NOTIFICATIONS → Game alerts; once/session, 7-day cooldown after decline; `docs/NOTIFICATIONS.md` + DataStore `WE_NotifyState_v1`.
 - **Kill switches:** `TutorialConfig.FastStart.Enabled`, `EconomyConfig.OfflineEarnings.Enabled`, `DailyRewardConfig.ShowTomorrow` / `StreakCard.Enabled`, `RetentionConfig.Notifications.Enabled`. Launch later = set `OwnerFirst = false` on those blocks.
 - **Pins:** `tools/checks/claude_bud_job29.py` + `tools/checks/codebot_v125.py` (WE_Build 125, OwnerFirst=true). Retired codebot_v124 WE_Build pins; bumped BuyPathStatic / codebot_v110 / codebot_v113 frozen WE_Build pins to 125.
-- **Checks:** claude_bud_job29.py PASS (31 pins; offline sim via LUAU skipped in that runner); codebot_v125.py PASS; tools/sim/run_offline_test.py 7/7 ok; BuyPathStatic **PASS=6505 FAIL=0**; rojo → dist/WarEmpire-PERF.rbxlx (+ WarEmpire.rbxlx copy). Place version filled after Open Cloud publish.
+- **Checks:** claude_bud_job29.py PASS (31 pins; offline sim via LUAU skipped in that runner); codebot_v125.py PASS; tools/sim/run_offline_test.py 7/7 ok; BuyPathStatic **PASS=6505 FAIL=0**; rojo → dist/WarEmpire-PERF.rbxlx (+ WarEmpire.rbxlx copy). Open Cloud HTTP 200 `versionNumber=123`. Code commit `d55b769`.
 - **Phone tests (owner account; Migrate to Latest Update):**
   1. Offline: play, note ATM, leave ≥2 h, rejoin → after ~6 s "WELCOME BACK +$X", ATM holds ~¼ of 2 h income.
   2. Streak: Missions shows 7-day strip + "Tomorrow" line; daily row "Day N done · Tomorrow $Y".
