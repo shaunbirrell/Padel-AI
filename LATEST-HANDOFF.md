@@ -1,4 +1,22 @@
 <!-- Q2-START -->
+## v150 PUBLISHED (Code Bot Roblox, 2026-09-30 22:48 Dublin): Open Cloud place version 148 — JOB 40 parts A+B base guards + SpeedV2 OWNER-FIRST
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **150**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":148}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Cherry-picks only** (not a bud-branch merge): `cc14b0e` JOB 40 part A real base guards + one hostility rule, `d8a2f62` JOB 40 part B Speed Pass x1.75 / Speed Boost x2.5 (SpeedV2). On phase-7 as `e3117bf` / `f8b6145`.
+- **Commits (phase-7-polish):** `4565e9b` WE_Build 150 + `tools/checks/codebot_v150.py`, `b1d9ebc` dist rebuild; this handoff.
+- **What ships (owner-first):**
+  - **JOB 40A guards:** live `BaseGuard_*` at every gate/helipad/dock/sea post (statues parked); IDLE/ALERT/ATTACK/RETURN/DEAD; one hostility rule (`UnitMayHitPlayer` / `ArmyHostility` + `ApplyDefenceHit`) for post/gate/tower guards and AutoGuns; FRIENDS outside clan are hostile to the base; OwnerFirst by BASE OWNER.
+  - **JOB 40B SpeedV2:** Speed Pass x1.75 (WalkSpeed 28, "Run 75% faster"), Speed Boost x2.5 (40, "Run 2.5x faster"); one `SpeedText` / `DescFor` helper for stands / Shop / death card / toast; army Follow caps raised for a 40 runner; MaxWalkSpeedMult 2.5. Stale "40%" text was a pre-v133 live server, not current source.
+- **Flags:** `GuardConfig.Posts` Enabled + OwnerFirst=true; `MonetizationConfig.SpeedV2` Enabled + OwnerFirst=true. Endgame + BaseMarker OwnerFirst stay true. **Do NOT set OwnerFirst=false until Studio §11 / 2-player proof + owner ask.**
+- **Live state kept:** ArmyOrders OwnerFirst=true; ShopOverhaul + CheckpointGuard OwnerFirst=false; VIP 199; pass Ids unchanged; RPG hold 3972151362; WeaponsLive=true; FastTravel removed; PreferMesh OFF; WE_Building* untouched.
+- **Checks:** BuyPathStatic PASS=7216 FAIL=0; codebot_v150 PASS; run_base_guards_test 0 failed; run_speed_test 0 failed; rojo deterministic (2 builds identical).
+- **Creator Hub (Code Bot / owner):** update Speed Pass (1998656357) and Speed Boost (3713839342) descriptions to 'Run 75% faster, forever' and 'Run 2.5x faster, forever'. Prices unchanged.
+- **Needs a decision (reported, not blocking ship):** army sim S40 turn worst-after-3s 7.49 (>6) and hairpin 10.72 (within v115 about-turn 12); formation turn at 40 may need tuning or a spec relaxation.
+- **Servers:** not restarted. Owner: "Migrate to Latest Update" (or rejoin a fresh server) to get v150 / place 148.
+- **Phone tests (Migrate to Latest Update, as shaunie6):**
+  1. As B (another player, not in A's clan), walk onto A's helipad apron: guards turn, aim and shoot. Kill one: respawns at post after 45 s. As A past your own guards: no shots. Clan-mate: the same. B runs out past 45 studs: guard walks back.
+  2. With Speed Boost: you run at 40. Army stays together on a straight, corner and U-turn (no teleports). Speed pad / Shop / death card read "Run 75% faster" / "Run 2.5x faster".
+- **Next:** Studio 2-player proof for base-guard hostility (docs/BASE-GUARDS-ROOTCAUSE.md §6) still owed; do NOT flip Posts / SpeedV2 / Endgame / BaseMarker OwnerFirst=false until owner asks. JOBs 41/42 still queued. Claude desktop-bud tip was `6b0fe34` (~22:33 Dublin); not a takeover.
+
 ## claude-bud JOB 40 PART B (2026-09-30): SPEED HIGHER, WITH TEXT THAT CAN'T GO STALE (branch `claude/desktop-bud`)
 **Flags:** `MonetizationConfig.SpeedV2` (`Enabled`, `OwnerFirst = true`).
 - **Live:** Speed Pass x1.75 (WalkSpeed 28, "Run 75% faster"), Speed Boost x2.5 (40, "Run 2.5x faster"), both = the
