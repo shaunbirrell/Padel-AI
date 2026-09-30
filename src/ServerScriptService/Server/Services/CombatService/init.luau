@@ -1500,7 +1500,7 @@ end
 
 -- ── W2 Combat Core: target resolution, seat rules, damage APIs ─────────────────────────────────────────────
 
-local FX_KIND: { [string]: string } = { Player = "P", NPC = "N", Vehicle = "V", Gate = "G" }
+local FX_KIND: { [string]: string } = { Player = "P", NPC = "N", Vehicle = "V", Gate = "G", Unit = "N" }
 
 -- The registered vehicle a part belongs to (and its VehicleHealth record), or nil. Every call is pcall'd.
 local function registeredVehicle(inst: Instance): (Model?, any)
@@ -1546,6 +1546,11 @@ local function resolveTarget(inst: Instance): (string, any, Model?)
 			local plr = Players:GetPlayerFromCharacter(node)
 			if plr then
 				return "Player", plr, node :: Model
+			end
+			-- v133 (Code Bot): an army soldier (SquadOrdersService unit) is a target of its own: "Unit", its owner's UserId
+			local unitOwner = node:GetAttribute("OwnerUserId")
+			if typeof(unitOwner) == "number" and node:GetAttribute("SquadUnitId") ~= nil then
+				return "Unit", unitOwner, node :: Model
 			end
 			if CollectionService:HasTag(node, Constants.Tags.NPC) then
 				local npcId = node:GetAttribute("NPCId")
@@ -1663,6 +1668,76 @@ function CombatService.EndNoviceShield(player: Player, reason: string): boolean
 	return true
 end
 
+--[[ v133 (Code Bot, phone bug "I shot another player's army and did no damage; it never shot me"): may `attacker` hurt
+	the soldiers of `owner` (player guns / rockets on his squad units)? The other direction (his soldiers on a player:
+	the ATTACK pick and the v133 FOLLOW / HOLD defend pick) is UnitMayHitPlayer below. Both use the same reasons as
+	pvpBlock: PvP on, not himself, never a clan ally, and a player under the novice shield neither hurts nor is hurt (an
+	army whose owner is shielded is "protected"). The owner's short spawn shield and his being dead do NOT protect his
+	soldiers (they stand in the world).
+	Returns (ok, reason): "ok" | "pvp_off" | "self" | "ally" | "protected" | "bad_args". ]]
+function CombatService.ArmyHostility(attacker: Player, owner: Player): (boolean, string)
+	if typeof(attacker) ~= "Instance" or not attacker:IsA("Player") or typeof(owner) ~= "Instance" or not owner:IsA("Player") then
+		return false, "bad_args"
+	end
+	if not GameConfig.PvPEnabled then
+		return false, "pvp_off"
+	end
+	if attacker == owner then
+		return false, "self"
+	end
+	if isClanAlly(attacker, owner) then
+		return false, "ally"
+	end
+	if NS.Active[owner.UserId] ~= nil then
+		return false, "protected"
+	end
+	return true, "ok"
+end
+
+-- v133: SquadOrdersService hands in the one function that says whether a model is one of its LIVE units:
+-- fn(attacker, unitModel) -> its Humanoid (or nil). CombatService applies the damage itself (the squad service never
+-- deals raw damage: squadfair). nil = soldiers take no player damage (the v132 behaviour).
+local unitHitHandler: ((Player, Model) -> Humanoid?)? = nil
+function CombatService.SetUnitHitHandler(fn: ((Player, Model) -> Humanoid?)?)
+	unitHitHandler = fn
+end
+
+-- v133: hurting a player's soldiers counts as hurting him for his army's aggressor priority (RecentlyHurtBy)
+function CombatService.NoteArmyAggressor(owner: Player, attacker: Player)
+	if owner == attacker then
+		return
+	end
+	local byVictim = pvpHurtAt[owner.UserId]
+	if byVictim == nil then
+		byVictim = {}
+		pvpHurtAt[owner.UserId] = byVictim
+	end
+	byVictim[attacker.UserId] = clock()
+end
+
+-- v133 /armydebug: one [ArmyUnitHit] line per shooter at most every 1 s (printed when the shooter or the owner has it on)
+local unitHitLogAt: { [number]: number } = {}
+local function armyDebugOn(p: Player?): boolean
+	return p ~= nil and p:GetAttribute("WE_ArmyDebug") == true
+end
+local function logUnitHit(attacker: Player, owner: Player?, model: Model, dmg: number, dealt: number, why: string)
+	if not (armyDebugOn(attacker) or armyDebugOn(owner)) then
+		return
+	end
+	local t = clock()
+	if t - (unitHitLogAt[attacker.UserId] or -math.huge) < 1 and why == "ok" then
+		return
+	end
+	unitHitLogAt[attacker.UserId] = t
+	print(string.format("[ArmyUnitHit] %s -> %s's %s dmg=%.1f dealt=%.1f %s", attacker.Name, if owner then owner.Name else "?", model.Name, dmg, dealt, why))
+end
+
+-- v133 tests / live probes: what a hit on this part resolves to ("Player" | "Unit" | "NPC" | "Vehicle" | "Gate" | "None")
+function CombatService._ResolveKind(inst: Instance): string
+	local kind = resolveTarget(inst)
+	return kind
+end
+
 --[[ W2 (contracts §3.1): one hit on whatever `hit` belongs to (player > NPC > registered vehicle > gate).
 	Players / NPCs take amount x VsInfantryMult x (Headshot and HeadshotMult); vehicles go to VehicleHealth
 	(class maths there); gates need an attacker. Unless opts.Quiet the attacker gets CombatHitFeedback. ]]
@@ -1711,6 +1786,58 @@ function CombatService.ApplyHit(attacker: Player?, hit: Instance, amount: number
 			UnitShot = opts.UnitShot,
 		})
 		return { Kind = "NPC", Dealt = dealt, Killed = killed, Target = model }
+	elseif kind == "Unit" then
+		-- v133: a player's shot on an enemy army soldier. THE shared rule (ArmyHostility), then the owning
+		-- SquadOrdersService applies it (the unit's squad remembers the shooter and fights back: NoteArmyAggressor).
+		local unitModel = model :: Model
+		local owner = Players:GetPlayerByUserId(ref :: number)
+		local dmg = amount * (tonumber(opts.VsInfantryMult) or 1) * (if opts.Headshot == true then CombatFeelConfig.HeadshotMult else 1)
+		local acfg = (ArmyConfig :: any).ArmyCombat
+		if attacker == nil or owner == nil or unitHitHandler == nil or typeof(acfg) ~= "table" or acfg.PlayersHitUnits ~= true then
+			return { Kind = "Unit", Dealt = 0, Killed = false, Target = unitModel }
+		end
+		local may, why = CombatService.ArmyHostility(attacker, owner)
+		if may and not NS.allowsAttack(attacker) then -- F6: a shielded attacker's hit ends his shield first
+			may, why = false, "attacker_shielded"
+		end
+		if not may then
+			logUnitHit(attacker, owner, unitModel, dmg, 0, why)
+			if why == "protected" and not quiet and NotificationService then
+				local t = clock()
+				local key = -attacker.UserId
+				if t - (unitHitLogAt[key] or -math.huge) >= 8 then
+					unitHitLogAt[key] = t
+					pcall(NotificationService.Notify, attacker, owner.DisplayName .. "'s army is Protected (new-player shield)", "Warn")
+				end
+			end
+			return { Kind = "Unit", Dealt = 0, Killed = false, Target = unitModel }
+		end
+		local okH, uh = pcall(unitHitHandler :: any, attacker, unitModel)
+		local dealt, killed = 0, false
+		if okH and typeof(uh) == "Instance" and uh:IsA("Humanoid") and uh.Health > 0 then
+			local before = uh.Health
+			uh:TakeDamage(dmg)
+			dealt = math.max(0, before - uh.Health)
+			killed = uh.Health <= 0
+		end
+		logUnitHit(attacker, owner, unitModel, dmg, dealt, if okH then (if dealt > 0 then "ok" else "not_live") else "error " .. tostring(uh))
+		if dealt > 0 then
+			CombatService.NoteArmyAggressor(owner, attacker)
+			if not quiet then
+				hitFeedback(attacker, {
+					Kind = if killed then "Kill" else "Hit",
+					Damage = dealt,
+					TargetName = owner.DisplayName .. "'s soldier",
+					WeaponId = weaponId,
+					IsHeadshot = opts.Headshot == true,
+					Target = unitModel,
+					TargetKind = "NPC",
+					Pos = opts.HitPos,
+					Assist = if opts.Assist then true else nil,
+				})
+			end
+		end
+		return { Kind = "Unit", Dealt = dealt, Killed = killed, Target = unitModel }
 	elseif kind == "Vehicle" then
 		local veh = ref :: Model
 		if veh == firing or not NS.allowsAttack(attacker) then -- F6: a shielded attacker's hit ends the shield first
@@ -2207,18 +2334,46 @@ local function seatFireRule(player: Player): (boolean, Model?, boolean)
 	return false, veh, false
 end
 
--- the shot's Exclude list: the shooter, the vehicle they sit in, every squad unit (units are not player targets)
-local function shotFilterFor(character: Model, veh: Model?): { Instance }
+-- the shot's Exclude list: the shooter, the vehicle they sit in, and army soldiers he may not hurt.
+-- v133 (Code Bot): was EVERY squad unit (the whole WarEmpireSquads folder), so a bullet flew straight through an enemy
+-- army and no player could ever hurt one. Now only his own soldiers and his clan allies' are passed through
+-- (ArmyConfig.ArmyCombat.PlayersHitUnits = false: the old whole-folder filter).
+local function shotFilterFor(character: Model, veh: Model?, shooterUid: number?): { Instance }
 	local f: { Instance } = { character }
 	if veh then
 		table.insert(f, veh)
 	end
 	local squads = Workspace:FindFirstChild("WarEmpireSquads")
 	if squads then
-		table.insert(f, squads)
+		local acfg = (ArmyConfig :: any).ArmyCombat
+		local shooter = Players:GetPlayerFromCharacter(character)
+		local uid = if shooter then shooter.UserId else shooterUid
+		if uid == nil or typeof(acfg) ~= "table" or acfg.PlayersHitUnits ~= true then
+			table.insert(f, squads)
+		else
+			local friendly: { [number]: boolean } = {}
+			for _, m in ipairs(squads:GetChildren()) do
+				local uo = m:GetAttribute("OwnerUserId")
+				if typeof(uo) ~= "number" then
+					table.insert(f, m)
+				else
+					local fr = friendly[uo]
+					if fr == nil then
+						local op = Players:GetPlayerByUserId(uo)
+						-- (an owner who left: his soldiers are about to go; a test uid with no Player: never an ally)
+						fr = uo == uid or (shooter ~= nil and (op == nil or isClanAlly(shooter, op)))
+						friendly[uo] = fr
+					end
+					if fr then
+						table.insert(f, m)
+					end
+				end
+			end
+		end
 	end
 	return f
 end
+CombatService._ShotFilterFor = shotFilterFor -- v133: live probes (tools/checks/codebot_v133.py documents the run)
 
 -- W2 (contracts §1.1): the fire payload's Input field sets the assist class (first valid one at once, then at most
 -- one change per ClassChangeSeconds); anything else is ignored without a strike
@@ -2400,6 +2555,28 @@ local function assistPick(
 			CombatAssist.Offer(rec.Model, torsoOf(rec.Model, rec.Root), nil, id)
 		end
 	end
+	-- v133: enemy army soldiers the shared rule lets him hurt (his own / allies' are in the shot filter already)
+	local acfg = (ArmyConfig :: any).ArmyCombat
+	local squads = if typeof(acfg) == "table" and acfg.PlayersHitUnits == true then Workspace:FindFirstChild("WarEmpireSquads") else nil
+	if squads then
+		local verdict: { [number]: boolean } = {}
+		for _, m in ipairs(squads:GetChildren()) do
+			local uo = m:GetAttribute("OwnerUserId")
+			if typeof(uo) == "number" and uo ~= player.UserId and m:IsA("Model") then
+				local ok = verdict[uo]
+				if ok == nil then
+					local op = Players:GetPlayerByUserId(uo)
+					ok = op ~= nil and (CombatService.ArmyHostility(player, op))
+					verdict[uo] = ok
+				end
+				local hum = if ok then m:FindFirstChildOfClass("Humanoid") else nil
+				local root = if hum then m:FindFirstChild("HumanoidRootPart") else nil
+				if hum and hum.Health > 0 and root and root:IsA("BasePart") and CombatAssist.InCone(root.Position) then
+					CombatAssist.Offer(m, torsoOf(m, root), nil, nil)
+				end
+			end
+		end
+	end
 	return CombatAssist.Finish(filter)
 end
 
@@ -2543,7 +2720,7 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 		local kind = resolveTarget(result.Instance)
 		if kind ~= "None" then
 			how = "Exact"
-			local isHead = (kind == "Player" or kind == "NPC") and result.Instance.Name == "Head"
+			local isHead = (kind == "Player" or kind == "NPC" or kind == "Unit") and result.Instance.Name == "Head"
 			local amount = if kind == "Gate"
 				then damage
 				else damage * CombatDamage.FalloffMult(def, (result.Position - origin).Magnitude)

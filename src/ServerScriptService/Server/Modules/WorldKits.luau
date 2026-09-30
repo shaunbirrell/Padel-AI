@@ -1785,10 +1785,46 @@ local function wallOpen(b: B, name: string, cf: CFrame, len: number, height: num
 	piece(x, len * 0.5, 0, height)
 end
 
--- 55 parts; see PlazaBuildingsConfig. Front (door) toward local -Z, like the TownHouse it replaces.
+-- v133 (Code Bot): the town-centre look (PlazaBuildingsConfig.Styles, one per row: walls, trim, awning, accent).
+-- Every detail part is small, never casts a shadow, and (except the balcony, AC units and cistern: roof / balcony
+-- cover you can stand on or duck behind) never collides or answers a ray: glass and frames never stop a shot or a
+-- look through a window (the JOB 32 LosRule), and the plaza test checks each window / door gap stays clear of
+-- colliding parts.
+local PH_FRONT_OUT = 1 -- how far the facade reaches out of the front face (see the facade block)
+local PH_STYLE_DEFAULT = { Wall = Color3.fromRGB(212, 176, 122), Trim = Color3.fromRGB(236, 226, 200), Awning = Color3.fromRGB(38, 118, 118), Accent = Color3.fromRGB(96, 70, 48) }
+local function plazaStyle(b: B): any?
+	local cfgP: any = PlazaBuildingsConfig
+	local st = if typeof(cfgP.Styles) == "table" then cfgP.Styles[tostring(b.Cluster.Name)] else nil
+	return if typeof(st) == "table" then st else nil
+end
+
+-- a see-through pane in a window gap: never collides, never answers a ray (shots and sight pass as through the gap)
+local function glass(b: B, size: Vector3, lcf: CFrame)
+	local g = put(b, "PlazaWindowGlass", size, lcf, Color3.fromRGB(150, 190, 205), M.Glass, false)
+	g.Transparency = 0.55
+	g.CanQuery = false
+	return g
+end
+
+-- a window's dressing in the frame `wcf` of a wall face (local -Z = out of the building, z 0 = the face): a head
+-- (lintel trim), a sill and the glass in the gap. proj = how far head and sill stand out of the face (the front
+-- has room for a real sill; the sides and back keep them flush: WorldPOI measures the row's part box).
+local function windowDress(b: B, wcf: CFrame, c: number, w: number, y0: number, y1: number, trim: Color3, proj: number)
+	local outer = -math.max(proj, 0.02) -- the frame's outer face, just proud of the wall (no z-fighting)
+	local d = math.max(proj, 0.3)
+	local zc = outer + d * 0.5
+	put(b, "PlazaWindowFrame", Vector3.new(w + 0.6, 0.3, d), wcf * CFrame.new(c, y1 + 0.15, zc), trim, M.SmoothPlastic, false)
+	put(b, "PlazaWindowFrame", Vector3.new(w + 0.8, 0.25, d), wcf * CFrame.new(c, y0 - 0.125, zc), trim, M.SmoothPlastic, false)
+	glass(b, Vector3.new(w, y1 - y0, 0.1), wcf * CFrame.new(c, (y0 + y1) * 0.5, 0.4))
+end
+
+-- 142 parts (v133; 55 before the facade); see PlazaBuildingsConfig. Front (door) toward local -Z, like the TownHouse it replaces.
 Builders.PlazaHouse = function(b: B)
 	local W, D, T, H = PH.W, PH.D, PH.T, PH.H
-	local wallC = b.Opts.Color or PAL.AdobeLight
+	local rowSty = plazaStyle(b)
+	local sty: any = rowSty or PH_STYLE_DEFAULT
+	local wallC = if rowSty then rowSty.Wall else (b.Opts.Color or PAL.AdobeLight) -- the row's style wins
+	local trimC: Color3 = sty.Trim or PH_STYLE_DEFAULT.Trim
 	local wm = M.Concrete
 	local win1 = function(c: number)
 		return { c = c, w = 3.6, b = 4, t = 7.4 }
@@ -1815,10 +1851,38 @@ Builders.PlazaHouse = function(b: B)
 	-- the ramp: a wedge rising toward +Z (its sloped face looks to -Z), foot at z -5.5, top at z 6.5 on the upper floor
 	put(b, "PlazaStair", Vector3.new(ix - 4.4, H + 0.4, 12), CFrame.new((4.4 + ix) * 0.5, (H + 0.4) * 0.5, 0.5), PAL.Wood, M.WoodPlanks, true, false, Enum.PartType.Wedge)
 	put(b, "PlazaRail", Vector3.new(0.3, 3, 10.5), CFrame.new(4.2, H + 0.4 + 1.5, -0.25), PAL.SteelDark, M.Metal, true)
+	--[[ v133 (Code Bot, phone bug "the ladder ends under a solid ceiling"): JOB 32's hatch was the 2 x 2 truss footprint
+		(x -8.8 .. -5.4, z 5.3 .. 8.7, half of it over the walls): a climber hangs on a FACE of the truss, so his head hit
+		the roof slab 5 studs below the top (tools/sim/run_hatch_test.py: every face blocked). The roof is now 4 slabs
+		round a real 5.6 x 5.3 opening (inside x -8.0 .. -2.4, z 2.6 .. 7.9); the ladder stands against the opening's
+		+X edge (its +X face boxed in), so he climbs any open face inside the hole and steps off its top onto the roof;
+		a hatch frame round the hole, a railing on its open edges, the lid propped open. ]]
 	local roofY = 2 * H + 0.4 -- the roof slab's centre (top 22.8)
-	put(b, "PlazaRoof", Vector3.new(W * 0.5 + 5.4, 0.8, D), CFrame.new((-5.4 + W * 0.5) * 0.5, roofY, 0), PAL.Concrete, M.Concrete, true, true)
-	put(b, "PlazaRoof", Vector3.new(W * 0.5 - 5.4, 0.8, D * 0.5 + 5.3), CFrame.new((-W * 0.5 - 5.4) * 0.5, roofY, (-D * 0.5 + 5.3) * 0.5), PAL.Concrete, M.Concrete, true)
-	truss(b, "PlazaLadder", 14, CFrame.new(-6.7, H + 0.4 + 7, 6.6), PAL.SteelDark)
+	local hx0, hx1, hz0, hz1 = -ix, -2.4, 2.6, iz -- the opening (inside the walls)
+	put(b, "PlazaRoof", Vector3.new(W, 0.8, hz0 + D * 0.5), CFrame.new(0, roofY, (-D * 0.5 + hz0) * 0.5), PAL.Concrete, M.Concrete, true, true)
+	put(b, "PlazaRoof", Vector3.new(W * 0.5 - hx1, 0.8, D * 0.5 - hz0), CFrame.new((hx1 + W * 0.5) * 0.5, roofY, (hz0 + D * 0.5) * 0.5), PAL.Concrete, M.Concrete, true)
+	put(b, "PlazaRoof", Vector3.new(T, 0.8, D * 0.5 - hz0), CFrame.new(-W * 0.5 + T * 0.5, roofY, (hz0 + D * 0.5) * 0.5), PAL.Concrete, M.Concrete, true)
+	put(b, "PlazaRoof", Vector3.new(hx1 - hx0, 0.8, T), CFrame.new((hx0 + hx1) * 0.5, roofY, D * 0.5 - T * 0.5), PAL.Concrete, M.Concrete, true)
+	-- the ladder: 12 tall from the upper floor (11.4) to 0.6 above the roof top, 0.2 in from the opening's +X edge, so
+	-- a climber on its -X, +Z or -Z face hangs inside the hole all the way up. Its +X face (under the roof) is boxed
+	-- in by a shaft panel from the floor to the roof top, which also bridges the ladder's top to the roof.
+	truss(b, "PlazaLadder", 12, CFrame.new(hx1 - 1.2, H + 0.4 + 6, 5.25), PAL.SteelDark)
+	put(b, "PlazaHatchShaft", Vector3.new(0.2, 2 * H + 0.8 - (H + 0.4), 2), CFrame.new(hx1 - 0.1, (H + 0.4 + 2 * H + 0.8) * 0.5, 5.25), PAL.SteelDark, M.Metal, true)
+	local rt = roofY + 0.4 -- the roof top (22.8)
+	-- the hatch frame (a low kerb on the roof round the opening's front and open +X edge, clear of the ladder's top)
+	put(b, "PlazaHatchFrame", Vector3.new(hx1 - hx0 + 0.3, 0.3, 0.3), CFrame.new((hx0 + hx1) * 0.5 + 0.15, rt + 0.15, hz0 - 0.15), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaHatchFrame", Vector3.new(0.3, 0.3, 4.25 - hz0 - 0.2), CFrame.new(hx1 + 0.15, rt + 0.15, (hz0 + 4.05) * 0.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaHatchFrame", Vector3.new(0.3, 0.3, hz1 - 6.45), CFrame.new(hx1 + 0.15, rt + 0.15, (6.45 + hz1) * 0.5), PAL.SteelDark, M.Metal, false)
+	-- the railing: posts + top rail along the front edge and the +X edge either side of the ladder's top
+	local railC = sty.Accent or PAL.SteelDark
+	put(b, "PlazaHatchRail", Vector3.new(hx1 - hx0, 0.25, 0.25), CFrame.new((hx0 + hx1) * 0.5, rt + 3.2, hz0 - 0.15), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 3.2, 0.25), CFrame.new(hx0 + 0.2, rt + 1.6, hz0 - 0.15), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 3.2, 0.25), CFrame.new(hx1 + 0.15, rt + 1.6, hz0 - 0.15), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 0.25, 4.05 - hz0), CFrame.new(hx1 + 0.15, rt + 3.2, (hz0 + 4.05) * 0.5), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 0.25, hz1 - 6.45), CFrame.new(hx1 + 0.15, rt + 3.2, (6.45 + hz1) * 0.5), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 3.2, 0.25), CFrame.new(hx1 + 0.15, rt + 1.6, hz1 - 0.15), railC, M.Metal, true)
+	-- the lid, propped open against the back parapet (see-through for shots: it neither collides nor answers a ray)
+	put(b, "PlazaHatchLid", Vector3.new(4.6, 3.6, 0.15), CFrame.new(-5.2, rt + 1.8, hz1 - 0.3) * rotX(-12), PAL.SteelDark, M.DiamondPlate, false)
 	-- the parapet (chest-high cover) and two sandbag rows at the front corners
 	local py = roofY + 0.4 + 1.6
 	put(b, "PlazaParapet", Vector3.new(W, 3.2, 0.6), CFrame.new(0, py, -D * 0.5 + 0.3), PAL.AdobeDark, M.Concrete, true)
@@ -1832,9 +1896,87 @@ Builders.PlazaHouse = function(b: B)
 	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-5, 1.3, 3) * rotY(10), PAL.CrateOlive, M.Wood, true)
 	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-2.5, 1.3, 5.6) * rotY(-8), PAL.Crate, M.Wood, true)
 	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-4, H + 1.4, -4) * rotY(20), PAL.CrateOlive, M.Wood, true)
+
+	-- ── v133: the facade (issue: "town centre buildings are flat boxes") ──
+	-- Nothing reaches more than PH_FRONT_OUT out of the front face, and nothing past the sides or the back: WorldPOI
+	-- measures the row's part box, and its disc must stay >= 30 from the road line and outside the plaza capture ring
+	-- (the 4 rows have ~1.2 - 1.8 studs to spare; tools/sim/run_plaza_test.py pins the box)
+	local out = PH_FRONT_OUT
+	local fz = -D * 0.5 -- the front face plane (outside)
+	local frontW = CFrame.new(0, 0, fz) -- window dressing frame on the front wall (local -Z = out)
+	local accC: Color3 = sty.Accent or PH_STYLE_DEFAULT.Accent
+	-- door: jambs + head, a step
+	put(b, "PlazaDoorFrame", Vector3.new(0.45, 8.3, 0.4), CFrame.new(-3.2, 4.15, fz - 0.2), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaDoorFrame", Vector3.new(0.45, 8.3, 0.4), CFrame.new(3.2, 4.15, fz - 0.2), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaDoorFrame", Vector3.new(6.9, 0.5, 0.45), CFrame.new(0, 8.25, fz - 0.22), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaDoorStep", Vector3.new(6.4, 0.25, out), CFrame.new(0, 0.125, fz - out * 0.5), PAL.Concrete, M.Concrete, false)
+	-- ground-floor shop windows (glass + frame) with striped awnings, and the door's awning
+	for _, c in ipairs({ -5.4, 5.4 }) do
+		windowDress(b, frontW, c, 3.6, 4, 7.4, trimC, 0.6)
+	end
+	for _, a in ipairs({ { -5.4, 4.6, 8.35 }, { 5.4, 4.6, 8.35 }, { 0, 7.2, 9.3 } }) do
+		local ax, aw, ay = a[1], a[2], a[3]
+		-- a 1.9-long canopy sloped 58 degrees down from the wall: it reaches ~0.95 out
+		put(b, "PlazaAwningCanopy", Vector3.new(aw, 0.15, 1.9), CFrame.new(ax, ay - 0.8, fz - out * 0.44) * rotX(-58), sty.Awning or PH_STYLE_DEFAULT.Awning, M.Fabric, false)
+		put(b, "PlazaAwningStripe", Vector3.new(aw, 0.4, 0.08), CFrame.new(ax, ay - 1.0, fz - out + 0.05), trimC, M.Fabric, false)
+	end
+	-- the shop sign band between the storeys, with a trim inset. No painted text and no light here: WorldPOI counts
+	-- the row's SurfaceGuis and Lights against the Town caps, and a row over a cap is skipped whole.
+	put(b, "PlazaShopSign", Vector3.new(11.5, 1.35, 0.3), CFrame.new(0, 10.05, fz - 0.2), accC, M.Wood, false)
+	put(b, "PlazaShopSignInset", Vector3.new(10.3, 0.55, 0.06), CFrame.new(0, 10.05, fz - 0.38), sty.Awning or PH_STYLE_DEFAULT.Awning, M.SmoothPlastic, false)
+	-- storey band + the roof-line cornice, a coping on the front parapet, corner quoins, a base plinth
+	put(b, "PlazaCornice", Vector3.new(W, 0.45, 0.5), CFrame.new(0, H + 0.1, fz - 0.25), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaCornice", Vector3.new(W, 0.7, out), CFrame.new(0, 2 * H + 0.45, fz - out * 0.5), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaCoping", Vector3.new(W, 0.2, 0.8), CFrame.new(0, py + 1.7, -D * 0.5 + 0.3), trimC, M.SmoothPlastic, false)
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaQuoin", Vector3.new(0.9, 2 * H, 0.35), CFrame.new(s * (W * 0.5 - 0.45), H, fz - 0.175), trimC, M.Concrete, false)
+	end
+	put(b, "PlazaPlinth", Vector3.new(W, 0.9, 0.3), CFrame.new(0, 0.45, fz - 0.15), accC, M.Concrete, false)
+	-- upper-floor windows: front 3 (the middle one opens onto a balcony), back, both sides; the ground-floor side one
+	for _, c in ipairs({ -5.4, 0, 5.4 }) do
+		windowDress(b, frontW * CFrame.new(0, H, 0), c, 3.6, 3.5, 7, trimC, 0.6)
+	end
+	windowDress(b, CFrame.new(0, H, -fz) * rotY(180), 0, 3.6, 3.5, 7, trimC, 0)
+	windowDress(b, CFrame.new(-W * 0.5, H, 0) * rotY(90), 0, 3.6, 3.5, 7, trimC, 0)
+	windowDress(b, CFrame.new(W * 0.5, H, 0) * rotY(-90), 0, 3.6, 3.5, 7, trimC, 0)
+	windowDress(b, CFrame.new(-W * 0.5, 0, 0) * rotY(90), 2, 3.6, 4, 7.4, trimC, 0) -- win1(2) on the left side
+	-- a shallow balcony under the middle upper window: a ledge you can stand on, its railing, two brackets, a planter
+	local by = H + 3.5 -- its top level with the window sill (14.5)
+	put(b, "PlazaBalcony", Vector3.new(5.2, 0.35, out), CFrame.new(0, by - 0.175, fz - out * 0.5), PAL.Concrete, M.Concrete, true)
+	put(b, "PlazaBalconyRail", Vector3.new(5.2, 0.2, 0.2), CFrame.new(0, by + 2.9, fz - out + 0.1), accC, M.Metal, true)
+	for _, x in ipairs({ -2.5, -0.9, 0.9, 2.5 }) do
+		put(b, "PlazaBalconyRail", Vector3.new(0.14, 2.9, 0.14), CFrame.new(x, by + 1.45, fz - out + 0.1), accC, M.Metal, math.abs(x) > 2)
+	end
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaBalconyBracket", Vector3.new(0.3, 1.1, out * 0.9), CFrame.new(s * 2.2, by - 0.9, fz - out * 0.45), trimC, M.Concrete, false, false, Enum.PartType.Wedge)
+	end
+	put(b, "PlazaPlanter", Vector3.new(4.2, 0.6, 0.5), CFrame.new(0, by + 0.3, fz - out + 0.45), PAL.WoodDark, M.Wood, false)
+	put(b, "PlazaPlanterFlora", Vector3.new(3.8, 0.5, 0.4), CFrame.new(0, by + 0.85, fz - out + 0.45), Color3.fromRGB(84, 120, 60), M.Grass, false)
+	-- street level: two planters by the door, a bench under the right window, a wall lantern
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaPlanter", Vector3.new(0.95, 1.0, out * 0.95), CFrame.new(s * 3.9, 0.5, fz - out * 0.5), accC, M.Concrete, false)
+		put(b, "PlazaPlanterFlora", Vector3.new(0.9, 0.9, 0.9), CFrame.new(s * 3.9, 1.35, fz - out * 0.5), Color3.fromRGB(78, 116, 58), M.Grass, false, false, Enum.PartType.Ball)
+	end
+	put(b, "PlazaBenchSeat", Vector3.new(3.4, 0.25, out * 0.8), CFrame.new(5.6, 1.5, fz - out * 0.5), PAL.Wood, M.WoodPlanks, false)
+	put(b, "PlazaBenchLeg", Vector3.new(3.0, 1.35, out * 0.6), CFrame.new(5.6, 0.7, fz - out * 0.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaLampLantern", Vector3.new(0.7, 1, 0.7), CFrame.new(-7.4, 9.0, fz - 0.35), PAL.LampLens, M.SmoothPlastic, false) -- unlit (the row's light cap)
+	-- rooftop: two AC units (cover), a water cistern on a stand (cover), an antenna mast with a dish, a vent pipe; all
+	-- clear of the hatch (x -8 .. -2.4, z 2.6 .. 7.9), the ladder's step-off (x -2.4 .. 0) and the front sandbags
+	for _, ac in ipairs({ { 2.6, 6.2, 0 }, { 5.8, 6.2, 90 } }) do
+		put(b, "PlazaACUnit", Vector3.new(2.4, 1.6, 1.8), CFrame.new(ac[1], rt + 0.8, ac[2]) * rotY(ac[3]), Color3.fromRGB(198, 200, 196), M.Metal, true)
+		vcyl(b, "PlazaACFan", ac[1], rt + 1.6, ac[2], 0.12, 1.3, PAL.SteelDark, M.Metal, false)
+	end
+	put(b, "PlazaCisternStand", Vector3.new(2.8, 1.2, 2.8), CFrame.new(5.8, rt + 0.6, 1.2), PAL.SteelDark, M.Metal, true)
+	vcyl(b, "PlazaCistern", 5.8, rt + 1.2, 1.2, 2.8, 2.6, Color3.fromRGB(70, 88, 104), M.Metal, true)
+	vcyl(b, "PlazaCisternLid", 5.8, rt + 4.0, 1.2, 0.25, 2.8, Color3.fromRGB(60, 74, 88), M.Metal, false)
+	put(b, "PlazaAntennaMast", Vector3.new(0.2, 7, 0.2), CFrame.new(-7.2, rt + 3.5, -1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaAntennaMast", Vector3.new(2.4, 0.12, 0.12), CFrame.new(-7.2, rt + 5.6, -1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaAntennaMast", Vector3.new(1.6, 0.12, 0.12), CFrame.new(-7.2, rt + 6.4, -1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaAntennaDish", Vector3.new(0.2, 1.8, 1.8), CFrame.new(-6.95, rt + 4.4, -1.5) * rotY(-20), Color3.fromRGB(220, 220, 215), M.SmoothPlastic, false, false, Enum.PartType.Cylinder)
+	vcyl(b, "PlazaVentPipe", 1.5, rt, -2.5, 1.4, 0.5, PAL.SteelDark, M.Metal, false)
 end
 
-WorldKits.DetailSpecs.PlazaHouse = 55
+WorldKits.DetailSpecs.PlazaHouse = 142 -- v133 (Code Bot): the facade + the real hatch (was 55)
 WorldKits.PlazaStats = { Built = 0, Extra = 0, Plain = 0 }
 
 -- claude-bud JOB 32: a TownHouse row flagged Enterable (its cluster's WE_Enterable, set by WorldPOI from

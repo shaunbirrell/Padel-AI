@@ -12,7 +12,7 @@
 	a whitelisted `source` on RequestPurchase*. Offers: none before the tutorial is complete, the Starter Pack gate
 	TrySoftOfferStarterBundle (TutorialService schedules it), no Speed Boost / death Cash Mega pop-ups, D8 budget.
 	Owner's 11 features, lane M (spec_f11 F7 / F8): SpeedMultFor (the highest WalkSpeedMult among the speed SKUs the
-	player owns: Speed Pass x1.4, Speed Boost x1.6 (v126); never multiplied together), re-applied on respawn, on load and
+	player owns: Speed Pass x1.5, Speed Boost x2 (v133; v126 was x1.4 / x1.6); never multiplied together), re-applied on respawn, on load and
 	when a speed pass flips to owned; TryDeathSpeedOffer (the one death offer, MonetizationConfig.DeathSpeedOffer).
 	The Keep-Base Rebirth receipt needs no branch of its own: CounterGrants.GrantKeepBaseRebirths banks the token,
 	it is saved before PurchaseGranted, and PrestigeService runs the rebirth from OnGranted (never in the receipt).
@@ -93,7 +93,7 @@ local sessionStartAt: { [number]: number } = {}
 -- F8: the death speed offer was sent this session (userId -> true; cleared on PlayerRemoving)
 local deathSpeedSent: { [number]: boolean } = {}
 -- F8: sanity cap on a WalkSpeedMult config value (a typo must never launch players across the map)
-local MAX_WALK_SPEED_MULT = 1.75 -- v126: Speed Boost x1.6 fits under it (16 -> 25.6; the cap = 28)
+local MAX_WALK_SPEED_MULT = 2.0 -- v133: Speed Boost x2 fits under it (16 -> 32; the cap = 32). v126 was 1.75 (28)
 
 -- Whole number >= 0; junk (nil, strings, NaN, inf, negatives) becomes 0.
 local function nonNegInt(value: any): number
@@ -458,8 +458,8 @@ local function isSpeedKey(key: string): boolean
 end
 
 --[[ F8 (owner's 11 features): the walk-speed multiplier for this player = the HIGHEST WalkSpeedMult among the speed
-	SKUs they own (GamePasses.ImpulseSpeed x1.4, DevProducts.SpeedBoost x1.6; v126), never the product of them: owning
-	both gives x1.6. 1 when none is owned. A pass whose Id is 0 is never owned outside Studio mocks. Never yields. ]]
+	SKUs they own (GamePasses.ImpulseSpeed x1.5, DevProducts.SpeedBoost x2; v133), never the product of them: owning
+	both gives x2. 1 when none is owned. A pass whose Id is 0 is never owned outside Studio mocks. Never yields. ]]
 function MonetizationService.SpeedMultFor(player: Player): number
 	local best = 1
 	if typeof(player) ~= "Instance" or not player:IsA("Player") then

@@ -52,8 +52,8 @@ _AC = _j32_code("src/ServerScriptService/Server/Modules/ArmyController.luau")
 _AY = _j32_src("src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau")
 
 # enterable buildings
-_j32("local PlazaBuildingsConfig = {\n\tEnabled = true,\n\tMaxExtraParts = 240," in _PB and "Rows = { NE_E1 = true, SW_S1 = true, NE_N1 = true, NW_W1 = true }" in _PB,
-     "kill switch PlazaBuildingsConfig.Enabled; the 4 buildings facing the plaza flag; one allowance for their parts")
+# v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py (MaxExtraParts 640 for the facade): #_j32("local PlazaBuildingsConfig = {\n\tEnabled = true,\n\tMaxExtraParts = 240," in _PB and "Rows = { NE_E1 = true, SW_S1 = true, NE_N1 = true, NW_W1 = true }" in _PB,
+# v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py (MaxExtraParts 640 for the facade): #"kill switch PlazaBuildingsConfig.Enabled; the 4 buildings facing the plaza flag; one allowance for their parts")
 _j32("if tryPlaza(kitId, b) then" in _WK and "Ent.Register(tostring(b.Cluster.Name), b.CF" in _WK, "a flagged TownHouse row builds the PlazaHouse and registers it")
 _j32('model:SetAttribute("WE_Enterable", true)' in _WP and "PBC.Rows[c.Id] == true" in _WP and "WorldKits.Add(model, k.Kit, kcf, kitOpts(k, text))" in _WP,
      "WorldPOI flags only the configured Town rows (its Add line unchanged)")
@@ -64,7 +64,7 @@ _ok_ladder = False
 if _m:
     _h, _c = float(_m.group(1)), 11 + 0.4 + float(_m.group(2))
     _ok_ladder = abs((_c - _h / 2) - 11.4) < 0.05 and (_c + _h / 2) >= 22.8 + 2
-_j32(_ok_ladder, "the roof ladder runs from the upper floor (11.4) to >= 2 above the roof (22.8)")
+# v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py + tools/sim/run_hatch_test.py (the ladder moved into a real hatch; the character-sized climb test replaces the span pin): #_j32(_ok_ladder, "the roof ladder runs from the upper floor (11.4) to >= 2 above the roof (22.8)")
 # the one LOS rule
 _j32("CombatConfig.LineOfSight = {\n\tUnified = true," in _CC, "kill switch CombatConfig.LineOfSight.Unified")
 _j32("function LosRule.HitCast(" in _LR and "function LosRule.SightRespect(" in _LR and "LosRule.IsCharacterPart(inst)" in _LR and "p:AddToFilter(inst)" in _LR,

@@ -1,13 +1,15 @@
-"""claude-bud JOB 32: real-code tests in the Luau CLI (stand-ins from run_kit_detail_test.PRELUDE).
+"""claude-bud JOB 32 (v133 Code Bot: the facade detail, the real hatch; see tools/sim/run_hatch_test.py for the climb):
+real-code tests in the Luau CLI (stand-ins from run_kit_detail_test.PRELUDE).
 
 1. PLAZA HOUSE: the real WorldKits builds the enterable PlazaHouse for a TownHouse row flagged Enterable:
-   * 55 parts; Add returns the TownHouse's plain count; ExtraParts / Finish keep the budgets on the plain kit;
-   * the door gap (6 x 8) and every window gap are empty (no part inside them), so walkers and shots pass;
+   * v133: PLAZA_PARTS parts (the facade); Add returns the TownHouse's plain count; ExtraParts / Finish keep the budgets on the plain kit;
+   * the door gap (6 x 8) and every window gap hold no COLLIDING part (v133: the glass never collides and never
+     answers a ray, so walkers, shots and sight pass as before);
    * the ramp is walkable (<= 45 degrees), its foot has >= 2 studs of floor in front, and no floor part covers it;
-   * the ladder (TrussPart) runs from the upper floor through the roof hatch to >= 2 above the roof, and no roof part
-     covers the hatch;
+   * no roof part covers the hatch opening (v133: x -8 .. -2.4, z 2.6 .. 7.9; the climb is run_hatch_test.py);
    * the parapet stands 3-3.5 above the roof (shoot over it);
-   * the building stays inside the TownHouse core it replaces;
+   * the building stays inside the TownHouse core it replaces, the facade reaching <= 1 stud out of the front (v133:
+     WorldPOI's road / plaza-ring keep-outs measure the row's part box; its disc radius stays <= 12.8);
    * Enterables: inside / on the roof = this building; 3 studs outside = none; the army's waiting point is out in the
      street in front of the door.
 2. LOS RULE: the real Shared/Util/LosRule against a scripted ray world:
@@ -24,6 +26,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run_kit_detail_test import PRELUDE  # noqa: E402
+
+PLAZA_PARTS = 141  # v133: WorldKits.Part parts per PlazaHouse (+ the ladder TrussPart); PlazaBuildingsConfig.Parts - 1
 
 ROOT = Path(__file__).resolve().parents[2]
 SH = ROOT / "src/ReplicatedStorage/Shared"
@@ -59,6 +63,7 @@ game = { GetService = function(_, n) if n == "Workspace" then return WS end retu
 '''
 
 TEST = r'''
+local PLAZA_PARTS = __PLAZA_PARTS__
 local fails = 0
 local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if not ok then fails += 1 end end
 local WK = require(node("Modules/WorldKits"))
@@ -74,9 +79,22 @@ rec = {} -- the Footprint's throw-away build is not the building
 local ret = WK.Add(cluster, "TownHouse", frame, { Variant = "walkup", Enterable = true })
 local live = {}
 for _, p in ipairs(rec) do if not rawget(p, "__destroyed") then table.insert(live, p) end end
-check(#live == 54, "PlazaHouse: 54 Parts + the ladder TrussPart = 55 (" .. #live .. " Parts)")
+check(#live == PLAZA_PARTS, "PlazaHouse: " .. PLAZA_PARTS .. " Parts + the ladder TrussPart (" .. #live .. " Parts)")
+local PBC0 = require(node("Configs/PlazaBuildingsConfig"))
+check(PBC0.Parts == PLAZA_PARTS + 1, "PlazaBuildingsConfig.Parts = " .. (PLAZA_PARTS + 1) .. " (" .. tostring(PBC0.Parts) .. ")")
+check(PBC0.MaxExtraParts >= 4 * (PLAZA_PARTS + 1 - (plain and plain.Parts or 0)), "MaxExtraParts holds all 4 plaza houses (" .. tostring(PBC0.MaxExtraParts) .. ")")
+local glassN, glassBad = 0, 0
+for _, p in ipairs(live) do
+  if p.Name == "PlazaWindowGlass" then glassN += 1; if p.CanCollide or p.CanQuery or p.Transparency < 0.3 then glassBad += 1 end end
+end
+check(glassN >= 9 and glassBad == 0, "window glass: " .. glassN .. " panes, all see-through, none collide or answer a ray (" .. glassBad .. " bad)")
+local small, shadowSmall = 0, 0
+for _, p in ipairs(live) do
+  if math.max(p.Size.X, p.Size.Y, p.Size.Z) < 8 then small += 1; if p.CastShadow then shadowSmall += 1 end end
+end
+check(shadowSmall == 0, "no small part casts a shadow (" .. shadowSmall .. " of " .. small .. ")")
 check(plain ~= nil and ret == plain.Parts, "Add returns the TownHouse plain count " .. tostring(ret))
-check(WK.ExtraParts(cluster) == 55 - (plain and plain.Parts or 0), "ExtraParts = 55 - plain (" .. WK.ExtraParts(cluster) .. ")")
+check(WK.ExtraParts(cluster) == PLAZA_PARTS + 1 - (plain and plain.Parts or 0), "ExtraParts = Parts - plain (" .. WK.ExtraParts(cluster) .. ")")
 -- local boxes of every part
 local boxes = {}
 for _, p in ipairs(live) do
@@ -91,7 +109,7 @@ end
 local function hits(x0, x1, y0, y1, z0, z1, skipName)
   local n = {}
   for _, b in ipairs(boxes) do
-    if b.N ~= skipName and b.X0 < x1 - 0.01 and b.X1 > x0 + 0.01 and b.Y0 < y1 - 0.01 and b.Y1 > y0 + 0.01 and b.Z0 < z1 - 0.01 and b.Z1 > z0 + 0.01 then table.insert(n, b.N) end
+    if b.N ~= skipName and b.Collide and b.X0 < x1 - 0.01 and b.X1 > x0 + 0.01 and b.Y0 < y1 - 0.01 and b.Y1 > y0 + 0.01 and b.Z0 < z1 - 0.01 and b.Z1 > z0 + 0.01 then table.insert(n, b.N) end
   end
   return n
 end
@@ -124,11 +142,11 @@ if stair then
   end
   check(#cover == 0, "no upper floor covers the ramp (stair hole)")
 end
--- the ladder through the roof hatch (x -7.7 .. -5.7, z 5.6 .. 7.6)
+-- the roof hatch opening (v133: x -8 .. -2.4, z 2.6 .. 7.9)
 local roofTop = -math.huge
 for _, b in ipairs(boxes) do if b.N == "PlazaRoof" then roofTop = math.max(roofTop, b.Y1) end end
 local hatch = {}
-for _, b in ipairs(boxes) do if b.N == "PlazaRoof" and b.X0 < -5.7 and b.X1 > -7.7 and b.Z0 < 7.6 and b.Z1 > 5.6 then table.insert(hatch, b.N) end end
+for _, b in ipairs(boxes) do if b.N == "PlazaRoof" and b.X0 < -2.45 and b.X1 > -7.95 and b.Z0 < 7.85 and b.Z1 > 2.65 then table.insert(hatch, b.N) end end
 check(#hatch == 0, "no roof part covers the hatch")
 check(math.abs(roofTop - 22.8) < 0.05, "roof top 22.8")
 -- the ladder is a TrussPart made by truss() (not WorldKits.Part): its span is pinned in tools/checks/claude_bud_job32.py
@@ -139,7 +157,9 @@ check(ptop - roofTop >= 3 and ptop - roofTop <= 3.5, string.format("parapet %.1f
 -- inside the TownHouse core
 local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
 for _, b in ipairs(boxes) do x0, x1, z0, z1 = math.min(x0, b.X0), math.max(x1, b.X1), math.min(z0, b.Z0), math.max(z1, b.Z1) end
-check(x0 >= -W * 0.5 - 0.05 and x1 <= W * 0.5 + 0.05 and z0 >= -D * 0.5 - 0.05 and z1 <= D * 0.5 + 0.05, string.format("footprint x %.1f..%.1f z %.1f..%.1f inside the 17.6 x 17.4 core", x0, x1, z0, z1))
+check(x0 >= -W * 0.5 - 0.05 and x1 <= W * 0.5 + 0.05 and z0 >= -D * 0.5 - 1.05 and z1 <= D * 0.5 + 0.05, string.format("footprint x %.2f..%.2f z %.2f..%.2f inside the 17.6 x 17.4 core (+1 out of the front)", x0, x1, z0, z1))
+local discR = 0.5 * math.sqrt((x1 - x0) ^ 2 + (z1 - z0) ^ 2)
+check(discR <= 12.8, string.format("WorldPOI disc radius %.2f <= 12.8 (road >= 30 and the plaza capture ring keep their margin)", discR))
 -- Enterables
 local e = ENT.At(Vector3.new(2, 3.5, 2))
 check(e ~= nil and e.Id == "NE_E1", "inside the ground floor = this building")
@@ -191,7 +211,7 @@ if fails > 0 then error("failed") end
 chunks = [PRELUDE, EXTRA]
 for key, path in MODS.items():
     chunks.append("SOURCES[%r] = function(script)\n%s\nend" % (key, path.read_text(encoding="utf-8")))
-chunks.append(TEST)
+chunks.append(TEST.replace("__PLAZA_PARTS__", str(PLAZA_PARTS)))
 with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
     f.write("\n".join(chunks))
     path = f.name

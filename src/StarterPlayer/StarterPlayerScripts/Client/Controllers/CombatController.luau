@@ -128,6 +128,7 @@ type FeelState = {
 	FilterChar: Instance?,
 	FilterVeh: Instance?,
 	FilterSquads: Instance?,
+	FilterKids: number?, -- v133: the squad folder's child count when the list was built
 	FilterList: { Instance },
 	Shown: boolean?, -- last drawn state pushed to the feel modules
 	Weapon: string?,
@@ -174,6 +175,7 @@ do
 		FilterChar = nil,
 		FilterVeh = nil,
 		FilterSquads = nil,
+		FilterKids = nil,
 		FilterList = {},
 		Shown = nil,
 		Weapon = nil,
@@ -1293,8 +1295,12 @@ function W2.shotFilter(): RaycastParams
 		end
 	end
 	local squads = Workspace:FindFirstChild("WarEmpireSquads")
-	if ch ~= Feel.FilterChar or veh ~= Feel.FilterVeh or squads ~= Feel.FilterSquads then
-		Feel.FilterChar, Feel.FilterVeh, Feel.FilterSquads = ch, veh, squads
+	-- v133 (Code Bot): enemy army soldiers are shootable now (server CombatService shotFilterFor): the preview ray passes
+	-- only through HIS OWN soldiers (the server also passes clan allies'); the list is rebuilt when the folder's
+	-- child count changes (a unit spawned / died)
+	local nKids = if squads then #squads:GetChildren() else -1
+	if ch ~= Feel.FilterChar or veh ~= Feel.FilterVeh or squads ~= Feel.FilterSquads or nKids ~= Feel.FilterKids then
+		Feel.FilterChar, Feel.FilterVeh, Feel.FilterSquads, Feel.FilterKids = ch, veh, squads, nKids
 		local list = Feel.FilterList
 		table.clear(list)
 		if ch then
@@ -1304,7 +1310,11 @@ function W2.shotFilter(): RaycastParams
 			table.insert(list, veh)
 		end
 		if squads then
-			table.insert(list, squads)
+			for _, m in ipairs(squads:GetChildren()) do
+				if m:GetAttribute("OwnerUserId") == player.UserId or typeof(m:GetAttribute("OwnerUserId")) ~= "number" then
+					table.insert(list, m)
+				end
+			end
 		end
 		Feel.ShotParams.FilterDescendantsInstances = list
 	end

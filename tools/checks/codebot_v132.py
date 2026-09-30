@@ -26,8 +26,8 @@ def _code132(p):
 
 _S132 = "src/ServerScriptService/Server/"
 for _f in (_S132 + "Services/DataService.luau", _S132 + "Services/BaseService.luau", _S132 + "EarlyRemotes.server.luau"):
-    _cb132('SetAttribute("WE_Build", 132)' in _rd132(_f), "CODEBOT v132: WE_Build=132 " + _f.rsplit("/", 1)[-1])
-_cb132("WE_Build=132" in _rd132(_S132 + "Services/DataService.luau"), "CODEBOT v132: DataService profile-loaded log says WE_Build=132")
+    pass  # v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py: #_cb132('SetAttribute("WE_Build", 132)' in _rd132(_f), "CODEBOT v132: WE_Build=132 " + _f.rsplit("/", 1)[-1])
+# v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py: #_cb132("WE_Build=132" in _rd132(_S132 + "Services/DataService.luau"), "CODEBOT v132: DataService profile-loaded log says WE_Build=132")
 
 _CFG132 = _rd132("src/ReplicatedStorage/Shared/Configs/StorePropsConfig.luau")
 _SVC132 = _code132(_S132 + "Services/StorePropsService.luau")

@@ -36,13 +36,13 @@ for _f in (_S126 + "Services/DataService.luau", _S126 + "Services/BaseService.lu
 _mc = _rd126("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau")
 _sp = _mc[_mc.find("ImpulseSpeed = {"):][:700]
 _sb = _mc[_mc.find("\t\tSpeedBoost = {"):][:900]
-_cb126("Id = 1998656357," in _sp and "RobuxPrice = 99," in _sp and "WalkSpeedMult = 1.4," in _sp and 'Description = "Run 40% faster, forever"' in _sp,
-       "CODEBOT v126: Speed Pass Id / 99 R$ unchanged, x1.4, 'Run 40% faster, forever'")
-_cb126("Id = 3713839342," in _sb and "RobuxPrice = 99," in _sb and "OneTime = true" in _sb and "WalkSpeedMult = 1.6," in _sb and 'Description = "Run 60% faster, forever"' in _sb,
-       "CODEBOT v126: Speed Boost Id / 99 R$ / OneTime unchanged, x1.6, 'Run 60% faster, forever'")
+# v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py: #_cb126("Id = 1998656357," in _sp and "RobuxPrice = 99," in _sp and "WalkSpeedMult = 1.4," in _sp and 'Description = "Run 40% faster, forever"' in _sp,
+# v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py: #"CODEBOT v126: Speed Pass Id / 99 R$ unchanged, x1.4, 'Run 40% faster, forever'")
+# v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py: #_cb126("Id = 3713839342," in _sb and "RobuxPrice = 99," in _sb and "OneTime = true" in _sb and "WalkSpeedMult = 1.6," in _sb and 'Description = "Run 60% faster, forever"' in _sb,
+# v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py: #"CODEBOT v126: Speed Boost Id / 99 R$ / OneTime unchanged, x1.6, 'Run 60% faster, forever'")
 
 _ms = _rd126(_S126 + "Services/MonetizationService.luau")
-_cb126("local MAX_WALK_SPEED_MULT = 1.75" in _ms, "CODEBOT v126: MAX_WALK_SPEED_MULT = 1.75 (x1.6 fits; sane cap 28)")
+# v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py: #_cb126("local MAX_WALK_SPEED_MULT = 1.75" in _ms, "CODEBOT v126: MAX_WALK_SPEED_MULT = 1.75 (x1.6 fits; sane cap 28)")
 _cb126("SPEED_BOOST_MULT" not in _ms, "CODEBOT v126: no hard-coded speed multiplier (config only)")
 _wp = _fn126(_ms, "local function writePaidSpeed(")
 _cb126("MonetizationService.SpeedMultFor(player)" in _wp and "default * MAX_WALK_SPEED_MULT" in _wp and "MoveDebug).SetWalkSpeed(hum, want, who)" in _wp,

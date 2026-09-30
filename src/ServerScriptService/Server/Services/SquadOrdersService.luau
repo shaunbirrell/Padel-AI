@@ -3032,6 +3032,144 @@ local function attackAimOnly(player: Player, st: SquadState, unit: SquadUnit, no
 	faceYaw(unit.Root, aimPoint(unit, tgt.Root)) -- (the gyro; SoldierController leaves the aim alone after a shot)
 end
 
+--[[ v133 (Code Bot, phone bug "another player's army stood right in front of me and never fired"). PROVEN (tools/sim +
+	the static trace in codebot_v133.py): a player was only ever a candidate in pickSquadTarget, and the think loop ran
+	that for st.Order == "Attack" only; FOLLOW (every army's default order) and HOLD scan WE_NPC models only
+	(nearestHostile / escortPickLive), so an enemy player could stand in the middle of a FOLLOW army untouched.
+	Fix (ArmyConfig.ArmyCombat.DefendOnFollow): once per think pass a FOLLOW / HOLD army picks the enemy player it may
+	engage under THE shared rule (CombatService.UnitMayHitPlayer: PvP on, not an ally, not spawn / novice protected,
+	its owner not shielded) within DefendPlayerStuds of its centre or its owner, or out to DefendAggressorStuds for one
+	who hurt the owner or his soldiers in the last AggressorSeconds (CombatService.RecentlyHurtBy; soldiers hit by a
+	player note him via CombatService.NoteArmyAggressor) - aggressors first, then nearest, the current one sticky.
+	The units shoot it from where they stand (same LOS rule, hit chance, damage and per-victim DPS cap as ATTACK) and
+	keep their FOLLOW / HOLD movement: no teleport, no speed change, no forced damage.
+	/armydebug: [ArmyDefend] lines when the owner OR the candidate player has it on (a victim sees why every enemy
+	army ignores or engages him). ]]
+local defendLogAt: { [number]: number } = {}
+local function pickDefendTarget(player: Player, st: SquadState, proot: BasePart)
+	local ac = armyCombat()
+	if ac == nil or ac.DefendOnFollow ~= true or ac.TargetPlayers ~= true or CombatService == nil or CombatService.UnitMayHitPlayer == nil then
+		(st :: any)._defTarget = nil
+		return
+	end
+	local sum, cnt = Vector3.zero, 0
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Root.Parent then
+			sum += Vector3.new(u.Root.Position.X, 0, u.Root.Position.Z)
+			cnt += 1
+		end
+	end
+	if cnt == 0 then
+		(st :: any)._defTarget = nil
+		return
+	end
+	local centre = sum / cnt
+	local r0 = tonumber(ac.DefendPlayerStuds) or 47
+	local rA = math.max(r0, tonumber(ac.DefendAggressorStuds) or r0)
+	local aggroSecs = tonumber(ac.AggressorSeconds) or 10
+	local cur = (st :: any)._defTarget
+	local acm = SquadOrdersService._AC
+	local now = os.clock()
+	local logDue = now - (defendLogAt[player.UserId] or -math.huge) >= (tonumber(ac.TargetLogSeconds) or 2)
+	local dlines: { string }? = nil
+	local best: any = nil
+	local bestScore = math.huge
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl ~= player then
+			local dbg = logDue and acm ~= nil and acm.DebugFor ~= nil and (acm.DebugFor(player) or acm.DebugFor(pl))
+			local ch = pl.Character
+			local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+			local r = ch and ch:FindFirstChild("HumanoidRootPart")
+			local verdict: string
+			if not (hum and r and r:IsA("BasePart")) then
+				verdict = "no_character"
+			elseif hum.Health <= 0 then
+				verdict = "dead"
+			else
+				local dC = flatDist(r.Position, centre)
+				local dO = flatDist(r.Position, proot.Position)
+				local d = math.min(dC, dO)
+				local okM, may, why = pcall(CombatService.UnitMayHitPlayer, player, pl)
+				local agg = okM and may == true and CombatService.RecentlyHurtBy ~= nil and CombatService.RecentlyHurtBy(player, pl, aggroSecs) == true
+				local lim = if agg then rA else r0
+				if not okM then
+					verdict = "error " .. tostring(may)
+				elseif d > lim then
+					verdict = string.format("out_of_reach d=%.0f>%.0f rule=%s", d, lim, if may then "ok" else tostring(why))
+				elseif not may then
+					verdict = "rejected " .. tostring(why)
+					noteProtected(player, pl, why)
+				else
+					local score = d - (if agg then 1000 else 0) - (if cur and cur.Player == pl then 10 else 0)
+					verdict = string.format("CANDIDATE%s", if agg then " aggressor" else "")
+					if score < bestScore then
+						bestScore = score
+						best = { Hum = hum, Root = r, Kind = "Player", Player = pl, Aggressor = agg }
+					end
+				end
+				verdict ..= string.format(" (dCentre=%.0f dOwner=%.0f)", dC, dO)
+			end
+			if dbg then
+				dlines = dlines or {}
+				table.insert(dlines :: { string }, pl.Name .. ": " .. verdict)
+			end
+		end
+	end
+	(st :: any)._defTarget = best
+	if dlines then
+		defendLogAt[player.UserId] = now
+		print(string.format("[ArmyDefend] %s order=%s units=%d pick=%s | %s", player.Name, tostring(st.Order), cnt,
+			if best then best.Player.Name .. (if best.Aggressor then " (aggressor)" else "") else "none", table.concat(dlines :: { string }, " ; ")))
+	end
+end
+
+-- v133: one FOLLOW / HOLD unit's shot at the defend target (true = it has one in reach: it aims / fires at it)
+local function defendAimOnly(player: Player, st: SquadState, unit: SquadUnit, now: number): boolean
+	local tgt = (st :: any)._defTarget
+	if tgt == nil or tgt.Root.Parent == nil or tgt.Hum.Health <= 0 then
+		return false
+	end
+	local range = OrdersConfig.AttackRange or 55
+	local band = if tgt.Aggressor then range else range * 0.85 -- the ATTACK fire band; an aggressor out to the full range
+	local d = (tgt.Root.Position - unit.Root.Position).Magnitude
+	if d > band then
+		return false -- this unit is out of reach: it does its usual FOLLOW / HOLD thing
+	end
+	if losCheckDue(unit, now) then
+		if unitHasLos(player, unit, tgt.Root) then
+			unit.LosBlocked = false
+			local firedAt = unit.LastFireAt
+			local hit = unitShootAt(player, unit, tgt, tgt.Root, now)
+			unitShotFx(player, unit, tgt.Root, firedAt, hit)
+		else
+			hitLog(player, unit, "Player", tgt.Player.Name, 0, 0, "no_los")
+			losBlockedFor(unit, now)
+		end
+	end
+	unit.AimRoot = nil
+	unit.AimHum = nil
+	faceYaw(unit.Root, tgt.Root.Position)
+	return true
+end
+
+-- v133: a player's gun / rocket hit on one of this service's soldiers (CombatService.ApplyHit "Unit", after THE shared
+-- rule CombatService.ArmyHostility): the unit's Humanoid when `model` is a LIVE unit of its owner's squad, else nil.
+-- CombatService deals the damage (real Humanoid damage); a unit that dies is re-formed by SyncArmy as on any death.
+local function playerHitUnit(_attacker: Player, model: Model): Humanoid?
+	local uo = model:GetAttribute("OwnerUserId")
+	local st = if typeof(uo) == "number" then squadByUser[uo] else nil
+	if st == nil then
+		return nil
+	end
+	for _, u in ipairs(st.Units) do
+		if u.Model == model then
+			return if u.Alive and u.Humanoid.Health > 0 then u.Humanoid else nil
+		end
+	end
+	return nil
+end
+SquadOrdersService._PlayerHitUnit = playerHitUnit -- (tests)
+
 local function reformRootless(uid: number): boolean
 	local rc = (ArmyConfig :: any).Recover
 	-- off with the Recover kill switch; v90: only for a Rollout.Fix owner
@@ -3052,6 +3190,13 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 	if order == "Attack" and SquadOrdersService._AC.AttackLive(player.UserId) then
 		attackAimOnly(player, st, unit, now) -- claude-bud JOB 24: the ArmyController moves it; here it only shoots / aims
 		return
+	end
+	-- v133 (ArmyCombat.DefendOnFollow): FOLLOW / HOLD defend against an enemy player in reach (pickDefendTarget)
+	if (order == "Follow" or order == "Hold") and playerRoot and (st :: any)._defTarget ~= nil then
+		local engaged = defendAimOnly(player, st, unit, now)
+		if engaged and order == "Follow" and SquadOrdersService._AFOn and SquadOrdersService._AC.LiveFor(player.UserId) then
+			return -- Follow3: ArmyController keeps moving it in the formation; here it only shoots / aims
+		end
 	end
 	if order ~= "Follow" then
 		SquadOrdersService._AF.Release(unit, order) -- v99: HOLD / ATTACK / RETREAT drive it now (one controller per unit; JOB 22: its state)
@@ -3683,6 +3828,9 @@ function SquadOrdersService.Init(deps: { [string]: any })
 	BaseService = deps.BaseService
 	ResearchService = deps.ResearchService -- v69 research
 	CombatService = deps.CombatService -- F6 novice shield (Init order does not matter: used only on an order)
+	if CombatService and CombatService.SetUnitHitHandler then
+		CombatService.SetUnitHitHandler(playerHitUnit) -- v133: player guns hurt enemy soldiers (THE shared rule in CombatService)
+	end
 
 	if not OrdersConfig.Enabled then
 		print("[WAR EMPIRE] SquadOrdersService disabled (OrdersConfig.Enabled=false)")
@@ -3862,6 +4010,16 @@ function SquadOrdersService.Init(deps: { [string]: any })
 						end
 					else
 						(st :: any)._acTarget = nil
+					end
+					-- v133: the FOLLOW / HOLD army's defend target (an enemy player in reach, THE shared rule)
+					if (st.Order == "Follow" or st.Order == "Hold") and proot then
+						local okD, errD = pcall(pickDefendTarget :: any, player, st, proot)
+						if not okD then
+							(st :: any)._defTarget = nil
+							thinkError(player, errD, now)
+						end
+					else
+						(st :: any)._defTarget = nil
 					end
 					for _, unit in ipairs(st.Units) do
 						-- army fix (ArmyConfig.Loop): an error in one unit's think never stops the loop for every army

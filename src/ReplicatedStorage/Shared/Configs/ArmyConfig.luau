@@ -517,7 +517,8 @@ local ArmyConfig = {
 		CatchUpPerStud = 0.9, -- catching up: WalkSpeed = its slot's pace + this per stud from its slot ...
 		CatchUpMaxMult = 1.8, -- ... capped at max(his pace x this, CatchUpMin), never over MaxSpeed
 		CatchUpMin = 30,
-		MaxSpeed = 40,
+		MaxSpeed = 46, -- v133 (Code Bot): was 40; the x2 Speed Boost owner runs 32 (the block: max(FormMaxSpeed, his
+		-- speed x FormSpeedMult) = 40): 46 keeps a soldier's catch-up headroom over his pace (x1.45, as at 25.6)
 		MinSpeed = 8,
 		SpeedUpPerTick = 6, -- WalkSpeed changes at most this much per tick up ...
 		SpeedDownPerTick = 5, -- ... and down
@@ -591,6 +592,20 @@ local ArmyConfig = {
 		PreferPlayers = true,
 		AggressorSeconds = 10,
 		TargetLogSeconds = 2, -- debug (/armydebug): the [ArmyTarget] per-candidate verdict line, this often per army
+		-- v133 (Code Bot, phone bug "I stood right in front of another player's army and it never fired; my shots did
+		-- nothing to it"). Proven causes: (1) only ATTACK ever looked at players (pickSquadTarget ran for st.Order ==
+		-- "Attack" only; the FOLLOW / HOLD escort scans WE_NPC models only), and every army is on FOLLOW by default;
+		-- (2) every player shot excluded the whole WarEmpireSquads folder (CombatService shotFilterFor), so bullets
+		-- flew through enemy soldiers and no player could hurt one.
+		-- DefendOnFollow: a FOLLOW / HOLD army engages an enemy player in reach under THE shared rule
+		-- (CombatService.UnitMayHitPlayer; protected / ally / PvP off never), from its slot (no movement change).
+		-- DefendPlayerStuds: an enemy player this close to the army's centre (or its owner); one who hurt the owner or
+		-- his soldiers within AggressorSeconds is answered out to DefendAggressorStuds. PlayersHitUnits: player guns /
+		-- rockets hurt enemy soldiers (CombatService.ArmyHostility); false = the v132 pass-through.
+		DefendOnFollow = true,
+		DefendPlayerStuds = 47, -- (= the fire band OrdersConfig.AttackRange 55 x 0.85: the FOLLOW army does not walk out to him)
+		DefendAggressorStuds = 55, -- (the full AttackRange: he shot first)
+		PlayersHitUnits = true,
 	},
 
 	Gate = {
