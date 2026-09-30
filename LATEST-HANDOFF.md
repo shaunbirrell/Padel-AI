@@ -1,6 +1,6 @@
 <!-- Q2-START -->
-## v128 (Code Bot Roblox, 2026-09-30): ship claude-bud JOB 31 real prop detail + 8 sites + activities — FAST TRAVEL STILL OFF — OwnerFirst
-- Cherry-picked Claude `ca9d294` (JOB 31) onto phase-7-polish (v127 tip `8b75615`). **WE_Build 128**. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged).
+## v128 (Code Bot Roblox, 2026-09-30 ~09:53 Dublin): ship claude-bud JOB 31 real prop detail + 8 sites + activities — FAST TRAVEL STILL OFF — OwnerFirst — place version 126
+- Cherry-picked Claude `ca9d294` (JOB 31) onto phase-7-polish (v127 tip `8b75615`). **WE_Build 128**. Code commit `ae9aa30`. Open Cloud HTTP 200 `versionNumber=126`. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged).
 - **Fast travel stays REMOVED** (v127 owner request). Kept `MapConfig.FastTravelEnabled = false`; no `RequestFastTravel`, no TRAVEL button, no MapService teleport handler. Took JOB 31 `SiteKindInfo` + site map overlays only. `codebot_v128.py` pins WE_Build 128 + no-fast-travel.
 - **JOB 31 shipped OwnerFirst** (UserId 470626172 + Studio): WorldDetailConfig, WorldSitesConfig, SiteActivityConfig. Flip OwnerFirst false after Shaun signs off phone / FPS tests.
 - New: WorldDetailConfig + detailed WorldKits; WorldSitesConfig + WorldSites (8 sites); SiteActivityConfig + SiteActivityService (5 activities); MissionController ACTIVITIES; MapController site zones; checks `claude_bud_job31.py` + sim tests.
