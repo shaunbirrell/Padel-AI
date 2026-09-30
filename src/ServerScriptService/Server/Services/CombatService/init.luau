@@ -71,6 +71,7 @@ local CombatAssist = require(script.CombatAssist) -- W2
 local CombatFx = require(script.CombatFx) -- W2
 local VehicleHealth = require(script.Parent.Parent.Modules.VehicleHealth) -- W2 (CC-2; every call pcall'd)
 local Projectile = require(script.Parent.Parent.Modules.Projectile) -- W2
+local GunMechanics = require(ReplicatedStorage.Shared.Util.GunMechanics) -- claude-bud JOB 35: burst / spin / charge / pierce
 local WeaponAssetLoader = require(script.Parent.Parent.Modules.WeaponAssetLoader) -- W2
 
 -- Cached CollectionService:GetTagged results (invalidated on TTL)
@@ -152,6 +153,7 @@ export type HitOpts = {
 	HitPos: Vector3?, -- world point (feedback Pos)
 	Vehicle: Model?, -- the FIRING vehicle (M6): never damaged; its occupants never hit; rookie protection vs players
 	Headshot: boolean?, -- only RequestFire's exact-ray Head hit sets this
+	HeadshotMult: number?, -- claude-bud JOB 35: this gun's headshot multiplier (nil = CombatFeelConfig.HeadshotMult)
 	Quiet: boolean?, -- no attacker hitFeedback, no per-kill toast (NPC rewards still paid)
 	UnitShot: boolean?, -- creator tag carries WE_UnitShot (squad credit share)
 	Assist: boolean?, -- feedback only: the server assist chose this target (RequestFire)
@@ -1297,6 +1299,11 @@ function CombatService.NPCCounts(): { Regular: number, Special: number, Total: n
 	return { Regular = regular, Special = special, Total = regular + special }
 end
 
+-- claude-bud JOB 35: refresh WE_Weapons / the combat state after another service granted a weapon
+function CombatService.SyncWeapons(player: Player)
+	pushState(player)
+end
+
 function CombatService.EquipWeapon(player: Player, weaponId: any): (boolean, string?)
 	if not RemoteGuard.IsIdString(weaponId, 48) then
 		return false, "InvalidWeapon"
@@ -1356,6 +1363,9 @@ function CombatService.PurchaseWeapon(player: Player, weaponId: any): (boolean, 
 	end
 	-- v69: price comes from the server's WeaponConfig only (the remote carries just the id). A weapon with no
 	-- positive CostCash is not sold — the starter is granted by ensureStarter, anything else by other systems.
+	if (def :: any).Premium == true then
+		return false, "RobuxOnly" -- claude-bud JOB 35: premium guns come only from their Robux pass (PremiumGunService)
+	end
 	local cost = math.floor(tonumber(def.CostCash) or 0)
 	if cost <= 0 then
 		return false, "NotForSale"
@@ -1400,6 +1410,8 @@ local function weaponRefusalText(action: string, weaponId: any, err: string): st
 		return string.format("You don't own %s yet — buy it in Shop › WEAPONS", name)
 	elseif err == "NotForSale" then
 		return string.format("%s is not for sale", name)
+	elseif err == "RobuxOnly" then
+		return string.format("%s is sold in your base Armory", name) -- claude-bud JOB 35
 	elseif err == "NoProfile" then
 		return "Your save is still loading — try again in a moment"
 	end
@@ -1757,7 +1769,7 @@ function CombatService.ApplyHit(attacker: Player?, hit: Instance, amount: number
 				return { Kind = "Player", Dealt = 0, Killed = false, Target = model }
 			end
 		end
-		local dmg = amount * (tonumber(opts.VsInfantryMult) or 1) * (if opts.Headshot == true then CombatFeelConfig.HeadshotMult else 1)
+		local dmg = amount * (tonumber(opts.VsInfantryMult) or 1) * (if opts.Headshot == true then (tonumber(opts.HeadshotMult) or CombatFeelConfig.HeadshotMult) else 1) -- claude-bud JOB 35: per-gun HeadshotMult
 		if firing then
 			local rp = VehicleCombatConfig.RookieProtection
 			local vp = DataService and DataService.GetProfile(victim)
@@ -1777,7 +1789,7 @@ function CombatService.ApplyHit(attacker: Player?, hit: Instance, amount: number
 		if typeof(ref) ~= "string" then
 			return { Kind = "NPC", Dealt = 0, Killed = false, Target = model }
 		end
-		local dmg = amount * (tonumber(opts.VsInfantryMult) or 1) * (if opts.Headshot == true then CombatFeelConfig.HeadshotMult else 1)
+		local dmg = amount * (tonumber(opts.VsInfantryMult) or 1) * (if opts.Headshot == true then (tonumber(opts.HeadshotMult) or CombatFeelConfig.HeadshotMult) else 1) -- claude-bud JOB 35: per-gun HeadshotMult
 		local dealt, killed = hurtNPC(attacker, ref, dmg, weaponId, {
 			Headshot = opts.Headshot,
 			Pos = opts.HitPos,
@@ -2580,6 +2592,53 @@ local function assistPick(
 	return CombatAssist.Finish(filter)
 end
 
+-- claude-bud JOB 35: per player, per gun: GunMechanics state (burst count, spin, charge)
+local gunMech: { [number]: { [string]: GunMechanics.State } } = {}
+local function mechFor(player: Player, weaponId: string): GunMechanics.State
+	local byGun = gunMech[player.UserId]
+	if byGun == nil then
+		byGun = {}
+		gunMech[player.UserId] = byGun
+	end
+	local st = byGun[weaponId]
+	if st == nil then
+		st = GunMechanics.New()
+		byGun[weaponId] = st
+	end
+	return st
+end
+
+--[[ claude-bud JOB 35: Pierce. After an exact hit on a player / NPC, the same server ray is cast again with every body
+	already hit excluded, up to GunMechanics.MaxTargets(def) bodies; it stops at scenery, a vehicle or a gate. Each hit
+	goes through ApplyHit (the one PvP / protection rule). Returns true when any extra hit dealt damage. ]]
+local function pierceOn(player: Player, def: any, weaponId: string, damage: number, origin: Vector3, direction: Vector3, range: number, filter: { Instance }, firstBody: Model?): boolean
+	if firstBody == nil then
+		return false
+	end
+	local ignore = table.clone(filter)
+	table.insert(ignore, firstBody)
+	local any = false
+	for _ = 2, GunMechanics.MaxTargets(def) do
+		local r = raycast(origin, direction, range, ignore)
+		if r == nil then
+			break
+		end
+		local kind, _, body = resolveTarget(r.Instance)
+		if (kind ~= "Player" and kind ~= "NPC") or body == nil then
+			break
+		end
+		local hit = CombatService.ApplyHit(player, r.Instance, damage * CombatDamage.FalloffMult(def, (r.Position - origin).Magnitude), {
+			WeaponId = weaponId,
+			HitPos = r.Position,
+			Headshot = r.Instance.Name == "Head",
+			HeadshotMult = def.HeadshotMult,
+		})
+		any = any or hit.Dealt > 0
+		table.insert(ignore, body)
+	end
+	return any
+end
+
 function CombatService.RequestFire(player: Player, payload: any): boolean
 	if typeof(payload) ~= "table" then
 		AntiExploitService.Strike(player, "fire_bad_payload")
@@ -2611,6 +2670,15 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	if not def then
 		return false
 	end
+	-- claude-bud JOB 35: a trigger-down prime ("Spin" / "Charge") is not a shot; a spinning / charging gun waits
+	local mech = mechFor(player, state.WeaponId)
+	if payload.Prime ~= nil then
+		GunMechanics.Prime(def, mech, clock(), payload.Prime)
+		return false
+	end
+	if not GunMechanics.Ready(def, mech, clock()) then
+		return false
+	end
 
 	-- W2 (contracts §1.2 step 2): seat rule before any ammo or schedule is spent (a refusal is not a strike)
 	local seatVeh, seatAllowed, fromSeat = nil, true, false
@@ -2623,6 +2691,7 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	end
 
 	local minInterval = 1 / math.max(def.FireRate * researchMult(player, "WeaponFireRate"), 0.1) -- v69 research
+	minInterval = GunMechanics.Interval(def, mech, clock(), minInterval) -- claude-bud JOB 35: Burst.Gap inside a burst
 	if state.LastFireAt > clock() + minInterval * 0.5 then -- v69 research: after a switch from a slower gun,
 		state.LastFireAt = clock() + minInterval * 0.5 -- cap its schedule to this gun (no-op for one gun)
 	end
@@ -2682,6 +2751,7 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 		return false
 	end
 
+	GunMechanics.OnShot(def, mech, clock()) -- claude-bud JOB 35: burst count, keeps the barrel warm, spends the charge
 	state.Ammo -= 1
 	state.LastFireAt = math.max(state.LastFireAt + minInterval, clock()) -- v69 research: was = clock()
 	guns[state.WeaponId] = math.max(gunAt + minInterval, clock()) -- v69 research
@@ -2717,7 +2787,7 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	if result then
 		-- W2 (contracts §1.3 step 1): a player, an NPC, a registered vehicle (cover, even when protected) or a gate
 		-- decides the shot. A part named "Head" of a player or NPC is a headshot.
-		local kind = resolveTarget(result.Instance)
+		local kind, _, body = resolveTarget(result.Instance)
 		if kind ~= "None" then
 			how = "Exact"
 			local isHead = (kind == "Player" or kind == "NPC" or kind == "Unit") and result.Instance.Name == "Head"
@@ -2728,8 +2798,12 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 				WeaponId = state.WeaponId,
 				HitPos = result.Position,
 				Headshot = isHead,
+				HeadshotMult = (def :: any).HeadshotMult, -- claude-bud JOB 35
 			})
 			hitSomething = hit.Dealt > 0
+			if (kind == "Player" or kind == "NPC") and GunMechanics.MaxTargets(def) > 1 then -- claude-bud JOB 35: Pierce
+				hitSomething = pierceOn(player, def, state.WeaponId, damage, origin, direction, range, shotFilter, body) or hitSomething
+			end
 			fxKind = FX_KIND[kind] or "W"
 			fxAt = result.Position
 		else
@@ -3140,6 +3214,7 @@ function CombatService.Init(deps: { [string]: any })
 		combatStates[player.UserId] = nil
 		pvpHurtAt[player.UserId] = nil -- v124 (an attacker's entries in other victims' maps expire by time)
 		gunSchedule[player.UserId] = nil -- v69 research
+		gunMech[player.UserId] = nil -- claude-bud JOB 35
 		claimRefusals[player.UserId] = nil -- P0-7
 		CombatNPC.ForgetPlayer(player.UserId) -- P1-2 speed samples
 		W2.inputClass[player.UserId] = nil -- W2

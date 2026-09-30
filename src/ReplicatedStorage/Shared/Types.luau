@@ -369,6 +369,7 @@ export type FireRequestPayload = {
 	TargetNpcId: string?, -- same
 	HitPosition: Vector3?, -- the client ray's end: telemetry only (the fire_hitpos_oor soft strike)
 	Input: string?, -- W2: "Touch" | "Gamepad" | "KeyboardAndMouse" (<= 16 chars; anything else is ignored, no strike)
+	Prime: string?, -- claude-bud JOB 35: "Spin" | "Charge" = the trigger went down on a SpinUp / ChargeSeconds gun (no shot)
 }
 
 -- W2 (contracts §2.1): one WeaponFx UnreliableRemoteEvent table per event, sent with FireClient to each recipient.

@@ -1816,6 +1816,44 @@ function WeaponVisuals.MuzzleWorldPosition(): Vector3?
 	return nil
 end
 
+-- claude-bud JOB 35: the rotary barrel (WeaponAssetLoader "WE_SpinWeld" under the Handle) turns while the trigger is
+-- held on a SpinUp gun. One RenderStepped connection only while spinning; nothing runs otherwise.
+local spinConn: RBXScriptConnection? = nil
+local spinWeld: Weld? = nil
+local spinBase: CFrame? = nil
+local spinAngle = 0
+function WeaponVisuals.SpinBarrel(on: boolean)
+	if not on then
+		if spinConn then
+			spinConn:Disconnect()
+			spinConn = nil
+		end
+		return
+	end
+	if spinConn then
+		return
+	end
+	local g = localGun
+	local w = if g then g.Handle:FindFirstChild("WE_SpinWeld") else nil
+	if w == nil or not w:IsA("Weld") then
+		return
+	end
+	if spinWeld ~= w then
+		spinWeld = w :: Weld
+		spinBase = (w :: Weld).C0
+		spinAngle = 0
+	end
+	spinConn = RunService.RenderStepped:Connect(function(dt: number)
+		local sw, base = spinWeld, spinBase
+		if sw == nil or base == nil or sw.Parent == nil then
+			WeaponVisuals.SpinBarrel(false)
+			return
+		end
+		spinAngle = (spinAngle + dt * 28) % (math.pi * 2)
+		sw.C0 = base * CFrame.Angles(0, 0, spinAngle)
+	end)
+end
+
 function WeaponVisuals.LocalShot(weaponId: string, origin: Vector3, dir: Vector3, hitPos: Vector3?, hitInst: Instance?, hitNormal: Vector3?)
 	local def = WeaponConfig.Weapons[weaponId]
 	if not def or typeof(origin) ~= "Vector3" or typeof(dir) ~= "Vector3" then

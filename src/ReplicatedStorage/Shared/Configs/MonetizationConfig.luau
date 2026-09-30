@@ -211,6 +211,73 @@ local MonetizationConfig = {
 			Feature = "PremiumVehicles",
 			Description = "Robux-only dreadnought",
 		},
+		-- claude-bud JOB 35: the PREMIUM GUNS ARMORY (PremiumGunsConfig; WeaponConfig Premium defs). Robux-only guns; owning
+		-- a pass sets profile.Weapons[id] = true (PremiumGunService, on join + OnPassOwned). Id 0 = hidden in the Shop, the
+		-- armory case shows SOON and never prompts. TODO(owner): create each pass on the Creator Hub, paste the Id.
+		-- BundlePassKeys = the other pass that also unlocks the gun (the Armory Pass). Not in RolloutKeys (Id 0).
+		PG_Sovereign = {
+			Id = 0,
+			DisplayName = "Sovereign Gold Pistol",
+			RobuxPrice = 99,
+			WeaponIds = { "SovereignPistol" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Gold burst pistol: 2-shot bursts",
+		},
+		PG_Quake = {
+			Id = 0,
+			DisplayName = "Quake Grenade Launcher",
+			RobuxPrice = 249,
+			WeaponIds = { "QuakeLauncher" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "6-round drum of lobbed grenades",
+		},
+		PG_Longshot = {
+			Id = 0,
+			DisplayName = "Longshot Sniper",
+			RobuxPrice = 299,
+			WeaponIds = { "LongshotSniper" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Scoped sniper: 110 damage, 600 range",
+		},
+		PG_Havoc = {
+			Id = 0,
+			DisplayName = "Havoc Rotary Gun",
+			RobuxPrice = 349,
+			WeaponIds = { "HavocRotary" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Spin-up rotary gun, 150-round belt",
+		},
+		PG_Thunderhead = {
+			Id = 0,
+			DisplayName = "Thunderhead Rocket Launcher",
+			RobuxPrice = 399,
+			WeaponIds = { "ThunderheadLauncher" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Fires a 2-rocket salvo",
+		},
+		PG_Tempest = {
+			Id = 0,
+			DisplayName = "Tempest Railgun",
+			RobuxPrice = 499,
+			WeaponIds = { "TempestRailgun" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Charged shot that pierces 3 targets",
+		},
+		PG_ArmoryPass = {
+			Id = 0,
+			DisplayName = "Armory Pass",
+			RobuxPrice = 1299,
+			WeaponIds = { "SovereignPistol", "QuakeLauncher", "LongshotSniper", "HavocRotary", "ThunderheadLauncher", "TempestRailgun" },
+			BundlePassKeys = { "PG_Sovereign", "PG_Quake", "PG_Longshot", "PG_Havoc", "PG_Thunderhead", "PG_Tempest" }, -- hidden once all six are owned
+			HideFromShop = true,
+			Description = "All six premium guns",
+		},
 		-- v71 money (M1): Rebirth Boost (J13: +15% Cash per Rebirth instead of +10%, 1.5x starting Cash; no Gold x2).
 		-- RebirthConfig.Boost.GamePassKey. Id = 0 until created (OFF sale until the M7b/M7d publish).
 		RebirthBoost = {

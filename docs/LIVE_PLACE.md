@@ -53,6 +53,13 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | BiggerArmy | Bigger Army | 2001734404 | 249 | Shop (+10 army cap; owner-only first; Id wired v99) |
 | ExtraGarageSlot | Extra Garage Slot | 1999359549 | 199 | Shop gold ROBUX row (+1 vehicle slot; owner-only first; Id wired v99) |
 | RebirthBoost | Rebirth Boost | 0 | 199 | hidden |
+| PG_Sovereign | Sovereign Gold Pistol | 0 | 99 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; owner-only first) |
+| PG_Quake | Quake Grenade Launcher | 0 | 249 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; owner-only first) |
+| PG_Longshot | Longshot Sniper | 0 | 299 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; owner-only first) |
+| PG_Havoc | Havoc Rotary Gun | 0 | 349 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; owner-only first) |
+| PG_Thunderhead | Thunderhead Rocket Launcher | 0 | 399 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; owner-only first) |
+| PG_Tempest | Tempest Railgun | 0 | 499 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; owner-only first) |
+| PG_ArmoryPass | Armory Pass | 0 | 1299 | Base armory 7th case + Shop WEAPONS (all six guns; claude-bud JOB 35) |
 
 ### DevProducts
 | Key | Name | Id | Robux | Shop |

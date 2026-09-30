@@ -448,7 +448,7 @@ function CameraFx.SetWeapon(weaponId: string?)
 	weaponRange = if def then math.max(0, tonumber(def.Range) or 0) else 0
 end
 
-function CameraFx.Kick(weaponId: string)
+function CameraFx.Kick(weaponId: string, mult: number?) -- claude-bud JOB 35: mult (the scope's x0.5; nil = 1)
 	if reducedMotion() then
 		return
 	end
@@ -457,7 +457,7 @@ function CameraFx.Kick(weaponId: string)
 	if not rc then
 		return
 	end
-	local scale = if inputClass == "Touch" then tonumber(CC.RecoilScaleTouch) or 0.5 else 1
+	local scale = (if inputClass == "Touch" then tonumber(CC.RecoilScaleTouch) or 0.5 else 1) * (tonumber(mult) or 1)
 	local recover = math.max(1, tonumber(rc.Recover) or tonumber(CC.RecoilSpring.Speed) or 12)
 	local smooth = 2 / recover -- SmoothDamp time; the peak comes at smooth / 2
 	local s = recoil :: RecoilSpring

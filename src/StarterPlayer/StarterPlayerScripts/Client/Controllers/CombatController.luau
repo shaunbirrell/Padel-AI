@@ -108,11 +108,13 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 local WeaponConfig = require(Shared.Configs.WeaponConfig)
+local GunMechanics = require(Shared.Util.GunMechanics) -- claude-bud JOB 35: burst / spin / charge (visual pacing)
 local HudConfig = require(Shared.Configs.HudConfig)
 local ResearchConfig = require(Shared.Configs.ResearchConfig)
 local GameConfig = require(Shared.Configs.GameConfig)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
+local Scope = require(script.Parent.Parent.Modules.Scope) -- claude-bud JOB 35: the sniper scope
 
 -- W2 (contracts §5.5): feel modules + state in ONE table (module locals are at Luau's register limit)
 type FeelState = {
@@ -284,6 +286,7 @@ local fireBtn: Frame? = nil -- W2: a non-Active Frame (drag-to-aim); TouchStarte
 local fireIcon: Frame? = nil
 local fireDimmed: boolean? = nil -- current FIRE style (nil = not styled yet)
 local reloadBtn: TextButton? = nil
+local scopeBtn: TextButton? = nil -- claude-bud JOB 35: phone SCOPE (only with a Scope gun drawn)
 local reticle: Frame? = nil
 local hitMarker: Frame? = nil
 local damageEdge: Frame? = nil
@@ -424,9 +427,17 @@ local function combatBlocked(): boolean
 	return false
 end
 
+local triggerHeld = false -- claude-bud JOB 35: a trigger press is in progress (spin / charge release)
 local function stopFiring()
 	firing = false
 	table.clear(fireTouches)
+	if triggerHeld then
+		triggerHeld = false
+		local wv = Feel.WV
+		if wv and wv.SpinBarrel then
+			pcall(wv.SpinBarrel, false)
+		end
+	end
 end
 
 local function refreshBound()
@@ -840,6 +851,9 @@ syncFeel = function()
 		end
 	end
 	W2.queueDrawn(on)
+	if scopeBtn then
+		HudLayout.RefreshVisibility(scopeBtn) -- claude-bud JOB 35: SCOPE follows the drawn Scope gun
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -1323,17 +1337,33 @@ end
 
 -- W2: local shot visuals follow the server's fire schedule (the same GCRA as CombatService: the 20 Hz loop sends
 -- more requests than a slow gun may fire; only the ones the server would take get a flash / tracer / kick)
+-- claude-bud JOB 35: this client's GunMechanics state per gun (the server keeps its own and decides)
+local clientMech: { [string]: GunMechanics.State } = {}
+function W2.mech(id: string): GunMechanics.State
+	local m = clientMech[id]
+	if m == nil then
+		m = GunMechanics.New()
+		clientMech[id] = m
+	end
+	return m
+end
+
 function W2.visualShotAllowed(def: WeaponConfig.WeaponDef): boolean
 	if Feel.PredictedAmmo <= 0 then
 		return false
 	end
-	local interval = 1 / math.max(0.1, (tonumber(def.FireRate) or 1) * Feel.FireRateMult)
+	local m = W2.mech(def.Id) -- claude-bud JOB 35: no predicted shot while the barrel spins up / the charge builds
 	local t = clock()
+	if not GunMechanics.Ready(def, m, t) then
+		return false
+	end
+	local interval = GunMechanics.Interval(def, m, t, 1 / math.max(0.1, (tonumber(def.FireRate) or 1) * Feel.FireRateMult))
 	if t - Feel.NextVisualAt < -interval * 0.5 then
 		return false
 	end
 	Feel.NextVisualAt = math.max(Feel.NextVisualAt + interval, t)
 	Feel.PredictedAmmo -= 1
+	GunMechanics.OnShot(def, m, t)
 	return true
 end
 
@@ -1355,6 +1385,52 @@ local function canFireNow(): boolean
 		return false -- holstered: the click belongs to the world (droppers, consoles, ClickDetectors)
 	end
 	return true
+end
+
+--[[ claude-bud JOB 35: the trigger. A SpinUp / ChargeSeconds gun sends a "Prime" on the press (no shot; the server
+	starts the spin / charge); a charge gun fires once on the release; the 20 Hz hold loop fires everything else. ]]
+local function currentDef(): any
+	local wid = activeWeaponId() or currentWeaponId
+	return if wid then WeaponConfig.Weapons[wid] else nil
+end
+
+local function triggerDown()
+	local def = currentDef()
+	local kind = GunMechanics.PrimeKind(def)
+	triggerHeld = true
+	if kind and canFireNow() and not reloading then
+		GunMechanics.Prime(def, W2.mech(def.Id), clock(), kind)
+		local remote = Remotes.TryGetEvent(Constants.RemoteNames.RequestFire)
+		if remote then
+			remote:FireServer({ Prime = kind })
+		end
+		local wv = Feel.WV
+		if kind == "Spin" and wv and wv.SpinBarrel then
+			pcall(wv.SpinBarrel, true)
+		end
+	end
+	if kind ~= "Charge" then
+		requestFire()
+	end
+end
+
+-- after the last trigger input ends
+local function maybeRelease()
+	if not triggerHeld or firing or next(fireTouches) ~= nil then
+		return
+	end
+	triggerHeld = false
+	local kind = GunMechanics.PrimeKind(currentDef())
+	local wv = Feel.WV
+	if kind == "Spin" and wv and wv.SpinBarrel then
+		pcall(wv.SpinBarrel, false)
+	elseif kind == "Charge" then
+		requestFire() -- the charged shot (the server checks the charge)
+	end
+end
+
+local function holdFires(): boolean
+	return GunMechanics.PrimeKind(currentDef()) ~= "Charge"
 end
 
 requestFire = function()
@@ -1424,7 +1500,7 @@ requestFire = function()
 				pcall(wv.LocalShot, wid, origin, direction, payload.HitPosition, if result then result.Instance else nil, if result then result.Normal else nil)
 			end
 			if cf then
-				pcall(cf.Kick, wid)
+				pcall(cf.Kick, wid, Scope.RecoilMult()) -- claude-bud JOB 35: x0.5 while scoped
 			end
 			W2.bloomReticle(def)
 		end
@@ -1432,6 +1508,7 @@ requestFire = function()
 end
 
 requestReload = function()
+	Scope.Exit() -- claude-bud JOB 35: a reload drops the scope
 	if combatBlocked() then
 		return
 	end
@@ -1678,6 +1755,10 @@ local function onWheel(_name: string, _state: Enum.UserInputState, io: InputObje
 	if z == 0 or not drawn or combatBlocked() then
 		return Enum.ContextActionResult.Pass
 	end
+	if Scope.Level() > 0 then
+		Scope.Set(if Scope.Level() == 1 then 2 else 1) -- claude-bud JOB 35: scoped, the wheel zooms
+		return Enum.ContextActionResult.Sink
+	end
 	local t = clock()
 	if t - lastWheelAt >= WHEEL_MIN_GAP then
 		lastWheelAt = t
@@ -1756,6 +1837,10 @@ local function placeCombatControls()
 	local r = reloadBtn
 	if r then
 		r.Position = UDim2.new(1, -g.ReloadRight, 1, -g.ReloadBottom)
+	end
+	local sc = scopeBtn -- claude-bud JOB 35: straight above RELOAD (away from the jump button)
+	if sc then
+		sc.Position = UDim2.new(1, -g.ReloadRight, 1, -(g.ReloadBottom + TC.Reload.Size + 12))
 	end
 end
 
@@ -1914,6 +1999,35 @@ local function buildTouchButtons(parent: Instance)
 	end)
 	reloadBtn = rel
 	HudLayout.AssertTouchTarget(rel, "RELOAD")
+
+	-- claude-bud JOB 35: SCOPE (above RELOAD, same size; only with a Scope gun drawn): off -> x1 -> x2 -> off
+	local sc = Instance.new("TextButton")
+	sc.Name = "ScopeButton"
+	sc.AnchorPoint = TC.Reload.Anchor
+	sc.Size = UDim2.fromOffset(TC.Reload.Size, TC.Reload.Size)
+	sc.BackgroundColor3 = Color3.fromRGB(30, 34, 40)
+	sc.BackgroundTransparency = 0.12
+	sc.BorderSizePixel = 0
+	sc.Font = Enum.Font.GothamBlack
+	sc.TextScaled = true
+	sc.TextColor3 = WHITE
+	sc.Text = "SCOPE"
+	sc.AutoButtonColor = true
+	sc.Active = true
+	sc.ZIndex = 2
+	sc.Visible = false
+	sc.Parent = parent
+	round(sc)
+	stroke(sc, Color3.fromRGB(0, 0, 0), 2.5, 0.55)
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0.12, 0)
+	pad.PaddingRight = UDim.new(0.12, 0)
+	pad.Parent = sc
+	sc.Activated:Connect(function()
+		Scope.Cycle()
+	end)
+	scopeBtn = sc
+	HudLayout.AssertTouchTarget(sc, "SCOPE")
 end
 
 local function buildReticleGui(pg: Instance)
@@ -2153,6 +2267,14 @@ local function buildHud(pg: Instance)
 		table.insert(bound, f)
 		table.insert(bound, r)
 	end
+	local sc = scopeBtn -- claude-bud JOB 35
+	if sc then
+		HudLayout.BindVisibility(sc, TC, function(): boolean
+			local d = currentDef()
+			return notSeated() and drawn and d ~= nil and d.Scope == true
+		end)
+		table.insert(bound, sc)
+	end
 	local ret = reticle
 	if ret then
 		HudLayout.BindVisibility(ret, RT, notSeated)
@@ -2365,7 +2487,14 @@ function CombatController.Init()
 		if ut == Enum.UserInputType.MouseButton1 or kc == GP.Fire then
 			if canFireNow() then
 				firing = true
-				requestFire()
+				triggerDown() -- claude-bud JOB 35 (was requestFire(): spin / charge guns prime first)
+			end
+			return
+		end
+		if ut == Enum.UserInputType.MouseButton2 or kc == Enum.KeyCode.ButtonL2 then
+			local d = currentDef() -- claude-bud JOB 35: hold RMB / L2 = scope
+			if d and d.Scope == true and drawn and canFireNow() then
+				Scope.Set(1)
 			end
 			return
 		end
@@ -2403,7 +2532,11 @@ function CombatController.Init()
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.KeyCode == GP.Fire then
 			firing = false
 		end
+		if input.UserInputType == Enum.UserInputType.MouseButton2 or input.KeyCode == Enum.KeyCode.ButtonL2 then
+			Scope.Exit() -- claude-bud JOB 35: hold-to-scope
+		end
 		fireTouches[input] = nil
+		maybeRelease() -- claude-bud JOB 35: spin down / fire the charged shot
 	end)
 	-- W2 drag-to-aim FIRE (P1-1): a finger that STARTS inside FIRE's rect (+ FireSlopPx real px) fires and keeps
 	-- firing while held; the touch is never sunk (FIRE is a non-Active Frame), so the same thumb turns the camera.
@@ -2430,11 +2563,12 @@ function CombatController.Init()
 		end
 		if canFireNow() then
 			fireTouches[input] = true
-			requestFire()
+			triggerDown() -- claude-bud JOB 35
 		end
 	end)
 	UserInputService.TouchEnded:Connect(function(input: InputObject)
 		fireTouches[input] = nil
+		maybeRelease() -- claude-bud JOB 35
 		-- a finger that slid off a hotbar slot before lifting ends that slot's long-press too
 		for _, sl in ipairs(slots) do
 			if sl.PressInput == input then
@@ -2450,7 +2584,9 @@ function CombatController.Init()
 			task.wait(period)
 			if firing or next(fireTouches) ~= nil then
 				if canFireNow() then
-					requestFire()
+					if holdFires() then -- claude-bud JOB 35: a charge gun fires on the release
+						requestFire()
+					end
 				else
 					stopFiring()
 				end
@@ -2460,6 +2596,12 @@ function CombatController.Init()
 
 	-- touch: dimmed FIRE while holstered with a visible hostile in range (≤ 4 Hz; nothing on desktop)
 	startArmedScan()
+
+	-- claude-bud JOB 35: the scope drops on reload, death, a seat, a switch, a holster or a gun without a scope
+	Scope.Start(function(): boolean
+		local d = currentDef()
+		return not drawn or not alive or reloading or combatBlocked() or d == nil or d.Scope ~= true
+	end)
 end
 
 return CombatController

@@ -1,4 +1,88 @@
 <!-- Q2-START -->
+## claude-bud JOB 35 (2026-09-30): premium guns armory (branch `claude/desktop-bud`)
+**Flags:** `PremiumGunsConfig.Live` (`Enabled`, `OwnerFirst = true`).
+- **Off:** no armory, no grants, no gold rows. The six guns stay in WeaponConfig, unowned and unsold.
+- `OwnerTestGrant = true`: while live, the owner (and Studio test players) get the six guns, since the passes are Id 0.
+- **To launch:** Code Bot sets `OwnerFirst = false`, and the owner pastes the pass Ids.
+
+**Ids the owner must paste** (MonetizationConfig; all 0 = hidden in the Shop, SOON in the armory, never prompted):
+
+| Pass | Price | Gun(s) |
+|---|---|---|
+| `PG_Sovereign` | 99 | Sovereign Gold Pistol |
+| `PG_Quake` | 249 | Quake Grenade Launcher |
+| `PG_Longshot` | 299 | Longshot Sniper |
+| `PG_Havoc` | 349 | Havoc Rotary Gun |
+| `PG_Thunderhead` | 399 | Thunderhead Rocket Launcher |
+| `PG_Tempest` | 499 | Tempest Railgun |
+| `PG_ArmoryPass` | 1299 | all six |
+
+**What it does**
+- **Guns:** six WeaponConfig guns (`Premium`, CostCash 0) on the brief's assets.
+
+  | Gun | Mechanics | DPS at full rate |
+  |---|---|---|
+  | Sovereign | 30 dmg, 2-shot burst, mag 12 | 100 |
+  | Quake | 70, lobbed, splash 11, drum 6 | 84 |
+  | Longshot | 110, headshot x1.5, range 600, real scope | 77 |
+  | Havoc | 0.6 s spin-up, 20 rps x 9, mag 150 | 180 |
+  | Thunderhead | 2-rocket salvo x 170, splash 12 | 109 |
+  | Tempest | 0.8 s charge, 140, hits up to 3 bodies in a line | 140 |
+
+  All are below the best existing automatics (AR 198, Sovereign Rifle 234).
+- **Grants:** owning PG_x or the Armory Pass sets `profile.Weapons[id] = true` (PremiumGunService on OnPassOwned: join
+  plus confirmed purchase).
+  - Cash purchase refuses premium guns ("RobuxOnly"); equip still refuses unowned guns.
+- **Mechanics** (`Shared/Util/GunMechanics`, server-authoritative in `CombatService.RequestFire`):
+  - a trigger-down "Prime" (Spin / Charge) is not a shot;
+  - Ready / Interval / OnShot sit around the unchanged v69 schedule;
+  - Pierce re-casts past each body and sends every extra hit through ApplyHit (the one PvP / protection rule);
+  - per-gun HeadshotMult;
+  - nil fields = every old gun unchanged (the test checks the AR still fires 9/s).
+- **Loader:** `WeaponAssetLoader` accepts a plain Model / MeshPart (`VisualPlain`).
+  - Every part is welded to the body, an invisible Handle is added, and the Havoc barrel gets `WE_SpinWeld`.
+  - `VisualChild "*"` = a kit Tool's first Model; `VisualLength` scales the template.
+  - Scripts are stripped, the 16-part cap stays, and the Part kit remains the fallback.
+- **Scope** (`Modules/Scope`, Longshot only):
+  - hold RMB / L2, or the phone SCOPE button above RELOAD;
+  - FOV 70 -> 20 -> 12 (wheel / second tap), then off;
+  - black vignette + reticle, mouse sensitivity x FOV/70, sway while moving, recoil x0.5;
+  - exits on reload, death, seat, switch or holster.
+- **Armory:** in every live player's base, 7 glass cases in one row west of the Supply Depot (plot X -92 .. -131,
+  Z 146), plus one ARMORY sign with the row's only light.
+  - Each case: plinth + gold trim + glass 0.6 + gold cap; about 30 parts per base.
+  - Prompt: "Buy - R$ X", Equip once owned (the glass fades), or disabled with a SOON board while the Id is 0.
+  - Boards are base labels, so the LabelGovernor shows the 3 nearest.
+  - The client spins the gun template in each case within 70 studs; the 7th case cycles the six guns.
+- **Shop > WEAPONS:** gold rows for the premium guns ("PERMANENT", R$ price), listed while live once the pass has an Id.
+
+**Checks**
+- `tools/checks/claude_bud_job35.py` (28 pins).
+- `tools/sim/run_armory_test.py`: 74 checks.
+  - mechanics; a 20 Hz held trigger per gun, on a line-for-line copy of RequestFire's schedule (the copy's lines are
+    checked against the source);
+  - configs / Ids / prices; CaseState; grants; owner-first;
+  - placement vs the whole layout;
+  - the real loader on a fake plain model (Handle, welds, spin weld, scale, 16-part cap) and a kit Tool with "*".
+- BuyPathStatic PASS=6754 FAIL=0; remote audit OK; rojo ok; all sims 0 failed; no new LSP errors.
+
+**Not verified here (needs Studio / a device)**
+- The six assets' real contents: part counts, and which way each muzzle points. A plain model's grip is placed on its
+  longest axis automatically. **Check each gun in the hand in Studio.** If a muzzle points backwards, set
+  `VisualGrip = { X = 0, Y = 0, Z = 0, RX = 0, RY = 180, RZ = 0 }`. A model over 16 parts falls back to the Part kit
+  and the server log says so.
+- **The 2-player Studio combat test (owner rule):** Tempest pierce through 2 players, Havoc spin-up, the Thunderhead
+  salvo splash, and PvP protection on each (novice shield / pvp off).
+
+**Test ON HIS PHONE (owner + a second phone)**
+1. Walk to the Supply Depot and look west: 7 glass cases with a gun turning in each, and the ARMORY sign. At most 3
+   boards show at once; they read SOON, or OWNED for the owner (test grant).
+2. Tap a case prompt (owner): "Equip" equips that gun. The hotbar shows it and the Shop > WEAPONS row is gold.
+3. Longshot: tap SCOPE (above RELOAD), tap again for more zoom, a third tap exits. It also exits on RELOAD. Check the
+   vignette and reticle are readable and FIRE / RELOAD stay usable.
+4. Havoc: hold FIRE. The barrel spins, shots start after about half a second, and 150 rounds last.
+5. Tempest: hold FIRE to charge and release to fire. It hits both of 2 players standing in a line. The second phone:
+   a player with a novice shield / pvp off takes nothing.
 ## v134 (Code Bot Roblox, 2026-09-30 ~13:28 Dublin): 5 Roblox badges wired + badge backfill on join - place version 132
 - **WE_Build 134**. Code commit `b457917` (+ dist `e2c6225`). Open Cloud HTTP 200 `versionNumber=132`. PreferMesh OFF; WE_Building* untouched; fast travel stays REMOVED. Badges only (JOB 40 guards / speed / props are Claude's, untouched).
 - **Root cause (owner: every badge 0% "Impossible"):** `AchievementConfig` BadgeIds were all 0, so `AchievementService.awardBadge` returned before `AwardBadge` for every unlock.

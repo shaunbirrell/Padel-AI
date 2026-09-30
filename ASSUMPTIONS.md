@@ -9655,3 +9655,25 @@ ds_territories.luau T3):
   0.2 studs dropped; parts under 8 studs cast no shadow; under 1.2 studs no collision.
 - **Not changed:** RebirthZoneBuilder / RebirthZoneService / WorldSites / WorldKits (Claude's queued jobs), WE_Building*,
   PreferMesh (OFF), VisualAssetConfig, fast travel (still removed).
+
+## 2026-09-30 — claude-bud JOB 35: premium guns armory
+- **Gun ids:** SovereignPistol / QuakeLauncher / LongshotSniper / HavocRotary / ThunderheadLauncher / TempestRailgun.
+  They don't clash with the JOB 33 rebirth guns (Sovereign Rifle, Longshot DMR, Havoc Launcher, Tempest SMG).
+- **Pierce 3:** one shot hits up to 3 players / NPCs in a line, full damage with falloff each. It stops at scenery, a
+  vehicle or a gate.
+- **Fire rates:** the Burst FireRate is cycles per second (Sovereign 2 bursts/s = 100 DPS; Thunderhead 0.35 salvos/s,
+  mag 2 = one salvo per reload). Charge: prime on the press, fire on the release. There is no charge meter on screen
+  yet.
+- **Longshot:** 110 damage one-shots a 100 HP player, as the brief says; there is no player-gun DPS cap in the game.
+  "Keep PlayerMaxDps" is met by the premium DPS staying below the best existing automatics (run_armory_test prints the
+  table).
+- **Armory:** one light for the whole row (not one per case), to fit the phone light budget. The row is west of the
+  Supply Depot (plot X -92 .. -131, Z 146), which the placement test checks against the layout. Visitors can buy from
+  any armory. The board shows the plot owner's state.
+- **Owner test grant:** while live, `OwnerTestGrant` writes the six guns into the owner's real profile (and every
+  Studio player's) so they can be tested before the Ids exist. This is like the admin unlock-all.
+- **Plain models:** the grip is automatic (longest axis, a quarter from the rear). The muzzle direction must be checked
+  in Studio; `VisualGrip` overrides it.
+- **Scope:** scales mouse sensitivity only (`MouseDeltaSensitivity`). Touch camera speed while scoped is Roblox's
+  default. RMB also rotates the default camera on PC; the shoulder camera already locks the mouse while drawn.
+- **Shop:** premium rows show in WEAPONS only; the generic pass list skips them (HideFromShop). JOB 36 reorders the Shop.

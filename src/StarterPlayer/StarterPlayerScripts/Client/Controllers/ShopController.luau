@@ -54,6 +54,7 @@ local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local PANEL_ID = "Shop"
 
 local player = Players.LocalPlayer
+local PremiumGunsConfig = require(Shared.Configs.PremiumGunsConfig) -- claude-bud JOB 35
 local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
 local pendingCashMegaHighlight = false
@@ -497,7 +498,8 @@ local function promptGamePass(passKey: string, source: string?)
 		return
 	end
 	-- v69: HideFromShop passes (ExtraPlotCosmetic — theme not implemented) are never offered
-	if (def :: any).HideFromShop == true then
+	-- claude-bud JOB 35: premium gun passes (WeaponIds) are HideFromShop for the generic list but sold from WEAPONS
+	if (def :: any).HideFromShop == true and typeof((def :: any).WeaponIds) ~= "table" then
 		return
 	end
 	-- F1: an owned pass (or one whose OwnedIfAny key is owned: the Speed Pass for a Speed Boost owner) never prompts
@@ -1079,6 +1081,13 @@ function ShopController.Init()
 			-- Weapons with no Cash price are only listed once owned (starter / granted)
 			r.Row.Visible = isOwned or cost > 0
 			r.Action = nil
+			-- claude-bud JOB 35: a premium gun (gold row) is listed while live once its pass has an Id (Id 0 = hidden)
+			local premiumKey: string? = if (def :: any).Premium == true then (def :: any).PassKey else nil
+			local premiumPass: any = if premiumKey then (MonetizationConfig.GamePasses :: any)[premiumKey] else nil
+			local premiumSold = premiumPass ~= nil and (tonumber(premiumPass.Id) or 0) ~= 0 and PremiumGunsConfig.LiveFor(player.UserId)
+			if premiumKey then
+				r.Row.Visible = isOwned or premiumSold
+			end
 			if r.Id == equipped then
 				setRowButton(r.Btn, "EQUIPPED", "owned")
 				r.Sub.Text = "Equipped · " .. stats
@@ -1091,6 +1100,10 @@ function ShopController.Init()
 			elseif isOwned then
 				setRowButton(r.Btn, "LV " .. def.UnlockLevel, "locked")
 				r.Sub.Text = string.format("Owned · equip at Lv %d", def.UnlockLevel)
+			elseif premiumKey and premiumSold then
+				setRowButton(r.Btn, utf8.char(0xE002) .. " " .. tostring(premiumPass.RobuxPrice), "buy") -- claude-bud JOB 35
+				r.Sub.Text = "PERMANENT · " .. stats
+				r.Action = "robux"
 			elseif cost <= 0 then
 				setRowButton(r.Btn, "N/A", "locked")
 				r.Sub.Text = "Not sold in the Shop"
@@ -1114,12 +1127,17 @@ function ShopController.Init()
 		for _, id in ipairs(WeaponConfig.SortedIds()) do
 			local def = WeaponConfig.Weapons[id]
 			wOrder += 1
-			local row, subLabel, btn = buildRow(weaponList, wOrder, "Weapon_" .. id, def.DisplayName, weaponStats(def), "…")
+			local premium = (def :: any).Premium == true -- claude-bud JOB 35: gold rows, listed first
+			local row, subLabel, btn = buildRow(weaponList, if premium then wOrder - 1000 else wOrder, "Weapon_" .. id, def.DisplayName, weaponStats(def), "…", premium)
 			local entry = { Id = id, Row = row, Sub = subLabel, Btn = btn, Action = nil :: string? }
 			table.insert(weaponRows, entry)
 			btn.Activated:Connect(function()
 				local action = entry.Action
 				if btn:GetAttribute("WE_Disabled") == true or action == nil then
+					return
+				end
+				if action == "robux" then
+					promptGamePass(tostring((def :: any).PassKey), "shop") -- claude-bud JOB 35: the pass grants the gun
 					return
 				end
 				-- One request per tap: the row shows BUYING… / EQUIPPING… until the server's attribute push
