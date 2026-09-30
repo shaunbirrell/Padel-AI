@@ -78,3 +78,10 @@ NEW CONFIG: ArmyOrdersConfig (new, Shared/Configs), Enabled = true, OwnerFirst =
    - G (OFF == OLD): ArmyOrdersConfig.Enabled = false or a non-owner account gets v124 Follow / Attack / Hold / Retreat exactly (the JOB 24 attack, leash 140), no SEND UI, and turrets without HP.
    - tools/checks/claude_bud_job38.py pins: the config flags, no PivotTo / Reposition calls reachable from the seek/send plan, no FastTravel, the RemoteGate schemas, the one hostility function used by both paths, and CanArmyRaid sharing CanRaid.
    - DONE reply: the list of what Shaun must test ON HIS PHONE (the walkie row at 44 px, SEND from the map, the defender alert, and the march look while turning).
+
+## ADDENDUM (owner, 2026-09-30 12:07): replace the "TOP ARMY" leaderboard with "ARMY KILLS"
+- Army size is capped at 75, so the TOP ARMY board is just a tie at 75 and means nothing. Once ATTACK / SEND ARMY ships in this job, replace that board.
+- The new board is "ARMY KILLS", with ALL-TIME and THIS WEEK tabs matching the other boards' style. It counts kills made by the player's army units: enemy army soldiers, checkpoint and bank guards, and enemy players killed by army fire.
+- Only credit kills under the shared hostility rule. No kills on protected targets and no self-farm (the same player's units, or alts in the same base, do not count).
+- Store it in a new OrderedDataStore key. Admin/owner accounts stay excluded, as on every board. Keep the board polished with no overlapping text.
+- Migrate the board slot in place (same position and frame). Remove the old Top Army board only when Army Kills goes live.
