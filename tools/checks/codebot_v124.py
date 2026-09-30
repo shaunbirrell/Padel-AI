@@ -35,8 +35,8 @@ def _fn124(src, head):
 
 _S124 = "src/ServerScriptService/Server/"
 for _f in (_S124 + "Services/DataService.luau", _S124 + "Services/BaseService.luau", _S124 + "EarlyRemotes.server.luau"):
-    _cb124('SetAttribute("WE_Build", 124)' in _rd124(_f), "CODEBOT v124: WE_Build=124 " + _f.rsplit("/", 1)[-1])
-_cb124("WE_Build=124" in _rd124(_S124 + "Services/DataService.luau"), "CODEBOT v124: DataService profile-loaded log says WE_Build=124")
+    pass  # v125 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v125.py: #_cb124('SetAttribute("WE_Build", 124)' in _rd124(_f), "CODEBOT v124: WE_Build=124 " + _f.rsplit("/", 1)[-1])
+# v125 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v125.py: #_cb124("WE_Build=124" in _rd124(_S124 + "Services/DataService.luau"), "CODEBOT v124: DataService profile-loaded log says WE_Build=124")
 
 # 1. ONE shared PvP hostility rule: guns (hurtPlayer), blasts and the army all use pvpBlock
 _cs = _code124(_rd124(_S124 + "Services/CombatService/init.luau"))

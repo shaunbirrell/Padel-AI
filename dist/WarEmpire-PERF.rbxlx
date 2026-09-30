@@ -566,20 +566,30 @@ local AnalyticsConfig = {
 	Roblox = {
 		Enabled = true,
 		FunnelNewPlayerSeconds = 900,
+		-- claude-bud JOB 29: the SAME funnel, extended with every onboarding step at the real moment it happens. "STEP:<x>"
+		-- events come from AnalyticsService.Onboard: RetentionService (Joined / CharacterSpawned on the real join and first
+		-- spawn) and TutorialService (BaseClaimed and Tut_<step Id> when that tutorial step is finished, TutorialDone /
+		-- TutorialSkipped). Order = the owner's tutorial order; a step done early (bought before asked) still counts.
 		Funnel = {
-			{ Step = "Joined", Events = { "PLAYER_JOIN" } },
-			{ Step = "CollectedCash", Events = { "CASH_COLLECT" } },
-			{ Step = "FirstBuilding", Events = { "FIRST_UPGRADE", "UPGRADE_PURCHASED" } },
-			{ Step = "OpenedArmy", Events = { "ARMY_OPEN", "SOLDIER_RECRUIT" } },
+			{ Step = "Joined", Events = { "PLAYER_JOIN", "STEP:Joined" } },
+			{ Step = "Spawned", Events = { "STEP:CharacterSpawned" } },
+			{ Step = "BaseClaimed", Events = { "STEP:BaseClaimed" } },
+			{ Step = "FirstBuilding", Events = { "STEP:Tut_CommandCenter", "FIRST_UPGRADE", "UPGRADE_PURCHASED" } },
+			{ Step = "CollectedCash", Events = { "STEP:Tut_Income", "CASH_COLLECT" } },
+			{ Step = "Recruited", Events = { "STEP:Tut_RecruitSoldiers", "SOLDIER_RECRUIT" } },
+			{ Step = "Barracks", Events = { "STEP:Tut_Barracks" } },
+			{ Step = "FirstOutpost", Events = { "STEP:Tut_Outpost", "FIRST_OUTPOST", "TERRITORY_CAPTURED" } },
+			{ Step = "FirstVehicle", Events = { "STEP:Tut_Jeep", "VEHICLE_SPAWNED" } },
+			{ Step = "TutorialDone", Events = { "STEP:TutorialDone", "STEP:TutorialSkipped" } },
+			{ Step = "OpenedArmy", Events = { "ARMY_OPEN" } },
 			{ Step = "FirstAttack", Events = { "ARMY_ATTACK" } },
-			{ Step = "FirstOutpost", Events = { "FIRST_OUTPOST", "TERRITORY_CAPTURED" } },
 			{ Step = "PurchasePrompt", Events = { "SHOP_PROMPT", "PREMIUM_VEHICLE_PROMPT" } },
 			{ Step = "FirstPurchase", Events = { "FIRST_PURCHASE", "PURCHASE_RECEIPT" } },
 		},
 		EconomyFlushSeconds = 60,
 		-- reason (prefix) -> Enum.AnalyticsEconomyTransactionType name; anything else = Gameplay
 		EconomyTypes = { upgrade_ = "Shop", weapon_ = "Shop", vehicle_ = "Shop", research_ = "Shop", recruit_ = "Shop", devproduct = "IAP",
-			daily = "TimedReward", premium_daily = "TimedReward", spinner = "TimedReward", code = "ContextualPurchase", onboarding = "Onboarding" },
+			daily = "TimedReward", premium_daily = "TimedReward", spinner = "TimedReward", code = "ContextualPurchase", onboarding = "Onboarding", offline = "TimedReward" }, -- claude-bud JOB 29: offline
 		-- in-house event -> Roblox custom event name (value = the Value prop, else 1; field 1 = the Field prop)
 		Custom = {
 			SHOP_OPEN = { Name = "ShopOpened" },
@@ -594,6 +604,11 @@ local AnalyticsConfig = {
 			TUTORIAL_CLOSED = { Name = "TipClosed", Field = "tip" },
 			ARMY_ATTACK = { Name = "ArmyAttack" },
 			SESSION_END = { Name = "SessionLength", Value = "minutes", Field = "bucket" },
+			-- claude-bud JOB 29: seconds to each funnel step (RetentionConfig.Funnel), offline pay, notification opt-in
+			ONBOARD_STEP = { Name = "OnboardingSeconds", Value = "seconds", Field = "step" },
+			OFFLINE_EARNED = { Name = "OfflineEarned", Value = "cash", Field = "hours" },
+			NOTIF_OPTIN = { Name = "NotificationOptIn", Field = "result" },
+			STREAK_DAY = { Name = "StreakDay", Value = "day" },
 		},
 		MaxCustomPerMinute = 100,
 		PerPlayerPerMinute = 10,
@@ -697,6 +712,11 @@ local AnalyticsConfig = {
 		TUTORIAL_CLOSED = "TUTORIAL_CLOSED",
 		MISSILE_STRIKE = "MISSILE_STRIKE",
 		SESSION_END = "SESSION_END",
+		-- claude-bud JOB 29
+		ONBOARD_STEP = "ONBOARD_STEP",
+		OFFLINE_EARNED = "OFFLINE_EARNED",
+		NOTIF_OPTIN = "NOTIF_OPTIN",
+		STREAK_DAY = "STREAK_DAY",
 	},
 }
 
@@ -3396,6 +3416,21 @@ local DailyRewardConfig = {
 		Rollout = "all", -- v101
 		DelaySeconds = 8,
 	},
+	--[[ claude-bud JOB 29 (2026-09-30): streak visibility.
+		ShowTomorrow (kill switch, everyone): wherever the streak is shown, tomorrow's reward is shown too (the Missions
+		panel's daily row, the auto-claim toast, the streak card).
+		StreakCard (OwnerFirst first): the auto-claim shows ONE card with the 7-day strip (today lit, BigDays gold) and
+		"Come back tomorrow for $Y" instead of two text toasts; the Missions panel shows the same strip plus 1-2
+		"tomorrow" goals; day 7 also gives Day7Boost (army damage x Mult for Minutes; profile.ArmyBoostUntil; no Robux).
+		The card waits while WE_Onboarding is on (FastStart). Both off = the JOB 4.2 toasts exactly as before. ]]
+	ShowTomorrow = true,
+	StreakCard = {
+		Enabled = true,
+		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+	},
+	BigDays = { [3] = true, [7] = true } :: { [number]: boolean },
+	CardSeconds = 6,
+	Day7Boost = { Enabled = true, Mult = 1.25, Minutes = 30, Label = "ARMY BOOST" },
 }
 
 -- claude-bud: is auto-claim live for this player (fail closed)
@@ -3410,6 +3445,14 @@ function DailyRewardConfig.AutoClaimLiveFor(userId: any): boolean
 		return AdminConfig.IsPlaytestOwner(userId)
 	end
 	return false
+end
+
+-- claude-bud JOB 29: is the streak card / strip / day-7 boost live for this player (fail closed)
+function DailyRewardConfig.ShowTomorrowLiveFor(userId: any): boolean
+	if DailyRewardConfig.ShowTomorrow ~= true then
+		return false
+	end
+	return (require(script.Parent.RetentionConfig) :: any).Live(DailyRewardConfig.StreakCard, userId)
 end
 
 return DailyRewardConfig
@@ -3824,6 +3867,23 @@ local EconomyConfig = {
 		KeyboardKey = Enum.KeyCode.E,
 		GamepadKey = Enum.KeyCode.ButtonX,
 		Exclusivity = Enum.ProximityPromptExclusivity.OnePerButton,
+	},
+	--[[ claude-bud JOB 29 (2026-09-30): OFFLINE EARNINGS. When the save loads, the server pays for the time away since
+		the last save was written (profile.LastSeenUnix, os.time(), stamped by DataService on every write). The formula is
+		the live passive tick's: BaseService.ComputePassiveIncomePerTick x EconomyService.GetCashMult(player, "passive"),
+		once per PassiveIncome.TickSeconds, for the seconds away (capped at CapSeconds), x Share, x (1 + PremiumBonus)
+		for Roblox Premium. It is paid straight into PendingCash (the ATM, like the tick) with reason "offline" (the
+		multiplier is already in, so never applied twice), then a "Welcome back: +$X while away" card shows.
+		No payout: first join (no LastSeenUnix), a negative gap, or a gap under MinSeconds.
+		Kill switch: Enabled = false (no payout, no card). OwnerFirst as TutorialConfig.FastStart. No Robux option. ]]
+	OfflineEarnings = {
+		Enabled = true,
+		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		Share = 0.25,
+		CapSeconds = 8 * 3600,
+		MinSeconds = 300,
+		PremiumBonus = 0.10,
+		ShowDelaySeconds = 6, -- the card: after the save loads (and after the onboarding hold)
 	},
 }
 
@@ -6709,6 +6769,8 @@ local MonetizationConfig = {
 		clan_war_participate = true,
 		collector = true, -- pending already multiplied at accrue time
 		manual_dropper = true, -- fixed click awards stay $10–25
+		offline = true, -- claude-bud JOB 29: the offline pay is already a share of the multiplied income rate
+		onboarding = true, -- claude-bud JOB 29: the FastStart starter payout is a fixed amount
 		atm_raid = true,
 		plot_oil = true, -- plot pump PendingCash via AccruePendingCash
 		ops = true, -- W3s2 Jobs: fixed job pay (OpsConfig.Rewards), never pass-multiplied
@@ -10996,6 +11058,86 @@ return ResearchConfig
         </Item>
         <Item class="ModuleScript" referent="62">
           <Properties>
+            <string name="Name">RetentionConfig</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 29 (2026-09-30): retention. The first-minute, offline and streak switches live beside the systems they
+	change (TutorialConfig.FastStart, EconomyConfig.OfflineEarnings, DailyRewardConfig.ShowTomorrow). This file holds:
+	  * the shared rollout rule;
+	  * the onboarding timing log;
+	  * the experience-notification opt-in, plus the state an external sender reads (docs/NOTIFICATIONS.md).
+]]
+
+local RunService = game:GetService("RunService")
+
+local RetentionConfig = {
+	--[[ Onboarding timing: seconds from join to each first-session step, once per session, NEW players only (the
+		profile's first join within AnalyticsConfig.Roblox.FunnelNewPlayerSeconds). The steps are Joined,
+		CharacterSpawned, BaseClaimed, Step1..7, FirstCash, FirstPurchase, FirstRecruit, FirstRobux and SessionEnd.
+		Sent as the Roblox custom event "OnboardingSeconds" (value = seconds, field = step). In Studio it also prints
+		"[FUNNEL] <step> t=<s>" for EVERY player, so a fresh-profile Studio run shows the times. Analytics only: it never
+		changes the game. ]]
+	Funnel = {
+		Enabled = true,
+		PrintInStudio = true,
+	},
+	--[[ Experience notifications (Roblox ExperienceNotificationService, a client API). Asked at a calm moment only:
+		  * TutorialDelaySeconds after the tutorial ends (finished or skipped), on foot, with no panel open;
+		  * or when the player taps TURN ON in Settings (NOTIFICATIONS row).
+		The automatic ask (never on join, never every join):
+		  * never in the first NotBeforeSeconds of a session;
+		  * at most once per session;
+		  * not again for DeclineCooldownDays after a decline (profile.NotifOptIn, saved);
+		  * never after an accept.
+		The client asks CanPromptOptInAsync, prompts, and reports the result on RequestNotifOptInResult (accepted /
+		declined / unavailable; analytics NotificationOptIn).
+		StateStore: one DataStore write per leave, with the fields an external sender reads (docs/NOTIFICATIONS.md). ]]
+	Notifications = {
+		Enabled = true,
+		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		NotBeforeSeconds = 60,
+		TutorialDelaySeconds = 25, -- after the Starter Pack offer's slot (3 s after the tutorial)
+		DeclineCooldownDays = 7,
+		Moments = { TutorialComplete = true } :: { [string]: boolean },
+		StateStore = "WE_NotifyState_v1",
+		MaxPerDay = 1, -- enforced by the sender (docs/NOTIFICATIONS.md); LastSentDay is its field
+	},
+}
+
+--[[ One owner-first rule for JOB 29's switches (a block with Enabled + OwnerFirst):
+	  * Enabled ~= true: off for everyone (the kill switch; the game exactly as before);
+	  * OwnerFirst == true: only AdminConfig.IsPlaytestOwner (UserId 470626172), plus every player in a Studio test
+	    session (so a fresh-profile Studio run sees it);
+	  * OwnerFirst == false: everyone.
+	(A boolean, not an old-style owner rollout string, which codebot_v101 keeps out of Configs; this
+	flag is new and Code Bot flips it when the owner is happy.) ]]
+function RetentionConfig.Live(block: any, userId: any): boolean
+	if typeof(block) ~= "table" or block.Enabled ~= true then
+		return false
+	end
+	if block.OwnerFirst ~= true then
+		return true
+	end
+	if RunService:IsStudio() then
+		return true
+	end
+	return (require(script.Parent.AdminConfig) :: any).IsPlaytestOwner(userId)
+end
+
+function RetentionConfig.NotificationsLiveFor(userId: any): boolean
+	return RetentionConfig.Live(RetentionConfig.Notifications, userId)
+end
+
+function RetentionConfig.OfflineLiveFor(userId: any): boolean
+	return RetentionConfig.Live((require(script.Parent.EconomyConfig) :: any).OfflineEarnings, userId)
+end
+
+return RetentionConfig
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="63">
+          <Properties>
             <string name="Name">RigConfig</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -11193,7 +11335,7 @@ return RigConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">SeasonConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11214,7 +11356,7 @@ return SeasonConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">SecurityConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11291,6 +11433,7 @@ local SecurityConfig = {
 		RequestTipSetting = { "boolean" }, -- claude-bud JOB 24 §5
 		RequestTipsReplay = {}, -- claude-bud JOB 24 §5
 		RequestBuyArmour = { "number" }, -- claude-bud JOB 26
+		RequestNotifOptInResult = { "string:12", "string?" }, -- claude-bud JOB 29: accepted / declined / unavailable, "settings"?
 		RequestArmourLook = { "boolean" }, -- claude-bud JOB 26 -- claude-bud JOB 24 §10 (AnalyticsConfig.Roblox.ClientEvents only)
 		RequestResearch = { "string", "string?" },
 		RequestMissileStrike = { "table" },
@@ -11318,7 +11461,7 @@ return SecurityConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">SocialConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11343,7 +11486,7 @@ return SocialConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">SoldierConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11409,7 +11552,7 @@ return SoldierConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">SoundConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11686,7 +11829,7 @@ return SoundConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">SpinnerConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11714,7 +11857,7 @@ return SpinnerConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">StreamingConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11748,7 +11891,7 @@ return StreamingConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">StructureVisualConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12249,7 +12392,7 @@ return StructureVisualConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">SupplyDropConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12321,7 +12464,7 @@ return SupplyDropConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">TerritoryConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12623,7 +12766,7 @@ return TerritoryConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">TrainingYardConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12756,7 +12899,7 @@ return TrainingYardConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">TutorialConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -13076,11 +13219,35 @@ function TutorialConfig.FirstMinutesLiveFor(userId: any): boolean
 	return false
 end
 
+--[[ claude-bud JOB 29 (2026-09-30): FAST START, the first 60 seconds. A new player (Command Center not bought, tutorial
+	not done) is already given a base on join (BaseService.AssignPlot) and moved onto it; with FastStart he lands
+	StandStuds in front of his OWN Command Center console instead of at the plot gate (~168 studs away), facing it, so
+	the first BUILD ($1,500 of the $10,000 start) is one step away with the gold line and the pulsing arrow on it.
+	His first BUILD pays StarterPayout (server, once per profile: profile.StarterPayoutDone, reason "onboarding") with a
+	coin burst flying to the cash pill. Until the tutorial is past step HoldPopupsUntilStep - 1 (the Command Center
+	step), nothing covers the screen: the daily-streak card, the nation picker and promos wait (WE_Onboarding = true on
+	the player while the hold is on; the server clears it). Kill switch: Enabled = false (the join exactly as before).
+	OwnerFirst = true: live only for the owner (and Studio test players) first; see RetentionConfig.Live. ]]
+TutorialConfig.FastStart = {
+	Enabled = true,
+	OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+	StandStuds = 7, -- in front of the console face (ConsolePromptDistance is 10)
+	StarterPayout = 1500,
+	HoldPopupsUntilStep = 3, -- WE_Onboarding clears once TutorialStep >= this (after the Command Center) or at 60 s
+	HoldMaxSeconds = 60, -- the hold never lasts longer than this, whatever the step
+	WelcomeText = "Welcome! Press BUILD on the gold console.", -- <= 42 characters, no key names
+	PayoutText = "Starter bonus!",
+}
+
+function TutorialConfig.FastStartLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live(TutorialConfig.FastStart, userId)
+end
+
 return TutorialConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">TycoonGuideConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -13302,7 +13469,7 @@ return TycoonGuideConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">VehicleCombatConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -13440,7 +13607,7 @@ return VehicleCombatConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">VehicleConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -14547,7 +14714,7 @@ return VehicleConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">VehicleWeaponConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -14777,7 +14944,7 @@ return VehicleWeaponConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">VisualAssetConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -16517,7 +16684,7 @@ return VisualAssetConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">WaterConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -16739,7 +16906,7 @@ return WaterConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="81">
+        <Item class="ModuleScript" referent="82">
           <Properties>
             <string name="Name">WeaponConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -16998,7 +17165,7 @@ return WeaponConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="82">
+        <Item class="ModuleScript" referent="83">
           <Properties>
             <string name="Name">WorldConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -18032,7 +18199,7 @@ return WorldConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">WorldDressConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -18267,7 +18434,7 @@ return WorldDressConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">WorldFillConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -18627,7 +18794,7 @@ return WorldFillConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">WorldLabelConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -18696,7 +18863,7 @@ return WorldLabelConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="86">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">XPBalanceConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -18787,7 +18954,7 @@ return XPBalanceConfig
           </Properties>
         </Item>
       </Item>
-      <Item class="ModuleScript" referent="87">
+      <Item class="ModuleScript" referent="88">
         <Properties>
           <string name="Name">Constants</string>
           <string name="Source"><![CDATA[--!strict
@@ -18881,6 +19048,7 @@ Constants.RemoteNames = {
 	RequestTipsReplay = "RequestTipsReplay", -- claude-bud JOB 24 §5: Settings -> show my building tips again
 	RequestBuyArmour = "RequestBuyArmour", -- claude-bud JOB 26: buy the next armour tier (ArmourService)
 	RequestArmourLook = "RequestArmourLook", -- claude-bud JOB 26: hide / show the armour look
+	RequestNotifOptInResult = "RequestNotifOptInResult", -- claude-bud JOB 29: the notification opt-in prompt result
 	CodeStateUpdate = "CodeStateUpdate",
 	-- Code Bot v102: RemoteFunction. Client -> server (code: string) -> { Result = "Success" | "AlreadyUsed" | "Invalid"
 	-- | "Expired" | "RateLimited" | "NotReady", Message: string }. Server validates + rate-limits (CodesService).
@@ -19005,7 +19173,7 @@ return Constants
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="88">
+      <Item class="ModuleScript" referent="89">
         <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[--!strict
@@ -19177,7 +19345,7 @@ return Remotes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="89">
+      <Item class="ModuleScript" referent="90">
         <Properties>
           <string name="Name">Types</string>
           <string name="Source"><![CDATA[--!strict
@@ -19584,11 +19752,11 @@ return {}
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="90">
+      <Item class="Folder" referent="91">
         <Properties>
           <string name="Name">Util</string>
         </Properties>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="92">
           <Properties>
             <string name="Name">ConsoleLocator</string>
             <string name="Source"><![CDATA[--!strict
@@ -19738,7 +19906,7 @@ return ConsoleLocator
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="92">
+        <Item class="ModuleScript" referent="93">
           <Properties>
             <string name="Name">FormationController</string>
             <string name="Source"><![CDATA[--!strict
@@ -20563,7 +20731,7 @@ return FormationController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="93">
+        <Item class="ModuleScript" referent="94">
           <Properties>
             <string name="Name">FormationMath</string>
             <string name="Source"><![CDATA[--!strict
@@ -20731,7 +20899,7 @@ return FormationMath
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="94">
+        <Item class="ModuleScript" referent="95">
           <Properties>
             <string name="Name">NationTexture</string>
             <string name="Source"><![CDATA[--!strict
@@ -20896,7 +21064,7 @@ return NationTexture
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="95">
+        <Item class="ModuleScript" referent="96">
           <Properties>
             <string name="Name">PlotFrame</string>
             <string name="Source"><![CDATA[--!strict
@@ -20978,7 +21146,7 @@ return PlotFrame
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="96">
+        <Item class="ModuleScript" referent="97">
           <Properties>
             <string name="Name">TycoonMath</string>
             <string name="Source"><![CDATA[--!strict
@@ -21636,7 +21804,7 @@ return TycoonMath
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="97">
+        <Item class="ModuleScript" referent="98">
           <Properties>
             <string name="Name">UIUtil</string>
             <string name="Source"><![CDATA[--!strict
@@ -22185,7 +22353,7 @@ return UIUtil
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="98">
+        <Item class="ModuleScript" referent="99">
           <Properties>
             <string name="Name">WaterRule</string>
             <string name="Source"><![CDATA[--!strict
@@ -22486,7 +22654,7 @@ return WaterRule
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="99">
+        <Item class="ModuleScript" referent="100">
           <Properties>
             <string name="Name">WorldLabel</string>
             <string name="Source"><![CDATA[--!strict
@@ -22930,11 +23098,11 @@ return WorldLabel
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="100">
+      <Item class="Folder" referent="101">
         <Properties>
           <string name="Name">Vendor</string>
         </Properties>
-        <Item class="ModuleScript" referent="101">
+        <Item class="ModuleScript" referent="102">
           <Properties>
             <string name="Name">Shake</string>
             <string name="Source"><![CDATA[--!strict
@@ -23487,7 +23655,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="102">
+        <Item class="ModuleScript" referent="103">
           <Properties>
             <string name="Name">Spring</string>
             <string name="Source"><![CDATA[--!strict
@@ -23597,7 +23765,7 @@ return Spring
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="103">
+        <Item class="ModuleScript" referent="104">
           <Properties>
             <string name="Name">Trove</string>
             <string name="Source"><![CDATA[--!strict
@@ -24400,15 +24568,15 @@ return {
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="104">
+  <Item class="ServerScriptService" referent="105">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="105">
+    <Item class="Folder" referent="106">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="Script" referent="106">
+      <Item class="Script" referent="107">
         <Properties>
           <string name="Name">Bootstrap</string>
           <token name="RunContext">0</token>
@@ -24475,6 +24643,7 @@ local CodesService = safeRequire("CodesService", Services.CodesService)
 local BuildingTips = safeRequire("BuildingTips", Services.BuildingTips) -- claude-bud JOB 24 §5
 local BaseSignService = safeRequire("BaseSignService", Services.BaseSignService) -- claude-bud JOB 25
 local ArmourService = safeRequire("ArmourService", Services.ArmourService) -- claude-bud JOB 26
+local RetentionService = safeRequire("RetentionService", Services.RetentionService) -- claude-bud JOB 29
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
@@ -24519,6 +24688,7 @@ local deps: { [string]: any } = {
 	ClanService = ClanService,
 	MonetizationService = MonetizationService,
 	TutorialService = TutorialService,
+	RetentionService = RetentionService, -- claude-bud JOB 29: FastStart / offline earnings / notification opt-in
 	BattlePassService = BattlePassService,
 	SoldierService = SoldierService,
 	BusinessService = BusinessService,
@@ -24608,6 +24778,7 @@ safeInit("NotificationService", NotificationService, deps)
 -- OnProfileLoaded fires at once for already-loaded players and used to call Notify before this Init → threw.
 -- (TutorialService.Init only needs BaseService.GetUpgradeChangedEvent, which works before BaseService.Init.)
 safeInit("TutorialService", TutorialService, deps)
+safeInit("RetentionService", RetentionService, deps) -- claude-bud JOB 29 (after Data / Tutorial; before the join hooks)
 safeInit("AntiExploitService", AntiExploitService, deps)
 safeInit("MonetizationService", MonetizationService, deps)
 safeInit("EconomyService", EconomyService, deps)
@@ -25022,11 +25193,11 @@ print("[WAR EMPIRE] CHECKLIST: 1) resetmap MANDATORY if void/dead-space persists
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="107">
+      <Item class="Folder" referent="108">
         <Properties>
           <string name="Name">Configs</string>
         </Properties>
-        <Item class="ModuleScript" referent="108">
+        <Item class="ModuleScript" referent="109">
           <Properties>
             <string name="Name">CodesConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -25121,7 +25292,7 @@ return CodesConfig
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="109">
+      <Item class="Script" referent="110">
         <Properties>
           <string name="Name">EarlyRemotes</string>
           <token name="RunContext">0</token>
@@ -25194,7 +25365,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 124)
+		player:SetAttribute("WE_Build", 125)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -25223,11 +25394,11 @@ print("[WAR EMPIRE] EarlyRemotes v63: WE_Remotes + leaderstats seed ready")
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="110">
+      <Item class="Folder" referent="111">
         <Properties>
           <string name="Name">Modules</string>
         </Properties>
-        <Item class="ModuleScript" referent="111">
+        <Item class="ModuleScript" referent="112">
           <Properties>
             <string name="Name">ActivityAnchors</string>
             <string name="Source"><![CDATA[--!strict
@@ -25568,7 +25739,7 @@ return ActivityAnchors
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="112">
+        <Item class="ModuleScript" referent="113">
           <Properties>
             <string name="Name">AirBodyRig</string>
             <string name="Source"><![CDATA[--!strict
@@ -26174,7 +26345,7 @@ return AirBodyRig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="113">
+        <Item class="ModuleScript" referent="114">
           <Properties>
             <string name="Name">AirOrdnance</string>
             <string name="Source"><![CDATA[--!strict
@@ -26446,7 +26617,7 @@ return AirOrdnance
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="114">
+        <Item class="ModuleScript" referent="115">
           <Properties>
             <string name="Name">ArmyController</string>
             <string name="Source"><![CDATA[--!strict
@@ -27021,7 +27192,7 @@ return ArmyController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="115">
+        <Item class="ModuleScript" referent="116">
           <Properties>
             <string name="Name">ArmyFollow</string>
             <string name="Source"><![CDATA[--!strict
@@ -28346,7 +28517,7 @@ return ArmyFollow
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="116">
+        <Item class="ModuleScript" referent="117">
           <Properties>
             <string name="Name">BaseGuards</string>
             <string name="Source"><![CDATA[--!strict
@@ -28984,7 +29155,7 @@ return BaseGuards
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="117">
+        <Item class="ModuleScript" referent="118">
           <Properties>
             <string name="Name">BaseLayout</string>
             <string name="Source"><![CDATA[--!strict
@@ -29133,7 +29304,7 @@ return BaseLayout
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="118">
+        <Item class="ModuleScript" referent="119">
           <Properties>
             <string name="Name">DesertFlora</string>
             <string name="Source"><![CDATA[--!strict
@@ -29475,7 +29646,7 @@ return DesertFlora
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="119">
+        <Item class="ModuleScript" referent="120">
           <Properties>
             <string name="Name">HollowBuildingBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -30736,11 +30907,11 @@ return HollowBuildingBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="120">
+        <Item class="Folder" referent="121">
           <Properties>
             <string name="Name">Installations</string>
           </Properties>
-          <Item class="ModuleScript" referent="121">
+          <Item class="ModuleScript" referent="122">
             <Properties>
               <string name="Name">Airfield</string>
               <string name="Source"><![CDATA[--!strict
@@ -30877,7 +31048,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="122">
+          <Item class="ModuleScript" referent="123">
             <Properties>
               <string name="Name">Checkpoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -31008,7 +31179,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="123">
+          <Item class="ModuleScript" referent="124">
             <Properties>
               <string name="Name">Helipad</string>
               <string name="Source"><![CDATA[--!strict
@@ -31116,7 +31287,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="124">
+          <Item class="ModuleScript" referent="125">
             <Properties>
               <string name="Name">MissileDefense</string>
               <string name="Source"><![CDATA[--!strict
@@ -31220,7 +31391,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="125">
+          <Item class="ModuleScript" referent="126">
             <Properties>
               <string name="Name">PowerStation</string>
               <string name="Source"><![CDATA[--!strict
@@ -31370,7 +31541,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="126">
+          <Item class="ModuleScript" referent="127">
             <Properties>
               <string name="Name">Radar</string>
               <string name="Source"><![CDATA[--!strict
@@ -31478,7 +31649,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="127">
+          <Item class="ModuleScript" referent="128">
             <Properties>
               <string name="Name">Watchtower</string>
               <string name="Source"><![CDATA[--!strict
@@ -31587,11 +31758,11 @@ end
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="128">
+        <Item class="Folder" referent="129">
           <Properties>
             <string name="Name">Interiors</string>
           </Properties>
-          <Item class="ModuleScript" referent="129">
+          <Item class="ModuleScript" referent="130">
             <Properties>
               <string name="Name">Armory</string>
               <string name="Source"><![CDATA[--!strict
@@ -31907,7 +32078,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="130">
+          <Item class="ModuleScript" referent="131">
             <Properties>
               <string name="Name">Barracks</string>
               <string name="Source"><![CDATA[--!strict
@@ -32120,7 +32291,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="131">
+          <Item class="ModuleScript" referent="132">
             <Properties>
               <string name="Name">CommandCenter</string>
               <string name="Source"><![CDATA[--!strict
@@ -32262,7 +32433,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="132">
+          <Item class="ModuleScript" referent="133">
             <Properties>
               <string name="Name">ResearchLab</string>
               <string name="Source"><![CDATA[--!strict
@@ -32658,7 +32829,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="133">
+          <Item class="ModuleScript" referent="134">
             <Properties>
               <string name="Name">SpecialForces</string>
               <string name="Source"><![CDATA[--!strict
@@ -32890,7 +33061,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="134">
+          <Item class="ModuleScript" referent="135">
             <Properties>
               <string name="Name">VehicleDepot</string>
               <string name="Source"><![CDATA[--!strict
@@ -33174,7 +33345,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="135">
+          <Item class="ModuleScript" referent="136">
             <Properties>
               <string name="Name">Warehouse</string>
               <string name="Source"><![CDATA[--!strict
@@ -33558,7 +33729,7 @@ end
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="136">
+        <Item class="ModuleScript" referent="137">
           <Properties>
             <string name="Name">MapDressing</string>
             <string name="Source"><![CDATA[--!strict
@@ -34194,7 +34365,7 @@ return MapDressing
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="137">
+        <Item class="ModuleScript" referent="138">
           <Properties>
             <string name="Name">MapSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -37603,7 +37774,7 @@ return MapSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="138">
+        <Item class="ModuleScript" referent="139">
           <Properties>
             <string name="Name">MoveDebug</string>
             <string name="Source"><![CDATA[--!strict
@@ -37926,7 +38097,7 @@ return MoveDebug
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="139">
+        <Item class="ModuleScript" referent="140">
           <Properties>
             <string name="Name">NationFlag</string>
             <string name="Source"><![CDATA[--!strict
@@ -38317,7 +38488,7 @@ return NationFlag
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="140">
+        <Item class="ModuleScript" referent="141">
           <Properties>
             <string name="Name">NightLights</string>
             <string name="Source"><![CDATA[--!strict
@@ -38653,7 +38824,7 @@ return NightLights
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="141">
+        <Item class="ModuleScript" referent="142">
           <Properties>
             <string name="Name">OutpostDefenders</string>
             <string name="Source"><![CDATA[--!strict
@@ -38937,11 +39108,11 @@ return OutpostDefenders
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="142">
+        <Item class="Folder" referent="143">
           <Properties>
             <string name="Name">POILayouts</string>
           </Properties>
-          <Item class="ModuleScript" referent="143">
+          <Item class="ModuleScript" referent="144">
             <Properties>
               <string name="Name">Frontier</string>
               <string name="Source"><![CDATA[--!strict
@@ -39141,7 +39312,7 @@ return Layouts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="144">
+          <Item class="ModuleScript" referent="145">
             <Properties>
               <string name="Name">Industry</string>
               <string name="Source"><![CDATA[--!strict
@@ -39406,7 +39577,7 @@ return Layouts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="145">
+          <Item class="ModuleScript" referent="146">
             <Properties>
               <string name="Name">Wilds</string>
               <string name="Source"><![CDATA[--!strict
@@ -39655,7 +39826,7 @@ return Layouts
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="146">
+        <Item class="ModuleScript" referent="147">
           <Properties>
             <string name="Name">PlazaAirstrike</string>
             <string name="Source"><![CDATA[--!strict
@@ -39780,7 +39951,7 @@ return PlazaAirstrike
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="147">
+        <Item class="ModuleScript" referent="148">
           <Properties>
             <string name="Name">PlazaBounty</string>
             <string name="Source"><![CDATA[--!strict
@@ -39896,7 +40067,7 @@ return PlazaBounty
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="148">
+        <Item class="ModuleScript" referent="149">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -40103,6 +40274,20 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	profile.FriendsPaid = nonNegInt(profile.FriendsPaid)
 	profile.ComebackPaidFor = nonNegInt(profile.ComebackPaidFor)
 	profile.ComebackPaidAt = nonNegInt(profile.ComebackPaidAt)
+	-- claude-bud JOB 29: retention bookkeeping (os.time() seconds; 0 / nil = never)
+	profile.LastSeenUnix = nonNegInt(profile.LastSeenUnix)
+	profile.PrevSeenUnix = nil -- session-only (DataService sets it on load)
+	profile.OfflineCapFullAt = nonNegInt(profile.OfflineCapFullAt)
+	profile.LastRaidedAt = nonNegInt(profile.LastRaidedAt)
+	profile.ArmyBoostUntil = nonNegInt(profile.ArmyBoostUntil)
+	profile.StarterPayoutDone = if profile.StarterPayoutDone == true then true else nil
+	if typeof(profile.NotifOptIn) == "table" then
+		local n = profile.NotifOptIn
+		local r = if n.Result == "accepted" or n.Result == "declined" or n.Result == "unavailable" then n.Result else nil
+		profile.NotifOptIn = { Result = r, PromptedAt = nonNegInt(n.PromptedAt), DeclinedAt = nonNegInt(n.DeclinedAt) }
+	else
+		profile.NotifOptIn = nil
+	end
 	-- claude-bud BOARDS: the notice boards' own counters (validated kills, the week, the biggest army)
 	if typeof(profile.LB) ~= "table" then
 		profile.LB = nil
@@ -40896,7 +41081,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="149">
+        <Item class="ModuleScript" referent="150">
           <Properties>
             <string name="Name">Projectile</string>
             <string name="Source"><![CDATA[--!strict
@@ -41094,7 +41279,7 @@ return Projectile
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="150">
+        <Item class="ModuleScript" referent="151">
           <Properties>
             <string name="Name">PurchaseStands</string>
             <string name="Source"><![CDATA[--!strict
@@ -41294,7 +41479,7 @@ return PurchaseStands
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="151">
+        <Item class="ModuleScript" referent="152">
           <Properties>
             <string name="Name">RemoteGate</string>
             <string name="Source"><![CDATA[--!strict
@@ -41548,7 +41733,7 @@ return RemoteGate
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="152">
+        <Item class="ModuleScript" referent="153">
           <Properties>
             <string name="Name">RemoteGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -41616,7 +41801,7 @@ return RemoteGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="153">
+        <Item class="ModuleScript" referent="154">
           <Properties>
             <string name="Name">RemoteSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -41689,6 +41874,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestTipsReplay, -- claude-bud JOB 24 §5
 	Constants.RemoteNames.RequestBuyArmour, -- claude-bud JOB 26
 	Constants.RemoteNames.RequestArmourLook, -- claude-bud JOB 26
+	Constants.RemoteNames.RequestNotifOptInResult, -- claude-bud JOB 29
 	Constants.RemoteNames.CodeStateUpdate,
 	Constants.RemoteNames.NationColorUpdate,
 	Constants.RemoteNames.RequestSetNation,
@@ -41980,7 +42166,7 @@ return RemoteSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="154">
+        <Item class="ModuleScript" referent="155">
           <Properties>
             <string name="Name">RigBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -42543,7 +42729,7 @@ return RigBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="155">
+        <Item class="ModuleScript" referent="156">
           <Properties>
             <string name="Name">SessionLock</string>
             <string name="Source"><![CDATA[--!strict
@@ -42802,7 +42988,7 @@ return SessionLock
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="156">
+        <Item class="ModuleScript" referent="157">
           <Properties>
             <string name="Name">SoldierController</string>
             <string name="Source"><![CDATA[--!strict
@@ -43415,7 +43601,7 @@ return SoldierController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="157">
+        <Item class="ModuleScript" referent="158">
           <Properties>
             <string name="Name">StreamPrefetch</string>
             <string name="Source"><![CDATA[--!strict
@@ -43686,7 +43872,7 @@ return StreamPrefetch
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="158">
+        <Item class="ModuleScript" referent="159">
           <Properties>
             <string name="Name">StructureKitBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -45343,7 +45529,7 @@ return StructureKitBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="159">
+        <Item class="ModuleScript" referent="160">
           <Properties>
             <string name="Name">StudioBuySmoke</string>
             <string name="Source"><![CDATA[--!strict
@@ -45634,7 +45820,7 @@ return StudioBuySmoke
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="160">
+        <Item class="ModuleScript" referent="161">
           <Properties>
             <string name="Name">TrainingYardBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -45845,7 +46031,7 @@ return TrainingYardBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="161">
+        <Item class="ModuleScript" referent="162">
           <Properties>
             <string name="Name">VIPLounge</string>
             <string name="Source"><![CDATA[--!strict
@@ -45970,7 +46156,7 @@ return VIPLounge
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="162">
+        <Item class="ModuleScript" referent="163">
           <Properties>
             <string name="Name">VehicleHealth</string>
             <string name="Source"><![CDATA[--!strict
@@ -46806,7 +46992,7 @@ return VehicleHealth
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="163">
+        <Item class="ModuleScript" referent="164">
           <Properties>
             <string name="Name">VehicleWaterGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -47666,7 +47852,7 @@ return VehicleWaterGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="164">
+        <Item class="ModuleScript" referent="165">
           <Properties>
             <string name="Name">Waterways</string>
             <string name="Source"><![CDATA[--!strict
@@ -48490,7 +48676,7 @@ return Waterways
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="165">
+        <Item class="ModuleScript" referent="166">
           <Properties>
             <string name="Name">WeaponAssetLoader</string>
             <string name="Source"><![CDATA[--!strict
@@ -48781,7 +48967,7 @@ return WeaponAssetLoader
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="166">
+        <Item class="ModuleScript" referent="167">
           <Properties>
             <string name="Name">WorldAtmosphere</string>
             <string name="Source"><![CDATA[--!strict
@@ -49123,7 +49309,7 @@ return WorldAtmosphere
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="167">
+        <Item class="ModuleScript" referent="168">
           <Properties>
             <string name="Name">WorldBounds</string>
             <string name="Source"><![CDATA[--!strict
@@ -49524,7 +49710,7 @@ return WorldBounds
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="168">
+        <Item class="ModuleScript" referent="169">
           <Properties>
             <string name="Name">WorldDress</string>
             <string name="Source"><![CDATA[--!strict
@@ -51195,7 +51381,7 @@ return WorldDress
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="169">
+        <Item class="ModuleScript" referent="170">
           <Properties>
             <string name="Name">WorldFill</string>
             <string name="Source"><![CDATA[--!strict
@@ -51792,7 +51978,7 @@ return WorldFill
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="170">
+        <Item class="ModuleScript" referent="171">
           <Properties>
             <string name="Name">WorldHygiene</string>
             <string name="Source"><![CDATA[--!strict
@@ -53051,7 +53237,7 @@ return WorldHygiene
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="171">
+        <Item class="ModuleScript" referent="172">
           <Properties>
             <string name="Name">WorldKits</string>
             <string name="Source"><![CDATA[--!strict
@@ -55253,7 +55439,7 @@ return WorldKits
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="172">
+        <Item class="ModuleScript" referent="173">
           <Properties>
             <string name="Name">WorldLabelPolicy</string>
             <string name="Source"><![CDATA[--!strict
@@ -55399,7 +55585,7 @@ return WorldLabelPolicy
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="173">
+        <Item class="ModuleScript" referent="174">
           <Properties>
             <string name="Name">WorldPOI</string>
             <string name="Source"><![CDATA[--!strict
@@ -56313,7 +56499,7 @@ return WorldPOI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="174">
+        <Item class="ModuleScript" referent="175">
           <Properties>
             <string name="Name">WorldTerrain</string>
             <string name="Source"><![CDATA[--!strict
@@ -57082,11 +57268,11 @@ return WorldTerrain
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="175">
+      <Item class="Folder" referent="176">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="176">
+        <Item class="ModuleScript" referent="177">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -57814,7 +58000,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="177">
+        <Item class="ModuleScript" referent="178">
           <Properties>
             <string name="Name">AirWeaponService</string>
             <string name="Source"><![CDATA[--!strict
@@ -58713,7 +58899,7 @@ return AirWeaponService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="178">
+        <Item class="ModuleScript" referent="179">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -58732,6 +58918,17 @@ return AirWeaponService
 	  * The client may report a few UI events (Roblox.ClientEvents: shop / Army opened, tips) on RequestAnalyticsEvent,
 	    rate-limited; nothing else from the client is ever logged.
 	Studio (or LogToOutput) still prints every event. Every Roblox call is pcall'd: analytics never breaks gameplay.
+
+	claude-bud JOB 29: onboarding steps (RetentionConfig.Funnel). AnalyticsService.Onboard(player, step) records the
+	seconds since this session's join, once per step per session:
+	  * logged on the SAME funnel above as the event "STEP:<step>" (AnalyticsConfig.Roblox.Funnel lists which row);
+	  * sent as the custom event ONBOARD_STEP ("OnboardingSeconds", value = seconds, field = step) for NEW players only
+	    (same rule as the funnel; marks made before the save loads wait and are sent once it is known);
+	  * printed "[FUNNEL] <step> t=<s>" in Studio for everyone, plus a one-line summary on leave.
+	Steps come from:
+	  * RetentionService: Joined, CharacterSpawned;
+	  * TutorialService: BaseClaimed, Tut_<step Id>, TutorialDone / TutorialSkipped;
+	  * this Log (ONBOARD_FROM_EVENT): first cash collect, first purchase, first recruit, first Robux, SessionEnd.
 ]]
 
 local Players = game:GetService("Players")
@@ -58739,6 +58936,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local AnalyticsConfig = require(ReplicatedStorage:WaitForChild("Shared").Configs.AnalyticsConfig)
+local RetentionConfig = require(ReplicatedStorage:WaitForChild("Shared").Configs.RetentionConfig) -- claude-bud JOB 29
 
 local AnalyticsService = {}
 AnalyticsService.Stats = { Custom = 0, Funnel = 0, Economy = 0, Dropped = 0, Client = 0 }
@@ -58922,6 +59120,106 @@ function AnalyticsService.Economy(player: Player, flow: string, amount: number, 
 	row.Balance = balance
 end
 
+-- ── onboarding timing (claude-bud JOB 29) ─────────────────────────────────────────────────────────────────────
+local ONBOARD_FROM_EVENT: { [string]: string } = {
+	CASH_COLLECT = "FirstCash",
+	UPGRADE_PURCHASED = "FirstPurchase",
+	FIRST_UPGRADE = "FirstPurchase",
+	SOLDIER_RECRUIT = "FirstRecruit",
+	PURCHASE_RECEIPT = "FirstRobux",
+}
+local onboardAt: { [number]: number } = {} -- userId -> os.clock() at join (the timing zero)
+local onboardMarks: { [number]: { { Step: string, T: number } } } = {}
+local onboardSeen: { [number]: { [string]: boolean } } = {}
+local onboardNew: { [number]: boolean } = {} -- nil = not decided yet (save not loaded)
+
+local function onboardIsNew(player: Player): boolean?
+	local uid = player.UserId
+	if onboardNew[uid] ~= nil then
+		return onboardNew[uid]
+	end
+	local ds = dataService()
+	local profile = ds and ds.GetProfile and ds.GetProfile(player)
+	if profile == nil then
+		return nil
+	end
+	local first = tonumber(profile.FirstJoinUnix) or 0
+	local isNew = first > 0 and os.time() - first <= (tonumber(RC and RC.FunnelNewPlayerSeconds) or 900)
+	onboardNew[uid] = isNew
+	return isNew
+end
+
+local function onboardSend(player: Player)
+	local marks = onboardMarks[player.UserId]
+	if marks == nil or #marks == 0 then
+		return
+	end
+	local isNew = onboardIsNew(player)
+	if isNew == nil then
+		return -- wait for the save
+	end
+	onboardMarks[player.UserId] = {}
+	if not isNew then
+		return
+	end
+	for _, m in ipairs(marks) do
+		pcall(funnel, player, "STEP:" .. m.Step) -- the same Roblox funnel (AnalyticsConfig.Roblox.Funnel), at the real moment
+		pcall(custom, player, "ONBOARD_STEP", { step = m.Step, seconds = math.floor(m.T * 10 + 0.5) / 10 })
+	end
+end
+
+--[[ Seconds from this session's join to `step`, once per session (RetentionConfig.Funnel). Analytics only. ]]
+function AnalyticsService.Onboard(player: Player, step: string)
+	local F: any = (RetentionConfig :: any).Funnel
+	if typeof(F) ~= "table" or F.Enabled ~= true or typeof(step) ~= "string" then
+		return
+	end
+	local uid = player.UserId
+	if onboardAt[uid] == nil then
+		onboardAt[uid] = os.clock()
+	end
+	local seen = onboardSeen[uid]
+	if seen == nil then
+		seen = {}
+		onboardSeen[uid] = seen
+	end
+	if seen[step] then
+		return
+	end
+	seen[step] = true
+	local t = os.clock() - onboardAt[uid]
+	local marks = onboardMarks[uid]
+	if marks == nil then
+		marks = {}
+		onboardMarks[uid] = marks
+	end
+	table.insert(marks, { Step = step, T = t })
+	if F.PrintInStudio == true and RunService:IsStudio() then
+		print(string.format("[FUNNEL] %s t=%.1fs user=%d", step, t, uid))
+	end
+	onboardSend(player)
+end
+
+local function onboardEnd(player: Player)
+	local uid = player.UserId
+	if onboardAt[uid] ~= nil then
+		pcall(AnalyticsService.Onboard, player, "SessionEnd")
+		local F: any = (RetentionConfig :: any).Funnel
+		if typeof(F) == "table" and F.PrintInStudio == true and RunService:IsStudio() and onboardSeen[uid] then
+			local steps = {}
+			for step in pairs(onboardSeen[uid]) do
+				table.insert(steps, step)
+			end
+			table.sort(steps)
+			print(string.format("[FUNNEL] session end user=%d steps=%s", uid, table.concat(steps, ",")))
+		end
+	end
+	onboardAt[uid] = nil
+	onboardMarks[uid] = nil
+	onboardSeen[uid] = nil
+	onboardNew[uid] = nil
+end
+
 function AnalyticsService.SetSink(fn: (eventName: string, userId: number?, props: { [string]: any }?) -> ())
 	sink = fn
 end
@@ -58959,9 +59257,16 @@ function AnalyticsService.Log(eventName: string, userId: number?, props: { [stri
 			custom(player, "SESSION_END", { minutes = minutes, bucket = bucketOf(minutes) })
 		end
 		flush(player.UserId)
+		onboardEnd(player) -- claude-bud JOB 29
 	end
 	pcall(funnel, player, eventName)
 	pcall(custom, player, eventName, props)
+	local step = ONBOARD_FROM_EVENT[eventName] -- claude-bud JOB 29: onboarding timing
+	if step then
+		pcall(AnalyticsService.Onboard, player, step)
+	elseif eventName == "PLAYER_JOIN" then
+		pcall(onboardSend, player) -- the save is loaded now: send the marks made before it
+	end
 end
 
 local started = false
@@ -58982,6 +59287,11 @@ function AnalyticsService.Init()
 	Players.PlayerRemoving:Connect(function(p: Player)
 		pcall(flush, p.UserId)
 		joinedAt[p.UserId] = nil
+		task.defer(onboardEnd, p) -- claude-bud JOB 29 (PLAYER_LEAVE normally ends it first; this only cleans up)
+	end)
+	-- claude-bud JOB 29: the timing zero is the real join (PlayerAdded), before the save loads
+	Players.PlayerAdded:Connect(function(p: Player)
+		onboardAt[p.UserId] = os.clock()
 	end)
 	-- a cancelled Robux prompt (analytics only: never a grant, never trusted for anything else)
 	pcall(function()
@@ -59051,7 +59361,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="179">
+        <Item class="ModuleScript" referent="180">
           <Properties>
             <string name="Name">AntiExploitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -59172,7 +59482,7 @@ return AntiExploitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="180">
+        <Item class="ModuleScript" referent="181">
           <Properties>
             <string name="Name">ArmourService</string>
             <string name="Source"><![CDATA[--!strict
@@ -59450,7 +59760,7 @@ return ArmourService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="181">
+        <Item class="ModuleScript" referent="182">
           <Properties>
             <string name="Name">BankRaidService</string>
             <string name="Source"><![CDATA[--!strict
@@ -60372,7 +60682,7 @@ return BankRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="182">
+        <Item class="ModuleScript" referent="183">
           <Properties>
             <string name="Name">BaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -60893,6 +61203,14 @@ function BaseService.TeleportToPlot(player: Player, onArrived: ((boolean) -> ())
 	local cf: CFrame? = nil
 	if plotId ~= nil then
 		cf = BaseService.GetPlotSpawnCFrame(plotId)
+		-- claude-bud JOB 29 FastStart: a new player lands in front of his own Command Center console (nil = as before)
+		local okR, RS = pcall(require, script.Parent.RetentionService)
+		if okR and typeof(RS) == "table" and (RS :: any).FastStartCFrame then
+			local okC, fast = pcall((RS :: any).FastStartCFrame, player, profile, plotId)
+			if okC and typeof(fast) == "CFrame" then
+				cf = fast
+			end
+		end
 	else
 		cf = noPlotDropCFrame()
 	end
@@ -62323,7 +62641,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 124)
+			player:SetAttribute("WE_Build", 125)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -62474,7 +62792,7 @@ return BaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="183">
+        <Item class="ModuleScript" referent="184">
           <Properties>
             <string name="Name">BaseSignService</string>
             <string name="Source"><![CDATA[--!strict
@@ -62700,7 +63018,7 @@ return BaseSignService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="184">
+        <Item class="ModuleScript" referent="185">
           <Properties>
             <string name="Name">BattlePassService</string>
             <string name="Source"><![CDATA[--!strict
@@ -63062,7 +63380,7 @@ return BattlePassService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="185">
+        <Item class="ModuleScript" referent="186">
           <Properties>
             <string name="Name">BuildingTips</string>
             <string name="Source"><![CDATA[--!strict
@@ -63202,7 +63520,7 @@ return BuildingTips
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="186">
+        <Item class="ModuleScript" referent="187">
           <Properties>
             <string name="Name">BusinessService</string>
             <string name="Source"><![CDATA[--!strict
@@ -63756,7 +64074,7 @@ return BusinessService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="187">
+        <Item class="ModuleScript" referent="188">
           <Properties>
             <string name="Name">CaptureStipendService</string>
             <string name="Source"><![CDATA[--!strict
@@ -63863,7 +64181,7 @@ return CaptureStipendService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="188">
+        <Item class="ModuleScript" referent="189">
           <Properties>
             <string name="Name">ClanService</string>
             <string name="Source"><![CDATA[--!strict
@@ -64499,7 +64817,7 @@ return ClanService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="189">
+        <Item class="ModuleScript" referent="190">
           <Properties>
             <string name="Name">ClanWarService</string>
             <string name="Source"><![CDATA[--!strict
@@ -64961,7 +65279,7 @@ return ClanWarService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="190">
+        <Item class="ModuleScript" referent="191">
           <Properties>
             <string name="Name">CodesService</string>
             <string name="Source"><![CDATA[--!strict
@@ -65298,7 +65616,7 @@ return CodesService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="191">
+        <Item class="ModuleScript" referent="192">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -68325,7 +68643,7 @@ end
 return CombatService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="192">
+          <Item class="ModuleScript" referent="193">
             <Properties>
               <string name="Name">CombatAssist</string>
               <string name="Source"><![CDATA[--!strict
@@ -68546,7 +68864,7 @@ return CombatAssist
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="193">
+          <Item class="ModuleScript" referent="194">
             <Properties>
               <string name="Name">CombatDamage</string>
               <string name="Source"><![CDATA[--!strict
@@ -68670,7 +68988,7 @@ return CombatDamage
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="194">
+          <Item class="ModuleScript" referent="195">
             <Properties>
               <string name="Name">CombatFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -68908,7 +69226,7 @@ return CombatFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="195">
+          <Item class="ModuleScript" referent="196">
             <Properties>
               <string name="Name">CombatNPC</string>
               <string name="Source"><![CDATA[--!strict
@@ -69682,7 +70000,7 @@ return CombatNPC
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="196">
+          <Item class="ModuleScript" referent="197">
             <Properties>
               <string name="Name">CombatWeaponLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -69736,7 +70054,7 @@ return CombatWeaponLogic
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="197">
+        <Item class="ModuleScript" referent="198">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -69949,7 +70267,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 124)
+		player:SetAttribute("WE_Build", 125)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -70072,6 +70390,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 
 	;(profile :: any).PrevJoinUnix = profile.LastJoinUnix -- claude-bud JOB 13: the comeback reward reads the previous join
+	;(profile :: any).PrevSeenUnix = (profile :: any).LastSeenUnix -- claude-bud JOB 29: offline earnings read the last save
 	profile.LastJoinUnix = os.time()
 	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
 		profile.FirstJoinUnix = os.time()
@@ -70090,7 +70409,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=124",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=125",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -70153,6 +70472,7 @@ local function writeProfile(userId: number, profile: PlayerProfile, releaseLock:
 		end
 		return true -- nothing to persist (Studio without API access)
 	end
+	;(profile :: any).LastSeenUnix = os.time() -- claude-bud JOB 29: the last time this save was written (offline earnings)
 	local snapshot = ProfileSchema.DeepCopy(profile)
 	lastWriteAt[userId] = os.clock() -- claude-bud JOB 24 §4d
 	local ok, err = retryAsync("SetAsync", function()
@@ -70276,7 +70596,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="198">
+        <Item class="ModuleScript" referent="199">
           <Properties>
             <string name="Name">EconomyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -70971,7 +71291,7 @@ return EconomyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="199">
+        <Item class="ModuleScript" referent="200">
           <Properties>
             <string name="Name">EngagementService</string>
             <string name="Source"><![CDATA[--!strict
@@ -71684,7 +72004,7 @@ return EngagementService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="200">
+        <Item class="ModuleScript" referent="201">
           <Properties>
             <string name="Name">FallSafetyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -71798,7 +72118,7 @@ return FallSafetyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="201">
+        <Item class="ModuleScript" referent="202">
           <Properties>
             <string name="Name">GameFeelService</string>
             <string name="Source"><![CDATA[--!strict
@@ -72033,7 +72353,7 @@ return GameFeelService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="202">
+        <Item class="ModuleScript" referent="203">
           <Properties>
             <string name="Name">GateDefenseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -74564,7 +74884,7 @@ return GateDefenseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="203">
+        <Item class="ModuleScript" referent="204">
           <Properties>
             <string name="Name">ManualDropperService</string>
             <string name="Source"><![CDATA[--!strict
@@ -75276,7 +75596,7 @@ return ManualDropperService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="204">
+        <Item class="ModuleScript" referent="205">
           <Properties>
             <string name="Name">MissileStrikeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -76006,7 +76326,7 @@ return MissileStrikeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="205">
+        <Item class="ModuleScript" referent="206">
           <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -76072,6 +76392,49 @@ local TerritoryService: any = nil
 local function yyyymmdd(unix: number): number
 	local t = os.date("!*t", unix)
 	return t.year * 10000 + t.month * 100 + t.day
+end
+
+-- claude-bud JOB 29: the streak strip / tomorrow data (DailyRewardConfig.ShowTomorrow), or nil when it is not live
+local function streakStrip(player: Player, profile: any, claimedToday: boolean): { [string]: any }?
+	if not DailyRewardConfig.ShowTomorrowLiveFor(player.UserId) then
+		return nil
+	end
+	local days = DailyRewardConfig.StreakResetsAfterDay
+	local streak = math.max(0, math.floor(tonumber(profile.DailyLogin and profile.DailyLogin.Streak) or 0))
+	local cash: { number } = {}
+	local big: { boolean } = {}
+	for d = 1, days do
+		local r = DailyRewardConfig.Rewards[d]
+		cash[d] = if r then r.Cash else 0
+		big[d] = DailyRewardConfig.BigDays[d] == true
+	end
+	-- tomorrow's day: the day after today's claim, or the day after the one he could claim today
+	local last = tonumber(profile.DailyLogin and profile.DailyLogin.LastClaimDay) or 0
+	if not claimedToday and DailyRewardConfig.MissedDayResetsStreak and last ~= 0 and last ~= yyyymmdd(os.time() - 86400) then
+		streak = 0 -- a missed day: the next claim starts again at day 1
+	end
+	local nextToClaim = (streak % days) + 1
+	local tomorrowDay = if claimedToday then nextToClaim else (nextToClaim % days) + 1
+	local offlineCap = 0
+	local okR, RS = pcall(function(): any
+		return require(script.Parent.RetentionService)
+	end)
+	if okR and RS and RS.OfflineCapCash then
+		local okC, v = pcall(RS.OfflineCapCash, player)
+		offlineCap = if okC and typeof(v) == "number" then math.floor(v) else 0
+	end
+	local boost = DailyRewardConfig.Day7Boost
+	return {
+		Days = days,
+		Today = if claimedToday then (if streak == 0 then 1 else streak) else nextToClaim,
+		Claimed = claimedToday,
+		Cash = cash,
+		Big = big,
+		TomorrowDay = tomorrowDay,
+		TomorrowCash = cash[tomorrowDay] or 0,
+		OfflineCap = offlineCap,
+		Day7Boost = if boost.Enabled == true then boost.Label else nil,
+	}
 end
 
 local function ensureDaily(profile: Types.PlayerProfile)
@@ -76645,6 +77008,12 @@ local function buildPayload(player: Player, profile: Types.PlayerProfile): (Type
 		},
 	}
 	table.insert(sig, if already then "L1" else "L0")
+	-- claude-bud JOB 29: the 7-day strip + tomorrow goals ride on the payload (nil while ShowTomorrow is off)
+	local strip = streakStrip(player, profile, already)
+	if strip then
+		(payload :: any).Streak7 = strip
+		table.insert(sig, "S" .. tostring(strip.Today) .. ":" .. tostring(strip.OfflineCap))
+	end
 	return payload, table.concat(sig, "|")
 end
 
@@ -76875,7 +77244,8 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 	return true, nil
 end
 
-function MissionService.ClaimDailyLogin(player: Player): (boolean, string?)
+-- quiet (claude-bud JOB 29): no "Day N reward" toast (the caller shows the streak card instead)
+function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boolean, string?)
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return false, "NoProfile"
@@ -76909,15 +77279,27 @@ function MissionService.ClaimDailyLogin(player: Player): (boolean, string?)
 		if reward.XP > 0 then
 			XPService.AddXP(player, reward.XP, "daily")
 		end
-		if NotificationService then
+		if NotificationService and quiet ~= true then
+			-- claude-bud JOB 29 (DailyRewardConfig.ShowTomorrow): tomorrow's reward wherever the streak is shown
+			local nextReward = DailyRewardConfig.Rewards[(daily.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1]
 			NotificationService.Notify(
 				player,
-				string.format("Day %d reward: $%d", daily.Streak, reward.Cash),
+				if DailyRewardConfig.ShowTomorrow == true and nextReward
+					then string.format("Day %d: +$%s. Tomorrow: $%s", daily.Streak, commas(reward.Cash), commas(nextReward.Cash))
+					else string.format("Day %d reward: $%d", daily.Streak, reward.Cash),
 				"Reward"
 			)
 		end
 		if AnalyticsService then
 			AnalyticsService.Log(AnalyticsConfig.Events.DAILY_REWARD_CLAIMED, player.UserId, { day = daily.Streak })
+			AnalyticsService.Log("STREAK_DAY", player.UserId, { day = daily.Streak }) -- claude-bud JOB 29
+		end
+		-- claude-bud JOB 29: day 7 = an army damage boost for a while (no Robux; SquadOrdersService reads it)
+		local boost = DailyRewardConfig.Day7Boost
+		if daily.Streak == DailyRewardConfig.StreakResetsAfterDay and boost.Enabled == true and DailyRewardConfig.ShowTomorrowLiveFor(player.UserId) then
+			local untilUnix = os.time() + math.max(1, math.floor(tonumber(boost.Minutes) or 30)) * 60
+			;(profile :: any).ArmyBoostUntil = untilUnix
+			player:SetAttribute("WE_ArmyBoostUntil", untilUnix)
 		end
 	end
 	DataService.MarkDirty(player)
@@ -77084,12 +77466,30 @@ function MissionService.Init(deps: { [string]: any })
 				if player.Parent == nil then
 					return
 				end
+				-- claude-bud JOB 29: nothing covers a new player's screen before the Command Center (FastStart hold)
+				local okR, RS = pcall(function(): any
+					return require(script.Parent.RetentionService)
+				end)
+				if okR and RS and RS.WaitOnboarding and not RS.WaitOnboarding(player, 90) then
+					return
+				end
 				local prof = DataService.GetProfile(player)
 				if prof == nil or prof.DailyLogin == nil or prof.DailyLogin.LastClaimDay == yyyymmdd(os.time()) then
 					return
 				end
-				local okClaim = MissionService.ClaimDailyLogin(player)
-				if okClaim and NotificationService then
+				local card = DailyRewardConfig.ShowTomorrowLiveFor(player.UserId)
+				local okClaim = MissionService.ClaimDailyLogin(player, card)
+				if okClaim and card then
+					-- claude-bud JOB 29: ONE card with the 7-day strip and "Come back tomorrow for $Y"
+					local strip = streakStrip(player, prof, true)
+					local ev = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.FeaturePush)
+					if strip and ev and ev:IsA("RemoteEvent") then
+						strip.Boost = (tonumber((prof :: any).ArmyBoostUntil) or 0) > os.time() and prof.DailyLogin.Streak == DailyRewardConfig.StreakResetsAfterDay
+						strip.BoostMinutes = DailyRewardConfig.Day7Boost.Minutes
+						strip.Seconds = DailyRewardConfig.CardSeconds
+						;(ev :: RemoteEvent):FireClient(player, "Streak", strip)
+					end
+				elseif okClaim and NotificationService then
 					local day = prof.DailyLogin.Streak
 					local nextDay = (day % DailyRewardConfig.StreakResetsAfterDay) + 1
 					local nextReward = DailyRewardConfig.Rewards[nextDay]
@@ -77108,7 +77508,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="206">
+        <Item class="ModuleScript" referent="207">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -78881,7 +79281,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="207">
+        <Item class="ModuleScript" referent="208">
           <Properties>
             <string name="Name">MoneyCollectorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -79686,6 +80086,7 @@ local function completeRaid(thief: Player, victim: Player, hold: RaidHold): bool
 		return false
 	end
 	-- 7. persist + mirror
+	;(vProfile :: any).LastRaidedAt = nowUnix -- claude-bud JOB 29: read by the notification state (docs/NOTIFICATIONS.md)
 	markDirty(victim)
 	markDirty(thief)
 	pcall(function()
@@ -80264,7 +80665,7 @@ return MoneyCollectorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="208">
+        <Item class="ModuleScript" referent="209">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -80833,7 +81234,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="209">
+        <Item class="ModuleScript" referent="210">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -80906,7 +81307,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="210">
+        <Item class="ModuleScript" referent="211">
           <Properties>
             <string name="Name">OpsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -82080,7 +82481,7 @@ end
 return OpsService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="211">
+          <Item class="ModuleScript" referent="212">
             <Properties>
               <string name="Name">OpsCargo</string>
               <string name="Source"><![CDATA[--!strict
@@ -82553,7 +82954,7 @@ return OpsCargo
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="212">
+          <Item class="ModuleScript" referent="213">
             <Properties>
               <string name="Name">OpsDirector</string>
               <string name="Source"><![CDATA[--!strict
@@ -82701,7 +83102,7 @@ return OpsDirector
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="213">
+          <Item class="ModuleScript" referent="214">
             <Properties>
               <string name="Name">OpsGarrison</string>
               <string name="Source"><![CDATA[--!strict
@@ -83198,7 +83599,7 @@ return OpsGarrison
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="214">
+          <Item class="ModuleScript" referent="215">
             <Properties>
               <string name="Name">OpsKinds</string>
               <string name="Source"><![CDATA[--!strict
@@ -84027,7 +84428,7 @@ return OpsKinds
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="215">
+          <Item class="ModuleScript" referent="216">
             <Properties>
               <string name="Name">OpsRewards</string>
               <string name="Source"><![CDATA[--!strict
@@ -84325,7 +84726,7 @@ return OpsRewards
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="216">
+          <Item class="ModuleScript" referent="217">
             <Properties>
               <string name="Name">OpsSites</string>
               <string name="Source"><![CDATA[--!strict
@@ -84808,7 +85209,7 @@ return OpsSites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="217">
+          <Item class="ModuleScript" referent="218">
             <Properties>
               <string name="Name">OpsZones</string>
               <string name="Source"><![CDATA[--!strict
@@ -84997,7 +85398,7 @@ return OpsZones
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="218">
+        <Item class="ModuleScript" referent="219">
           <Properties>
             <string name="Name">PlotOilPumpService</string>
             <string name="Source"><![CDATA[--!strict
@@ -85455,7 +85856,7 @@ return PlotOilPumpService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="219">
+        <Item class="ModuleScript" referent="220">
           <Properties>
             <string name="Name">PremiumPadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -85896,7 +86297,7 @@ return PremiumPadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="220">
+        <Item class="ModuleScript" referent="221">
           <Properties>
             <string name="Name">PremiumWeaponService</string>
             <string name="Source"><![CDATA[--!strict
@@ -86374,7 +86775,7 @@ return PremiumWeaponService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="221">
+        <Item class="ModuleScript" referent="222">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -87038,7 +87439,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="222">
+        <Item class="ModuleScript" referent="223">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -87090,7 +87491,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="223">
+        <Item class="ModuleScript" referent="224">
           <Properties>
             <string name="Name">ResearchService</string>
             <string name="Source"><![CDATA[--!strict
@@ -87633,7 +88034,475 @@ return ResearchService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="224">
+        <Item class="ModuleScript" referent="225">
+          <Properties>
+            <string name="Name">RetentionService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 29 (2026-09-30): retention, server side. Everything here is decided on the server; the client only
+	shows cards and reports an opt-in result. Each part has a kill switch and ships OwnerFirst (RetentionConfig.Live).
+
+	1. FAST START (TutorialConfig.FastStart)
+	   * FastStartCFrame: BaseService.TeleportToPlot lands a new player StandStuds in front of his OWN Command Center
+	     console. "New" = the Command Center is not bought and the tutorial is not done.
+	   * The onboarding hold: the player attribute WE_Onboarding = true until the tutorial is past the Command Center
+	     step, or HoldMaxSeconds. While it is on, the daily-streak card, the welcome-back card, the nation picker and
+	     promos wait (WaitOnboarding).
+	   * The starter payout: the first Command Center L1 of a profile still in the tutorial pays StarterPayout
+	     (reason "onboarding", once per profile: StarterPayoutDone) and a FeaturePush "StarterPayout" (the coin burst).
+	2. OFFLINE EARNINGS (EconomyConfig.OfflineEarnings), on load, with the live passive tick's formula:
+	   * away = os.time() - PrevSeenUnix (the save's last write), capped at CapSeconds;
+	   * no payout on a first join, a negative gap, or a gap under MinSeconds;
+	   * pay = ComputePassiveIncomePerTick x GetCashMult("passive") / TickSeconds x away x Share, x Premium bonus;
+	   * paid straight into PendingCash (the ATM), reason "offline" (never multiplied twice);
+	   * then FeaturePush "WelcomeBack" (the "Welcome back: +$X while away" card) after ShowDelaySeconds and the hold.
+	3. NOTIFICATIONS (RetentionConfig.Notifications)
+	   * GoodMoment(player, "TutorialComplete") sends FeaturePush "NotifOptIn":
+	     - TutorialDelaySeconds after the tutorial ends;
+	     - at most once per session;
+	     - never in the first NotBeforeSeconds;
+	     - never within DeclineCooldownDays of a decline;
+	     - never after an accept.
+	   * Settings' TURN ON asks the client directly; it reports with source "settings".
+	   * RequestNotifOptInResult records the answer in profile.NotifOptIn (analytics NotificationOptIn).
+	   * On leave, one DataStore write (StateStore) with what an external sender reads (docs/NOTIFICATIONS.md), only
+	     for a player who accepted.
+]]
+
+local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Constants = require(Shared.Constants)
+local TutorialConfig = require(Shared.Configs.TutorialConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
+local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
+local RetentionConfig = require(Shared.Configs.RetentionConfig)
+local ConsoleLocator = require(Shared.Util.ConsoleLocator)
+
+local RetentionService = {}
+
+local DataService: any = nil
+local EconomyService: any = nil
+local BaseService: any = nil
+local RemoteSetup: any = nil
+local RateLimitService: any = nil
+local AnalyticsService: any = nil
+
+local sessionAt: { [number]: number } = {} -- userId -> os.clock() at join
+local promptedThisSession: { [number]: boolean } = {}
+local awaitingResult: { [number]: boolean } = {}
+local holdToken: { [number]: number } = {}
+
+local ONBOARD_ATTR = "WE_Onboarding"
+
+local function push(player: Player, kind: string, data: any)
+	local ev = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.FeaturePush)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireClient(player, kind, data)
+	end
+end
+
+local function log(player: Player, eventName: string, props: { [string]: any }?)
+	if AnalyticsService and AnalyticsService.Log then
+		pcall(AnalyticsService.Log, eventName, player.UserId, props)
+	end
+end
+
+local function offlineCfg(): any
+	return (EconomyConfig :: any).OfflineEarnings
+end
+
+-- ── 1. FAST START ──────────────────────────────────────────────────────────────────────────────────────────────────
+local function isNewPlayer(profile: any): boolean
+	if typeof(profile) ~= "table" or profile.TutorialComplete == true then
+		return false
+	end
+	local cc = if typeof(profile.BaseUpgrades) == "table" then tonumber(profile.BaseUpgrades.CommandCenter) or 0 else 0
+	return cc < 1
+end
+
+--[[ Where BaseService.TeleportToPlot puts a new player: StandStuds in front of the face of HIS plot's Command Center
+	console, facing it, at the height ConsoleLocator.StandCFrame uses. nil = the normal plot spawn (FastStart off or not
+	live for him, not a new player, or no console found on the plot yet). Pure reads; no yield. ]]
+function RetentionService.FastStartCFrame(player: Player, profile: any, plotId: number?): CFrame?
+	if plotId == nil or not TutorialConfig.FastStartLiveFor(player.UserId) or not isNewPlayer(profile) then
+		return nil
+	end
+	local part = ConsoleLocator.Find(plotId, "CommandCenter")
+	if part == nil then
+		return nil
+	end
+	local stand = math.clamp(tonumber(TutorialConfig.FastStart.StandStuds) or 7, 3, 9)
+	local at = (part.CFrame * CFrame.new(0, 1.3, -stand)).Position + Vector3.new(0, 1.5, 0)
+	local look = Vector3.new(part.Position.X, at.Y, part.Position.Z)
+	if (look - at).Magnitude < 0.5 then
+		return CFrame.new(at)
+	end
+	return CFrame.lookAt(at, look)
+end
+
+local function setHold(player: Player, on: boolean)
+	pcall(function()
+		if (player:GetAttribute(ONBOARD_ATTR) == true) ~= on then
+			player:SetAttribute(ONBOARD_ATTR, if on then true else nil)
+		end
+	end)
+end
+
+-- true while this player's screen must stay clear (FastStart hold)
+function RetentionService.IsOnboarding(player: Player): boolean
+	return player:GetAttribute(ONBOARD_ATTR) == true
+end
+
+--[[ Yields until the onboarding hold is off (or maxSeconds, or the player left). Returns false when the player left. ]]
+function RetentionService.WaitOnboarding(player: Player, maxSeconds: number?): boolean
+	local left = math.max(0, tonumber(maxSeconds) or 90)
+	while player.Parent and player:GetAttribute(ONBOARD_ATTR) == true and left > 0 do
+		task.wait(0.5)
+		left -= 0.5
+	end
+	return player.Parent ~= nil
+end
+
+-- TutorialService tells us each step change (after it is saved)
+function RetentionService.OnTutorialStep(player: Player, step: number, complete: boolean)
+	if player:GetAttribute(ONBOARD_ATTR) == true
+		and (complete or step >= (tonumber(TutorialConfig.FastStart.HoldPopupsUntilStep) or 3)) then
+		setHold(player, false)
+	end
+	if complete then
+		-- the calm moment for the notification ask: after the Starter Pack offer's slot, once he is on foot
+		local delaySec = math.max(5, tonumber(RetentionConfig.Notifications.TutorialDelaySeconds) or 25)
+		task.delay(delaySec, function()
+			if player.Parent then
+				RetentionService.GoodMoment(player, "TutorialComplete")
+			end
+		end)
+	end
+end
+
+local function startHold(player: Player, profile: any)
+	if not TutorialConfig.FastStartLiveFor(player.UserId) or profile.TutorialComplete == true then
+		return
+	end
+	if (tonumber(profile.TutorialStep) or 1) >= (tonumber(TutorialConfig.FastStart.HoldPopupsUntilStep) or 3) then
+		return
+	end
+	setHold(player, true)
+	local uid = player.UserId
+	local my = (holdToken[uid] or 0) + 1
+	holdToken[uid] = my
+	task.delay(math.max(5, tonumber(TutorialConfig.FastStart.HoldMaxSeconds) or 60), function()
+		if holdToken[uid] == my and player.Parent then
+			setHold(player, false)
+		end
+	end)
+end
+
+local function onUpgrade(player: Player, structureId: string, level: number)
+	if structureId ~= "CommandCenter" or level ~= 1 or not TutorialConfig.FastStartLiveFor(player.UserId) then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if profile == nil or profile.StarterPayoutDone == true or profile.TutorialComplete == true then
+		return
+	end
+	local amount = math.max(0, math.floor(tonumber(TutorialConfig.FastStart.StarterPayout) or 0))
+	profile.StarterPayoutDone = true
+	DataService.MarkDirty(player)
+	if amount <= 0 then
+		return
+	end
+	local ok = EconomyService and EconomyService.AddCash(player, amount, "onboarding")
+	if ok then
+		push(player, "StarterPayout", { Cash = amount, Text = TutorialConfig.FastStart.PayoutText })
+	end
+end
+
+-- ── 2. OFFLINE EARNINGS ────────────────────────────────────────────────────────────────────────────────────────────
+-- the live passive tick's rate, per second: ComputePassiveIncomePerTick x the "passive" cash multiplier / TickSeconds
+local function incomePerSecond(player: Player, profile: any): number
+	if BaseService == nil or BaseService.ComputePassiveIncomePerTick == nil then
+		return 0
+	end
+	local ok, perTick = pcall(BaseService.ComputePassiveIncomePerTick, profile, player)
+	if not ok or typeof(perTick) ~= "number" or perTick ~= perTick or perTick <= 0 then
+		return 0
+	end
+	local mult = 1
+	if EconomyService and EconomyService.GetCashMult then
+		local okM, m = pcall(EconomyService.GetCashMult, player, "passive")
+		if okM and typeof(m) == "number" and m == m and m > 0 then
+			mult = m
+		end
+	end
+	return perTick * mult / math.max(1, tonumber(EconomyConfig.PassiveIncome.TickSeconds) or 5)
+end
+
+local function premiumMult(player: Player): number
+	local isPremium = false
+	pcall(function()
+		isPremium = player.MembershipType == Enum.MembershipType.Premium
+	end)
+	return if isPremium then 1 + math.max(0, tonumber(offlineCfg().PremiumBonus) or 0) else 1
+end
+
+--[[ Pure: the offline payout for the gap prevSeen -> now at `perSec` income, `mult` (Premium), with config `o`.
+	Returns (cash, secondsCounted). First join (prevSeen <= 0), negative or short gaps -> 0. ]]
+function RetentionService.ComputeOffline(prevSeen: number, now: number, perSec: number, mult: number, o: any): (number, number)
+	if prevSeen <= 0 or perSec <= 0 or perSec ~= perSec then
+		return 0, 0
+	end
+	local away = now - prevSeen
+	if away ~= away or away < math.max(0, tonumber(o.MinSeconds) or 0) then
+		return 0, 0
+	end
+	local counted = math.min(away, math.max(0, tonumber(o.CapSeconds) or 0))
+	local share = math.clamp(tonumber(o.Share) or 0, 0, 1)
+	return math.floor(perSec * counted * share * mult), math.floor(counted)
+end
+
+-- what a full cap pays at this player's income now (the Missions "tomorrow" line and the sender state)
+local function offlineCapCash(player: Player, profile: any): number
+	local o = offlineCfg()
+	return math.floor(incomePerSecond(player, profile) * (tonumber(o.CapSeconds) or 0) * math.clamp(tonumber(o.Share) or 0, 0, 1) * premiumMult(player))
+end
+
+function RetentionService.OfflineCapCash(player: Player): number
+	local profile = DataService and DataService.GetProfile(player)
+	if profile == nil or not RetentionConfig.OfflineLiveFor(player.UserId) then
+		return 0
+	end
+	return offlineCapCash(player, profile)
+end
+
+local function onLoadOffline(player: Player, profile: any)
+	if not RetentionConfig.OfflineLiveFor(player.UserId) then
+		return
+	end
+	local o = offlineCfg()
+	local cash, seconds = RetentionService.ComputeOffline(
+		tonumber(profile.PrevSeenUnix) or 0,
+		os.time(),
+		incomePerSecond(player, profile),
+		premiumMult(player),
+		o
+	)
+	profile.PrevSeenUnix = nil -- paid once per load: a later call in this session finds nothing
+	if cash <= 0 or not EconomyService or not EconomyService.AccruePendingCash(player, cash, "offline") then
+		return
+	end
+	log(player, "OFFLINE_EARNED", { cash = cash, hours = string.format("%.1f", seconds / 3600) })
+	task.delay(math.max(1, tonumber(o.ShowDelaySeconds) or 6), function()
+		if player.Parent and RetentionService.WaitOnboarding(player, 90) then
+			push(player, "WelcomeBack", {
+				Cash = cash,
+				Seconds = seconds,
+				Capped = seconds >= (tonumber(o.CapSeconds) or 0),
+				Premium = premiumMult(player) > 1,
+			})
+		end
+	end)
+end
+
+-- ── 3. NOTIFICATIONS ───────────────────────────────────────────────────────────────────────────────────────────────
+--[[ A calm moment to ask for notifications ("TutorialComplete"). Sends the client the ask when every rule passes; the
+	client decides with CanPromptOptInAsync whether Roblox lets it prompt. ]]
+function RetentionService.GoodMoment(player: Player, moment: string)
+	local N = RetentionConfig.Notifications
+	if not RetentionConfig.NotificationsLiveFor(player.UserId) or N.Moments[moment] ~= true then
+		return
+	end
+	local uid = player.UserId
+	if promptedThisSession[uid] or RetentionService.IsOnboarding(player) then
+		return
+	end
+	local at = sessionAt[uid]
+	if at == nil or os.clock() - at < (tonumber(N.NotBeforeSeconds) or 60) then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if profile == nil then
+		return
+	end
+	local n = if typeof(profile.NotifOptIn) == "table" then profile.NotifOptIn else {}
+	if n.Result == "accepted" then
+		return
+	end
+	local declined = tonumber(n.DeclinedAt) or 0
+	if declined > 0 and os.time() - declined < (tonumber(N.DeclineCooldownDays) or 7) * 86400 then
+		return
+	end
+	promptedThisSession[uid] = true
+	awaitingResult[uid] = true
+	push(player, "NotifOptIn", { Moment = moment })
+end
+
+-- the client's answer: to our ask (awaitingResult) or to the player's own Settings tap (source "settings")
+local function onOptInResult(player: Player, result: any, source: any)
+	local uid = player.UserId
+	local fromSettings = source == "settings"
+	if (not awaitingResult[uid] and not fromSettings) or (result ~= "accepted" and result ~= "declined" and result ~= "unavailable") then
+		return
+	end
+	awaitingResult[uid] = nil
+	promptedThisSession[uid] = true
+	local profile = DataService and DataService.GetProfile(player)
+	if profile == nil then
+		return
+	end
+	local n = if typeof(profile.NotifOptIn) == "table" then profile.NotifOptIn else {}
+	n.PromptedAt = os.time()
+	if result ~= "unavailable" then
+		n.Result = result
+	end
+	if result == "declined" then
+		n.DeclinedAt = os.time()
+	end
+	profile.NotifOptIn = n
+	DataService.MarkDirty(player)
+	log(player, "NOTIF_OPTIN", { result = result .. (if fromSettings then "_settings" else "") })
+end
+
+--[[ docs/NOTIFICATIONS.md: the record an external sender reads, written once when an opted-in player leaves. Fields are
+	os.time() seconds (0 = never / not applicable). LastSentDay belongs to the sender (it writes it back). ]]
+function RetentionService.NotifyState(player: Player, profile: any, now: number): { [string]: any }
+	local o = offlineCfg()
+	local live = RetentionConfig.OfflineLiveFor(player.UserId)
+	local perSec = incomePerSecond(player, profile)
+	local daily = if typeof(profile.DailyLogin) == "table" then profile.DailyLogin else {}
+	local streak = math.max(0, math.floor(tonumber(daily.Streak) or 0))
+	return {
+		UserId = player.UserId,
+		LastSeen = now,
+		OfflineCapFullAt = if live and perSec > 0 then now + math.floor(tonumber(o.CapSeconds) or 0) else 0,
+		OfflineCapCash = if live then offlineCapCash(player, profile) else 0,
+		LastRaidedAt = math.max(0, math.floor(tonumber(profile.LastRaidedAt) or 0)),
+		StreakDay = streak,
+		NextStreakDay = (streak % DailyRewardConfig.StreakResetsAfterDay) + 1,
+		LastClaimDay = math.max(0, math.floor(tonumber(daily.LastClaimDay) or 0)), -- UTC yyyymmdd
+	}
+end
+
+local function writeNotifyState(player: Player)
+	if not RetentionConfig.NotificationsLiveFor(player.UserId) then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	local n = profile and profile.NotifOptIn
+	if typeof(n) ~= "table" or n.Result ~= "accepted" then
+		return
+	end
+	local rec = RetentionService.NotifyState(player, profile, os.time())
+	profile.OfflineCapFullAt = rec.OfflineCapFullAt
+	task.spawn(function()
+		local ok, err = pcall(function()
+			local store = DataStoreService:GetDataStore(RetentionConfig.Notifications.StateStore)
+			store:UpdateAsync("u_" .. tostring(player.UserId), function(old: any)
+				-- keep the sender's own bookkeeping (LastSentDay)
+				if typeof(old) == "table" and old.LastSentDay ~= nil then
+					rec.LastSentDay = old.LastSentDay
+				end
+				return rec
+			end)
+		end)
+		if not ok and not RunService:IsStudio() then
+			warn("[RetentionService] notify state write failed:", err)
+		end
+	end)
+end
+
+-- ── Init ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+local function onPlayerAdded(player: Player)
+	sessionAt[player.UserId] = os.clock()
+	if AnalyticsService and AnalyticsService.Onboard then
+		pcall(AnalyticsService.Onboard, player, "Joined")
+	end
+	local function spawned()
+		if AnalyticsService and AnalyticsService.Onboard then
+			pcall(AnalyticsService.Onboard, player, "CharacterSpawned")
+		end
+	end
+	if player.Character then
+		spawned()
+	else
+		local conn: RBXScriptConnection? = nil
+		conn = player.CharacterAdded:Connect(function()
+			if conn then
+				conn:Disconnect()
+				conn = nil
+			end
+			spawned()
+		end)
+	end
+end
+
+function RetentionService.Init(deps: { [string]: any })
+	DataService = deps.DataService
+	EconomyService = deps.EconomyService
+	BaseService = deps.BaseService
+	RemoteSetup = deps.RemoteSetup
+	RateLimitService = deps.RateLimitService
+	AnalyticsService = deps.AnalyticsService
+
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	for _, p in ipairs(Players:GetPlayers()) do
+		if sessionAt[p.UserId] == nil then
+			onPlayerAdded(p)
+		end
+	end
+
+	DataService.OnProfileLoaded(function(player: Player, profile: any)
+		startHold(player, profile)
+		-- after the other load hooks (BaseService's plot / income state), in its own thread
+		task.defer(onLoadOffline, player, profile)
+		-- a day-7 army boost still running from before (DailyRewardConfig.Day7Boost)
+		local boost = tonumber(profile.ArmyBoostUntil) or 0
+		if boost > os.time() then
+			player:SetAttribute("WE_ArmyBoostUntil", boost)
+		end
+	end)
+
+	if BaseService and BaseService.GetUpgradeChangedEvent then
+		BaseService.GetUpgradeChangedEvent().Event:Connect(function(userId: number, _plotId: any, structureId: string, level: number)
+			local player = Players:GetPlayerByUserId(userId)
+			if player then
+				onUpgrade(player, structureId, level)
+			end
+		end)
+	end
+
+	local optIn = RemoteSetup.Get(Constants.RemoteNames.RequestNotifOptInResult) :: RemoteEvent
+	optIn.OnServerEvent:Connect(function(player: Player, result: any, source: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestNotifOptInResult", result, source) then
+			return
+		end
+		if RateLimitService and not RateLimitService.Allow(player, "notif_optin", 1, 2) then
+			return
+		end
+		onOptInResult(player, result, source)
+	end)
+
+	Players.PlayerRemoving:Connect(function(player: Player)
+		pcall(writeNotifyState, player)
+		local uid = player.UserId
+		sessionAt[uid] = nil
+		promptedThisSession[uid] = nil
+		awaitingResult[uid] = nil
+		holdToken[uid] = nil
+	end)
+	print(string.format("[WAR EMPIRE] RetentionService Init: FastStart=%s Offline=%s Notifications=%s",
+		tostring(TutorialConfig.FastStart.Enabled), tostring(offlineCfg().Enabled), tostring(RetentionConfig.Notifications.Enabled)))
+end
+
+return RetentionService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="226">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -87897,7 +88766,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="225">
+        <Item class="ModuleScript" referent="227">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -88342,7 +89211,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="226">
+        <Item class="ModuleScript" referent="228">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -88504,7 +89373,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="227">
+        <Item class="ModuleScript" referent="229">
           <Properties>
             <string name="Name">SquadOrdersService</string>
             <string name="Source"><![CDATA[--!strict
@@ -88767,6 +89636,23 @@ end
 local function armyHealthBase(): number
 	local c = strongArmy()
 	return if c then tonumber(c.Health) or 90 else OrdersConfig.UnitHealth or 90
+end
+
+-- claude-bud JOB 29: the day-7 streak ARMY BOOST (DailyRewardConfig.Day7Boost; MissionService writes WE_ArmyBoostUntil)
+local function armyBoostMult(player: Player?): number
+	if player == nil then
+		return 1
+	end
+	local untilUnix = tonumber(player:GetAttribute("WE_ArmyBoostUntil")) or 0
+	if untilUnix <= os.time() then
+		return 1
+	end
+	local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig) :: any
+	local b = DailyRewardConfig.Day7Boost
+	if typeof(b) ~= "table" or b.Enabled ~= true then
+		return 1
+	end
+	return math.clamp(tonumber(b.Mult) or 1, 1, 2)
 end
 
 local function researchMult(player: Player?, statId: string): number -- v69 research: ≥1, 1 when absent
@@ -89921,7 +90807,7 @@ local function unitShoot(player: Player, unit: SquadUnit, th: Humanoid, now: num
 	if typeof(setShooter) == "function" then
 		setShooter(unit.Model)
 	end
-	local ok, dealt = pcall(apply, player, th, armyDamageBase() * researchMult(player, "SoldierDamage"), credit) -- v69 research
+	local ok, dealt = pcall(apply, player, th, armyDamageBase() * researchMult(player, "SoldierDamage") * armyBoostMult(player), credit) -- v69 research; JOB 29 boost
 	if typeof(setShooter) == "function" then
 		setShooter(nil)
 	end
@@ -91426,7 +92312,7 @@ local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: Base
 	unit.LastFireAt = now
 	local kind = if part ~= tgt.Root and part:GetAttribute("GateGuardPart") ~= true then "Gate" else tgt.Kind
 	local name = if tgt.Player then tgt.Player.Name elseif kind == "Gate" then "gate" else "guard"
-	local base = armyDamageBase() * researchMult(player, "SoldierDamage")
+	local base = armyDamageBase() * researchMult(player, "SoldierDamage") * armyBoostMult(player) -- claude-bud JOB 29 boost
 	if rng:NextNumber() >= unitHitChance((part.Position - unit.Root.Position).Magnitude) then
 		hitLog(player, unit, kind, name, 0, 0, "miss")
 		return false
@@ -92384,7 +93270,7 @@ return SquadOrdersService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="228">
+        <Item class="ModuleScript" referent="230">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -92876,7 +93762,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="229">
+        <Item class="ModuleScript" referent="231">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -94497,7 +95383,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="230">
+          <Item class="ModuleScript" referent="232">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -94627,7 +95513,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="231">
+          <Item class="ModuleScript" referent="233">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -94704,7 +95590,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="232">
+          <Item class="ModuleScript" referent="234">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -94773,7 +95659,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="233">
+        <Item class="ModuleScript" referent="235">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -94811,6 +95697,20 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local MonetizationService: any = nil
 local CombatService: any = nil -- F6: EndNoviceShield (batch A lane C API), pcall + nil-check
+local RetentionService: any = nil -- claude-bud JOB 29: the FastStart onboarding hold follows the step
+local AnalyticsService: any = nil -- claude-bud JOB 29: onboarding timing (Step1..7, BaseClaimed)
+
+-- claude-bud JOB 29: seconds-since-join marks (analytics only) and the FastStart hold; never breaks the tutorial
+local function onboard(player: Player, step: string)
+	if AnalyticsService and AnalyticsService.Onboard then
+		pcall(AnalyticsService.Onboard, player, step)
+	end
+end
+local function retentionStep(player: Player, step: number, complete: boolean)
+	if RetentionService and RetentionService.OnTutorialStep then
+		pcall(RetentionService.OnTutorialStep, player, step, complete)
+	end
+end
 
 -- Step 1 (ClaimBase) is the first step in every order; every other step is found through TutorialConfig
 local STEP_CLAIM = 1
@@ -95048,6 +95948,10 @@ local function setStep(player: Player, step: number, complete: boolean?)
 	end
 	DataService.MarkDirty(player)
 	pushTutorial(player)
+	retentionStep(player, step, complete == true) -- claude-bud JOB 29
+	if complete then
+		onboard(player, "TutorialDone") -- claude-bud JOB 29
+	end
 	if complete then
 		firstAttackHint(player, TutorialConfig.FirstMinutes.AttackHintDelaySeconds) -- claude-bud JOB 7
 	end
@@ -95078,6 +95982,11 @@ local function advanceTo(player: Player, targetStep: number)
 	end
 	lastAdvanceAt[player.UserId] = now
 	lastAdvanceStep[player.UserId] = targetStep
+	-- claude-bud JOB 29: the funnel step just finished, at the real moment (ClaimBase = "BaseClaimed", else Tut_<Id>)
+	local doneDef = TutorialConfig.GetStep(targetStep)
+	if doneDef then
+		onboard(player, if doneDef.Id == "ClaimBase" then "BaseClaimed" else "Tut_" .. doneDef.Id)
+	end
 	-- One setStep (one push): the client drops a second TutorialStateUpdate that lands within 0.2 s
 	local nextStep = skipOwnedBuySteps(profile, targetStep + 1)
 	if nextStep > TutorialConfig.StepCount() then
@@ -95103,6 +96012,8 @@ function TutorialService.Complete(player: Player)
 	if NotificationService then
 		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
+	onboard(player, "TutorialSkipped") -- claude-bud JOB 29
+	retentionStep(player, profile.TutorialStep, true)
 	firstAttackHint(player, TutorialConfig.FirstMinutes.AttackHintDelaySeconds) -- claude-bud JOB 7
 	endNoviceShield(player) -- F6: SKIP ends the novice shield too
 	scheduleStarterOffer(player, true) -- v71 money (M1): the Starter Pack offer 3 s after the tutorial
@@ -95168,6 +96079,8 @@ function TutorialService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	MonetizationService = deps.MonetizationService -- v71 money (M1): TrySoftOfferStarterBundle (Starter Pack gate)
 	CombatService = deps.CombatService -- F6: EndNoviceShield (CombatService.Init runs later; called only at run time)
+	RetentionService = deps.RetentionService -- claude-bud JOB 29
+	AnalyticsService = deps.AnalyticsService -- claude-bud JOB 29
 
 	local skipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSkipTutorial) :: RemoteEvent
 	skipRemote.OnServerEvent:Connect(function(player: Player)
@@ -95268,7 +96181,9 @@ function TutorialService.Init(deps: { [string]: any })
 				DataService.MarkDirty(player)
 				task.delay(TutorialConfig.FirstMinutes.WelcomeDelaySeconds, function()
 					if player.Parent and NotificationService then
-						NotificationService.Notify(player, TutorialConfig.FirstMinutes.WelcomeText, "Info", 6)
+						-- claude-bud JOB 29: with FastStart he already stands at the Command Center console
+						local text = if TutorialConfig.FastStartLiveFor(player.UserId) then TutorialConfig.FastStart.WelcomeText else TutorialConfig.FirstMinutes.WelcomeText
+						NotificationService.Notify(player, text, "Info", 6)
 					end
 				end)
 			end
@@ -95307,7 +96222,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="234">
+        <Item class="ModuleScript" referent="236">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -96030,7 +96945,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="235">
+        <Item class="ModuleScript" referent="237">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -101434,7 +102349,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="236">
+        <Item class="ModuleScript" referent="238">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -104296,7 +105211,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="237">
+        <Item class="ModuleScript" referent="239">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -104710,19 +105625,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="238">
+  <Item class="StarterPlayer" referent="240">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="239">
+    <Item class="StarterPlayerScripts" referent="241">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="240">
+      <Item class="Folder" referent="242">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="241">
+        <Item class="LocalScript" referent="243">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -104871,6 +105786,7 @@ safeInit("FeatureController", safeRequire("FeatureController", Controllers:WaitF
 safeInit("QualityGovernor", safeRequire("QualityGovernor", Modules:WaitForChild("QualityGovernor", 5) :: Instance)) -- claude-bud JOB 8: automatic low tier (small screen / low FPS)
 safeInit("Juice", safeRequire("Juice", Modules:WaitForChild("Juice", 5) :: Instance)) -- claude-bud JOB 11: purchase burst + rebirth celebration
 safeInit("ArmourController", safeRequire("ArmourController", Controllers:WaitForChild("ArmourController", 5) :: Instance)) -- claude-bud JOB 26
+safeInit("RetentionController", safeRequire("RetentionController", Controllers:WaitForChild("RetentionController", 5) :: Instance)) -- claude-bud JOB 29
 safeInit("BuildingTipController", safeRequire("BuildingTipController", Controllers:WaitForChild("BuildingTipController", 5) :: Instance)) -- claude-bud JOB 24 §5
 safeInit("ArmyDebugClient", safeRequire("ArmyDebugClient", Modules:WaitForChild("ArmyDebugClient", 5) :: Instance)) -- v115: owner-only army slot markers + labels (ArmyConfig.Follow3.Debug + WE_ArmyDebug; /armydebug)
 safeInit("MoveDebugClient", safeRequire("MoveDebugClient", Modules:WaitForChild("MoveDebugClient", 5) :: Instance)) -- v123: /movedebug player-movement log (WE_MoveDebug; quiet otherwise)
@@ -104885,11 +105801,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="242">
+        <Item class="Folder" referent="244">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="243">
+          <Item class="ModuleScript" referent="245">
             <Properties>
               <string name="Name">ArmourController</string>
               <string name="Source"><![CDATA[--!strict
@@ -105045,7 +105961,7 @@ return ArmourController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="244">
+          <Item class="ModuleScript" referent="246">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -105749,7 +106665,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="245">
+          <Item class="ModuleScript" referent="247">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -106022,7 +106938,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="246">
+          <Item class="ModuleScript" referent="248">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -106723,7 +107639,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="247">
+          <Item class="ModuleScript" referent="249">
             <Properties>
               <string name="Name">BuildingTipController</string>
               <string name="Source"><![CDATA[--!strict
@@ -106953,7 +107869,7 @@ return BuildingTipController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="248">
+          <Item class="ModuleScript" referent="250">
             <Properties>
               <string name="Name">CodesController</string>
               <string name="Source"><![CDATA[--!strict
@@ -107322,7 +108238,7 @@ return CodesController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="249">
+          <Item class="ModuleScript" referent="251">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -109783,7 +110699,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="250">
+          <Item class="ModuleScript" referent="252">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -110160,7 +111076,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="251">
+          <Item class="ModuleScript" referent="253">
             <Properties>
               <string name="Name">FeatureController</string>
               <string name="Source"><![CDATA[--!strict
@@ -110450,7 +111366,7 @@ return FeatureController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="252">
+          <Item class="ModuleScript" referent="254">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -112309,7 +113225,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="253">
+          <Item class="ModuleScript" referent="255">
             <Properties>
               <string name="Name">MissileController</string>
               <string name="Source"><![CDATA[--!strict
@@ -114191,7 +115107,7 @@ return MissileController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="254">
+          <Item class="ModuleScript" referent="256">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -114230,6 +115146,7 @@ local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
+local StreakStrip = require(script.Parent.Parent.Modules.StreakStrip) -- claude-bud JOB 29
 
 local MissionController = {}
 
@@ -114727,6 +115644,46 @@ local function refresh()
 		return
 	end
 
+	-- claude-bud JOB 29: the 7-day strip + 1-2 "tomorrow" goals (the server sends Streak7 while ShowTomorrow is live)
+	local s7: any = (state :: any).Streak7
+	if typeof(s7) == "table" then
+		local tSize = PanelShell.Text(13)
+		local tileW = math.max(56, tSize * 3)
+		local tileH = tSize * 2 + 16
+		local lines: { string } = {}
+		local tc = tonumber(s7.TomorrowCash) or 0
+		if tc > 0 then
+			table.insert(lines, string.format("Tomorrow: Day %d reward $%s", tonumber(s7.TomorrowDay) or 1, commas(tc)))
+		end
+		local cap = tonumber(s7.OfflineCap) or 0
+		if cap > 0 then
+			table.insert(lines, string.format("Away 8 h: earn up to $%s", commas(cap)))
+		end
+		local row = Instance.new("Frame")
+		row.Name = "Streak7Row"
+		row.LayoutOrder = -100
+		row.Size = UDim2.new(1, -8, 0, tileH + 12 + #lines * (tSize + 6))
+		row.BackgroundColor3 = Constants.Colors.Background
+		row.BorderSizePixel = 0
+		row.Parent = listFrame
+		corner(row, 8)
+		local strip = StreakStrip.Build(row, s7, tileW, tileH, tSize)
+		strip.Position = UDim2.fromOffset(10, 6)
+		for i, text in ipairs(lines) do
+			local l = Instance.new("TextLabel")
+			l.BackgroundTransparency = 1
+			l.Position = UDim2.fromOffset(10, 6 + tileH + 4 + (i - 1) * (tSize + 6))
+			l.Size = UDim2.new(1, -20, 0, tSize + 4)
+			l.Font = Enum.Font.GothamBold
+			l.TextSize = tSize
+			l.TextXAlignment = Enum.TextXAlignment.Left
+			l.TextColor3 = Constants.Colors.Gold
+			l.TextTruncate = Enum.TextTruncate.AtEnd
+			l.Text = text
+			l.Parent = row
+		end
+	end
+
 	if #state.Daily == 0 then
 		emptyState(listFrame, "No daily missions right now — check back after UTC midnight refresh.")
 	end
@@ -114842,15 +115799,24 @@ local function refresh()
 		local d = state.DailyLogin
 		local reward = DailyRewardConfig.Rewards[d.NextDay]
 		local rewardText = if reward then "$" .. commas(reward.Cash) else ""
+		-- claude-bud JOB 29 (DailyRewardConfig.ShowTomorrow): tomorrow's reward wherever the streak is shown
+		local days = DailyRewardConfig.StreakResetsAfterDay
+		local tomorrowDay = if d.AlreadyClaimedToday then (d.Streak % days) + 1 else (d.NextDay % days) + 1
+		local tomorrow = DailyRewardConfig.Rewards[tomorrowDay]
+		local showTomorrow = DailyRewardConfig.ShowTomorrow == true and tomorrow ~= nil
 		if d.AlreadyClaimedToday then
-			dailyInfo.Text = string.format("Daily streak: Day %d (claimed)", d.Streak)
+			dailyInfo.Text = if showTomorrow and tomorrow
+				then string.format("Day %d done · Tomorrow $%s", d.Streak, commas(tomorrow.Cash))
+				else string.format("Daily streak: Day %d (claimed)", d.Streak)
 			if dailyBtn then
 				dailyBtn.Text = "CLAIMED"
 				dailyBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 60)
 				dailyBtn.Active = false
 			end
 		else
-			dailyInfo.Text = string.format("Claim Day %d reward %s", d.NextDay, rewardText)
+			dailyInfo.Text = if showTomorrow and tomorrow
+				then string.format("Day %d: %s · then $%s", d.NextDay, rewardText, commas(tomorrow.Cash))
+				else string.format("Claim Day %d reward %s", d.NextDay, rewardText)
 			if dailyBtn then
 				dailyBtn.Text = "CLAIM DAILY"
 				dailyBtn.BackgroundColor3 = Constants.Colors.Gold
@@ -115135,7 +116101,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="255">
+          <Item class="ModuleScript" referent="257">
             <Properties>
               <string name="Name">NationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -116245,7 +117211,8 @@ local function blocked(): boolean
 			return true
 		end
 	end
-	return false
+	-- claude-bud JOB 29 FastStart: nothing covers a new player's screen before his Command Center (server attribute)
+	return player:GetAttribute("WE_Onboarding") == true
 end
 
 local function autoWanted(): boolean
@@ -116526,6 +117493,11 @@ function NationController.Init()
 			end
 		end)
 	end
+	player:GetAttributeChangedSignal("WE_Onboarding"):Connect(function()
+		if player:GetAttribute("WE_Onboarding") ~= true and not autoDone and autoReady then
+			scheduleAutoOpen(REOPEN_SETTLE) -- claude-bud JOB 29: the onboarding hold is over
+		end
+	end)
 	HudLayout.FlagChanged:Connect(function(flagName: string, on: boolean)
 		if on or autoDone or not autoReady then
 			return
@@ -116591,7 +117563,7 @@ return NationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="256">
+          <Item class="ModuleScript" referent="258">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -117696,7 +118668,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="257">
+          <Item class="ModuleScript" referent="259">
             <Properties>
               <string name="Name">OpsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -118589,7 +119561,7 @@ return OpsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="258">
+          <Item class="ModuleScript" referent="260">
             <Properties>
               <string name="Name">OrdersController</string>
               <string name="Source"><![CDATA[--!strict
@@ -119161,7 +120133,7 @@ return OrdersController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="259">
+          <Item class="ModuleScript" referent="261">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -120141,7 +121113,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="260">
+            <Item class="ModuleScript" referent="262">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -120306,7 +121278,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="261">
+            <Item class="ModuleScript" referent="263">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -120346,7 +121318,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="262">
+          <Item class="ModuleScript" referent="264">
             <Properties>
               <string name="Name">PromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -121261,7 +122233,7 @@ return PromptController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="263">
+          <Item class="ModuleScript" referent="265">
             <Properties>
               <string name="Name">ResearchController</string>
               <string name="Source"><![CDATA[--!strict
@@ -122357,7 +123329,398 @@ return ResearchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="264">
+          <Item class="ModuleScript" referent="266">
+            <Properties>
+              <string name="Name">RetentionController</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 29 (2026-09-30): retention, client side. It only shows what the server pushes (FeaturePush) and
+	reports taps; every amount is decided on the server (RetentionService / MissionService).
+	  * "StarterPayout" {Cash}: coins fly from the middle of the screen to the cash pill, with a big "+$X" (FastStart).
+	  * "WelcomeBack" {Cash, Seconds, Capped, Premium}: the "Welcome back: +$X while away" card. The server already
+	    paid it into his ATM (PendingCash); OK / X / 12 s only close the card.
+	  * "Streak" {Days, Today, Cash, Big, TomorrowCash, Boost, Seconds}: one card with the 7-day strip and "Come back
+	    tomorrow for $Y". Top-centre under the top bar, tap to close, gone after Seconds.
+	  * "NotifOptIn": the server's calm-moment ask (after the tutorial). Modules/NotifOptIn asks Roblox and reports
+	    the result (Settings has the same TURN ON).
+	  * The FastStart arrow: while WE_Onboarding is on and the Command Center is not bought, a big pulsing arrow
+	    floats over HIS Command Center console (WE_ConsolePos_CommandCenter). Only one TweenService loop, no per-frame
+	    work.
+	The cards wait while the player drives, is dead, is in combat or has a panel open (HudLayout flags), up to 60 s.
+	Real px (no UIScale on these guis): text >= 15, buttons 48 tall. Copy names no keys.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] RetentionController: no ReplicatedStorage.Shared after 60 s; not started")
+	return {}
+end
+local Constants = require(Shared.Constants)
+local Remotes = require(Shared.Remotes)
+
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+local StreakStrip = require(script.Parent.Parent.Modules.StreakStrip)
+local NotifOptIn = require(script.Parent.Parent.Modules.NotifOptIn)
+
+local RetentionController = {}
+
+local player = Players.LocalPlayer
+local GOLD = Color3.fromRGB(255, 205, 60)
+local PLATE = Color3.fromRGB(22, 24, 20)
+local BLOCK_FLAGS = { "Driving", "Dead", "RecentCombat", "Modal" }
+
+local function money(n: number): string
+	local s = tostring(math.floor(n))
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return "$" .. out:gsub("^,", "")
+end
+
+local function blocked(): boolean
+	for _, f in ipairs(BLOCK_FLAGS) do
+		if HudLayout.GetFlag(f) then
+			return true
+		end
+	end
+	return false
+end
+
+-- run `fn` once the screen is free (not driving / dead / in combat / a panel open), giving up after 60 s
+local function whenFree(fn: () -> ())
+	task.spawn(function()
+		local left = 60
+		while blocked() and left > 0 do
+			task.wait(1)
+			left -= 1
+		end
+		if left > 0 then
+			fn()
+		end
+	end)
+end
+
+local function screen(name: string, order: number): ScreenGui?
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if pg == nil then
+		return nil
+	end
+	local old = pg:FindFirstChild(name)
+	if old then
+		old:Destroy()
+	end
+	local g = Instance.new("ScreenGui")
+	g.Name = name
+	g.ResetOnSpawn = false
+	g.DisplayOrder = order
+	g.Parent = pg
+	return g
+end
+
+local function corner(p: Instance, r: number)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, r)
+	c.Parent = p
+end
+
+local function label(parent: Instance, text: string, size: number, color: Color3, font: Enum.Font): TextLabel
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Font = font
+	l.TextSize = size
+	l.TextColor3 = color
+	l.TextWrapped = true
+	l.Text = text
+	l.Parent = parent
+	return l
+end
+
+-- ── coins to the cash pill ─────────────────────────────────────────────────────────────────────────────────────────
+local function coinBurst(amount: number, headline: string?)
+	local g = screen("WE_CoinBurst", 45)
+	if g == nil then
+		return
+	end
+	g.IgnoreGuiInset = true
+	local cam = Workspace.CurrentCamera
+	local vp = if cam then cam.ViewportSize else Vector2.new(844, 390)
+	local from = Vector2.new(vp.X * 0.5, vp.Y * 0.55)
+	local pillPos, pillSize = HudLayout.GetRect("CashPill")
+	local to = if pillSize.X > 0 then pillPos + pillSize * 0.5 + Vector2.new(0, 36) else Vector2.new(vp.X * 0.5, 30)
+	local big = label(g, (headline and (headline .. "\n") or "") .. "+" .. money(amount), 30, GOLD, Enum.Font.GothamBlack)
+	big.AnchorPoint = Vector2.new(0.5, 0.5)
+	big.Position = UDim2.fromOffset(from.X, from.Y - 40)
+	big.Size = UDim2.fromOffset(320, 84)
+	local st = Instance.new("UIStroke")
+	st.Thickness = 2
+	st.Color = Color3.fromRGB(40, 30, 0)
+	st.Parent = big
+	TweenService:Create(big, TweenInfo.new(1.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Position = UDim2.fromOffset(from.X, from.Y - 90),
+		TextTransparency = 0.15,
+	}):Play()
+	for i = 1, 12 do
+		local c = Instance.new("Frame")
+		c.AnchorPoint = Vector2.new(0.5, 0.5)
+		c.Size = UDim2.fromOffset(18, 18)
+		c.BackgroundColor3 = GOLD
+		c.BorderSizePixel = 0
+		c.Position = UDim2.fromOffset(from.X + math.random(-70, 70), from.Y + math.random(-30, 30))
+		corner(c, 9)
+		c.Parent = g
+		local t = 0.55 + i * 0.05
+		task.delay(0.1, function()
+			TweenService:Create(c, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Position = UDim2.fromOffset(to.X, to.Y),
+				Size = UDim2.fromOffset(10, 10),
+			}):Play()
+		end)
+	end
+	pcall(HudLayout.CashFloat, amount)
+	task.delay(2.2, function()
+		g:Destroy()
+	end)
+end
+
+-- ── the "Welcome back: +$X while away" card ─────────────────────────────────────────────────────────────────────────────────
+local function awayText(seconds: number): string
+	local h = math.floor(seconds / 3600)
+	local m = math.floor((seconds % 3600) / 60)
+	if h > 0 then
+		return string.format("%d h %d min", h, m)
+	end
+	return string.format("%d min", m)
+end
+
+local function welcomeBackCard(data: any)
+	local cash = math.floor(tonumber(data.Cash) or 0)
+	if cash <= 0 then
+		return
+	end
+	local g = screen("WE_WelcomeBackCard", 38)
+	if g == nil then
+		return
+	end
+	local card = Instance.new("Frame")
+	card.AnchorPoint = Vector2.new(0.5, 0.5)
+	card.Position = UDim2.fromScale(0.5, 0.5)
+	card.Size = UDim2.fromOffset(360, 206)
+	card.BackgroundColor3 = PLATE
+	card.BackgroundTransparency = 0.04
+	card.Parent = g
+	corner(card, 12)
+	local st = Instance.new("UIStroke")
+	st.Color = GOLD
+	st.Thickness = 2
+	st.Parent = card
+	local title = label(card, "WELCOME BACK", 17, GOLD, Enum.Font.GothamBlack)
+	title.Position = UDim2.fromOffset(14, 10)
+	title.Size = UDim2.new(1, -76, 0, 26)
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	local body = label(card, "While you were away you earned", 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
+	body.Position = UDim2.fromOffset(14, 44)
+	body.Size = UDim2.new(1, -28, 0, 20)
+	local amt = label(card, "+" .. money(cash), 32, GOLD, Enum.Font.GothamBlack)
+	amt.Position = UDim2.fromOffset(14, 66)
+	amt.Size = UDim2.new(1, -28, 0, 38)
+	local sub = awayText(tonumber(data.Seconds) or 0) .. (if data.Capped == true then " (8 h max)" else "") .. " · in your ATM"
+	if data.Premium == true then
+		sub ..= " · Premium +10%"
+	end
+	local subL = label(card, sub, 15, Color3.fromRGB(190, 190, 180), Enum.Font.GothamMedium)
+	subL.Position = UDim2.fromOffset(14, 106)
+	subL.Size = UDim2.new(1, -28, 0, 20)
+	local x = Instance.new("TextButton")
+	x.Position = UDim2.new(1, -56, 0, 6)
+	x.Size = UDim2.fromOffset(48, 48)
+	x.BackgroundColor3 = Color3.fromRGB(55, 60, 50)
+	x.TextColor3 = Color3.new(1, 1, 1)
+	x.Font = Enum.Font.GothamBold
+	x.TextSize = 16
+	x.Text = "X"
+	corner(x, 8)
+	x.Parent = card
+	local collect = Instance.new("TextButton")
+	collect.AnchorPoint = Vector2.new(0.5, 1)
+	collect.Position = UDim2.new(0.5, 0, 1, -14)
+	collect.Size = UDim2.fromOffset(220, 52)
+	collect.BackgroundColor3 = Color3.fromRGB(120, 100, 40)
+	collect.TextColor3 = Color3.new(1, 1, 1)
+	collect.Font = Enum.Font.GothamBlack
+	collect.TextSize = 18
+	collect.Text = "OK"
+	corner(collect, 10)
+	collect.Parent = card
+	-- the money is already in his ATM (server, PendingCash): both buttons only close the card
+	local function close()
+		if g.Parent then
+			g:Destroy()
+		end
+	end
+	collect.Activated:Connect(close)
+	x.Activated:Connect(close)
+	task.delay(12, close)
+end
+
+-- ── the streak card ────────────────────────────────────────────────────────────────────────────────────────────────
+local function streakCard(data: any)
+	local g = screen("WE_StreakCard", 36)
+	if g == nil then
+		return
+	end
+	local today = math.floor(tonumber(data.Today) or 1)
+	local cash = if typeof(data.Cash) == "table" then tonumber(data.Cash[today]) or 0 else 0
+	local big = typeof(data.Big) == "table" and data.Big[today] == true
+	local card = Instance.new("TextButton") -- tap anywhere to close
+	card.AutoButtonColor = false
+	card.Text = ""
+	card.AnchorPoint = Vector2.new(0.5, 0)
+	card.Position = UDim2.new(0.5, 0, 0, 58)
+	card.Size = UDim2.fromOffset(420, if data.Boost == true then 150 else 128)
+	card.BackgroundColor3 = if big then Color3.fromRGB(40, 32, 10) else PLATE
+	card.BackgroundTransparency = 0.06
+	card.Parent = g
+	corner(card, 12)
+	local fit = Instance.new("UISizeConstraint")
+	fit.MaxSize = Vector2.new(420, 170)
+	fit.Parent = card
+	local st = Instance.new("UIStroke")
+	st.Color = GOLD
+	st.Thickness = if big then 3 else 2
+	st.Parent = card
+	local title = label(card, string.format(if big then "DAY %d! BIG REWARD +%s" else "DAY %d STREAK  +%s", today, money(cash)), if big then 20 else 17, GOLD, Enum.Font.GothamBlack)
+	title.Position = UDim2.fromOffset(10, 6)
+	title.Size = UDim2.new(1, -20, 0, 26)
+	local holder = Instance.new("Frame")
+	holder.BackgroundTransparency = 1
+	holder.Position = UDim2.fromOffset(0, 36)
+	holder.Size = UDim2.new(1, 0, 0, 46)
+	holder.Parent = card
+	local strip = StreakStrip.Build(holder, data, 52, 46, 15)
+	strip.AnchorPoint = Vector2.new(0.5, 0)
+	strip.Position = UDim2.fromScale(0.5, 0)
+	local y = 88
+	if data.Boost == true then
+		local b = label(card, string.format("+ ARMY BOOST for %d min", math.floor(tonumber(data.BoostMinutes) or 30)), 16, Color3.fromRGB(255, 120, 80), Enum.Font.GothamBlack)
+		b.Position = UDim2.fromOffset(10, y)
+		b.Size = UDim2.new(1, -20, 0, 22)
+		y += 24
+	end
+	local tomorrow = tonumber(data.TomorrowCash) or 0
+	local foot = label(card, if tomorrow > 0 then "Come back tomorrow for " .. money(tomorrow) else "Come back tomorrow!", 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
+	foot.Position = UDim2.fromOffset(10, y)
+	foot.Size = UDim2.new(1, -20, 0, 22)
+	card.Activated:Connect(function()
+		g:Destroy()
+	end)
+	if big then
+		coinBurst(cash, nil)
+	end
+	task.delay(math.clamp(tonumber(data.Seconds) or 6, 3, 12), function()
+		if g.Parent then
+			g:Destroy()
+		end
+	end)
+end
+
+-- ── the FastStart arrow over his Command Center console ────────────────────────────────────────────────────────────
+local arrowGui: BillboardGui? = nil
+local arrowAnchor: Part? = nil
+local arrowTween: Tween? = nil
+
+local function clearArrow()
+	if arrowTween then
+		arrowTween:Cancel()
+		arrowTween = nil
+	end
+	if arrowGui then
+		arrowGui:Destroy()
+		arrowGui = nil
+	end
+	if arrowAnchor then
+		arrowAnchor:Destroy()
+		arrowAnchor = nil
+	end
+end
+
+local function showArrow()
+	local pos = player:GetAttribute("WE_ConsolePos_CommandCenter")
+	if player:GetAttribute("WE_Onboarding") ~= true or typeof(pos) ~= "Vector3" then
+		clearArrow()
+		return
+	end
+	if arrowAnchor and (arrowAnchor.Position - (pos + Vector3.new(0, 7, 0))).Magnitude < 0.5 then
+		return
+	end
+	clearArrow()
+	local a = Instance.new("Part")
+	a.Name = "WE_FastStartArrow"
+	a.Anchored = true
+	a.CanCollide = false
+	a.CanQuery = false
+	a.CanTouch = false
+	a.Transparency = 1
+	a.Size = Vector3.new(0.2, 0.2, 0.2)
+	a.Position = pos + Vector3.new(0, 7, 0)
+	a.Parent = Workspace.CurrentCamera or Workspace
+	local b = Instance.new("BillboardGui")
+	b.Name = "Arrow"
+	b.Adornee = a
+	b.Size = UDim2.fromScale(5, 5) -- studs: shrinks with distance like the world it points at
+	b.MaxDistance = 40
+	b.LightInfluence = 0
+	b.Parent = a
+	local t = Instance.new("TextLabel")
+	t.BackgroundTransparency = 1
+	t.Size = UDim2.fromScale(1, 1)
+	t.Font = Enum.Font.GothamBlack
+	t.TextScaled = true
+	t.TextColor3 = GOLD
+	t.TextStrokeTransparency = 0.2
+	t.Text = "▼"
+	t.Parent = b
+	arrowAnchor = a
+	arrowGui = b
+	local tw = TweenService:Create(b, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+		Size = UDim2.fromScale(6.5, 6.5),
+		StudsOffset = Vector3.new(0, 1, 0),
+	})
+	tw:Play()
+	arrowTween = tw
+end
+
+function RetentionController.Init()
+	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if kind == "StarterPayout" and typeof(data) == "table" then
+			clearArrow()
+			coinBurst(math.floor(tonumber(data.Cash) or 0), if typeof(data.Text) == "string" then data.Text else nil)
+		elseif kind == "WelcomeBack" and typeof(data) == "table" then
+			whenFree(function()
+				welcomeBackCard(data)
+			end)
+		elseif kind == "Streak" and typeof(data) == "table" then
+			whenFree(function()
+				streakCard(data)
+			end)
+		elseif kind == "NotifOptIn" then
+			whenFree(function()
+				NotifOptIn.Ask("auto")
+			end)
+		end
+	end)
+	player:GetAttributeChangedSignal("WE_Onboarding"):Connect(showArrow)
+	player:GetAttributeChangedSignal("WE_ConsolePos_CommandCenter"):Connect(showArrow)
+	showArrow()
+end
+
+return RetentionController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="267">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -122762,6 +124125,19 @@ function SettingsController.Init()
 	end)
 	y += TAP + 14
 
+	-- claude-bud JOB 29: game notifications (Roblox experience notifications, opt-in). Only while the switch is live
+	-- for this player (RetentionConfig.Notifications); the tap asks Roblox's own prompt (Modules/NotifOptIn).
+	if (require(Shared.Configs.RetentionConfig) :: any).NotificationsLiveFor(player.UserId) then
+		section("NOTIFICATIONS")
+		local notifBtn = button("NotifOptIn", "Game alerts: TURN ON", UDim.new(0, 16), UDim.new(1, -32))
+		notifBtn.Activated:Connect(function()
+			AudioController.PlayClick()
+			setOpen(false)
+			require(script.Parent.Parent.Modules.NotifOptIn).Ask("settings")
+		end)
+		y += TAP + 14
+	end
+
 	-- Supply spinner (the Missions panel has the same claim row; this section stays per spec §3.7)
 	section("SUPPLY SPINNER")
 	local spinnerBtn = button("SpinnerClaim", "SUPPLY SPINNER — Claim free Cash/Gold", UDim.new(0, 16), UDim.new(1, -32))
@@ -122898,7 +124274,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="265">
+          <Item class="ModuleScript" referent="268">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -124808,7 +126184,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="266">
+          <Item class="ModuleScript" referent="269">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -126075,7 +127451,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="267">
+          <Item class="ModuleScript" referent="270">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -127711,7 +129087,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="268">
+          <Item class="ModuleScript" referent="271">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -128072,7 +129448,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="269">
+          <Item class="ModuleScript" referent="272">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -129516,7 +130892,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="270">
+          <Item class="ModuleScript" referent="273">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -131817,11 +133193,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="271">
+        <Item class="Folder" referent="274">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="272">
+          <Item class="ModuleScript" referent="275">
             <Properties>
               <string name="Name">AimTargets</string>
               <string name="Source"><![CDATA[--!strict
@@ -132364,7 +133740,7 @@ return AimTargets
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="273">
+          <Item class="ModuleScript" referent="276">
             <Properties>
               <string name="Name">AirWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -133016,7 +134392,7 @@ return AirWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="274">
+          <Item class="ModuleScript" referent="277">
             <Properties>
               <string name="Name">AircraftBodyClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -133347,7 +134723,7 @@ return AircraftBodyClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="275">
+          <Item class="ModuleScript" referent="278">
             <Properties>
               <string name="Name">ArmyDebugClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -133691,7 +135067,7 @@ return ArmyDebugClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="276">
+          <Item class="ModuleScript" referent="279">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -134523,7 +135899,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="277">
+          <Item class="ModuleScript" referent="280">
             <Properties>
               <string name="Name">AudioHooks</string>
               <string name="Source"><![CDATA[--!strict
@@ -135055,7 +136431,7 @@ return AudioHooks
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="278">
+          <Item class="ModuleScript" referent="281">
             <Properties>
               <string name="Name">BusinessVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -136490,7 +137866,7 @@ return BusinessVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="279">
+          <Item class="ModuleScript" referent="282">
             <Properties>
               <string name="Name">CameraFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -137041,7 +138417,7 @@ return CameraFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="280">
+          <Item class="ModuleScript" referent="283">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -137109,7 +138485,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="281">
+          <Item class="ModuleScript" referent="284">
             <Properties>
               <string name="Name">ConsoleWaypoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -137423,7 +138799,7 @@ return ConsoleWaypoint
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="282">
+          <Item class="ModuleScript" referent="285">
             <Properties>
               <string name="Name">EngagementClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -137869,7 +139245,7 @@ return EngagementClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="283">
+          <Item class="ModuleScript" referent="286">
             <Properties>
               <string name="Name">GameFeelClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -138172,7 +139548,7 @@ return GameFeelClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="284">
+          <Item class="ModuleScript" referent="287">
             <Properties>
               <string name="Name">HudIcons</string>
               <string name="Source"><![CDATA[--!strict
@@ -138531,7 +139907,7 @@ return HudIcons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="285">
+          <Item class="ModuleScript" referent="288">
             <Properties>
               <string name="Name">HudLayout</string>
               <string name="Source"><![CDATA[--!strict
@@ -139848,7 +141224,7 @@ return HudLayout
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="286">
+          <Item class="ModuleScript" referent="289">
             <Properties>
               <string name="Name">Juice</string>
               <string name="Source"><![CDATA[--!strict
@@ -140012,7 +141388,7 @@ return Juice
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="287">
+          <Item class="ModuleScript" referent="290">
             <Properties>
               <string name="Name">LabelGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -140254,7 +141630,7 @@ return LabelGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="288">
+          <Item class="ModuleScript" referent="291">
             <Properties>
               <string name="Name">MoveDebugClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -140628,7 +142004,7 @@ return MoveDebugClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="289">
+          <Item class="ModuleScript" referent="292">
             <Properties>
               <string name="Name">NextPadChevrons</string>
               <string name="Source"><![CDATA[--!strict
@@ -141116,7 +142492,98 @@ return NextPadChevrons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="290">
+          <Item class="ModuleScript" referent="293">
+            <Properties>
+              <string name="Name">NotifOptIn</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 29 (2026-09-30): the ONE place the client asks Roblox for experience-notification opt-in.
+	Used by RetentionController (the server's calm-moment ask, FeaturePush "NotifOptIn") and SettingsController (the
+	player's own TURN ON tap).
+
+	The steps:
+	  1. ExperienceNotificationService:CanPromptOptInAsync(), then :PromptOptIn();
+	  2. wait for OptInPromptClosed (at most 120 s);
+	  3. ask CanPromptOptInAsync() again: false = accepted (or Roblox's own limit), true = declined; an error or no
+	     prompt = unavailable.
+	The result goes to the server on RequestNotifOptInResult (result, source). Every Roblox call is pcall'd; it never
+	throws. Studio cannot show the Roblox prompt, so it reports "unavailable" there.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local NotifOptIn = {}
+
+local asking = false
+
+-- true when Roblox would show the prompt now (yields; false on any error)
+function NotifOptIn.CanAsk(): boolean
+	local okS, svc = pcall(function(): any
+		return game:GetService("ExperienceNotificationService")
+	end)
+	if not okS or svc == nil then
+		return false
+	end
+	local ok, can = pcall(function()
+		return svc:CanPromptOptInAsync()
+	end)
+	return ok and can == true
+end
+
+--[[ Ask (source = "auto" | "settings"). Yields in its own thread; reports the result to the server. Returns at once
+	when an ask is already running. ]]
+function NotifOptIn.Ask(source: string)
+	if asking then
+		return
+	end
+	asking = true
+	task.spawn(function()
+		local result = "unavailable"
+		local okS, ens = pcall(function(): any
+			return game:GetService("ExperienceNotificationService")
+		end)
+		local svc: any = if okS then ens else nil
+		if svc and NotifOptIn.CanAsk() then
+			local closed = false
+			local conn: RBXScriptConnection? = nil
+			pcall(function()
+				conn = svc.OptInPromptClosed:Connect(function()
+					closed = true
+				end)
+			end)
+			local okP = pcall(function()
+				svc:PromptOptIn()
+			end)
+			if okP then
+				local left = 120
+				while not closed and left > 0 do
+					task.wait(0.5)
+					left -= 0.5
+				end
+				local okA, stillCan = pcall(function()
+					return svc:CanPromptOptInAsync()
+				end)
+				result = if okA and stillCan == false then "accepted" elseif okA then "declined" else "unavailable"
+			end
+			if conn then
+				conn:Disconnect()
+			end
+		end
+		local Shared = ReplicatedStorage:FindFirstChild("Shared")
+		if Shared then
+			local Remotes = require((Shared :: any).Remotes) :: any
+			local Constants = require((Shared :: any).Constants) :: any
+			Remotes.FireServer(Constants.RemoteNames.RequestNotifOptInResult, result, if source == "settings" then "settings" else nil)
+		end
+		asking = false
+	end)
+end
+
+return NotifOptIn
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="294">
             <Properties>
               <string name="Name">ObjectiveMarker</string>
               <string name="Source"><![CDATA[--!strict
@@ -141575,7 +143042,7 @@ return ObjectiveMarker
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="291">
+          <Item class="ModuleScript" referent="295">
             <Properties>
               <string name="Name">OpsJobs</string>
               <string name="Source"><![CDATA[--!strict
@@ -142199,7 +143666,7 @@ return OpsJobs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="292">
+          <Item class="ModuleScript" referent="296">
             <Properties>
               <string name="Name">PanelShell</string>
               <string name="Source"><![CDATA[--!strict
@@ -142445,7 +143912,7 @@ return PanelShell
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="293">
+          <Item class="ModuleScript" referent="297">
             <Properties>
               <string name="Name">PremiumWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -142859,7 +144326,7 @@ return PremiumWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="294">
+          <Item class="ModuleScript" referent="298">
             <Properties>
               <string name="Name">ProducerLabels</string>
               <string name="Source"><![CDATA[--!strict
@@ -143292,7 +144759,7 @@ return ProducerLabels
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="295">
+          <Item class="ModuleScript" referent="299">
             <Properties>
               <string name="Name">ProductionFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -144546,7 +146013,7 @@ return ProductionFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="296">
+          <Item class="ModuleScript" referent="300">
             <Properties>
               <string name="Name">ProgressPill</string>
               <string name="Source"><![CDATA[--!strict
@@ -144725,7 +146192,7 @@ return ProgressPill
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="297">
+          <Item class="ModuleScript" referent="301">
             <Properties>
               <string name="Name">QualityGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -145071,7 +146538,7 @@ return QualityGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="298">
+          <Item class="ModuleScript" referent="302">
             <Properties>
               <string name="Name">RebirthConfirm</string>
               <string name="Source"><![CDATA[--!strict
@@ -145957,7 +147424,7 @@ return RebirthConfirm
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="299">
+          <Item class="ModuleScript" referent="303">
             <Properties>
               <string name="Name">RigAnimator</string>
               <string name="Source"><![CDATA[--!strict
@@ -146985,7 +148452,7 @@ return RigAnimator
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="300">
+          <Item class="ModuleScript" referent="304">
             <Properties>
               <string name="Name">StandFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -147066,7 +148533,106 @@ return StandFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="301">
+          <Item class="ModuleScript" referent="305">
+            <Properties>
+              <string name="Name">StreakStrip</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 29 (2026-09-30): the 7-day login strip, shared by the streak card (RetentionController) and the Missions
+	panel (MissionController). Pure UI from the server's Streak7 data:
+	  * Days = 7;
+	  * Today = the day claimed today, or the one he can claim;
+	  * Claimed;
+	  * Cash[d];
+	  * Big[d] (day 3 and day 7).
+	Days before today show a tick, today is lit gold, the big days carry a gold border and a star. No input, no loops.
+]]
+
+local StreakStrip = {}
+
+local GOLD = Color3.fromRGB(255, 205, 60)
+local DONE = Color3.fromRGB(70, 150, 90)
+local DIM = Color3.fromRGB(40, 44, 50)
+local TEXT = Color3.fromRGB(235, 235, 235)
+
+-- "$1k", "$3.5k", "$20k", "$750"
+function StreakStrip.ShortCash(n: number): string
+	local v = math.floor(tonumber(n) or 0)
+	if v >= 1000 then
+		local k = v / 1000
+		if k == math.floor(k) then
+			return string.format("$%dk", k)
+		end
+		return string.format("$%.1fk", k)
+	end
+	return "$" .. tostring(v)
+end
+
+--[[ A horizontal strip of `data.Days` tiles, each tileW x tileH (in the parent's units), text `textSize`. Returns the
+	strip Frame (parented to `parent`). ]]
+function StreakStrip.Build(parent: Instance, data: any, tileW: number, tileH: number, textSize: number): Frame
+	local days = math.clamp(math.floor(tonumber(data.Days) or 7), 1, 7)
+	local today = math.floor(tonumber(data.Today) or 1)
+	local claimed = data.Claimed == true
+	local gap = 4
+	local strip = Instance.new("Frame")
+	strip.Name = "StreakStrip"
+	strip.BackgroundTransparency = 1
+	strip.Size = UDim2.fromOffset(days * tileW + (days - 1) * gap, tileH)
+	local list = Instance.new("UIListLayout")
+	list.FillDirection = Enum.FillDirection.Horizontal
+	list.Padding = UDim.new(0, gap)
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Parent = strip
+	for d = 1, days do
+		local done = d < today or (d == today and claimed)
+		local isToday = d == today
+		local big = typeof(data.Big) == "table" and data.Big[d] == true
+		local tile = Instance.new("Frame")
+		tile.Name = "Day" .. tostring(d)
+		tile.LayoutOrder = d
+		tile.Size = UDim2.fromOffset(tileW, tileH)
+		tile.BackgroundColor3 = if isToday then GOLD elseif done then DONE else DIM
+		tile.BorderSizePixel = 0
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 6)
+		c.Parent = tile
+		if big then
+			local st = Instance.new("UIStroke")
+			st.Color = GOLD
+			st.Thickness = 2
+			st.Parent = tile
+		end
+		local top = Instance.new("TextLabel")
+		top.BackgroundTransparency = 1
+		top.Size = UDim2.new(1, 0, 0.5, 0)
+		top.Font = Enum.Font.GothamBlack
+		top.TextSize = textSize
+		top.TextColor3 = if isToday then Color3.fromRGB(30, 26, 10) else TEXT
+		top.Text = (if done and not isToday then "✓" else "D" .. tostring(d)) .. (if big then "★" else "")
+		top.Parent = tile
+		local bottom = Instance.new("TextLabel")
+		bottom.BackgroundTransparency = 1
+		bottom.Position = UDim2.fromScale(0, 0.5)
+		bottom.Size = UDim2.new(1, 0, 0.5, 0)
+		bottom.Font = Enum.Font.GothamBold
+		bottom.TextSize = textSize
+		bottom.TextColor3 = top.TextColor3
+		local cash = if typeof(data.Cash) == "table" then tonumber(data.Cash[d]) or 0 else 0
+		bottom.Text = StreakStrip.ShortCash(cash)
+		bottom.TextScaled = false
+		bottom.Parent = tile
+		tile.Parent = strip
+	end
+	strip.Parent = parent
+	return strip
+end
+
+return StreakStrip
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="306">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -147131,7 +148697,7 @@ return StudioSmokeClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="302">
+          <Item class="ModuleScript" referent="307">
             <Properties>
               <string name="Name">VehicleCombatClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -147821,7 +149387,7 @@ return VehicleCombatClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="303">
+          <Item class="ModuleScript" referent="308">
             <Properties>
               <string name="Name">VehicleDriveClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -151589,7 +153155,7 @@ return VehicleDriveClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="304">
+          <Item class="ModuleScript" referent="309">
             <Properties>
               <string name="Name">WeaponVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -153736,7 +155302,7 @@ return WeaponVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="305">
+          <Item class="ModuleScript" referent="310">
             <Properties>
               <string name="Name">WorldSpinners</string>
               <string name="Source"><![CDATA[--!strict
@@ -153877,7 +155443,7 @@ return WorldSpinners
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="306">
+  <Item class="Workspace" referent="311">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
