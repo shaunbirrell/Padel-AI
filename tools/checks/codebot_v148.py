@@ -27,9 +27,10 @@ def _rd148(p):
 _S148 = "src/ServerScriptService/Server/"
 _C148 = "src/ReplicatedStorage/Shared/Configs/"
 
-for _f in (_S148 + "Services/DataService.luau", _S148 + "Services/BaseService.luau", _S148 + "EarlyRemotes.server.luau"):
-	_cb148('SetAttribute("WE_Build", 148)' in _rd148(_f), "CODEBOT v148: WE_Build=148 " + _f.rsplit("/", 1)[-1])
-_cb148("WE_Build=148" in _rd148(_S148 + "Services/DataService.luau"), "CODEBOT v148: DataService profile-loaded log says WE_Build=148")
+# v149 (Code Bot Roblox): the WE_Build=148 pins are superseded in tools/checks/codebot_v149.py (WE_Build=149).
+# for _f in (_S148 + "Services/DataService.luau", _S148 + "Services/BaseService.luau", _S148 + "EarlyRemotes.server.luau"):
+# 	_cb148('SetAttribute("WE_Build", 148)' in _rd148(_f), "CODEBOT v148: WE_Build=148 " + _f.rsplit("/", 1)[-1])
+# _cb148("WE_Build=148" in _rd148(_S148 + "Services/DataService.luau"), "CODEBOT v148: DataService profile-loaded log says WE_Build=148")
 
 # tower guards: the stats table carries every field spawnGuardModel assigns to the Humanoid
 _BG = _rd148(_S148 + "Modules/BaseGuards.luau")
