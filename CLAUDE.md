@@ -13,6 +13,8 @@
   flag, no teleport / PivotTo in marches, no fast travel.
 - After JOB 38 is finished and pushed, do JOB 39 exactly as written in
   [`docs/claude-queue/JOB39-endgame-progression.md`](docs/claude-queue/JOB39-endgame-progression.md).
+- After JOB 39 is finished and pushed, do JOB 40 exactly as written in
+  [`docs/claude-queue/JOB40-guards-speed-props-like-reminder.md`](docs/claude-queue/JOB40-guards-speed-props-like-reminder.md).
 - **Store props (Code Bot STORE-PROPS, v132): DO NOT REMOVE.** The owner's Creator Store buildings / props live in
   `Shared/Configs/StorePropsConfig.luau` (placed by `Services/StorePropsService.luau`; list in
   [`docs/PROP-ASSETS.md`](docs/PROP-ASSETS.md)). They dress the JOB 31 sites / named areas and swap in as the JOB 33
