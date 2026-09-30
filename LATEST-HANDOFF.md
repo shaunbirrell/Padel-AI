@@ -1,4 +1,22 @@
 <!-- Q2-START -->
+## v151 PUBLISHED (Code Bot Roblox, 2026-09-30 23:00 Dublin): Open Cloud place version 149 — JOB 40 part C store-props PLUMBING (rows empty: probe 0/19)
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **151**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":149}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Cherry-pick only** (not a bud-branch merge): `a46a46a` JOB 40 part C -> `7a626d9` on phase-7. JOB 40 part D (`57201e8`, rate reminder) landed on bud mid-ship and is **NOT** in v151 (next ship).
+- **Commits (phase-7-polish):** `2e437c4` WE_Build 151 + `tools/checks/codebot_v151.py` + probe result, `c2471da` dist rebuild; this handoff. Bud merge `1ca3494` (phase-7 into claude/desktop-bud, temp worktree).
+- **Load probe (Open Cloud Luau on the live place, `tools/probes/job40c_codebot_probe.luau`, raw `docs/job40c-probe-2026-09-30.txt`, table in `docs/PROP-ASSETS.md`): 0 of 19 pass.**
+  - 18 ids: `User is not authorized to access Asset` (free public models, but not Roblox's / not in shaunie6's inventory, so the live place cannot load them).
+  - 856258654 Radar Station (VexHavoc) loads but fails: 213 parts after the trim (cap 40), a plain block build (119 blocks, no mesh files) and its decal 77911929 is by another user (origin rule).
+  - 10140810871 is also by the group "Philadelphia International Airport" (real place) — reject even if it loads later.
+  - No Roblox-made radar / sandbag / stall / tower model found on the Creator Store.
+- **So `StorePropsConfig.ReplaceRows` / `BaseRows` stay EMPTY:** the code ships as no-op plumbing; the RadarDome kit, helipads and Crossroads Town look exactly as v150. `StorePropsConfig.JOB40` Enabled + **OwnerFirst=true** kept.
+- **To unblock:** the owner "Gets" the wanted candidates on the Creator Store as shaunie6 (or picks Roblox-made / own models), then Code Bot re-runs the probe and wires only passers.
+- **Live state kept:** GuardConfig.Posts + SpeedV2 + Endgame + BaseMarker + ArmyOrders OwnerFirst=true; ShopOverhaul + CheckpointGuard OwnerFirst=false; STORE-PROPS world rows launched (v136); VIP 199; PreferMesh OFF; WE_Building* untouched; fast travel removed.
+- **Checks:** BuyPathStatic PASS=7262 FAIL=0 (phase-7), PASS=7270 FAIL=0 (merged bud); codebot_v151 PASS; rojo deterministic (2 builds identical).
+- **Phone tests (Migrate to Latest Update, as shaunie6):**
+  1. Radar Hill: the same block radar dome as before, nothing missing, nothing floating.
+  2. Your base helipad / runway / dock: unchanged and clear; frame rate as before.
+  3. Quick regression: base guards shoot a non-clan intruder; Speed Boost still 40 ("Run 2.5x faster").
+
 ## v150 PUBLISHED (Code Bot Roblox, 2026-09-30 22:48 Dublin): Open Cloud place version 148 — JOB 40 parts A+B base guards + SpeedV2 OWNER-FIRST
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **150**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":148}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Cherry-picks only** (not a bud-branch merge): `cc14b0e` JOB 40 part A real base guards + one hostility rule, `d8a2f62` JOB 40 part B Speed Pass x1.75 / Speed Boost x2.5 (SpeedV2). On phase-7 as `e3117bf` / `f8b6145`.
