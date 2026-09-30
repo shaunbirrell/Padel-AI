@@ -1,4 +1,21 @@
 <!-- Q2-START -->
+## v152 PUBLISHED (Code Bot Roblox, 2026-09-30 23:21 Dublin): Open Cloud place version 150 — JOB 40C market stalls (owner-first) + JOB 40D rate reminder (owner-first)
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **152**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":150}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Cherry-pick only:** `57201e8` JOB 40 part D -> `2205590` (RatePromptConfig Enabled + OwnerFirst=true).
+- **Commits (phase-7-polish):** `b2ae749` WE_Build 152 + `tools/checks/codebot_v152.py` + stall rows + re-probe docs, `5fd8d2c` dist rebuild; this handoff. Bud merge `8354bce`.
+- **JOB 40C re-probe** (after the owner's Get Model; `docs/job40c-probe2-2026-09-30.txt`, table in `docs/PROP-ASSETS.md`): 18 of 19 load (10140810871 still not authorized; rejected anyway, a real airport's group). **1 passes: 86311252190175 Market stall** (1 textured MeshPart, mesh + texture by its creator IAmASwedishMale, no scripts). Every radar / tower / bunker failed: over 40 parts, a block build, third-party meshes / textures, or (12735882090) an M60 gun + 22 scripts.
+- **Wired:** 2 ReplaceRows: the stall (Scale 5, 8.2 x 10 x 5.1 studs) replaces the Part stalls NW_Stall_1 / NW_Stall_2 in the Crossroads Town market lane. Dry run on the live place (`tools/probes/job40c_stall_dryrun.luau`): 7 kit parts hidden each, bottom = kit base, 0 overlaps, same facing. BaseRows stay EMPTY; Radar Hill dome unchanged.
+- **Owner-first:** `StorePropsConfig.JOB40` OwnerFirst=true. Once the owner is in a server, the two stalls change for everyone in that server (ReplaceRows are shared world). v152 fix: the swap now waits for the owner (0.2 Hz, once), so it also happens if he joins after someone else.
+- **§11 screenshots NOT taken:** no Studio on the Code Bot box and Open Cloud Luau cannot render. Owed (Studio or the phone).
+- **Checks:** BuyPathStatic PASS=7287 FAIL=0; codebot_v152 PASS; run_rate_prompt_test 0 failed; rojo deterministic.
+- **Live state kept:** GuardConfig.Posts, SpeedV2, Endgame, BaseMarker, ArmyOrders, RatePrompt OwnerFirst=true; ShopOverhaul + CheckpointGuard OwnerFirst=false; STORE-PROPS world rows launched; VIP 199; PreferMesh OFF; WE_Building* untouched.
+- **Phone tests (Migrate to Latest Update, as shaunie6):**
+  1. Crossroads Town, NW market lane (north-west of the plaza, near the water tower): the two front stalls are now blue/red awning stalls with fruit baskets, standing on the paving, not floating or sunk, fronts facing the lane; the two stalls behind them stay as before.
+  2. Walk up to and around the new stalls: no invisible wall where the old stall was; you can walk up to the counter.
+  3. Frame rate in the Town feels the same.
+  4. Radar Hill and your helipad look exactly as before.
+  5. Play 15 min (or rebirth): the "Enjoying WAR EMPIRE?" card shows once, gives nothing; "Don't show again" + rejoin: it never comes back.
+
 ## v151 PUBLISHED (Code Bot Roblox, 2026-09-30 23:00 Dublin): Open Cloud place version 149 — JOB 40 part C store-props PLUMBING (rows empty: probe 0/19)
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **151**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":149}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Cherry-pick only** (not a bud-branch merge): `a46a46a` JOB 40 part C -> `7a626d9` on phase-7. JOB 40 part D (`57201e8`, rate reminder) landed on bud mid-ship and is **NOT** in v151 (next ship).
