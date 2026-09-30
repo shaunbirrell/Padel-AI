@@ -1,5 +1,12 @@
 # WAR EMPIRE — rules for anyone working in this repo
 
+## QUEUED JOBS (Code Bot, 2026-09-30)
+- After JOB 34 is finished and pushed, do JOB 35 then JOB 36 exactly as written in
+  [`docs/claude-queue/JOB35-36-shop-and-guns.md`](docs/claude-queue/JOB35-36-shop-and-guns.md), one at a time, same
+  rules. No fast travel.
+- **No fast travel, ever:** it was removed in v127 at the owner's request. The map is tap-to-pin only (see
+  `tools/checks/codebot_v127.py`).
+
 ## 0. Start here (every session, every time)
 - **Parallel sessions:** read [`LANES.md`](LANES.md) first. It says which lane your job is in, which files you own,
   the rules for shared hot files, the branch name (`claude/lane-<x>-<topic>` from the latest `phase-7-polish`), and
