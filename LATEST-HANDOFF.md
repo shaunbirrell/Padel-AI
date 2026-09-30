@@ -1,6 +1,6 @@
 <!-- Q2-START -->
-## v135 (Code Bot Roblox, 2026-09-30 ~14:00 Dublin): ship claude-bud JOB 35 premium guns armory — OWNER-FIRST (pass Ids still 0) — place version TBD
-- **WE_Build 135**. Cherry-pick `4c2b10a` + `4ec656d` from `origin/claude/desktop-bud` onto phase-7-polish (after v134). PreferMesh OFF; WE_Building* untouched; fast travel stays REMOVED.
+## v135 (Code Bot Roblox, 2026-09-30 ~13:52 Dublin): ship claude-bud JOB 35 premium guns armory — OWNER-FIRST (pass Ids still 0) — place version 133
+- **WE_Build 135**. Code commits `0eba3bd`/`182aca8` (cherry-pick) + `1e6d56c` (+ dist `4e5b834`). Open Cloud HTTP 200 `versionNumber=133`. PreferMesh OFF; WE_Building* untouched; fast travel stays REMOVED.
 - **Flags (per Claude handoff):** `PremiumGunsConfig.Live.Enabled = true`, `OwnerFirst = true`, `OwnerTestGrant = true`. Pass Ids (`PG_*`) stay **0** — Shop hides gold rows; armory cases show SOON / never prompt until the owner pastes Ids. **To launch for everyone:** set `OwnerFirst = false` and paste the 7 pass Ids in MonetizationConfig.
 - **What ships:** 6 premium guns (Sovereign / Quake / Longshot / Havoc / Thunderhead / Tempest) + Armory Pass; GunMechanics (burst/spin/charge/pierce/headshot); Longshot scope; base armory 7 glass cases west of Supply Depot; Shop gold rows when Ids live; PremiumGunService grants on pass own.
 - **Checks:** BuyPathStatic PASS=6807 FAIL=0; `claude_bud_job35` 28 pins; `run_armory_test.py` 0 failed; `codebot_v135` pins; rojo ok.
