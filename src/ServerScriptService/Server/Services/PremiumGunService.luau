@@ -258,7 +258,11 @@ function PremiumGunService.Build(plotId: number, owner: Player)
 		end
 		local P = A.Plinth
 		local G = A.Glass
-		local plinth = part("Plinth", P, base * CFrame.new(0, P.Y / 2, 0), steel, Enum.Material.Metal, case, true)
+		-- build guide §2.4: 2-3 tones and a seeded +-5 % shade per case (no flat single-colour row)
+		local shade = 1 + (((i * 37) % 11) - 5) / 100
+		local tone = Color3.new(math.clamp(steel.R * shade, 0, 1), math.clamp(steel.G * shade, 0, 1), math.clamp(steel.B * shade, 0, 1))
+		local plinth = part("Plinth", P, base * CFrame.new(0, P.Y / 2, 0), tone, Enum.Material.Metal, case, true)
+		part("KickPlate", Vector3.new(P.X + 0.2, 0.3, P.Z + 0.2), base * CFrame.new(0, 0.15, 0), Color3.fromRGB(34, 35, 38), Enum.Material.DiamondPlate, case, false)
 		part("Trim", Vector3.new(P.X + 0.3, 0.25, P.Z + 0.3), base * CFrame.new(0, P.Y, 0), A.Trim, Enum.Material.Metal, case, false)
 		local glass = part("Glass", G, base * CFrame.new(0, P.Y + G.Y / 2, 0), Color3.fromRGB(200, 225, 240), Enum.Material.Glass, case, true)
 		glass.Transparency = A.GlassTransparency
@@ -303,6 +307,14 @@ function PremiumGunService.Build(plotId: number, owner: Player)
 		end
 	end
 	folder:SetAttribute("OwnerUserId", owner.UserId)
+	local parts = 0
+	for _, d in ipairs(folder:GetDescendants()) do -- once per build
+		if d:IsA("BasePart") then
+			parts += 1
+		end
+	end
+	folder:SetAttribute("WE_Parts", parts)
+	print(string.format("[Armory] plot %d parts=%d", plotId, parts))
 	folder.Parent = root
 	plotOf[owner.UserId] = plotId
 	PremiumGunService.Refresh(owner)
