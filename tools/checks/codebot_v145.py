@@ -69,6 +69,10 @@ _cb145("FastTravelEnabled = false" in _rd145(_C145 + "MapConfig.luau"), "CODEBOT
 try:
 	_wb = _sp145.run(["git", "diff", "--name-only", "aa7f88e"], capture_output=True, text=True).stdout
 	_cb145(not any("WE_Building" in l for l in _wb.splitlines()), "CODEBOT v145: no WE_Building* file touched since v144 tip")
-	_cb145(not any(l.startswith(_C145) for l in _wb.splitlines()), "CODEBOT v145: no config changed since v144 tip (VIP / pass Ids / RPG hold / WeaponsLive untouched)")
+	# claude-bud JOB 39 phase 2: retired "no config changed since v144 tip" (every later job adds config: EndgameConfig parts,
+	# PlazaServicesConfig stations). Replacement: the configs this guard protected (VIP / pass Ids = MonetizationConfig,
+	# RPG hold = WeaponConfig, WeaponsLive = RebirthConfig) are still untouched since the v144 tip.
+	_cb145(not any(l in (_C145 + "MonetizationConfig.luau", _C145 + "WeaponConfig.luau", _C145 + "RebirthConfig.luau") for l in _wb.splitlines()),
+		"CODEBOT v145: VIP / pass Ids / RPG hold / WeaponsLive configs untouched since v144 tip (claude-bud JOB 39 replacement)")
 except Exception:
 	pass

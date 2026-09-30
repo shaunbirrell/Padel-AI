@@ -783,7 +783,7 @@ local function completeRaid(thief: Player, victim: Player, hold: RaidHold): bool
 	end
 	-- 2. 10% of the raidable balance
 	local balance = MoneyCollectorService.GetRaidableBalance(victim)
-	local steal = math.floor(balance * R.StealFraction)
+	local steal = math.floor(balance * R.StealFraction * MoneyCollectorService.VaultMult(victim, false)) -- claude-bud JOB 39: Vault Plating (x1 while not live)
 	-- 3. protection first: a failure below favours the victim
 	local vRaid = raidOf(vProfile)
 	local tRaid = raidOf(tProfile)
@@ -899,6 +899,21 @@ function MoneyCollectorService._RaidDone(thief: Player, victim: Player, vProfile
 	return true
 end
 
+-- claude-bud JOB 39 §2.5 (APPROVED §9 f): the victim's Vault Plating: the ATM raid 10 % x (1 - 0.03 L), the army raid
+-- 5 % x (1 - 0.05 L). 1 while EndgameConfig's Defence part is not live for the victim (= the JOB 38 numbers).
+function MoneyCollectorService.VaultMult(victim: Player, army: boolean): number
+	local ok, EGS = pcall(function(): any
+		return require(script.Parent.EndgameService)
+	end)
+	if ok and EGS and EGS.VaultMult then
+		local okM, m = pcall(EGS.VaultMult, victim.UserId, army)
+		if okM and typeof(m) == "number" and m == m then
+			return math.clamp(m, 0, 1)
+		end
+	end
+	return 1
+end
+
 --[[ claude-bud JOB 38: the ARMY raid (ArmyPlan, after the breach and the ATM hold). fraction = StealFraction x ArmyLootMult
 	(x BullyLootMult). Same checks (CanArmyRaid), the same money path (_MoveLoot: the victim's ATM -> the sender's ATM),
 	the same victim shield; the sender gets no in-person cooldown (the SEND has its own). Returns what moved. ]]
@@ -913,7 +928,7 @@ function MoneyCollectorService.ArmyRaid(sender: Player, victim: Player, fraction
 		return 0
 	end
 	local balance = MoneyCollectorService.GetRaidableBalance(victim)
-	local frac = math.clamp(tonumber(fraction) or 0, 0, R.StealFraction)
+	local frac = math.clamp(tonumber(fraction) or 0, 0, R.StealFraction) * MoneyCollectorService.VaultMult(victim, true) -- claude-bud JOB 39
 	local steal = math.max(R.MinSteal, math.floor(balance * frac))
 	local vRaid = raidOf(vProfile)
 	local oldShield = vRaid.ShieldUntil

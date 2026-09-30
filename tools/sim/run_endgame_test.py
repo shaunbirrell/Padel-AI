@@ -43,12 +43,15 @@ MODS = {
     "Configs/ResearchConfig": SH / "Configs/ResearchConfig.luau",
     "Services/EndgameService": SV / "Services/EndgameService.luau",
     "Controllers/EndgameController": CL / "Controllers/EndgameController.luau",
+    "Modules/BaseTierBuilder": SV / "Modules/BaseTierBuilder.luau",
 }
 
 EXTRA = r'''
 task = { spawn = function() end, wait = function() end, delay = function() end, defer = function(fn, ...) fn(...) end }
 local function signal() local s = { fns = {} }; s.Connect = function(self, fn) table.insert(self.fns, fn); return { Disconnect = function() end } end; return s end
-local Players = { PlayerAdded = signal(), PlayerRemoving = signal(), GetPlayers = function() return {} end, LocalPlayer = any }
+BY_UID = {}
+local Players = { PlayerAdded = signal(), PlayerRemoving = signal(), GetPlayers = function() return {} end, LocalPlayer = any,
+  GetPlayerByUserId = function(_, uid) return BY_UID[uid] end }
 local RunService = { IsStudio = function() return false end }
 local prevGame = game
 game = { GetService = function(_, n)
@@ -221,6 +224,140 @@ check(head ~= nil and head.Name == "Head", "the Chief of Staff's head anchors th
 local okNone = CT.BuildStation("Recruits", CFrame.new(0, 0, 0)) == nil
 check(okNone, "phase 1 builds only the Command Office")
 
+-- ── 4b. phase 2: Base Tier + Defence (the real service; the owner's profile through GetPlayerByUserId) ──
+BY_UID[470626172] = owner
+BY_UID[9] = other
+EG.Live.Enabled = true
+local po = profiles[470626172]
+po.Endgame = { EmpireLevel = 10, BaseTier = 0, Defence = {} }
+po.Prestige = 3
+po.BaseUpgrades = { CommandCenter = 5 }
+po.Cash = 5e9
+local atHQ, down, rebuilt, synced = false, false, 0, 0
+deps.BaseService = { IsAtConsole = function(p, id) return atHQ and id == "CommandCenter", "ok" end }
+deps.GateDefenseService = { NeedsRebuild = function() return down end, InstantRebuild = function() rebuilt += 1; down = false; return true end, SyncPlot = function() synced += 1 end }
+spentLog = {}
+local te = EG.TierEffects(5)
+check(te.GateHpPct == 30 and te.SoldierCap == 20 and te.Nests == 2 and te.RebuildSeconds == -10, "Tier 5 = gate HP +30 %, soldiers +20, 2 nests, rebuild -10 s")
+check(EG.DefenceNeedTier(4) == 0 and EG.DefenceNeedTier(5) == 1 and EG.DefenceNeedTier(7) == 2 and EG.DefenceNeedTier(9) == 3 and EG.DefenceNeedTier(10) == 4, "Defence L5-6 need T1, L7-8 T2, L9 T3, L10 T4")
+check(ES.GateHpMult(470626172) == 1 and ES.RebuildCut(470626172, 50) == 50 and ES.TurretHpMult(470626172) == 1 and ES.VaultMult(470626172, true) == 1 and ES.ExtraNests(470626172) == 0,
+  "nothing bought: every defence number is the old one")
+ok, msg = ES.Purchase(owner, "Tier", "Next")
+check(not ok and msg == EG.Text.NotAtHQ, "Base Tier away from the HQ console: refused")
+atHQ = true
+po.Prestige = 1
+ok, msg = ES.Purchase(owner, "Tier", "Next")
+check(not ok and msg == string.format(EG.Text.NeedRebirths, 2), "Fort needs 2 rebirths (" .. tostring(msg) .. ")")
+po.Prestige = 3
+po.BaseUpgrades.CommandCenter = 4
+ok, msg = ES.Purchase(owner, "Tier", "Next")
+check(not ok and msg == string.format(EG.Text.NeedCC, 5), "Fort needs Command Center L5")
+po.BaseUpgrades.CommandCenter = 5
+ok, msg = ES.Purchase(owner, "Tier", "Next")
+check(ok and po.Endgame.BaseTier == 1 and spentLog[#spentLog].n == 10e6 and spentLog[#spentLog].why == "endgame_tier", "Fort: $10M as endgame_tier, BASE TIER 1 (" .. tostring(msg) .. ")")
+ok, msg = ES.Purchase(owner, "Tier", "Next")
+check(ok and po.Endgame.BaseTier == 2, "Citadel at R3")
+ok, msg = ES.Purchase(owner, "Tier", "Next")
+check(not ok and msg == string.format(EG.Text.NeedRebirths, 5), "Stronghold needs 5 rebirths")
+po.Prestige = 12
+for _ = 1, 3 do ES.Purchase(owner, "Tier", "Next") end
+check(po.Endgame.BaseTier == 5 and ES.Purchase(owner, "Tier", "Next") == false, "Stronghold, Bastion, Capital at R12; then maxed")
+ES._Own(po, 470626172)
+check(ES.SoldierCapBonus(po) == 20 and ES.ExtraNests(470626172) == 2 and ES.SoldierCapBonus({ Endgame = { BaseTier = 5 } }) == 0, "Capital: +20 soldiers, 2 nests (an unknown profile gets 0)")
+-- Defence at the Engineering Bureau
+ES._SetStation("Engineers", CFrame.new(300, 5, 0))
+local eng = ES.StationPoint("Engineers")
+ok, msg = ES.Purchase(owner, "Defence", "Vault")
+check(not ok, "Defence away from the Engineering Bureau: refused (" .. tostring(msg) .. ")")
+owner.Root.Position = eng
+ok, msg = ES.Purchase(owner, "Defence", "Robux")
+check(not ok, "an unknown track is refused")
+po.Endgame.BaseTier = 0
+for _ = 1, 4 do ES.Purchase(owner, "Defence", "Gate") end
+ok, msg = ES.Purchase(owner, "Defence", "Gate")
+check(po.Endgame.Defence.Gate == 4 and not ok and msg == string.format(EG.Text.NeedTier, 1), "Gate & Walls L1-4 bought, L5 needs Base Tier 1 (" .. tostring(msg) .. ")")
+po.Endgame.BaseTier = 5
+for _ = 1, 6 do ES.Purchase(owner, "Defence", "Gate") end
+for _, tr in ipairs({ "Plating", "Guns", "Vault" }) do for _ = 1, 10 do ES.Purchase(owner, "Defence", tr) end end
+check(po.Endgame.Defence.Gate == 10 and po.Endgame.Defence.Plating == 10 and po.Endgame.Defence.Guns == 10 and po.Endgame.Defence.Vault == 10 and synced > 0,
+  "every track to L10 (the gate defences resync after each buy)")
+check(spentLog[#spentLog].why == "endgame_defence" and spentLog[#spentLog].n == EG.DefenceCost(10), "L10 costs $68.7M as endgame_defence")
+check(math.abs(ES.GateHpMult(470626172) - 2.5) < 1e-9, string.format("[DefTest] gate=10 tier=5 gateHP x%.2f (+30 %% tier +120 %% track)", ES.GateHpMult(470626172)))
+check(ES.RebuildCut(470626172, 50) == 10, "[DefTest] gate=10 rebuild=10 s (50 - 10 - 30, floor 10)")
+check(math.abs(ES.TurretHpMult(470626172) - 2.5) < 1e-9, "[DefTest] plating=10 autogunHP x2.50")
+check(math.abs(ES.TurretDmgMult(470626172, 1.5) - 2.4) < 1e-9 and ES.TurretDmgMult(470626172, 2.5) == 3 and ES.TurretDmgMult(9, 1.5) == 1.5, "[DefTest] guns=10 turretDmg research 1.5 -> x2.40; capped at MaxMult 3; not live = research only")
+check(math.abs(0.05 * ES.VaultMult(470626172, true) - 0.025) < 1e-9 and math.abs(0.10 * ES.VaultMult(470626172, false) - 0.07) < 1e-9, "[LootTest] vault=10 army pct=2.5 % atm pct=7 %")
+po.Endgame.Defence.Vault = 5
+check(math.abs(0.05 * ES.VaultMult(470626172, true) - 0.0375) < 1e-9 and math.abs(0.10 * ES.VaultMult(470626172, false) - 0.085) < 1e-9, "[LootTest] vault=5 army 3.75 % atm 8.5 %")
+check(ES.VaultMult(9, true) == 1, "[LootTest] vault=0 (not live) = the JOB 38 5 % / 10 %")
+-- instant rebuild at the HQ console
+owner.attrs.WE_IncomePerSec = 23700
+ok, msg = ES.Purchase(owner, "Rebuild", "Now")
+check(not ok and msg == EG.Text.NothingDown and rebuilt == 0, "rebuild with nothing down: refused")
+down = true
+ok, msg = ES.Purchase(owner, "Rebuild", "Now")
+check(ok and rebuilt == 1 and spentLog[#spentLog].n == 711000 and spentLog[#spentLog].why == "endgame_rebuild", "rebuild: 30 s of income ($711,000 at 23.7k/s) as endgame_rebuild")
+owner.attrs.WE_IncomePerSec = 100
+down = true
+ES.Purchase(owner, "Rebuild", "Now")
+check(spentLog[#spentLog].n == 25000, "rebuild floor $25,000")
+atHQ = false
+down = true
+check(ES.Purchase(owner, "Rebuild", "Now") == false, "rebuild away from the HQ console: refused")
+-- OFF: the tier / defence numbers are the old ones for a not-live owner even with a full profile
+EG.Live.Enabled = false
+check(ES.GateHpMult(470626172) == 1 and ES.TurretHpMult(470626172) == 1 and ES.ExtraNests(470626172) == 0 and ES.SoldierCapBonus(po) == 0 and ES.VaultMult(470626172, false) == 1 and ES.RebuildCut(470626172, 50) == 50,
+  "Live.Enabled = false: gate / turret / nests / soldiers / vault / rebuild all back to the old numbers")
+EG.Live.Enabled = true
+local st2 = ES.State(owner)
+check(st2.Tier and st2.Tier.Level == 5 and st2.Tier.Next == nil and #st2.Defence == 4 and st2.Rebuild ~= nil, "State: the tier, 4 defence rows, the rebuild row")
+local rowsE = CT.ListRows("Engineers", st2)
+local rowsH = CT.ListRows("HQ", st2)
+check(#rowsE == 4 and rowsE[1].Kind == "Defence" and #rowsH == 2 and rowsH[1].Done == "MAX" and rowsH[2].Kind == "Rebuild", "the list panel rows: 4 tracks; HQ = tier (MAX) + rebuild")
+
+-- the Engineering Bureau stand
+local em = CT.BuildStation("Engineers", CFrame.new(0, 0, 0))
+local ep, el, eg2, eneon = 0, 0, 0, 0
+for _, d in ipairs(em:GetDescendants()) do
+  if d.ClassName == "Part" then ep += 1; if d.Material == "Material.Neon" then eneon += 1 end
+  elseif d.ClassName == "PointLight" then el += 1
+  elseif d.ClassName == "SurfaceGui" then eg2 += 1 end
+end
+check(ep == PSC.Stations.Engineers.Parts and ep <= PSC.MaxParts and el == 1 and eg2 == 1 and eneon == 0, string.format("the Engineering Bureau stand = %d parts (cap %d), 1 light, 1 sign", ep, PSC.MaxParts))
+
+-- the Base Tier builds (real BaseTierBuilder; a plot like the live ones: 320 pad, walls at 21.5, 2 gate posts, the HQ box)
+local BTB = require(node("Modules/BaseTierBuilder"))
+local ctx = {
+  Ground = CFrame.new(0, 1, 0), PadCentre = Vector3.new(0, 0.5, 0), HalfX = 158.5, HalfZ = 158.5, WallTop = 22.5, GroundY = 1,
+  Posts = { { CFrame = CFrame.new(-6, 7, 158), Size = Vector3.new(3, 12, 3) }, { CFrame = CFrame.new(6, 7, 158), Size = Vector3.new(3, 12, 3) } },
+  Gate = CFrame.new(0, 1, 158), Nests = { CFrame.new(-16, 1, 150), CFrame.new(16, 1, 150) },
+  HQ = { CFrame = CFrame.new(0, 12, -38), Size = Vector3.new(26, 22, 20) },
+}
+local prevParts = 0
+local allOk = true
+for t = 1, 5 do
+  local model, parts, lights = BTB.Build(ctx, t)
+  local tierParts = 0
+  local f = nil
+  for _, c in ipairs(model:GetChildren()) do if c.Name == "Tier" .. t then f = c end end
+  local neonT = 0
+  for _, d in ipairs(model:GetDescendants()) do if d.ClassName == "Part" and d.Material == "Material.Neon" then neonT += 1 end end
+  for _, d in ipairs(f and f:GetDescendants() or {}) do if d.ClassName == "Part" then tierParts += 1 end end
+  print(string.format("[BaseTier] tier=%d added=%d total=%d lights=%d", t, tierParts, parts, lights))
+  if tierParts > EG.BaseTier.MaxPartsPerTier or lights > EG.BaseTier.MaxLightsPerTier or tierParts < 20 or neonT > 0 or parts ~= prevParts + tierParts then allOk = false end
+  prevParts = parts
+end
+check(allOk, "every tier adds 20..120 parts, <= 2 lights, no Neon; cumulative (total " .. prevParts .. " at Capital)")
+local m5 = BTB.Build(ctx, 5)
+local bast, lint = 0, 0
+for _, d in ipairs(m5:GetDescendants()) do
+  if d.Name == "BastionBody" then bast += 1 end
+  if d.Name == "GatehouseLintel" then lint += 1 end
+end
+check(bast == 4 and lint == 1, "Stronghold: 4 corner bastions + the gatehouse lintel")
+local m0 = BTB.Build(ctx, 0)
+check(#m0:GetDescendants() == 0, "tier 0 builds nothing")
+
 -- ── 5. rebirth screen ──
 local PC = require(node("Configs/PrestigeConfig"))
 local function has(list, s) for _, l in ipairs(list) do if l == s then return true end end return false end
@@ -278,7 +415,20 @@ def main():
     pres = (SV / "Services/PrestigeService.luau").read_text(encoding="utf-8")
     mon = (SV / "Services/MonetizationService.luau").read_text(encoding="utf-8")
     new = "".join((p.read_text(encoding="utf-8")) for p in (SV / "Services/EndgameService.luau", CL / "Controllers/EndgameController.luau", SH / "Configs/EndgameConfig.luau"))
+    gds = (SV / "Services/GateDefenseService.luau").read_text(encoding="utf-8")
+    mcs = (SV / "Services/MoneyCollectorService.luau").read_text(encoding="utf-8")
+    sls = (SV / "Services/SoldierService.luau").read_text(encoding="utf-8")
+    btb = (SV / "Modules/BaseTierBuilder.luau").read_text(encoding="utf-8")
+    new += btb
     for cond, msg in (
+        ("maxHp = math.floor(maxHp * eg.GateHpMult(ownerUserId) + 0.5)" in gds, "gate HP reads GateHpMult (spawnGateBarriers)"),
+        ("os.clock() + GateDefenseService.RebuildSeconds(def.OwnerUserId)" in gds, "the gate rebuild timer reads RebuildCut"),
+        ("tu.MaxHealth = math.floor(tu.MaxHealth * eg.TurretHpMult(ownerUserId) + 0.5)" in gds, "AutoGun HP reads TurretHpMult"),
+        ("dealDamage(plr, hum, (stats.TurretDamage or 22) * gunMult, t.Model, def.PlotId)" in gds, "turret damage reads TurretDmgMult (research x guns, capped)"),
+        ("for slot, sx in ipairs(GateDefenseService.GunSlots(gx, ownerUserId)) do" in gds, "the Base Tier nests are real AutoGun slots"),
+        ("R.StealFraction * MoneyCollectorService.VaultMult(victim, false)" in mcs and "* MoneyCollectorService.VaultMult(victim, true)" in mcs, "Vault Plating on the ATM raid and the army raid"),
+        ("+ rebirth + tier" in sls, "the soldier cap adds the Base Tier soldiers"),
+        ("Instance.new(\"Humanoid\")" not in btb and "Neon" not in btb, "BaseTierBuilder: no Humanoid, no Neon"),
         ("Endgame" not in bal, "structure income reads the raw Costs (BalanceConfig never sees the scale)"),
         ("profile.Endgame =" not in pres and "profile.Endgame" not in pres.replace("x.EndgameKeep", ""), "PrestigeService never clears profile.Endgame (kept on both paths)"),
         ("Endgame" not in mon, "no Robux path to the endgame (MonetizationService never grants it)"),

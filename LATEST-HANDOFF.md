@@ -1,4 +1,67 @@
 <!-- Q2-START -->
+## claude-bud JOB 39 PHASE 2 (2026-09-30): BASE TIER + DEFENCE TREE + Engineering Bureau + instant rebuild (branch `claude/desktop-bud`)
+Owner-first (`EndgameConfig.Parts.BaseTier` / `Defence` now true; `Live.OwnerFirst` still true). Per CONTINUE-NOW.md the
+§11 Studio proof is owed later, not blocking. Off / not live: every gate / turret / loot / soldier number is the old one
+(run_endgame_test checks each with Live.Enabled = false).
+
+**1. BASE TIER 1..5 (§2.3)**
+- **Where:** bought at the HQ console, a client "HQ Upgrade" prompt (F on PC) on the player's own Command Center console.
+  The HQ panel also has REBUILD DEFENCES NOW.
+- **Price and requirements:** Fort 10M (R2 + CC L5), Citadel 25M (R3), Stronghold 60M (R5), Bastion 150M (R8),
+  Capital 400M (R12). Kept through rebirth.
+- **Effects:** gate HP +10 % (T1 / T2 / T4); soldiers +5 / +5 / +10 (T1 / T3 / T5, SoldierService cap); rebuild -10 s
+  (T3); +1 real AutoGun nest at the gate at T2 and T4 (GateDefenseService.GunSlots: real turrets, the same shot rules).
+- **Look (Modules/BaseTierBuilder, server-built, everyone sees it; rebuilt on tier / CC level / walls change, removed
+  when the owner leaves):**
+  - T1: roofs on the real gate posts + a new HQ storey with a window band.
+  - T2: a lattice comms mast + dish on it, a sandbagged roof deck, ammo at nest 1.
+  - T3: 4 corner bastions on the wall ring + a gatehouse (piers, lintel, crest) clear of the opening.
+  - T4: a floodlit flag tower beside the HQ (1 SpotLight, no shadows), ammo at nest 2, banners on the gate roofs.
+  - T5: a marble kerb round the parade ground, a bronze commander statue, 4 banners with the gold Capital trim.
+- **Parts added per tier (the real builder, the headless count):** 26 / 29 / 54 / 27 / 37 = **173 at Capital**, 1 light.
+  The live per-base total (cap 2,700, 40 lights) still has to be measured in Studio.
+
+**2. DEFENCE TREE (§2.5; bought at the Engineering Bureau)**
+- **Price:** 4 tracks x 10 levels, $1.0M ... $68.7M a level. L5-6 need T1, L7-8 T2, L9 T3, L10 T4.
+- **Plating:** AutoGun HP +15 % / level (on the JOB 38 TurretHealth).
+- **Guns:** turret damage +6 % / level, x the research bonus, capped at MaxMult 3.
+- **Gate & Walls:** gate HP +12 % / level, rebuild -3 s / level (never under 10 s).
+- **Vault (APPROVED §9 f):** army raid 5 % -> 2.5 % at L10, ATM raid 10 % -> 7 % (MoneyCollectorService.VaultMult).
+- **After a buy:** the gate defences resync at once (GateDefenseService.SyncPlot).
+- **Headless numbers:** `[DefTest] gate=10 tier=5 gateHP x2.50`, `rebuild=10 s`, `plating=10 autogunHP x2.50`,
+  `guns=10 turretDmg research 1.5 -> x2.40`; `[LootTest] vault=10 army 2.5 % atm 7 %`, `vault=5 3.75 % / 8.5 %`,
+  `vault=0 = 5 % / 10 %`.
+
+**3. The Engineering Bureau**
+- **Where:** a covered drafting stand in the Office Building's forecourt (store prop 12423243620). It stands 7 studs out
+  of the face nearest the plaza, because the prop's ground floor is not known to be walkable (the spec's fallback).
+- **No prop:** without the prop (StoreProps not placed) the stand goes beside the Command Office house.
+- **Build:** client-only for live players, 32 parts, 1 lamp, the ENGINEERS sign on the canopy valance.
+- **Prompt:** "Defences" opens the list panel: 4 rows with level, now / next effect, price + ETA, BUY / LOCKED / MAX.
+
+**4. Instant rebuild**
+- At the HQ console, while the gate is breached or a gun is shot down: max($25,000, 30 s of income).
+- It calls GateDefenseService.InstantRebuild (the same rebuild as the timer).
+
+**5. Plumbing**
+- **One spend call:** EndgameService.Purchase now has ONE SpendCash: `"endgame_" .. key` (empire / tier / defence /
+  rebuild; non-paying).
+- **XP pin:** the entry is now the prefix `endgame_` (still 11 sites).
+- **Retired Code Bot pin** (claude-bud comment + replacement): codebot_v145 "no config changed since v144 tip". It is now
+  "MonetizationConfig / WeaponConfig / RebirthConfig untouched since v144 tip", the configs it protected.
+- **EMPIRE panel:** HQ UPGRADE and ENGINEERING BUREAU rows with their cheapest next goal + PIN.
+
+**Checks:** BuyPathStatic PASS=7080 FAIL=0; all 16 sims 0 failed (run_endgame_test now covers phase 2: every purchase,
+every effect, OFF, the stand, the 5 tier builds); rojo ok; no new LSP errors; remote audit OK.
+
+**Test ON HIS PHONE**
+1. At your base, walk to the Command Center console: a second prompt "HQ Upgrade". Tap it: BASE TIER 1: FORT, $10M, BUY.
+   Buy it: roofs appear on the gate posts and a new storey on the HQ roof. Check the look from 100+ studs out.
+2. Keep buying to Capital (with the rebirths): mast + sandbags, corner bastions, the gatehouse, the flag tower
+   (floodlight at night), the statue and banners. Tier 2 and 4: a new AutoGun at the gate.
+3. Plaza, the Office Building: the ENGINEERS stand. Tap "Defences": 4 rows. Buy Gate & Walls: the gate bar's max HP rises.
+4. Let a friend breach your gate: at the HQ console, REBUILD DEFENCES NOW for 30 s of income, and the gate is back.
+5. EMPIRE (Base panel): HQ UPGRADE and ENGINEERING BUREAU rows with PIN.
 ## v145 PUBLISHED (Code Bot Roblox, 2026-09-30 19:01 Dublin): Open Cloud place version 143 — JOB 38 army SEND / ATTACK fix
 - **Owner report:** "Sending my army to a location they don't go and attack" (phone). SEND buttons + map pick worked; the army never left.
 - **Root cause (evidence):** `ArmyPlan.StartSend` / `StartClear` built the plan with `Lead` = the OWNER's root and `setDest` planned the route from `plan.Lead`. With the owner inside his walled base the army holds outside the gate, and his gate barrier (`GateDefenseService.spawnGateBarriers`, CanCollide) blocks pathfinding out -> `ArmyPlan._NoRoute` -> "No route to X's base" + HOLD about a second after "Army left". Live Open Cloud probe (place 142, synthetic walls): inside plot -> outside, gate closed = NoPath, gate open = Success; real `ArmyRoute.Plan` from inside base = `no_route`, from the army spot = 130 waypoints.

@@ -26,8 +26,8 @@ local EndgameConfig = {
 	Parts = {
 		Rebirth = true, -- phase 1: §2.1 the base price scale
 		EmpireLevel = true, -- phase 1: §2.2 + the Command Office
-		BaseTier = false, -- phase 2
-		Defence = false, -- phase 2
+		BaseTier = true, -- phase 2: §2.3 + the HQ UPGRADE console
+		Defence = true, -- phase 2: §2.5 + the Engineering Bureau + instant rebuild
 		Elite = false, -- phase 3
 		Hospital = false, -- phase 4
 		Mastery = false, -- phase 4
@@ -79,6 +79,8 @@ local EndgameConfig = {
 		} :: { any },
 		MaxPartsPerTier = 120,
 		MaxLightsPerTier = 2,
+		NestExtraX = 9, -- an extra AutoGun nest stands this far past the outer gate gun (T2 left, T4 right)
+		MinRebuildSeconds = 10, -- the gate never rebuilds faster than this (T3 -10 s, Gate track -3 s / level)
 	},
 
 	-- §2.4 ELITE TRAINING (phase 3)
@@ -193,6 +195,14 @@ local EndgameConfig = {
 		EmpireBought = "EMPIRE %d!  +%d%% cash",
 		NotHere = "Go to the Command Office in the plaza",
 		Hurt = "You're in combat",
+		TierBought = "BASE TIER %d: %s!",
+		DefenceBought = "%s level %d!",
+		Rebuilt = "Defences rebuilt",
+		NothingDown = "Nothing to rebuild",
+		NotAtHQ = "Use the HQ console at your base",
+		NeedTier = "Needs Base Tier %d",
+		NeedRebirths = "Needs %d rebirths",
+		NeedCC = "Needs Command Center L%d",
 		Short = "Need $%s",
 		Max = "Empire Level maxed",
 		NotLive = "Not open yet",
@@ -318,6 +328,25 @@ function EndgameConfig.LifeCost(scale: number): number
 		end
 	end
 	return total
+end
+
+-- §2.3 the summed Base Tier effects for tier t (1..5): gate HP %, soldier cap, AutoGun nests, rebuild seconds
+function EndgameConfig.TierEffects(t: number): { GateHpPct: number, SoldierCap: number, Nests: number, RebuildSeconds: number }
+	local out = { GateHpPct = 0, SoldierCap = 0, Nests = 0, RebuildSeconds = 0 }
+	local tiers: any = EndgameConfig.BaseTier.Tiers
+	for i = 1, math.min(level(t), #tiers) do
+		local r = tiers[i]
+		out.GateHpPct += tonumber(r.GateHpPct) or 0
+		out.SoldierCap += tonumber(r.SoldierCap) or 0
+		out.Nests += tonumber(r.AutoGunNests) or 0
+		out.RebuildSeconds += tonumber(r.RebuildSeconds) or 0
+	end
+	return out
+end
+
+-- §2.5 the Base Tier a Defence level needs (0 = none)
+function EndgameConfig.DefenceNeedTier(L: number): number
+	return tonumber((EndgameConfig.Defence.NeedTier :: any)[level(L)]) or 0
 end
 
 -- §2.10 the week number since the first Monday 00:00 UTC (every server agrees)

@@ -9775,3 +9775,25 @@ ds_territories.luau T3):
   added with those phases, not in phase 1.
 - **§11 proof:** phase 1 is code complete, but §11 item 6 needs Studio captures that this session cannot make.
   Recorded as NOT DONE in LATEST-HANDOFF; phases 2-5 were not started.
+
+## 2026-09-30 — claude-bud JOB 39 phase 2: Base Tier + Defence tree + Engineering Bureau
+- **Proof owed:** the owner said (CONTINUE-NOW.md) not to block on the §11 Studio proof. Phase 2 was built and pushed;
+  the §11.1 / §11.5 screenshots and the 2-player raid tests are still owed (listed in LATEST-HANDOFF).
+- **The HQ console:** the HQ UPGRADE / base Defences console is the player's own Command Center console. There is a
+  client prompt on it (KeyboardKeyCode F, so the console's own E buy prompt stays), and the server checks
+  BaseService.IsAtConsole. The same console sells the instant rebuild.
+- **Gate towers:** "gate towers get roofs" = roofs on the real gate posts (GateDefenseService's post list, whatever
+  their size). The HQ storey sits on the Command Center building's live bounding box. Both are rebuilt when the CC level
+  or the walls change.
+- **Extra nests:** the extra AutoGun nests are real turrets placed like the two gate guns, NestExtraX (9) studs further
+  out. spawnAutoGun already builds a sandbag ring; the tier adds ammo boxes and a second bag layer.
+- **Engineering Bureau placement:** a forecourt stand, 7 studs out of the Office Building's face nearest the Command
+  Office house. Its interior is not proven walkable (the spec's fallback). Without the store prop (StoreProps not live)
+  it stands beside the Command Office house.
+- **Turret damage cap:** Turret Guns multiply the research bonus and the product is capped at ResearchConfig.MaxMult (3).
+  The gate HP multiplier (tier + Gate track) is capped at 3 too.
+- **Rebuild floor:** the gate rebuild never goes under 10 s (MinRebuildSeconds). With T3 + Gate L10 the spec's
+  50 - 10 - 30 would be exactly 10.
+- **Base Tier soldiers:** they show on the army cap at the next soldier push (SoldierService has no public push).
+- **Tier look:** the Base Tier model is shared (everyone sees a base's tier) and is removed when its owner leaves the
+  plot.

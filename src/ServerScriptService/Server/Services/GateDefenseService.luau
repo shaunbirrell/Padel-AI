@@ -52,6 +52,11 @@ local AircraftWeaponConfig = require(Shared.Configs.AircraftWeaponConfig) -- air
 local ArmyConfig = require(Shared.Configs.ArmyConfig) -- army fix: Gate.OwnUnitsOpen (the owner's units open his gate)
 
 local GateDefenseService = {}
+-- claude-bud JOB 39 phase 2 (EndgameService, from deps): Base Tier + the Defence tree. Every helper returns the old
+-- number (x1, +0, no extra slot) unless EndgameConfig's BaseTier / Defence part is live for the base's OWNER.
+GateDefenseService._Endgame = nil :: any
+GateDefenseService._Nests = {} :: { [number]: { CFrame } } -- plot -> the extra AutoGun nest frames (BaseTierBuilder dresses them)
+GateDefenseService._Posts = {} :: { [number]: { BasePart } } -- plot -> the gate posts (BaseTierBuilder roofs them)
 
 local BaseService: any = nil
 local DataService: any = nil
@@ -1405,6 +1410,10 @@ local function spawnGateBarriers(gateCf: CFrame, wallsLevel: number, parent: Fol
 	local thickness = GateDefenseConfig.GateBarrierThickness or 1.6
 	local height = GateDefenseConfig.GateBarrierHeight or 9
 	local maxHp = gateMaxHealthForWalls(wallsLevel)
+	local eg = GateDefenseService._Endgame -- claude-bud JOB 39: Base Tier + Gate & Walls (x1 while not live)
+	if eg and eg.GateHpMult then
+		maxHp = math.floor(maxHp * eg.GateHpMult(ownerUserId) + 0.5)
+	end
 	local parts: { BasePart } = {}
 	local leafW = clear * 0.5 - 0.15
 	for i, sx in ipairs({ -leafW * 0.5 - 0.1, leafW * 0.5 + 0.1 }) do
@@ -1476,7 +1485,7 @@ local function breachGate(def: PlotDefense)
 	end
 	def.GateBreached = true
 	def.GateHealth = 0
-	def.GateRebuildAt = os.clock() + (GateDefenseConfig.GateRebuildSeconds or 50)
+	def.GateRebuildAt = os.clock() + GateDefenseService.RebuildSeconds(def.OwnerUserId) -- claude-bud JOB 39 (50 s while not live)
 	def.GateOpen = false
 	setGateBarrierOpen(def.GateBarriers, true)
 	for _, p in ipairs(def.GateBarriers) do
@@ -1498,6 +1507,78 @@ local function breachGate(def: PlotDefense)
 	pcall(function() -- claude-bud JOB 14: the raid report
 		require(script.Parent.GameFeelService).NoteRaid(def.OwnerUserId, "Breach", nil)
 	end)
+end
+
+-- claude-bud JOB 39: the gate's rebuild timer (GateRebuildSeconds, minus Base Tier 3 / Gate & Walls while live)
+function GateDefenseService.RebuildSeconds(ownerUserId: number): number
+	local base = GateDefenseConfig.GateRebuildSeconds or 50
+	local eg = GateDefenseService._Endgame
+	if eg and eg.RebuildCut then
+		return eg.RebuildCut(ownerUserId, base)
+	end
+	return base
+end
+
+--[[ claude-bud JOB 39 §2.5: the after-raid sink. Rebuild a breached gate and every shot-down AutoGun at once (the
+	caller, EndgameService.Purchase "Rebuild", checked the owner, the console and the price). true = something rebuilt. ]]
+function GateDefenseService.InstantRebuild(plotId: number): boolean
+	local def = defenses[plotId]
+	if def == nil then
+		return false
+	end
+	local any = false
+	if def.GateBreached then
+		rebuildGate(def)
+		any = true
+	end
+	for _, tur in ipairs(def.Turrets) do
+		local tu: any = tur
+		if tu.DeadUntil ~= nil then
+			tu.DeadUntil = nil
+			tu.Health = tu.MaxHealth
+			tur.Offline = false
+			tur.Model:SetAttribute("Offline", nil)
+			tur.Model:SetAttribute("GateAutoGunHealth", tu.Health)
+			local smoke = tur.YawPart:FindFirstChild("WE_StrikeSmoke")
+			if smoke then
+				smoke:Destroy()
+			end
+			any = true
+		end
+	end
+	return any
+end
+
+-- claude-bud JOB 39: is anything down to rebuild (the HQ panel's REBUILD row)?
+function GateDefenseService.NeedsRebuild(plotId: number): boolean
+	local def = defenses[plotId]
+	if def == nil then
+		return false
+	end
+	if def.GateBreached then
+		return true
+	end
+	for _, tur in ipairs(def.Turrets) do
+		if (tur :: any).DeadUntil ~= nil then
+			return true
+		end
+	end
+	return false
+end
+
+-- claude-bud JOB 39: the AutoGun slots' flank offsets: the two gate guns, plus the Base Tier nests (T2 left, T4 right)
+function GateDefenseService.GunSlots(gx: number, ownerUserId: number): { number }
+	local out = { -gx, gx }
+	local eg = GateDefenseService._Endgame
+	local n = if eg and eg.ExtraNests then eg.ExtraNests(ownerUserId) else 0
+	local extra = gx + (tonumber((require(ReplicatedStorage.Shared.Configs.EndgameConfig) :: any).BaseTier.NestExtraX) or 9)
+	if n >= 1 then
+		table.insert(out, -extra)
+	end
+	if n >= 2 then
+		table.insert(out, extra)
+	end
+	return out
 end
 
 --[[ v69 F3 order: (1) sane amount + attacker alive and close to the hit part, (2) a defense on that plot and the
@@ -2110,13 +2191,17 @@ local function syncPlotNow(plotId: number)
 		-- owner 2026-09-27: outside posts sit AutoGunOutsideWallGap past the wall's outer face (gate-local +Z = outside)
 		local gunOutZ = if outside then gateWallHalfThickness(plotFolder, posts) + GateDefenseConfig.AutoGunOutsideWallGap else 0
 		local yawDeg = GateDefenseConfig.AutoGunYawDeg or 15
-		for slot, sx in ipairs({ -gx, gx }) do
+		local nests: { CFrame } = {}
+		for slot, sx in ipairs(GateDefenseService.GunSlots(gx, ownerUserId)) do
 			local yaw = if sx < 0 then yawDeg else -yawDeg
 			-- idle facing out of the gate (inside posts: the gate; outside posts: the approach), toed in toward the
 			-- approach centre line; thinkTurret re-aims at targets
 			local at = if outside
 				then gateCf * CFrame.new(sx, 0, gunOutZ) * CFrame.Angles(0, math.pi + math.rad(yaw), 0)
 				else gateCf * CFrame.new(sx, 0, -gunInside) * CFrame.Angles(0, math.pi + math.rad(yaw), 0)
+			if slot > 2 then
+				table.insert(nests, at) -- claude-bud JOB 39: a Base Tier nest (BaseTierBuilder adds its sandbags)
+			end
 			local t = spawnAutoGun(slot, at, folder)
 			if t then
 				t.Outside = outside
@@ -2127,6 +2212,10 @@ local function syncPlotNow(plotId: number)
 				if AOC.TurretHP.Enabled == true then
 					local tu: any = t
 					tu.MaxHealth = AOC.TurretHealth(wallsLevel)
+					local eg = GateDefenseService._Endgame -- claude-bud JOB 39: Turret Plating (x1 while not live)
+					if eg and eg.TurretHpMult then
+						tu.MaxHealth = math.floor(tu.MaxHealth * eg.TurretHpMult(ownerUserId) + 0.5)
+					end
 					tu.Health = tu.MaxHealth
 					t.YawPart:SetAttribute("GateBarrier", true)
 					t.YawPart:SetAttribute("GateAutoGunPart", true)
@@ -2136,7 +2225,11 @@ local function syncPlotNow(plotId: number)
 				table.insert(turrets, t)
 			end
 		end
+		GateDefenseService._Nests[plotId] = nests
+	else
+		GateDefenseService._Nests[plotId] = {}
 	end
+	GateDefenseService._Posts[plotId] = posts
 
 	-- v69: owner left / plot changed hands while the spawns above yielded → drop this build
 	local ownerNow = if BaseService and BaseService.GetOwnerUserId then BaseService.GetOwnerUserId(plotId) else nil
@@ -2413,9 +2506,12 @@ local function thinkTurret(def: PlotDefense, t: TurretUnit, stats: any, tnow: nu
 	if tnow - t.LastFireAt >= interval and dist <= aggro then
 		-- line of sight to this target was checked above, this think
 		t.LastFireAt = tnow
+		-- claude-bud JOB 39: Turret Guns stack with the research bonus, the total capped at MaxMult (x1 while not live)
+		local eg = GateDefenseService._Endgame
+		local gunMult = if eg and eg.TurretDmgMult then eg.TurretDmgMult(def.OwnerUserId, researchMult(def.OwnerUserId)) else researchMult(def.OwnerUserId)
 		local hit = turretRng:NextNumber() < turretHitChance(dist, aggro)
 		if hit then
-			dealDamage(plr, hum, (stats.TurretDamage or 22) * researchMult(def.OwnerUserId), t.Model, def.PlotId)
+			dealDamage(plr, hum, (stats.TurretDamage or 22) * gunMult, t.Model, def.PlotId)
 		end
 		turretShotFx(def, t, fromPos, troot.Position, hit) -- fix 1: every roll shows (a tracer; a miss lands beside him)
 	end
@@ -2455,6 +2551,7 @@ function GateDefenseService.Init(deps: { [string]: any })
 	EconomyService = deps.EconomyService
 	NotificationService = deps.NotificationService
 	SquadOrdersService = deps.SquadOrdersService -- army fix
+	GateDefenseService._Endgame = deps.EndgameService -- claude-bud JOB 39
 
 	if not GateDefenseConfig.Enabled then
 		return

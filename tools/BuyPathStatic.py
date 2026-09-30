@@ -5517,8 +5517,9 @@ def _xp_spendcash_sites() -> None:
         "rebirthzone_": (svc + "RebirthZoneService.luau", "RebirthZoneService.Upgrade", False),
         "nuke_rush": (svc + "NukeService.luau", "NukeService.Rush", False),
         # claude-bud JOB 39 (retired the "exactly 10" count; replacement = this 1 more, 11 in all): the endgame's ONE
-        # purchase path (Empire Level, EndgameService.Purchase) spends Cash and pays NO purchase XP (not in OnSpend's list)
-        "endgame_empire": (svc + "EndgameService.luau", "EndgameService.Purchase", False),
+        # purchase path (EndgameService.Purchase: "endgame_" .. empire / tier / defence / rebuild, one call) spends Cash
+        # and pays NO purchase XP (not in OnSpend's list)
+        "endgame_": (svc + "EndgameService.luau", "EndgameService.Purchase", False),
     }
     fn_head = re.compile(r"^(?:local\s+)?function\s+([\w.:]+)\s*\(", re.M)
     guard_ok = re.compile(r"\s*(?:(?:==|~=)\s*nil\b|\)?\s*then\b)")
@@ -5592,7 +5593,7 @@ def _xp_spendcash_sites() -> None:
     if defs != 1:
         problems.append(f"{defs} definitions of EconomyService.SpendCash (expected 1)")
     if seen == 11 and not problems:
-        ok("XP: SpendCash has exactly 11 call sites (claude-bud JOB 33: + rebirthzone_ / nuke_rush; JOB 39: + endgame_empire; non-paying), each reason in its one file and function, none in a nested / anonymous / assigned function; the 4 paying calls pass (player, cost, ...) and sit in no loop (paying: upgrade_ BaseService.PurchaseUpgrade, research_ ResearchService.Purchase, vehicle_ VehicleService.Purchase, weapon_ CombatService.PurchaseWeapon)")
+        ok("XP: SpendCash has exactly 11 call sites (claude-bud JOB 33: + rebirthzone_ / nuke_rush; JOB 39: + endgame_ (one call, the plan's key); non-paying), each reason in its one file and function, none in a nested / anonymous / assigned function; the 4 paying calls pass (player, cost, ...) and sit in no loop (paying: upgrade_ BaseService.PurchaseUpgrade, research_ ResearchService.Purchase, vehicle_ VehicleService.Purchase, weapon_ CombatService.PurchaseWeapon)")
     else:
         bad(f"XP: SpendCash call-site pin — {seen} calls (expected 11); " + "; ".join(problems))
 

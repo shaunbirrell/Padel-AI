@@ -48,9 +48,8 @@ _BS = _j39_code(_SV + "Services/BaseService.luau")
 # flags: one owner-first kill switch + a switch per system; phase 1 turns on Rebirth + EmpireLevel only
 _j39("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- only UserId 470626172" in _EGC and "RetentionConfig.Live(EndgameConfig.Live, userId)" in _EGC,
      "one owner-first kill switch (EndgameConfig.Live)")
-_j39("\t\tRebirth = true," in _EGC and "\t\tEmpireLevel = true," in _EGC and all(("\t\t%s = false," % k) in _EGC for k in
-     ("BaseTier", "Defence", "Elite", "Hospital", "Mastery", "Workshop", "Warheads", "Heist", "Contracts", "BlackMarket", "RewardScaling")),
-     "phase 1 parts on (Rebirth, EmpireLevel); phases 2-5 off")
+_j39("\t\tRebirth = true," in _EGC and "\t\tEmpireLevel = true," in _EGC and "\t\tBaseTier = true," in _EGC and "\t\tDefence = true," in _EGC,
+     "phases 1-2 parts on (Rebirth, EmpireLevel, BaseTier, Defence)")
 _j39('= "owner"' not in _EGC and '= "owner"' not in _j39_src(_CF + "PlazaServicesConfig.luau"), "no \"owner\" strings in the new configs (codebot_v101)")
 # OFF = old: every read is behind LiveFor
 _j39("if not EndgameConfig.LiveFor(player.UserId, \"EmpireLevel\") then\n\t\treturn 1\n\tend" in _ES
@@ -63,13 +62,28 @@ _j39("\tlocal cost = def.Costs[targetLevel]\n\tif not cost then\n\t\treturn { Ok
      "the one structure buy path charges the scaled price (BaseService.PurchaseUpgrade)")
 _j39("Endgame" not in _j39_src(_CF + "BalanceConfig.luau"), "structure income reads the raw Costs (income unchanged)")
 # the one purchase path; the client sends only kind / id
-_j39("function EndgameService.Purchase(player: Player, kind: string, _id: string?): (boolean, string)" in _ES
-     and 'local ok, err = eco.SpendCash(player, price, "endgame_empire")' in _ES and "local price = EndgameConfig.EmpireCost(L + 1)" in _ES,
-     "ONE purchase path; the price comes from config; SpendCash \"endgame_empire\"")
+_j39("function EndgameService.Purchase(player: Player, kind: string, id: string?): (boolean, string)" in _ES
+     and _ES.count("eco.SpendCash(") == 1 and 'local ok, err = eco.SpendCash(player, price, "endgame_" .. key)' in _ES
+     and "local price = EndgameConfig.EmpireCost(L + 1)" in _ES and "Price = nx.Cost," in _ES,
+     "ONE purchase path, ONE SpendCash (\"endgame_\" .. key); every price comes from config (EndgameService._Plan)")
 _j39('Remotes.FireServer, Constants.RemoteNames.RequestEndgameBuy, "Empire", "Next")' in _ECT and "NextCost" not in _ECT.split("RequestEndgameBuy")[1][:40],
      "the client sends only the kind and id (never a price)")
-_j39("if not EndgameService.AtStation(player, \"Command\") then" in _ES and "if EndgameService.RecentlyHurt(player) then" in _ES,
-     "buying needs the station reach and no damage in the last HurtLockSeconds")
+_j39("if not EndgameService.AtStation(player, \"Command\") then" in _ES and "if not EndgameService.AtStation(player, \"Engineers\") then" in _ES
+     and _ES.count("if not EndgameService.AtHQ(player) then") == 2 and _ES.count("if EndgameService.RecentlyHurt(player) then") >= 3,
+     "buying needs the station / HQ console reach and no damage in the last HurtLockSeconds")
+# phase 2: every effect is the old number while the part is not live for the base owner
+_GD = _j39_code(_SV + "Services/GateDefenseService.luau")
+_j39("maxHp = math.floor(maxHp * eg.GateHpMult(ownerUserId) + 0.5)" in _GD and "os.clock() + GateDefenseService.RebuildSeconds(def.OwnerUserId)" in _GD
+     and "tu.MaxHealth = math.floor(tu.MaxHealth * eg.TurretHpMult(ownerUserId) + 0.5)" in _GD
+     and "for slot, sx in ipairs(GateDefenseService.GunSlots(gx, ownerUserId)) do" in _GD and "(stats.TurretDamage or 22) * gunMult" in _GD,
+     "GateDefenseService reads the Base Tier / Defence effects (gate HP, rebuild, turret HP / damage, nests)")
+_j39("local function tierOf(userId: number): number\n\tif not EndgameConfig.LiveFor(userId, \"BaseTier\") then\n\t\treturn 0" in _ES
+     and "local function defOf(userId: number, track: string): number\n\tif not EndgameConfig.LiveFor(userId, \"Defence\") then\n\t\treturn 0" in _ES,
+     "OFF = old: the tier / defence levels read as 0 unless the part is live for the owner")
+_j39("R.StealFraction * MoneyCollectorService.VaultMult(victim, false)" in _j39_code(_SV + "Services/MoneyCollectorService.luau"),
+     "Vault Plating lowers the ATM raid (and the army raid) through MoneyCollectorService.VaultMult")
+_BTB = _j39_code(_SV + "Modules/BaseTierBuilder.luau")
+_j39("sl.Shadows = false" in _BTB and "Neon" not in _BTB and "PreferMesh" not in _BTB and "MeshPart" not in _BTB, "Base Tier builds: Parts only, no Neon, the one floodlight casts no shadows")
 _SEC = _j39_src(_CF + "SecurityConfig.luau")
 _j39('RequestEndgameBuy = { "string:16", "string:32?" },' in _SEC and "RequestEndgameState = {}," in _SEC
      and 'require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestEndgameBuy", kind, id)' in _ES
@@ -95,7 +109,7 @@ _j39("MaxParts = 40," in _PSC and "Parts = 39," in _PSC and "SignMaxDistance = 4
 _j39("light.Shadows = false" in _ECT and "M.Neon" not in _ECT and 'Instance.new("Humanoid")' not in _ECT, "no shadows, no Neon, no Humanoid on the station NPC")
 _j39("local want = live and EndgameConfig.LiveFor(player.UserId, st.Part)" in _ECT, "the station is built only for players it is live for (nobody else sees a change)")
 # never touched
-_j39(all("WE_Building" not in _j39_src(p) for p in (_SV + "Services/EndgameService.luau", _CL + "Controllers/EndgameController.luau")), "no WE_Building* edits")
+_j39(all("WE_Building" not in _j39_src(p) for p in (_SV + "Services/EndgameService.luau", _CL + "Controllers/EndgameController.luau", _SV + "Modules/BaseTierBuilder.luau")), "no WE_Building* edits")
 _j39("PreferMesh" not in _NEW, "PreferMesh untouched")
 
 _luau = _j39_os.environ.get("LUAU")

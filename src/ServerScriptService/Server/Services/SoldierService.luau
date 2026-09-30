@@ -110,7 +110,12 @@ local function maxSoldiers(profile: any): number
 		local okB, b = pcall(RZ.ArmyBonus, profile)
 		rebirth = if okB and typeof(b) == "number" and b == b then math.max(0, math.floor(b)) else 0
 	end
-	return base + barracksLevel(profile) * per + armyCapBonus(profile) + rebirth
+	-- claude-bud JOB 39: + the Base Tier soldiers (0 while EndgameConfig's BaseTier part is not live for the owner)
+	local okEG, EGS = pcall(function(): any
+		return require(script.Parent.EndgameService)
+	end)
+	local tier = if okEG and EGS and EGS.SoldierCapBonus then EGS.SoldierCapBonus(profile) else 0
+	return base + barracksLevel(profile) * per + armyCapBonus(profile) + rebirth + tier
 end
 
 local function pushState(player: Player)
