@@ -80,6 +80,7 @@ export type KitPlace = {
 	Roof: string?,
 	Lantern: boolean?,
 	R: number?, -- W3 step 2: HoldPad radius (studs)
+	NoDetail: boolean?, -- codebot_v142: build this kit plain (WorldDetailConfig skipped; a Checkpoint then gets no guards)
 }
 -- A Town cluster: one Model <= 64 studs across at (X, Z) turned by Yaw (degrees; 0 = its front faces north, -Z).
 -- Tier 1 = built in Quality Low and Full, 2 = Full only. Street = true: a road-side cluster (checkpoint, lamp, board)

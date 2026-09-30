@@ -9,7 +9,7 @@
 	  3. Duplicates: the Speed Pass and Army Expansion leave the Shop (HideWhenLive); the Speed stand and the death offer
 	     sell Speed Boost; the army-wiped offer sells Bigger Army. Owners keep what they bought (SpeedMultFor / the army
 	     cap read ownership, not the Shop).
-	  4. VIP (349 R$): +50 % Cash (was 25 %), a daily VIP supply crate (~10 min of income, profile.VipSupplyAt), the lounge,
+	  4. VIP (199 R$ — codebot_v142: owner has NOT approved 349; MonetizationConfig VIP.OverhaulRobuxPrice = 199): +50 % Cash (was 25 %), a daily VIP supply crate (~10 min of income, profile.VipSupplyAt), the lounge,
 	     the [VIP] chat tag and a gold chat name. Every current VIP owner gets it.
 	  5. New passes (Id 0 until the owner creates them): War Chest (counts as 2x Cash + Auto Collect + VIP + Bigger
 	     Army; hidden once all four are owned), Super Soldiers (+25 % army damage and soldier HP), Double HP (x2 MaxHealth).
@@ -21,7 +21,7 @@ export type Pack = { Floor: number, Minutes: number }
 local ShopOverhaulConfig = {
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v142 launch (owner 2026-09-30 16:24): everyone
 	},
 
 	--[[ SUPPLY tab order: each Shop row name ("ShopRow_<key>") takes the first matching pattern's place; rows in the

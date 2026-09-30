@@ -25,7 +25,8 @@ _C140 = "src/ReplicatedStorage/Shared/Configs/"
 # v141 (Code Bot Roblox): the WE_Build=140 pins are superseded in tools/checks/codebot_v141.py (WE_Build=141).
 
 _SOC = _rd140(_C140 + "ShopOverhaulConfig.luau")
-_cb140("Enabled = true" in _SOC and "OwnerFirst = true" in _SOC, "CODEBOT v140: ShopOverhaulConfig stays Enabled + OwnerFirst=true")
+# v142 (Code Bot Roblox): launched for everyone; the OwnerFirst=true pin is superseded in tools/checks/codebot_v142.py.
+_cb140("Enabled = true" in _SOC, "CODEBOT v140: ShopOverhaulConfig stays Enabled")
 
 _MON = _rd140(_C140 + "MonetizationConfig.luau")
 for _k, _id, _price in (("WarChest", 2002640637, 799), ("SuperSoldiers", 1998231741, 349), ("DoubleHP", 2002214665, 199)):
@@ -34,7 +35,7 @@ for _k, _id, _price in (("WarChest", 2002640637, 799), ("SuperSoldiers", 1998231
     m2 = _re140.search(rf"\t\t{_k}\s*=\s*\{{[^}}]*?RobuxPrice\s*=\s*(\d+)", _MON, _re140.S)
     _cb140(m2 is not None and int(m2.group(1)) == _price, "CODEBOT v140: " + _k + " RobuxPrice=" + str(_price))
 _cb140("\t\tVIP = {\n\t\t\tId = 1985475542,\n\t\t\tDisplayName = \"VIP\",\n\t\t\tRobuxPrice = 199," in _MON
-       and "OverhaulRobuxPrice = 349," in _MON, "CODEBOT v140: VIP Id/price unchanged (199; overhaul 349)")
+       and "OverhaulRobuxPrice = 199," in _MON, "CODEBOT v140: VIP Id/price unchanged (199; v142: overhaul shows 199, superseded in codebot_v142.py)")
 _cb140("2002640637" in _rd140("docs/SHOP.md") and "1998231741" in _rd140("docs/SHOP.md") and "2002214665" in _rd140("docs/SHOP.md"),
        "CODEBOT v140: docs/SHOP.md lists the three new pass Ids")
 _cb140("WeaponsLive = true" in _rd140(_C140 + "AircraftWeaponConfig.luau"), "CODEBOT v140: aircraft weapons stay live")

@@ -21,7 +21,7 @@
 local CheckpointGuardConfig = {
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v142 launch (owner 2026-09-30 16:24): everyone
 	},
 	NpcType = "CheckpointGuard",
 	-- the NPC type's per-kill reward (CombatConfig.NPCTypes.CheckpointGuard reads these; CombatService pays them)
@@ -45,6 +45,9 @@ local CheckpointGuardConfig = {
 	CheckSeconds = 2,
 	MaxGuards = 5,
 	MapLabel = "CHECKPOINT",
+	-- codebot_v142: no guards at a booth within this of a base plot (pad edge), a player spawn or a vehicle spawn pad
+	-- (CheckpointGuardService keep-out; Depot.CP_E / Armory.CP_W also build plain: ~54 studs from Pool_Depot / Pool_Armory)
+	KeepOutStuds = 130,
 }
 
 local RetentionConfig = require(script.Parent.RetentionConfig)

@@ -11,7 +11,11 @@ CheckpointGuardConfig on recording stubs; stand-ins: run_kit_detail_test.PRELUDE
    new cycle can pay again, but the per-player cooldown (300 s) holds.
 5. SLEEP: nobody live within SleepStuds -> every guard despawned (no NPC slot).
 6. MAP / GO: MapList only for live players (hostile / cleared + seconds left); GoTargets skips a cleared checkpoint.
-7. CONFIG: owner-first, respawn 180, the cleared cash floor / cap / private-server half.
+7. CONFIG: codebot_v142 launched for everyone (OwnerFirst = false); 1-6 still prove the owner-first rule (the test
+   sets OwnerFirst = true for them); respawn 180, the cleared cash floor / cap / private-server half.
+8. codebot_v142: everyone is targeted, except a player under the spawn / novice shield (CombatService
+   IsSpawnInvulnerable / IsNoviceShielded); the keep-out (KeepOutStuds 130) from the real BaseConfig plots and
+   WorldConfig vehicle pools: the six detailed booths pass, Depot.CP_E / Armory.CP_W / Hawk are kept out.
 Run: LUAU=path/to/luau(.exe) python tools/sim/run_checkpoint_guards_test.py   (exit 1 on any failure)"""
 import os
 import subprocess
@@ -78,6 +82,8 @@ local fails = 0
 local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if not ok then fails += 1 end end
 local G = require(node("Configs/CheckpointGuardConfig"))
 local S = require(node("Services/CheckpointGuardService"))
+local LAUNCHED = G.Live.OwnerFirst -- codebot_v142: false (everyone); 1-6 prove the owner-first rule still works
+G.Live.OwnerFirst = true
 local NOW = 1000
 S._SetClock(function() return NOW end)
 S.Init(DEPS)
@@ -170,14 +176,62 @@ site.ClearedAt = nil
 check(#S.GoTargets() == 1, "GO points at a checkpoint with guards up")
 
 -- ── 7. config ──
-check(G.Live.Enabled == true and G.Live.OwnerFirst == true and G.RespawnSeconds == 180 and not G.LiveForAll(), "owner-first, respawn 180 s")
+G.Live.OwnerFirst = LAUNCHED
+check(G.Live.Enabled == true and G.Live.OwnerFirst == false and G.RespawnSeconds == 180 and G.LiveForAll() and G.LiveFor(9) and G.LiveFor(12345), "codebot_v142: live for everyone (OwnerFirst=false), respawn 180 s")
 check(G.ClearedCash(0, false) == 2500 and G.ClearedCash(1e6, false) == 25000 and G.ClearedCash(3000, true) == 3000, "cleared cash: floor $2,500, cap $25,000, private servers half")
+
+-- ── 8. codebot_v142: everyone + the shared protection rule + keep-out ──
+check(r1.Opts.TargetFilter(other) == true and r1.Opts.TargetFilter(owner) == true, "everyone live: a non-owner (uid 9) is a target")
+local SHIELD = {}
+DEPS.CombatService.IsSpawnInvulnerable = function(p) return SHIELD[p.UserId] == "spawn" end
+DEPS.CombatService.IsNoviceShielded = function(p) return SHIELD[p.UserId] == "novice" end
+SHIELD[9] = "spawn"
+check(r1.Opts.TargetFilter(other) == false and S.Protected(other), "spawn shield: never targeted")
+SHIELD[9] = "novice"
+check(r1.Opts.TargetFilter(other) == false, "novice shield: never targeted")
+SHIELD[9] = nil
+check(r1.Opts.TargetFilter(other) == true and not S.Protected(other), "shield over: targeted again")
+DEPS.CombatService.IsSpawnInvulnerable = function() error("boom") end
+check(r1.Opts.TargetFilter(other) == true, "a failing shield check never breaks targeting")
+check(G.KeepOutStuds == 130, "KeepOutStuds 130")
+local ZONES = {}
+for i, pz in ipairs(PLOTS) do table.insert(ZONES, { Name = "Plot" .. i, X = pz[1], Z = pz[2], Half = 160 }) end
+for _, pz in ipairs(POOLS) do table.insert(ZONES, { Name = pz[1], X = pz[2], Z = pz[3], Half = 0 }) end
+table.insert(ZONES, { Name = "EmergencySpawn", X = 0, Z = 0, Half = 0 })
+for _, b in ipairs({ { "Town.CP_N", 0, -310 }, { "Town.CP_E", 310, 0 }, { "Town.CP_S", 0, 310 }, { "Town.CP_W", -310, 0 }, { "Depot.CP_W", -1483, 0 }, { "Armory.CP_E", 1483, 0 } }) do
+  local hit, d = S.KeepOutHit(Vector3.new(b[2], 0, b[3]), ZONES)
+  check(hit == nil, "keep-out: detailed " .. b[1] .. " is clear of every plot / spawn")
+end
+for _, b in ipairs({ { "Depot.CP_E", -1127, 0, "Pool_Depot" }, { "Armory.CP_W", 1127, 0, "Pool_Armory" }, { "Sites.Hawk", 17.5, -478, nil } }) do
+  local hit, d = S.KeepOutHit(Vector3.new(b[2], 0, b[3]), ZONES)
+  check(hit ~= nil and (b[4] == nil or hit == b[4]), "keep-out: " .. b[1] .. " would get no guards (" .. tostring(hit) .. ", " .. tostring(d and math.floor(d)) .. " studs)")
+end
+check(S.KeepOutHit(Vector3.new(-800, 0, -400 + 160 + 129), ZONES) ~= nil and S.KeepOutHit(Vector3.new(-800, 0, -400 + 160 + 131), { ZONES[1] }) == nil, "keep-out measures from the plot pad edge")
+S._SetKeepZones(ZONES)
 
 print(string.format("CHECKPOINT GUARDS TEST: %d failed", fails))
 if fails > 0 then error("failed") end
 '''
 
-chunks = [PRELUDE, EXTRA]
+# codebot_v142: the real plot positions + vehicle pools (keep-out test 8)
+import re as _re  # noqa: E402
+_bc = (SH / "Configs/BaseConfig.luau").read_text(encoding="utf-8")
+_plots = _re.findall(r"Vector3\.new\((-?\d+), 0\.5, (-?\d+)\)", _bc.split("PlotPositions = {", 1)[1].split("} :: { Vector3 }", 1)[0])
+_wc = (SH / "Configs/WorldConfig.luau").read_text(encoding="utf-8")
+_pools = _re.findall(r'\{ Id = "(Pool_\w+)", X = (-?\d+), Z = (-?\d+)', _wc)
+assert len(_plots) == 10 and len(_pools) >= 4, (_plots, _pools)
+# plot gate vehicle pads: plot-local (-62, 222) turned by PlotFrame.PlotYaw (faces the map centre)
+def _gate(x, z):
+    x, z = int(x), int(z)
+    if abs(x) >= abs(z):
+        return (x + 222, z + 62) if x < 0 else (x - 222, z - 62)
+    return (x - 62, z + 222) if z < 0 else (x + 62, z - 222)
+for _i, (_x, _z) in enumerate(_plots, 1):
+    _gx, _gz = _gate(_x, _z)
+    _pools.append(("Gate_P%d" % _i, str(_gx), str(_gz)))
+DATA = "PLOTS = {%s}\nPOOLS = {%s}\n" % (", ".join("{%s, %s}" % p for p in _plots), ", ".join('{"%s", %s, %s}' % p for p in _pools))
+
+chunks = [PRELUDE, EXTRA, DATA]
 for key, path in MODS.items():
     chunks.append("SOURCES[%r] = function(script)\n%s\nend" % (key, path.read_text(encoding="utf-8")))
 chunks.append(TEST)

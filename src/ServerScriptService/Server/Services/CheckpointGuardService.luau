@@ -17,6 +17,11 @@
 	    and never while a player stands within SpawnClearStuds of a post.
 	  * Map / mission: MapList(player) (hostile / cleared + countdown, live players only) and GoTargets() (checkpoints
 	    with guards up or asleep and ready) for MissionService's "Checkpoint" GO.
+  * codebot_v142 keep-out: a booth within CheckpointGuardConfig.KeepOutStuds of a base plot (pad edge), a player spawn
+    (each plot PlayerSpawn lies on its pad; the Emergency / Neutral spawn at 0, 0) or a vehicle spawn pad (WorldConfig.Spawns.Garage gate pads + pools)
+    never gets guards (logged once). The shared protection rule: the TargetFilter also refuses a player under the
+    spawn / novice shield (CombatService.IsSpawnInvulnerable / IsNoviceShielded), on top of CombatNPC's own
+    InvulnerableUntil hit skip.
 ]]
 
 local Players = game:GetService("Players")
@@ -47,6 +52,10 @@ export type Site = {
 
 local deps: { [string]: any } = {}
 local sites: { [string]: Site } = {}
+local keptOut: { [string]: string } = {} -- site id -> reason (never guarded)
+-- keep-out zones: { Kind, X, Z, Half } (Half > 0 = an axis-aligned square of that half size, else a point)
+export type KeepZone = { Name: string, X: number, Z: number, Half: number }
+local keepZones: { KeepZone } = {}
 local lastPaid: { [number]: number } = {} -- UserId -> os.clock() of his last cleared bonus (any checkpoint)
 local clock: () -> number = os.clock
 
@@ -96,12 +105,63 @@ function CheckpointGuardService.SiteFromBooth(booth: BasePart): Site?
 	}
 end
 
+-- codebot_v142: the first keep-out zone within KeepOutStuds of pos (flat), or nil
+function CheckpointGuardService.KeepOutHit(pos: Vector3, zones: { KeepZone }, studs: number?): (string?, number?)
+	local limit = studs or G.KeepOutStuds or 130
+	for _, z in ipairs(zones) do
+		local dx = math.max(math.abs(pos.X - z.X) - math.max(z.Half, 0), 0)
+		local dz = math.max(math.abs(pos.Z - z.Z) - math.max(z.Half, 0), 0)
+		local d = math.sqrt(dx * dx + dz * dz)
+		if d < limit then
+			return z.Name, d
+		end
+	end
+	return nil, nil
+end
+
+-- the keep-out zones from the configs: plot pads, plot spawns, emergency spawn, vehicle spawn pads (server boot)
+function CheckpointGuardService.BuildKeepZones(): { KeepZone }
+	local out: { KeepZone } = {}
+	local ok, err = pcall(function()
+		local Configs = Shared:WaitForChild("Configs")
+		local BaseConfig = require(Configs:WaitForChild("BaseConfig")) :: any
+		local WorldConfig = require(Configs:WaitForChild("WorldConfig")) :: any
+		local PlotFrame = require(Shared:WaitForChild("Util"):WaitForChild("PlotFrame")) :: any
+		local half = (BaseConfig.PlotSize and BaseConfig.PlotSize.X or 320) / 2
+		local plots = BaseConfig.PlotPositions or {}
+		for i, pos in ipairs(plots) do
+			table.insert(out, { Name = "Plot" .. i, X = pos.X, Z = pos.Z, Half = half })
+		end
+		local garage = WorldConfig.Spawns and WorldConfig.Spawns.Garage or {}
+		for _, pad in ipairs(garage) do
+			if typeof(pad.PlotId) == "number" and plots[pad.PlotId] then
+				local w = PlotFrame.PlotCFrame(plots[pad.PlotId]):PointToWorldSpace(Vector3.new(pad.LocalX or 0, 0, pad.LocalZ or 0))
+				table.insert(out, { Name = tostring(pad.Id), X = w.X, Z = w.Z, Half = 0 })
+			elseif typeof(pad.X) == "number" and typeof(pad.Z) == "number" then
+				table.insert(out, { Name = tostring(pad.Id), X = pad.X, Z = pad.Z, Half = 0 })
+			end
+		end
+	end)
+	if not ok then
+		warn("[CheckpointGuardService] keep-out configs: " .. tostring(err))
+	end
+	-- the Emergency / Neutral spawn (Bootstrap / MapSetup, both at 0, 0); each plot's PlayerSpawn lies on its pad
+	table.insert(out, { Name = "EmergencySpawn", X = 0, Z = 0, Half = 0 })
+	return out
+end
+
 local function discover()
 	for _, inst in ipairs(CollectionService:GetTagged(SITE_TAG)) do
 		if inst:IsA("BasePart") and inst.Parent ~= nil then
 			local s = CheckpointGuardService.SiteFromBooth(inst)
-			if s and sites[s.Id] == nil then
-				sites[s.Id] = s
+			if s and sites[s.Id] == nil and keptOut[s.Id] == nil then
+				local hit, d = CheckpointGuardService.KeepOutHit(s.Center, keepZones)
+				if hit then
+					keptOut[s.Id] = hit
+					print(string.format("[CheckpointGuardService] %s: no guards (%.0f studs from %s < %d keep-out)", s.Id, d or 0, hit, G.KeepOutStuds or 130))
+				else
+					sites[s.Id] = s
+				end
 			end
 		end
 	end
@@ -117,6 +177,24 @@ local function aliveCount(s: Site): number
 	return n
 end
 
+-- codebot_v142: the shared protection rule (spawn shield + novice shield): guards never target such a player
+function CheckpointGuardService.Protected(p: Player): boolean
+	local cs = deps.CombatService
+	if cs == nil then
+		return false
+	end
+	for _, fn in ipairs({ "IsSpawnInvulnerable", "IsNoviceShielded" }) do
+		local f = cs[fn]
+		if typeof(f) == "function" then
+			local ok, v = pcall(f, p)
+			if ok and v == true then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 local function spawnGroup(s: Site)
 	local cs = deps.CombatService
 	if cs == nil or cs.SpawnNPC == nil then
@@ -130,7 +208,7 @@ local function spawnGroup(s: Site)
 			Leash = G.SiteRadius + G.LeashExtra,
 			Static = s.Static[i] == true,
 			TargetFilter = function(p: Player): boolean
-				return live(p.UserId)
+				return live(p.UserId) and not CheckpointGuardService.Protected(p)
 			end,
 		})
 		if ok and rec then
@@ -325,6 +403,13 @@ end
 function CheckpointGuardService._Reset()
 	table.clear(sites)
 	table.clear(lastPaid)
+	table.clear(keptOut)
+end
+function CheckpointGuardService._SetKeepZones(z: { KeepZone })
+	keepZones = z
+end
+function CheckpointGuardService._KeptOut(): { [string]: string }
+	return keptOut
 end
 
 function CheckpointGuardService.Init(d: { [string]: any })
@@ -337,6 +422,7 @@ function CheckpointGuardService.Init(d: { [string]: any })
 		cs.OnNPCDeath(onDeath)
 	end
 	task.spawn(function()
+		keepZones = CheckpointGuardService.BuildKeepZones()
 		while true do
 			task.wait(G.CheckSeconds)
 			local ok, err = pcall(function()

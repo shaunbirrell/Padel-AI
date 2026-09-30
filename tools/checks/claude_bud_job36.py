@@ -45,13 +45,13 @@ _SC = _j36_code(_CL + "Controllers/ShopController.luau")
 _SQ = _j36_code(_SV + "Services/SquadOrdersService.luau")
 _AR = _j36_code(_SV + "Services/ArmourService.luau")
 
-_j36("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- only UserId 470626172" in _SOC and "RetentionConfig.Live(ShopOverhaulConfig.Live, userId)" in _SOC,
-     "one owner-first kill switch (ShopOverhaulConfig.Live)")
+_j36("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false, -- codebot_v142 launch" in _SOC and "RetentionConfig.Live(ShopOverhaulConfig.Live, userId)" in _SOC,
+     "one kill switch (ShopOverhaulConfig.Live; v142: OwnerFirst=false, everyone; superseded in codebot_v142.py)")
 # new passes: real Creator Hub Ids (codebot_v140, universe 10767159222); no live Id or price changed
 for _k, _id, _p in (("WarChest", 2002640637, 799), ("SuperSoldiers", 1998231741, 349), ("DoubleHP", 2002214665, 199)):
     _j36(("\t\t%s = {\n\t\t\tId = %d,\n" % (_k, _id)) in _MCF and ("RobuxPrice = %d," % _p) in _MCF, "%s: Id %d, R$ %d" % (_k, _id, _p))
-_j36("\t\tVIP = {\n\t\t\tId = 1985475542,\n\t\t\tDisplayName = \"VIP\",\n\t\t\tRobuxPrice = 199," in _MCF and "OverhaulRobuxPrice = 349," in _MCF,
-     "VIP: 349 shown while live (OverhaulRobuxPrice); the live 199 stays until the owner reprices on the Creator Hub")
+_j36("\t\tVIP = {\n\t\t\tId = 1985475542,\n\t\t\tDisplayName = \"VIP\",\n\t\t\tRobuxPrice = 199," in _MCF and "OverhaulRobuxPrice = 199," in _MCF,
+     "VIP: the Shop shows the real Creator Hub price 199 (v142: owner has not approved 349; superseded in codebot_v142.py)")
 for _k, _id in (("CashSmall", 3713838744), ("CashMedium", 3713838815), ("CashLarge", 3713838888), ("CashMega", 3713838952)):
     _j36(("%s = { Id = %d," % (_k, _id)) in _MCF, "%s keeps its Id %d" % (_k, _id))
 # cash packs in ProcessReceipt, before any mutation

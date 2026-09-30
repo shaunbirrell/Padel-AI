@@ -46,8 +46,8 @@ _CC = _j37_code("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Check
 _det = _WK[_WK.index("Detail.Checkpoint = function"):_WK.index("-- exact part counts of the detailed builds")] if "Detail.Checkpoint = function" in _WK else ""
 
 # flags
-_j37("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- only UserId 470626172" in _CGC and "RetentionConfig.Live(CheckpointGuardConfig.Live, userId)" in _CGC,
-     "guards: one owner-first kill switch (CheckpointGuardConfig.Live)")
+_j37("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false, -- codebot_v142 launch" in _CGC and "RetentionConfig.Live(CheckpointGuardConfig.Live, userId)" in _CGC,
+     "guards: one kill switch (CheckpointGuardConfig.Live; v142: OwnerFirst=false, everyone; superseded in codebot_v142.py)")
 _j37("Checkpoint = true, -- claude-bud JOB 37" in _WDC and "Checkpoint = 546," in _WDC and "MaxExtraParts = 1446," in _WDC,
      "detail: WorldDetailConfig.Kits.Checkpoint, its own share 546 (MaxExtraParts 900 -> 1446: the JOB 31 kits keep 900)")
 _j37("RespawnSeconds = 180," in _CGC, "the group respawns 180 s after the last guard died")

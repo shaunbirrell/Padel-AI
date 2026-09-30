@@ -76,8 +76,9 @@ local MonetizationConfig = {
 			CashBonusMult = 0.25, -- additive +25% cash earnings
 			Description = "+25% Cash earnings",
 			-- claude-bud JOB 36 (ShopOverhaulConfig, owner-first): the premium VIP. Shown at this price while the overhaul is
-			-- live; TODO(owner): set 349 R$ on the Creator Hub pass before Code Bot turns the overhaul on for everyone.
-			OverhaulRobuxPrice = 349,
+			-- live. codebot_v142 (2026-09-30): the Creator Hub price stays 199 (owner has NOT approved 349), so the Shop shows
+			-- the real price. Change this only together with the Creator Hub price.
+			OverhaulRobuxPrice = 199,
 			OverhaulDescription = "+50% Cash, daily supply crate, VIP lounge, gold name",
 		},
 		-- claude-bud JOB 36: new passes (ShopOverhaulConfig). codebot_v140 (2026-09-30): owner created them on the Creator

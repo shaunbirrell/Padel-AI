@@ -22,13 +22,11 @@ def _rd141(p):
 
 _S141 = "src/ServerScriptService/Server/"
 _C141 = "src/ReplicatedStorage/Shared/Configs/"
-for _f in (_S141 + "Services/DataService.luau", _S141 + "Services/BaseService.luau", _S141 + "EarlyRemotes.server.luau"):
-    _cb141('SetAttribute("WE_Build", 141)' in _rd141(_f), "CODEBOT v141: WE_Build=141 " + _f.rsplit("/", 1)[-1])
-_cb141("WE_Build=141" in _rd141(_S141 + "Services/DataService.luau"), "CODEBOT v141: DataService profile-loaded log says WE_Build=141")
+# v142 (Code Bot Roblox): the WE_Build=141 pins are superseded in tools/checks/codebot_v142.py (WE_Build=142).
 
 # JOB 37 present + owner-first
 _CGC = _rd141(_C141 + "CheckpointGuardConfig.luau")
-_cb141("Enabled = true" in _CGC and "OwnerFirst = true" in _CGC, "CODEBOT v141: CheckpointGuardConfig.Live Enabled + OwnerFirst=true (as Claude shipped)")
+_cb141("Enabled = true" in _CGC, "CODEBOT v141: CheckpointGuardConfig.Live Enabled (v142: OwnerFirst=false, everyone; superseded in codebot_v142.py)")
 _cb141(_P141(_S141 + "Services/CheckpointGuardService.luau").is_file(), "CODEBOT v141: CheckpointGuardService present")
 _cb141("CheckpointGuardService" in _rd141(_S141 + "Bootstrap.server.luau"), "CODEBOT v141: Bootstrap inits CheckpointGuardService")
 _CGS = _rd141(_S141 + "Services/CheckpointGuardService.luau")

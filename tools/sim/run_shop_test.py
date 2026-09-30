@@ -10,8 +10,8 @@
 4. PERKS: SyncPerks sets WE_PerkDoubleHP / WE_PerkSuperSoldiers from ownership only while live.
 5. SPEED STAND (the real ShopOverhaulService + PurchaseStands.Retarget): a live owner's Speed stand sells Speed Boost
    (attributes, price chip, prompt), back to the config offer when he leaves.
-6. CONFIG: the three new passes at their Creator Hub Ids (v140) with their prices; War Chest implies the four; VIP shown at 349 only through
-   OverhaulRobuxPrice (the live price stays until the owner reprices); vip_supply exempt.
+6. CONFIG: the three new passes at their Creator Hub Ids (v140) with their prices; War Chest implies the four; VIP shown at the real
+   Creator Hub price 199 (codebot_v142: OverhaulRobuxPrice = 199; the owner has not approved 349); vip_supply exempt.
 7. RECEIPT ORDER (static, MonetizationService): the pack lookup comes before the first grant mutation and re-checks the
    player / profile after it.
 8. RENDER (codebot_v140, run_shop_render_test.py): the real ShopController rows (cash packs render; the cash + scrolls
@@ -118,7 +118,13 @@ S.Init({
 })
 check(S.TryVipSupply(owner) == 20000 and #paid == 1 and paid[1].why == "vip_supply" and profiles[470626172].VipSupplyAt > 0, "live VIP owner: crate $20,000 paid as vip_supply")
 check(S.TryVipSupply(owner) == 0 and #paid == 1, "the crate never pays twice in a day")
-check(S.TryVipSupply(other) == 0, "not live for another player (owner-first): no crate")
+-- codebot_v142: launched for everyone; the owner-first rule is still proved with OwnerFirst = true for this one check
+local launched = SO.Live.OwnerFirst
+SO.Live.OwnerFirst = true
+check(S.TryVipSupply(other) == 0, "owner-first rule: not live for another player -> no crate")
+SO.Live.OwnerFirst = launched
+check(launched == false and SO.LiveFor(9) and SO.LiveFor(12345), "codebot_v142: ShopOverhaulConfig live for everyone (OwnerFirst=false)")
+check(S.TryVipSupply(other) == 20000, "codebot_v142: a non-owner VIP gets the crate too")
 vipOwned[470626172] = false
 profiles[470626172].VipSupplyAt = 0
 check(S.TryVipSupply(owner) == 0, "no VIP: no crate")
@@ -128,7 +134,7 @@ check(MC.CashMultExemptReasons.vip_supply == true, "vip_supply is multiplier-exe
 S.SyncPerks(owner)
 check(owner.attrs.WE_PerkDoubleHP == true and owner.attrs.WE_PerkSuperSoldiers == nil, "Double HP owner -> WE_PerkDoubleHP; no Super Soldiers")
 S.SyncPerks(other)
-check(other.attrs.WE_PerkDoubleHP == nil, "not live -> no perk attributes")
+check(other.attrs.WE_PerkDoubleHP == nil, "a non-owner without Double HP -> no perk attribute")
 
 -- ── 5. speed stand ──
 local function stand(plot)
@@ -156,7 +162,7 @@ for k, v in pairs({ WarChest = { 2002640637, 799 }, SuperSoldiers = { 1998231741
   check(d ~= nil and d.Id == v[1] and d.RobuxPrice == v[2] and d.OverhaulShop == true, k .. ": Id " .. v[1] .. ", R$ " .. v[2])
 end
 check(table.concat(MC.GamePasses.WarChest.Implies, ",") == "DoubleCash,AutoCollect,VIP,BiggerArmy", "War Chest implies 2x Cash, Auto Collect, VIP, Bigger Army")
-check(MC.GamePasses.VIP.RobuxPrice == 199 and MC.GamePasses.VIP.OverhaulRobuxPrice == 349 and MC.GamePasses.VIP.Id == 1985475542, "VIP: 349 shown while live; 199 until the owner reprices")
+check(MC.GamePasses.VIP.RobuxPrice == 199 and MC.GamePasses.VIP.OverhaulRobuxPrice == 199 and MC.GamePasses.VIP.Id == 1985475542, "codebot_v142: VIP shown at the real Creator Hub price 199 (owner has not approved 349)")
 check(SO.Vip.CashBonusMult == 0.5 and MC.GamePasses.VIP.CashBonusMult == 0.25, "VIP +50 % while live (+25 % old path)")
 check(SO.HideWhenLive.ImpulseSpeed and SO.HideWhenLive.ExtraSoldierSlot and SO.DeathOfferProduct == "SpeedBoost" and SO.ArmyWipedPass == "BiggerArmy", "duplicates: Speed Pass / Army Expansion out; Speed Boost / Bigger Army sold")
 check(SO.SuperSoldiers.Mult == 1.25 and SO.DoubleHP.Mult == 2, "Super Soldiers x1.25, Double HP x2")

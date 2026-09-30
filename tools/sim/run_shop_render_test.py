@@ -85,10 +85,17 @@ for _, k in ipairs({ "CashMega", "CashLarge", "CashMedium", "CashSmall" }) do
   local r = byName["ShopRow_" .. k]
   check(r ~= nil and P(r, "Visible") ~= false and P(r, "Parent") == list and subText(r) ~= nil, k .. " row renders (" .. tostring(r and subText(r)) .. ")")
 end
-local live = TEST_UID == 470626172
+-- codebot_v142: ShopOverhaulConfig.Live.OwnerFirst = false -> the new shop for everyone (owner and uid 9 alike)
+local live = true
 for _, k in ipairs({ "WarChest", "SuperSoldiers", "DoubleHP" }) do
-  check((byName["ShopRow_Pass_" .. k] ~= nil) == live, k .. (if live then " row renders for the owner (overhaul live)" else " row hidden for other players (owner-first)"))
+  check((byName["ShopRow_Pass_" .. k] ~= nil) == live, k .. " row renders for uid " .. TEST_UID .. " (overhaul live for everyone)")
 end
+-- codebot_v142: the VIP row shows the real Creator Hub price (199), never 349
+local function texts(x, out) for _, c in ipairs(x:GetChildren()) do local t = P(c, "Text"); if type(t) == "string" then table.insert(out, t) end; texts(c, out) end return out end
+local vip = byName["ShopRow_Pass_VIP"]
+local vt = if vip then table.concat(texts(vip, {}), " | ") else ""
+check(vip ~= nil and string.find(vt, "199 R$", 1, true) ~= nil and string.find(vt, "349", 1, true) == nil, "VIP row shows 199 R$ (not 349): " .. vt)
+check(vip ~= nil and string.find(vt, "PERMANENT", 1, true) ~= nil, "VIP row is the overhaul row (PERMANENT)")
 -- the cash "+": OpenCashPacks scrolls to the Mega row
 SC.OpenCashPacks()
 local mega = byName["ShopRow_CashMega"]
@@ -100,7 +107,7 @@ for _, c in ipairs(list:GetChildren()) do
 end
 local cp = P(list, "CanvasPosition")
 check(cp ~= nil and cp.Y == want, "OpenCashPacks scrolls to Cash Pack Mega: CanvasPosition.Y=" .. tostring(cp and cp.Y) .. " want " .. want)
-if live then check(want > 1000, "owner: Mega sits " .. want .. " px down (after the passes): it is only visible because of the scroll") end
+if live then check(want > 1000, "uid " .. TEST_UID .. ": Mega sits " .. want .. " px down (after the passes): reachable through the cash + scroll") end
 print(string.format("SHOP RENDER TEST uid %d: %d failed", TEST_UID, fails))
 if fails > 0 then error("failed") end
 '''

@@ -280,7 +280,7 @@ local plainRebuild = false
 
 local function kitOpts(k: WorldConfig.KitPlace, text: string?): WorldKits.KitOpts
 	return {
-		NoDetail = if plainRebuild then true else nil, -- claude-bud JOB 37
+		NoDetail = if plainRebuild or (k :: any).NoDetail == true then true else nil, -- claude-bud JOB 37; codebot_v142: a row may ask for the plain kit
 		Variant = k.Variant,
 		Count = k.Count,
 		Length = k.Length,
