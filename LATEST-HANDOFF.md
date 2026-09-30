@@ -1,5 +1,5 @@
 <!-- Q2-START -->
-## v156 PUBLISHED (Code Bot Roblox, 2026-10-01 Dublin): Open Cloud place version 154 — real Robux prices + plain Shop text + ARMY KILLS board, live for everyone
+## v156 PUBLISHED (Code Bot Roblox, 2026-10-01 00:29 Dublin): Open Cloud place version 154 — real Robux prices + plain Shop text + ARMY KILLS board, live for everyone
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **156**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":154}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Commits:** phase-7-polish `e289e76` (source, checks and dist); claude/desktop-bud merge `3beaae7`; this handoff.
 - **Prices:** new `Shared/Util/LivePrices` (server GetProductInfo cache -> RS attributes `WE_Px_*` / `WE_PxN_*`, refresh 10 min). The Shop, Supply Depot, stands and every offer card (including the ~2 min Starter offer) show the Roblox price and name; the config is the fallback only. Mismatches found (config vs Roblox): StarterBundle 149 "Commander Starter Pack" vs **249 "Commander Starter Bundle"**; ExtraSoldierSlot 99 "Army Expansion (+10)" vs **79 "Extra Soldier Slot"**. Fallbacks now match Roblox. No Creator Hub price changed. All game passes matched.
