@@ -1,4 +1,17 @@
 <!-- Q2-START -->
+## v147 PUBLISHED (Code Bot Roblox, 2026-09-30 ~21:35 Dublin): Open Cloud place version 145 — live error fixes + phone pad-loop cost
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **147**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":145}`. Servers NOT restarted (Migrate to Latest Update / rejoin for v147).
+- **Commits (phase-7-polish):** `81cacef` code + `tools/checks/codebot_v147.py`, `ccb05ee` dist rebuild; this handoff. Merged into `claude/desktop-bud` as `cb8d6e1` (Endgame / job39 files kept bud side = phase 3; phase-7 copies were identical to bud 9e15f27). Endgame phase 3 (`1cd39a6`) is on bud only, NOT in this ship.
+- **Fixes (proven live):**
+  - DataStore queue: `writeProfile(releaseLock)` no longer does SessionLock.Refresh+Release back-to-back on `lock_<id>`; Refresh skips if this server wrote the key <7 s ago (heartbeat 15 s and autosave 60 s aligned every minute). TTL 45 s still covers.
+  - ArmyDebug spam: SLOT ASSIGN / SLOT CHANGE / REPOSITION logs only when `WE_ArmyDebug` is on. Movement unchanged.
+  - LoadAsset "not authorized": only live sources were the L5 upgrade pop Flag 1679839739 + Floodlight 116763933 (plus silent GateDefense Sandbags 3525056989) -> set to 0 (Part kit already shown, no visual change). Full list of 54 non-authorised IDs in source (mostly PreferMesh-gated/unused) in `/workspace/v146probe/unauth_refs.txt`.
+  - Sound HTTP 429: AudioController created ~20 Sounds at join (14 downloads of 7 files). Now each distinct id is warmed once, 4 s after join, 0.35 s apart (`SoundConfig.Mix.WarmDelaySeconds / WarmGapSeconds`).
+  - Phone per-frame: WorldPromptController overlap loop scanned all 150 pads each Heartbeat -> bounding-sphere skip + cached keys (leave events still fire).
+- **Not fixed / unproven (need error text from Creator Hub CSV):** animation load failures (all 7 code anim ids are Roblox-owned and load in the live place; likely throttle), nil-to-number (134), mesh/PBR transient failures. Max-player/base-plot warnings came from pre-10-cap servers.
+- **FPS census (server world):** ~13k parts, 124 lights (no shadows), 1,840 Textures, 237 SurfaceGuis, 100 Humanoids, StreamingEnabled OFF. Rendering/part count is the likely main phone cost; streaming is an owner decision, not changed.
+- **Checks:** BuyPathStatic PASS=7122 FAIL=0 (bud merge 7129/0); codebot_v147 PASS; sound_audit OK; army orders/sim 0 fails. PreferMesh OFF; WE_Building* untouched; prices/passes/shop/ads/server size 10 unchanged.
+
 ## v146 PUBLISHED (Code Bot Roblox, 2026-09-30 21:18 Dublin): Open Cloud place version 144 — JOB 39 phase 2 Base Tier + Defence OWNER-FIRST
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **146**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":144}`. Cherry-pick only of `9e15f27` (not a bud-branch merge — bud was behind on the JOB 38 army fix). Owner-first so Shaun can phone-test; §11 Studio proof still owed before `OwnerFirst=false`.
 - **What ships (owner-first):** Base Tier 1..5 (Fort..Capital, real Part builds, nests, soldiers, gate HP) + Defence tree (Plating / Guns / Gate / Vault) + Engineering Bureau stand + instant rebuild. `EndgameConfig.Parts.BaseTier` + `Defence` = true; `Live.OwnerFirst` still true.
