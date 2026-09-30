@@ -29,9 +29,9 @@ local EndgameConfig = {
 		BaseTier = true, -- phase 2: §2.3 + the HQ UPGRADE console
 		Defence = true, -- phase 2: §2.5 + the Engineering Bureau + instant rebuild
 		Elite = true, -- phase 3: §2.4 + the Recruitment Office + re-train fees
-		Hospital = false, -- phase 4
-		Mastery = false, -- phase 4
-		Workshop = false, -- phase 4
+		Hospital = true, -- phase 4: §2.8 the Field Hospital (heal, Med Kits, Combat Medicine, Field Surgeon, army medic)
+		Mastery = true, -- phase 4: §2.9 the Armory Workshop (mastery, attachments, camos)
+		Workshop = true, -- phase 4: §2.6 the Vehicle Workshop (the Vehicle Depot console)
 		Warheads = false, -- phase 5
 		Heist = false, -- phase 5
 		Contracts = false, -- phase 5
@@ -126,6 +126,8 @@ local EndgameConfig = {
 	-- §2.6 VEHICLE WORKSHOP (phase 4): Cost(L) = 1M x 2.2^(L-1)
 	Workshop = {
 		Classes = { "Ground", "Air", "Naval" },
+		PlateLevel = 3, -- bolt-on armour plates from this level
+		TrimLevel = 5, -- the gold nameplate trim at this level
 		MaxLevel = 5,
 		BaseCost = 1_000_000,
 		Growth = 2.2,
@@ -161,6 +163,16 @@ local EndgameConfig = {
 			Suppressor = { Cost = 3_000_000 },
 		},
 		Camos = { Olive = 50, Urban = 100, Tiger = 150, Gold = 250 } :: { [string]: number },
+		CamoOrder = { "Olive", "Urban", "Tiger", "Gold" },
+		-- a camo recolours the gun's body parts: base colour + the second tone on every other part (Tiger / Urban)
+		CamoLook = {
+			Olive = { A = Color3.fromRGB(86, 96, 60), B = Color3.fromRGB(70, 80, 50), Mat = "Fabric" },
+			Urban = { A = Color3.fromRGB(128, 132, 138), B = Color3.fromRGB(72, 76, 82), Mat = "Fabric" },
+			Tiger = { A = Color3.fromRGB(196, 140, 60), B = Color3.fromRGB(40, 36, 30), Mat = "Fabric" },
+			Gold = { A = Color3.fromRGB(214, 178, 64), B = Color3.fromRGB(190, 150, 50), Mat = "Metal" },
+		} :: { [string]: { A: Color3, B: Color3, Mat: string } },
+		SlotNames = { RedDot = "Red-dot sight", Grip = "Grip", ExtendedMag = "Extended Mag", Suppressor = "Suppressor" } :: { [string]: string },
+		AttachOrder = { "RedDot", "Grip", "ExtendedMag", "Suppressor" },
 	},
 
 	-- §2.10 BLACK MARKET (phase 5): Monday 00:00 UTC weeks, the same stock on every server
@@ -376,6 +388,53 @@ function EndgameConfig.SlotKind(slot: number, sfFacilityLevel: number): string
 		return "Heavy"
 	end
 	return "Infantry"
+end
+
+-- §2.9 a gun's stats after its mastery level (0..5) and attachments: damage +3 %, fire rate +2 %, range +4 %,
+-- magazine +6 %, reload -5 % a level; Red-dot range +10 %, Grip spread -15 %, Extended Mag +25 %. Every multiplier
+-- is capped at MaxMult 3 (the reload never under a third). `def` is a WeaponConfig row; returns a new table.
+function EndgameConfig.GunStats(def: any, mastery: number, att: { [string]: boolean }?): { [string]: number }
+	local Ma = EndgameConfig.Mastery
+	local L = math.clamp(level(mastery), 0, Ma.MaxLevel)
+	local a: { [string]: boolean } = att or {}
+	local pl = Ma.PerLevel
+	local cap = 3
+	local function m(pct: number): number
+		return math.min(1 + pct / 100, cap)
+	end
+	local rangePct = pl.RangePct * L + (if a.RedDot then Ma.Attachments.RedDot.RangePct else 0)
+	local magPct = pl.MagPct * L + (if a.ExtendedMag then Ma.Attachments.ExtendedMag.MagPct else 0)
+	return {
+		Damage = (tonumber(def.Damage) or 0) * m(pl.DamagePct * L),
+		FireRate = (tonumber(def.FireRate) or 0) * m(pl.RatePct * L),
+		Range = (tonumber(def.Range) or 0) * m(rangePct),
+		MagazineSize = math.floor((tonumber(def.MagazineSize) or 0) * m(magPct) + 0.5),
+		ReloadTime = (tonumber(def.ReloadTime) or 0) * math.max(1 + pl.ReloadPct * L / 100, 1 / cap),
+		Spread = (tonumber(def.Spread) or 0) * (if a.Grip then 1 + Ma.Attachments.Grip.SpreadPct / 100 else 1),
+	}
+end
+
+-- §2.9 the mastery price base for a gun: shop 1M, rebirth 2M, premium (Robux) 3M
+function EndgameConfig.MasteryBase(def: any): number
+	local T = EndgameConfig.Mastery.TierBase
+	if typeof(def) == "table" and def.Premium == true then
+		return T.Premium
+	elseif typeof(def) == "table" and def.RebirthOnly == true then
+		return T.Rebirth
+	end
+	return T.Shop
+end
+
+-- §2.6 the vehicle workshop factors at level L: HP (and armour) +6 %, speed +3 % a level
+function EndgameConfig.WorkshopMults(L: number): (number, number)
+	local W = EndgameConfig.Workshop
+	local l = math.clamp(level(L), 0, W.MaxLevel)
+	return 1 + W.HpPct * l / 100, 1 + W.SpeedPct * l / 100
+end
+
+-- §2.8 the Combat Medicine max-HP bonus at level L (+10 a level)
+function EndgameConfig.MedicineHp(L: number): number
+	return math.clamp(level(L), 0, #EndgameConfig.Hospital.Medicine.Costs) * EndgameConfig.Hospital.Medicine.HpPerLevel
 end
 
 -- §2.5 the Base Tier a Defence level needs (0 = none)

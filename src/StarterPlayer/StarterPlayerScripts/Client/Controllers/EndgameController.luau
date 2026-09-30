@@ -264,6 +264,111 @@ Builders.Recruits = function(house: CFrame, st: any): (Model, Part)
 	return m, head
 end
 
+-- phase 4: the Armory Workshop inside SW_S1: a gunsmith's bench (top, legs, a vise, a gun on it), a wall rack of four
+-- guns on the left wall, a tool board, the Gunsmith (a leather apron), two ammo crates, a stool, one lamp, the sign.
+Builders.Armory = function(house: CFrame, st: any): (Model, Part)
+	local m = Instance.new("Model")
+	m.Name = "Station_Armory"
+	local wood = Color3.fromRGB(96, 66, 42)
+	local steel = Color3.fromRGB(62, 66, 70)
+	local gun = Color3.fromRGB(34, 34, 36)
+	local bc = house * CFrame.new(-2.5, 0.3, -1.3)
+	put(m, "BenchTop", Vector3.new(5.6, 0.3, 2.2), bc * CFrame.new(0, 3.2, 0), wood, M.WoodPlanks, true)
+	put(m, "BenchLegs", Vector3.new(5.2, 2.9, 0.3), bc * CFrame.new(0, 1.55, 0.8), steel, M.Metal)
+	put(m, "BenchLegs", Vector3.new(5.2, 2.9, 0.3), bc * CFrame.new(0, 1.55, -0.8), steel, M.Metal)
+	put(m, "Vise", Vector3.new(0.6, 0.6, 0.8), bc * CFrame.new(2.2, 3.65, 0), Color3.fromRGB(40, 90, 150), M.Metal)
+	put(m, "BenchGunBody", Vector3.new(2.6, 0.3, 0.25), bc * CFrame.new(-0.4, 3.52, 0.1) * CFrame.Angles(0, math.rad(8), 0), gun, M.Metal)
+	put(m, "BenchGunStock", Vector3.new(0.8, 0.45, 0.22), bc * CFrame.new(-1.8, 3.5, 0.3) * CFrame.Angles(0, math.rad(8), 0), wood, M.Wood)
+	put(m, "BenchGunMag", Vector3.new(0.25, 0.5, 0.18), bc * CFrame.new(-0.2, 3.25, 0.12), gun, M.Metal)
+	local rk = house * CFrame.new(-7.6, 0.3, -3.2) * CFrame.Angles(0, math.rad(90), 0)
+	put(m, "WallRack", Vector3.new(4.4, 4.2, 0.3), rk * CFrame.new(0, 3.2, 0), wood, M.Wood)
+	put(m, "WallRackRail", Vector3.new(4.4, 0.2, 0.5), rk * CFrame.new(0, 1.3, -0.25), steel, M.Metal)
+	for i, x in ipairs({ -1.5, -0.5, 0.5, 1.5 }) do
+		put(m, "RackGun" .. i, Vector3.new(0.24, 3.2, 0.3), rk * CFrame.new(x, 3.0, -0.3) * CFrame.Angles(0, 0, math.rad(3)), gun, M.Metal)
+		put(m, "RackGunStock" .. i, Vector3.new(0.34, 0.7, 0.3), rk * CFrame.new(x, 1.7, -0.3), wood, M.Wood)
+	end
+	put(m, "ToolBoard", Vector3.new(3.4, 2.2, 0.15), house * CFrame.new(-2.5, 5.6, 7.75), Color3.fromRGB(150, 124, 90), M.Wood)
+	for i, x in ipairs({ -1, 0, 1 }) do
+		put(m, "Tool" .. i, Vector3.new(0.15, 1.2 - i * 0.15, 0.1), house * CFrame.new(-2.5 + x, 5.5, 7.65), steel, M.Metal)
+	end
+	local head = figure(m, house * CFrame.new(st.NpcAt), Color3.fromRGB(88, 70, 52), Color3.fromRGB(150, 110, 70), Color3.fromRGB(56, 48, 40))
+	put(m, "Apron", Vector3.new(2.05, 2.6, 0.12), house * CFrame.new(st.NpcAt) * CFrame.new(0, 3.2, -0.55), Color3.fromRGB(110, 76, 48), M.Fabric)
+	for i, c in ipairs({ { 1.4, 5.4 }, { 1.4, 3.9 } }) do
+		put(m, "AmmoCrate" .. i, Vector3.new(1.8, 1.1, 1.2), house * CFrame.new(c[1], 0.85 + (i - 1) * 0, c[2]), Color3.fromRGB(86, 96, 60), M.Wood)
+	end
+	put(m, "LampRod", Vector3.new(0.15, 1.0, 0.15), house * CFrame.new(-2.5, 10.5, -1.5), steel, M.Metal)
+	local shade = put(m, "LampShade", Vector3.new(1.6, 0.5, 1.6), house * CFrame.new(-2.5, 9.8, -1.5), Color3.fromRGB(236, 224, 190), M.SmoothPlastic)
+	local light = Instance.new("PointLight")
+	light.Range = PSC.LightRange
+	light.Brightness = PSC.LightBrightness
+	light.Shadows = false
+	light.Color = Color3.fromRGB(255, 236, 190)
+	light.Parent = shade
+	doorSign(m, house, st.Sign)
+	return m, head
+end
+
+-- phase 4: the Field Hospital stand in the Hospital's forecourt (the frame's -Z faces the players): a deck, a canvas
+-- canopy on 4 posts with the HOSPITAL valance sign, a white plus on a green board, the reception desk, the Field Medic,
+-- two stretcher beds, an IV stand, a med crate, one lamp.
+Builders.Hospital = function(f: CFrame, st: any): (Model, Part)
+	local m = Instance.new("Model")
+	m.Name = "Station_Hospital"
+	local steel = Color3.fromRGB(150, 156, 160)
+	local green = Color3.fromRGB(40, 110, 70)
+	put(m, "StandDeck", Vector3.new(11, 0.3, 8), f * CFrame.new(0, 0.15, 1.8), Color3.fromRGB(170, 170, 164), M.Concrete, true)
+	for _, c in ipairs({ { -5.2, -2 }, { 5.2, -2 }, { -5.2, 5.6 }, { 5.2, 5.6 } }) do
+		put(m, "CanopyPost", Vector3.new(0.35, 8, 0.35), f * CFrame.new(c[1], 4.3, c[2]), steel, M.Metal)
+	end
+	put(m, "CanopyRoof", Vector3.new(11.4, 0.2, 8.2), f * CFrame.new(0, 8.4, 1.8) * CFrame.Angles(math.rad(-5), 0, 0), Color3.fromRGB(230, 232, 226), M.Fabric)
+	local valance = put(m, "CanopyValance", Vector3.new(11.4, 1.1, 0.12), f * CFrame.new(0, 7.8, -2.35), green, M.Fabric)
+	local g = Instance.new("SurfaceGui")
+	g.Name = "SignGui"
+	g.Face = Enum.NormalId.Front
+	g.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	g.PixelsPerStud = 40
+	g.LightInfluence = 0
+	g.MaxDistance = PSC.SignMaxDistance
+	g.Parent = valance
+	local t = Instance.new("TextLabel")
+	t.BackgroundTransparency = 1
+	t.Size = UDim2.fromScale(1, 1)
+	t.Font = Enum.Font.GothamBlack
+	t.TextScaled = true
+	t.TextColor3 = Color3.fromRGB(255, 255, 255)
+	t.Text = st.Sign
+	t.Parent = g
+	-- the plus board (white on green) beside the desk
+	put(m, "PlusBoard", Vector3.new(2.6, 2.6, 0.2), f * CFrame.new(4.2, 5.4, 5.4), green, M.SmoothPlastic)
+	put(m, "PlusBar", Vector3.new(1.8, 0.5, 0.06), f * CFrame.new(4.2, 5.4, 5.28), Color3.fromRGB(255, 255, 255), M.SmoothPlastic)
+	put(m, "PlusBar", Vector3.new(0.5, 1.8, 0.06), f * CFrame.new(4.2, 5.4, 5.28), Color3.fromRGB(255, 255, 255), M.SmoothPlastic)
+	-- the reception desk between the medic and the players
+	put(m, "DeskBody", Vector3.new(4.6, 3.1, 1.2), f * CFrame.new(0, 1.85, -0.3), Color3.fromRGB(220, 222, 218), M.SmoothPlastic, true)
+	put(m, "DeskTop", Vector3.new(5, 0.2, 1.6), f * CFrame.new(0, 3.5, -0.3), Color3.fromRGB(120, 124, 128), M.Metal)
+	put(m, "DeskStripe", Vector3.new(4.62, 0.35, 0.05), f * CFrame.new(0, 2.4, -0.93), green, M.SmoothPlastic)
+	put(m, "MedCase", Vector3.new(1.2, 0.6, 0.8), f * CFrame.new(-1.4, 3.9, -0.3), Color3.fromRGB(240, 240, 236), M.SmoothPlastic)
+	local head = figure(m, f * CFrame.new(st.NpcAt), Color3.fromRGB(226, 228, 224), green, green)
+	-- two stretcher beds and an IV stand on the deck
+	for i, x in ipairs({ -3.6, 3.6 }) do
+		local b = f * CFrame.new(x, 0.3, 3.6)
+		put(m, "BedFrame" .. i, Vector3.new(2.4, 1.6, 5.4), b * CFrame.new(0, 0.8, 0), steel, M.Metal)
+		put(m, "BedMattress" .. i, Vector3.new(2.2, 0.4, 5.2), b * CFrame.new(0, 1.8, 0), Color3.fromRGB(80, 120, 96), M.Fabric)
+		put(m, "BedPillow" .. i, Vector3.new(1.6, 0.35, 0.9), b * CFrame.new(0, 2.15, 2.0), Color3.fromRGB(240, 240, 236), M.Fabric)
+	end
+	put(m, "IVPole", Vector3.new(0.12, 5.4, 0.12), f * CFrame.new(-1.8, 3.0, 5.6), steel, M.Metal)
+	put(m, "IVBag", Vector3.new(0.5, 0.8, 0.2), f * CFrame.new(-1.8, 5.3, 5.5), Color3.fromRGB(200, 226, 236), M.Glass)
+	put(m, "MedCrate", Vector3.new(1.6, 1.0, 1.2), f * CFrame.new(1.6, 0.8, 6.2), Color3.fromRGB(240, 240, 236), M.SmoothPlastic)
+	put(m, "MedCrateBand", Vector3.new(1.62, 0.3, 1.22), f * CFrame.new(1.6, 0.8, 6.2), green, M.SmoothPlastic)
+	local lamp = put(m, "WorkLamp", Vector3.new(0.8, 0.5, 0.8), f * CFrame.new(0, 7.6, 1.6), Color3.fromRGB(236, 236, 230), M.SmoothPlastic)
+	local light = Instance.new("PointLight")
+	light.Range = PSC.LightRange
+	light.Brightness = PSC.LightBrightness
+	light.Shadows = false
+	light.Color = Color3.fromRGB(240, 246, 255)
+	light.Parent = lamp
+	return m, head
+end
+
 function EndgameController.BuildStation(kind: string, house: CFrame): (Model?, Part?)
 	local st = PSC.Stations[kind]
 	local b = Builders[kind]
@@ -296,7 +401,8 @@ local listTitle: TextLabel? = nil
 local listSub: TextLabel? = nil
 local listShell: PanelShell.Shell? = nil
 local hqConsole: BasePart? = nil
-local LIST_TITLES = { Engineers = "ENGINEERING BUREAU", HQ = "HQ UPGRADE", Recruits = "RECRUITMENT OFFICE" }
+local LIST_TITLES = { Engineers = "ENGINEERING BUREAU", HQ = "HQ UPGRADE", Recruits = "RECRUITMENT OFFICE", Hospital = "FIELD HOSPITAL", Armory = "ARMORY WORKSHOP", Workshop = "VEHICLE WORKSHOP" }
+local depotConsole: BasePart? = nil
 
 local function short(n: number): string
 	if n >= 1e9 then
@@ -383,6 +489,10 @@ local function stationPoint(kind: string): Vector3?
 		local c = hqConsole
 		return if c and c.Parent then c.Position else nil
 	end
+	if kind == "Workshop" then
+		local c = depotConsole
+		return if c and c.Parent then c.Position else nil
+	end
 	local pts = state.Stations
 	local p = if typeof(pts) == "table" then pts[kind] else nil
 	if typeof(p) ~= "table" then
@@ -391,7 +501,7 @@ local function stationPoint(kind: string): Vector3?
 	return Vector3.new(p.X, p.Y, p.Z)
 end
 
-type Row = { Name: string, Sub: string, Price: number?, Need: string?, Kind: string, Id: string, Done: string? }
+type Row = { Name: string, Sub: string, Price: number?, Need: string?, Kind: string, Id: string, Done: string?, Gold: boolean?, Label: string? }
 
 -- the rows a list station shows (from the server's EndgameState; display only)
 function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
@@ -432,6 +542,55 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 				Done = nil,
 			})
 		end
+	elseif kind == "Armory" and typeof(s.Armory) == "table" then
+		local a = s.Armory
+		local eq = a.Equipped
+		for _, g in ipairs(a.Guns or {}) do
+			table.insert(out, {
+				Name = string.format("%s  MASTERY %d/%d", string.upper(g.Name), g.Mastery, g.Max),
+				Sub = "+3% damage, +2% rate, +4% range a level",
+				Price = g.NextCost, Need = nil, Kind = "Mastery", Id = g.Id,
+				Done = if g.NextCost == nil then "MAX" else nil,
+			})
+		end
+		if typeof(eq) == "string" then
+			for _, at in ipairs(a.Attach or {}) do
+				table.insert(out, {
+					Name = string.format("%s (your %s)", string.upper(at.Name), eq),
+					Sub = if at.Id == "RedDot" then "+10% range" elseif at.Id == "Grip" then "-15% spread" elseif at.Id == "ExtendedMag" then "+25% magazine" else "Coming soon",
+					Price = if at.Owned or at.Soon then nil else at.Cost, Need = nil, Kind = "Attach", Id = eq .. ":" .. at.Id,
+					Done = if at.Owned then "FITTED" elseif at.Soon then "SOON" else nil,
+				})
+			end
+			for _, cm in ipairs(a.Camos or {}) do
+				if cm.Owned then
+					table.insert(out, {
+						Name = string.format("%s CAMO", string.upper(cm.Id)), Sub = if cm.On then "On your gun" else "Owned", Price = 0, Need = nil,
+						Kind = "EquipCamo", Id = eq .. ":" .. (if cm.On then "None" else cm.Id), Label = if cm.On then "TAKE OFF" else "PUT ON",
+					})
+				else
+					table.insert(out, {
+						Name = string.format("%s CAMO", string.upper(cm.Id)), Sub = string.format("%d Gold  (you have %d)", cm.Gold, a.Gold or 0), Price = cm.Gold, Need = nil,
+						Kind = "Camo", Id = eq .. ":" .. cm.Id, Gold = true,
+					})
+				end
+			end
+		end
+	elseif kind == "Workshop" and typeof(s.Workshop) == "table" then
+		for _, w in ipairs(s.Workshop) do
+			table.insert(out, {
+				Name = string.format("%s VEHICLES  L%d/%d", string.upper(w.Id), w.Level, w.Max),
+				Sub = string.format("+%d%% HP, +%d%% speed now. Plates at L3, gold trim at L5", w.Hp, w.Speed),
+				Price = w.NextCost, Need = nil, Kind = "Workshop", Id = w.Id,
+				Done = if w.NextCost == nil then "MAX" else nil,
+			})
+		end
+	elseif kind == "Hospital" and typeof(s.Hospital) == "table" then
+		local h = s.Hospital
+		table.insert(out, { Name = "FREE HEAL", Sub = if h.HealIn > 0 then string.format("Ready in %d s", h.HealIn) else "Back to full health", Price = if h.HealIn > 0 then nil else 0, Need = nil, Kind = "Heal", Id = "Now", Done = if h.HealIn > 0 then "WAIT" else nil })
+		table.insert(out, { Name = string.format("MED KIT  %d/%d", h.MedKits, h.MedKitMax), Sub = "+50 HP over 3 s. Hold the MED KIT button", Price = if h.MedKits < h.MedKitMax then h.MedKitPrice else nil, Need = nil, Kind = "MedKit", Id = "One", Done = if h.MedKits >= h.MedKitMax then "FULL" else nil })
+		table.insert(out, { Name = string.format("COMBAT MEDICINE  L%d/%d", h.Medicine, h.MedicineMax), Sub = string.format("+%d max HP now, +10 a level", h.Medicine * 10), Price = h.MedicineNext, Need = nil, Kind = "Medicine", Id = "Next", Done = if h.MedicineNext == nil then "MAX" else nil })
+		table.insert(out, { Name = "FIELD SURGEON", Sub = "Get up where you fall (10 s, half HP)", Price = if h.Revive < 1 then h.RevivePrice else nil, Need = nil, Kind = "Revive", Id = "One", Done = if h.Revive >= 1 then "READY" else nil })
 	elseif kind == "HQ" then
 		local t = s.Tier
 		if typeof(t) == "table" then
@@ -478,7 +637,7 @@ local function refreshList()
 	local rows = EndgameController.ListRows(kind, state)
 	local sub = listSub
 	if sub then
-		sub.Text = if #rows == 0 then "Loading..." elseif kind == "HQ" then "Kept through rebirth" elseif kind == "Recruits" then "Train each soldier type. Kept through rebirth" else "Tougher turrets, gate and vault"
+		sub.Text = if #rows == 0 then "Loading..." elseif kind == "HQ" then "Kept through rebirth" elseif kind == "Recruits" then "Train each soldier type. Kept through rebirth" elseif kind == "Hospital" then "Heal, Med Kits, more max HP, a revive" elseif kind == "Armory" then "Upgrade your guns. Attachments and camos for the gun in your hand" elseif kind == "Workshop" then "Tougher, faster vehicles. Applies on the next spawn" else "Tougher turrets, gate and vault"
 	end
 	for i, r in ipairs(rows) do
 		local row = Instance.new("Frame")
@@ -511,7 +670,7 @@ local function refreshList()
 		sb.TextYAlignment = Enum.TextYAlignment.Top
 		sb.TextWrapped = true
 		local extra = ""
-		if r.Price then
+		if r.Price and r.Price > 0 and not r.Gold then
 			extra = "  " .. short(r.Price) .. "  " .. EndgameController.EtaText(r.Price, cash, perSec)
 		end
 		sb.Text = r.Sub .. extra
@@ -528,8 +687,15 @@ local function refreshList()
 		b.Parent = row
 		UIUtil.Corner(b, 8)
 		UIUtil.TextOutline(b, 1.2)
-		local can = r.Done == nil and r.Need == nil and r.Price ~= nil and cash >= (r.Price :: number)
-		b.Text = if r.Done then r.Done elseif r.Need then "LOCKED" elseif can then "BUY" else "NEED " .. short((r.Price or 0) - cash)
+		local gold = if typeof(state.Armory) == "table" then tonumber(state.Armory.Gold) or 0 else 0
+		local can = r.Done == nil and r.Need == nil and r.Price ~= nil and (if r.Gold then gold >= (r.Price :: number) else cash >= (r.Price :: number))
+		b.Text = if r.Done then r.Done
+			elseif r.Need then "LOCKED"
+			elseif r.Label then r.Label
+			elseif r.Gold then (if can then string.format("%d GOLD", r.Price :: number) else "NEED GOLD")
+			elseif can and r.Price == 0 then "GET"
+			elseif can then "BUY"
+			else "NEED " .. short((r.Price or 0) - cash)
 		b.BackgroundColor3 = if can then Color3.fromRGB(46, 170, 82) else Color3.fromRGB(70, 76, 84)
 		b.AutoButtonColor = can
 		if r.Need then
@@ -678,10 +844,10 @@ local function empireRowsRefresh()
 				goal.Text = if typeof(e.NextCost) == "number"
 					then string.format("EMPIRE %d  %s  %s", e.Level + 1, short(e.NextCost), EndgameController.EtaText(e.NextCost, cash, perSec))
 					else "EMPIRE MAX"
-			elseif kind == "HQ" or kind == "Engineers" or kind == "Recruits" then
+			elseif kind == "HQ" or kind == "Engineers" or kind == "Recruits" or kind == "Hospital" or kind == "Armory" then
 				local best: Row? = nil
 				for _, r in ipairs(EndgameController.ListRows(kind, state)) do
-					if r.Price and r.Kind ~= "Rebuild" and r.Kind ~= "Retrain" and (best == nil or (r.Price :: number) < ((best :: Row).Price :: number)) then
+					if r.Price and r.Price > 0 and not r.Gold and r.Kind ~= "Rebuild" and r.Kind ~= "Retrain" and r.Kind ~= "MedKit" and r.Kind ~= "Revive" and (best == nil or (r.Price :: number) < ((best :: Row).Price :: number)) then
 						best = r
 					end
 				end
@@ -1091,12 +1257,128 @@ local function watchSquad(model: Instance)
 	end)
 end
 
+-- phase 4: the MED KIT button (right edge, clear of the thumbstick / jump zones; hold 0.6 s) and the GET UP button (after
+-- a death while a Field Surgeon token is carried, 10 s). Both only for live players, both touch-first (>= 64 v).
+local medBtn: TextButton? = nil
+local upBtn: TextButton? = nil
+local function makeHudButtons(pg: PlayerGui)
+	local sg = Instance.new("ScreenGui")
+	sg.Name = "WarEmpireMedic"
+	sg.ResetOnSpawn = false
+	PanelShell.Screen(sg)
+	sg.Parent = pg
+	local TAP = PanelShell.TouchMinV()
+	local mb = Instance.new("TextButton")
+	mb.Name = "MedKit"
+	mb.AnchorPoint = Vector2.new(1, 0.5)
+	mb.Position = UDim2.new(1, -12, 0.42, 0)
+	mb.Size = UDim2.fromOffset(TAP + 40, TAP)
+	mb.BackgroundColor3 = Color3.fromRGB(40, 110, 70)
+	mb.Font = HudConfig.Fonts.Display
+	mb.TextSize = PanelShell.Text(16)
+	mb.TextColor3 = Color3.fromRGB(255, 255, 255)
+	mb.Text = "MED KIT"
+	mb.Visible = false
+	mb.Parent = sg
+	UIUtil.Corner(mb, 10)
+	UIUtil.TextOutline(mb, 1.2)
+	local fill = Instance.new("Frame")
+	fill.Name = "Hold"
+	fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	fill.BackgroundTransparency = 0.7
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.BorderSizePixel = 0
+	fill.Parent = mb
+	local holding = 0
+	mb.InputBegan:Connect(function(io: InputObject)
+		if io.UserInputType ~= Enum.UserInputType.Touch and io.UserInputType ~= Enum.UserInputType.MouseButton1 then
+			return
+		end
+		holding += 1
+		local my = holding
+		task.spawn(function()
+			local t0 = os.clock()
+			while holding == my and os.clock() - t0 < 0.6 do
+				fill.Size = UDim2.fromScale((os.clock() - t0) / 0.6, 1)
+				task.wait(0.05)
+			end
+			if holding == my then
+				holding += 1
+				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestEndgameBuy, "UseMedKit", "One")
+			end
+			fill.Size = UDim2.fromScale(0, 1)
+		end)
+	end)
+	mb.InputEnded:Connect(function()
+		holding += 1
+	end)
+	medBtn = mb
+	local ub = Instance.new("TextButton")
+	ub.Name = "GetUp"
+	ub.AnchorPoint = Vector2.new(0.5, 0.5)
+	ub.Position = UDim2.fromScale(0.5, 0.62)
+	ub.Size = UDim2.fromOffset(240, TAP + 8)
+	ub.BackgroundColor3 = Color3.fromRGB(46, 170, 82)
+	ub.Font = HudConfig.Fonts.Display
+	ub.TextSize = PanelShell.Text(22)
+	ub.TextColor3 = Color3.fromRGB(255, 255, 255)
+	ub.Text = "GET UP"
+	ub.Visible = false
+	ub.Parent = sg
+	UIUtil.Corner(ub, 12)
+	UIUtil.TextOutline(ub, 1.5)
+	ub.Activated:Connect(function()
+		ub.Visible = false
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestEndgameBuy, "UseRevive", "One")
+	end)
+	upBtn = ub
+end
+
+-- MED KIT shows while he carries kits and is hurt (checked on health / attribute changes: no loop)
+local function syncMed(h: Humanoid?)
+	local b = medBtn
+	if b == nil then
+		return
+	end
+	local n = tonumber(player:GetAttribute("WE_MedKits")) or 0
+	b.Visible = n > 0 and h ~= nil and h.Health > 0 and h.Health < h.MaxHealth
+	b.Text = string.format("MED KIT x%d", n)
+end
+
 local function watchDamage(char: Model)
+	char:GetAttributeChangedSignal("WE_GunCamo"):Connect(function()
+		local gun = char:FindFirstChild("WE_Gun")
+		if gun then
+			local okW, WV = pcall(function(): any
+				return require(script.Parent.Parent.Modules.WeaponVisuals)
+			end)
+			if okW and WV and WV.ApplyCamo then
+				WV.ApplyCamo(gun, char:GetAttribute("WE_GunCamo"))
+			end
+		end
+	end)
 	local hum = char:WaitForChild("Humanoid", 10)
 	if hum == nil or not hum:IsA("Humanoid") then
 		return
 	end
 	local last = hum.Health
+	syncMed(hum)
+	hum.Died:Connect(function()
+		local ub = upBtn
+		if ub and player:GetAttribute("WE_Revive") == true then
+			ub.Visible = true
+			task.spawn(function()
+				for s = EndgameConfig.Hospital.Revive.WithinSeconds, 1, -1 do
+					if not ub.Visible then
+						return
+					end
+					ub.Text = string.format("GET UP (%d)", s)
+					task.wait(1)
+				end
+				ub.Visible = false
+			end)
+		end
+	end)
 	hum.HealthChanged:Connect(function(h: number)
 		if h < last and stationOpen ~= nil then
 			setStationOpen(nil) -- the plaza is contested PvP: taking damage closes the shop
@@ -1104,6 +1386,7 @@ local function watchDamage(char: Model)
 		if h < last and listOpen ~= nil then
 			setListOpen(nil)
 		end
+		syncMed(hum)
 		last = h
 	end)
 end
@@ -1118,6 +1401,11 @@ function EndgameController.Init()
 		return
 	end
 	buildPanels(pg)
+	makeHudButtons(pg)
+	player:GetAttributeChangedSignal("WE_MedKits"):Connect(function()
+		local c = player.Character
+		syncMed(c and c:FindFirstChildOfClass("Humanoid"))
+	end)
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if kind ~= "EndgameState" or typeof(data) ~= "table" then
 			return
@@ -1174,6 +1462,34 @@ function EndgameController.Init()
 			local want = player:GetAttribute("WE_EndgameLive") == true
 				and (EndgameConfig.LiveFor(player.UserId, "BaseTier") or EndgameConfig.LiveFor(player.UserId, "Defence"))
 			local pid = tonumber(player:GetAttribute("WE_PlotId"))
+			-- phase 4: the Vehicle Workshop prompt on his own Vehicle Depot console
+			local wantW = player:GetAttribute("WE_EndgameLive") == true and EndgameConfig.LiveFor(player.UserId, "Workshop")
+			local depot = if wantW and pid then ConsoleLocator.Find(pid, "VehicleDepot") else nil
+			if depot ~= depotConsole then
+				local oldD = depotConsole
+				if oldD then
+					local pr0 = oldD:FindFirstChild("WE_WorkshopPrompt")
+					if pr0 then
+						pr0:Destroy()
+					end
+				end
+				depotConsole = depot
+				if depot then
+					local prW = Instance.new("ProximityPrompt")
+					prW.Name = "WE_WorkshopPrompt"
+					prW.ActionText = "Workshop"
+					prW.ObjectText = "Vehicle upgrades"
+					prW.HoldDuration = 0
+					prW.KeyboardKeyCode = Enum.KeyCode.F -- the console's own buy prompt keeps E
+					prW.UIOffset = Vector2.new(0, 72)
+					prW.MaxActivationDistance = 10
+					prW.RequiresLineOfSight = false
+					prW.Parent = depot
+					prW.Triggered:Connect(function()
+						EndgameController.OpenStation("Workshop")
+					end)
+				end
+			end
 			local console = if want and pid then ConsoleLocator.Find(pid, "CommandCenter") else nil
 			if console ~= hqConsole then
 				local old = hqConsole

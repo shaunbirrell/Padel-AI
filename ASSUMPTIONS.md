@@ -9811,3 +9811,21 @@ ds_territories.luau T3):
   keyboard device (PreferredInput), so phones never pay for it.
 - **Retrain timing:** a training buy / RE-TRAIN / refill re-applies to living soldiers in place (MaxHealth rescaled with
   the HP ratio kept, Model:ScaleTo in place). No move and no PivotTo, so JOB 38's formation standard holds.
+
+## 2026-09-30 — claude-bud JOB 39 phase 4: Hospital + Armory Workshop + Vehicle Workshop
+- **Suppressor not sold:** the Suppressor's effect ("no minimap ping when firing") has nothing to act on, because no
+  firing ping exists in the game. It shows as SOON and is not sold, rather than selling a 3M part that does nothing.
+- **Spread:** WeaponConfig.Spread only drives the client reticle bloom (the server ray has no spread), so the Grip's
+  -15 % shows as a steadier reticle.
+- **Camos:** camos are owned once (per account) and put on / taken off per gun for free; profile.Endgame.Camos[id] =
+  true, Camos.Equip[gun] = id. They recolour the gun parts client-side (two tones, Gold = metal).
+- **Hospital placement:** the Field Hospital is a forecourt stand at the Hospital store prop (its interior is not proven
+  walkable). Without the prop it stands beside the radio shop house. No red cross (a protected emblem): a white plus on
+  green.
+- **Field Surgeon:** the revive reloads the character and pivots it onto the spot it fell (within 10 s). That is the one
+  PivotTo in the endgame code, pinned, and not travel. It is refused inside another player's plot (the "enemy base
+  during a siege" rule, applied to any enemy plot).
+- **Army medic:** it runs on the 5 s endgame sweep (+5 HP a sweep = 1 HP / s) for soldiers whose HP did not drop since
+  the last sweep.
+- **Vehicle Workshop timing:** the Workshop applies at the next spawn (a spawned vehicle keeps the numbers it spawned
+  with).

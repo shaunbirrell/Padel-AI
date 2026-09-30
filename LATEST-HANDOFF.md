@@ -30,6 +30,63 @@
 - **Phone tests (Migrate to Latest Update, as shaunie6):** see PHASE 2 section below (HQ Upgrade → Fort..Capital look; ENGINEERS Defences; rebuild after breach; EMPIRE rows + PIN).
 - **Next:** Studio §11 proof still owed; do NOT set Endgame OwnerFirst=false until owner asks. Claude already pushed phase 3 tip `1cd39a6` on desktop-bud (Elite Training) — not in this ship; Code Bot can cherry-pick next. JOBs 40–42 still queued.
 
+## claude-bud JOB 39 PHASE 4 (2026-09-30): FIELD HOSPITAL + ARMORY WORKSHOP (mastery / attachments / camos) + VEHICLE WORKSHOP (branch `claude/desktop-bud`)
+Owner-first (`EndgameConfig.Parts.Hospital / Mastery / Workshop` = true). Off / not live: the WeaponConfig row itself,
+no max-HP bonus, vehicle x1, no stations.
+
+**1. Armory Workshop (SW_S1, the navy-awning market, ground floor; 39 parts, 1 lamp, the ARMORY sign)**
+- **Mastery L1-5 per owned gun:** +3 % damage, +2 % fire rate, +4 % range, +6 % magazine, -5 % reload a level.
+  - Price: shop 1M x 2^(L-1), rebirth guns 2M, Robux guns 3M.
+- **Attachments** for the gun in your hand: Red-dot +10 % range 1M, Grip -15 % spread 1.5M, Extended Mag +25 % 2M.
+  - The Suppressor is listed but NOT sold: nothing pings the map when a player fires, so it would do nothing (see
+    ASSUMPTIONS).
+- **Server numbers:** CombatService uses ONE per-player gun row (`CombatService._GunDef` ->
+  `EndgameService.PlayerGunDef`, cached, applied once) for the fire-rate check, the range / hit slop, damage (damageFor),
+  magazine (magSize) and reload. The client paces / reaches / reloads with the same multipliers (WE_GunMods).
+- **`[GunTest]` (headless):**
+  - AR at L0 = the WeaponConfig numbers.
+  - AR at L5: dmg 25.3, rps 9.9, range 168, mag 39, reload 1.50.
+  - AR at L5 + Red-dot range 182, + Grip spread x0.85, + Extended Mag mag 47.
+  - A 150-stud shot is past the AR's old range (140) and inside L5 + Red-dot.
+- **Camos (the first Gold sink):** Olive 50 / Urban 100 / Tiger 150 / Gold 250 Gold.
+  - Buy once, put on / take off per gun for free.
+  - The server sets the character's WE_GunCamo with the drawn gun; every client recolours the built gun (WeaponVisuals,
+    template or kit, local and remote).
+
+**2. Field Hospital (the Hospital store prop's forecourt: a canvas stand; 37 parts, 1 lamp, the HOSPITAL sign)**
+- The sign is a white plus on green: no red-cross emblem.
+- FREE HEAL to full (not within 6 s of damage, every 60 s).
+- MED KIT (carry 3, max($25k, 30 s of income)). A MED KIT button on the right edge while hurt: HOLD 0.6 s, +50 HP over
+  3 s.
+- COMBAT MEDICINE L1-5 (2 / 5 / 12 / 30 / 75M): +10 max HP a level on the base, before Double HP and armour, hard cap
+  400 (ArmourService). From L3 the army medic: soldiers not hurt for a sweep regain 1 HP / s.
+- FIELD SURGEON (carry 1, max($250k, 3 min)): after a death a GET UP (10) button. It puts the new body back on the spot
+  you fell with half HP. Not inside an enemy plot.
+  - This is the endgame code's ONLY PivotTo, pinned. It is not travel: the same place, within 10 s.
+
+**3. Vehicle Workshop (a "Workshop" prompt on your own Vehicle Depot console)**
+- Ground / Air / Naval x L1-5 ($1.0M ... $23.4M): +6 % HP (VehicleHealth HPMult) and +3 % speed (the drive
+  attributes) a level. It applies on the next spawn.
+- L3 bolts armour plates (+ bolt rails) on both flanks; L5 adds a gold nameplate on the nose.
+- Premium vehicles take it on top of their own multipliers (the Robux lead is kept).
+
+**Checks**
+- run_endgame_test (+ phase 4): GunStats, every purchase (ownership, the station, the Suppressor refusal, the Gold camo
+  with no Cash), the cached per-player gun row, WE_GunMods, Workshop + look, Hospital (Medicine / Med Kit / revive
+  prices, token kept on a failed revive), both stations built and counted.
+- **Pins:** the new stat paths, the 4 Health-write sites, the one revive PivotTo.
+- BuyPathStatic PASS=7093 FAIL=0; all 16 sims 0 failed; rojo ok; remote audit OK.
+- **LSP:** no new errors. HudConfig / Remotes show 3 pre-existing ones because CombatController is now in the changed
+  set; HEAD has the same 3.
+
+**Test ON HIS PHONE**
+1. Plaza, the navy-awning market: the ARMORY sign, the Gunsmith at a bench, a wall rack. Tap "Gun Upgrades": your guns'
+   MASTERY rows, then the attachments and camos for the gun in your hand. Buy AR mastery + Red-dot and shoot a target a
+   bit past the old range: it hits.
+2. Buy the Tiger camo (150 Gold): your gun turns tiger-striped for you and the second phone; PUT ON / TAKE OFF.
+3. The Hospital: the green HOSPITAL stand. FREE HEAL when hurt; buy 2 Med Kits; in a fight HOLD the MED KIT button on the
+   right. Buy the Field Surgeon, die, tap GET UP: you stand where you fell with half HP.
+4. At your Vehicle Depot console: "Workshop" -> Air L3. Spawn a jet: armour plates on its flanks, more HP on the bar.
 ## claude-bud JOB 39 PHASE 3 (2026-09-30): ELITE TRAINING + Recruitment Office + re-train fees (branch `claude/desktop-bud`)
 Owner-first (`EndgameConfig.Parts.Elite` = true). Off / not live: `UnitElite` returns nil, so today's soldier exactly.
 

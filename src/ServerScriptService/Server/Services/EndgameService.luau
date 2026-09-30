@@ -31,6 +31,7 @@ local EndgameConfig = require(Shared.Configs.EndgameConfig)
 local PlazaServicesConfig = require(Shared.Configs.PlazaServicesConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
 local ResearchConfig = require(Shared.Configs.ResearchConfig)
+local WeaponConfig = require(Shared.Configs.WeaponConfig)
 
 local EndgameService = {}
 
@@ -376,6 +377,286 @@ function EndgameService.DressUnit(model: Model, humanoid: Humanoid, elite: { [st
 	model:SetAttribute("WE_EliteUntrained", if elite.Untrained then true else nil)
 end
 
+-- ── phase 4: the FIELD HOSPITAL (the player's own health; the ONE place new code writes a player's Health) ───────────
+local healAt: { [number]: number } = {}
+local diedAt: { [number]: { At: number, CF: CFrame } } = {} -- where / when the player last fell (the revive window)
+local healing: { [number]: boolean } = {}
+
+function EndgameService.MedicineLevel(profile: any): number
+	local e = if typeof(profile) == "table" then profile.Endgame else nil
+	return if typeof(e) == "table" then math.min(nonNeg(e.Medicine), #EndgameConfig.Hospital.Medicine.Costs) else 0
+end
+
+-- ArmourService: the Combat Medicine max-HP bonus (0 while the Hospital part is not live for him)
+function EndgameService.MedicineBonus(player: Player): number
+	if not EndgameConfig.LiveFor(player.UserId, "Hospital") then
+		return 0
+	end
+	return EndgameConfig.MedicineHp(EndgameService.MedicineLevel(getProfile(player)))
+end
+
+local function humOf(player: Player): Humanoid?
+	local c = player.Character
+	local h = c and c:FindFirstChildOfClass("Humanoid")
+	return if h and h.Health > 0 then h else nil
+end
+
+-- the Med Kit heal: HealPerKit over Seconds, in 6 steps; stops when he dies or is full
+local function healOverTime(player: Player, amount: number, seconds: number)
+	if healing[player.UserId] then
+		return
+	end
+	healing[player.UserId] = true
+	task.spawn(function()
+		local steps = 6
+		for _ = 1, steps do
+			local h = humOf(player)
+			if h == nil or h.Health >= h.MaxHealth then
+				break
+			end
+			h.Health = math.min(h.MaxHealth, h.Health + amount / steps)
+			task.wait(seconds / steps)
+		end
+		healing[player.UserId] = nil
+	end)
+end
+
+-- is `pos` inside ANOTHER player's plot (a revive is refused there: the siege rule)
+local function inEnemyPlot(player: Player, pos: Vector3): boolean
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local bases = setup and setup:FindFirstChild("Bases")
+	local profile = getProfile(player)
+	local own = if profile then tonumber(profile.BasePlotId) else nil
+	for _, f in ipairs(if bases then bases:GetChildren() else {}) do
+		local pad = f:FindFirstChild("PlotPad")
+		if pad and pad:IsA("BasePart") and f.Name ~= ("Plot" .. tostring(own)) then
+			local lp = pad.CFrame:PointToObjectSpace(pos)
+			if math.abs(lp.X) <= pad.Size.X * 0.5 and math.abs(lp.Z) <= pad.Size.Z * 0.5 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+--[[ The Field Surgeon: get up where you fell. The ONLY move in the endgame code, and it is not travel: the new body is
+	placed back on the spot the old one fell (Hospital.Revive.WithinSeconds after death), never anywhere else. ]]
+function EndgameService.Revive(player: Player): (boolean, string)
+	local d = diedAt[player.UserId]
+	local R = EndgameConfig.Hospital.Revive
+	if d == nil or clock() - d.At > R.WithinSeconds then
+		return false, "Too late to revive"
+	end
+	if inEnemyPlot(player, d.CF.Position) then
+		return false, "No revive inside an enemy base"
+	end
+	diedAt[player.UserId] = nil
+	local fell = d.CF
+	task.spawn(function()
+		local ok = pcall(function()
+			(player :: any):LoadCharacter()
+		end)
+		local c = player.Character
+		local h = c and c:FindFirstChildOfClass("Humanoid")
+		if ok and c and h then
+			c:PivotTo(fell + Vector3.new(0, 3, 0)) -- the spot he fell on (not travel: WithinSeconds of his death, same place)
+			h.Health = h.MaxHealth * R.HpFraction
+		end
+	end)
+	return true, "Back on your feet"
+end
+
+-- phase 4: the army medic (Combat Medicine L3+): each sweep (5 s) a soldier not hurt since the last sweep gets back
+-- 1 HP a second of it. Soldiers only (never a player).
+local unitLastHp: { [any]: number } = setmetatable({}, { __mode = "k" }) :: any
+function EndgameService.MedicTick(player: Player, seconds: number)
+	if not EndgameConfig.LiveFor(player.UserId, "Hospital") then
+		return
+	end
+	if EndgameService.MedicineLevel(getProfile(player)) < EndgameConfig.Hospital.Medicine.MedicLevel then
+		return
+	end
+	local sq = deps.SquadOrdersService
+	local st = if sq and sq.StateOf then sq.StateOf(player) else nil
+	if st == nil then
+		return
+	end
+	for _, u in ipairs(st.Units) do
+		local h = u.Humanoid
+		if u.Alive and h and h.Health > 0 then
+			local prev = unitLastHp[u]
+			if prev ~= nil and h.Health >= prev and h.Health < h.MaxHealth then
+				h.Health = math.min(h.MaxHealth, h.Health + seconds)
+			end
+			unitLastHp[u] = h.Health
+		end
+	end
+end
+
+-- ── phase 4: the ARMORY WORKSHOP (mastery, attachments, camos) and the VEHICLE WORKSHOP ──────────────────────────
+local gunCache: { [number]: { [string]: { Sig: string, Def: any } } } = {}
+
+local function endgameMap(profile: any, key: string): { [string]: any }
+	local e = EndgameService.Data(profile)
+	if typeof(e[key]) ~= "table" then
+		e[key] = {}
+	end
+	return e[key]
+end
+
+function EndgameService.MasteryLevel(profile: any, weaponId: string): number
+	local e = if typeof(profile) == "table" then profile.Endgame else nil
+	local m = if typeof(e) == "table" and typeof(e.Mastery) == "table" then e.Mastery else nil
+	return if m then math.min(nonNeg(m[weaponId]), EndgameConfig.Mastery.MaxLevel) else 0
+end
+
+function EndgameService.Attachments(profile: any, weaponId: string): { [string]: boolean }
+	local e = if typeof(profile) == "table" then profile.Endgame else nil
+	local a = if typeof(e) == "table" and typeof(e.Attachments) == "table" then e.Attachments[weaponId] else nil
+	return if typeof(a) == "table" then a else {}
+end
+
+-- the owned guns (CombatService writes WE_Weapons = the sorted comma list of owned ids)
+local function ownedGuns(player: Player): { string }
+	local out: { string } = {}
+	local s = player:GetAttribute("WE_Weapons")
+	if typeof(s) == "string" then
+		for id in string.gmatch(s, "[^,]+") do
+			if WeaponConfig.Weapons[id] ~= nil then
+				table.insert(out, id)
+			end
+		end
+	end
+	return out
+end
+
+--[[ CombatService: the weapon row this player's shots / reload / magazine use. The WeaponConfig row itself while the
+	Mastery part is not live or the gun has no mastery / attachment (OFF = old); else a copy with GunStats applied
+	(cached until the level / attachments change), marked __eg so it is never applied twice. ]]
+function EndgameService.PlayerGunDef(player: Player?, def: any): any
+	if player == nil or typeof(def) ~= "table" or def.__eg == true or typeof(def.Id) ~= "string" then
+		return def
+	end
+	if not EndgameConfig.LiveFor(player.UserId, "Mastery") then
+		return def
+	end
+	local profile = getProfile(player)
+	if profile == nil then
+		return def
+	end
+	local L = EndgameService.MasteryLevel(profile, def.Id)
+	local att = EndgameService.Attachments(profile, def.Id)
+	local sig = tostring(L)
+	for _, slot in ipairs(EndgameConfig.Mastery.AttachOrder) do
+		sig ..= if att[slot] then "1" else "0"
+	end
+	if sig == "00000" then
+		return def
+	end
+	local byGun = gunCache[player.UserId]
+	if byGun == nil then
+		byGun = {}
+		gunCache[player.UserId] = byGun
+	end
+	local hit = byGun[def.Id]
+	if hit and hit.Sig == sig then
+		return hit.Def
+	end
+	local out = table.clone(def)
+	for k, v in pairs(EndgameConfig.GunStats(def, L, att)) do
+		out[k] = v
+	end
+	out.__eg = true
+	byGun[def.Id] = { Sig = sig, Def = out }
+	return out
+end
+
+-- WE_GunMods for the client's local fire rate / range / reload / reticle: "Id=rate,range,reload,spread;..." (the
+-- multipliers vs the WeaponConfig row; only guns that differ). nil while nothing is upgraded.
+function EndgameService.GunModsString(player: Player): string?
+	if not EndgameConfig.LiveFor(player.UserId, "Mastery") then
+		return nil
+	end
+	local parts: { string } = {}
+	for _, id in ipairs(ownedGuns(player)) do
+		local def: any = WeaponConfig.Weapons[id]
+		local g = EndgameService.PlayerGunDef(player, def)
+		if g ~= def then
+			local function r(a: any, b: any): number
+				local x, y = tonumber(a) or 0, tonumber(b) or 0
+				return if y > 0 then x / y else 1
+			end
+			table.insert(parts, string.format("%s=%.3f,%.3f,%.3f,%.3f", id, r(g.FireRate, def.FireRate), r(g.Range, def.Range), r(g.ReloadTime, def.ReloadTime), r(g.Spread, def.Spread)))
+		end
+	end
+	return if #parts > 0 then table.concat(parts, ";") else nil
+end
+
+-- the camo on a gun (nil = none / not live): CombatService sets the character's WE_GunCamo with the drawn gun
+function EndgameService.CamoFor(player: Player, weaponId: string?): string?
+	if weaponId == nil or not EndgameConfig.LiveFor(player.UserId, "Mastery") then
+		return nil
+	end
+	local profile = getProfile(player)
+	local e = if profile then profile.Endgame else nil
+	local c = if typeof(e) == "table" and typeof(e.Camos) == "table" then e.Camos else nil
+	local eq = if c and typeof(c.Equip) == "table" then c.Equip[weaponId] else nil
+	return if typeof(eq) == "string" and c and c[eq] == true then eq else nil
+end
+
+-- VehicleService: the Vehicle Workshop factors for a spawn (1, 1 while the part is not live)
+function EndgameService.WorkshopFor(userId: number, category: string?): (number, number, number)
+	if not EndgameConfig.LiveFor(userId, "Workshop") then
+		return 1, 1, 0
+	end
+	local profile = profileOf(userId)
+	local e = if profile then profile.Endgame else nil
+	local w = if typeof(e) == "table" and typeof(e.Workshop) == "table" then e.Workshop else nil
+	local L = if w then math.min(nonNeg(w[category or "Ground"]), EndgameConfig.Workshop.MaxLevel) else 0
+	local hp, sp = EndgameConfig.WorkshopMults(L)
+	return hp, sp, L
+end
+
+-- VehicleService: the Workshop look on a spawned vehicle: L3 bolt-on armour plates on both flanks (+ a skirt), L5 a
+-- gold nameplate trim on the nose. Welded to the vehicle's PrimaryPart, massless, never colliding.
+function EndgameService.DressVehicle(model: Model, L: number)
+	local W = EndgameConfig.Workshop
+	local base = model.PrimaryPart
+	if L < W.PlateLevel or base == nil then
+		return
+	end
+	local cf, size = model:GetBoundingBox()
+	local function plate(name: string, sz: Vector3, at: CFrame, color: Color3, mat: Enum.Material)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = sz
+		p.CFrame = at
+		p.Color = color
+		p.Material = mat
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Massless = true
+		p.CastShadow = false
+		p:SetAttribute("WE_WorkshopPiece", true)
+		p.Parent = model
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = base
+		w.Part1 = p
+		w.Parent = p
+	end
+	local armour = Color3.fromRGB(70, 74, 64)
+	local len = math.max(size.Z * 0.55, 2)
+	local h = math.max(size.Y * 0.28, 0.6)
+	for _, s in ipairs({ -1, 1 }) do
+		plate("WorkshopPlate", Vector3.new(0.25, h, len), cf * CFrame.new(s * (size.X * 0.5 + 0.12), -size.Y * 0.12, 0), armour, Enum.Material.DiamondPlate)
+		plate("WorkshopBolts", Vector3.new(0.12, 0.2, len * 0.9), cf * CFrame.new(s * (size.X * 0.5 + 0.3), -size.Y * 0.12 + h * 0.3, 0), Color3.fromRGB(40, 42, 40), Enum.Material.Metal)
+	end
+	if L >= W.TrimLevel then
+		plate("WorkshopNameplate", Vector3.new(math.max(size.X * 0.4, 0.8), 0.3, 0.12), cf * CFrame.new(0, size.Y * 0.1, -size.Z * 0.5 - 0.08), Color3.fromRGB(214, 178, 64), Enum.Material.Metal)
+	end
+end
+
 local function setAttr(player: Player, name: string, value: any)
 	if player:GetAttribute(name) ~= value then
 		player:SetAttribute(name, value)
@@ -399,6 +680,12 @@ function EndgameService.SyncAttributes(player: Player)
 	setAttr(player, "WE_PlotId", if anyLive then tonumber(profile.BasePlotId) else nil)
 	local tier = tierOf(player.UserId)
 	setAttr(player, "WE_BaseTier", if tier > 0 then tier else nil)
+	-- phase 4: the Med Kit / revive counts (the client's MED KIT and GET UP buttons)
+	local hosp = EndgameConfig.LiveFor(player.UserId, "Hospital")
+	local eg = if typeof(profile.Endgame) == "table" then profile.Endgame else {}
+	setAttr(player, "WE_MedKits", if hosp and nonNeg(eg.MedKits) > 0 then nonNeg(eg.MedKits) else nil)
+	setAttr(player, "WE_Revive", if hosp and nonNeg(eg.Revive) > 0 then true else nil)
+	setAttr(player, "WE_GunMods", EndgameService.GunModsString(player))
 end
 
 -- the station frame for a station kind, or nil until the world registered it
@@ -568,6 +855,55 @@ function EndgameService.State(player: Player): { [string]: any }
 		out.Defence = rows
 		out.Rebuild = { Need = needsRebuild(profile), Price = EndgameService.RebuildPrice(player) }
 	end
+	if EndgameConfig.LiveFor(uid, "Mastery") then
+		local Ma = EndgameConfig.Mastery
+		local guns = {}
+		for _, gid in ipairs(ownedGuns(player)) do
+			local def: any = WeaponConfig.Weapons[gid]
+			local L = EndgameService.MasteryLevel(profile, gid)
+			table.insert(guns, { Id = gid, Name = tostring(def.DisplayName or gid), Mastery = L, Max = Ma.MaxLevel, NextCost = EndgameConfig.MasteryCost(EndgameConfig.MasteryBase(def), L + 1) })
+		end
+		local eqRaw = player:GetAttribute("WE_EquippedWeapon")
+		local eq: string? = if typeof(eqRaw) == "string" then eqRaw else nil
+		local att = if typeof(eq) == "string" then EndgameService.Attachments(profile, eq) else {}
+		local attRows = {}
+		for _, slot in ipairs(Ma.AttachOrder) do
+			table.insert(attRows, { Id = slot, Name = Ma.SlotNames[slot], Owned = att[slot] == true, Cost = Ma.Attachments[slot].Cost, Soon = slot == "Suppressor" })
+		end
+		local camos = {}
+		local c = endgameMap(profile, "Camos")
+		for _, cm in ipairs(Ma.CamoOrder) do
+			table.insert(camos, { Id = cm, Gold = Ma.Camos[cm], Owned = c[cm] == true, On = typeof(eq) == "string" and EndgameService.CamoFor(player, eq) == cm })
+		end
+		out.Armory = { Guns = guns, Equipped = eq, Attach = attRows, Camos = camos, Gold = nonNeg(profile.Gold) }
+	end
+	if EndgameConfig.LiveFor(uid, "Workshop") then
+		local rows = {}
+		local w = endgameMap(profile, "Workshop")
+		for _, cl in ipairs(EndgameConfig.Workshop.Classes) do
+			local L = math.min(nonNeg(w[cl]), EndgameConfig.Workshop.MaxLevel)
+			local hp, sp = EndgameConfig.WorkshopMults(L)
+			table.insert(rows, { Id = cl, Level = L, Max = EndgameConfig.Workshop.MaxLevel, NextCost = EndgameConfig.WorkshopCost(L + 1), Hp = math.floor((hp - 1) * 100 + 0.5), Speed = math.floor((sp - 1) * 100 + 0.5) })
+		end
+		out.Workshop = rows
+	end
+	if EndgameConfig.LiveFor(uid, "Hospital") then
+		local H = EndgameConfig.Hospital
+		local e = EndgameService.Data(profile)
+		local L = EndgameService.MedicineLevel(profile)
+		local last = healAt[uid]
+		out.Hospital = {
+			HealIn = if last then math.max(0, math.ceil(H.HealCooldown - (clock() - last))) else 0,
+			MedKits = nonNeg(e.MedKits),
+			MedKitMax = H.MedKit.Max,
+			MedKitPrice = EndgameConfig.IncomeMinutesPrice(H.MedKit.Floor, H.MedKit.IncomeSeconds / 60, incomePerSec(player)),
+			Medicine = L,
+			MedicineMax = #H.Medicine.Costs,
+			MedicineNext = H.Medicine.Costs[L + 1],
+			Revive = nonNeg(e.Revive),
+			RevivePrice = EndgameConfig.IncomeMinutesPrice(H.Revive.Floor, H.Revive.IncomeSeconds / 60, incomePerSec(player)),
+		}
+	end
 	if EndgameConfig.LiveFor(uid, "Elite") then
 		local rows = {}
 		for _, k in ipairs(EndgameConfig.Elite.Types) do
@@ -608,7 +944,7 @@ function EndgameService.Push(player: Player)
 	end
 end
 
-type Plan = { Key: string, Price: number, Apply: (profile: any) -> string, Log: string }
+type Plan = { Key: string, Price: number, Apply: (profile: any) -> string, Log: string, Gold: boolean? }
 
 --[[ What a purchase would do: (plan) or (nil, why). Every rule the client might skip is checked here: the part is
 	live, the place (station / HQ console), not hurt, the requirement, the level cap. The price is config's. ]]
@@ -649,6 +985,278 @@ function EndgameService._Plan(player: Player, profile: any, kind: string, id: st
 				end
 				e.Elite[kk] = t
 				return string.format(T.EliteBought, EndgameConfig.Elite.Names[kk], row.Name)
+			end,
+		}
+	elseif kind == "Mastery" or kind == "Attach" or kind == "Camo" or kind == "EquipCamo" then
+		local Ma = EndgameConfig.Mastery
+		if not EndgameConfig.LiveFor(uid, "Mastery") then
+			return nil, T.NotLive
+		end
+		if typeof(id) ~= "string" then
+			return nil, "Unknown"
+		end
+		local sid: string = id
+		local gm1, gm2 = string.match(sid, "^([%w_]+):?([%w_]*)$")
+		local gunId: string? = gm1
+		local extra: string = gm2 or ""
+		local def: any = if gunId then WeaponConfig.Weapons[gunId] else nil
+		if def == nil then
+			return nil, "Unknown gun"
+		end
+		local owned = false
+		for _, g in ipairs(ownedGuns(player)) do
+			if g == gunId then
+				owned = true
+			end
+		end
+		if kind ~= "Camo" and not owned then
+			return nil, "You don't own that gun"
+		end
+		if kind ~= "EquipCamo" then
+			if not EndgameService.AtStation(player, "Armory") then
+				return nil, "Go to the Armory Workshop"
+			end
+			if EndgameService.RecentlyHurt(player) then
+				return nil, T.Hurt
+			end
+		end
+		local gid: string = gunId :: string
+		if kind == "Mastery" then
+			local L = EndgameService.MasteryLevel(profile, gid) + 1
+			local cost = EndgameConfig.MasteryCost(EndgameConfig.MasteryBase(def), L)
+			if cost == nil then
+				return nil, "Mastery maxed"
+			end
+			return {
+				Key = "mastery",
+				Price = cost,
+				Log = string.format("Armory mastery %s ok L=%d price=%d", gid, L, cost),
+				Apply = function(p: any): string
+					endgameMap(p, "Mastery")[gid] = L
+					gunCache[uid] = nil
+					return string.format("%s mastery %d", tostring(def.ShortName or gid), L)
+				end,
+			}
+		elseif kind == "Attach" then
+			local slot = extra
+			local a: any = Ma.Attachments[slot]
+			if a == nil or slot == "Suppressor" then -- the Suppressor waits for a firing ping to hide (none exists yet)
+				return nil, "Not available"
+			end
+			if EndgameService.Attachments(profile, gid)[slot] then
+				return nil, "Already fitted"
+			end
+			return {
+				Key = "attach",
+				Price = a.Cost,
+				Log = string.format("Armory attach %s:%s ok price=%d", gid, slot, a.Cost),
+				Apply = function(p: any): string
+					local m = endgameMap(p, "Attachments")
+					if typeof(m[gid]) ~= "table" then
+						m[gid] = {}
+					end
+					m[gid][slot] = true
+					gunCache[uid] = nil
+					return string.format("%s fitted", Ma.SlotNames[slot] or slot)
+				end,
+			}
+		elseif kind == "Camo" then
+			local camo = extra
+			local gold = Ma.Camos[camo]
+			if gold == nil then
+				return nil, "Unknown camo"
+			end
+			local c = endgameMap(profile, "Camos")
+			if c[camo] == true then
+				return nil, "Owned"
+			end
+			return {
+				Key = "camo",
+				Price = gold,
+				Gold = true,
+				Log = string.format("Armory camo %s ok gold=%d", camo, gold),
+				Apply = function(p: any): string
+					local cc = endgameMap(p, "Camos")
+					cc[camo] = true
+					if typeof(cc.Equip) ~= "table" then
+						cc.Equip = {}
+					end
+					cc.Equip[gid] = camo
+					return camo .. " camo on your " .. tostring(def.ShortName or gid)
+				end,
+			}
+		end
+		-- EquipCamo: free, anywhere ("None" takes it off)
+		local camo = extra
+		local c = endgameMap(profile, "Camos")
+		if camo ~= "None" and c[camo] ~= true then
+			return nil, "Buy that camo first"
+		end
+		return {
+			Key = "camo_equip",
+			Price = 0,
+			Log = string.format("Armory camo equip %s:%s", gid, camo),
+			Apply = function(p: any): string
+				local cc = endgameMap(p, "Camos")
+				if typeof(cc.Equip) ~= "table" then
+					cc.Equip = {}
+				end
+				cc.Equip[gid] = if camo == "None" then nil else camo
+				return if camo == "None" then "Camo off" else camo .. " camo on"
+			end,
+		}
+	elseif kind == "Workshop" then
+		if not EndgameConfig.LiveFor(uid, "Workshop") then
+			return nil, T.NotLive
+		end
+		local cls = id
+		if typeof(cls) ~= "string" or table.find(EndgameConfig.Workshop.Classes, cls) == nil then
+			return nil, "Unknown"
+		end
+		local bs = deps.BaseService
+		local okC, at = pcall(function()
+			return bs and bs.IsAtConsole and bs.IsAtConsole(player, "VehicleDepot")
+		end)
+		if not (okC and at == true) then
+			return nil, "Use the Workshop at your Vehicle Depot"
+		end
+		if EndgameService.RecentlyHurt(player) then
+			return nil, T.Hurt
+		end
+		local cl: string = cls
+		local w = endgameMap(profile, "Workshop")
+		local L = math.min(nonNeg(w[cl]), EndgameConfig.Workshop.MaxLevel) + 1
+		local cost = EndgameConfig.WorkshopCost(L)
+		if cost == nil then
+			return nil, cl .. " workshop maxed"
+		end
+		return {
+			Key = "workshop",
+			Price = cost,
+			Log = string.format("Depot workshop %s ok L=%d price=%d", cl, L, cost),
+			Apply = function(p: any): string
+				endgameMap(p, "Workshop")[cl] = L
+				local hp, sp = EndgameConfig.WorkshopMults(L)
+				return string.format("%s vehicles: +%d%% HP, +%d%% speed (next spawn)", cl, math.floor((hp - 1) * 100 + 0.5), math.floor((sp - 1) * 100 + 0.5))
+			end,
+		}
+	elseif kind == "Heal" or kind == "MedKit" or kind == "Medicine" or kind == "Revive" or kind == "UseMedKit" or kind == "UseRevive" then
+		local H = EndgameConfig.Hospital
+		if not EndgameConfig.LiveFor(uid, "Hospital") then
+			return nil, T.NotLive
+		end
+		local e = EndgameService.Data(profile)
+		if kind == "UseMedKit" then
+			local h = humOf(player)
+			if nonNeg(e.MedKits) <= 0 then
+				return nil, "No Med Kits"
+			end
+			if h == nil or h.Health >= h.MaxHealth then
+				return nil, "Already at full health"
+			end
+			return {
+				Key = "medkit_use",
+				Price = 0,
+				Log = "Medic kit used",
+				Apply = function(p: any): string
+					local d = EndgameService.Data(p)
+					d.MedKits = math.max(0, nonNeg(d.MedKits) - 1)
+					healOverTime(player, H.MedKit.Heal, H.MedKit.Seconds)
+					return string.format("Med Kit: +%d HP", H.MedKit.Heal)
+				end,
+			}
+		elseif kind == "UseRevive" then
+			if nonNeg(e.Revive) <= 0 then
+				return nil, "No revive token"
+			end
+			return {
+				Key = "revive_use",
+				Price = 0,
+				Log = "Medic revive used",
+				Apply = function(p: any): string
+					local ok, msg = EndgameService.Revive(player)
+					if ok then
+						local d = EndgameService.Data(p)
+						d.Revive = math.max(0, nonNeg(d.Revive) - 1)
+					end
+					return msg
+				end,
+			}
+		end
+		if not EndgameService.AtStation(player, "Hospital") then
+			return nil, "Go to the Field Hospital"
+		end
+		if EndgameService.RecentlyHurt(player) then
+			return nil, T.Hurt
+		end
+		if kind == "Heal" then
+			local h = humOf(player)
+			local last = healAt[uid]
+			if last and clock() - last < H.HealCooldown then
+				return nil, string.format("Next free heal in %d s", math.ceil(H.HealCooldown - (clock() - last)))
+			end
+			if h == nil or h.Health >= h.MaxHealth then
+				return nil, "Already at full health"
+			end
+			return {
+				Key = "heal",
+				Price = 0,
+				Log = "Hospital heal ok",
+				Apply = function(_p: any): string
+					healAt[uid] = clock()
+					local hh = humOf(player)
+					if hh then
+						hh.Health = hh.MaxHealth -- the free heal (not in combat: RecentlyHurt checked above)
+					end
+					return "Healed"
+				end,
+			}
+		elseif kind == "MedKit" then
+			if nonNeg(e.MedKits) >= H.MedKit.Max then
+				return nil, string.format("You carry %d already", H.MedKit.Max)
+			end
+			local price = EndgameConfig.IncomeMinutesPrice(H.MedKit.Floor, H.MedKit.IncomeSeconds / 60, incomePerSec(player))
+			return {
+				Key = "medkit",
+				Price = price,
+				Log = string.format("Hospital medkit ok price=%d", price),
+				Apply = function(p: any): string
+					local d = EndgameService.Data(p)
+					d.MedKits = math.min(H.MedKit.Max, nonNeg(d.MedKits) + 1)
+					return string.format("Med Kit %d/%d", d.MedKits, H.MedKit.Max)
+				end,
+			}
+		elseif kind == "Revive" then
+			if nonNeg(e.Revive) >= 1 then
+				return nil, "You carry a revive already"
+			end
+			local price = EndgameConfig.IncomeMinutesPrice(H.Revive.Floor, H.Revive.IncomeSeconds / 60, incomePerSec(player))
+			return {
+				Key = "revive",
+				Price = price,
+				Log = string.format("Hospital revive ok price=%d", price),
+				Apply = function(p: any): string
+					EndgameService.Data(p).Revive = 1
+					return "Field Surgeon ready: get up where you fall"
+				end,
+			}
+		end
+		local L = EndgameService.MedicineLevel(profile) + 1
+		local cost = H.Medicine.Costs[L]
+		if cost == nil then
+			return nil, "Combat Medicine maxed"
+		end
+		return {
+			Key = "medicine",
+			Price = cost,
+			Log = string.format("Hospital medicine ok L=%d price=%d", L, cost),
+			Apply = function(p: any): string
+				EndgameService.Data(p).Medicine = L
+				local arm = deps.ArmourService
+				if arm and arm.Apply then
+					pcall(arm.Apply, player)
+				end
+				return string.format("Combat Medicine %d: +%d max HP", L, EndgameConfig.MedicineHp(L))
 			end,
 		}
 	elseif kind == "Retrain" then
@@ -819,12 +1427,23 @@ function EndgameService.Purchase(player: Player, kind: string, id: string?, auto
 		return false, "Not ready"
 	end
 	local price = plan.Price
+	local key = plan.Key
+	if plan.Gold == true then
+		-- camos are the first Gold sink (§2.9): Gold only, never Cash
+		if nonNeg(profile.Gold) < price then
+			return false, string.format("Need %d Gold", price - nonNeg(profile.Gold))
+		end
+		local okG, errG = eco.SpendGold(player, price, "endgame_" .. key)
+		if not okG then
+			return false, tostring(errG or "SpendFailed")
+		end
+		price = 0
+	end
 	local cash = nonNeg(profile.Cash)
 	if cash < price then
 		return false, string.format(EndgameConfig.Text.Short, short(price - cash))
 	end
-	local key = plan.Key
-	if price > 0 then -- a free re-train (the Instant Army Refill) spends nothing
+	if price > 0 then -- a free re-train (the Instant Army Refill), a heal or a Gold camo spends no Cash
 		local ok, err = eco.SpendCash(player, price, "endgame_" .. key)
 		if not ok then
 			return false, tostring(err or "SpendFailed")
@@ -855,6 +1474,18 @@ function EndgameService.Purchase(player: Player, kind: string, id: string?, auto
 		local ss = deps.SoldierService
 		if key == "tier" and ss and ss.PushState then
 			pcall(ss.PushState, player)
+		end
+	end
+	if key == "mastery" or key == "attach" or key == "camo" or key == "camo_equip" then
+		-- the drawn gun's camo and the client's fire-rate / range multipliers follow at once
+		local cs = deps.CombatService
+		if cs and cs.SyncWeapons then
+			pcall(cs.SyncWeapons, player)
+		end
+		local c = player.Character
+		if c then
+			local out = c:GetAttribute("WE_GunOut")
+			c:SetAttribute("WE_GunCamo", EndgameService.CamoFor(player, if typeof(out) == "string" then out else nil))
 		end
 	end
 	if (key == "elite" or key == "retrain") and auto ~= true then
@@ -1008,6 +1639,13 @@ local function watchCharacter(player: Player, char: Model)
 		end
 		last = h
 	end)
+	-- phase 4: where he fell (the Field Surgeon's revive window)
+	hum.Died:Connect(function()
+		local r = char:FindFirstChild("HumanoidRootPart")
+		if r and r:IsA("BasePart") then
+			diedAt[player.UserId] = { At = clock(), CF = r.CFrame }
+		end
+	end)
 end
 
 -- a store prop's forecourt: ForecourtStuds out of the box face nearest the plaza, local -Z pointing away from it
@@ -1146,6 +1784,10 @@ function EndgameService.Init(d: { [string]: any })
 		hurtAt[p.UserId] = nil
 		deaths[p.UserId] = nil
 		untrained[p.UserId] = nil
+		healAt[p.UserId] = nil
+		gunCache[p.UserId] = nil
+		diedAt[p.UserId] = nil
+		healing[p.UserId] = nil
 		feeToast[p.UserId] = nil
 	end)
 	if d.DataService and d.DataService.OnProfileLoaded then
@@ -1160,6 +1802,7 @@ function EndgameService.Init(d: { [string]: any })
 			for _, p in ipairs(Players:GetPlayers()) do
 				pcall(EndgameService.SyncAttributes, p)
 				pcall(EndgameService.SyncBaseTier, p)
+				pcall(EndgameService.MedicTick, p, 5)
 			end
 			pcall(sweepOrphans)
 		end

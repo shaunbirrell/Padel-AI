@@ -133,6 +133,16 @@ function ArmourService.Apply(player: Player)
 	-- claude-bud JOB 36: Double HP (WE_PerkDoubleHP, server-set by ShopOverhaulService from pass ownership) doubles the base
 	local hpMult = if player:GetAttribute("WE_PerkDoubleHP") == true then (require(Shared.Configs.ShopOverhaulConfig) :: any).DoubleHP.Mult else 1
 	local mx = math.floor(ArmourService.MaxHealthFor(tier) * hpMult + 0.5)
+	-- claude-bud JOB 39: Combat Medicine (+10 max HP a level) on the BASE, before Double HP and armour; the effective HP
+	-- is hard-capped at EndgameConfig.Hospital.MaxEffectiveHp (0 bonus while the Hospital part is not live = unchanged)
+	local okM, EGS = pcall(function(): any
+		return require(script.Parent.EndgameService)
+	end)
+	local med = if okM and EGS and EGS.MedicineBonus then EGS.MedicineBonus(player) else 0
+	if med > 0 then
+		local b = baseHp()
+		mx = math.min(math.floor(mx * (b + med) / b + 0.5), (require(Shared.Configs.EndgameConfig) :: any).Hospital.MaxEffectiveHp)
+	end
 	if hum.MaxHealth ~= mx then
 		local ratio = if hum.MaxHealth > 0 then hum.Health / hum.MaxHealth else 1
 		hum.MaxHealth = mx

@@ -144,6 +144,16 @@ local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot
 local StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch) -- streaming2 S2: pre-fetched respawn hop
 
 local CombatService = {}
+CombatService._Endgame = nil :: any -- claude-bud JOB 39 phase 4: EndgameService (Weapon Mastery / attachments / camos)
+
+-- claude-bud JOB 39: the weapon row a player's shots use (mastery + attachments; the WeaponConfig row while not live)
+function CombatService._GunDef(player: Player?, def: any): any
+	local eg = CombatService._Endgame
+	if eg == nil or eg.PlayerGunDef == nil then
+		return def
+	end
+	return eg.PlayerGunDef(player, def)
+end
 
 -- W2 (contracts §3): server damage API types
 export type HitOpts = {
@@ -270,7 +280,7 @@ local function researchMult(player: Player?, statId: string): number -- v69 rese
 end
 
 local function magSize(player: Player?, def: WeaponDef): number -- v69 research: upgraded magazine
-	return ResearchConfig.EffectiveMagazine(def.MagazineSize, researchMult(player, "WeaponMagazine"))
+	return ResearchConfig.EffectiveMagazine(CombatService._GunDef(player, def).MagazineSize, researchMult(player, "WeaponMagazine")) -- JOB 39 mastery
 end
 
 local function ensureStarter(profile: PlayerProfile)
@@ -1432,7 +1442,7 @@ function CombatService.Reload(player: Player): (boolean, string?)
 	if state.Ammo >= magSize(player, def) then -- v69 research
 		return false, "FullMag"
 	end
-	local reloadTime = def.ReloadTime / researchMult(player, "WeaponReload") -- v69 research
+	local reloadTime = CombatService._GunDef(player, def).ReloadTime / researchMult(player, "WeaponReload") -- v69 research; JOB 39 mastery
 	state.ReloadingUntil = clock() + reloadTime
 	local weaponId = state.WeaponId
 	pushState(player)
@@ -2435,6 +2445,11 @@ local function setGunOut(player: Player, weaponId: string?)
 	if char:GetAttribute(attr) ~= weaponId then
 		char:SetAttribute(attr, weaponId)
 	end
+	local eg = CombatService._Endgame -- claude-bud JOB 39: the drawn gun's camo (nil = none / not live)
+	local camo = if eg and eg.CamoFor then eg.CamoFor(player, weaponId) else nil
+	if char:GetAttribute("WE_GunCamo") ~= camo then
+		char:SetAttribute("WE_GunCamo", camo)
+	end
 end
 
 function CombatService.SetDrawn(player: Player, drawn: boolean)
@@ -2684,6 +2699,7 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	if not def then
 		return false
 	end
+	def = CombatService._GunDef(player, def) -- claude-bud JOB 39: this player's mastery / attachments (the row itself while not live)
 	-- claude-bud JOB 35: a trigger-down prime ("Spin" / "Charge") is not a shot; a spinning / charging gun waits
 	local mech = mechFor(player, state.WeaponId)
 	if payload.Prime ~= nil then
@@ -3091,6 +3107,7 @@ function CombatService.Init(deps: { [string]: any })
 	MissionService = deps.MissionService
 	TerritoryService = deps.TerritoryService
 	ResearchService = deps.ResearchService -- v69 research
+	CombatService._Endgame = deps.EndgameService -- claude-bud JOB 39
 	ClanService = deps.ClanService -- W2: ally exclusion (optional)
 
 	CombatDamage.Bind({ TerritoryService = TerritoryService })

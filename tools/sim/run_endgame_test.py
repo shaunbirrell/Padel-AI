@@ -41,6 +41,7 @@ MODS = {
     "Configs/PrestigeConfig": SH / "Configs/PrestigeConfig.luau",
     "Configs/LevelConfig": SH / "Configs/LevelConfig.luau",
     "Configs/ResearchConfig": SH / "Configs/ResearchConfig.luau",
+    "Configs/WeaponConfig": SH / "Configs/WeaponConfig.luau",
     "Services/EndgameService": SV / "Services/EndgameService.luau",
     "Controllers/EndgameController": CL / "Controllers/EndgameController.luau",
     "Modules/BaseTierBuilder": SV / "Modules/BaseTierBuilder.luau",
@@ -60,6 +61,10 @@ game = { GetService = function(_, n)
 -- recursive FindFirstChild (DressUnit looks up Head / Left Arm / Torso inside the rig)
 local baseIdx = INST.__index
 INST.__index = function(t, k)
+  if k == "GetBoundingBox" then return function() return CFrame.new(0, 2, 0), Vector3.new(6, 4, 12) end end
+  if k == "FindFirstChildOfClass" then
+    return function(s, cls) for _, c in ipairs(rawget(s, "__kids") or {}) do if c.ClassName == cls then return c end end return nil end
+  end
   if k == "FindFirstChild" then
     return function(s, n, rec)
       local function f(o)
@@ -76,7 +81,9 @@ INST.__index = function(t, k)
 end
 function mkPlayer(uid, pos)
   local root = { Position = pos, IsA = function(_, c) return c == "BasePart" end }
-  local char = { FindFirstChild = function(_, n) if n == "HumanoidRootPart" then return root end return nil end }
+  local char = { FindFirstChild = function(_, n) if n == "HumanoidRootPart" then return root end return nil end, cattrs = {} }
+  char.GetAttribute = function(self, k) return self.cattrs[k] end
+  char.SetAttribute = function(self, k, v) self.cattrs[k] = v end
   local p = { UserId = uid, Parent = true, attrs = {}, Character = char, Root = root }
   p.SetAttribute = function(self, k, v) self.attrs[k] = v end
   p.GetAttribute = function(self, k) return self.attrs[k] end
@@ -460,6 +467,89 @@ for _, d in ipairs(rmod:GetDescendants()) do
 end
 check(rp == PSC.Stations.Recruits.Parts and rp <= PSC.MaxParts and rl == 1 and rg == 1, string.format("the Recruitment Office = %d parts (cap %d), 1 light, 1 sign", rp, PSC.MaxParts))
 
+-- ── 4d. phase 4: Mastery / attachments / camos, the Vehicle Workshop, the Field Hospital ──
+local WC = require(node("Configs/WeaponConfig"))
+local AR = WC.Weapons.AssaultRifle
+local g5 = EG.GunStats(AR, 5, {})
+check(math.abs(g5.Damage - 22 * 1.15) < 1e-9 and math.abs(g5.FireRate - 9 * 1.10) < 1e-9 and math.abs(g5.Range - 140 * 1.20) < 1e-9 and g5.MagazineSize == 39 and math.abs(g5.ReloadTime - 2.0 * 0.75) < 1e-9,
+  "[GunTest] weapon=AssaultRifle mastery=5 dmg=25.3 rps=9.9 range=168 mag=39 reload=1.50")
+local g5a = EG.GunStats(AR, 5, { RedDot = true, Grip = true, ExtendedMag = true })
+check(math.abs(g5a.Range - 140 * 1.30) < 1e-9 and math.abs(g5a.Spread - 2.0 * 0.85) < 1e-9 and g5a.MagazineSize == 47, "[GunTest] + Red-dot range=182, Grip spread x0.85, Extended Mag mag=47")
+check(AR.Range < 150 and g5a.Range > 150, "range test: a 150-stud shot is past the AR's old range (140) and inside L5 + Red-dot (182)")
+local g0 = EG.GunStats(AR, 0, {})
+check(g0.Damage == AR.Damage and g0.Range == AR.Range and g0.MagazineSize == AR.MagazineSize, "[GunTest] mastery=0: the WeaponConfig numbers")
+local prem, reb = nil, nil
+for _, d in pairs(WC.Weapons) do if d.Premium == true then prem = d end; if d.RebirthOnly == true then reb = d end end
+check(EG.MasteryBase(AR) == 1e6 and (reb == nil or EG.MasteryBase(reb) == 2e6) and (prem == nil or EG.MasteryBase(prem) == 3e6) and EG.MasteryCost(2e6, 5) == 32e6, "mastery price base: shop 1M, rebirth 2M, premium 3M (a rebirth gun L1-5 = $62M)")
+-- the service
+owner.attrs.WE_Weapons = "AssaultRifle,StarterRifle"
+owner.attrs.WE_EquippedWeapon = "AssaultRifle"
+ES._SetStation("Armory", CFrame.new(0, 5, 300))
+owner.Root.Position = ES.StationPoint("Armory")
+po.Cash = 5e9
+po.Gold = 300
+check(ES.PlayerGunDef(owner, AR) == AR, "no mastery yet: the WeaponConfig row itself")
+ok, msg = ES.Purchase(owner, "Mastery", "SMG")
+check(not ok and msg == "You don't own that gun", "mastery on a gun he does not own: refused")
+for _ = 1, 5 do ES.Purchase(owner, "Mastery", "AssaultRifle") end
+check(po.Endgame.Mastery.AssaultRifle == 5 and spentLog[#spentLog].why == "endgame_mastery" and spentLog[#spentLog].n == 16e6, "AR mastery 1-5 (L5 $16M as endgame_mastery)")
+local d5 = ES.PlayerGunDef(owner, AR)
+check(d5 ~= AR and d5.__eg == true and d5.Range == 168 and ES.PlayerGunDef(owner, AR) == d5 and ES.PlayerGunDef(owner, d5) == d5, "the player's AR: a cached copy (range 168), never applied twice")
+check(ES.PlayerGunDef(other, AR) == AR, "another player / not live: the row itself")
+ok, msg = ES.Purchase(owner, "Attach", "AssaultRifle:RedDot")
+check(ok and ES.PlayerGunDef(owner, AR).Range == 182 and spentLog[#spentLog].n == 1e6, "Red-dot fitted: range 182 ($1M)")
+ok, msg = ES.Purchase(owner, "Attach", "AssaultRifle:Suppressor")
+check(not ok and msg == "Not available", "the Suppressor is not sold (no firing ping exists to hide)")
+check(string.find(ES.GunModsString(owner) or "", "AssaultRifle=1.100,1.300,0.750,1.000", 1, true) ~= nil, "WE_GunMods for the client: " .. tostring(ES.GunModsString(owner)))
+local goldSpent = {}
+deps.EconomyService.SpendGold = function(p, n, why) local pr = profiles[p.UserId]; if (pr.Gold or 0) < n then return false end; pr.Gold -= n; table.insert(goldSpent, { n = n, why = why }); return true end
+local cashBefore = po.Cash
+ok, msg = ES.Purchase(owner, "Camo", "AssaultRifle:Tiger")
+check(ok and po.Gold == 150 and goldSpent[1].why == "endgame_camo" and po.Cash == cashBefore and ES.CamoFor(owner, "AssaultRifle") == "Tiger", "Tiger camo: 150 Gold (no Cash), on the AR")
+ok, msg = ES.Purchase(owner, "Camo", "AssaultRifle:Gold")
+check(not ok and string.find(msg, "Gold") ~= nil, "Gold camo with 150 Gold: refused (" .. tostring(msg) .. ")")
+ok, msg = ES.Purchase(owner, "EquipCamo", "AssaultRifle:None")
+check(ok and ES.CamoFor(owner, "AssaultRifle") == nil, "camo off (free, anywhere)")
+-- the Vehicle Workshop
+local atDepot = false
+deps.BaseService.IsAtConsole = function(p, id) return (id == "VehicleDepot" and atDepot) or (id == "CommandCenter" and atHQ), "ok" end
+ok, msg = ES.Purchase(owner, "Workshop", "Air")
+check(not ok, "Workshop away from the Vehicle Depot console: refused")
+atDepot = true
+for _ = 1, 5 do ES.Purchase(owner, "Workshop", "Air") end
+local hpM, spM, wl = ES.WorkshopFor(470626172, "Air")
+check(wl == 5 and math.abs(hpM - 1.30) < 1e-9 and math.abs(spM - 1.15) < 1e-9 and spentLog[#spentLog].n == EG.WorkshopCost(5), "Air workshop L5: +30 % HP, +15 % speed ($23.4M)")
+check(ES.WorkshopFor(470626172, "Naval") == 1 and ES.WorkshopFor(9, "Air") == 1, "another class / not live: x1")
+local vm = Instance.new("Model")
+local body = Instance.new("Part"); body.Name = "Body"; body.Parent = vm; vm.PrimaryPart = body
+ES.DressVehicle(vm, 5)
+local plates, trim = 0, 0
+for _, dd in ipairs(vm:GetDescendants()) do if dd.Name == "WorkshopPlate" then plates += 1 elseif dd.Name == "WorkshopNameplate" then trim += 1 end end
+check(plates == 2 and trim == 1, "L5 vehicle: 2 flank plates (+ bolt rails) and the gold nameplate")
+-- the Field Hospital
+ES._SetStation("Hospital", CFrame.new(0, 5, -300))
+owner.Root.Position = ES.StationPoint("Hospital")
+owner.attrs.WE_IncomePerSec = 23700
+for _ = 1, 3 do ES.Purchase(owner, "Medicine", "Next") end
+check(po.Endgame.Medicine == 3 and ES.MedicineBonus(owner) == 30 and ES.MedicineBonus(other) == 0 and spentLog[#spentLog].n == 12e6, "Combat Medicine L3: +30 max HP ($12M); not live: 0")
+ES.Purchase(owner, "MedKit", "One")
+check(po.Endgame.MedKits == 1 and spentLog[#spentLog].n == 711000, "a Med Kit: max($25k, 30 s of income) = $711,000")
+ES.Purchase(owner, "Revive", "One")
+check(po.Endgame.Revive == 1 and spentLog[#spentLog].n == 4266000 and ES.Purchase(owner, "Revive", "One") == false, "the Field Surgeon: max($250k, 3 min) = $4,266,000; carry 1")
+ok, msg = ES.Purchase(owner, "UseRevive", "One")
+check(po.Endgame.Revive == 1 and msg == "Too late to revive", "revive with no death in the last 10 s: the token is kept")
+local st4 = ES.State(owner)
+check(st4.Armory and #st4.Armory.Guns == 2 and st4.Workshop and #st4.Workshop == 3 and st4.Hospital and st4.Hospital.Medicine == 3, "State: 2 guns, 3 workshop classes, the hospital row")
+check(#CT.ListRows("Armory", st4) >= 2 + 4 + 4 and #CT.ListRows("Workshop", st4) == 3 and #CT.ListRows("Hospital", st4) == 4, "list rows: guns + 4 attachments + 4 camos; 3 classes; 4 hospital rows")
+for _, kind in ipairs({ "Armory", "Hospital" }) do
+  local sm = CT.BuildStation(kind, CFrame.new(0, 0, 0))
+  local sp, sl, sg = 0, 0, 0
+  for _, dd in ipairs(sm:GetDescendants()) do
+    if dd.ClassName == "Part" then sp += 1 elseif dd.ClassName == "PointLight" then sl += 1 elseif dd.ClassName == "SurfaceGui" then sg += 1 end
+  end
+  check(sp == PSC.Stations[kind].Parts and sp <= PSC.MaxParts and sl == 1 and sg == 1, string.format("the %s station = %d parts (cap %d), 1 light, 1 sign", kind, sp, PSC.MaxParts))
+end
+
 -- ── 5. rebirth screen ──
 local PC = require(node("Configs/PrestigeConfig"))
 local function has(list, s) for _, l in ipairs(list) do if l == s then return true end end return false end
@@ -540,8 +630,15 @@ def main():
         ("Endgame" not in bal, "structure income reads the raw Costs (BalanceConfig never sees the scale)"),
         ("profile.Endgame =" not in pres and "profile.Endgame" not in pres.replace("x.EndgameKeep", ""), "PrestigeService never clears profile.Endgame (kept on both paths)"),
         ("Endgame" not in mon, "no Robux path to the endgame (MonetizationService never grants it)"),
-        ("PivotTo" not in new and "FastTravel" not in new and "TeleportService" not in new, "no PivotTo / fast travel / teleport in the new code"),
-        (".Health =" not in new and "TakeDamage" not in new, "no Health writes in the new code"),
+        (new.count("PivotTo") == 1 and "c:PivotTo(fell + Vector3.new(0, 3, 0))" in new and "FastTravel" not in new and "TeleportService" not in new,
+         "no fast travel / teleport; the ONE PivotTo is the revive putting him back on the spot he fell"),
+        ("TakeDamage" not in new and all(l.strip().startswith(("hh.Health = hh.MaxHealth", "h.Health = math.min(h.MaxHealth", "h.Health = h.MaxHealth * R.HpFraction")) for l in new.splitlines() if ".Health =" in l),
+         "the only Health writes: the Hospital heal, the Med Kit, the revive and the army medic (soldiers)"),
+        ("CombatService._GunDef(player, def) -- claude-bud JOB 39" in (SV / "Services/CombatService/init.luau").read_text(encoding="utf-8"), "RequestFire uses the player's gun row (mastery / attachments) for rate, range and damage"),
+        ("HPMult = wsHp," in (SV / "Services/VehicleService.luau").read_text(encoding="utf-8"), "vehicle HP through VehicleHealth's HPMult (the Workshop)"),
+        ("WeaponVisuals.ApplyCamo(mdl, character:GetAttribute(\"WE_GunCamo\"))" in (CL / "Modules/WeaponVisuals.luau").read_text(encoding="utf-8"), "the camo on every built gun (local and remote)"),
+        ((CL / "Controllers/CombatController.luau").read_text(encoding="utf-8").count("W2.gunMod(") >= 5, "the client paces / reaches / reloads with the same multipliers"),
+        ("mx = math.min(math.floor(mx * (b + med) / b + 0.5)" in (SV / "Services/ArmourService.luau").read_text(encoding="utf-8"), "Combat Medicine on the base HP before Double HP / armour, capped at 400"),
     ):
         print(("ok    " if cond else "FAIL  ") + msg)
         if not cond:

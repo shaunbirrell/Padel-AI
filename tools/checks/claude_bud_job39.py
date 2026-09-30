@@ -91,8 +91,25 @@ _j39('RequestEndgameBuy = { "string:16", "string:32?" },' in _SEC and "RequestEn
      "RemoteGate schemas + checks for both remotes")
 # no fast travel / teleport / health writes; no Robux path
 _NEW = _ES + _ECT + _EGC
-_j39("PivotTo" not in _NEW and "FastTravel" not in _NEW and "TeleportService" not in _NEW, "no PivotTo / fast travel / teleport in the new code")
-_j39(_j39_re.search(r"\.Health\s*=[^=]", _NEW) is None and "TakeDamage" not in _NEW, "no Humanoid.Health writes in the new code")
+_j39(_NEW.count("PivotTo") == 1 and "c:PivotTo(fell + Vector3.new(0, 3, 0))" in _ES and "FastTravel" not in _NEW and "TeleportService" not in _NEW,
+     "no fast travel / teleport; the ONE PivotTo is the Field Surgeon revive (back on the spot he fell, within 10 s)")
+_hw = [l.strip() for l in _NEW.splitlines() if _j39_re.search(r"\.Health\s*=[^=]", l)]
+_j39("TakeDamage" not in _NEW and all(l.startswith(("hh.Health = hh.MaxHealth", "h.Health = math.min(h.MaxHealth", "h.Health = h.MaxHealth * R.HpFraction")) for l in _hw) and len(_hw) == 4,
+     "Health writes only in the Hospital heal / Med Kit / revive / army medic (4 sites, server)")
+# phase 4
+_CS39 = _j39_code(_SV + "Services/CombatService/init.luau")
+_j39("\tdef = CombatService._GunDef(player, def)" in _CS39 and "EffectiveMagazine(CombatService._GunDef(player, def).MagazineSize" in _CS39
+     and 'local reloadTime = CombatService._GunDef(player, def).ReloadTime / researchMult(player, "WeaponReload")' in _CS39,
+     "Weapon Mastery / attachments change the SERVER rate, range, damage, magazine and reload (one gun row per player)")
+_j39('if sig == "00000" then\n\t\treturn def' in _ES and 'if not EndgameConfig.LiveFor(player.UserId, "Mastery") then\n\t\treturn def' in _ES,
+     "OFF = old: the WeaponConfig row itself when nothing is bought / not live")
+_j39('local okG, errG = eco.SpendGold(player, price, "endgame_" .. key)' in _ES and "Gold = true," in _ES, "camos are the first Gold sink (Gold only, never Cash)")
+_j39("HPMult = wsHp," in _j39_code(_SV + "Services/VehicleService.luau") and "EGS.WorkshopFor(player.UserId, (def :: any).Category)" in _j39_code(_SV + "Services/VehicleService.luau"),
+     "the Vehicle Workshop raises vehicle HP (VehicleHealth HPMult) and speed (the drive attributes) by class")
+_j39("mx = math.min(math.floor(mx * (b + med) / b + 0.5), (require(Shared.Configs.EndgameConfig) :: any).Hospital.MaxEffectiveHp)" in _j39_code(_SV + "Services/ArmourService.luau"),
+     "Combat Medicine: (100 + Medicine) x Double HP -> armour, hard cap 400")
+_j39('Armory = { Row = "SW_S1", Part = "Mastery"' in _j39_src(_CF + "PlazaServicesConfig.luau") and "StoreProp = 5201630514," in _j39_src(_CF + "PlazaServicesConfig.luau"),
+     "the Armory Workshop in SW_S1 and the Field Hospital at the Hospital store prop")
 _j39("Endgame" not in _j39_src(_SV + "Services/MonetizationService.luau") and "Endgame" not in _j39_src(_CF + "MonetizationConfig.luau"),
      "no Robux path to Empire Level (MonetizationService / Config untouched)")
 _j39("Endgame" not in _j39_code(_SV + "Services/LeaderboardService.luau") if read(_SV + "Services/LeaderboardService.luau") else True,

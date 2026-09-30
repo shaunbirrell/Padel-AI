@@ -4994,8 +4994,32 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			(require(script.Parent.PremiumWeaponService) :: any).OnSpawn(model, def, player)
 		end)
 	end
+	-- claude-bud JOB 39: the Vehicle Workshop (HP / speed by class; 1, 1 while not live): speed on the drive attributes,
+	-- HP through VehicleHealth's HPMult, the L3 plates / L5 nameplate on the model
+	local wsHp = 1
+	do
+		local okW, EGS = pcall(function(): any
+			return require(script.Parent.EndgameService)
+		end)
+		if okW and EGS and EGS.WorkshopFor then
+			local hpM, spM, wsL = EGS.WorkshopFor(player.UserId, (def :: any).Category)
+			wsHp = hpM
+			if spM ~= 1 then
+				for _, k in ipairs({ "WE_BaseMaxSpeed", "WE_MaxSpeed" }) do
+					local v = model:GetAttribute(k)
+					if typeof(v) == "number" then
+						model:SetAttribute(k, v * spM)
+					end
+				end
+			end
+			if wsL > 0 then
+				pcall(EGS.DressVehicle, model, wsL)
+			end
+		end
+	end
 	-- W2: vehicle HP (VehicleHealth). At 0 HP: the wreck look at once, the normal teardown after DebrisSeconds.
 	local okHp, errHp = pcall(VehicleService._VehicleHealth.Register, model, def, player, {
+		HPMult = wsHp, -- claude-bud JOB 39: the Vehicle Workshop (1 while not live)
 		Premium = (def :: any).Premium ~= nil,
 		OnWrecked = function()
 			VehicleService._Wreck(model)

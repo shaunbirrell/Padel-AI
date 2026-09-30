@@ -195,6 +195,26 @@ do
 end
 local W2 = {} -- W2 helper functions (defined below, as table fields for the same register reason)
 
+-- claude-bud JOB 39 phase 4: this player's Weapon Mastery / attachment multipliers for a gun (the server's WE_GunMods,
+-- "Id=rate,range,reload,spread;..."). All 1 when the gun has none (or the job is not live for him). Parsed once per
+-- attribute change (cached by the string), never per frame.
+local ONE_MOD = table.freeze({ Rate = 1, Range = 1, Reload = 1, Spread = 1 })
+W2._modSrc = nil :: string?
+W2._mods = {} :: { [string]: { Rate: number, Range: number, Reload: number, Spread: number } }
+function W2.gunMod(id: string?): { Rate: number, Range: number, Reload: number, Spread: number }
+	local s = Players.LocalPlayer:GetAttribute("WE_GunMods")
+	local src = if typeof(s) == "string" then s else ""
+	if src ~= W2._modSrc then
+		W2._modSrc = src
+		local t = {}
+		for gid, a, b, c, d in string.gmatch(src, "([%w_]+)=([%d%.]+),([%d%.]+),([%d%.]+),([%d%.]+)") do
+			t[gid] = { Rate = tonumber(a) or 1, Range = tonumber(b) or 1, Reload = tonumber(c) or 1, Spread = tonumber(d) or 1 }
+		end
+		W2._mods = t
+	end
+	return if id and W2._mods[id] then W2._mods[id] else ONE_MOD
+end
+
 local CombatController = {}
 
 local player = Players.LocalPlayer
@@ -1110,7 +1130,7 @@ end
 local function reloadSeconds(): number
 	local id = currentWeaponId
 	local def = if id then WeaponConfig.Weapons[id] else nil
-	local base = if def then def.ReloadTime else 2
+	local base = if def then def.ReloadTime * W2.gunMod(id).Reload else 2 -- claude-bud JOB 39 mastery
 	return math.max(0.1, base / math.max(1, reloadMult))
 end
 
@@ -1357,7 +1377,7 @@ function W2.visualShotAllowed(def: WeaponConfig.WeaponDef): boolean
 	if not GunMechanics.Ready(def, m, t) then
 		return false
 	end
-	local interval = GunMechanics.Interval(def, m, t, 1 / math.max(0.1, (tonumber(def.FireRate) or 1) * Feel.FireRateMult))
+	local interval = GunMechanics.Interval(def, m, t, 1 / math.max(0.1, (tonumber(def.FireRate) or 1) * Feel.FireRateMult * W2.gunMod(def.Id).Rate)) -- JOB 39 mastery
 	if t - Feel.NextVisualAt < -interval * 0.5 then
 		return false
 	end
@@ -1373,7 +1393,7 @@ function W2.bloomReticle(def: WeaponConfig.WeaponDef)
 	if not b then
 		return
 	end
-	b.Scale = 1 + math.clamp((tonumber(def.Spread) or 0) * 0.06, 0.03, 0.5)
+	b.Scale = 1 + math.clamp((tonumber(def.Spread) or 0) * W2.gunMod(def.Id).Spread * 0.06, 0.03, 0.5) -- JOB 39: the Grip
 	TweenService:Create(b, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 end
 
@@ -1468,7 +1488,7 @@ requestFire = function()
 	-- the server's exact ray lands and a far miss never reports a HitPosition out of range (fire_hitpos_oor)
 	local wid = activeWeaponId() or currentWeaponId
 	local def = if wid then WeaponConfig.Weapons[wid] else nil
-	local reach = if def then (tonumber(def.Range) or 496) + Feel.HitSlop else 500
+	local reach = if def then (tonumber(def.Range) or 496) * W2.gunMod(def.Id).Range + Feel.HitSlop else 500 -- JOB 39 mastery / Red-dot
 	-- streaming2 F30: this ray sees only what has streamed in here (a far wall may be missing), so HitPosition and the
 	-- target ids are hints; the server re-casts on the whole world and decides the hit
 	local result = (require(Shared.Util.LosRule) :: any).HitCast(origin, direction * reach, W2.shotFilter()) -- claude-bud JOB 32: the server's shot rule
@@ -1568,7 +1588,7 @@ end
 local function weaponRange(): number
 	local id = activeWeaponId() or currentWeaponId
 	local def = if id then WeaponConfig.Weapons[id] else nil
-	return if def then math.max(0, tonumber(def.Range) or 0) else 0
+	return if def then math.max(0, (tonumber(def.Range) or 0) * W2.gunMod(def.Id).Range) else 0 -- JOB 39 mastery / Red-dot
 end
 
 local function aliveHumanoid(model: Model): boolean

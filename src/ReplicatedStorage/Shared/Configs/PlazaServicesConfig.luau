@@ -49,11 +49,27 @@ local PlazaServicesConfig = {
 		},
 		-- phase 3: the cafe facade (teal awning). A counter with lockers behind it, the Drill Sergeant, a flag stand.
 		Recruits = { Row = "NE_E1", Part = "Elite", Title = "RECRUITMENT OFFICE", Sign = "RECRUITS", Npc = "Drill Sergeant", Action = "Elite Training", NpcAt = Vector3.new(-2.5, 0.3, 1.1), Parts = 37 },
-		Armory = { Row = "SW_S1", Part = "Mastery", Title = "ARMORY WORKSHOP", Sign = "ARMORY", Npc = "Gunsmith", Action = "Gun Upgrades", NpcAt = Vector3.new(-2.5, 0.3, 1.1), Parts = 0 },
+		-- phase 4: the market facade (navy awning), ground floor: a gun bench, a wall rack, the Gunsmith
+		Armory = { Row = "SW_S1", Part = "Mastery", Title = "ARMORY WORKSHOP", Sign = "ARMORY", Npc = "Gunsmith", Action = "Gun Upgrades", NpcAt = Vector3.new(-2.5, 0.3, 1.1), Parts = 39 },
+		-- phase 4: the Town Hospital store prop (5201630514): a field-hospital stand in its forecourt (reception desk, 2
+		-- stretcher beds, an IV stand); a white plus on green (no red-cross emblem). No prop: beside the radio shop house.
+		Hospital = {
+			StoreProp = 5201630514,
+			FallbackRow = "NW_W1",
+			FallbackOffset = Vector3.new(16, 0, -14),
+			ForecourtStuds = 7,
+			Part = "Hospital",
+			Title = "FIELD HOSPITAL",
+			Sign = "HOSPITAL",
+			Npc = "Field Medic",
+			Action = "Medic",
+			NpcAt = Vector3.new(0, 0.3, 1.6),
+			Parts = 37,
+		},
 		Intel = { Row = "NW_W1", Part = "Contracts", Title = "INTEL OFFICE", Sign = "INTEL", Npc = "Signals Officer", Action = "Contracts", NpcAt = Vector3.new(-2.5, 0.3, 1.1), Parts = 0 },
 	} :: { [string]: any },
 	-- the order the base EMPIRE panel lists them in
-	Order = { "Command", "Engineers", "Recruits", "Armory", "Intel" },
+	Order = { "Command", "Engineers", "Recruits", "Armory", "Hospital", "Intel" },
 }
 
 return PlazaServicesConfig
