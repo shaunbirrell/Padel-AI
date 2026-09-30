@@ -1,7 +1,7 @@
 # JOB 39: ENDGAME PROGRESSION ("always a next goal") + PLAZA INTERIORS WITH A PURPOSE
 
-> **DRAFT: AWAITING OWNER APPROVAL.** Do not start this job. It is not listed in CLAUDE.md QUEUED JOBS. Shaun must
-> approve the design and every Robux item in §9 first. Written by Code Bot Roblox on 2026-09-30 from the configs at
+> **APPROVED by owner (Shaun) 2026-09-30.** The whole plan, with the §9 decisions recorded below. Build it exactly as
+> written. §11 (EVERYTHING MUST VISIBLY AND MECHANICALLY WORK) is the bar for DONE. Written by Code Bot Roblox on 2026-09-30 from the configs at
 > `phase-7-polish` a0921df (WE_Build 132/133). Analysis script: `tools/sim/endgame_curve_sim.py`
 > (`python3 tools/sim/endgame_curve_sim.py` and `... --time`).
 
@@ -166,7 +166,9 @@ faster than the income it adds, so it never "finishes" quickly. Every price stay
 - Look: a helmet band per tier (grey, green, gold, black-gold). Simple welded parts, no store assets.
 - **Recurring sink:** refilling a dead trained soldier costs $500 + a re-train fee (Veteran 5k, Elite 15k, Legendary 40k,
   Mythic 100k). A 79-man Mythic army wiped in a raid costs $7.9M to refill (5.5 min at 23.7k/s). The existing 49 R$ Instant
-  Army Refill covers the fee too (§9 b).
+  Army Refill also pays the re-train fees (APPROVED, §9 b; same product, same price, same Id).
+- Size and look (§11.3): the rig scale per tier is Veteran 1.05, Elite 1.10, Legendary 1.18, Mythic 1.28. It uses the
+  soldier's HIGHEST tier (its type's tier). Rank insignia + colour trim per tier, and a light Mythic aura.
 - This feeds JOB 38: army power (the SEND fairness ratio) and the Army Kills board both rise with training.
 
 ### 2.5 DEFENCE TREE (matters once JOB 38 raids ship; the Engineering Bureau in the plaza)
@@ -176,7 +178,8 @@ faster than the income it adds, so it never "finishes" quickly. Every price stay
   - **Turret Guns:** turret damage +6 %/level, stacked with Research TargetingSystems (total ≤ MaxMult 3).
   - **Gate & Walls:** gate HP +12 %/level. Rebuild time -3 s/level (GateRebuildSeconds 50 -> 20 at L10).
   - **Vault Plating:** army raid loot 5 % x (1 - 0.05 x L), so L10 = 2.5 %. The player ATM raid is 10 % x (1 - 0.03 x L),
-    so L10 = 7 %. **This changes the loot numbers Shaun decided for JOB 38 (§9 f), so it needs his OK. Default OFF.**
+    so L10 = 7 %. **APPROVED by Shaun 2026-09-30 (§9 f):** it overrides the JOB 38 5 % / 10 % at the Vault levels bought
+    (L0 = exactly the JOB 38 numbers). Behind EndgameConfig.Parts.Defence like the other tracks.
 - **After-raid sink:** a destroyed gate or turret rebuilds free after the timer, or at once for Cash = 30 s of the
   defender's passive income (min 25k) from the base Defences console. Army refill (§2.4). All raid rules stay as JOB 38
   decided them: online only, 5 %, 10-min protection, 5-min SEND cooldown, power checks.
@@ -206,10 +209,11 @@ faster than the income it adds, so it never "finishes" quickly. Every price stay
 - Army medic: out-of-combat soldiers regenerate 1 HP/s once the Medicine tree is L3+.
 
 ### 2.9 WEAPON MASTERY + ATTACHMENTS (the Armory Workshop in the plaza)
-- Per gun, 5 levels: +3 % damage, +6 % magazine, -5 % reload per level. Cost = TierBase x 2^(L-1). TierBase: shop guns 1M,
+- Per gun, 5 levels: +3 % damage, +2 % fire rate, +4 % range, +6 % magazine, -5 % reload per level (all read by the
+  server's shot validation, not only the client). Cost = TierBase x 2^(L-1). TierBase: shop guns 1M,
   rebirth guns 2M, JOB 35 premium guns 3M (a cash path that makes Robux guns better too). Examples: a rebirth gun L1-L5
   costs 2+4+8+16+32 = $62M. Clamped by MaxMult 3 and PlayerMaxDps. The PvP rules are unchanged.
-- Attachments (one-time per gun, one per slot): Red-dot 1M, Grip 1.5M (-15 % spread), Extended Mag 2M (+25 %),
+- Attachments (one-time per gun, one per slot): Red-dot 1M (+10 % range), Grip 1.5M (-15 % spread), Extended Mag 2M (+25 %),
   Suppressor 3M (no minimap ping when firing). Our own generic names, no brand names.
 - Camos (cosmetic, **the first Gold sink**): 50-250 Gold each (Olive 50, Urban 100, Tiger 150, Gold 250). Rotating ones
   go in the Black Market (§2.10).
@@ -221,6 +225,7 @@ faster than the income it adds, so it never "finishes" quickly. Every price stay
   1 Gold slot (100-250 Gold).
 - Cosmetic only: vehicle paints, base banner patterns, soldier beret colours, gun camos, one base trophy prop (Part-built,
   ≤ 30 parts). **Never power.** The stock and "back in N weeks" show in the panel. One of each per player.
+- **No Robux item in the Black Market** (owner decision 2026-09-30). Cash and Gold only.
 
 ### 2.11 INTEL + CONTRACTS (the Intel Office in the plaza)
 - 3 daily contracts from a pool (clear 2 site garrisons, capture 2 outposts, kill 10 checkpoint guards, defend a raid,
@@ -342,20 +347,19 @@ Contracts = { Day = n, Rows = {...}, WeekHVT = {...} }, BlackMarket = { Week = n
 - E: Every plaza building has an NPC, a sign, a light and a working panel, and the panel closes on damage.
 - F: Black Market stock matches across 2 servers in the same week and changes on Monday 00:00 UTC.
 - G: Rebirth cost scale: R3 base price = 1.6x the L-table, and income per tick is unchanged vs today for the same levels.
+- H: every §11 proof item for the phase is done and listed (logs + screenshots). Without it the phase is NOT DONE.
 - DONE reply: what Shaun tests ON HIS PHONE (the station prompt + panel at 800x360, the BUY/ETA text, PIN to a station,
   the Med Kit button, the Base Tier look).
 
-## 9. ROBUX: what Shaun must decide (nothing here changes a price by itself)
-- a) **No new Robux SKU is needed.** The core is Cash + Gold. Empire Level, Base Tier, Elite, Defence, Workshop, Mastery and
-  Medicine are **never sold for Robux** (recommended; please confirm).
-- b) The existing **Instant Army Refill (49 R$)** would also pay the elite re-train fees (§2.4). The price is the same and the
-  value is higher. Needs OK.
-- c) The existing **Keep-Base Rebirth (50 R$)** is worth much more once the base price scales (it saves $22-80M per rebirth).
-  Recommended: keep it at 50 R$ (a price change needs your OK). Or decide a new price.
-- d) **Cash Packs** (JOB 36 scales them with income) can fund Empire Level. That is normal tycoon spending. OK?
-- e) Optional, default NO: one weekly **Black Market premium cosmetic** for Robux (99 R$, Id 0, cosmetic only).
-- f) Not Robux, but it changes a rule you decided: **Vault Plating** lowers the JOB 38 5 % army loot to a 2.5 % floor and
-  the 10 % ATM raid to 7 %. Approve, or drop the track (the other 3 Defence tracks stay).
+## 9. ROBUX: OWNER DECISIONS (Shaun, 2026-09-30; all APPROVED as listed)
+- a) **No new Robux SKU.** Empire Level, Base Tier, Elite, Defence, Workshop, Mastery, Medicine, Warheads and Heist kits are
+  Cash (or Gold for camos) and are **never sold for Robux**. No MonetizationConfig price or Id changes in this job.
+- b) **Instant Army Refill (49 R$, existing product) also pays the elite re-train fees** (§2.4). The price and Id are unchanged.
+  The ProcessReceipt grant refills the soldiers at their trained tiers with no fee (save before PurchaseGranted).
+- c) **Keep-Base Rebirth stays 50 R$**, even though it now saves $22-80M per rebirth under the cost scale.
+- d) **Cash Packs (JOB 36, income-scaled) may be spent on Empire Level.** It is ordinary cash, with no special block.
+- e) **No weekly Black Market Robux item.** It is dropped.
+- f) **Vault Plating is APPROVED:** army raid loot goes from 5 % down to a 2.5 % floor at L10, and the ATM raid from 10 % down to 7 % at L10 (§2.5).
 
 ## 10. PHASES (one at a time, each flag-gated and shippable alone)
 1. The Rebirth cost scale + Empire Level + the Command Office (the fastest fix for "nothing to buy").
@@ -364,7 +368,74 @@ Contracts = { Day = n, Rows = {...}, WeekHVT = {...} }, BlackMarket = { Week = n
 4. The Hospital + the Armory Workshop (Mastery, attachments, camos) + the Vehicle Workshop.
 5. Warheads, Heist tiers, Intel contracts, Black Market, reward scaling.
 
-## 11. SOURCES (research for §0.6; fan wikis, figures unverified where marked)
+## 11. EVERYTHING MUST VISIBLY AND MECHANICALLY WORK (hard rule, owner 2026-09-30)
+A phase is DONE only when every item below that it touches is PROVEN, not when the code runs. Proof = the logged numbers,
+plus screenshots or Studio captures listed in the DONE reply (file paths committed under docs/proof/job39/). A missing
+proof means NOT DONE. Say so in LATEST-HANDOFF and stop; do not mark it done.
+
+1. **Base Tiers visibly grow the base (Fort -> Capital).**
+   - Each tier adds real, detailed builds in the world, following docs/ROBLOX-BUILD-GUIDE.md (§2 silhouette / layered parts /
+     bevels / material variation, §11 checklist):
+     - bigger or extra walls (thicker wall ring, parapets, corner bastions);
+     - taller or extra towers;
+     - a heavier gate (a frame, a lintel, a gatehouse at T3+);
+     - extra and heavier turrets (T2 and T4 nests with sandbag rings and ammo boxes);
+     - flags (more, and taller, masts per tier).
+   - **No block models:** no single-box "tower" or "wall"; every piece is layered.
+   - Proof: one screenshot per tier (T0 to T5) from the same camera spot 100+ studs out, and one close-up per tier. The
+     per-base part and light counts are logged per tier and stay under the 2,700 parts and 40 lights caps.
+2. **Elite training really changes soldiers on the server.**
+   - Veteran / Elite / Legendary / Mythic raise the soldier Humanoid MaxHealth (and Health on spawn/refill) and the soldier
+     damage on the server, through the shared hostility rule (CombatService.UnitMayHitPlayer / UnitMayHitNPC) and the
+     existing damage path (the attackAimOnly shots, the research multipliers, the MaxMult 3 clamp, PlayerMaxDps).
+   - There is no second damage path and no client-set stat.
+   - Proof: a 2-player Studio test (Local Server, 2 clients). Log `[EliteTest] tier=<t> maxHP=<n> dmg=<n> TTK_vs_player=<s>
+     TTK_vs_unit=<s>` for untrained vs each tier: the same target, the same range, averaged over ≥ 5 kills. The TTK must drop
+     with every tier.
+3. **Trained soldiers are visibly bigger, with a tier look, and still animated.**
+   - The rig scale per tier is Veteran 1.05, Elite 1.10, Legendary 1.18, Mythic 1.28, done properly: Model:ScaleTo on the
+     soldier model or HumanoidDescription body scales, with the hip height and animations still correct. A Mythic soldier is
+     visibly bigger than a regular army soldier.
+   - Tier look:
+     - rank insignia (a shoulder or helmet plate: 1 / 2 / 3 chevrons, then a star for Mythic);
+     - colour trim (grey, green, gold, black-gold);
+     - a Mythic aura: one light ParticleEmitter (Rate ≤ 4, LightEmission ≤ 0.3, no lights, off at Graphics Quality ≤ 3, capped
+       by the existing particle budget).
+   - The rigs keep walking and shooting animations, and FOLLOW / HOLD / ATTACK / SEND formations still work. **Formation
+     spacing scales with the soldier size** (slot spacing x the largest scale in the block). There is no teleport, PivotTo
+     or snap; the existing formation standard applies (JOB 38).
+   - Proof: a screenshot of a mixed block (regular / Veteran / Mythic) standing and walking, plus a short capture or
+     /armydebug `[ArmyMarch]` log showing PivotTo=0 while the scaled block turns.
+4. **Gun upgrades and attachments change the real server numbers.**
+   - Mastery levels and attachments change the SERVER damage, fire rate, range, magazine and reload that the shot
+     validation uses.
+   - Proof: log `[GunTest] weapon=<id> mastery=<L> att=<list> dmg=<n> rps=<n> range=<n> mag=<n> reload=<s>` for L0 and L5
+     (+ each attachment), plus a range test that a shot past the old range fails at L0 and hits at L5 + Red-dot.
+   - Camos are visibly applied to the equipped gun model (first person and third person): one screenshot per camo.
+5. **Defence upgrades change turrets, gates and loot.**
+   - Turret Plating raises the AutoGun HP, Turret Guns raise the turret damage, and Gate & Walls raise the gate HP and
+     shorten its rebuild.
+   - Vault Plating lowers the loot:
+     - army raid 5 % -> 2.5 % at L10;
+     - ATM raid 10 % -> 7 % at L10.
+   - Proof: logs `[DefTest] plating=<L> autogunHP=<n> guns=<L> turretDmg=<n> gate=<L> gateHP=<n> rebuild=<s>` at L0 and L10.
+     Also 2-player raid tests (a SEND raid and an ATM raid) at Vault L0, L5 and L10 with the loot logged:
+     `[LootTest] vault=<L> pending=<n> looted=<n> pct=<x>`.
+6. **Empire Level raises income, and every plaza station works.**
+   - Proof: WE_IncomePerSec before and after buying Empire L1, L5 and L10 (the $/s change logged and shown on the HUD
+     screenshot: +2 % per level).
+   - Each plaza building has a working NPC / station:
+     - Command Office;
+     - Recruitment Office;
+     - Armory Workshop + Black Market;
+     - Intel Office;
+     - Field Hospital;
+     - Engineering Bureau;
+     - Bank heist desk.
+   - For each one the proof is a screenshot inside the building showing the NPC, the prompt, the open panel on a phone
+     viewport (800x360), and one completed purchase or action logged (`[Station] <kind> <action> ok`).
+
+## 12. SOURCES (research for §0.6; fan wikis, figures unverified where marked)
 - Military Tycoon wiki: https://military-tycoon.fandom.com/wiki/Rebirths ,
   https://military-tycoon.fandom.com/wiki/Nuke_Base , https://military-tycoon.fandom.com/wiki/Research_Center ,
   https://military-tycoon.fandom.com/wiki/Spec-Ops_Quests
