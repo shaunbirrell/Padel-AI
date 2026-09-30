@@ -41,8 +41,8 @@ def _fn133(src, head, n=6000):
 
 _S133 = "src/ServerScriptService/Server/"
 for _f in (_S133 + "Services/DataService.luau", _S133 + "Services/BaseService.luau", _S133 + "EarlyRemotes.server.luau"):
-    _cb133('SetAttribute("WE_Build", 133)' in _rd133(_f), "CODEBOT v133: WE_Build=133 " + _f.rsplit("/", 1)[-1])
-_cb133("WE_Build=133" in _rd133(_S133 + "Services/DataService.luau"), "CODEBOT v133: DataService profile-loaded log says WE_Build=133")
+    pass  # v134 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v134.py: #_cb133('SetAttribute("WE_Build", 133)' in _rd133(_f), "CODEBOT v133: WE_Build=133 " + _f.rsplit("/", 1)[-1])
+# v134 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v134.py: #_cb133("WE_Build=133" in _rd133(_S133 + "Services/DataService.luau"), "CODEBOT v133: DataService profile-loaded log says WE_Build=133")
 
 # ── 1b: player shots on enemy soldiers ──
 _CS = _rd133(_S133 + "Services/CombatService/init.luau")

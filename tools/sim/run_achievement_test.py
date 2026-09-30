@@ -2,7 +2,7 @@
 run_kit_detail_test.PRELUDE; the services around AchievementService are recording stubs).
 
 1. CONFIG (the real AchievementConfig): every brief achievement is there once; ids / orders / Stat-or-Event are
-   sound; BadgeId = 0 everywhere (Code Bot fills them); the Command Center target = BaseConfig's max level; no key
+   sound; BadgeId = 0 or (codebot_v134) exactly the wired Creator Hub id (WIRED below); the Command Center target = BaseConfig's max level; no key
    names / "click" / nation words in any chat line.
 2. ORDINALS ("1st" ... "111th") and the dotted stat reader.
 3. OWNER-FIRST (RunService:IsStudio = false): the owner is live, another player is not (the old path runs for him).
@@ -21,6 +21,9 @@ run_kit_detail_test.PRELUDE; the services around AchievementService are recordin
     GapSeconds apart; a full queue drops small lines and keeps big ones.
 11. BADGES: BadgeId 0 = BadgeService never called; a non-zero id checks UserHasBadgeAsync, retries a failed
     AwardBadge, never awards a badge the player already has.
+    codebot_v134 BACKFILL: on profile load every already-unlocked achievement with a wired BadgeId is awarded if not
+    owned (also for a player the Live rule does not cover, and for the owner / admin), throttled SyncGapSeconds per
+    badge, owned ones skipped, once per session.
 12. THE CLIENT line format (the real AchievementController.Format / Escape / RewardLine).
 Run: LUAU=path/to/luau(.exe) python tools/sim/run_achievement_test.py   (exit 1 on any failure)"""
 import os
@@ -117,6 +120,9 @@ local BC = require(node("Configs/BaseConfig"))
 local PS = require(node("Modules/ProfileSchema"))
 
 -- ── 1. config ──
+-- codebot_v134: the 5 Creator Hub badges wired into AchievementConfig (the other 16 stay 0 until the daily routine)
+WIRED = { FirstKillNPC = 772051421546625, FirstPlayerKill = 2489884143486750, FirstUpgrade = 583497417329015,
+  Cash10k = 1847488248714137, PlayerKills10 = 2976613716370877 }
 local BRIEF = { "FirstKillNPC", "FirstPlayerKill", "PlayerKills10", "PlayerKills100", "Cash100k", "Cash1M", "Cash100M",
   "FirstUpgrade", "CommandCenterMax", "FirstOutpost", "PlazaCaptured", "Rebirth1", "Rebirth5", "Rebirth10", "Rebirth20",
   "FirstNuke", "Army50", "Streak7", "WeeklyCrown" }
@@ -131,12 +137,14 @@ for id, d in pairs(AC.Achievements) do
   check(orders[d.Order] == nil, id .. ": page order " .. d.Order .. " is unique")
   orders[d.Order] = true
   check((d.Stat ~= nil and d.Target ~= nil) ~= (d.Event ~= nil), id .. ": exactly one of Stat+Target / Event")
-  check(d.BadgeId == 0, id .. ": BadgeId 0 (Code Bot creates the badge)")
+  check(d.BadgeId == (WIRED[id] or 0), id .. ": BadgeId " .. tostring(WIRED[id] or 0) .. " (codebot_v134 wired / 0 = not created yet)")
   check(d.RewardCash >= 0 and d.RewardGold >= 0 and d.RewardXP >= 0 and d.RewardCash <= 100000 and d.RewardGold <= 40, id .. ": a small reward")
   local s = string.lower(d.Shout or "")
   check(not (s:find("click") or s:find("press") or s:find("%[e%]") or s:find("tap ")), id .. ": no key / click words in the chat line")
 end
 check(n == 21, "21 achievements (19 from the brief, First Building = the original First Brick, + War Chest / Sergeant): " .. n)
+-- sections 3-11 were written for BadgeId 0 everywhere: zero the wired ids for them (section 11 puts them back)
+for id in pairs(WIRED) do AC.Achievements[id].BadgeId = 0 end
 check(AC.Achievements.CommandCenterMax.Target == BC.Structures.CommandCenter.MaxLevel, "Command Center target = BaseConfig max level " .. tostring(BC.Structures.CommandCenter.MaxLevel))
 check(AC.Live.Enabled == true and AC.Live.OwnerFirst == false, "kill switch on, launched for everyone")
 
@@ -275,6 +283,31 @@ owner.DailyLogin.Streak = 7
 AS2.Check(OWNER); runTasks()
 check(owner.Achievements.Streak7 == true and #BADGE.awarded == before, "UserHasBadgeAsync first: an owned badge is not awarded again")
 AC.Achievements.Army50.BadgeId = 0; AC.Achievements.Streak7.BadgeId = 0
+
+-- codebot_v134 badge backfill on join (the real OnProfileLoaded hook)
+for id, bid in pairs(WIRED) do AC.Achievements[id].BadgeId = bid end
+local PLCB = nil
+DEPS.DataService.OnProfileLoaded = function(cb) PLCB = cb end
+local prevOF = AC.Live.OwnerFirst
+AC.Live.OwnerFirst = true -- OTHER is not Live: the backfill must still run for him
+local AS3 = freshService()
+check(PLCB ~= nil and typeof(AS3.BackfillBadges) == "function", "v134: BackfillBadges exists and hooks OnProfileLoaded")
+PROFILES[OTHER.UserId] = { Achievements = { FirstKillNPC = true, Cash10k = true, Level10 = true }, AchievementsSeeded = true }
+BADGE.has[OTHER.UserId .. ":" .. WIRED.Cash10k] = true
+local b0, t0 = #BADGE.awarded, NOW
+PLCB(OTHER, PROFILES[OTHER.UserId]); runTasks()
+check(BADGE.has[OTHER.UserId .. ":" .. WIRED.FirstKillNPC] == true and #BADGE.awarded == b0 + 1,
+  "v134 backfill: an unlocked First Blood is awarded on join for a non-Live player; owned War Chest skipped; BadgeId 0 (Level10) skipped")
+check(NOW - t0 >= 2 * AC.Badges.SyncGapSeconds, "v134 backfill: throttled SyncGapSeconds per badge (" .. tostring(NOW - t0) .. " s)")
+local b1 = #BADGE.awarded
+PLCB(OTHER, PROFILES[OTHER.UserId]); runTasks()
+check(#BADGE.awarded == b1, "v134 backfill: once per session")
+PROFILES[OWNER.UserId].Achievements.FirstKillNPC = true
+PLCB(OWNER, PROFILES[OWNER.UserId]); runTasks()
+check(BADGE.has[OWNER.UserId .. ":" .. WIRED.FirstKillNPC] == true, "v134 backfill: the owner / admin gets First Blood too")
+PROFILES[OTHER.UserId].Achievements.PlayerKills10 = true
+check(#AS3.BackfillBadges(OTHER) == 0, "v134 backfill: BackfillBadges is once per session (re-sync next join)")
+AC.Live.OwnerFirst = prevOF
 
 -- ── 12. client format ──
 local C = require(node("Client/AchievementController"))

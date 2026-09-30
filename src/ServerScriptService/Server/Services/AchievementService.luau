@@ -18,6 +18,10 @@
 	    CombineSeconds merge, small lines dropped past MaxQueue).
 	  * Badges: BadgeService:AwardBadge only for BadgeId ~= 0, after UserHasBadgeAsync, pcall + retries; re-synced once
 	    per session on join so a failed award is retried later.
+	  * codebot_v134 badge backfill (BackfillBadges): on every profile load (NOT gated by Live, so the old MissionService
+	    path's unlocks count too) every achievement already in profile.Achievements whose BadgeId ~= 0 is awarded if the
+	    player does not own it; one badge per Badges.SyncGapSeconds (throttled), whole pass in pcall, one in-flight award
+	    per player + badge (so an unlock's award and the backfill never double-call AwardBadge). Admins included.
 	  * Analytics ACHIEVEMENT_UNLOCKED { id, backfill } per unlock.
 	  * The page: RequestAchievements -> FeaturePush "AchState" { List, Earned, Total }.
 	Owner / admin accounts earn and are announced like anyone (they stay off the leaderboards, EngagementService).
@@ -41,6 +45,7 @@ export type Shout = { Uid: number, Name: string, Text: string, Big: boolean, Ext
 local deps: { [string]: any } = {}
 local checking: { [Player]: boolean } = {}
 local badgeSynced: { [Player]: boolean } = {}
+local badgeInFlight: { [Player]: { [number]: boolean } } = {} -- codebot_v134: one award chain per player + badge
 local rebirthShouted: { [number]: number } = {} -- uid -> the prestige already announced
 local queue: { Shout } = {}
 local lastSent = -math.huge
@@ -186,27 +191,41 @@ local function awardBadge(player: Player, def: Def)
 	if bid <= 0 then
 		return
 	end
+	local fl = badgeInFlight[player]
+	if fl == nil then
+		fl = {}
+		badgeInFlight[player] = fl
+	end
+	if fl[bid] then
+		return
+	end
+	fl[bid] = true
 	local B = AchievementConfig.Badges
 	for attempt = 1, B.Retries do
 		if player.Parent == nil then
-			return
+			break
 		end
 		local okH, has = pcall(function()
 			return BadgeService:UserHasBadgeAsync(player.UserId, bid)
 		end)
 		if okH and has == true then
-			return
+			break
 		end
 		if okH then
 			local okA, res = pcall(function()
 				return BadgeService:AwardBadge(player.UserId, bid)
 			end)
 			if okA and res == true then
-				return
+				print(string.format("[WAR EMPIRE] badge awarded %s (%d) userId=%d", def.Id, bid, player.UserId))
+				break
+			end
+			if not okA then
+				warn(string.format("[WAR EMPIRE] AwardBadge %s (%d) failed: %s", def.Id, bid, tostring(res)))
 			end
 		end
 		task.wait(B.RetryDelaySeconds * attempt)
 	end
+	fl[bid] = nil
 end
 
 function AchievementService.Progress(profile: any, def: Def): (number, number)
@@ -399,22 +418,37 @@ function AchievementService.OnRebirth(player: Player)
 	end
 end
 
--- once per session: award any earned achievement's badge the player does not have yet (a failed award retries here)
-local function syncBadges(player: Player)
+-- codebot_v134 backfill, once per session: every achievement already unlocked (profile.Achievements) whose BadgeId is
+-- non-zero is awarded if not owned (awardBadge: UserHasBadgeAsync first, pcall, retried). Throttled SyncGapSeconds per
+-- badge. Not gated by Live; admins / the owner included (only leaderboards exclude admins). Returns the ids tried.
+local function syncBadges(player: Player): { string }
+	local tried: { string } = {}
 	if badgeSynced[player] then
-		return
+		return tried
 	end
 	badgeSynced[player] = true
 	local profile = deps.DataService and deps.DataService.GetProfile(player)
 	if profile == nil or typeof(profile.Achievements) ~= "table" then
-		return
+		return tried
 	end
 	for _, def in ipairs(ORDERED) do
+		if player.Parent == nil then
+			break
+		end
 		if profile.Achievements[def.Id] == true and (tonumber(def.BadgeId) or 0) > 0 then
-			awardBadge(player, def)
+			table.insert(tried, def.Id)
+			local ok, err = pcall(awardBadge, player, def)
+			if not ok then
+				warn("[WAR EMPIRE] badge backfill " .. def.Id .. ": " .. tostring(err))
+			end
 			task.wait(AchievementConfig.Badges.SyncGapSeconds)
 		end
 	end
+	return tried
+end
+
+function AchievementService.BackfillBadges(player: Player): { string }
+	return syncBadges(player)
 end
 
 -- test hooks (tools/sim/run_achievement_test.py)
@@ -449,13 +483,16 @@ function AchievementService.Init(d: { [string]: any })
 	end
 	if d.DataService and d.DataService.OnProfileLoaded then
 		d.DataService.OnProfileLoaded(function(player: Player)
-			if not live(player.UserId) then
-				return
-			end
 			task.delay(4, function()
 				if player.Parent then
-					AchievementService.Check(player)
-					syncBadges(player)
+					if live(player.UserId) then
+						AchievementService.Check(player)
+					end
+					-- codebot_v134: the badge backfill runs for every player (Live or not, admins included)
+					local ok, err = pcall(syncBadges, player)
+					if not ok then
+						warn("[WAR EMPIRE] badge backfill: " .. tostring(err))
+					end
 				end
 			end)
 		end)
@@ -463,6 +500,7 @@ function AchievementService.Init(d: { [string]: any })
 	Players.PlayerRemoving:Connect(function(player: Player)
 		checking[player] = nil
 		badgeSynced[player] = nil
+		badgeInFlight[player] = nil
 		rebirthShouted[player.UserId] = nil
 	end)
 	print("[WAR EMPIRE] AchievementService Init")

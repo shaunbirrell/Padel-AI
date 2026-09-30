@@ -11,7 +11,8 @@
 	  * Earner: a popup + sound + the small reward below (server-side AddCash / AddGold / AddXP, reason "achievement").
 	  * Whole server: one styled TextChatService system line ("[WAR EMPIRE] <name> just ..."), rate limited (Shout).
 	    Big = also a short banner at the top for everyone.
-	  * BadgeId: 0 = no badge yet. Code Bot creates them in Creator Hub (docs/BADGES.md) and fills the ids; the server
+	  * BadgeId: 0 = no badge yet. codebot_v134: the first 5 created badges are wired (First Blood, Duelist, First
+	    Building, War Chest, Hunter); the other 16 are wired by the daily badge routine (5 free per 24h GMT). Code Bot creates them in Creator Hub (docs/BADGES.md) and fills the ids; the server
 	    awards only a non-zero id (pcall, UserHasBadgeAsync first, retried, re-synced on join).
 	  * Kill switch: Live (RetentionConfig.Live rule: OwnerFirst = UserId 470626172 + Studio). Off = the old 3-entry
 	    behaviour.
@@ -74,7 +75,7 @@ local AchievementConfig = {
 			Stat = "Stats.UpgradesPurchased",
 			Target = 1,
 			Shout = "just built their first building!",
-			BadgeId = 0,
+			BadgeId = 583497417329015,
 			Order = 3,
 		},
 		Cash10k = {
@@ -86,7 +87,7 @@ local AchievementConfig = {
 			RewardXP = 50,
 			Stat = "Stats.TotalCashEarned",
 			Target = 10000,
-			BadgeId = 0,
+			BadgeId = 1847488248714137,
 			Order = 4,
 		},
 		Level10 = {
@@ -106,17 +107,17 @@ local AchievementConfig = {
 		FirstKillNPC = {
 			Id = "FirstKillNPC", DisplayName = "First Blood", Description = "Defeat your first enemy soldier.",
 			RewardCash = 500, RewardGold = 0, RewardXP = 25, Event = "KillNPC",
-			Shout = "drew first blood!", BadgeId = 0, Order = 1,
+			Shout = "drew first blood!", BadgeId = 772051421546625, Order = 1,
 		},
 		FirstPlayerKill = {
 			Id = "FirstPlayerKill", DisplayName = "Duelist", Description = "Defeat another player.",
 			RewardCash = 1500, RewardGold = 1, RewardXP = 50, Stat = "LB.Kills", Target = 1,
-			Shout = "won their first player duel!", BadgeId = 0, Order = 2,
+			Shout = "won their first player duel!", BadgeId = 2489884143486750, Order = 2,
 		},
 		PlayerKills10 = {
 			Id = "PlayerKills10", DisplayName = "Hunter", Description = "Defeat 10 players.",
 			RewardCash = 5000, RewardGold = 3, RewardXP = 100, Stat = "LB.Kills", Target = 10,
-			Shout = "has defeated 10 players!", BadgeId = 0, Order = 5,
+			Shout = "has defeated 10 players!", BadgeId = 2976613716370877, Order = 5,
 		},
 		PlayerKills100 = {
 			Id = "PlayerKills100", DisplayName = "Warlord", Description = "Defeat 100 players.",
