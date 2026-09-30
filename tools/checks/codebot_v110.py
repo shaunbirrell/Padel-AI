@@ -6,8 +6,8 @@ _cb110_CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 
 # ── build ──
 for _f in (_cb110_S + "Services/DataService.luau", _cb110_S + "Services/BaseService.luau", _cb110_S + "EarlyRemotes.server.luau"):
-    must_contain(_f, 'SetAttribute("WE_Build", 153)', "CODEBOT v110: WE_Build=110 " + _f.rsplit("/", 1)[-1])
-must_contain(_cb110_S + "Services/DataService.luau", "WE_Build=153", "CODEBOT v110: DataService profile-loaded log says WE_Build=110")
+    must_contain(_f, 'SetAttribute("WE_Build", 154)', "CODEBOT v110: WE_Build=110 " + _f.rsplit("/", 1)[-1])
+must_contain(_cb110_S + "Services/DataService.luau", "WE_Build=154", "CODEBOT v110: DataService profile-loaded log says WE_Build=110")
 
 # ── JOB 20 real base guards (live for all) ──
 must_contain(_cb110_SH + "Configs/GuardConfig.luau", "\tEnabled = true,", "CODEBOT v110: GuardConfig Enabled (live for all)")

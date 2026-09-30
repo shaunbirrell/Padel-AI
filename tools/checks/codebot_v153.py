@@ -29,9 +29,10 @@ _S153 = "src/ServerScriptService/Server/"
 _C153 = "src/ReplicatedStorage/Shared/Configs/"
 _CL153 = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
-for _f in (_S153 + "Services/DataService.luau", _S153 + "Services/BaseService.luau", _S153 + "EarlyRemotes.server.luau"):
-	_cb153('SetAttribute("WE_Build", 153)' in _rd153(_f), "CODEBOT v153: WE_Build=153 " + _f.rsplit("/", 1)[-1])
-_cb153("WE_Build=153" in _rd153(_S153 + "Services/DataService.luau"), "CODEBOT v153: DataService profile-loaded log says WE_Build=153")
+# v154 (Code Bot Roblox): the WE_Build=153 pins are superseded in tools/checks/codebot_v154.py (WE_Build=154).
+# for _f in (_S153 + "Services/DataService.luau", _S153 + "Services/BaseService.luau", _S153 + "EarlyRemotes.server.luau"):
+# 	_cb153('SetAttribute("WE_Build", 153)' in _rd153(_f), "CODEBOT v153: WE_Build=153 " + _f.rsplit("/", 1)[-1])
+# _cb153("WE_Build=153" in _rd153(_S153 + "Services/DataService.luau"), "CODEBOT v153: DataService profile-loaded log says WE_Build=153")
 
 _MC = _rd153(_C153 + "MonetizationConfig.luau")
 _MS = _rd153(_S153 + "Services/MonetizationService.luau")
