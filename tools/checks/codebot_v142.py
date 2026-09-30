@@ -27,9 +27,7 @@ def _rd142(p):
 
 _S142 = "src/ServerScriptService/Server/"
 _C142 = "src/ReplicatedStorage/Shared/Configs/"
-for _f in (_S142 + "Services/DataService.luau", _S142 + "Services/BaseService.luau", _S142 + "EarlyRemotes.server.luau"):
-    _cb142('SetAttribute("WE_Build", 142)' in _rd142(_f), "CODEBOT v142: WE_Build=142 " + _f.rsplit("/", 1)[-1])
-_cb142("WE_Build=142" in _rd142(_S142 + "Services/DataService.luau"), "CODEBOT v142: DataService profile-loaded log says WE_Build=142")
+# v143 (Code Bot Roblox): the WE_Build=142 pins are superseded in tools/checks/codebot_v143.py (WE_Build=143).
 
 # the two launches
 _SOC = _rd142(_C142 + "ShopOverhaulConfig.luau")

@@ -1,4 +1,20 @@
 <!-- Q2-START -->
+## v143 (Code Bot Roblox, 2026-09-30 ~16:50 Dublin): ship claude-bud JOB 38 army ATTACK/SEND/RECALL + ARMY KILLS — OWNER-FIRST — place version TBD
+- **WE_Build 143**. Cherry-pick `0150edf` from `origin/claude/desktop-bud` as `2003433` onto phase-7-polish (v142 tip `e113293`). Code + dist commit TBD after publish. Open Cloud place version TBD.
+- **Flags:** `ArmyOrdersConfig.Live` Enabled + `OwnerFirst = true` (owner 470626172 + Studio only), as Claude shipped. **Do NOT set OwnerFirst=false until Shaun phone-tests and asks.** That later flip also swaps TOP ARMY → ARMY KILLS for everyone.
+- **Live state kept (v142):** `ShopOverhaulConfig.Live.OwnerFirst = false`; `CheckpointGuardConfig.Live.OwnerFirst = false`; VIP `OverhaulRobuxPrice = 199` (Creator Hub 199; owner has NOT approved 349); guard keep-out 130; Depot.CP_E / Armory.CP_W plain; pass Ids (WarChest / SuperSoldiers / DoubleHP / PG_*); RPG hold 3972151362; SpawnNPC regular-cap fix; WeaponsLive=true; FastTravel removed; PreferMesh OFF; WE_Building* untouched.
+- **What ships (while live for owner):** ATTACK = auto-clear (seek→march→fight→chain→return, leash 300, no PivotTo/teleport during plan); SEND ARMY from map card (verdict, defender ETA + red marker, siege turrets→guards→gate→ATM, 5%/2.5% ArmyRaid loot); RECALL marches home; fairness a–g (online-only, 5 min SEND cooldown, 10 min protect, too-weak block, bully loot half); AutoGun HP; ARMY KILLS board (replaces TOP ARMY only when LiveForAll).
+- **Checks:** BuyPathStatic / claude_bud_job38 / run_army_orders_test / codebot_v143 / rojo — see publish commit.
+- **Phone tests (Migrate to Latest Update, as shaunie6):**
+  1. Open the walkie: a third row SEND / RECALL at the same 44 px cells and a status line. Press ATTACK near a camp: status SEEKING → MARCHING → FIGHTING → CLEARED → RETURNING; the block walks there and back in formation (no pops, no teleports).
+  2. RECALL mid-march: the army turns and walks back.
+  3. Second phone: open the map, tap the owner's base (SEND ARMY + "Your army X vs defences Y"). Or from the owner's phone tap the second player's base → SEND ARMY. Second phone gets the ETA warning and the red ENEMY ARMY marker.
+  4. Watch the siege: turrets smoke/offline → guards → gate breach toast → ATM hold → "Looted $N" (5 %). Army walks home.
+  5. Try SEND again at once: "Army resting 4:5x". Same base from another account: "Just raided: protected 9:xx".
+- **Still pending:** Studio 2-player acceptance A–F; march look while turning; walkie at 5 viewports; live PathfindingService routes; confirm AutoGuns still ignore army units.
+- **Servers:** running servers keep v142 / place 140. Shaun restarts / Migrate to Latest Update himself; Code Bot does not restart servers.
+- **Next:** owner phone-test; when happy, ask Code Bot to set `ArmyOrdersConfig.Live.OwnerFirst = false`. JOBs 39–40 still queued on desktop-bud docs (not started).
+
 ## v142 (Code Bot Roblox, 2026-09-30 ~16:38 Dublin): JOB 36 shop overhaul + JOB 37 checkpoint guards LIVE FOR EVERYONE (owner 16:24) — place version 140
 - **WE_Build 142**. Code + dist commit `52d0905`. Open Cloud HTTP 200 `versionNumber=140`. Nothing from `origin/claude/desktop-bud` merged (its new JOB 38 `0150edf` / `128ff9d` is NOT shipped).
 - **Flags:** `ShopOverhaulConfig.Live.OwnerFirst = false`; `CheckpointGuardConfig.Live.OwnerFirst = false` (guards, cleared bonus, map rows, and the daily "Checkpoint" objective through `LiveForAll()`). Kill switches (`Enabled`) kept.
