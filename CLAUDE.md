@@ -7,6 +7,10 @@
 - After JOB 36 is finished and pushed, do JOB 37 (real road checkpoint: detail + killable guards) exactly as written in
   [`docs/claude-queue/JOB37-checkpoint.md`](docs/claude-queue/JOB37-checkpoint.md), same rules. If any JOB 31 work is
   still unfinished, it may fold into JOB 37 (JOB 31 itself shipped in v128).
+- After JOB 37 is finished and pushed, do JOB 38 (army ATTACK auto-clear nearest + SEND army to another player's base
+  to breach gates / guards / turrets, raid fairness) exactly as written in
+  [`docs/claude-queue/JOB38-army-attack-orders.md`](docs/claude-queue/JOB38-army-attack-orders.md), same rules. Owner-first
+  flag, no teleport / PivotTo in marches, no fast travel.
 - **No fast travel, ever:** it was removed in v127 at the owner's request. The map is tap-to-pin only (see
   `tools/checks/codebot_v127.py`).
 
