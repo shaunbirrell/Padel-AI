@@ -1,4 +1,18 @@
 <!-- Q2-START -->
+## v139 (Code Bot Roblox, 2026-09-30 ~15:23 Dublin): ship claude-bud JOB 36 shop overhaul — OWNER-FIRST (WarChest/SuperSoldiers/DoubleHP Id 0) — place version 137
+- **WE_Build 139**. Cherry-pick `1d09cce` (`db7899b` on phase-7-polish) from `origin/claude/desktop-bud` + code/dist `2f721fc`. Open Cloud HTTP 200 `versionNumber=137`. PreferMesh OFF; WE_Building* untouched; fast travel stays REMOVED; aircraft weapons stay live (v138); premium guns stay live (v136/v137 Ids).
+- **Flags (per Claude handoff):** `ShopOverhaulConfig.Live.Enabled = true`, `OwnerFirst = true` (owner UserId 470626172 + Studio only). New passes `WarChest` / `SuperSoldiers` / `DoubleHP` stay **Id 0** — hidden, never prompted. **To launch for everyone:** owner creates those three passes + sets VIP Creator Hub price 199→349, pastes Ids, then Code Bot sets `OwnerFirst = false`.
+- **What ships (while live for owner):** Shop order FREE → War Chest → 2x Cash (**BEST VALUE**) → VIP 349 → …; every pass row **PERMANENT**; cash packs scale with passive income; Speed stand / death offer = Speed Boost; army-wiped = Bigger Army; VIP +50% cash + daily crate + gold name; War Chest implies 2x+Auto+VIP+BiggerArmy; Super Soldiers x1.25 army; Double HP x2 MaxHealth. Full list in `docs/SHOP.md`.
+- **Checks:** `LUAU_COMPILE=$HOME/.local/bin/luau-compile python3 tools/BuyPathStatic.py` PASS=6889 FAIL=0; `tools/checks/claude_bud_job36.py`; `tools/sim/run_shop_test.py` 0 failed; `tools/checks/codebot_v139.py`; rojo ok.
+- **Phone tests (Migrate to Latest Update, as owner shaunie6):**
+  1. Open Shop > SUPPLY: FREE rows, then 2x Cash marked **BEST VALUE** in gold, then VIP at 349, and so on. Every pass row reads PERMANENT; Speed Pass / Army Expansion rows are gone.
+  2. Cash pack rows show amounts from your income (e.g. Cash Pack L = 60 min of passive, never under $200k).
+  3. Supply Depot Speed stand reads Speed Boost R$ 99 (a second non-owner phone's base still shows the Speed Pass).
+  4. Rejoin as VIP: "VIP supply crate: +$X" once; chat name gold; same-day rejoin = no second crate.
+  5. Lose your whole army: offer is "Army down! Bigger Army". Die with no speed owned: "Run faster" for Speed Boost.
+  6. Non-owner join: old shop exactly (OwnerFirst).
+- **Servers:** running servers keep v138. Shaun will restart / migrate them himself; Code Bot did not restart any.
+
 ## v138 (Code Bot Roblox, 2026-09-30 ~14:58 Dublin): aircraft weapons ON for everyone (owner Shaun 14:44) — place version 136
 - **WE_Build 138**. Code + dist commit `e45c7bb`; JOB 40 doc `667d004` (phase-7-polish) / `b520912` (claude/desktop-bud). Open Cloud HTTP 200 `versionNumber=136`. PreferMesh OFF; WE_Building* untouched; fast travel stays REMOVED; RolloutKeys and Robux prices unchanged.
 - **The gate:** `AircraftWeaponConfig.WeaponsLive = false` (dark since the air-weapons lane / v101); `AircraftWeaponConfig.LiveFor` returned true only for `AdminConfig.IsPlaytestOwner` (UserId 470626172). That is why Shaun's jets fired. AirWeaponService refuses fire with "off" when LiveFor is false and writes the player attribute `WE_AirWeaponsLive` that shows the client fire buttons. No other owner / Studio check in the air-weapon path.

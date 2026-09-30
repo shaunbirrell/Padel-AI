@@ -4,6 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
+- **Current live (Code Bot):** Open Cloud **versionNumber=137** (2026-09-30 Europe/Dublin) — **v139 JOB 36 shop overhaul** owner-first (`ShopOverhaulConfig.OwnerFirst=true`; WarChest/SuperSoldiers/DoubleHP Id 0). `WE_Build=139`. PreferMesh OFF; fast travel REMOVED.
 - **Live Published:** Open Cloud **versionNumber=63** (2026-09-21 Europe/Madrid) — **v61 BUY PATH**: `Remotes.FireServer` (≤3s TryGet, no unbounded WaitForChild); WorldPrompt/BaseController toast "Buying…" only after FireServer; EnsureProfile on pad+PurchaseUpgrade; DataService Init before UpgradePad; `WE_Build=63`.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** **Public** since 2026-09-24 17:54 UTC (develop API: privacyType Public, audiences Editors + Public). Under current Roblox rules, Private means only users with Edit permission can play.
