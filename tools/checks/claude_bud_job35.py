@@ -50,9 +50,9 @@ _SCO = _j35_code(_CL + "Modules/Scope.luau")
 # gate + no Robux changes elsewhere: every new pass Id 0, prices in MonetizationConfig only, not in RolloutKeys
 _j35("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false, -- codebot_v136 launch" in _PGC and "RetentionConfig.Live(PremiumGunsConfig.Live, userId)" in _PGC,
      "one kill switch (PremiumGunsConfig.Live; v136: OwnerFirst=false, everyone; superseded in codebot_v136.py)")
-for _k, _p in (("PG_Sovereign", 99), ("PG_Quake", 249), ("PG_Longshot", 299), ("PG_Havoc", 349), ("PG_Thunderhead", 399), ("PG_Tempest", 499), ("PG_ArmoryPass", 1299)):
-    _j35(("\t\t%s = {\n\t\t\tId = 0,\n" % _k) in _MCF and ("RobuxPrice = %d," % _p) in _MCF, "%s: Id 0 (hidden / SOON), R$ %d in MonetizationConfig" % (_k, _p))
-_j35('"PG_' not in _MCF.split("RolloutKeys", 1)[1].split("\n", 1)[0], "PG_* passes are not in RolloutKeys (they are Id 0)")
+for _k, _p, _id in (("PG_Sovereign", 99, 2002154652), ("PG_Quake", 249, 2003492417), ("PG_Longshot", 299, 2003180431), ("PG_Havoc", 349, 2002250646), ("PG_Thunderhead", 399, 1999305818), ("PG_Tempest", 499, 2002682646), ("PG_ArmoryPass", 1299, 2002868467)):
+    _j35(("\t\t%s = {\n\t\t\tId = %d,\n" % (_k, _id)) in _MCF and ("RobuxPrice = %d," % _p) in _MCF, "%s: live Id %d, R$ %d in MonetizationConfig" % (_k, _id, _p))
+_j35('"PG_' not in _MCF.split("RolloutKeys", 1)[1].split("\n", 1)[0], "PG_* passes are not in RolloutKeys (they use their live Ids directly)")
 _j35("RobuxPrice" not in _PGC and "RobuxPrice" not in _PGS.replace("d.RobuxPrice", ""), "no price typed outside MonetizationConfig")
 # guns: premium, never sold for Cash; ownership only from the pass
 _j35(_WC.count("premiumGun({") == 6 and "d.Premium = true" in _WC and "d.CostCash = 0" in _WC, "six WeaponConfig premium guns (Premium, CostCash 0)")

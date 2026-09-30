@@ -10,7 +10,7 @@ plus Clone / FindFirstChild / bounds / ScaleTo on the Instance stand-in).
    line for line from CombatService) under a 20 Hz held trigger for 6 s: shots per gun match the design, and the
    existing guns are unchanged (their Interval is the old 1 / FireRate).
 3. CONFIG (the real WeaponConfig / MonetizationConfig / PremiumGunsConfig): six premium guns with the brief's asset
-   ids, Premium + CostCash 0 + a PG_* pass (Id 0, price in MonetizationConfig), the Armory Pass covers all six and
+   ids, Premium + CostCash 0 + a live PG_* pass (Id and price in MonetizationConfig), the Armory Pass covers all six and
    hides once the six are owned; no id clashes with the rebirth guns; the DPS table (printed).
 4. SERVICE (the real Services/PremiumGunService on stubs): CaseState Owned / Soon / Buy; OnPassOwned grants one gun /
    the bundle grants six, idempotent; not live = no grant; the prompt text is the stands' "Buy - R$ X".
@@ -194,15 +194,16 @@ check(tr >= 5 and tr <= 8, "Tempest: one charged shot per ~0.8-1 s (" .. tr .. "
 
 -- ── 3. config ──
 local want = { SovereignPistol = 720567240, QuakeLauncher = 4842201032, LongshotSniper = 14498314181, HavocRotary = 590594953, ThunderheadLauncher = 12458308179, TempestRailgun = 4842190633 }
+local passIds = { PG_Sovereign = 2002154652, PG_Quake = 2003492417, PG_Longshot = 2003180431, PG_Havoc = 2002250646, PG_Thunderhead = 1999305818, PG_Tempest = 2002682646, PG_ArmoryPass = 2002868467 }
 local prices = { PG_Sovereign = 99, PG_Quake = 249, PG_Longshot = 299, PG_Havoc = 349, PG_Thunderhead = 399, PG_Tempest = 499, PG_ArmoryPass = 1299 }
 for id, aid in pairs(want) do
   local d = W[id]
   check(d ~= nil and d.Premium == true and d.CostCash == 0 and d.VisualAssetId == aid, id .. ": premium, not sold for Cash, asset " .. aid)
   local p = d and MC.GamePasses[d.PassKey]
-  check(p ~= nil and p.Id == 0 and p.RobuxPrice == prices[d.PassKey] and table.find(p.WeaponIds, id) ~= nil, id .. ": pass " .. tostring(d and d.PassKey) .. " Id 0 at R$ " .. tostring(p and p.RobuxPrice))
+  check(p ~= nil and p.Id == passIds[d.PassKey] and p.RobuxPrice == prices[d.PassKey] and table.find(p.WeaponIds, id) ~= nil, id .. ": pass " .. tostring(d and d.PassKey) .. " live Id at R$ " .. tostring(p and p.RobuxPrice))
 end
 local bundle = MC.GamePasses.PG_ArmoryPass
-check(bundle.Id == 0 and bundle.RobuxPrice == 1299 and #bundle.WeaponIds == 6 and #bundle.BundlePassKeys == 6, "Armory Pass: Id 0, R$ 1299, all six")
+check(bundle.Id == passIds.PG_ArmoryPass and bundle.RobuxPrice == 1299 and #bundle.WeaponIds == 6 and #bundle.BundlePassKeys == 6, "Armory Pass: live Id, R$ 1299, all six")
 check(#PG.UnlockedBy({ PG_ArmoryPass = true }) == 6 and #PG.UnlockedBy({ PG_Quake = true }) == 1 and PG.UnlockedBy({ PG_Quake = true })[1] == "QuakeLauncher", "UnlockedBy: bundle = 6, a single = its gun")
 local six = {}
 for k in pairs(prices) do if k ~= "PG_ArmoryPass" then six[k] = true end end
@@ -227,14 +228,12 @@ for id in pairs(want) do check(GM.Dps(W[id]) <= best, id .. " DPS " .. string.fo
 local PS = require(node("Services/PremiumGunService"))
 local prof = { Weapons = { StarterRifle = true } }
 local s1, sub1, act1 = PS.CaseState(prof, PG.Guns[1])
-check(s1 == "Soon" and act1 == "", "case: pass Id 0 -> SOON, no prompt")
-MC.GamePasses.PG_Sovereign.Id = 123
+check(s1 == "Buy" and act1 == PS.BuyText(99) and act1 == "Buy - R$ 99", "case: live pass -> " .. act1)
 local s2, _, act2 = PS.CaseState(prof, PG.Guns[1])
-check(s2 == "Buy" and act2 == PS.BuyText(99) and act2 == "Buy - R$ 99", "case: a real Id -> " .. act2)
+check(s2 == "Buy" and act2 == "Buy - R$ 99", "case: non-owner sees price -> " .. act2)
 prof.Weapons.SovereignPistol = true
 local s3, sub3, act3 = PS.CaseState(prof, PG.Guns[1])
 check(s3 == "Owned" and act3 == "Equip" and sub3 == "OWNED", "case: owned -> Equip")
-MC.GamePasses.PG_Sovereign.Id = 0
 local grants, dirty, synced = {}, 0, 0
 local profiles = { [470626172] = { Weapons = { StarterRifle = true } }, [5] = { Weapons = { StarterRifle = true } } }
 local passCb
@@ -254,9 +253,9 @@ passCb(owner, "PG_ArmoryPass", "join")
 local n = 0
 for id in pairs(want) do if profiles[470626172].Weapons[id] then n += 1 end end
 check(n == 6, "the Armory Pass grants all six (" .. n .. ")")
--- v136 (Code Bot Roblox): the shipped config is OwnerFirst = false (everyone); the owner-first rule is still tested
+-- v137 (Code Bot Roblox): the shipped config is OwnerFirst = false (everyone); the owner-first rule is still tested
 local launched = PG.Live.OwnerFirst
-check(launched == false, "v136 launch: PremiumGunsConfig.Live.OwnerFirst = false (everyone)")
+check(launched == false, "v137 live: PremiumGunsConfig.Live.OwnerFirst = false (everyone)")
 PG.Live.OwnerFirst = true
 passCb(other, "PG_Havoc", "purchase")
 check(profiles[5].Weapons.HavocRotary == nil, "not live for another player (owner-first): no grant")
@@ -264,8 +263,9 @@ passCb(owner, "VIP", "join")
 check(synced == 2, "an unrelated pass grants nothing")
 PG.Live.OwnerFirst = launched
 passCb(other, "PG_Havoc", "purchase")
-check(profiles[5].Weapons.HavocRotary == true and synced == 3, "v136 launch: live for another player: a bought pass grants his gun")
-check(PS.CaseState(profiles[5], PG.Guns[2]) == "Soon", "v136 launch: another player sees SOON on an Id-0 case (never prompted)")
+check(profiles[5].Weapons.HavocRotary == true and synced == 3, "v137 live: live for another player: a bought pass grants his gun")
+local otherState, _, otherAction = PS.CaseState(profiles[5], PG.Guns[2])
+check(otherState == "Buy" and otherAction == "Buy - R$ 249", "v137 live: another player sees a price, not SOON")
 
 -- ── 5. placement ──
 local BL = require(node("Configs/BaseLayoutConfig"))

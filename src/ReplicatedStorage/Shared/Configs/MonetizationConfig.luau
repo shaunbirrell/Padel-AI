@@ -216,7 +216,7 @@ local MonetizationConfig = {
 		-- armory case shows SOON and never prompts. TODO(owner): create each pass on the Creator Hub, paste the Id.
 		-- BundlePassKeys = the other pass that also unlocks the gun (the Armory Pass). Not in RolloutKeys (Id 0).
 		PG_Sovereign = {
-			Id = 0,
+			Id = 2002154652,
 			DisplayName = "Sovereign Gold Pistol",
 			RobuxPrice = 99,
 			WeaponIds = { "SovereignPistol" },
@@ -225,7 +225,7 @@ local MonetizationConfig = {
 			Description = "Gold burst pistol: 2-shot bursts",
 		},
 		PG_Quake = {
-			Id = 0,
+			Id = 2003492417,
 			DisplayName = "Quake Grenade Launcher",
 			RobuxPrice = 249,
 			WeaponIds = { "QuakeLauncher" },
@@ -234,7 +234,7 @@ local MonetizationConfig = {
 			Description = "6-round drum of lobbed grenades",
 		},
 		PG_Longshot = {
-			Id = 0,
+			Id = 2003180431,
 			DisplayName = "Longshot Sniper",
 			RobuxPrice = 299,
 			WeaponIds = { "LongshotSniper" },
@@ -243,7 +243,7 @@ local MonetizationConfig = {
 			Description = "Scoped sniper: 110 damage, 600 range",
 		},
 		PG_Havoc = {
-			Id = 0,
+			Id = 2002250646,
 			DisplayName = "Havoc Rotary Gun",
 			RobuxPrice = 349,
 			WeaponIds = { "HavocRotary" },
@@ -252,7 +252,7 @@ local MonetizationConfig = {
 			Description = "Spin-up rotary gun, 150-round belt",
 		},
 		PG_Thunderhead = {
-			Id = 0,
+			Id = 1999305818,
 			DisplayName = "Thunderhead Rocket Launcher",
 			RobuxPrice = 399,
 			WeaponIds = { "ThunderheadLauncher" },
@@ -261,7 +261,7 @@ local MonetizationConfig = {
 			Description = "Fires a 2-rocket salvo",
 		},
 		PG_Tempest = {
-			Id = 0,
+			Id = 2002682646,
 			DisplayName = "Tempest Railgun",
 			RobuxPrice = 499,
 			WeaponIds = { "TempestRailgun" },
@@ -270,7 +270,7 @@ local MonetizationConfig = {
 			Description = "Charged shot that pierces 3 targets",
 		},
 		PG_ArmoryPass = {
-			Id = 0,
+			Id = 2002868467,
 			DisplayName = "Armory Pass",
 			RobuxPrice = 1299,
 			WeaponIds = { "SovereignPistol", "QuakeLauncher", "LongshotSniper", "HavocRotary", "ThunderheadLauncher", "TempestRailgun" },
