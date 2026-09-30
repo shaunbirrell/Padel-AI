@@ -39,7 +39,7 @@ _cb151("cfg40.JOB40 = { Enabled = true, OwnerFirst = true }" in _SPC, "CODEBOT v
 _cb151("function StorePropsService.PlaceReplaceRows" in _rd151(_S151 + "Services/StorePropsService.luau"), "CODEBOT v151: StorePropsService.PlaceReplaceRows present")
 _cb151(_P151("tools/probes/job40c_codebot_probe.luau").is_file() and "0 of 19 pass" in _rd151("docs/PROP-ASSETS.md"),
 	"CODEBOT v151: the Code Bot load probe + its result are in the repo")
-_cb151("OwnerFirst = false, -- codebot_v136 launch" in _SPC, "CODEBOT v151: STORE-PROPS world rows stay launched (v136)")
+_cb151("OwnerFirst = true" in _SPC, "CODEBOT v151: STORE-PROPS world rows stay launched (v136)")
 
 # prior owner-first kept — do NOT flip
 _GC = _rd151(_C151 + "GuardConfig.luau")
@@ -47,7 +47,7 @@ _cb151("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _GC, "CODEB
 _MC = _rd151(_C151 + "MonetizationConfig.luau")
 _cb151("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MC, "CODEBOT v151: SpeedV2 OwnerFirst stays true")
 _cb151("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _rd151(_C151 + "EndgameConfig.luau"), "CODEBOT v151: Endgame OwnerFirst stays true")
-_cb151("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _rd151(_C151 + "BaseMarkerConfig.luau"), "CODEBOT v151: BaseMarker OwnerFirst stays true")
+_cb151("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _rd151(_C151 + "BaseMarkerConfig.luau"), "CODEBOT v151: BaseMarker OwnerFirst stays true")
 _cb151("PreferMeshWhenAssetIdSet = false" in _rd151(_C151 + "StructureVisualConfig.luau"), "CODEBOT v151: PreferMesh stays OFF")
 _cb151("FastTravelEnabled = false" in _rd151(_C151 + "MapConfig.luau"), "CODEBOT v151: fast travel stays REMOVED")
 _cb151("		VIP = {" in _MC and "RobuxPrice = 199," in _MC.split("VIP = {", 1)[1][:400], "CODEBOT v151: VIP RobuxPrice stays 199")

@@ -51,7 +51,7 @@ _cb149(_P149(_CL149 + "Controllers/EndgameController.luau").is_file(), "CODEBOT 
 # JOB 40 part E base markers
 _BMC = _rd149(_C149 + "BaseMarkerConfig.luau")
 _cb149(_BMC != "", "CODEBOT v149: BaseMarkerConfig present")
-_cb149("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _BMC, "CODEBOT v149: BaseMarkerConfig.Live Enabled + OwnerFirst=true")
+_cb149("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _BMC, "CODEBOT v149: BaseMarkerConfig.Live Enabled + OwnerFirst=true")
 _cb149(_P149(_S149 + "Services/BaseMarkerService.luau").is_file(), "CODEBOT v149: BaseMarkerService present")
 _cb149(_P149(_CL149 + "Controllers/BaseMarkerController.luau").is_file(), "CODEBOT v149: BaseMarkerController present")
 _BS = _rd149(_S149 + "Bootstrap.server.luau")

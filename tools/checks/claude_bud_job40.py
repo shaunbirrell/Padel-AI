@@ -43,7 +43,7 @@ _CF = "src/ReplicatedStorage/Shared/Configs/"
 _BMC = _j40_src(_CF + "BaseMarkerConfig.luau")
 _BMS = _j40_code(_SV + "Services/BaseMarkerService.luau")
 _BMK = _j40_code(_CL + "Controllers/BaseMarkerController.luau")
-_j40("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- only UserId 470626172" in _BMC and "RetentionConfig.Live(BaseMarkerConfig.Live, userId)" in _BMC,
+_j40("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false, -- live for everyone" in _BMC and "RetentionConfig.Live(BaseMarkerConfig.Live, userId)" in _BMC,
      "E: one owner-first kill switch (BaseMarkerConfig.Live, by viewer)")
 # JOB 40E FIX: retired "HeightStuds = 70," (the owner: too low / too big); replacement: high, slim, capped, never empty
 _j40("MaxDistance = 5000," in _BMC and "HeightStuds = 150," in _BMC and "HideInsideStuds = 60," in _BMC and "FadeInsideStuds = 90," in _BMC

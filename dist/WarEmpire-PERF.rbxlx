@@ -2430,7 +2430,7 @@ local RetentionConfig = require(script.Parent.RetentionConfig)
 local BaseMarkerConfig = {
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) sees markers until Code Bot sets false = everyone
+		OwnerFirst = false, -- live for everyone
 	},
 	FolderName = "WE_BaseMarkers", -- ReplicatedStorage (streaming-safe: never a workspace lookup on the client)
 	RefreshSeconds = 5, -- the server's fallback refresh (claims / leaves / nation / rebirth also push at once)
@@ -14392,7 +14392,7 @@ export type ZoneRow = { Id: number, L0: number, L1: number, X: number, Z: number
 
 local StorePropsConfig = {
 	Enabled = true, -- KILL SWITCH: false = no store props anywhere (the Part builds as before)
-	OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
+	OwnerFirst = true, -- owner-first rollout rail; unchanged for this publish
 	World = true, -- the site / area dressing
 	ZonesOn = true, -- the rebirth zone upgrade visuals
 	LiveAttribute = "WE_StorePropsOff", -- Workspace attribute: true = remove every copy now
@@ -29493,7 +29493,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 154)
+		player:SetAttribute("WE_Build", 155)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -71477,7 +71477,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 154)
+			player:SetAttribute("WE_Build", 155)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -79917,7 +79917,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 154)
+		player:SetAttribute("WE_Build", 155)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -80059,7 +80059,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=154",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=155",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)

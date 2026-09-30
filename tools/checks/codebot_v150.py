@@ -61,7 +61,7 @@ _cb150(_P150("tools/sim/run_speed_test.py").is_file(), "CODEBOT v150: run_speed_
 _EC = _rd150(_C150 + "EndgameConfig.luau")
 _cb150("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _EC, "CODEBOT v150: EndgameConfig.Live OwnerFirst stays true")
 _BMC = _rd150(_C150 + "BaseMarkerConfig.luau")
-_cb150("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _BMC, "CODEBOT v150: BaseMarkerConfig.Live OwnerFirst stays true")
+_cb150("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _BMC, "CODEBOT v150: BaseMarkerConfig.Live OwnerFirst stays true")
 _AOC = _rd150(_C150 + "ArmyOrdersConfig.luau")
 _cb150("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _AOC, "CODEBOT v150: ArmyOrdersConfig OwnerFirst stays true")
 _cb150("OwnerFirst = false, -- codebot_v142 launch" in _rd150(_C150 + "ShopOverhaulConfig.luau"), "CODEBOT v150: ShopOverhaul stays OwnerFirst=false")

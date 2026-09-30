@@ -26,14 +26,14 @@ _C154 = "src/ReplicatedStorage/Shared/Configs/"
 _CL154 = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for _f in (_S154 + "Services/DataService.luau", _S154 + "Services/BaseService.luau", _S154 + "EarlyRemotes.server.luau"):
-	_cb154('SetAttribute("WE_Build", 154)' in _rd154(_f), "CODEBOT v154: WE_Build=154 " + _f.rsplit("/", 1)[-1])
-_cb154("WE_Build=154" in _rd154(_S154 + "Services/DataService.luau"), "CODEBOT v154: DataService profile-loaded log says WE_Build=154")
+	_cb154('SetAttribute("WE_Build", 155)' in _rd154(_f), "CODEBOT v154: WE_Build=155 " + _f.rsplit("/", 1)[-1])
+_cb154("WE_Build=155" in _rd154(_S154 + "Services/DataService.luau"), "CODEBOT v154: DataService profile-loaded log says WE_Build=155")
 
 _BMC = _rd154(_C154 + "BaseMarkerConfig.luau")
 _BMK = _rd154(_CL154 + "BaseMarkerController.luau")
 
 # OwnerFirst MUST stay true (do not flip without owner ask)
-_cb154("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _BMC, "CODEBOT v154: BaseMarker OwnerFirst stays true")
+_cb154("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _BMC, "CODEBOT v154: BaseMarker OwnerFirst stays true")
 
 # JOB 40E fix: high slim tags, never empty
 _cb154("HeightStuds = 150," in _BMC and "HeightPerStud = 0.06," in _BMC and "MaxHeightStuds = 260," in _BMC,

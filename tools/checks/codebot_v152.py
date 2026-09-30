@@ -60,7 +60,7 @@ _cb152("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _rd152(_C15
 _MC = _rd152(_C152 + "MonetizationConfig.luau")
 _cb152("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MC, "CODEBOT v152: SpeedV2 OwnerFirst stays true")
 _cb152("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _rd152(_C152 + "EndgameConfig.luau"), "CODEBOT v152: Endgame OwnerFirst stays true")
-_cb152("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _rd152(_C152 + "BaseMarkerConfig.luau"), "CODEBOT v152: BaseMarker OwnerFirst stays true")
+_cb152("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _rd152(_C152 + "BaseMarkerConfig.luau"), "CODEBOT v152: BaseMarker OwnerFirst stays true")
 _cb152("PreferMeshWhenAssetIdSet = false" in _rd152(_C152 + "StructureVisualConfig.luau"), "CODEBOT v152: PreferMesh stays OFF")
 _cb152("FastTravelEnabled = false" in _rd152(_C152 + "MapConfig.luau"), "CODEBOT v152: fast travel stays REMOVED")
 _cb152("		VIP = {" in _MC and "RobuxPrice = 199," in _MC.split("VIP = {", 1)[1][:400], "CODEBOT v152: VIP RobuxPrice stays 199")

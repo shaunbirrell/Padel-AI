@@ -29,7 +29,7 @@ local RetentionConfig = require(script.Parent.RetentionConfig)
 local BaseMarkerConfig = {
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) sees markers until Code Bot sets false = everyone
+		OwnerFirst = false, -- live for everyone
 	},
 	FolderName = "WE_BaseMarkers", -- ReplicatedStorage (streaming-safe: never a workspace lookup on the client)
 	RefreshSeconds = 5, -- the server's fallback refresh (claims / leaves / nation / rebirth also push at once)
