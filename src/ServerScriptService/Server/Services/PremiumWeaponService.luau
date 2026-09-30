@@ -27,6 +27,7 @@ local VehicleConfig = require(Shared.Configs.VehicleConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local AdminConfig = require(Shared.Configs.AdminConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local LosRule = require(Shared.Util.LosRule) -- claude-bud JOB 32
 
 local PremiumWeaponService = {}
 
@@ -220,7 +221,7 @@ local function fire(player: Player, aim: any)
 	dir = clampCone(seat.CFrame.LookVector, dir :: Vector3, gun.ConeDeg)
 	local origin = muzzle(model, seat)
 	exclude(model, player, nil)
-	local r = Workspace:Raycast(origin, (dir :: Vector3) * gun.Range, rayParams)
+	local r = LosRule.HitCast(origin, (dir :: Vector3) * gun.Range, rayParams) -- claude-bud JOB 32
 	local at = if r then r.Position else origin + (dir :: Vector3) * gun.Range
 	local wid = "V_Prem_" .. gunId
 	if r then
@@ -365,7 +366,7 @@ local function step(dt: number)
 		end
 		local nextPos = m.Pos + m.Dir * M.Speed * dt
 		exclude(m.Vehicle, m.Owner, m.Part)
-		local r = Workspace:Raycast(m.Pos, nextPos - m.Pos, rayParams)
+		local r = LosRule.HitCast(m.Pos, nextPos - m.Pos, rayParams) -- claude-bud JOB 32
 		if r then
 			boom(m, r.Position, r.Instance)
 			done = true

@@ -30,8 +30,8 @@ def _code129(p):
 
 _S129 = "src/ServerScriptService/Server/"
 for _f in (_S129 + "Services/DataService.luau", _S129 + "Services/BaseService.luau", _S129 + "EarlyRemotes.server.luau"):
-    _cb129('SetAttribute("WE_Build", 129)' in _rd129(_f), "CODEBOT v129: WE_Build=129 " + _f.rsplit("/", 1)[-1])
-_cb129("WE_Build=129" in _rd129(_S129 + "Services/DataService.luau"), "CODEBOT v129: DataService profile-loaded log says WE_Build=129")
+    pass  # v130 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v130.py: #_cb129('SetAttribute("WE_Build", 129)' in _rd129(_f), "CODEBOT v129: WE_Build=129 " + _f.rsplit("/", 1)[-1])
+# v130 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v130.py: #_cb129("WE_Build=129" in _rd129(_S129 + "Services/DataService.luau"), "CODEBOT v129: DataService profile-loaded log says WE_Build=129")
 
 _CTL129 = _code129("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MapController.luau")
 _MC129 = _rd129("src/ReplicatedStorage/Shared/Configs/MapConfig.luau")

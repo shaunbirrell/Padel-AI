@@ -29,6 +29,7 @@ local AdminConfig = require(Shared.Configs.AdminConfig)
 local FormationController = require(Shared.Util.FormationController)
 local SoldierController = require(script.Parent.SoldierController)
 local ArmyFollow = require(script.Parent.ArmyFollow)
+local Enterables = require(script.Parent.Enterables) -- claude-bud JOB 32: owner indoors -> the army waits at the door
 
 local ArmyController = {}
 ArmyController.Stats = { Ticks = 0, Errors = 0, AuditFixes = 0, SlotChanges = 0 }
@@ -414,6 +415,25 @@ local function stepArmy(player: Player, st: any, now: number)
 	if jumped or seated then
 		ownerVelNow = vel
 	end
+	-- claude-bud JOB 32: inside / on top of an enterable building -> plan round the street point outside its door,
+	-- facing the building (the block forms behind that point, out in the street); no speed, so nothing snaps or recovers
+	local lookVec = proot.CFrame.LookVector
+	local indoorCfg: any = (ArmyConfig :: any).Indoors
+	local held = if typeof(indoorCfg) == "table" and indoorCfg.Enabled == true then Enterables.At(pos) else nil
+	if held then
+		pos = Vector3.new(held.Door.X, held.Door.Y + 3, held.Door.Z) -- street level (a root is ~3 above the ground)
+		lookVec = held.Face
+		vel = Vector3.zero
+		ownerVelNow = Vector3.zero
+		if a.HeldAt ~= held.Id then
+			a.HeldAt = held.Id
+			if debugOn then
+				warn(string.format("[ArmyDebug] %s is inside %s: the army holds at its door", player.Name, held.Id))
+			end
+		end
+	elseif a.HeldAt ~= nil then
+		a.HeldAt = nil
+	end
 	-- (FOLLOW <-> ATTACK keeps the block: no restart; only a spell under HOLD / RETREAT restarts it behind him)
 	local snap = jumped or fresh or prevState ~= "FOLLOW" and not (wasDriven and (prevState == "ATTACK" or prevState == "FOLLOW"))
 	a.Driven = true
@@ -421,7 +441,13 @@ local function stepArmy(player: Player, st: any, now: number)
 	local tgt = if attackOn then st._acTarget else nil
 	local troot: BasePart? = if tgt then tgt.Root else nil
 	a.F.Attack = if troot and troot.Parent then { Pos = troot.Position } else nil
-	local plans, _frames, cols, last = FormationController.Plan(a.F, living, pos, proot.CFrame.LookVector, vel, dt, snap, escOf, c, ownerVelNow)
+	local plans: any, _frames: any, cols: any, last: any
+	if held then
+		-- claude-bud JOB 32: held at a door: the block faces the building from the street
+		plans, _frames, cols, last = FormationController.Plan(a.F, living, pos, lookVec, vel, dt, snap, escOf, c, ownerVelNow)
+	else
+		plans, _frames, cols, last = FormationController.Plan(a.F, living, pos, proot.CFrame.LookVector, vel, dt, snap, escOf, c, ownerVelNow)
+	end
 	local key = tostring(cols) .. "x" .. tostring(last + 1)
 	if a.LayoutKey ~= nil and a.LayoutKey ~= key then
 		warn(string.format("[ArmyDebug] LAYOUT CHANGE %s %s -> %s (columns x rows; roster / escort count changed)", player.Name, a.LayoutKey, key))

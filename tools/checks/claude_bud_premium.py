@@ -42,7 +42,8 @@ for _need, _label in (
     ("if t - (lastFire[model] or -math.huge) < 0.9 / math.max(0.1, gun.FireRate) then", "gun fire rate"),
     ("if t - (lastMissile[model] or -math.huge) < M.Cooldown then", "missile cooldown"),
     ("dir = clampCone(seat.CFrame.LookVector, dir :: Vector3, gun.ConeDeg)", "aim clamped to the gun's cone"),
-    ("local r = Workspace:Raycast(origin, (dir :: Vector3) * gun.Range, rayParams)", "server raycast from the muzzle (range + line of sight)"),
+    # claude-bud JOB 32: the shot goes through the one shot rule (Shared/Util/LosRule)
+    ("local r = LosRule.HitCast(origin, (dir :: Vector3) * gun.Range, rayParams)", "server raycast from the muzzle (range + line of sight)"),
     ("if cs == nil or cs.ApplyHit == nil or friendly(player, inst) then", "friendly fire off (self, own vehicles, clan allies)"),
     ("pcall(cs.ApplyHit, player, inst, amount, {", "damage through CombatService.ApplyHit (PvP / shields / protection)"),
     ("local target = pickTarget(player, model, origin, dir :: Vector3)", "the server picks the missile lock"),

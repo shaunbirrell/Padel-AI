@@ -2,6 +2,7 @@
 --[[ Raycast + damage math + creator tags for CombatService. ]]
 
 local Workspace = game:GetService("Workspace")
+local LosRule = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared", 60).Util.LosRule) -- claude-bud JOB 32: the one shot / sight rule
 
 local CombatDamage = {}
 
@@ -21,7 +22,7 @@ function CombatDamage.Raycast(origin: Vector3, direction: Vector3, range: number
 	params.FilterDescendantsInstances = ignore
 	params.IgnoreWater = true
 	local unit = if direction.Magnitude > 1e-4 then direction.Unit else Vector3.new(0, 0, -1)
-	return Workspace:Raycast(origin, unit * range, params)
+	return LosRule.HitCast(origin, unit * range, params) -- claude-bud JOB 32 (the plain raycast while the rule is off)
 end
 
 --[[ Line of sight (same pattern as GateDefenseService.hasLos): a ray from `fromPos` to `toPos` that excludes
@@ -45,9 +46,11 @@ function CombatDamage.LineOfSight(
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = ignore
 	params.IgnoreWater = true
-	params.RespectCanCollide = respectCanCollide == true
+	-- claude-bud JOB 32: a sight check (no target) never stops on non-colliding parts; a check that must reach the
+	-- target is a shot (LosRule.HitCast: it can stop on the target's limbs, never on see-through decor)
+	params.RespectCanCollide = if target == nil then LosRule.SightRespect(respectCanCollide == true) else respectCanCollide == true
 	local reach = if target then len + math.max(0, pastStuds or 0) else len
-	local hit = Workspace:Raycast(fromPos, delta.Unit * reach, params)
+	local hit = if target then LosRule.HitCast(fromPos, delta.Unit * reach, params) else Workspace:Raycast(fromPos, delta.Unit * reach, params)
 	if target == nil then
 		return hit == nil
 	end

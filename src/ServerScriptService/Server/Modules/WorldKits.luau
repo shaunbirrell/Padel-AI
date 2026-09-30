@@ -86,6 +86,7 @@ local Workspace = game:GetService("Workspace")
 local Configs = ReplicatedStorage.Shared.Configs
 local WorldConfig = require(Configs.WorldConfig)
 local WorldDetailConfig = require(Configs.WorldDetailConfig) -- claude-bud JOB 31: detailed props (kill switch)
+local PlazaBuildingsConfig = require(Configs.PlazaBuildingsConfig) -- claude-bud JOB 32: enterable plaza buildings
 local WorldTerrain = require(script.Parent.WorldTerrain)
 local WorldLabel = require(ReplicatedStorage.Shared.Util.WorldLabel)
 
@@ -1517,6 +1518,20 @@ end
 -- WorldKits.DetailSpecs (the headless kit test checks them).
 local Detail: { [string]: (b: B) -> boolean } = {}
 
+-- claude-bud JOB 31 / 32: the parts each cluster holds BEYOND its plain kits (detail + enterable buildings). Every
+-- caller's budget counts the plain kits: Finish reports parts minus this, and WorldPOI / WorldFill subtract it from
+-- what they measure, so the allowances (MaxExtraParts) are the only growth and no row is dropped for it.
+local extraBy: { [Instance]: number } = setmetatable({}, { __mode = "k" }) :: any
+function WorldKits.ExtraParts(inst: Instance): number
+	local n = extraBy[inst] or 0
+	for _, d in ipairs(inst:GetDescendants()) do
+		if d:IsA("Model") then
+			n += extraBy[d] or 0
+		end
+	end
+	return n
+end
+
 local function wheelZ(b: B, name: string, x: number, y: number, z: number, d: number, t: number, color: Color3)
 	-- a wheel on an axle along Z (a Cylinder's axis is X: turned 90 about Y); never collides (the track / body does)
 	put(b, name, Vector3.new(t, d, d), CFrame.new(x, y, z) * rotY(90), color, M.CorrodedMetal, false, false, Enum.PartType.Cylinder)
@@ -1739,6 +1754,117 @@ local function tryDetail(kitId: string, b: B): boolean
 	end
 	WorldKits.DetailStats.Extra += extra
 	WorldKits.DetailStats.Kits += 1
+	extraBy[b.Cluster] = (extraBy[b.Cluster] or 0) + extra
+	return true
+end
+
+-- ── claude-bud JOB 32: the enterable PlazaHouse (PlazaBuildingsConfig) ─────────────────────────────────────────────
+-- a wall along local X (centre-bottom at cf, thickness T in Z) with openings { c = centre, w = width, b = bottom,
+-- t = top } (heights from the wall base): full-height piers between, a lintel above and a sill below each opening.
+-- The openings are GAPS: nothing stops a shot or a look through them.
+local PH = { W = 17.6, D = 17.4, T = 0.8, H = 11 }
+
+local function wallOpen(b: B, name: string, cf: CFrame, len: number, height: number, openings: { { c: number, w: number, b: number, t: number } }, color: Color3, mat: Enum.Material)
+	table.sort(openings, function(x, y)
+		return x.c < y.c
+	end)
+	local T = PH.T
+	local x = -len * 0.5
+	local function piece(x0: number, x1: number, y0: number, y1: number)
+		if x1 - x0 > 0.05 and y1 - y0 > 0.05 then
+			put(b, name, Vector3.new(x1 - x0, y1 - y0, T), cf * CFrame.new((x0 + x1) * 0.5, (y0 + y1) * 0.5, 0), color, mat, true)
+		end
+	end
+	for _, o in ipairs(openings) do
+		local o0, o1 = o.c - o.w * 0.5, o.c + o.w * 0.5
+		piece(x, o0, 0, height)
+		piece(o0, o1, o.t, height)
+		piece(o0, o1, 0, o.b)
+		x = o1
+	end
+	piece(x, len * 0.5, 0, height)
+end
+
+-- 55 parts; see PlazaBuildingsConfig. Front (door) toward local -Z, like the TownHouse it replaces.
+Builders.PlazaHouse = function(b: B)
+	local W, D, T, H = PH.W, PH.D, PH.T, PH.H
+	local wallC = b.Opts.Color or PAL.AdobeLight
+	local wm = M.Concrete
+	local win1 = function(c: number)
+		return { c = c, w = 3.6, b = 4, t = 7.4 }
+	end
+	local win2 = function(c: number)
+		return { c = c, w = 3.6, b = 3.5, t = 7 }
+	end
+	for storey = 1, 2 do
+		local y0 = (storey - 1) * H
+		local front = if storey == 1 then { { c = 0, w = 6, b = 0, t = 8 }, win1(-5.4), win1(5.4) } else { win2(-5.4), win2(0), win2(5.4) }
+		wallOpen(b, "PlazaWall", CFrame.new(0, y0, -D * 0.5 + T * 0.5), W, H, front, wallC, wm)
+		wallOpen(b, "PlazaWall", CFrame.new(0, y0, D * 0.5 - T * 0.5), W, H, if storey == 1 then {} else { win2(0) }, wallC, wm)
+		wallOpen(b, "PlazaWall", CFrame.new(-W * 0.5 + T * 0.5, y0, 0) * rotY(90), D - 2 * T, H, { if storey == 1 then win1(2) else win2(0) }, wallC, wm)
+		-- the stair side: solid downstairs (the ramp runs along it), a window upstairs
+		wallOpen(b, "PlazaWall", CFrame.new(W * 0.5 - T * 0.5, y0, 0) * rotY(90), D - 2 * T, H, if storey == 1 then {} else { win2(0) }, wallC, wm)
+	end
+	local ix, iz = W * 0.5 - T, D * 0.5 - T -- the inside half-extents (8.0, 7.9)
+	-- ground floor, the upper floor with the stair hole (x 4.2 .. 8.0, z -5.5 .. 6.5), the roof with the hatch
+	put(b, "PlazaFloor", Vector3.new(ix * 2, 0.3, iz * 2), CFrame.new(0, 0.15, 0), PAL.WoodDark, M.WoodPlanks, true)
+	local fy = H + 0.2 -- the upper floor's centre (top 11.4)
+	put(b, "PlazaFloor", Vector3.new(4.2 + ix, 0.4, iz * 2), CFrame.new((-ix + 4.2) * 0.5, fy, 0), PAL.WoodDark, M.WoodPlanks, true)
+	put(b, "PlazaFloor", Vector3.new(ix - 4.2, 0.4, iz - 5.5), CFrame.new((4.2 + ix) * 0.5, fy, (-iz - 5.5) * 0.5), PAL.WoodDark, M.WoodPlanks, true)
+	put(b, "PlazaFloor", Vector3.new(ix - 4.2, 0.4, iz - 6.5), CFrame.new((4.2 + ix) * 0.5, fy, (iz + 6.5) * 0.5), PAL.WoodDark, M.WoodPlanks, true)
+	-- the ramp: a wedge rising toward +Z (its sloped face looks to -Z), foot at z -5.5, top at z 6.5 on the upper floor
+	put(b, "PlazaStair", Vector3.new(ix - 4.4, H + 0.4, 12), CFrame.new((4.4 + ix) * 0.5, (H + 0.4) * 0.5, 0.5), PAL.Wood, M.WoodPlanks, true, false, Enum.PartType.Wedge)
+	put(b, "PlazaRail", Vector3.new(0.3, 3, 10.5), CFrame.new(4.2, H + 0.4 + 1.5, -0.25), PAL.SteelDark, M.Metal, true)
+	local roofY = 2 * H + 0.4 -- the roof slab's centre (top 22.8)
+	put(b, "PlazaRoof", Vector3.new(W * 0.5 + 5.4, 0.8, D), CFrame.new((-5.4 + W * 0.5) * 0.5, roofY, 0), PAL.Concrete, M.Concrete, true, true)
+	put(b, "PlazaRoof", Vector3.new(W * 0.5 - 5.4, 0.8, D * 0.5 + 5.3), CFrame.new((-W * 0.5 - 5.4) * 0.5, roofY, (-D * 0.5 + 5.3) * 0.5), PAL.Concrete, M.Concrete, true)
+	truss(b, "PlazaLadder", 14, CFrame.new(-6.7, H + 0.4 + 7, 6.6), PAL.SteelDark)
+	-- the parapet (chest-high cover) and two sandbag rows at the front corners
+	local py = roofY + 0.4 + 1.6
+	put(b, "PlazaParapet", Vector3.new(W, 3.2, 0.6), CFrame.new(0, py, -D * 0.5 + 0.3), PAL.AdobeDark, M.Concrete, true)
+	put(b, "PlazaParapet", Vector3.new(W, 3.2, 0.6), CFrame.new(0, py, D * 0.5 - 0.3), PAL.AdobeDark, M.Concrete, true)
+	put(b, "PlazaParapet", Vector3.new(0.6, 3.2, D - 1.2), CFrame.new(-W * 0.5 + 0.3, py, 0), PAL.AdobeDark, M.Concrete, true)
+	put(b, "PlazaParapet", Vector3.new(0.6, 3.2, D - 1.2), CFrame.new(W * 0.5 - 0.3, py, 0), PAL.AdobeDark, M.Concrete, true)
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaSandbags", Vector3.new(3.5, 1.2, 1.2), CFrame.new(5.2 * s, roofY + 1.0, -D * 0.5 + 1.4), PAL.Sandbag, M.Sand, true)
+	end
+	-- cover inside
+	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-5, 1.3, 3) * rotY(10), PAL.CrateOlive, M.Wood, true)
+	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-2.5, 1.3, 5.6) * rotY(-8), PAL.Crate, M.Wood, true)
+	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-4, H + 1.4, -4) * rotY(20), PAL.CrateOlive, M.Wood, true)
+end
+
+WorldKits.DetailSpecs.PlazaHouse = 55
+WorldKits.PlazaStats = { Built = 0, Extra = 0, Plain = 0 }
+
+-- claude-bud JOB 32: a TownHouse row flagged Enterable (its cluster's WE_Enterable, set by WorldPOI from
+-- PlazaBuildingsConfig.Rows; or opts.Enterable) builds the PlazaHouse
+-- instead, when the switch is on and its allowance has room; true = built (the caller returns the TownHouse count)
+local function tryPlaza(kitId: string, b: B): boolean
+	local cfgP: any = PlazaBuildingsConfig
+	local flagged = (b.Opts :: any).Enterable == true or b.Cluster:GetAttribute("WE_Enterable") == true
+	if kitId ~= "TownHouse" or not flagged or cfgP.Enabled ~= true then
+		return false
+	end
+	local plain = WorldKits.Footprint(kitId, b.Opts)
+	local plainN = if plain then plain.Parts else 0
+	local extra = (tonumber(cfgP.Parts) or 55) - plainN
+	if WorldKits.PlazaStats.Extra + extra > math.max(0, tonumber(cfgP.MaxExtraParts) or 0) then
+		WorldKits.PlazaStats.Plain += 1
+		return false
+	end
+	local before = #b.Parts
+	Builders.PlazaHouse(b)
+	local ex = (#b.Parts - before) - plainN
+	WorldKits.PlazaStats.Extra += ex
+	extraBy[b.Cluster] = (extraBy[b.Cluster] or 0) + ex
+	WorldKits.PlazaStats.Built += 1
+	local okE, Ent = pcall(function(): any
+		return require(script.Parent.Enterables)
+	end)
+	if okE and Ent and Ent.Register then
+		Ent.Register(tostring(b.Cluster.Name), b.CF, Vector3.new(PH.W, 2 * PH.H + 4.4, PH.D), tonumber(cfgP.DoorOutStuds) or 10)
+	end
 	return true
 end
 
@@ -1757,6 +1883,11 @@ function WorldKits.Add(cluster: Model, kitId: string, cf: CFrame, opts: KitOpts?
 	-- claude-bud JOB 31: the detailed build when WorldDetailConfig wants it and its allowance has room. It returns the
 	-- PLAIN count, so every caller's budget and cap (planned from Footprint, which stays plain) is unchanged; the
 	-- extra parts are counted once, in WorldKits.DetailStats.Extra (<= MaxExtraParts)
+	-- claude-bud JOB 32: an enterable plaza building instead of this TownHouse row (the TownHouse count is returned)
+	if tryPlaza(kitId, b) then
+		local plainH = WorldKits.Footprint(kitId, o)
+		return if plainH then plainH.Parts else #b.Parts
+	end
 	if tryDetail(kitId, b) then
 		local plain = WorldKits.Footprint(kitId, o)
 		return if plain then plain.Parts else #b.Parts
@@ -2170,7 +2301,8 @@ function WorldKits.Finish(cluster: Model, parent: Instance): ClusterInfo
 	if overlays and #overlays > 0 then
 		scheduleOverlays(cluster, overlays)
 	end
-	return { Ok = true, Parts = parts, Span = span, Lights = lights, Signs = signs, Reason = nil }
+	-- claude-bud JOB 31 / 32: the plain-kit count (the extras come out of their own allowances)
+	return { Ok = true, Parts = parts - (extraBy[cluster] or 0), Span = span, Lights = lights, Signs = signs, Reason = nil }
 end
 
 function WorldKits.Place(kitId: string, cf: CFrame, parent: Instance, opts: PlaceOpts): Model?

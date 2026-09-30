@@ -9579,3 +9579,14 @@ ds_territories.luau T3):
 - **"Rooftop sniper":** uses the Overwatch tower deck. JOB 32's enterable plaza roofs can host a second one.
 - **"Capture the depot":** the new Kestrel Supply Depot (clear the guards, then hold 30 s), not the West Depot outpost
   (that is a territory capture and already pays).
+
+## 2026-09-30 — claude-bud JOB 32: enterable plaza buildings, one LOS rule, army at the door
+- **Which buildings:** the 4 facing the flag, one per side. The rest stay solid mesh buildings (their collider can't be
+  hollowed without new art).
+- **Windows** are open gaps, not glass: "shots through windows work" for every shooter with no special case. The base
+  buildings' glass panes (WE_Building*) were not touched.
+- **The one LOS rule** is "solid parts block, non-colliding parts don't, shots can hit limbs". Player bullets therefore
+  now pass non-colliding decor (tarps, fronds, flat decals), the same as NPC / army / turret sight already did.
+- **Army:** it waits OUTSIDE the door, not on the ground floor. Pathing units up a 43-degree ramp and a ladder is where
+  they get stuck.
+- **Ramp slope:** relies on Roblox's default Humanoid MaxSlopeAngle (89 degrees); the ramp is 43.5 degrees.

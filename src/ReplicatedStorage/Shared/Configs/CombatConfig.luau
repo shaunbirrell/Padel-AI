@@ -198,4 +198,12 @@ function CombatConfig.LiveFor(block: any, userId: any): boolean
 	return false
 end
 
+--[[ claude-bud JOB 32: the ONE line-of-sight / shot rule for every shooter (Shared/Util/LosRule): a solid (CanCollide)
+	part stops a shot and blocks sight, a non-colliding one never does, water never does; a shot can also stop on a
+	character part (its target). Unified = false: every shooter keeps its old ray settings. ]]
+CombatConfig.LineOfSight = {
+	Unified = true,
+	MaxSkips = 6, -- a shot steps over at most this many see-through parts
+}
+
 return CombatConfig

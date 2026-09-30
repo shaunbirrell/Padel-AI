@@ -55,6 +55,13 @@ local function countParts(inst: Instance): number
 			n += 1
 		end
 	end
+	-- claude-bud JOB 31: the caps count the plain kits (detailed props' extras come out of WorldDetailConfig's allowance)
+	local okK, WK = pcall(function(): any
+		return require(script.Parent.WorldKits)
+	end)
+	if okK and WK and WK.ExtraParts then
+		n -= WK.ExtraParts(inst)
+	end
 	return n
 end
 

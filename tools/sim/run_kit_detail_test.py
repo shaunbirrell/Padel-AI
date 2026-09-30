@@ -94,6 +94,8 @@ Vector2 = { new = function(x, y) return { X = x, Y = y } end }
 -- Instance stand-in: a property bag
 local INST = {}
 INST.__index = function(t, k)
+  local own = rawget(t, "__props")[k]
+  if type(own) == "function" then return own end -- a test's per-object override
   if k == "SetAttribute" then return function(s, n, v) s.__attr[n] = v end end
   if k == "GetAttribute" then return function(s, n) return s.__attr[n] end end
   if k == "Destroy" then return function(s) rawset(s, "__destroyed", true); rawset(s, "Parent", nil) end end

@@ -1385,7 +1385,7 @@ requestFire = function()
 	local reach = if def then (tonumber(def.Range) or 496) + Feel.HitSlop else 500
 	-- streaming2 F30: this ray sees only what has streamed in here (a far wall may be missing), so HitPosition and the
 	-- target ids are hints; the server re-casts on the whole world and decides the hit
-	local result = Workspace:Raycast(origin, direction * reach, W2.shotFilter())
+	local result = (require(Shared.Util.LosRule) :: any).HitCast(origin, direction * reach, W2.shotFilter()) -- claude-bud JOB 32: the server's shot rule
 	if result then
 		payload.HitPosition = result.Position
 		local model = result.Instance:FindFirstAncestorOfClass("Model")

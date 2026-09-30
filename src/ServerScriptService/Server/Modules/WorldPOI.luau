@@ -546,6 +546,11 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 		local frame = CFrame.new(c.X, GROUND_Y, c.Z) * CFrame.Angles(0, math.rad(c.Yaw), 0)
 		local built: Built = { First = nil, Host = nil, Booths = {}, MissingBooths = 0 }
 		local signsHere = 0
+		-- claude-bud JOB 32: the plaza rows named in PlazaBuildingsConfig build the enterable PlazaHouse (WorldKits reads it)
+		local PBC: any = require(game:GetService("ReplicatedStorage").Shared.Configs.PlazaBuildingsConfig)
+		if PBC.Enabled == true and PBC.Rows[c.Id] == true then
+			model:SetAttribute("WE_Enterable", true)
+		end
 		for _, k in ipairs(c.Kits) do
 			local text = k.Text
 			if text == nil and k.Kit == "PoiBoard" then
@@ -587,8 +592,10 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 		if not hostOnly then
 			why = why or m.RoadWhy or m.Outside or circleWhy(poi, cx, cz, r)
 		end
-		if why == nil and not hostOnly and row.Parts + m.Parts > partsCap then
-			why = string.format("budget %d + %d > %d", row.Parts, m.Parts, partsCap)
+		-- claude-bud JOB 31 / 32: the budget counts the plain kits (detail / enterable extras have their own allowances)
+		local plainParts = m.Parts - WorldKits.ExtraParts(model)
+		if why == nil and not hostOnly and row.Parts + plainParts > partsCap then
+			why = string.format("budget %d + %d > %d", row.Parts, plainParts, partsCap)
 		end
 		if why == nil and row.Lights + m.Lights > lightsCap then
 			why = string.format("lights %d + %d > %d", row.Lights, m.Lights, lightsCap)

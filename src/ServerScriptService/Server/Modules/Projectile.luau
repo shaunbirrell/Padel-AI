@@ -14,6 +14,7 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local CombatFeelConfig = require(Shared.Configs.CombatFeelConfig)
+local LosRule = require(Shared.Util.LosRule) -- claude-bud JOB 32
 
 local Projectile = {}
 
@@ -103,7 +104,7 @@ local function step(rec: Record, now: number)
 	local pos1 = rec.O + rec.V * t1 + rec.G * (0.5 * t1 * t1)
 	local seg = pos1 - rec.Pos
 	if seg.Magnitude > 1e-3 then
-		local res = Workspace:Raycast(rec.Pos, seg, rec.Params)
+		local res = LosRule.HitCast(rec.Pos, seg, rec.Params) -- claude-bud JOB 32: the one shot rule
 		if res then
 			rec.Pos = res.Position
 			finish(rec, res.Position, res)

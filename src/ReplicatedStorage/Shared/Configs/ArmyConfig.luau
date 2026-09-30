@@ -666,4 +666,12 @@ function ArmyConfig.ThreatStandingFor(userId: any): boolean
 	return v == "owner" and AdminConfig.IsPlaytestOwner(userId) == true
 end
 
+--[[ claude-bud JOB 32: while the owner is inside (or on the roof of) an enterable building (Modules/Enterables: the
+	PlazaBuildingsConfig houses), FOLLOW forms the block up outside its door, facing it, instead of behind him. The
+	units never walk in, never climb the stair, and are never teleported: the owner's measured speed is zero while he is
+	held, so no jump / far / pace recovery fires. Enabled = false: the army follows him exactly as before. ]]
+ArmyConfig.Indoors = {
+	Enabled = true,
+}
+
 return ArmyConfig

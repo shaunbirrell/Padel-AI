@@ -1,4 +1,85 @@
 <!-- Q2-START -->
+## v130 (Code Bot Roblox, 2026-09-30): ship claude-bud JOB 32 enterable plaza + LosRule + army holds at door — FAST TRAVEL STILL OFF — MAP-REDESIGN KEPT
+- Cherry-picked Claude `e6a1b56` (JOB 32) onto phase-7-polish (v129 tip `937d197`). **WE_Build 130**. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged).
+- **Fast travel stays REMOVED** (v127 owner request). Kept `MapConfig.FastTravelEnabled = false`; no `RequestFastTravel`, no TRAVEL button. **MAP-REDESIGN (v129) kept** — do not revert square map / MapLabelLayout / title-case pills.
+- **JOB 32:** PlazaBuildingsConfig + PlazaHouse (4 enterable plaza buildings); CombatConfig.LineOfSight + Shared/Util/LosRule (one shot/sight rule); ArmyConfig.Indoors + Modules/Enterables (army holds at the door). Kill switches: PlazaBuildingsConfig.Enabled, LineOfSight.Unified as Claude wrote.
+- **Pins:** `tools/checks/claude_bud_job32.py` + `tools/sim/run_plaza_test.py`; `tools/checks/codebot_v130.py` (WE_Build 130, JOB 32 files, no fast travel, PreferMesh OFF, MAP-REDESIGN kept). Retired codebot_v129 WE_Build pins; BuyPathStatic / v110 / v113 WE_Build pins bumped to 130.
+- Do **not** re-add fast travel. Do **not** turn PreferMesh on. Do **not** touch WE_Building*. Do **not** revert the v129 map UI.
+- **Phone tests (owner account; Migrate to Latest Update):** see JOB 32 list below (enter plaza door / ramp / ladder / roof; roof vs ground shooting; window gaps; army holds at door; phone thumbstick).
+
+## claude-bud JOB 32 (2026-09-30): enterable Central Plaza buildings (branch `claude/desktop-bud`)
+**Why:** every Crossroads Town building was a solid invisible box with Roblox-made mesh fronts, so none could be entered.
+
+**1. Enterable buildings** (`PlazaBuildingsConfig`)
+- The 4 buildings facing the plaza flag (NE_E1, SW_S1, NE_N1, NW_W1) are now the **PlazaHouse** (55 parts, same
+  footprint and frame):
+  - **Ground floor:** a 6 x 8 door; the windows are open gaps (no glass); crates inside for cover.
+  - **Stair:** a ramp up the right wall (43.5 degrees, walkable) with a rail round the stair hole.
+  - **Upper floor:** windows on every side.
+  - **Roof:** a ladder (TrussPart) through a hatch, a 3.2-stud parapet (shoot over it, duck behind it) and two sandbag
+    rows.
+- **Budget:** the Town budget and layout are unchanged: the planner and caps count the TownHouse, and the extras come
+  out of `MaxExtraParts` (240; 4 x ~51 used).
+- **Kill switch:** `PlazaBuildingsConfig.Enabled = false` builds the solid TownHouse rows again.
+
+**2. The ONE line-of-sight / shot rule** (`CombatConfig.LineOfSight`, `Shared/Util/LosRule`)
+- **The rule:** a solid (CanCollide) part stops shots and blocks sight; a non-colliding part never does; water never
+  does. A shot can also stop on a character's limbs (its target).
+- **Who uses it:**
+  - player guns, aim assist, lag-tolerance claims and splash (CombatDamage);
+  - projectiles and premium vehicle guns;
+  - NPCs, all 3 army sight rays, base turrets and gate / base guards (GateDefense hasLos);
+  - the client shot preview.
+- **Effect:** shots through window gaps and from roofs work, and nothing shoots through walls.
+- **The only behaviour change:** player bullets now pass non-colliding decor, as NPCs, army and turrets already did.
+- The v124 pvpBlock stays the one hostility rule.
+- **Kill switch:** `Unified = false` restores each shooter's old ray settings.
+
+**3. The army** (`ArmyConfig.Indoors`)
+- While the owner is inside or on the roof of a registered building (`Modules/Enterables`), FOLLOW plans round a street
+  point 10 studs out from the door, facing the building. The block forms in the street.
+- The owner's speed counts as zero while he is held, so no jump / far / pace recovery fires: no teleport, snap or
+  PivotTo was added, and no unit climbs the stair.
+
+**Also fixed (JOB 31 bug found here):** WorldPOI and WorldFill measured a cluster's ACTUAL parts against their caps, so
+JOB 31's detailed props inside POIs could push rows over the cap and drop them. Now:
+- `WorldKits.ExtraParts(cluster)` tracks the extras;
+- `Finish` reports the plain count;
+- WorldPOI's budget test and WorldFill's `countParts` subtract the extras.
+
+**Existing pins kept:**
+- WorldPOI's pinned Add line is unchanged; rows are flagged with the cluster attribute `WE_Enterable`.
+- squadfair's frozen line is unchanged; the rule is applied on the next line.
+- Code Bot v115's Plan call is kept on the normal path.
+- My own PREMIUM pin is updated.
+
+**Checks**
+- tools/checks/claude_bud_job32.py (14 pins, including the ladder span).
+- `tools/sim/run_plaza_test.py`:
+  - REAL WorldKits PlazaHouse: 55 parts; the door and all 6 checked windows are empty gaps; ramp slope, foot room and
+    stair hole; roof hatch clear; parapet 3.2 above the roof; inside the core;
+  - Enterables inside / roof / street and the door point;
+  - kill switch;
+  - REAL LosRule on a scripted ray world: a shot steps over a sign to the wall, hits a limb; sight passes the limb;
+    params are never grown; off = the old raycast.
+- All earlier sim tests still pass. BuyPathStatic PASS=6568 FAIL=0; remote audit OK; rojo ok; no new LSP errors.
+
+**NOT done here:**
+- The 2-player Studio test (I cannot run Studio): steps below.
+- The optional rooftop king-of-the-hill.
+
+**Test (2 players, Studio Start Server + 2, then phones)**
+1. Walk to a plaza building facing the flag (e.g. NE_E1, east of the flag). Go in through the door, up the ramp, climb
+   the ladder through the hatch to the roof.
+2. **Roof vs ground:**
+   - Player 1 on the roof, player 2 on the plaza. Both can shoot each other over the parapet.
+   - Player 1 ducks behind the parapet: player 2's shots stop on it.
+   - Nobody can shoot through a wall. Shots through the window gaps work, both ways.
+3. Enemies (the plaza bank guards / an NPC / a base turret) see and shoot a player at a window or on the roof, but not
+   through a wall.
+4. Player 1 with an army on FOLLOW goes inside: the army lines up in the street in front of the door (it does not walk
+   in or teleport). Going up to the roof: same. Coming out: it follows as normal.
+5. The door and ramp work on a phone with the thumbstick; the ladder climbs by walking into it.
 ## v129 (Code Bot Roblox, 2026-09-30 ~10:18 Dublin): MAP-REDESIGN — the world map UI was redesigned at the owner's request — place version 127
 - **Claude: the map UI was redesigned on purpose (Shaun: "labels overlap, it is not beautiful"). Do NOT revert it** to the v127/v128 right-half canvas, ALL CAPS labels, flat brown square or loose outpost diamonds. Build on it.
 - **WE_Build 129**. Code commit `1b6ae52`. Open Cloud HTTP 200 `versionNumber=127`. PreferMesh OFF; WE_Building* untouched; fast travel still REMOVED; MapConfig OwnerFirst unchanged.

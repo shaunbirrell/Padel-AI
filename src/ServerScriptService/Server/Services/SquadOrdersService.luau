@@ -45,6 +45,7 @@ local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local LosRule = require(Shared.Util.LosRule) -- claude-bud JOB 32
 local Constants = require(Shared.Constants)
 local OrdersConfig = require(Shared.Configs.OrdersConfig)
 local RigConfig = require(Shared.Configs.RigConfig) -- R-RIG: escort figures per unit (army D14)
@@ -1476,7 +1477,8 @@ local function unitHasLos(player: Player, unit: SquadUnit, troot: BasePart): boo
 		table.insert(losIgnore, player.Character :: Instance)
 	end
 	losParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true
-	losParams.FilterDescendantsInstances = losIgnore -- the property takes a copy of the list
+	losParams.FilterDescendantsInstances = losIgnore
+	losParams.RespectCanCollide = LosRule.SightRespect(losParams.RespectCanCollide) -- claude-bud JOB 32: the one sight rule -- the property takes a copy of the list
 	local blocked = Workspace:Raycast(eye, delta, losParams) ~= nil
 	table.clear(losIgnore) -- the Lua list holds no model between checks (the next ray's list replaces the property's)
 	return not blocked
@@ -1507,6 +1509,7 @@ local function losFromEye(player: Player, unit: SquadUnit, eye: Vector3, troot: 
 	end
 	losParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true
 	losParams.FilterDescendantsInstances = losIgnore
+	losParams.RespectCanCollide = LosRule.SightRespect(losParams.RespectCanCollide) -- claude-bud JOB 32: the one sight rule
 	local blocked = Workspace:Raycast(eye, delta, losParams) ~= nil
 	table.clear(losIgnore)
 	return not blocked
@@ -2912,6 +2915,7 @@ local function gateBlocking(player: Player, unit: SquadUnit, troot: BasePart): B
 	end
 	losParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true
 	losParams.FilterDescendantsInstances = losIgnore
+	losParams.RespectCanCollide = LosRule.SightRespect(losParams.RespectCanCollide) -- claude-bud JOB 32: the one sight rule
 	local res = Workspace:Raycast(eye, delta, losParams)
 	table.clear(losIgnore)
 	local inst = res and res.Instance

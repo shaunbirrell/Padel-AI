@@ -41,6 +41,7 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local LosRule = require(Shared.Util.LosRule) -- claude-bud JOB 32: turrets / gate + base guards use the one rule
 local Constants = require(Shared.Constants)
 local GateDefenseConfig = require(Shared.Configs.GateDefenseConfig)
 local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
@@ -1005,7 +1006,7 @@ local function hasLos(fromPos: Vector3, toPos: Vector3, ignore: { Instance }): b
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = ignore
 	-- v69: non-collidable decor (wire, trims, signs, lamp shades) no longer blocks the shot
-	params.RespectCanCollide = RaidConfig.Defense.LosRespectCanCollide
+	params.RespectCanCollide = LosRule.SightRespect(RaidConfig.Defense.LosRespectCanCollide == true) -- claude-bud JOB 32
 	local dir = toPos - fromPos
 	-- ownerfb/gate fix 1: past the ray length nothing is known, so the target is NOT in sight (the ray used to be cut
 	-- at LosMaxDistance and read as clear: at L5 a target 110-115 studs out was shot through cover)
