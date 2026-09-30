@@ -445,7 +445,7 @@ export type WeaponDef = {
 }
 
 local AircraftWeaponConfig = {
-	WeaponsLive = false, -- ship dark; the owner's playtest account is always live (LiveFor)
+	WeaponsLive = true, -- v138 (Code Bot, owner 2026-09-30 14:44): aircraft weapons ON for everyone (was dark except the owner's playtest account via LiveFor)
 
 	RemoteRate = 12, -- RateLimitService "air_fire": 12/s, burst 16 (client sends <= 10/s: gun Rate cap)
 	RemoteBurst = 16,
@@ -27780,7 +27780,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 137)
+		player:SetAttribute("WE_Build", 138)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -62322,8 +62322,8 @@ return AdminService
             <string name="Source"><![CDATA[--!strict
 --[[ Aircraft weapons (owner request part 2). Numbers: Shared/Configs/AircraftWeaponConfig.luau.
 
-	Only combat aircraft are armed (AircraftWeaponConfig.Aircraft / Loadouts). The feature is dark while
-	WeaponsLive = false, except for the owner's playtest account (AircraftWeaponConfig.LiveFor, evaluated HERE).
+	Only combat aircraft are armed (AircraftWeaponConfig.Aircraft / Loadouts). v138: WeaponsLive = true, live for every
+	player (AircraftWeaponConfig.LiveFor, evaluated HERE; the owner's playtest override is now redundant).
 
 	RequestVehicleFire (the v71 M2 remote, contract { M = mountId, D = direction }) + optional I = input class.
 	Nothing else in the payload is read: a client never names a target. Order of checks (first failure wins, the
@@ -66977,7 +66977,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 137)
+			player:SetAttribute("WE_Build", 138)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -74879,7 +74879,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 137)
+		player:SetAttribute("WE_Build", 138)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -75021,7 +75021,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=137",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=138",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)

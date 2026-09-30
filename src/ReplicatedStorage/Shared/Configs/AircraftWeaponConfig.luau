@@ -79,7 +79,7 @@ export type WeaponDef = {
 }
 
 local AircraftWeaponConfig = {
-	WeaponsLive = false, -- ship dark; the owner's playtest account is always live (LiveFor)
+	WeaponsLive = true, -- v138 (Code Bot, owner 2026-09-30 14:44): aircraft weapons ON for everyone (was dark except the owner's playtest account via LiveFor)
 
 	RemoteRate = 12, -- RateLimitService "air_fire": 12/s, burst 16 (client sends <= 10/s: gun Rate cap)
 	RemoteBurst = 16,

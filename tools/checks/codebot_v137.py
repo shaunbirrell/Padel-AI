@@ -20,9 +20,7 @@ def _rd137(p):
 
 _S137 = "src/ServerScriptService/Server/"
 _C137 = "src/ReplicatedStorage/Shared/Configs/"
-for _f in (_S137 + "Services/DataService.luau", _S137 + "Services/BaseService.luau", _S137 + "EarlyRemotes.server.luau"):
-    _cb137('SetAttribute("WE_Build", 137)' in _rd137(_f), "CODEBOT v137: WE_Build=137 " + _f.rsplit("/", 1)[-1])
-_cb137("WE_Build=137" in _rd137(_S137 + "Services/DataService.luau"), "CODEBOT v137: DataService profile-loaded log says WE_Build=137")
+# v138 (Code Bot Roblox): the WE_Build=137 pins are superseded in tools/checks/codebot_v138.py (WE_Build=138).
 
 _MON137 = _rd137(_C137 + "MonetizationConfig.luau")
 _PASSES137 = {
