@@ -1,4 +1,14 @@
 <!-- Q2-START -->
+## v126 (Code Bot Roblox, 2026-09-30 ~09:30 Dublin): paid speed feels real — Speed Boost x1.6, Speed Pass x1.4 — place version 124
+- **Owner bug:** "the Speed Boost barely makes me faster". **Live proof** (Open Cloud Luau probe, read-only): shaunie6 (470626172) owns the Speed Pass (UserOwnsGamePassAsync 1998656357 = true) AND `Entitlements.SpeedBoost = true`. SpeedMultFor takes the higher one, 1.25, so he had WalkSpeed **20** (+4 studs/s, +25%). The Speed Pass he also owns added nothing. No admin override. MonetizationService (via MoveDebug.SetWalkSpeed) is the **only** server writer of a player's WalkSpeed. No armour or gun weight slowdown exists (ArmourConfig / WeaponConfig have no speed fields). CombatConfig WalkSpeed is NPC-only. Vehicles never write it. Respawn re-applies it (CharacterAdded +0.3 s).
+- **Fix:** SpeedBoost WalkSpeedMult 1.25 -> **1.6** (25.6) "Run 60% faster, forever". ImpulseSpeed 1.15 -> **1.4** (22.4) "Run 40% faster, forever". MAX_WALK_SPEED_MULT 2 -> 1.75. The paid multiplier is now applied **after** any other WalkSpeed writer (X -> X x mult, capped at 28) and re-applied on seat exit. ArmyConfig Follow.CatchUp MaxSpeed 28 -> 40 (Follow2 x1.08 / max 50 and Follow3 max 40 already cover 27.6). AntiExploit has no speed check. Prices / Ids unchanged; no new Robux items.
+- **Pins:** tools/checks/codebot_v126.py. Retired the old x1.15 / x1.25 / `base * mult` pins (BuyPathStatic, codebot_v123) and the codebot_v125 WE_Build pins. Frozen pins in BuyPathStatic / v110 / v113 bumped to 126. BuyPathStatic's CatchUp MaxSpeed range is now 20..40. **BuyPathStatic PASS=6524 FAIL=0**. Code commit `fab245f`. Open Cloud HTTP 200 `versionNumber=124`.
+- **Phone tests (owner account; Migrate to Latest Update):**
+  1. Join and run on flat ground: clearly faster than before. /movedebug shows `ws=25.6`.
+  2. Get in a jeep, get out: still 25.6. Die / respawn: still 25.6.
+  3. Walk with the army in FOLLOW for 30 s: the wedge keeps up, with no teleports.
+- **Also (read-only):** /workspace/war-empire-shop-audit.md, a ranked Robux shop audit. Every price or new item there needs Shaun's OK.
+
 ## v125 (Code Bot Roblox, 2026-09-30 ~09:15 Dublin): ship JOB 29 retention (FastStart, offline earnings, streak tomorrow, notif opt-in) — place version 123
 - Fast-forward merged Claude `8cad44d` (JOB 29) onto phase-7 tip `a5b4ae0` (v124). **WE_Build 125**. PreferMesh OFF; WE_Building* untouched. **OwnerFirst retained** (`RetentionConfig.Live` — UserId 470626172 + Studio); do not flip to everyone until Shaun signs off phone tests.
 - **JOB 29 — retention (OwnerFirst)**
