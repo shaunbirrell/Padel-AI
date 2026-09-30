@@ -1,4 +1,12 @@
 <!-- Q2-START -->
+## v144 PUBLISHED (Code Bot Roblox, 2026-09-30 17:20 Dublin): Open Cloud place version 142 — JOB 39 phase 1 endgame OWNER-FIRST
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build 144) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":142}`. Owner asked to keep merging + pushing; JOB 39 is owner-first so publishing lets him phone-test. The §11 Studio proof is still owed before `OwnerFirst=false`.
+- **dist rebuild:** dist was stale (built at v143 `b91f409`); fresh `rojo build` of HEAD `dc2eb4e` (deterministic, 2 builds identical) copied to `dist/WarEmpire.rbxlx` + `dist/WarEmpire-PERF.rbxlx`, commit `ea758ec`.
+- **Pre-publish checks:** WE_Build pins 144 (EarlyRemotes, BaseService, DataService x2); `EndgameConfig.Live` Enabled + OwnerFirst=true (Parts: Rebirth + EmpireLevel only). v142/v143 state intact: ShopOverhaul + CheckpointGuard OwnerFirst=false, VIP 199, pass Ids unchanged (MonetizationConfig untouched since v143), RPG hold 3972151362, ArmyOrders OwnerFirst=true, WeaponsLive=true, FastTravelEnabled=false, PreferMeshWhenAssetIdSet=false, WE_Building* untouched. BuyPathStatic PASS=7063 FAIL=0.
+- **Live probe (Open Cloud Luau, place v142, IsStudio=false):** Endgame AnyLiveFor / LiveFor(Rebirth, EmpireLevel) = true for 470626172, false for 12345 and 987654321; BaseTier false for all; Shop/CG OwnerFirst=false; ArmyOrders OwnerFirst=true; RebirthCostScale(5)=2; EndgameService present.
+- **Servers:** not restarted. Owner: "Migrate to Latest Update" (or rejoin a fresh server) to get v144; phone tests as in the v144 section below.
+- **Next:** Studio §11 proof, then owner ask to set `EndgameConfig.Live.OwnerFirst = false` + publish. JOBs 39 phases 2–5 + JOB 40 still queued.
+
 ## v144 (Code Bot Roblox, 2026-09-30 ~17:15 Dublin): merge claude-bud JOB 39 phase 1 endgame — OWNER-FIRST — NOT published
 - **WE_Build 144**. Cherry-pick `cd47047` from `origin/claude/desktop-bud` as `d06064b` onto phase-7-polish (v143 tip `83eeb88`) + Code Bot bump commit. **NOT published** to Open Cloud (handoff STATUS: CODE COMPLETE, NOT DONE under JOB 39 §11 until Studio proof / captures in `docs/proof/job39/`).
 - **Flags:** `EndgameConfig.Live` Enabled + `OwnerFirst = true` (owner 470626172 + Studio only). **Do NOT set OwnerFirst=false until Studio §11 proof + owner ask.** PreferMesh OFF; WE_Building* untouched.
