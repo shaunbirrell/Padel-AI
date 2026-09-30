@@ -25,8 +25,8 @@ def _code128(p):
 
 _S128 = "src/ServerScriptService/Server/"
 for _f in (_S128 + "Services/DataService.luau", _S128 + "Services/BaseService.luau", _S128 + "EarlyRemotes.server.luau"):
-    _cb128('SetAttribute("WE_Build", 128)' in _rd128(_f), "CODEBOT v128: WE_Build=128 " + _f.rsplit("/", 1)[-1])
-_cb128("WE_Build=128" in _rd128(_S128 + "Services/DataService.luau"), "CODEBOT v128: DataService profile-loaded log says WE_Build=128")
+    pass  # v129 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v129.py: #_cb128('SetAttribute("WE_Build", 128)' in _rd128(_f), "CODEBOT v128: WE_Build=128 " + _f.rsplit("/", 1)[-1])
+# v129 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v129.py: #_cb128("WE_Build=128" in _rd128(_S128 + "Services/DataService.luau"), "CODEBOT v128: DataService profile-loaded log says WE_Build=128")
 
 # ── fast travel is OFF (owner request; carried from v127) ───────────────────────────────────────────────────────
 _MC128 = _rd128("src/ReplicatedStorage/Shared/Configs/MapConfig.luau")

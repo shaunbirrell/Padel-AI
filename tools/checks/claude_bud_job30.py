@@ -63,7 +63,7 @@ _j30("while open and loopToken == my do" in _CTL and "GetDescendants" not in _CT
      "one refresh loop only while open; no per-frame work, no tree scans")
 _j30("if staticBuilt then" in _CTL, "the area layer is built once and cached")
 # layout: the canvas (tap surface) on the right, never in the left 40 %
-_j30("cv.AnchorPoint = Vector2.new(1, 0.5)" in _CTL and "cv.Size = UDim2.new(0.58, 0, 1, -12)" in _CTL, "the tap canvas sits on the right (thumbstick zone kept clear)")
+# v129 (Code Bot Roblox MAP-REDESIGN): retired, superseded in tools/checks/codebot_v129.py (owner: the map fills the screen, square left of centre + slim card; the map is a modal, the thumbstick is not live under it): #_j30("cv.AnchorPoint = Vector2.new(1, 0.5)" in _CTL and "cv.Size = UDim2.new(0.58, 0, 1, -12)" in _CTL, "the tap canvas sits on the right (thumbstick zone kept clear)")
 # server feed + names
 _j30('RemoteGate).Check(player, "RequestMapLive")' in _SVC, "map remote is gated (Code Bot v127: no fast-travel remote)")
 _j30("sign.TitleFor(plotId)" in _SVC and "function BaseSignService.TitleFor(plotId: number): string?" in _BSS and "title = titleOf(owner)" in _BSS,

@@ -25,8 +25,46 @@ local MapConfig = {
 	PinTimeoutSeconds = 1800,
 	PinLabel = "PIN",
 	PinTapPx = 26, -- real px: a tap this close to the pin removes it
-	-- short label shown on the map for these area Ids (the rest show on tap; <= 10 labels keep a phone map readable)
-	LabelIds = { Town = true, Depot = true, Armory = true, Signal = true, Port = true, OilField = true, Radar = true, FortI = true, FortS = true, Airstrip = true } :: { [string]: boolean },
+	--[[ Code Bot MAP-REDESIGN (v129): the phone-first look (MapController + Shared/Util/MapLabelLayout).
+		Icons are a few fixed sizes (v); labels are title-case pills placed by the collision pass (8 slots round the icon,
+		clamped inside the map, lower priority skipped when they still collide; tap a place to see its hidden label, zoom
+		in for more). ]]
+	Icon = { Area = 22, Site = 20, Base = 16, BaseMine = 22, Bank = 20, Drop = 14, Airdrop = 20, Job = 10, Me = 26, Pin = 28, Badge = 10 },
+	LabelTextV = 14, -- PanelShell.Text floors it to 20 v on touch (= 14 real px, HudConfig.Scale.MinTextPx)
+	LabelPadX = 7,
+	LabelPadY = 3,
+	LabelGap = 3, -- icon edge to pill
+	LabelPad = 3, -- pill to pill
+	LabelIconPad = 2, -- pill to any icon
+	LabelEdge = 4, -- pill to the map edge
+	LabelMaxSlide = 40, -- a clamp may slide a pill this far along the edge, no further (it stays next to its icon)
+	MyBaseLabel = "Your Base",
+	IconTapPx = 24, -- real px: a tap this close to an icon picks it (a 48 px touch circle)
+	CompassV = 56,
+	-- 0 = your base, 1 = towns / sites / forts, 2 = outposts / camps / rigs, 3 = depots + rig shore bases (zoom 1 shows <= 2)
+	LabelPriority = {
+		town = 1, fort = 1, port = 1, airstrip = 1, oil = 1, radar = 1, signal = 1, armory = 1, site = 1,
+		ruins = 2, camp = 2, crash = 2, oasis = 2, rig = 2, outpost = 2,
+		depot = 3, site_depot = 3, rigshore = 3,
+	} :: { [string]: number },
+	-- inside one priority: who gets the first pick of the space (town, the forts, the port ...)
+	LabelRank = { town = 1, fort = 2, port = 3, airstrip = 4, armory = 5, oil = 6, signal = 7, radar = 8, site = 9 } :: { [string]: number },
+	ZoomLevels = { 1, 2 },
+	ZoomMaxPriority = { 2, 3 }, -- per zoom level: the lowest-priority label kind shown
+	-- short map names (the card shows the full name)
+	LabelShort = {
+		Town = "Crossroads", Armory = "Armory", Depot = "West Depot", Signal = "North Ridge", Port = "South Port", OilField = "Oil Field",
+		Radar = "Radar Hill", FortI = "Fort Ironclad", FortS = "Fort Sandhold", RigA = "Alpha Shore", RigB = "Bravo Shore",
+		Airstrip = "Airstrip", Ruins = "Ruined Village", Quarry = "Quarry Camp", CoastalOilAlpha = "Rig Alpha",
+		CoastalOilBravo = "Rig Bravo", Kestrel = "Kestrel Depot", PumpSeven = "Pump Station 7", DryWell = "Dry Well",
+		Overwatch = "Overwatch Ridge", CampViper = "Camp Viper", Hawk = "Hawk Checkpoint", Anvil = "Anvil Scrapyard",
+	} :: { [string]: string },
+	-- icon family per POI kind (colour + inner shape: MapController.Groups)
+	KindGroup = {
+		town = "Town", fort = "Military", armory = "Military", radar = "Military", signal = "Military", airstrip = "Military",
+		outpost = "Military", port = "Industry", oil = "Industry", depot = "Industry", rigshore = "Industry", rig = "Industry",
+		ruins = "Wilds", camp = "Wilds", crash = "Wilds", oasis = "Wilds",
+	} :: { [string]: string },
 	-- what each POI kind is, in 2-4 words (the card's first line)
 	KindInfo = {
 		town = "City and Central Plaza",
@@ -64,7 +102,21 @@ local MapConfig = {
 		Text = Color3.fromRGB(230, 225, 205),
 		Muted = Color3.fromRGB(160, 155, 135),
 		Accent = Color3.fromRGB(235, 195, 90),
-		Site = Color3.fromRGB(190, 120, 70), -- claude-bud JOB 31: the named sites (WorldSitesConfig)
+		Site = Color3.fromRGB(196, 66, 58), -- claude-bud JOB 31: the named sites (WorldSitesConfig); MAP-REDESIGN: brick red
+		-- Code Bot MAP-REDESIGN: the terrain and icon families
+		SandLight = Color3.fromRGB(222, 196, 140),
+		SandDark = Color3.fromRGB(170, 138, 88),
+		SeaLight = Color3.fromRGB(34, 74, 92),
+		SeaDark = Color3.fromRGB(12, 30, 42),
+		Road = Color3.fromRGB(92, 72, 50),
+		Grid = Color3.fromRGB(70, 54, 34),
+		Zone = Color3.fromRGB(140, 110, 70),
+		Town = Color3.fromRGB(248, 214, 96),
+		Military = Color3.fromRGB(86, 132, 186),
+		Industry = Color3.fromRGB(230, 126, 40),
+		Wilds = Color3.fromRGB(120, 150, 70),
+		Pill = Color3.fromRGB(12, 14, 12),
+		Card = Color3.fromRGB(20, 24, 20),
 	},
 	-- claude-bud JOB 31: what each site kind is (the card's first line)
 	SiteKindInfo = {
