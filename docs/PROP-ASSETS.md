@@ -183,3 +183,33 @@ All 19 are free public models, but none is owned by Roblox or by shaunie6, and t
 owner's inventory, so the live place cannot load them. To try them again the owner must "Get" each one on the Creator
 Store with shaunie6 (then re-run the probe). A Creator Store search for Roblox-made radar / sandbag / stall / tower
 models found none.
+
+### JOB 40 part C RE-PROBE (Code Bot Roblox v152, 2026-09-30 ~23:15 Dublin, after the owner's Get Model on 17 ids)
+Same script (`tools/probes/job40c_codebot_probe.luau`), raw output `docs/job40c-probe2-2026-09-30.txt`. Now **18 of 19
+load** (10140810871 still not authorized and rejected anyway: a real airport's group). Rules: <= 40 parts after the
+trim, real mesh detail (not a block build), every mesh / texture by the model's creator, no real-world / franchise copy,
+scripts stripped. **1 passes: 86311252190175 Market stall.**
+| Id | Loads | Parts (trim) | Detail | Origin | Verdict |
+|---|---|---|---|---|---|
+| 856258654 Radar Station | yes | 213 | 119 blocks, built-in shapes | decal 77911929 by botor2 | REJECT (parts, block build, origin) |
+| 91764409 Radar Station | yes | 44 | 41 blocks, no mesh | own decal | REJECT (parts, block build) |
+| 124247102466690 Radar Station Military Dish | yes | 213 | a re-upload of 856258654 + 2 scripts | decal by botor2 | REJECT (copy, parts, origin) |
+| 110033425601385 Military Satellite Dish | yes | 1 | 1 MeshPart | mesh + texture by holder_thatswhyim, not mdq6r | REJECT (origin) |
+| 37473580 Pre-War Radar | yes | 26 | block build on a grass baseplate | - | REJECT (block build) |
+| 12972439539 ATC tower | yes | 114 | unions + 3D text | texture 42420590 by EpikYummeh, mesh by XAXA | REJECT (parts, origin) |
+| 10480494876 ATC Tower | yes | 2993 | blocks | - | REJECT (parts, block build) |
+| 1660469777 Military Cargo HQ | yes | 38 | 26 unions + 12 blocks (plain box, thumbnail) | - | REJECT (block build) |
+| 5437548774 Radio Command | yes | 830 | blocks | - | REJECT (parts) |
+| 9230948087 Sandbag Bunker | yes | 100 | 99 MeshParts | - | REJECT (parts > 40) |
+| 12735882090 Sandbags Bunker | yes | 112 | contains an "M60" gun, 22 scripts, a SpawnLocation | mesh 467359376 by ChIoroplast | REJECT (real weapon, parts, scripts) |
+| 11921729320 / 11921736228 Sandbag Bunker small / medium | yes | 320 / 1200 | one Roblox sandbag mesh per bag | texture 139076290 by Enrxq | REJECT (parts, origin) |
+| 8887518461 Firebase Sandbag Bunker | yes | 175 | 1050 textures | - | REJECT (parts) |
+| **86311252190175 Market stall** | **yes** | **1** | **1 textured MeshPart (awning, baskets of fruit)** | **mesh 115301117023765 + texture 125481352272554 by IAmASwedishMale (the creator)** | **PASS** |
+| 388036950 / 740042082 Market Stand / Market | yes | 109 / 110 | parts + built-in shapes | mesh / texture by Roblox (ok) | REJECT (parts) |
+| 2033520495 Stall V2 | yes | 66 | 29 unions + 29 blocks | textures by ZacAttackk | REJECT (parts, origin) |
+
+**Wired (owner-first `StorePropsConfig.JOB40`):** two ReplaceRows, the market stall at Scale 5 (8.2 x 10.0 x 5.1 studs)
+in place of the Part stalls NW_Stall_1 (-81, -166.4) and NW_Stall_2 (-80, -182.6) in the Crossroads Town market lane
+(the kit's counter is the anchor). Dry run on the live place (`tools/probes/job40c_stall_dryrun.luau`, the Town built by
+WorldPOI.Build, the service's steps): 7 kit parts hidden per stall, the copy's bottom = the kit base (0.50), 0 overlaps,
+the copy faces the same way as the kit. No radar / tower / bunker passed: Radar Hill and BaseRows stay as today.

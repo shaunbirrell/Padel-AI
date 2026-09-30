@@ -24,17 +24,18 @@ def _rd151(p):
 _S151 = "src/ServerScriptService/Server/"
 _C151 = "src/ReplicatedStorage/Shared/Configs/"
 
-for _f in (_S151 + "Services/DataService.luau", _S151 + "Services/BaseService.luau", _S151 + "EarlyRemotes.server.luau"):
-	_cb151('SetAttribute("WE_Build", 151)' in _rd151(_f), "CODEBOT v151: WE_Build=151 " + _f.rsplit("/", 1)[-1])
-_cb151("WE_Build=151" in _rd151(_S151 + "Services/DataService.luau"), "CODEBOT v151: DataService profile-loaded log says WE_Build=151")
+# v152 (Code Bot Roblox): the WE_Build=151 and 'rows empty' pins are superseded in tools/checks/codebot_v152.py
+# for _f in (_S151 + "Services/DataService.luau", _S151 + "Services/BaseService.luau", _S151 + "EarlyRemotes.server.luau"):
+# 	_cb151('SetAttribute("WE_Build", 151)' in _rd151(_f), "CODEBOT v151: WE_Build=151 " + _f.rsplit("/", 1)[-1])
+# _cb151("WE_Build=151" in _rd151(_S151 + "Services/DataService.luau"), "CODEBOT v151: DataService profile-loaded log says WE_Build=151")
 
 # JOB 40 part C
 _SPC = _rd151(_C151 + "StorePropsConfig.luau")
 _cb151("cfg40.JOB40 = { Enabled = true, OwnerFirst = true }" in _SPC, "CODEBOT v151: StorePropsConfig.JOB40 Enabled + OwnerFirst=true")
-_rr = _SPC.split("cfg40.ReplaceRows = {", 1)[1].split("} :: { any }", 1)[0] if "cfg40.ReplaceRows = {" in _SPC else "x"
-_br = _SPC.split("cfg40.BaseRows = {", 1)[1].split("} :: { any }", 1)[0] if "cfg40.BaseRows = {" in _SPC else "x"
-_cb151("Id =" not in "".join(l for l in _rr.splitlines() if not l.strip().startswith("--")), "CODEBOT v151: ReplaceRows empty (probe: 0 of 19 load + pass)")
-_cb151("Id =" not in "".join(l for l in _br.splitlines() if not l.strip().startswith("--")), "CODEBOT v151: BaseRows empty (probe: 0 of 19 load + pass)")
+# _rr = _SPC.split("cfg40.ReplaceRows = {", 1)[1].split("} :: { any }", 1)[0] if "cfg40.ReplaceRows = {" in _SPC else "x"
+# _br = _SPC.split("cfg40.BaseRows = {", 1)[1].split("} :: { any }", 1)[0] if "cfg40.BaseRows = {" in _SPC else "x"
+# _cb151("Id =" not in "".join(l for l in _rr.splitlines() if not l.strip().startswith("--")), "CODEBOT v151: ReplaceRows empty (probe: 0 of 19 load + pass)")
+# _cb151("Id =" not in "".join(l for l in _br.splitlines() if not l.strip().startswith("--")), "CODEBOT v151: BaseRows empty (probe: 0 of 19 load + pass)")
 _cb151("function StorePropsService.PlaceReplaceRows" in _rd151(_S151 + "Services/StorePropsService.luau"), "CODEBOT v151: StorePropsService.PlaceReplaceRows present")
 _cb151(_P151("tools/probes/job40c_codebot_probe.luau").is_file() and "0 of 19 pass" in _rd151("docs/PROP-ASSETS.md"),
 	"CODEBOT v151: the Code Bot load probe + its result are in the repo")

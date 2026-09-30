@@ -369,10 +369,14 @@ local StorePropsConfig = {
 	OFF == OLD (the RadarDome kit and the plain helipad exactly as today). ]]
 local cfg40: any = StorePropsConfig
 cfg40.JOB40 = { Enabled = true, OwnerFirst = true }
--- Code Bot v151 probe (2026-09-30, docs/PROP-ASSETS.md): 0 of 19 candidates pass (18 not authorized to load in the
--- live place, 856258654 = 213-part block build with a third-party decal). Both lists stay EMPTY until a probe passes.
+-- Code Bot v152 re-probe (2026-09-30, after the owner's Get Model; docs/PROP-ASSETS.md): 1 of 19 passes, the market
+-- stall 86311252190175 (1 MeshPart, its mesh + texture by its creator IAmASwedishMale, no scripts). It replaces the two
+-- tier-1 Part stalls in the Crossroads Town market lane (dry run: bottom on the kit base, 0 overlaps, faces the lane).
+-- No radar / tower / bunker passed, so the RadarDome kit and BaseRows stay as today.
 cfg40.ReplaceRows = {
 	-- after the probe, e.g.: { KitPart = "RadarDome", At = Vector3.new(-1053.5, 0, -1009.8), Radius = 20, Id = <radar station id>, Scale = 1, Yaw = 0 },
+	{ KitPart = "StallCounter", At = Vector3.new(-81, 0, -166.4), Radius = 6, Id = 86311252190175, Scale = 5, Yaw = 0 }, -- Town NW_Stall_1 (market stall, IAmASwedishMale)
+	{ KitPart = "StallCounter", At = Vector3.new(-80, 0, -182.6), Radius = 6, Id = 86311252190175, Scale = 5, Yaw = 180 }, -- Town NW_Stall_2
 } :: { any }
 cfg40.BaseRows = {
 	-- after the probe, e.g.: { Id = <ops building id>, Anchor = "Helipad", MinLevel = 1, X = 58, Z = -110, Yaw = 180, Scale = 1 },

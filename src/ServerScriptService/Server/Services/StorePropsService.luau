@@ -691,7 +691,23 @@ local function worldLoop()
 	end
 	task.wait(2)
 	placeWorld()
-	pcall(StorePropsService.PlaceReplaceRows) -- claude-bud JOB 40 part C (no-op while ReplaceRows is empty)
+	-- claude-bud JOB 40 part C (no-op while ReplaceRows is empty). v152 Code Bot: wait (0.2 Hz) for a player JOB40 is
+	-- live for, so the owner joining after the first player still gets the rows; runs once per server.
+	task.spawn(function()
+		local cfgR: any = Cfg
+		if typeof(cfgR.ReplaceRows) ~= "table" or #cfgR.ReplaceRows == 0 then
+			return
+		end
+		while not off() do
+			for _, pl in ipairs(Players:GetPlayers()) do
+				if cfgR.JOB40LiveFor(pl.UserId) then
+					pcall(StorePropsService.PlaceReplaceRows)
+					return
+				end
+			end
+			task.wait(5)
+		end
+	end)
 end
 
 -- ── rebirth zone visuals ──────────────────────────────────────────────────────────────────────────────────────────
