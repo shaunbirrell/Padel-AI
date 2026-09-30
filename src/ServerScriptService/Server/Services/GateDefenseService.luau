@@ -1505,7 +1505,7 @@ end
 	(still false while breached or down). Called by CombatService for any hit on a GateBarrier-attributed part. ]]
 -- claude-bud JOB 24 §2: `fromPos` = the shooting ARMY unit's position (ApplyUnitDamage): the reach is measured from it
 -- instead of the attacker's character (an army fights at range from its owner); every other rule is the same
-local function applyDamageFrom(attacker: Player, hitPart: BasePart, amount: number, _weaponId: string?, fromPos: Vector3?): boolean
+local function applyDamageFrom(attacker: Player, hitPart: BasePart, amount: number, _weaponId: string?, fromPos: Vector3?, opts: any?): boolean
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 or amount == math.huge then
 		return false
 	end
@@ -1514,13 +1514,18 @@ local function applyDamageFrom(attacker: Player, hitPart: BasePart, amount: numb
 	end
 	local isGuardPart = hitPart:GetAttribute("GateGuardPart") == true
 	local char = attacker.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart")
-	if not root or not root:IsA("BasePart") then
-		return false
-	end
-	local hum = (char :: Model):FindFirstChildOfClass("Humanoid")
-	if not hum or hum.Health <= 0 then
-		return false
+	local root: any = char and char:FindFirstChild("HumanoidRootPart")
+	-- claude-bud JOB 38: a SEND army keeps hitting while its sender is dead but in the server (ArmySend RequireOwnerAlive
+	-- false; the reach is from the unit). Every other path keeps the alive check.
+	local ownerAway = typeof(opts) == "table" and opts.OwnerAway == true and typeof(fromPos) == "Vector3" and attacker.Parent ~= nil
+	if not ownerAway then
+		if not root or not root:IsA("BasePart") then
+			return false
+		end
+		local hum = (char :: Model):FindFirstChildOfClass("Humanoid")
+		if not hum or hum.Health <= 0 then
+			return false
+		end
 	end
 	local maxDist = if isGuardPart then RaidConfig.Defense.GuardHitMaxDistance else GateDefenseConfig.GateHitMaxDistance
 	-- aircraft weapons (AirWeaponService, hit id "V_<mount>"): out to that weapon's Range + GateReachSlack
@@ -1544,6 +1549,11 @@ local function applyDamageFrom(attacker: Player, hitPart: BasePart, amount: numb
 	end
 	graceFrom[attacker.UserId] = nil -- attacking the defenses ends the spawn grace
 
+	-- claude-bud JOB 38: an AutoGun with HP (ArmyOrdersConfig.TurretHP): shot down, it goes offline until its rebuild
+	if hitPart:GetAttribute("GateAutoGunPart") == true then
+		return GateDefenseService._TurretHit(def, hitPart, amount, attacker)
+	end
+
 	if isGuardPart then
 		for _, g in ipairs(def.Guards) do
 			if hitPart == g.Root or hitPart:IsDescendantOf(g.Model) then
@@ -1554,6 +1564,11 @@ local function applyDamageFrom(attacker: Player, hitPart: BasePart, amount: numb
 					local bgMod = (GateDefenseService :: any)._BG
 					if g.Humanoid.Health <= 0 and bgMod and bgMod.Live() then
 						pcall(bgMod.OnGuardKilledBy, attacker, def.OwnerUserId)
+					end
+					if g.Humanoid.Health <= 0 and _weaponId == "Squad" then
+						pcall(function() -- claude-bud JOB 38: an army kill (the ARMY KILLS board)
+							require(script.Parent.EngagementService).NoteArmyKill(attacker)
+						end)
 					end
 					return true
 				end
@@ -1595,11 +1610,83 @@ end
 
 -- claude-bud JOB 24 §2 (ArmyConfig.ArmyCombat): an attacking army unit's hit on a gate guard / tower guard / the gate,
 -- credited to its owner (alive). Same rules as a player's hit; the reach is from the unit.
-function GateDefenseService.ApplyUnitDamage(owner: Player, fromPos: Vector3, hitPart: BasePart, amount: number): boolean
+function GateDefenseService.ApplyUnitDamage(owner: Player, fromPos: Vector3, hitPart: BasePart, amount: number, opts: any?): boolean
 	if typeof(fromPos) ~= "Vector3" then
 		return false
 	end
-	return applyDamageFrom(owner, hitPart, amount, "Squad", fromPos)
+	return applyDamageFrom(owner, hitPart, amount, "Squad", fromPos, opts) -- claude-bud JOB 38: opts.OwnerAway (a SEND)
+end
+
+-- claude-bud JOB 38: an AutoGun hit (TurretHP). Only attackers the switch is live for can damage one (owner-first); a
+-- shot-down gun is Offline (the strike visuals) until TurretHP.RebuildSeconds (or a full re-sync) brings it back.
+function GateDefenseService._TurretHit(def: PlotDefense, hitPart: BasePart, amount: number, attacker: Player): boolean
+	local AOC: any = require(ReplicatedStorage.Shared.Configs.ArmyOrdersConfig)
+	if AOC.TurretHP.Enabled ~= true or not AOC.LiveFor(attacker.UserId) or isDown(def) then
+		return false
+	end
+	for _, t in ipairs(def.Turrets) do
+		local tu: any = t
+		if hitPart == t.YawPart or hitPart:IsDescendantOf(t.Model) then
+			if t.Offline or (tonumber(tu.Health) or 0) <= 0 then
+				return false
+			end
+			tu.Health = math.max(0, tu.Health - amount)
+			t.Model:SetAttribute("GateAutoGunHealth", math.floor(tu.Health))
+			alertBaseUnderAttack(def.PlotId, def.OwnerUserId, attacker)
+			if tu.Health <= 0 then
+				t.Offline = true
+				t.Model:SetAttribute("Offline", true)
+				tu.DeadUntil = nowClock() + (tonumber(AOC.TurretHP.RebuildSeconds) or 90)
+				if t.YawPart.Parent and not t.YawPart:FindFirstChild("WE_StrikeSmoke") then
+					local smoke = Instance.new("Smoke")
+					smoke.Name = "WE_StrikeSmoke"
+					smoke.Color = Color3.fromRGB(45, 45, 48)
+					smoke.Opacity = 0.35
+					smoke.RiseVelocity = 4
+					smoke.Size = 2
+					smoke.Parent = t.YawPart
+				end
+			end
+			return true
+		end
+	end
+	return false
+end
+
+--[[ claude-bud JOB 38: what an army SEND sees at a base (ArmyPlan / ArmySendRules). nil = no defences here.
+	GuardPower / TurretPower are { Hp, Dps } rows for the power verdict. ]]
+function GateDefenseService.SiegeInfo(plotId: number): { [string]: any }?
+	local def = defenses[plotId]
+	if def == nil then
+		return nil
+	end
+	local stats: any = GateDefenseConfig.GetLevelStats(def.WallsLevel) or {}
+	local guardDps = (tonumber(stats.GuardDamage) or 0) * (tonumber(stats.GuardFireRate) or 0)
+	local turretDps = (tonumber(stats.TurretDamage) or 0) * (tonumber(stats.TurretFireRate) or 0)
+	local turrets, tPower, gPower = {}, {}, {}
+	for _, t in ipairs(def.Turrets) do
+		local tu: any = t
+		local hp = tonumber(tu.Health) or 0
+		table.insert(turrets, { Part = t.YawPart, Hp = hp, Max = tonumber(tu.MaxHealth) or 0, Offline = t.Offline })
+		if not t.Offline and hp > 0 then
+			table.insert(tPower, { Hp = hp, Dps = turretDps })
+		end
+	end
+	for _, g in ipairs(def.Guards) do
+		if g.Alive and g.Humanoid.Health > 0 then
+			table.insert(gPower, { Hp = g.Humanoid.Health, Dps = guardDps })
+		end
+	end
+	return {
+		GatePart = def.GateBarriers[1],
+		GateHp = if def.GateBreached or isDown(def) then 0 else def.GateHealth,
+		GateMax = def.GateMaxHealth,
+		Breached = def.GateBreached or isDown(def),
+		Turrets = turrets,
+		CollectorPos = def.CollectorPos,
+		GuardPower = gPower,
+		TurretPower = tPower,
+	}
 end
 
 -- claude-bud JOB 24 §2: the living gate guards and tower guards of every base that is NOT this player's or an ally's,
@@ -2035,6 +2122,17 @@ local function syncPlotNow(plotId: number)
 				t.Outside = outside
 				t.Model:SetAttribute("OwnerUserId", ownerUserId)
 				t.Model:SetAttribute("PlotId", plotId)
+				-- claude-bud JOB 38: AutoGun HP (ArmyOrdersConfig.TurretHP): its aim part takes hits through the gate path
+				local AOC: any = require(ReplicatedStorage.Shared.Configs.ArmyOrdersConfig)
+				if AOC.TurretHP.Enabled == true then
+					local tu: any = t
+					tu.MaxHealth = AOC.TurretHealth(wallsLevel)
+					tu.Health = tu.MaxHealth
+					t.YawPart:SetAttribute("GateBarrier", true)
+					t.YawPart:SetAttribute("GateAutoGunPart", true)
+					t.YawPart:SetAttribute("PlotId", plotId)
+					t.Model:SetAttribute("GateAutoGunHealth", tu.Health)
+				end
 				table.insert(turrets, t)
 			end
 		end
@@ -2465,6 +2563,19 @@ function GateDefenseService.Init(deps: { [string]: any })
 					thinkGuard(def, g, stats, tnow)
 				end
 				for _, tur in ipairs(def.Turrets) do
+					local tu: any = tur
+					if tu.DeadUntil ~= nil and tnow >= tu.DeadUntil then
+						-- claude-bud JOB 38: a shot-down AutoGun is rebuilt (TurretHP.RebuildSeconds)
+						tu.DeadUntil = nil
+						tu.Health = tu.MaxHealth
+						tur.Offline = false
+						tur.Model:SetAttribute("Offline", nil)
+						tur.Model:SetAttribute("GateAutoGunHealth", tu.Health)
+						local smoke = tur.YawPart:FindFirstChild("WE_StrikeSmoke")
+						if smoke then
+							smoke:Destroy()
+						end
+					end
 					thinkTurret(def, tur, stats, tnow)
 				end
 				-- claude-bud JOB 20: the tower guards (hired per corner tower)

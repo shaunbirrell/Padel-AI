@@ -140,6 +140,18 @@ local function sameClan(player: Player, userId: number): boolean
 	return okA and okB and a ~= nil and a == b
 end
 
+-- claude-bud JOB 38: the armies marching on this player's base (ArmyPlan; the defender always sees them)
+local function incomingRows(player: Player): { any }?
+	local okP, AP = pcall(function(): any
+		return require(script.Parent.Parent.Modules.ArmyPlan)
+	end)
+	if not okP or AP == nil or AP.IncomingFor == nil then
+		return nil
+	end
+	local ok, list = pcall(AP.IncomingFor, player.UserId)
+	return if ok then list else nil
+end
+
 -- claude-bud JOB 37: the road checkpoints for this player (CheckpointGuardService; nil when not live)
 local function checkpointRows(player: Player): { any }?
 	local okC, CG = pcall(function(): any
@@ -173,6 +185,7 @@ function MapService.Live(player: Player): { [string]: any }?
 		Jobs = s.Jobs,
 		Sites = s.Sites, -- claude-bud JOB 31
 		Checkpoints = checkpointRows(player), -- claude-bud JOB 37: hostile / cleared + respawn countdown (live players only)
+		Incoming = incomingRows(player), -- claude-bud JOB 38: armies marching on / sieging his base (always shown to him)
 		Bank = { X = math.floor(BankRaidConfig.Position.X), Z = math.floor(BankRaidConfig.Position.Z) },
 	}
 end

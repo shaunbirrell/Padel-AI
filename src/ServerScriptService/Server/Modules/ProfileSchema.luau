@@ -972,7 +972,8 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 			raid = {}
 			;(profile :: any).Raid = raid
 		end
-		for _, k in ipairs({ "ShieldUntil", "StrikeCooldownUntil", "DefensesDownUntil" }) do
+		-- claude-bud JOB 38: the SEND cooldown (sender) and the army protection (victim base), os.time()
+		for _, k in ipairs({ "ShieldUntil", "StrikeCooldownUntil", "DefensesDownUntil", "ArmySendCooldownUntil", "ArmyProtectUntil" }) do
 			if typeof(raid[k]) ~= "number" then
 				raid[k] = 0
 			end

@@ -74,6 +74,9 @@ end
 
 -- JOB 24 (claude-bud, docs/ARMY-ATTACK-ROOTCAUSE.md): ATTACK is driven here too, by the same steered block
 -- (Follow3.Steer + Follow3.AttackSteer; false = the v116 SquadOrdersService.attackUnit movement)
+-- claude-bud JOB 38: set by ArmyPlan.Init: (player) -> { Root = a stand-in root at the plan's lead point } | nil
+ArmyController.PlanLead = nil :: ((Player) -> any)?
+
 function ArmyController.AttackLive(userId: any): boolean
 	local c = cfg()
 	return ArmyController.LiveFor(userId) and c.Steer == true and c.AttackSteer == true
@@ -382,6 +385,12 @@ local function stepArmy(player: Player, st: any, now: number)
 		return
 	end
 	local root: BasePart? = deps.CharacterRoot and deps.CharacterRoot(player)
+	-- claude-bud JOB 38: an army plan (ArmyPlan: ATTACK auto-clear / SEND / RECALL) walks a LEAD POINT; the block follows
+	-- it exactly as it follows him (the same Plan / steering / caps), even while he is dead. No recover / reposition.
+	local planLead: any = if ArmyController.PlanLead ~= nil then ArmyController.PlanLead(player) else nil
+	if planLead ~= nil then
+		root = planLead.Root :: any
+	end
 	if root == nil then
 		-- the owner is dead: stop once, wait
 		for _, u in ipairs(living) do
@@ -477,7 +486,7 @@ local function stepArmy(player: Player, st: any, now: number)
 			pace = math.max(16, math.min(math.max(pace, speedSmooth), num("CatchUpMin", 30)))
 		end
 		local lead = if p and (moving or c.Steer == true) then p.Lead else Vector3.zero
-		local allow = not drivingFast and not walkBack
+		local allow = not drivingFast and not walkBack and planLead == nil -- claude-bud JOB 38: never during a plan
 		local noPath = false
 		local clear = num("OwnerClearStuds", 5)
 		local upos = u.Root.Position
@@ -516,6 +525,7 @@ local function stepArmy(player: Player, st: any, now: number)
 			AllowRecover = allow,
 			Jumped = jumped,
 			NoPath = noPath,
+			NoReposition = planLead ~= nil, -- claude-bud JOB 38: a plan's unit that cannot follow is marked LOST, never moved
 			OwnerClear = clear,
 			Spot = function()
 				return repositionSpot(proot, g, h)

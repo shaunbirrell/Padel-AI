@@ -9718,3 +9718,36 @@ ds_territories.luau T3):
 - **Mission:** the daily "Checkpoint" objective is offered only once the switch is live for everyone, because the
   offer is global. While owner-first, the owner tests through the map (hostile / cleared) and the tracker.
 - **Cleared bonus:** "checkpoint" cash is multiplier-exempt (it is already minutes of multiplied income).
+
+## 2026-09-30 — claude-bud JOB 38: army attack orders + SEND + ARMY KILLS
+**DECIDED by Shaun (2026-09-30):**
+- a) Online only.
+- b) Army loot 5 %.
+- c) The defender always gets the ETA warning + red marker.
+- d) The army keeps attacking while the sender is dead but in the server; it disbands on leave.
+- e) Too weak < 0.25 is blocked; > 4 x halves the loot.
+- f) 5 min SEND cooldown.
+- g) 10 min base protection after any army raid.
+
+**My assumptions:**
+- **Movement:** the block follows a plan-owned lead point rather than a new steering input, so the Follow3 formation
+  code is reused unchanged.
+- **Lead height:** the lead point's Y follows the route (ground), so its FLAT speed is MarchSpeed.
+- **Auto-clear range:** grouped NPCs (camps, garrisons, checkpoint guards) may be engaged away from the owner ONLY during
+  his ordered auto-clear (the "owner must be near" rule is relaxed for that order, not for FOLLOW / ATTACK near him).
+- **Kill credit:** auto-clear kills pay at the army unit rate (CreditSteeredAttackKills), exactly as the JOB 24 steered
+  attack.
+- **CLEARED status:** it shows the kill count, not a cash amount (the per-kill cash is paid by CombatService as today).
+- **Siege targets:** turrets are a siege target through a pseudo "Structure" target (the turret's aim part). AutoGuns
+  still shoot players only, not army units (unchanged).
+- **Players shooting turrets:** a shootable turret part is the one narrow LosRule exception (`GateAutoGunPart`), so
+  players can shoot turrets too (one rule for everyone), only while the switch is live for the shooter.
+- **Power verdict:** ArmyPower = units x unit HP x unit DPS and DefencePower = gate HP + guard HP x DPS + turret HP x
+  DPS, as specified, even though the units differ. Tower guards are not in DefencePower.
+- **Leaving an order mid-plan:** a Hold / Retreat / Follow order during a plan marches the army back first, then applies
+  the order (no teleport back).
+- **ARMY KILLS:** counts players (army fire, MOST KILLS rules), checkpoint and bank guards, and base guards. Tower guards
+  killed by the army are not credited (the tower damage path does not report the killing blow). Alts cannot be told
+  apart beyond the MOST KILLS pair cap.
+- **Walkie size:** the walkie grows to 216 x 346 v on touch while live (SizeTouchPlan); the 5-viewport HUD harness still
+  has to confirm it clears the reserved zones.

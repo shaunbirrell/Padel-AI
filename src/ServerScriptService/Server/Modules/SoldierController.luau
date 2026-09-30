@@ -382,9 +382,13 @@ function SoldierController.Drive(unit: any, ctx: { [string]: any })
 	-- 0) emergencies: under the map (always), extremely far for FarSeconds (not while he drives fast)
 	local fph = Workspace.FallenPartsDestroyHeight
 	if pos.Y < ownerPos.Y - num("VoidBelowOwner", 60) or pos.Y < fph + num("VoidMargin", 80) then
-		local spot = ctx.Spot and ctx.Spot()
-		if spot and SoldierController.Reposition(unit, spot, "void") then
-			return
+		if ctx.NoReposition == true then
+			unit._scLost = true -- claude-bud JOB 38: during an army plan nothing is moved: LOST (ArmyPlan reports it)
+		else
+			local spot = ctx.Spot and ctx.Spot()
+			if spot and SoldierController.Reposition(unit, spot, "void") then
+				return
+			end
 		end
 	end
 	if ctx.AllowRecover and d > num("FarStuds", 120) then

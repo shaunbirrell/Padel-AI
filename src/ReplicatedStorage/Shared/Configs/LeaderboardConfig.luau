@@ -110,4 +110,20 @@ function LeaderboardConfig.AllowKill(log: { [string]: { number } }, killerId: nu
 	return true
 end
 
+-- claude-bud JOB 38 ADDENDUM (owner 2026-09-30): ARMY KILLS replaces TOP ARMY in the same slot (army size is capped, so
+-- TOP ARMY is a tie). Its own store keys ("WE_LB2_ArmyKills", weekly "_W<week>"); the swap happens only once army orders
+-- are live for everyone (ArmyOrdersConfig.LiveForAll); until then TOP ARMY stays exactly as it is.
+LeaderboardConfig.ArmyKillsBoard = { Id = "ArmyKills", Title = "ARMY KILLS", Unit = "kills", AllTime = true, Weekly = true } :: Board
+do
+	local okA, AOC = pcall(function(): any
+		return require(script.Parent.ArmyOrdersConfig)
+	end)
+	if okA and AOC and AOC.LiveForAll() then
+		for i, b in ipairs(LeaderboardConfig.Boards) do
+			if b.Id == "Army" then
+				LeaderboardConfig.Boards[i] = LeaderboardConfig.ArmyKillsBoard
+			end
+		end
+	end
+end
 return LeaderboardConfig

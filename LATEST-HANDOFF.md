@@ -84,6 +84,106 @@
   5. Tempest: hold to charge, release; 2-player pierce + PvP protection still holds (novice shield / pvp off).
   6. Non-owner join: no armory / no grants (OwnerFirst).
 
+## claude-bud JOB 38 (2026-09-30): army ATTACK auto-clear + SEND ARMY + ARMY KILLS (branch `claude/desktop-bud`)
+**Flags:** `ArmyOrdersConfig.Live` (`Enabled`, `OwnerFirst = true`).
+- **Off / not live:** today's Follow / Attack / Hold / Retreat exactly (the JOB 24 attack, leash 140), no SEND UI, no
+  walkie row, turret HP only matters to live attackers.
+- **To launch:** Code Bot sets `OwnerFirst = false`. That also swaps TOP ARMY -> ARMY KILLS.
+
+**How it moves (the formation standard)**
+- `Modules/ArmyPlan` owns a LEAD POINT that walks an `ArmyRoute` path (PathfindingService legs <= 400 studs, 3 retries,
+  a 2 / s budget) at MarchSpeed 14.
+- `ArmyController` steers the SAME block after that lead instead of the owner: the same FormationController.Plan,
+  heading rate and slot caps, even while the owner is dead.
+- The lead WAITS while the block is > 18 studs behind (the block goes at its slowest soldier).
+- During a plan: AllowRecover = false, NoReposition = true. No PivotTo, Reposition or teleport; a unit that cannot
+  follow is marked LOST and reported (`[ArmyRoute]`).
+
+**1. ATTACK (live owner) = auto-clear**
+- Seek the nearest hostile group within 250 of the owner, through THE target pick (`pickSquadTarget` with plan
+  overrides: one hostility rule).
+- March; fight until the group (CombatService GroupId) is gone / out of reach (60 s without progress) / non-hostile.
+- Chain to the next within 150 (max 4). Then RETURN and fold into FOLLOW.
+- Leash 300 while auto-clearing. An enemy player shooting the army on the way is answered.
+- Grouped NPCs may be engaged away from the owner only during his ordered auto-clear (CombatService.SetUnitPlanCheck).
+- Status: SEEKING / MARCHING -> X 180 m / FIGHTING 3 left / CLEARED n / RETURNING.
+
+**2. SEND (the map card of another player's base)**
+- **Verdict:** SEND ARMY shows the server verdict (`RequestArmySendCheck` -> "Your army 820 vs defences 1,240: risky"),
+  and `RequestArmySend { plotId }` re-checks everything.
+- **March:** the army walks there; the owner stays put. The defender gets "⚠ <Name>'s ARMY is marching on your base,
+  ETA m:ss" at once, plus a red ENEMY ARMY marker on his map (the 2 s feed).
+- **Siege, in order:**
+  - turrets (new HP: 400 / 550 / 700 by walls level 4 / 5 / 6+, rebuilt after 90 s);
+  - gate / tower guards;
+  - the gate (the existing breachGate: toast, 50 s rebuild);
+  - inside guards;
+  - the ATM.
+  - A defending player is always first. Every hit goes through the existing paths (attackAimOnly / unitShootAt ->
+    GateDefenseService.ApplyUnitDamage / CombatService).
+  - A dead sender's army keeps going (OwnerAway, SEND only) while he is in the server; he leaves = disbanded as before.
+  - No refill at the owner while a SEND is out.
+- **Loot:** the lead unit holds the ATM 6 s. A hit restarts the hold (the DamageCancelHp rule).
+  - `MoneyCollectorService.ArmyRaid`: CanArmyRaid (= CanRaid's checks minus the thief-character ones) and the same money
+    path (`_MoveLoot`) into the sender's ATM, at 5 % (2.5 % bully).
+  - The victim's shield starts exactly as for a player raid.
+- **No loot:** a shield / low balance at the breach -> "Gate breached, no loot (...)".
+- **End:** looted / wiped / RECALL / 240 s -> RETURN on foot.
+
+**3. Fairness (DECIDED by Shaun, 2026-09-30)**
+- a) Raids are online only; never raid an offline base ("Player left").
+- b) An army raid loots 5 % (ArmyLootMult 0.5).
+- c) The defender always gets the ETA warning and the red map marker.
+- d) The army keeps attacking while the sender is dead, as long as he is in the server; it disbands when he leaves.
+- e) SEND is blocked when the army is too weak (< 0.25 x defences); the loot is halved when it is far stronger (> 4 x).
+- f) A 5-minute SEND cooldown per sender (`profile.Raid.ArmySendCooldownUntil`, from the siege; 150 s if the victim
+  left).
+- g) 10 minutes of protection for a base after any army raid (`profile.Raid.ArmyProtectUntil`).
+- Plus: the shield, the new-player 600 s and the novice shield block a SEND; allies never; no SEND with PvP off; one
+  active SEND.
+
+**4. Orders UI**
+- **Walkie** (live): a third row SEND / RECALL (64 v cells, 44.8 px real), keys 5 / 6, and a status line under the grid.
+  While the walkie is shut, a small "ARMY: ..." strip sits in the top stack.
+- **SEND** opens the world map ("Tap an enemy base").
+- **RECALL** marches the army back (no teleport).
+- **Debug** (`/armydebug`): `[ArmyPlan] [ArmyRoute] [ArmyMarch] [ArmySiege] [ArmyFair]`, plus `[ArmyTarget]` as before.
+
+**5. ARMY KILLS (addendum)**
+- Counts army kills: players killed by army fire (MOST KILLS' kill rules: no self / clan / farmed pair), checkpoint and
+  bank guards (ByUnit), and base guards (weapon "Squad").
+- New store key `WE_LB2_ArmyKills` (+ weekly). ALL-TIME and THIS WEEK tabs, the TOP ARMY slot and frame, admin
+  excluded.
+- It replaces TOP ARMY only when `ArmyOrdersConfig.LiveForAll()`.
+
+**Checks**
+- `tools/checks/claude_bud_job38.py` (33 pins).
+- `tools/sim/run_army_orders_test.py`: 57 checks. Every fairness reason; the loot 5 / 2.5 %; route legs / retries /
+  no-route; the lead <= MarchSpeed and waits; seek -> march -> fight -> chain -> return -> FOLLOW; RECALL; send march;
+  cooldown / protection on the profiles; siege priority; the defending player first; the breach with a dead sender;
+  the ATM hold restarted by a hit; victim left -> 150 s; wiped; bully kept; no PivotTo / teleport / forced damage.
+- BuyPathStatic PASS=6947 FAIL=0; all 13 sims 0 failed; rojo ok; no new LSP errors; remote audit OK.
+- **Retired pin** (claude-bud comment + replacement): the XP SpendCash site for "atm_raid_loss" moved from
+  completeRaid to its shared helper `MoneyCollectorService._MoveLoot` (same one non-paying call).
+
+**Not verified here (Shaun / Code Bot must):**
+- the Studio 2-player acceptance A-F;
+- the march look while turning ([ArmyMarch] shows no PivotTo);
+- the walkie row at the 5 viewports (HUD harness);
+- the real PathfindingService routes on the live map;
+- AutoGuns do not target army units (as before): they fight players only.
+
+**Test ON HIS PHONE**
+1. Open the walkie: a third row SEND / RECALL at the same 44 px cells and a status line. Press ATTACK near a camp: the
+   status goes SEEKING -> MARCHING -> FIGHTING -> CLEARED -> RETURNING, and the block walks there and back in formation
+   (no pops, no teleports).
+2. RECALL mid-march: the army turns and walks back.
+3. Second phone: open the map, tap the owner's base (SEND ARMY + "Your army X vs defences Y"). Or, from the owner's
+   phone, tap the second player's base -> SEND ARMY. The second phone gets the ETA warning and sees the red ENEMY ARMY
+   marker.
+4. Watch the siege: turrets smoke and go offline, then guards, then the gate breaches (toast), then the ATM hold and
+   "Looted $N" (5 %). The army walks home.
+5. Try SEND again at once: "Army resting 4:5x". Try the same base from another account: "Just raided: protected 9:xx".
 ## claude-bud JOB 37 (2026-09-30): real road checkpoint + killable guards (branch `claude/desktop-bud`)
 **Flags**
 - **Detail:** `WorldDetailConfig.Kits.Checkpoint`. False builds today's 8-part kit exactly. The world is built once for

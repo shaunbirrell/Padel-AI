@@ -2083,6 +2083,18 @@ end
 	within CombatFairnessConfig.UnitProvokeOwnerStuds when that is above 0), calm or already provoked. A squad never
 	opens a fight its owner is not part of, and never keeps one going after the owner has left (an owner far away cannot
 	wake guards, or keep them awake, onto a bystander). ]]
+-- claude-bud JOB 38: ArmyPlan's check: an ordered ATTACK auto-clear may engage a grouped NPC its owner is not beside
+local unitPlanCheck: ((Player, string?) -> boolean)? = nil
+function CombatService.SetUnitPlanCheck(fn: ((Player, string?) -> boolean)?)
+	unitPlanCheck = fn
+end
+
+-- claude-bud JOB 38: an NPC's group id (ArmyPlan: "clear it" means the whole group)
+function CombatService.NPCGroupOf(npcId: string): string?
+	local rec = if typeof(npcId) == "string" then npcRecords[npcId] else nil
+	return if rec then rec.GroupId else nil
+end
+
 local function unitMayHit(owner: Player, rec: NPCRecord): boolean
 	if CombatFairnessConfig.UnitProvokeNeedsOwner ~= true or not (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then
 		return true
@@ -2090,6 +2102,9 @@ local function unitMayHit(owner: Player, rec: NPCRecord): boolean
 	local reach = tonumber(CombatFairnessConfig.UnitProvokeOwnerStuds) or 0
 	if not (reach > 0) then
 		reach = rec.Def.AggroRange
+	end
+	if unitPlanCheck ~= nil and unitPlanCheck(owner, rec.GroupId) == true then
+		return true -- claude-bud JOB 38: his ordered auto-clear (the army went out to clear it)
 	end
 	local _, hum, root = characterParts(owner)
 	if hum == nil or root == nil or hum.Health <= 0 then

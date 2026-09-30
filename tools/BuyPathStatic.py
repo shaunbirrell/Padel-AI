@@ -5509,7 +5509,9 @@ def _xp_spendcash_sites() -> None:
         "recruit_soldiers": (svc + "SoldierService.luau", "SoldierService.Recruit", False),
         "missile_strike": (svc + "MissileStrikeService.luau", "launch", False),
         "gate_repair": (svc + "GateDefenseService.luau", "GateDefenseService.TryRepair", False),
-        "atm_raid_loss": (svc + "MoneyCollectorService.luau", "completeRaid", False),
+        # claude-bud JOB 38: the raid money move is shared by the in-person and the army raid (completeRaid calls it; the
+        # same one non-paying call): retired "completeRaid", replaced by its helper MoneyCollectorService._MoveLoot
+        "atm_raid_loss": (svc + "MoneyCollectorService.luau", "MoneyCollectorService._MoveLoot", False),
         # claude-bud JOB 33 (retired the "exactly 8" count; replacement = these 2 more, 10 in all): the rebirth zone
         # upgrades and the silo rush spend Cash and pay NO purchase XP (XPService.OnSpend's whitelist does not list them)
         "rebirthzone_": (svc + "RebirthZoneService.luau", "RebirthZoneService.Upgrade", False),

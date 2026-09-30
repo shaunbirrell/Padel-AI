@@ -597,6 +597,7 @@ safeInit("AchievementService", AchievementService, deps) -- claude-bud JOB 34: a
 safeInit("PremiumGunService", PremiumGunService, deps) -- claude-bud JOB 35: premium guns armory (after Monetization / Combat / Base)
 safeInit("ShopOverhaulService", ShopOverhaulService, deps) -- claude-bud JOB 36: shop overhaul (after Monetization / Economy / Base / SquadOrders)
 safeInit("CheckpointGuardService", CheckpointGuardService, deps) -- claude-bud JOB 37: road checkpoint guards (after Combat / Mission / Monetization)
+safeInit("ArmyPlan", safeRequire("ArmyPlan", Modules.ArmyPlan), deps) -- claude-bud JOB 38: army ATTACK auto-clear / SEND / RECALL (after SquadOrders / GateDefense / MoneyCollector)
 safeInit("StorePropsService", StorePropsService, deps) -- Code Bot STORE-PROPS v132: Creator Store props (after RebirthZone; lazy, never blocks)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)

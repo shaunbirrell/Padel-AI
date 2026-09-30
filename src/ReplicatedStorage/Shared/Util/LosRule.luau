@@ -86,6 +86,10 @@ function LosRule.HitCast(origin: Vector3, dir: Vector3, params: RaycastParams): 
 		if (inst:IsA("BasePart") and inst.CanCollide) or inst:IsA("Terrain") or LosRule.IsCharacterPart(inst) then
 			return r
 		end
+		-- claude-bud JOB 38: an AutoGun with HP (ArmyOrdersConfig.TurretHP) is shootable though it never collides
+		if inst:GetAttribute("GateAutoGunPart") == true then
+			return r
+		end
 		-- see-through (non-colliding, not a character): step over it on a private copy
 		if p == params then
 			p = copyParams(params)

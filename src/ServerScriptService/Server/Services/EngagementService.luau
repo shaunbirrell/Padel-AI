@@ -146,6 +146,7 @@ local function rollWeek(profile: any, now: number)
 	if lb.Week ~= week then
 		lb.Week = week
 		lb.KillsW = 0
+		lb.ArmyKillsW = 0 -- claude-bud JOB 38: ARMY KILLS this week
 		lb.PlazaBase = math.floor(tonumber(profile.Stats and profile.Stats.PlazaCaptures) or 0)
 	end
 	if lb.Seeded ~= true then
@@ -169,6 +170,8 @@ local function valuesOf(player: Player, profile: any): { [string]: number }
 		Plaza_W = math.max(0, math.floor(tonumber(stats.PlazaCaptures) or 0) - math.floor(tonumber(lb.PlazaBase) or 0)),
 		Rebirths = math.max(0, math.floor(tonumber(profile.Prestige) or 0)),
 		Army = math.floor(tonumber(lb.ArmyMax) or 0),
+		ArmyKills = math.floor(tonumber(lb.ArmyKills) or 0), -- claude-bud JOB 38 (the board shows once live for everyone)
+		ArmyKills_W = math.floor(tonumber(lb.ArmyKillsW) or 0),
 	}
 	-- Supporters: confirmed Robux only (profile.Monetization.RobuxSpent), never 0, never for an opted-out player
 	local settings = if typeof(profile.Settings) == "table" then profile.Settings else {}
@@ -412,7 +415,9 @@ local function readBoards()
 end
 
 -- a real PvP kill (the server's creator tag): counts for the kill boards unless self / clan mate / farmed
+local killCounted = false -- claude-bud JOB 38: the last onKill passed the kill rules (the ARMY KILLS credit reuses them)
 local function onKill(victim: Player, killer: Player?)
+	killCounted = false
 	if killer == nil or killer == victim or killer.Parent == nil then
 		return
 	end
@@ -429,6 +434,30 @@ local function onKill(victim: Player, killer: Player?)
 	local lb = lbOf(profile)
 	lb.Kills = (tonumber(lb.Kills) or 0) + 1
 	lb.KillsW = (tonumber(lb.KillsW) or 0) + 1
+	deps.DataService.MarkDirty(killer)
+	killCounted = true
+end
+
+--[[ claude-bud JOB 38 ADDENDUM: ARMY KILLS. One kill made by this player's army units: an enemy player killed by army fire
+	(after the same kill rules as MOST KILLS: no self, clan mate or farmed pair), a checkpoint / bank guard
+	(ArmyOrdersConfig.ArmyKillNpcTypes, CombatService ByUnit), a base / tower guard (GateDefenseService, weapon "Squad").
+	Protected targets cannot be hit at all (the shared rule), so they never count. Admin / owner stay off the board. ]]
+function EngagementService.NoteArmyKill(killer: Player)
+	if typeof(killer) ~= "Instance" or not killer:IsA("Player") or killer.Parent == nil then
+		return
+	end
+	local AOC: any = require(Shared.Configs.ArmyOrdersConfig)
+	if not AOC.LiveFor(killer.UserId) then
+		return
+	end
+	local profile = deps.DataService and deps.DataService.GetProfile(killer)
+	if profile == nil then
+		return
+	end
+	rollWeek(profile, os.time())
+	local lb = lbOf(profile)
+	lb.ArmyKills = (tonumber(lb.ArmyKills) or 0) + 1
+	lb.ArmyKillsW = (tonumber(lb.ArmyKillsW) or 0) + 1
 	deps.DataService.MarkDirty(killer)
 end
 
@@ -644,6 +673,17 @@ function EngagementService.Init(d: { [string]: any })
 	if d.CombatService and d.CombatService.OnPlayerDeath then
 		d.CombatService.OnPlayerDeath(function(victim: Player, killer: Player?, _info: any)
 			onKill(victim, killer)
+			if killCounted and killer and typeof(_info) == "table" and _info.WeaponId == "Squad" then
+				EngagementService.NoteArmyKill(killer) -- claude-bud JOB 38: killed by his army's fire
+			end
+		end)
+	end
+	if d.CombatService and d.CombatService.OnNPCDeath then
+		d.CombatService.OnNPCDeath(function(info: any) -- claude-bud JOB 38: army kills of checkpoint / bank guards
+			local AOC: any = require(Shared.Configs.ArmyOrdersConfig)
+			if typeof(info) == "table" and info.ByUnit == true and info.Killer and AOC.ArmyKillNpcTypes[info.TypeId] == true then
+				EngagementService.NoteArmyKill(info.Killer)
+			end
 		end)
 	end
 	local okR, Remotes = pcall(require, Shared.Remotes)

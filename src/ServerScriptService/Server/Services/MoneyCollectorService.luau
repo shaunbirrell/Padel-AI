@@ -673,7 +673,10 @@ end
 
 --[[ (ok, reason?, secondsLeft?) — first failure wins. reason nil = silent (own ATM). "Dead" / "VictimLeft" are
 	cancel-only reasons (never pushed as Blocked). ]]
-function MoneyCollectorService.CanRaid(thief: Player, victim: Player): (boolean, string?, number?)
+-- claude-bud JOB 38: ONE set of raid checks. army = an army raid (ArmyOrdersConfig SEND): the thief-character checks
+-- (alive, on foot, the teleport lock) and the in-person thief cooldown do not apply (the army is there, he may be
+-- dead or far; the SEND has its own cooldown); every other check is the same.
+local function raidChecks(thief: Player, victim: Player, army: boolean): (boolean, string?, number?)
 	local R = RaidConfig.Raid
 	if not R.Enabled then
 		return false, "Disabled"
@@ -703,6 +706,9 @@ function MoneyCollectorService.CanRaid(thief: Player, victim: Player): (boolean,
 	if not R.AllowAllies and isAlly(victim.UserId, thief) then
 		return false, "Ally"
 	end
+	if army then
+		return MoneyCollectorService._RaidVictimChecks(tProfile, vProfile, victim, false)
+	end
 	local char = thief.Character
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
 	if not hum or hum.Health <= 0 then
@@ -720,6 +726,13 @@ function MoneyCollectorService.CanRaid(thief: Player, victim: Player): (boolean,
 	if nowUnix < cd then
 		return false, "ThiefCooldown", cd - nowUnix
 	end
+	return MoneyCollectorService._RaidVictimChecks(tProfile, vProfile, victim, true)
+end
+
+-- the victim-side checks both raids share (shield, new player, balance)
+function MoneyCollectorService._RaidVictimChecks(_tProfile: any, vProfile: any, victim: Player, _inPerson: boolean): (boolean, string?, number?)
+	local R = RaidConfig.Raid
+	local nowUnix = os.time()
 	local shield = raidNum(vProfile, "ShieldUntil")
 	if nowUnix < shield then
 		return false, "Shielded", shield - nowUnix
@@ -733,6 +746,15 @@ function MoneyCollectorService.CanRaid(thief: Player, victim: Player): (boolean,
 		return false, "LowBalance"
 	end
 	return true, nil, nil
+end
+
+function MoneyCollectorService.CanRaid(thief: Player, victim: Player): (boolean, string?, number?)
+	return raidChecks(thief, victim, false)
+end
+
+-- claude-bud JOB 38: CanRaid's checks for an army raid (no thief-character checks; the SEND fairness rules are ArmyPlan's)
+function MoneyCollectorService.CanArmyRaid(sender: Player, victim: Player): (boolean, string?, number?)
+	return raidChecks(sender, victim, true)
 end
 
 function MoneyCollectorService.GetRaidHold(thief: Player): { VictimUserId: number, Progress: number }?
@@ -780,6 +802,22 @@ local function completeRaid(thief: Player, victim: Player, hold: RaidHold): bool
 	vRaid.ShieldUntil = nowUnix + R.ShieldSeconds + shieldBonus
 	tRaid.RaidCooldownUntil = nowUnix + R.ThiefCooldownSeconds
 	-- 4. PendingCash → thief's ATM, 1:1 (existing transfer, no multipliers)
+	local moved = MoneyCollectorService._MoveLoot(thief, victim, steal)
+	-- 6. nothing moved → no shield, no cooldown
+	if moved <= 0 then
+		vRaid.ShieldUntil = oldShield
+		tRaid.RaidCooldownUntil = oldCooldown
+		clearHold(thief)
+		pushBlocked(thief, victim, "LowBalance", nil, true)
+		return false
+	end
+	return MoneyCollectorService._RaidDone(thief, victim, vProfile, vRaid, moved, balance, hold, nowUnix)
+end
+
+-- claude-bud JOB 38: steps 4-5 of a raid (shared by the in-person raid and the army raid): the victim's PendingCash, then
+-- (Auto Collect owners) the last 10 min of auto-collected Cash, into the thief's ATM. Returns what moved.
+function MoneyCollectorService._MoveLoot(thief: Player, victim: Player, steal: number): number
+	local R = RaidConfig.Raid
 	local moved = 0
 	local pending = math.max(0, math.floor(tonumber(EconomyService.GetPendingCash(victim)) or 0))
 	local fromPending = math.min(steal, pending)
@@ -800,14 +838,12 @@ local function completeRaid(thief: Player, victim: Player, hold: RaidHold): bool
 			end
 		end
 	end
-	-- 6. nothing moved → no shield, no cooldown
-	if moved <= 0 then
-		vRaid.ShieldUntil = oldShield
-		tRaid.RaidCooldownUntil = oldCooldown
-		clearHold(thief)
-		pushBlocked(thief, victim, "LowBalance", nil, true)
-		return false
-	end
+	return moved
+end
+
+-- steps 7-8 of an in-person raid (persist, mirror, feedback, analytics)
+function MoneyCollectorService._RaidDone(thief: Player, victim: Player, vProfile: any, vRaid: any, moved: number, balance: number, hold: any, nowUnix: number): boolean
+	local R = RaidConfig.Raid
 	-- 7. persist + mirror
 	;(vProfile :: any).LastRaidedAt = nowUnix -- claude-bud JOB 29: read by the notification state (docs/NOTIFICATIONS.md)
 	markDirty(victim)
@@ -861,6 +897,63 @@ local function completeRaid(thief: Player, victim: Player, hold: RaidHold): bool
 		end)
 	end
 	return true
+end
+
+--[[ claude-bud JOB 38: the ARMY raid (ArmyPlan, after the breach and the ATM hold). fraction = StealFraction x ArmyLootMult
+	(x BullyLootMult). Same checks (CanArmyRaid), the same money path (_MoveLoot: the victim's ATM -> the sender's ATM),
+	the same victim shield; the sender gets no in-person cooldown (the SEND has its own). Returns what moved. ]]
+function MoneyCollectorService.ArmyRaid(sender: Player, victim: Player, fraction: number): number
+	local R = RaidConfig.Raid
+	local ok = MoneyCollectorService.CanArmyRaid(sender, victim)
+	if not ok or EconomyService == nil then
+		return 0
+	end
+	local vProfile = profileOf(victim)
+	if not vProfile then
+		return 0
+	end
+	local balance = MoneyCollectorService.GetRaidableBalance(victim)
+	local frac = math.clamp(tonumber(fraction) or 0, 0, R.StealFraction)
+	local steal = math.max(R.MinSteal, math.floor(balance * frac))
+	local vRaid = raidOf(vProfile)
+	local oldShield = vRaid.ShieldUntil
+	local nowUnix = os.time()
+	local shieldBonus = 0 -- the Bunker Complex, exactly as a player raid
+	local okRZ, RZ = pcall(function(): any
+		return require(script.Parent.RebirthZoneService)
+	end)
+	if okRZ and RZ and RZ.RaidShieldBonus then
+		local okB, b = pcall(RZ.RaidShieldBonus, vProfile)
+		shieldBonus = if okB and typeof(b) == "number" then math.max(0, b) else 0
+	end
+	vRaid.ShieldUntil = nowUnix + R.ShieldSeconds + shieldBonus
+	local moved = MoneyCollectorService._MoveLoot(sender, victim, steal)
+	if moved <= 0 then
+		vRaid.ShieldUntil = oldShield
+		return 0
+	end
+	;(vProfile :: any).LastRaidedAt = nowUnix
+	markDirty(victim)
+	markDirty(sender)
+	pcall(function()
+		victim:SetAttribute("WE_ShieldUntil", vRaid.ShieldUntil)
+	end)
+	recentAuto[victim.UserId] = nil
+	if NotificationService then
+		NotificationService.Notify(sender, string.format("+$%s", formatCash(moved)), "Collect", nil, moved)
+		NotificationService.Notify(victim, string.format("%s's army robbed your ATM: -$%s", sender.DisplayName, formatCash(moved)), "Error", 6)
+		NotificationService.Notify(victim, string.format("-$%s", formatCash(moved)), "Collect", nil, -moved)
+	end
+	pcall(function()
+		require(script.Parent.GameFeelService).NoteRaid(victim.UserId, "Robbed", sender, moved)
+	end)
+	MoneyCollectorService.RefreshForPlayer(victim)
+	if AnalyticsService and AnalyticsService.Log then
+		task.spawn(function()
+			pcall(AnalyticsService.Log, "ARMY_RAID", sender.UserId, { VictimUserId = victim.UserId, Stolen = moved, Balance = balance })
+		end)
+	end
+	return moved
 end
 
 -- ── the hold state machine (spec §1.3) ─────────────────────────────────────

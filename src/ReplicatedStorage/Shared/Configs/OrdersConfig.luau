@@ -87,7 +87,12 @@ local OrdersConfig = {
 	-- under the one HUD UIScale (HudLayout.ApplyScreen: 0.70 on phones), so 64 v = 44.8 real px.
 	Walkie = {
 		Size = UDim2.fromOffset(216, 180), -- desktop: title + 2×2 cells of 100×44 v + MANAGE row 40 v
-		SizeTouch = UDim2.fromOffset(216, 244), -- 2×2 cells of 96×64 v + title + MANAGE row
+		SizeTouch = UDim2.fromOffset(216, 244),
+		-- claude-bud JOB 38 (ArmyOrdersConfig live): a third row (SEND / RECALL) + the plan status line
+		SizeTouchPlan = UDim2.fromOffset(216, 346),
+		SizePlan = UDim2.fromOffset(216, 262),
+		PanelMaxHeightPlan = 360,
+		StatusHeight = 22, -- 2×2 cells of 96×64 v + title + MANAGE row
 		MinTouchPx = 64, -- v; 56 v × 0.70 = 39 px was under the 44 px touch minimum
 		PanelMaxWidth = 240, -- popover 216 v + padding (UISizeConstraint)
 		PanelMaxHeight = 260,

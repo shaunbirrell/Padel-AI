@@ -119,6 +119,7 @@ local cardTitle: TextLabel? = nil
 local cardBody: TextLabel? = nil
 local goBtn: TextButton? = nil
 local clearBtn: TextButton? = nil
+local sendBtn: TextButton? = nil -- claude-bud JOB 38: SEND ARMY on an enemy base card (ArmyOrdersConfig live)
 local selected: { Kind: string, Id: string, X: number, Z: number }? = nil
 
 local function isLive(): boolean
@@ -698,6 +699,10 @@ local function paint()
 		for i, d in ipairs(live.Drops or {}) do
 			mark("Drop" .. tostring(i), d.X, d.Z, C.Drop, if d.A then I.Airdrop else I.Drop, "circle", if d.A then "AIRDROP" else nil)
 		end
+		-- claude-bud JOB 38: an enemy army marching on / sieging this player's base (red, the server's 2 s feed)
+		for i, inc in ipairs(live.Incoming or {}) do
+			mark("Inc" .. tostring(i), inc.X, inc.Z, C.OutpostEnemy, I.Job, "circle", "ENEMY ARMY")
+		end
 		for i, j in ipairs(live.Jobs or {}) do
 			mark("Job" .. tostring(i), j.X, j.Z, C.Job, I.Job, "circle", nil)
 		end
@@ -737,7 +742,7 @@ local function paint()
 		end
 	end
 	if clearBtn then
-		clearBtn.Visible = ObjectiveMarker.Pinned()
+		clearBtn.Visible = ObjectiveMarker.Pinned() and not (sendBtn ~= nil and sendBtn.Visible) -- JOB 38: one row
 	end
 end
 
@@ -780,6 +785,9 @@ local function showCard(title: string?, lines: { string }, canGo: boolean)
 	end
 	if goBtn then
 		goBtn.Visible = canGo
+	end
+	if sendBtn then
+		sendBtn.Visible = false -- claude-bud JOB 38: only selectBase shows it
 	end
 end
 
@@ -831,6 +839,21 @@ local function selectBase(b: any)
 	selected = { Kind = "Base", Id = tostring(b.P), X = b.X, Z = b.Z }
 	local title = if b.Mine then "Your base" elseif typeof(b.N) == "string" then b.N else "Unclaimed base"
 	showCard(title, { if b.Mine then "Home: build, collect, recruit" else "Player base" }, true)
+	-- claude-bud JOB 38: another player's base: SEND ARMY + the server's fairness verdict (the server re-checks on send)
+	local AOC = require(Shared.Configs.ArmyOrdersConfig) :: any
+	local sb = sendBtn
+	if sb and not b.Mine and typeof(b.N) == "string" and AOC.LiveFor(player.UserId) then
+		sb.Visible = true
+		sb.Text = "SEND ARMY"
+		sb:SetAttribute("Ok", false)
+		if clearBtn then
+			clearBtn.Visible = false
+		end
+		if cardBody then
+			cardBody.Text = "Player base\nChecking your army..."
+		end
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySendCheck, tonumber(b.P))
+	end
 end
 
 local function selectBank(bk: any)
@@ -1323,6 +1346,8 @@ function MapController.Init()
 	local goB = button(row, "Go", "GO", 96)
 	local clearB = button(row, "ClearPin", "CLEAR PIN", 150)
 	goBtn, clearBtn = goB, clearB
+	local sendB = button(row, "SendArmy", "SEND ARMY", 150) -- claude-bud JOB 38 (in CLEAR PIN's place on a base card)
+	sendBtn = sendB
 	y += TAP + 10
 	local rule2 = box(card, "Rule", C.Accent, 0.6, 3)
 	rule2.Position = UDim2.fromOffset(0, y)
@@ -1396,6 +1421,27 @@ function MapController.Init()
 	clearB.Activated:Connect(function()
 		ObjectiveMarker.ClearPin()
 		paint()
+	end)
+	-- claude-bud JOB 38: SEND ARMY (the client sends only the plot id; the army walks, nobody teleports)
+	sendB.Activated:Connect(function()
+		local s = selected
+		if s and s.Kind == "Base" and sendB:GetAttribute("Ok") == true then
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySend, tonumber(s.Id))
+			setOpen(false)
+		end
+	end)
+	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if kind ~= "ArmySendVerdict" or typeof(data) ~= "table" then
+			return
+		end
+		local s = selected
+		if s and s.Kind == "Base" and tonumber(s.Id) == tonumber(data.PlotId) then
+			if cardBody then
+				cardBody.Text = "Player base\n" .. tostring(data.Text)
+			end
+			sendB.Text = if data.Ok == true then "SEND ARMY" else "BLOCKED"
+			sendB:SetAttribute("Ok", data.Ok == true)
+		end
 	end)
 
 	root:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()

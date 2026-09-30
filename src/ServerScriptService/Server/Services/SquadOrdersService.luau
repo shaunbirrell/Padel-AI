@@ -71,6 +71,7 @@ SquadOrdersService._AF = require(script.Parent.Parent.Modules.ArmyFollow)
 -- PivotTo in SoldierController; in FOLLOW the escort code below only shoots and aims (escortAimOnly)
 SquadOrdersService._AC = require(script.Parent.Parent.Modules.ArmyController)
 SquadOrdersService._SC = require(script.Parent.Parent.Modules.SoldierController)
+SquadOrdersService._Plan = nil :: any -- claude-bud JOB 38: ArmyPlan (set by ArmyPlan.Init; nil = no plans, today's orders)
 local escortAimOnly = false -- v114: set around escortUnit for a Follow3 owner: shoot / face only, never walk
 SquadOrdersService._AFOn = false
 
@@ -371,6 +372,7 @@ local function pushState(player: Player)
 		FieldUnits = alive,
 		MaxFieldUnits = (OrdersConfig.MaxFieldUnits or 5) + math.floor(researchAdd(player, "SquadSize")), -- v69 research
 		ShowPanel = show,
+		Plan = if SquadOrdersService._Plan ~= nil then SquadOrdersService._Plan.Status(player.UserId) else nil, -- claude-bud JOB 38
 	})
 end
 
@@ -2734,10 +2736,17 @@ end
 -- guard / NPC counts and the pick, per owner at most every ArmyCombat.TargetLogSeconds
 local targetLogAt: { [number]: number } = {}
 
-local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
+local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart?, planOpts: any?)
 	local f3 = (ArmyConfig :: any).Follow3
 	local reach = (tonumber(f3.AttackAggroStuds) or 120) + (tonumber(f3.AttackKeepExtraStuds) or 20)
 	local leash = tonumber(f3.AttackLeashStuds) or 140
+	-- claude-bud JOB 38: an army plan (ArmyPlan) calls this same pick with its own centre / reach / leash (the owner may
+	-- be far away or dead on a SEND): ONE target pick, ONE hostility rule for both paths
+	if planOpts ~= nil then
+		reach = tonumber(planOpts.Reach) or reach
+		leash = tonumber(planOpts.Leash) or leash
+	end
+	local leashFrom: Vector3 = if planOpts ~= nil and typeof(planOpts.LeashFrom) == "Vector3" then planOpts.LeashFrom elseif proot then proot.Position else Vector3.zero
 	local sum, cnt = Vector3.zero, 0
 	for _, u in ipairs(st.Units) do
 		if u.Alive and u.Root.Parent then
@@ -2749,7 +2758,7 @@ local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
 		(st :: any)._acTarget = nil
 		return
 	end
-	local centre = sum / cnt
+	local centre = if planOpts ~= nil and typeof(planOpts.Centre) == "Vector3" then Vector3.new(planOpts.Centre.X, 0, planOpts.Centre.Z) else sum / cnt
 	local ac = armyCombat()
 	-- v124: the per-candidate rejection log (only for an owner with /armydebug on, rate-limited)
 	local acm = SquadOrdersService._AC
@@ -2766,7 +2775,7 @@ local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
 	local kinds: { [any]: string } = {}
 	local who: { [any]: Player } = {}
 	local function consider(h: Humanoid?, r: BasePart?, kind: string?, pl: Player?, pri: number?): boolean
-		if h and r and h.Health > 0 and r.Parent ~= nil and not roots[h] and flatDist(r.Position, proot.Position) <= leash then
+		if h and r and h.Health > 0 and r.Parent ~= nil and not roots[h] and flatDist(r.Position, leashFrom) <= leash then
 			roots[h] = r
 			kinds[h] = kind or "NPC"
 			if pl then
@@ -2802,7 +2811,7 @@ local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart)
 					verdict = "dead"
 				else
 					local dC = flatDist(r.Position, centre)
-					local dO = flatDist(r.Position, proot.Position)
+					local dO = flatDist(r.Position, leashFrom)
 					if dC > reach then
 						verdict = string.format("out_of_reach dCentre=%.0f>%.0f", dC, reach)
 					else
@@ -2978,8 +2987,9 @@ local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: Base
 	if gd == nil or gd.ApplyUnitDamage == nil then
 		return false
 	end
-	local mult = if kind == "Gate" then tonumber(ac.GateDamageMult) or 1 else tonumber(ac.GuardDamageMult) or 1
-	local ok, landed = pcall(gd.ApplyUnitDamage, player, unit.Root.Position, part, base * mult)
+	local mult = if kind == "Gate" or kind == "Structure" then tonumber(ac.GateDamageMult) or 1 else tonumber(ac.GuardDamageMult) or 1
+	-- claude-bud JOB 38: a SEND keeps hitting while its sender is dead but in the server (ArmyPlan.DamageOpts)
+	local ok, landed = pcall(gd.ApplyUnitDamage, player, unit.Root.Position, part, base * mult, if SquadOrdersService._Plan ~= nil then SquadOrdersService._Plan.DamageOpts(player) else nil)
 	local hit = ok and landed == true
 	hitLog(player, unit, kind, name, base * mult, if hit then base * mult else 0, if hit then "ok" elseif ok then "refused" else "error")
 	return hit
@@ -2993,8 +3003,9 @@ local function attackAimOnly(player: Player, st: SquadState, unit: SquadUnit, no
 		return
 	end
 	local band = (OrdersConfig.AttackRange or 55) * 0.85 -- the fire band, as attackUnit
-	if tgt.Kind == "Player" or tgt.Kind == "Guard" then
+	if tgt.Kind == "Player" or tgt.Kind == "Guard" or tgt.Kind == "Structure" then
 		-- JOB 24 §2: an enemy player / base defender: shoot it in sight, else the gate in the way (ShootGates)
+		-- claude-bud JOB 38: "Structure" = a SEND siege's turret / gate part (ArmyPlan), shot through the same path
 		if losCheckDue(unit, now) then
 			local d = (tgt.Root.Position - unit.Root.Position).Magnitude
 			if d <= band then
@@ -3576,7 +3587,8 @@ function SquadOrdersService.SyncArmy(player: Player)
 		pushState(player)
 		return
 	end
-	while #st.Units < desired do
+	while #st.Units < desired and not (SquadOrdersService._Plan ~= nil and SquadOrdersService._Plan.HoldsRefill(player.UserId)) do
+		-- claude-bud JOB 38: a SEND army does not refill at its owner while it is out
 		-- lane C: the lowest free slot (was #Units + 1, which doubled up a slot after a unit died)
 		local used: { [number]: boolean } = {}
 		for _, u in ipairs(st.Units) do
@@ -3678,6 +3690,23 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 	if typeof(orderRaw) ~= "string" then
 		return false, "InvalidOrder"
 	end
+	-- claude-bud JOB 38: RECALL, or another order while an army plan runs: the army marches back first (ArmyPlan);
+	-- ATTACK again while auto-clearing keeps the plan
+	if SquadOrdersService._Plan ~= nil then
+		local owns = SquadOrdersService._Plan.Owns(player.UserId)
+		if owns and orderRaw == "Attack" then
+			return true, nil
+		end
+		if orderRaw == "Recall" or owns then
+			if SquadOrdersService._Plan.Recall(player, if orderRaw == "Recall" then nil else orderRaw, squadByUser[player.UserId]) then
+				pushState(player)
+				return true, nil
+			end
+			if orderRaw == "Recall" then
+				orderRaw = "Follow"
+			end
+		end
+	end
 	local order = orderRaw :: string
 	if not VALID[order] then
 		return false, "InvalidOrder"
@@ -3749,6 +3778,9 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 		end
 	end
 
+	if order == "Attack" and SquadOrdersService._Plan ~= nil then
+		pcall(SquadOrdersService._Plan.StartClear, player, st) -- claude-bud JOB 38: live owners: auto-clear
+	end
 	pushState(player)
 	-- the order echo is this flash + the Army popover (no "Squad: X" toast per order — spec §4.2)
 	flashOrderBillboard(player, st, order :: OrderId)
@@ -3761,6 +3793,28 @@ end
 
 function SquadOrdersService.Push(player: Player)
 	pushState(player)
+end
+
+-- claude-bud JOB 38: the owner's squad state (ArmyPlan SEND) and the army's power numbers (ArmySendRules: units x unit HP
+-- x unit DPS, research / boosts included)
+function SquadOrdersService.StateOf(player: Player): any
+	return squadByUser[player.UserId]
+end
+
+function SquadOrdersService.UnitPower(player: Player): (number, number, number)
+	local st = squadByUser[player.UserId]
+	local units, rate = 0, OrdersConfig.AttackFireRate or 1.8
+	if st then
+		for _, u in ipairs(st.Units) do
+			if u.Alive and u.Humanoid.Health > 0 then
+				units += 1
+				rate = armyFireRate(u)
+			end
+		end
+	end
+	local hp = armyHealthBase() * researchMult(player, "SoldierHealth") * superMult(player)
+	local dps = armyDamageBase() * researchMult(player, "SoldierDamage") * armyBoostMult(player) * rate
+	return units, hp, dps
 end
 
 -- army fix (ArmyConfig.Gate): may this owner's army open his gate at `pos`? Only while his squad FOLLOWS him (never
@@ -4030,6 +4084,13 @@ function SquadOrdersService.Init(deps: { [string]: any })
 						end
 					else
 						(st :: any)._defTarget = nil
+					end
+					-- claude-bud JOB 38: an army plan (ATTACK auto-clear / SEND / RECALL) sets the target and moves the lead
+					if SquadOrdersService._Plan ~= nil and SquadOrdersService._Plan.Owns(player.UserId) then
+						local okPl, errPl = pcall(SquadOrdersService._Plan.Think, player, st, proot, pickSquadTarget, now)
+						if not okPl then
+							thinkError(player, errPl, now)
+						end
 					end
 					for _, unit in ipairs(st.Units) do
 						-- army fix (ArmyConfig.Loop): an error in one unit's think never stops the loop for every army
