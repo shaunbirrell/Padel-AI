@@ -316,6 +316,18 @@ function BaseTierBuilder.Build(ctx: Ctx, tier: number): (Model, number, number)
 		put(m, "CrestInlay", Vector3.new(1.6, 2.0, 0.1), gate * CFrame.new(0, ch, -2.55), bannerColor, M.SmoothPlastic)
 		put(m, "CrestPoint", Vector3.new(1.4, 1.4, 0.4), gate * CFrame.new(0, ch - 1.6, -2.3) * CFrame.Angles(0, 0, math.rad(45)), C.Gold, M.Metal)
 	end
+	-- v157: the Black Market banners below Tier 4 (the gate banners Tier 4 adds): two masts on the gate posts, 4 parts
+	if ctx.BannerColor and t < 4 then
+		local m = tierFolder(root, 0)
+		m.Name = "MarketBanners"
+		for i, p in ipairs(ctx.Posts) do
+			if i <= 2 then
+				local top = p.CFrame * CFrame.new(0, p.Size.Y * 0.5 + (if t >= 1 then 2.8 else 0), 0)
+				put(m, "GateMast", Vector3.new(4.5, 0.25, 0.25), top * CFrame.new(0, 2.25, 0) * CFrame.Angles(0, 0, math.rad(90)), C.Steel, M.Metal, false, Enum.PartType.Cylinder)
+				put(m, "GateBanner", Vector3.new(0.1, 1.8, 2.6), top * CFrame.new(0, 3.3, 1.4), bannerColor, M.Fabric)
+			end
+		end
+	end
 	if ctx.Trophy then
 		local m = tierFolder(root, 0)
 		m.Name = "Trophy"

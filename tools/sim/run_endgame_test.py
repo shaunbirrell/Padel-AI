@@ -651,7 +651,9 @@ for _, kind in ipairs({ "Intel", "BlackMarket", "Heist" }) do
   for _, dd in ipairs(sm:GetDescendants()) do
     if dd.ClassName == "Part" then sp += 1 elseif dd.ClassName == "PointLight" then sl += 1 elseif dd.ClassName == "SurfaceGui" then sg += 1 end
   end
-  check(sp == PSC.Stations[kind].Parts and sp <= PSC.MaxParts and sl <= 1 and sg == 1, string.format("the %s station = %d parts (cap %d), %d light, 1 sign", kind, sp, PSC.MaxParts, sl))
+  -- v157: the Black Market adds its own door sign (1 part, 1 SurfaceGui) while the Armory downstairs is not live
+  local ex = if kind == "BlackMarket" and not EG.LiveFor(Players.LocalPlayer.UserId, "Mastery") then 1 else 0
+  check(sp == PSC.Stations[kind].Parts + ex and sp <= PSC.MaxParts and sl <= 1 and sg == 1 + ex, string.format("the %s station = %d parts (cap %d), %d light, %d sign", kind, sp, PSC.MaxParts, sl, 1 + ex))
 end
 local ctxX = table.clone(ctx)
 ctxX.Crest = true

@@ -450,6 +450,11 @@ Builders.BlackMarket = function(house: CFrame, st: any): (Model, Part)
 	t.TextColor3 = Color3.fromRGB(255, 210, 90)
 	t.Text = st.Sign
 	t.Parent = g
+	-- v157: the Black Market is live for everyone; while the Armory downstairs is not (its ARMORY sign is the
+	-- building's), the door carries a BLACK MARKET sign so a player can find the stall (1 part, 1 SurfaceGui)
+	if not EndgameConfig.LiveFor(player.UserId, "Mastery") then
+		doorSign(m, house, st.Sign)
+	end
 	return m, head
 end
 
@@ -754,6 +759,23 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 				Id = if r.On then "None:" .. r.Kind else r.Id, Label = if r.On then "TAKE OFF" else "PUT ON",
 			})
 		end
+		-- v157: the Black Market camos you own go on the gun in your hand (the server checks the gun and the camo)
+		local held = mk.Held
+		for _, cm in ipairs(mk.Camos or {}) do
+			if typeof(held) == "string" then
+				table.insert(out, {
+					Name = string.format("%s (your %s)", string.upper(tostring(cm.Name)), tostring(mk.HeldName or held)),
+					Sub = if cm.On then "On your gun" else "Yours: put it on the gun in your hand",
+					Price = 0, Need = nil, Kind = "EquipCamo", Id = held .. ":" .. (if cm.On then "None" else tostring(cm.Id)),
+					Label = if cm.On then "TAKE OFF" else "PUT ON",
+				})
+			else
+				table.insert(out, {
+					Name = string.upper(tostring(cm.Name)), Sub = "Yours: hold a gun to put it on",
+					Price = nil, Need = nil, Kind = "Info", Id = "Camo" .. tostring(cm.Id), Done = "OWNED",
+				})
+			end
+		end
 	elseif kind == "Heist" and typeof(s.Heist) == "table" then
 		local hs = s.Heist
 		local nx = hs.Next
@@ -997,6 +1019,7 @@ local function empireRowsRefresh()
 	local ring = ringLabel
 	if ring then
 		ring.Text = if typeof(e) == "table" then tostring(e.Level) else "-"
+		ring.Visible = EndgameConfig.LiveFor(player.UserId, "EmpireLevel") -- v157: no empty ring for Black-Market-only players
 	end
 	local cash, perSec = wallet()
 	local TAP = PanelShell.TouchMinV()
@@ -1053,6 +1076,8 @@ local function empireRowsRefresh()
 				end
 				local b = best
 				goal.Text = if b then string.format("%s  %s  %s", b.Name, short(b.Price :: number), EndgameController.EtaText(b.Price :: number, cash, perSec)) else "ALL MAXED"
+			elseif kind == "BlackMarket" then
+				goal.Text = "Cosmetics for Cash + Gold. New stock every Monday"
 			end
 			goal.Parent = row
 			local pin = Instance.new("TextButton")

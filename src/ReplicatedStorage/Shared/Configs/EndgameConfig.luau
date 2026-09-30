@@ -22,6 +22,11 @@ local EndgameConfig = {
 		Enabled = true,
 		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
 	},
+	-- Code Bot v157 (owner-approved 2026-10-01): a part listed here is live for EVERY player while Live.OwnerFirst keeps
+	-- every other part owner-only. It still needs Live.Enabled and its own Parts switch (either false = off for all).
+	PublicParts = {
+		BlackMarket = true, -- the weekly Black Market (cosmetics only; Cash + Gold, never Robux)
+	} :: { [string]: boolean },
 	-- one switch per system (§4); a phase turns its own on
 	Parts = {
 		Rebirth = true, -- phase 1: §2.1 the base price scale
@@ -274,20 +279,43 @@ local EndgameConfig = {
 
 function EndgameConfig.LiveFor(userId: any, part: string): boolean
 	local parts: any = EndgameConfig.Parts
-	return parts[part] == true and RetentionConfig.Live(EndgameConfig.Live, userId)
-end
-
--- true when any part is live for this player (the client's stations and panels)
-function EndgameConfig.AnyLiveFor(userId: any): boolean
-	if not RetentionConfig.Live(EndgameConfig.Live, userId) then
+	if parts[part] ~= true then
 		return false
 	end
-	for _, on in pairs(EndgameConfig.Parts) do
-		if on == true then
+	-- v157: a PublicParts part skips the owner-first rule only (Live.Enabled is still the kill switch)
+	local pub: any = EndgameConfig.PublicParts
+	if typeof(pub) == "table" and pub[part] == true and EndgameConfig.Live.Enabled == true then
+		return true
+	end
+	return RetentionConfig.Live(EndgameConfig.Live, userId)
+end
+
+-- true when any part is live for this player (the client's stations and panels; the EMPIRE button)
+function EndgameConfig.AnyLiveFor(userId: any): boolean
+	for part in pairs(EndgameConfig.Parts) do
+		if EndgameConfig.LiveFor(userId, part) then
 			return true
 		end
 	end
 	return false
+end
+
+-- v157: the gun camo path (wear / put on / take off a camo you own). The Armory (Mastery) sells camos, the Black
+-- Market sells Urban / Tiger / Gold: a player the Black Market is live for can wear what he bought there even while
+-- the Armory is still owner-only. Buying at the Armory stays Mastery-only.
+function EndgameConfig.CamoLiveFor(userId: any): boolean
+	return EndgameConfig.LiveFor(userId, "Mastery") or EndgameConfig.LiveFor(userId, "BlackMarket")
+end
+
+-- v157: the camos the Black Market sells (Items of Kind "Camo" -> [camo id] = item id)
+function EndgameConfig.MarketCamos(): { [string]: string }
+	local out: { [string]: string } = {}
+	for id, it in pairs(EndgameConfig.BlackMarket.Items :: any) do
+		if typeof(it) == "table" and it.Kind == "Camo" and typeof(it.Camo) == "string" then
+			out[it.Camo] = id
+		end
+	end
+	return out
 end
 
 -- round to the nearest `step`, halves to the even step (the spec's tables: 5M x 1.17 = 5.85M -> 5.8M)

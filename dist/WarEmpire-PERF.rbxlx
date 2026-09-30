@@ -4528,6 +4528,11 @@ local EndgameConfig = {
 		Enabled = true,
 		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
 	},
+	-- Code Bot v157 (owner-approved 2026-10-01): a part listed here is live for EVERY player while Live.OwnerFirst keeps
+	-- every other part owner-only. It still needs Live.Enabled and its own Parts switch (either false = off for all).
+	PublicParts = {
+		BlackMarket = true, -- the weekly Black Market (cosmetics only; Cash + Gold, never Robux)
+	} :: { [string]: boolean },
 	-- one switch per system (§4); a phase turns its own on
 	Parts = {
 		Rebirth = true, -- phase 1: §2.1 the base price scale
@@ -4780,20 +4785,43 @@ local EndgameConfig = {
 
 function EndgameConfig.LiveFor(userId: any, part: string): boolean
 	local parts: any = EndgameConfig.Parts
-	return parts[part] == true and RetentionConfig.Live(EndgameConfig.Live, userId)
-end
-
--- true when any part is live for this player (the client's stations and panels)
-function EndgameConfig.AnyLiveFor(userId: any): boolean
-	if not RetentionConfig.Live(EndgameConfig.Live, userId) then
+	if parts[part] ~= true then
 		return false
 	end
-	for _, on in pairs(EndgameConfig.Parts) do
-		if on == true then
+	-- v157: a PublicParts part skips the owner-first rule only (Live.Enabled is still the kill switch)
+	local pub: any = EndgameConfig.PublicParts
+	if typeof(pub) == "table" and pub[part] == true and EndgameConfig.Live.Enabled == true then
+		return true
+	end
+	return RetentionConfig.Live(EndgameConfig.Live, userId)
+end
+
+-- true when any part is live for this player (the client's stations and panels; the EMPIRE button)
+function EndgameConfig.AnyLiveFor(userId: any): boolean
+	for part in pairs(EndgameConfig.Parts) do
+		if EndgameConfig.LiveFor(userId, part) then
 			return true
 		end
 	end
 	return false
+end
+
+-- v157: the gun camo path (wear / put on / take off a camo you own). The Armory (Mastery) sells camos, the Black
+-- Market sells Urban / Tiger / Gold: a player the Black Market is live for can wear what he bought there even while
+-- the Armory is still owner-only. Buying at the Armory stays Mastery-only.
+function EndgameConfig.CamoLiveFor(userId: any): boolean
+	return EndgameConfig.LiveFor(userId, "Mastery") or EndgameConfig.LiveFor(userId, "BlackMarket")
+end
+
+-- v157: the camos the Black Market sells (Items of Kind "Camo" -> [camo id] = item id)
+function EndgameConfig.MarketCamos(): { [string]: string }
+	local out: { [string]: string } = {}
+	for id, it in pairs(EndgameConfig.BlackMarket.Items :: any) do
+		if typeof(it) == "table" and it.Kind == "Camo" and typeof(it.Camo) == "string" then
+			out[it.Camo] = id
+		end
+	end
+	return out
 end
 
 -- round to the nearest `step`, halves to the even step (the spec's tables: 5M x 1.17 = 5.85M -> 5.8M)
@@ -29677,7 +29705,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 156)
+		player:SetAttribute("WE_Build", 157)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -35709,6 +35737,18 @@ function BaseTierBuilder.Build(ctx: Ctx, tier: number): (Model, number, number)
 		put(m, "CrestShield", Vector3.new(2.6, 3.0, 0.4), gate * CFrame.new(0, ch, -2.3), C.Gold, M.Metal)
 		put(m, "CrestInlay", Vector3.new(1.6, 2.0, 0.1), gate * CFrame.new(0, ch, -2.55), bannerColor, M.SmoothPlastic)
 		put(m, "CrestPoint", Vector3.new(1.4, 1.4, 0.4), gate * CFrame.new(0, ch - 1.6, -2.3) * CFrame.Angles(0, 0, math.rad(45)), C.Gold, M.Metal)
+	end
+	-- v157: the Black Market banners below Tier 4 (the gate banners Tier 4 adds): two masts on the gate posts, 4 parts
+	if ctx.BannerColor and t < 4 then
+		local m = tierFolder(root, 0)
+		m.Name = "MarketBanners"
+		for i, p in ipairs(ctx.Posts) do
+			if i <= 2 then
+				local top = p.CFrame * CFrame.new(0, p.Size.Y * 0.5 + (if t >= 1 then 2.8 else 0), 0)
+				put(m, "GateMast", Vector3.new(4.5, 0.25, 0.25), top * CFrame.new(0, 2.25, 0) * CFrame.Angles(0, 0, math.rad(90)), C.Steel, M.Metal, false, Enum.PartType.Cylinder)
+				put(m, "GateBanner", Vector3.new(0.1, 1.8, 2.6), top * CFrame.new(0, 3.3, 1.4), bannerColor, M.Fabric)
+			end
+		end
 	end
 	if ctx.Trophy then
 		local m = tierFolder(root, 0)
@@ -71663,7 +71703,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 156)
+			player:SetAttribute("WE_Build", 157)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -80103,7 +80143,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 156)
+		player:SetAttribute("WE_Build", 157)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -80245,7 +80285,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=156",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=157",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -81745,16 +81785,23 @@ function EndgameService.GunModsString(player: Player): string?
 	return if #parts > 0 then table.concat(parts, ";") else nil
 end
 
--- the camo on a gun (nil = none / not live): CombatService sets the character's WE_GunCamo with the drawn gun
+-- the camo on a gun (nil = none / not live): CombatService sets the character's WE_GunCamo with the drawn gun.
+-- v157: live with the Armory (Mastery) OR the Black Market; without the Armory only the Black Market's camos show.
 function EndgameService.CamoFor(player: Player, weaponId: string?): string?
-	if weaponId == nil or not EndgameConfig.LiveFor(player.UserId, "Mastery") then
+	if weaponId == nil or not EndgameConfig.CamoLiveFor(player.UserId) then
 		return nil
 	end
 	local profile = getProfile(player)
 	local e = if profile then profile.Endgame else nil
 	local c = if typeof(e) == "table" and typeof(e.Camos) == "table" then e.Camos else nil
 	local eq = if c and typeof(c.Equip) == "table" then c.Equip[weaponId] else nil
-	return if typeof(eq) == "string" and c and c[eq] == true then eq else nil
+	if typeof(eq) ~= "string" or c == nil or c[eq] ~= true then
+		return nil
+	end
+	if not EndgameConfig.LiveFor(player.UserId, "Mastery") and EndgameConfig.MarketCamos()[eq] == nil then
+		return nil
+	end
+	return eq
 end
 
 -- VehicleService: the Vehicle Workshop factors for a spawn (1, 1 while the part is not live)
@@ -82335,7 +82382,19 @@ function EndgameService.State(player: Player): { [string]: any }
 				table.insert(owned, { Id = id, Name = it.Name, Kind = it.Kind, On = bm.Equip[it.Kind] == id })
 			end
 		end
-		out.Market = { Rows = rows, Owned = owned, EndsIn = stock.EndsIn, Gold = nonNeg(profile.Gold) }
+		-- v157: the Black Market camos he owns, to put on / take off the gun in his hand (no Armory needed)
+		local heldRaw = player:GetAttribute("WE_EquippedWeapon")
+		local held: string? = if typeof(heldRaw) == "string" and table.find(ownedGuns(player), heldRaw) ~= nil then heldRaw else nil
+		local camoRows = {}
+		local mc = EndgameConfig.MarketCamos()
+		local on = if held then EndgameService.CamoFor(player, held) else nil
+		for _, cm in ipairs(EndgameConfig.Mastery.CamoOrder) do
+			local itemId = mc[cm]
+			if itemId and camos[cm] == true then
+				table.insert(camoRows, { Id = cm, Name = B.Items[itemId].Name, On = on == cm })
+			end
+		end
+		out.Market = { Rows = rows, Owned = owned, EndsIn = stock.EndsIn, Gold = nonNeg(profile.Gold), Held = held, HeldName = if held then tostring((WeaponConfig.Weapons :: any)[held].ShortName or (WeaponConfig.Weapons :: any)[held].DisplayName or held) else nil, Camos = camoRows }
 	end
 	if EndgameConfig.LiveFor(uid, "Contracts") then
 		local c = contractsOf(player, profile)
@@ -82491,7 +82550,9 @@ function EndgameService._Plan(player: Player, profile: any, kind: string, id: st
 		}
 	elseif kind == "Mastery" or kind == "Attach" or kind == "Camo" or kind == "EquipCamo" then
 		local Ma = EndgameConfig.Mastery
-		if not EndgameConfig.LiveFor(uid, "Mastery") then
+		-- v157: putting on / taking off a camo you own is live with the Black Market too; buying stays Armory-only
+		local masteryLive = EndgameConfig.LiveFor(uid, "Mastery")
+		if not masteryLive and not (kind == "EquipCamo" and EndgameConfig.CamoLiveFor(uid)) then
 			return nil, T.NotLive
 		end
 		if typeof(id) ~= "string" then
@@ -82593,6 +82654,9 @@ function EndgameService._Plan(player: Player, profile: any, kind: string, id: st
 		local c = endgameMap(profile, "Camos")
 		if camo ~= "None" and c[camo] ~= true then
 			return nil, "Buy that camo first"
+		end
+		if camo ~= "None" and not masteryLive and EndgameConfig.MarketCamos()[camo] == nil then
+			return nil, T.NotLive
 		end
 		return {
 			Key = "camo_equip",
@@ -82776,7 +82840,17 @@ function EndgameService._Plan(player: Player, profile: any, kind: string, id: st
 			Log = string.format("Market %s ok price=%d gold=%s", sid, price, tostring(isGold)),
 			Apply = function(p: any): string
 				if item.Kind == "Camo" then
-					endgameMap(p, "Camos")[item.Camo] = true
+					local cc = endgameMap(p, "Camos")
+					cc[item.Camo] = true
+					-- v157: the new camo goes straight onto the gun in his hand (an owned gun; server attribute)
+					local held = player:GetAttribute("WE_EquippedWeapon")
+					if typeof(held) == "string" and table.find(ownedGuns(player), held) ~= nil then
+						if typeof(cc.Equip) ~= "table" then
+							cc.Equip = {}
+						end
+						cc.Equip[held] = item.Camo
+						return item.Name .. " bought: on your " .. tostring((WeaponConfig.Weapons :: any)[held].ShortName or held)
+					end
 				else
 					local bm = marketData(p)
 					bm.Bought[sid] = true
@@ -83210,7 +83284,7 @@ function EndgameService.Purchase(player: Player, kind: string, id: string?, auto
 			pcall(ss.PushState, player)
 		end
 	end
-	if key == "mastery" or key == "attach" or key == "camo" or key == "camo_equip" then
+	if key == "mastery" or key == "attach" or key == "camo" or key == "camo_equip" or key == "market" then
 		-- the drawn gun's camo and the client's fire-rate / range multipliers follow at once
 		local cs = deps.CombatService
 		if cs and cs.SyncWeapons then
@@ -83313,7 +83387,7 @@ function EndgameService.SyncBaseTier(player: Player)
 	local crest = EndgameService.HasUnlock(player.UserId, "BastionCrest")
 	local trophy = EndgameService.HasTrophy(player.UserId)
 	local banner = EndgameService.BannerColor(player.UserId)
-	if tier <= 0 and not crest and not trophy then
+	if tier <= 0 and not crest and not trophy and banner == nil then
 		if existing then
 			existing:Destroy()
 		end
@@ -130186,6 +130260,11 @@ Builders.BlackMarket = function(house: CFrame, st: any): (Model, Part)
 	t.TextColor3 = Color3.fromRGB(255, 210, 90)
 	t.Text = st.Sign
 	t.Parent = g
+	-- v157: the Black Market is live for everyone; while the Armory downstairs is not (its ARMORY sign is the
+	-- building's), the door carries a BLACK MARKET sign so a player can find the stall (1 part, 1 SurfaceGui)
+	if not EndgameConfig.LiveFor(player.UserId, "Mastery") then
+		doorSign(m, house, st.Sign)
+	end
 	return m, head
 end
 
@@ -130490,6 +130569,23 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 				Id = if r.On then "None:" .. r.Kind else r.Id, Label = if r.On then "TAKE OFF" else "PUT ON",
 			})
 		end
+		-- v157: the Black Market camos you own go on the gun in your hand (the server checks the gun and the camo)
+		local held = mk.Held
+		for _, cm in ipairs(mk.Camos or {}) do
+			if typeof(held) == "string" then
+				table.insert(out, {
+					Name = string.format("%s (your %s)", string.upper(tostring(cm.Name)), tostring(mk.HeldName or held)),
+					Sub = if cm.On then "On your gun" else "Yours: put it on the gun in your hand",
+					Price = 0, Need = nil, Kind = "EquipCamo", Id = held .. ":" .. (if cm.On then "None" else tostring(cm.Id)),
+					Label = if cm.On then "TAKE OFF" else "PUT ON",
+				})
+			else
+				table.insert(out, {
+					Name = string.upper(tostring(cm.Name)), Sub = "Yours: hold a gun to put it on",
+					Price = nil, Need = nil, Kind = "Info", Id = "Camo" .. tostring(cm.Id), Done = "OWNED",
+				})
+			end
+		end
 	elseif kind == "Heist" and typeof(s.Heist) == "table" then
 		local hs = s.Heist
 		local nx = hs.Next
@@ -130733,6 +130829,7 @@ local function empireRowsRefresh()
 	local ring = ringLabel
 	if ring then
 		ring.Text = if typeof(e) == "table" then tostring(e.Level) else "-"
+		ring.Visible = EndgameConfig.LiveFor(player.UserId, "EmpireLevel") -- v157: no empty ring for Black-Market-only players
 	end
 	local cash, perSec = wallet()
 	local TAP = PanelShell.TouchMinV()
@@ -130789,6 +130886,8 @@ local function empireRowsRefresh()
 				end
 				local b = best
 				goal.Text = if b then string.format("%s  %s  %s", b.Name, short(b.Price :: number), EndgameController.EtaText(b.Price :: number, cash, perSec)) else "ALL MAXED"
+			elseif kind == "BlackMarket" then
+				goal.Text = "Cosmetics for Cash + Gold. New stock every Monday"
 			end
 			goal.Parent = row
 			local pin = Instance.new("TextButton")
