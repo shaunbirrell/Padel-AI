@@ -1,4 +1,23 @@
 <!-- Q2-START -->
+## v154 PUBLISHED (Code Bot Roblox, 2026-09-30 23:47 Dublin): Open Cloud place version 152 — JOB 40E FIX slim high base-owner tags (owner-first)
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **154**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":152}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Cherry-pick only** (not a bud-branch merge): `0f210ab` JOB 40E fix -> `d071c03` on phase-7. Kept phase-7 v153 sales-fix / WE_Build work intact.
+- **Commits (phase-7-polish):** `d071c03` cherry-pick, `cb6cc3f` WE_Build 154 + `tools/checks/codebot_v154.py`, `69c650b` dist rebuild; this handoff.
+- **What ships (OwnerFirst kept true — do NOT flip without owner ask):**
+  - **High in the sky:** `HeightAt(dist)` = 150 studs + 6% of viewer distance (cap 260). Far tags sit above the horizon, not across the bases / army.
+  - **Slim text-sized pill:** 24 px tall, 14 px name, names cut at 96 px; flag + short name; `@handle` / short `R<n>` only inside 300 studs. No rebirth title ("VETERAN" gone).
+  - **Scale 1.0 far .. 1.2 near** (clamped). Fade in 60-90 studs (v123 sign takes over at the gate), fade out 1,800-2,400 studs.
+  - **Max 5 rival tags** (nearest) + own "YOU". Overlapping screen boxes: farther tag hides.
+  - **Never empty / grey:** `ShowOpenBases = false`; `HasTag` requires a live owner and a name.
+- **Flag:** `BaseMarkerConfig.Live` Enabled + **OwnerFirst = true** (unchanged). SpeedV2 / Guards / Endgame / RatePrompt / JOB40 props OwnerFirst stay true. PreferMesh OFF; WE_Building* untouched; VIP 199; fast travel removed.
+- **Checks:** BuyPathStatic PASS=7311 FAIL=0; codebot_v154 PASS; run_base_marker_test 0 failed; claude_bud_job40 part E PASS; rojo deterministic (2 builds identical).
+- **Owed (§11):** before / after phone-size screenshots (1024x471, plaza looking out + a base road at night) still need Studio / a device.
+- **Queue NEXT:** JOB 41 (first-minutes retention) then JOB 42 (time-based cash packs). JOB 40E-FIX is done by this ship — do not redo. v153 sales fixes (first offer ~2 min, Starter shown-ack, analytics productKey) stay live for everyone.
+- **Phone tests (Migrate to Latest Update, as shaunie6):**
+  1. From the plaza, look out: tags are small pills high in the sky, not across the bases or the army.
+  2. No grey or empty tags anywhere; at most 5 rival tags at once and none on top of each other.
+  3. Walk up to a rival base: its tag grows a little and shows @handle / R<n>. At your own gate "YOU" fades out and your base sign shows.
+
 ## v153 PUBLISHED (Code Bot Roblox, 2026-09-30 23:39 Dublin): Open Cloud place version 151 — SALES FIXES, live for EVERYONE (Shaun approved: "ship the sales fixes and move JOB 41 to the front")
 - **Why:** ~1,100 ad visits, 0 sales, 2.8-minute sessions, almost nobody saw an offer.
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **153**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":151}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
