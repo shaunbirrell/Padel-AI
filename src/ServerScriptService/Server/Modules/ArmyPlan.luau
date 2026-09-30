@@ -16,6 +16,10 @@
 	passes AllowRecover = false and NoReposition = true (SoldierController marks a unit that cannot follow LOST; this
 	module reports it). No teleport, no PivotTo, no fast travel.
 	The owner stays where he is; an owner-dead SEND keeps going while he is in the server (Send.RequireOwnerAlive).
+Code Bot v145 (owner phone test: "sending my army ... they don't go"): every route starts at the BLOCK (its centre), not
+at the owner (from inside his walled base the closed gate gave NoPath: "No route" + HOLD); the lead is placed
+ArmyController.Standoff studs along the route, and "the block is behind" is measured past that standoff (a block deeper
+than LeadMaxGap never moved); RETURN goes to his gate spot while he is inside his base (or when he cannot be reached).
 ]]
 
 local Players = game:GetService("Players")
@@ -79,6 +83,8 @@ export type Plan = {
 	Status: string,
 	StatusAt: number,
 	LostCount: number,
+	Squad: any, -- Code Bot v145: the squad state (the block's centre / standoff for the route start and the gap)
+	ReturnGate: boolean?, -- Code Bot v145: RETURN re-aimed at his gate spot (he is inside his walled base)
 }
 
 local deps: { [string]: any } = {}
@@ -158,17 +164,44 @@ local function livingUnits(st: any): ({ any }, Vector3?)
 end
 
 -- ── the lead point and the route ─────────────────────────────────────────────────────────────────────────────────
-local function setDest(plan: Plan, dest: Vector3, from: Vector3?)
+-- Code Bot v145: how far behind the lead the steered block holds its centre by design (ArmyController.Standoff:
+-- FirstRowStuds + half its depth, at least its radius + BubbleStuds; 0 before it formed / in the unit tests)
+local function standoffOf(st: any): number
+	if st == nil then
+		return 0
+	end
+	local ok, v = pcall(function(): any
+		local AC = require(script.Parent.ArmyController) :: any
+		return AC.Standoff(st)
+	end)
+	return if ok and typeof(v) == "number" and v == v then math.max(0, v) else 0
+end
+
+-- the block's centre (its living units' mean), or nil
+local function blockCentre(st: any): Vector3?
+	if st == nil or typeof(st.Units) ~= "table" then
+		return nil
+	end
+	local _, c = livingUnits(st)
+	return c
+end
+
+--[[ Code Bot v145 (owner: "sending my army ... they don't go"): the route starts where the ARMY stands (its block
+	centre, a reachable point), never at the owner: from inside his walled base (the army waits outside his gate) the
+	closed gate barrier (CanCollide) gives PathfindingService NoPath and the SEND ended "No route" + HOLD before a step.
+	Once routed, the lead point is placed Standoff studs along the route from the block, so the block's formation spot
+	is where it already stands: nobody walks back, nobody is moved (the lead is a virtual point). ]]
+local function setDest(plan: Plan, dest: Vector3)
 	plan.Dest = dest
 	plan.Route = nil
 	plan.RouteIdx = 1
 	plan.Routing = true
 	plan.RoutedAt = clock()
-	if from then
-		plan.Lead = from
-	end
 	local g = plan.Gen
-	local start = plan.Lead
+	local st = plan.Squad
+	local c = blockCentre(st)
+	local start = if c then c else plan.Lead
+	local standoff = standoffOf(st)
 	task.spawn(function()
 		local route, why = ArmyRoute.Plan(start, dest)
 		local cur = plans[plan.Uid]
@@ -178,6 +211,9 @@ local function setDest(plan: Plan, dest: Vector3, from: Vector3?)
 		plan.Routing = false
 		if route then
 			plan.Route = route
+			if c then
+				plan.Lead, plan.RouteIdx = ArmyRoute.PointAlong(start, route, standoff)
+			end
 			dbg(plan.Owner, "ArmyRoute", string.format("%d waypoints, %.0f studs, legs %d", #route, flatDist(start, dest), #ArmyRoute.Legs(start, dest)), true)
 		else
 			plan.Route = nil
@@ -194,6 +230,13 @@ local function advance(plan: Plan, centre: Vector3, dt: number)
 		plan.LeadVel = Vector3.zero
 		return
 	end
+	-- Code Bot v145: "behind" = past the block's own formation spot (its centre sits Standoff behind the lead by design),
+	-- not the raw distance: a block deeper than LeadMaxGap (8 units + escorts: 16+ studs) made the lead wait for ever
+	local blockAt = centre
+	local toLead = Vector3.new(plan.Lead.X - centre.X, 0, plan.Lead.Z - centre.Z)
+	if toLead.Magnitude > 1e-3 then
+		centre = centre + toLead.Unit * math.min(standoffOf(plan.Squad), toLead.Magnitude)
+	end
 	if flatDist(plan.Lead, centre) > C.LeadMaxGap then
 		plan.LeadVel = Vector3.zero -- wait for the block
 	else
@@ -206,13 +249,14 @@ local function advance(plan: Plan, centre: Vector3, dt: number)
 	end
 	-- no block progress for StuckSeconds while waiting: plan the leg again from the block (at most every RepathSeconds)
 	local now = clock()
+	centre = blockAt -- (progress: where the block itself is)
 	if plan.ProgPos == nil or flatDist(plan.ProgPos :: Vector3, centre) > 4 then
 		plan.ProgPos = centre
 		plan.ProgAt = now
 	elseif now - plan.ProgAt >= C.StuckSeconds and now - plan.RoutedAt >= C.RepathSeconds and plan.Dest then
 		plan.ProgAt = now
 		dbg(plan.Owner, "ArmyRoute", "blocked: re-plan from the block", true)
-		setDest(plan, plan.Dest :: Vector3, Vector3.new(centre.X, plan.Lead.Y, centre.Z))
+		setDest(plan, plan.Dest :: Vector3) -- (from the block; the lead is placed ahead of it, never back onto it)
 	end
 end
 
@@ -297,7 +341,7 @@ local function newPlan(player: Player, kind: string, lead: Vector3): Plan
 		Group = nil, GroupAlive = 0, FightSince = clock(), Chain = 0, Kills = 0, SeekFrom = "owner", Bad = {},
 		Victim = nil, VictimUid = 0, VictimName = "", PlotId = 0, Bully = false, SiegeAt = nil, Breached = false,
 		NoLoot = nil, HoldUnit = nil, HoldSince = nil, HoldHp = 0, Looted = 0, ThenOrder = nil, Total = 0,
-		Status = "", StatusAt = -math.huge, LostCount = 0,
+		Status = "", StatusAt = -math.huge, LostCount = 0, Squad = nil, ReturnGate = nil,
 	}
 	plans[player.UserId] = p
 	return p
@@ -323,23 +367,60 @@ local function finish(plan: Plan, st: any?)
 end
 
 -- march back to the owner (or his base while he is dead), then FOLLOW
+-- Code Bot v145: his gate spot (outside it, Send.StandoffStuds out), or nil
+local function gateSpot(owner: Player): Vector3?
+	local profile = profileOf(owner)
+	local gd = deps.GateDefenseService
+	local plotId = profile and profile.BasePlotId
+	local cf = if typeof(plotId) == "number" and gd and gd.GetGateCFrame then gd.GetGateCFrame(plotId) else nil
+	return if cf then ((cf :: CFrame) * CFrame.new(0, 0, C.Send.StandoffStuds)).Position else nil
+end
+
+-- he stands inside his own (walled) plot: the army comes home to his gate, as FOLLOW's base hold does
+local function ownerInOwnPlot(owner: Player, pos: Vector3): boolean
+	local profile = profileOf(owner)
+	local plotId = profile and profile.BasePlotId
+	if typeof(plotId) ~= "number" then
+		return false
+	end
+	local ok, inside = pcall(function(): any
+		local AF = require(script.Parent.ArmyFollow) :: any
+		return AF.InPlot(plotId, pos, 6)
+	end)
+	return ok and inside == true
+end
+
+-- where RETURN walks to: him, or his gate spot while he is dead / inside his base
+local function returnDest(plan: Plan): Vector3
+	local r = ownerRoot(plan.Owner)
+	if r and not ownerInOwnPlot(plan.Owner, r.Position) then
+		plan.ReturnGate = nil
+		return r.Position
+	end
+	local g = gateSpot(plan.Owner)
+	if g then
+		plan.ReturnGate = true
+		return g
+	end
+	return if r then r.Position else plan.Lead
+end
+
 local function toReturn(plan: Plan, why: string?)
 	plan.Phase = "Return"
 	plan.Group = nil
-	local r = ownerRoot(plan.Owner)
-	local dest: Vector3? = if r then r.Position else nil
-	if dest == nil then
-		local profile = profileOf(plan.Owner)
-		local gd = deps.GateDefenseService
-		local plotId = profile and profile.BasePlotId
-		local cf = if typeof(plotId) == "number" and gd and gd.GetGateCFrame then gd.GetGateCFrame(plotId) else nil
-		dest = if cf then (cf :: CFrame).Position else plan.Lead
-	end
-	setDest(plan, dest :: Vector3)
+	setDest(plan, returnDest(plan))
 	dbg(plan.Owner, "ArmyPlan", "RETURN " .. tostring(why or ""), true)
 end
 
 function ArmyPlan._NoRoute(plan: Plan)
+	if plan.Phase == "Return" and plan.ReturnGate ~= true then
+		local g = gateSpot(plan.Owner)
+		if g then
+			plan.ReturnGate = true -- (he is somewhere the army cannot walk to: home to his gate instead)
+			setDest(plan, g)
+			return
+		end
+	end
 	if plan.Kind == "Clear" and plan.Group then
 		plan.Bad[plan.Group.Root] = true -- skip it; seek the next
 		plan.Group = nil
@@ -419,6 +500,7 @@ function ArmyPlan.StartClear(player: Player, st: any): boolean
 		return false
 	end
 	local p = newPlan(player, "Clear", r.Position)
+	p.Squad = st
 	p.SeekFrom = "owner"
 	setStatus(p, T.Seeking)
 	dbg(player, "ArmyPlan", "CLEAR start", true)
@@ -429,6 +511,7 @@ end
 function ArmyPlan.Recall(player: Player, thenOrder: string?, st: any?): boolean
 	local p = plans[player.UserId]
 	if p then
+		p.Squad = st or p.Squad
 		p.ThenOrder = thenOrder
 		if p.Kind == "Send" and p.SiegeAt == nil then
 			notify(player, "Army recalled", "Info")
@@ -443,6 +526,7 @@ function ArmyPlan.Recall(player: Player, thenOrder: string?, st: any?): boolean
 	local _, centre = livingUnits(st)
 	if r and centre and flatDist(centre, r.Position) > 60 then
 		local np = newPlan(player, "Return", centre)
+		np.Squad = st
 		np.ThenOrder = thenOrder
 		st.Order = "Attack"
 		toReturn(np, "recall (far)")
@@ -532,6 +616,7 @@ function ArmyPlan.StartSend(sender: Player, plotId: number, st: any): (boolean, 
 	end
 	local r = ownerRoot(sender)
 	local p = newPlan(sender, "Send", if r then r.Position else centre :: Vector3)
+	p.Squad = st
 	p.Victim, p.VictimUid, p.VictimName, p.PlotId, p.Bully = victim, victim.UserId, victim.Name, plotId, v.Bully
 	p.Total = #living
 	p.Phase = "March"
@@ -644,8 +729,7 @@ local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?,
 			else
 				plan.Group = nil
 				plan.Phase = "Seek"
-				plan.SeekFrom = "army"
-				plan.Lead = Vector3.new(centre.X, plan.Lead.Y, centre.Z)
+				plan.SeekFrom = "army" -- (the next route starts at the block itself: setDest)
 			end
 		end
 	end
@@ -690,7 +774,7 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 		st._acTarget = if t and t.Kind == "Player" then t else nil
 		local dest = plan.Dest or centre
 		setStatus(plan, string.format(T.Marching, plan.VictimName .. "'s base", math.floor(flatDist(centre, dest) * 0.28)))
-		if routeDone(plan) and flatDist(centre, dest) <= C.ArriveStuds then
+		if routeDone(plan) and flatDist(centre, dest) <= C.ArriveStuds + standoffOf(st) then
 			plan.Phase = "Siege"
 			plan.SiegeAt = now
 			plan.Route = nil
@@ -827,6 +911,7 @@ function ArmyPlan.Think(player: Player, st: any, proot: BasePart?, pick: any, no
 		return
 	end
 	local c = centre :: Vector3
+	plan.Squad = st
 	st.Order = "Attack" -- a plan fights through the steered ATTACK (attackAimOnly); the lead point moves the block
 	local dt = math.clamp(t - plan.LastAt, 0.05, 1)
 	plan.LastAt = t
@@ -834,13 +919,16 @@ function ArmyPlan.Think(player: Player, st: any, proot: BasePart?, pick: any, no
 	if plan.Phase == "Return" then
 		st._acTarget = nil
 		local r = ownerRoot(player)
-		if r and plan.Dest and flatDist(r.Position, plan.Dest :: Vector3) > 40 and t - plan.RoutedAt >= C.RepathSeconds and not plan.Routing then
-			setDest(plan, r.Position) -- he moved: follow him home
+		if r and plan.Dest and t - plan.RoutedAt >= C.RepathSeconds and not plan.Routing then
+			local home = returnDest(plan)
+			if flatDist(home, plan.Dest :: Vector3) > 40 then
+				setDest(plan, home) -- he moved: follow him home (his gate while he is inside his base)
+			end
 		end
 		advance(plan, c, dt)
 		setStatus(plan, T.Returning)
 		local dest = plan.Dest or c
-		if (routeDone(plan) or plan.Route == nil and not plan.Routing) and flatDist(c, dest) <= C.ReturnDoneStuds + 10 then
+		if (routeDone(plan) or plan.Route == nil and not plan.Routing) and flatDist(c, dest) <= C.ReturnDoneStuds + 10 + standoffOf(st) then
 			if plan.Kind == "Send" or plan.Looted > 0 or plan.SiegeAt ~= nil then
 				notify(player, T.Home, "Info")
 			end

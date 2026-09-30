@@ -77,6 +77,18 @@ end
 -- claude-bud JOB 38: set by ArmyPlan.Init: (player) -> { Root = a stand-in root at the plan's lead point } | nil
 ArmyController.PlanLead = nil :: ((Player) -> any)?
 
+-- Code Bot v145: how far behind its leader (the owner, or an ArmyPlan lead point) the steered block holds its CENTRE by
+-- design: FirstRowStuds + its half depth, and never nearer than its radius + BubbleStuds (FormationController.SteerFrames).
+-- 0 before the block has formed. ArmyPlan measures "the block is behind" from here, not from the lead itself.
+function ArmyController.Standoff(st: any): number
+	local a = if typeof(st) == "table" then st._ac else nil
+	local f = if typeof(a) == "table" and typeof(a.F) == "table" then a.F.Form else nil
+	if typeof(f) ~= "table" then
+		return 0
+	end
+	return math.max(num("FirstRowStuds", 7) + (tonumber(f.HalfDepth) or 0), (tonumber(f.Radius) or 0) + num("BubbleStuds", 3))
+end
+
 function ArmyController.AttackLive(userId: any): boolean
 	local c = cfg()
 	return ArmyController.LiveFor(userId) and c.Steer == true and c.AttackSteer == true

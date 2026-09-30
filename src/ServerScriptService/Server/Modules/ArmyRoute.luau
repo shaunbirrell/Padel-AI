@@ -5,6 +5,8 @@
 	  * The straight line from -> to is cut into legs of at most LegStuds; each leg is a PathfindingService path (agent
 	    sized for a soldier). A failed leg is retried with its end point moved sideways (+-24 studs), up to RouteRetries
 	    tries in all; then the route fails ("No route": the army holds; there is NO teleport fallback).
+	  * Code Bot v145: a failed middle leg (its end inside a walled plot / a building) tries the REST of the way as one
+	    path before the route fails.
 	  * One server-wide budget: at most PathBudgetPerSecond computes per second (the caller yields for a token).
 	  * The result is a list of flat waypoints (no jump / climb actions: soldiers walk).
 	Computing yields: always call it from a spawned thread.
@@ -81,7 +83,8 @@ end
 function ArmyRoute.Plan(from: Vector3, to: Vector3): ({ Vector3 }?, string?)
 	local out: { Vector3 } = {}
 	local start = from
-	for _, legEnd in ipairs(ArmyRoute.Legs(from, to)) do
+	local legs = ArmyRoute.Legs(from, to)
+	for li, legEnd in ipairs(legs) do
 		local got: { Vector3 }? = nil
 		local tries = 0
 		local target = legEnd
@@ -99,6 +102,21 @@ function ArmyRoute.Plan(from: Vector3, to: Vector3): ({ Vector3 }?, string?)
 				target = legEnd + side * (if tries % 2 == 1 then 24 else -24)
 			end
 		end
+		if got == nil and li < #legs then
+			-- Code Bot v145: a leg end on the straight line can sit inside a walled plot / a building (PathfindingService
+			-- NoPath, and +-24 studs sideways cannot leave a 320-stud plot): plan the REST of the way whole, once
+			takeToken()
+			stats.Computes += 1
+			got = compute(start, to)
+			if got ~= nil then
+				stats.Legs += 1
+				for _, p in ipairs(got :: { Vector3 }) do
+					table.insert(out, p)
+				end
+				return out, nil
+			end
+			stats.Failed += 1
+		end
 		if got == nil then
 			return nil, "no_route"
 		end
@@ -109,6 +127,13 @@ function ArmyRoute.Plan(from: Vector3, to: Vector3): ({ Vector3 }?, string?)
 		start = out[#out] or target
 	end
 	return out, nil
+end
+
+--[[ Code Bot v145: the point `dist` studs (flat) along `route` walked from `from` (its start), and the index of the next
+	waypoint after it (pure). The plan's lead starts here: the block's formation spot is then where the block stands. ]]
+function ArmyRoute.PointAlong(from: Vector3, route: { Vector3 }, dist: number): (Vector3, number)
+	local p, i = ArmyRoute.Advance(from, route, 1, math.max(0, dist), 1)
+	return p, i
 end
 
 --[[ Move a lead point along waypoints at `speed` for `dt` (pure; ArmyPlan and the tests call it). Returns the new point,
