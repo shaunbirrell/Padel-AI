@@ -94,6 +94,8 @@ Constants.RemoteNames = {
 	-- Code Bot v102: RemoteFunction. Client -> server (code: string) -> { Result = "Success" | "AlreadyUsed" | "Invalid"
 	-- | "Expired" | "RateLimited" | "NotReady", Message: string }. Server validates + rate-limits (CodesService).
 	RedeemCode = "RedeemCode",
+	RequestMapLive = "RequestMapLive", -- claude-bud JOB 30: RemoteFunction, the world map's live markers (MapService)
+	RequestFastTravel = "RequestFastTravel", -- claude-bud JOB 30: RemoteFunction (target) -> { Ok, Reason? }
 	NationColorUpdate = "NationColorUpdate",
 	-- Nations (cosmetic country flag): client -> server Types.NationRequestPayload { Action = "pick" | "later", Id?,
 	-- Source }. Replies go to that player only on NationColorUpdate. The server validates everything (rate limit,

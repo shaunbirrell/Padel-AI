@@ -62,6 +62,7 @@ local BuildingTips = safeRequire("BuildingTips", Services.BuildingTips) -- claud
 local BaseSignService = safeRequire("BaseSignService", Services.BaseSignService) -- claude-bud JOB 25
 local ArmourService = safeRequire("ArmourService", Services.ArmourService) -- claude-bud JOB 26
 local RetentionService = safeRequire("RetentionService", Services.RetentionService) -- claude-bud JOB 29
+local MapService = safeRequire("MapService", Services.MapService) -- claude-bud JOB 30
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
@@ -107,6 +108,7 @@ local deps: { [string]: any } = {
 	MonetizationService = MonetizationService,
 	TutorialService = TutorialService,
 	RetentionService = RetentionService, -- claude-bud JOB 29: FastStart / offline earnings / notification opt-in
+	BaseSignService = BaseSignService, -- claude-bud JOB 30: the map uses the sign's "<Name>'s Empire" (TitleFor)
 	BattlePassService = BattlePassService,
 	SoldierService = SoldierService,
 	BusinessService = BusinessService,
@@ -572,6 +574,7 @@ safeInit("CodesService", CodesService, deps)
 safeInit("BuildingTips", BuildingTips, deps) -- claude-bud JOB 24 §5: "NEW BUILDING" cards (after BaseService)
 safeInit("BaseSignService", BaseSignService, deps) -- claude-bud JOB 25: "<Name>'s Empire" signs (after BaseService + GateDefenseService)
 safeInit("ArmourService", ArmourService, deps) -- claude-bud JOB 26: personal armour (bonus max health)
+safeInit("MapService", MapService, deps) -- claude-bud JOB 30: the world map feed + fast travel (after BaseSign / Ops / Clan / Vehicle)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)
 safeInit("PremiumWeaponService", PremiumWeaponService, deps) -- claude-bud PREMIUM: Robux-only vehicle weapons (server-validated)

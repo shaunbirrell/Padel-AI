@@ -9554,3 +9554,14 @@ ds_territories.luau T3):
 - **Starter payout:** $1,500 (it refunds the Command Center). It is only paid while the tutorial is running, so a
   rebirth never re-pays it.
 - **Streak card:** it is owner-first. The "tomorrow" text is for everyone under ShowTomorrow, since it is copy only.
+
+## 2026-09-30 — claude-bud JOB 30: world map
+- **Tap rules:** a tap inside a named area opens its card (GO pins the tapped point); a tap on open ground pins at once.
+  Both "tap an area shows what's there" and "tap anywhere to pin" hold.
+- **Pin priority:** a manual pin ignores later mission / job / airdrop targets until it ends. The ignored targets do not
+  come back by themselves: tap GO again.
+- **Fast travel:** only to your own base or an outpost you hold, since "unlocked areas" = outposts you or your clan
+  hold. It lands at 60% of the zone radius, on the ground, facing the centre. The cooldown is 120 s.
+- **"Missions" on the map:** the job spots from OpsService's GO targets (camps, posts, uplinks, cargo). They are the
+  same points the Missions GO buttons use.
+- **Rail:** it grows to 7 tiles (wraps 5 + 2 on short phones). The frozen 6-tile pin is retired with a replacement.

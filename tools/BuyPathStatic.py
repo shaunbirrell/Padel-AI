@@ -1391,10 +1391,12 @@ _hudcfg = read(HUDCFG) or ""
 _tiles = _hudcfg.split("Tiles = {", 1)[1].split("\n\t},", 1)[0] if "Tiles = {" in _hudcfg else ""
 # v102 (Code Bot, owner request 2026-09-29): a 6th tile "Codes" (redeem codes) joins the 5 of spec §3.2; still no Base /
 # Settings tile. layoutRail wraps the rail to a 2nd column on short phones (844x390 / 800x360 → 5 + 1).
-if _tiles and 'Id = "Settings"' not in _tiles and 'Id = "Base"' not in _tiles and _tiles.count('Id = "') == 6 and 'Id = "Codes"' in _tiles:
-    ok("v70/v102 owner decision: 5 rail tiles + Codes (v102), no Base / Settings tile (Settings = TopStrip gear)")
+# claude-bud JOB 30 (owner request 2026-09-30: "a MAP button on the HUD"): retired the "exactly 6" count; replacement below
+# = the 5 of spec §3.2 + Codes + Map (7), still no Base / Settings tile (layoutRail wraps to a 2nd column: 5 + 2).
+if _tiles and 'Id = "Settings"' not in _tiles and 'Id = "Base"' not in _tiles and _tiles.count('Id = "') == 7 and 'Id = "Codes"' in _tiles and 'Id = "Map"' in _tiles:
+    ok("v70/v102/claude-bud J30 owner decision: 5 rail tiles + Codes (v102) + Map (J30), no Base / Settings tile (Settings = TopStrip gear)")
 else:
-    bad("v70/v102 rail tiles must be the 5 of spec §3.2 + Codes (no Base / Settings tile) in HudConfig.Rail.Tiles")
+    bad("v70/v102/claude-bud J30 rail tiles must be the 5 of spec §3.2 + Codes + Map (no Base / Settings tile) in HudConfig.Rail.Tiles")
 must_contain(CL + "/Controllers/HUDController.luau", "SetRailBadge", "v70 HUD rail badges")
 must_contain(CL + "/Controllers/HUDController.luau", "layoutRail", "v70 HUD left rail layout")
 must_contain(CL + "/Controllers/HUDController.luau", '"WE_TopStrip"', "v70 HUD TopStrip (level chip, gear, shield)")

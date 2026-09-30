@@ -1,4 +1,86 @@
 <!-- Q2-START -->
+## claude-bud JOB 30 (2026-09-30): world map + areas + tap-to-pin (branch `claude/desktop-bud`)
+Kill switches: `MapConfig.Enabled` and `MapConfig.FastTravel.Enabled`. Both ship **OwnerFirst** (UserId 470626172 +
+Studio test players); Code Bot sets `OwnerFirst = false` to launch.
+
+**Opening it**
+- A **MAP** rail tile (folded-map icon) opens a full-screen Modal panel. So does **M**, when keys are preferred.
+- Missions moved to **N**. The tile hint "Missions [N]" and the Settings key sheet read the same config.
+- The rail is now 5 + Codes + Map. Short phones wrap it to a 2nd column (5 + 2).
+- The frozen BuyPathStatic pin "exactly 6 tiles" is retired with a claude-bud comment and a 7-tile replacement.
+
+**What it shows**
+- **Always drawn:** land, sea, and the **real zones** (`Shared/Util/MapAreas`): the 18 WorldConfig.POIs, each joined to
+  the outpost inside it and to its garrison tier, plus the 2 offshore rigs as their own areas. 10 main areas are
+  labelled.
+- **Live, every 0.5 s and only while open**, from `RequestMapLive` (MapService):
+  - **Bases:** every base; yours is green "YOU"; tap a base for "<Name>'s Empire" (`BaseSignService.TitleFor`, the
+    sign's own string).
+  - **Outposts:** yours green, enemy red, free gold.
+  - **Other markers:** the bank ($), supply crates and the airdrop (labelled), and job spots (camps, posts, uplinks,
+    cargo).
+  - **You and your pin:** your arrow (position + facing), and your pin.
+- **Area card:** tap an area to see its kind, the outpost bonus and owner, the enemy tier and the jobs inside it.
+  - **GO** pins the tapped point.
+  - **TRAVEL** shows when you hold that outpost, or on your base.
+
+**Pin**
+- Tap open ground to drop a pin at once.
+- The pin is the ONE objective marker: `ObjectiveMarker.ShowWith(..., { Pin = true, ArriveStuds = 15 })`, with the same
+  GO line and compass as missions. There is no second Beam.
+- Additive ObjectiveMarker API: while a pin is set, other Show / ShowWith calls (missions, jobs, airdrop), a plain
+  Clear() and Move() are ignored. ShowWith still calls ConsoleWaypoint.Clear().
+- The pin clears on arrival, by tapping it again, or with **CLEAR PIN**.
+
+**Fast travel** (server)
+- Allowed to your own base (TeleportToPlot) or to an outpost you or your clan hold.
+- Refused when:
+  - the outpost is contested;
+  - you are in combat (the server damage lock: any health drop in the last 5 s);
+  - you are seated;
+  - the 120 s cooldown is still running.
+- The TRAVEL button shows the cooldown. A refusal reason shows in the card.
+
+**Performance**
+- The area layer is built once and cached.
+- Markers are pooled frames moved by scale.
+- One loop runs at 0.5 s while open; nothing runs while closed. No workspace scans or per-frame work on the client.
+
+**Layout (worked out by hand; the HUD harness `check_hud.py` is not in the repo)**
+- The tap canvas is a right-aligned square. Its left edge is at 54% (844x390), 54% (956x440), 55% (800x360), 41%
+  (1180x820) and 44% (1920x1080) of the width, so it never enters the left-40% thumbstick zone.
+- The GO / TRAVEL / CLEAR PIN buttons sit in the top third of the left column: their bottom is about 74 real px on
+  844x390 (the top third is 130 px).
+- Buttons are TouchMinV tall (44+ real px). Text is 14+ real px.
+
+**Bug found while testing:** `TerritoryConfig.Territories` is keyed by Id. My first draft looped over it with
+`ipairs`, which returns nothing, so no outposts showed. Fixed with `pairs`; the MapAreas test covers it.
+
+**Checks**
+- tools/checks/claude_bud_job30.py (16 pins).
+- `tools/sim/run_map_test.py`: runs the REAL MapAreas plus the real configs in the Luau CLI. 20 areas, 0 failures:
+  - every POI placed;
+  - every outpost joined exactly once;
+  - the plaza is in town;
+  - the rigs are their own areas;
+  - tap lookup works, including open ground.
+- BuyPathStatic PASS=6526 FAIL=0. rojo ok.
+- No new LSP errors in my files. MoveDebug's existing v123 error shows only because MapService pulls in StreamPrefetch.
+- The world sim and the DataService harness are not in the repo.
+
+**NOT verified on a device:** tap accuracy on a real screen, and how dense the labels look.
+
+**Test ON HIS PHONE** (2 players):
+1. Tap MAP. The map fills the screen, your arrow is on your base, the town is labelled and the bases are squares.
+2. Tap Crossroads Town. The card shows "City and Central Plaza · Outpost: ... · +10% Cash ...". Tap GO: the map
+   closes and the gold line and compass point there. Walk up to it: the pin clears at about 15 studs.
+3. Tap open desert to drop a pin. Then start a mission GO: the pin stays (the pin wins). Open the map, tap the pin (or
+   CLEAR PIN): it goes.
+4. Capture an outpost, open the map, tap it, then TRAVEL: you land at its edge. TRAVEL again shows the cooldown. With
+   player 2 shooting you, TRAVEL says "Not while under fire".
+5. Player 2 opens the map: player 1's base shows as a square. Tap it: "<P1>'s Empire". Player 2's own base is green
+   "YOU".
+6. On PC, M opens the map and N opens Missions.
 ## v125 (Code Bot Roblox, 2026-09-30 ~09:15 Dublin): ship JOB 29 retention (FastStart, offline earnings, streak tomorrow, notif opt-in) — place version 123
 - Fast-forward merged Claude `8cad44d` (JOB 29) onto phase-7 tip `a5b4ae0` (v124). **WE_Build 125**. PreferMesh OFF; WE_Building* untouched. **OwnerFirst retained** (`RetentionConfig.Live` — UserId 470626172 + Studio); do not flip to everyone until Shaun signs off phone tests.
 - **JOB 29 — retention (OwnerFirst)**
