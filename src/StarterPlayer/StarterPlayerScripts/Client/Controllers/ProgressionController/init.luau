@@ -460,6 +460,10 @@ local function setOpen(open: boolean)
 	if sh then
 		sh.Sync(open)
 	end
+	if open then
+		-- claude-bud JOB 33: the rebirth funnel's "opened" step (the server adds the level and this life's minutes)
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAnalyticsEvent, "RebirthOpened")
+	end
 end
 
 -- SeasonStateUpdate → the line under the title (was the HUD's SeasonLabel banner)

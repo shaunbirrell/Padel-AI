@@ -445,7 +445,17 @@ function AnalyticsService.Init()
 			AnalyticsService.Stats.Client += 1
 			-- a tip id is a short config key (BuildingTutorialConfig); anything else is dropped
 			local tipId = if typeof(tip) == "string" and #tip <= 32 and string.match(tip, "^[%w_]+$") then tip else nil
-			AnalyticsService.Log(ev, player.UserId, { tip = tipId })
+			local cprops: { [string]: any } = { tip = tipId }
+			if ev == "REBIRTH_OPENED" then
+				-- claude-bud JOB 33: the level and this life's minutes come from the server's save, never the client
+				local ds = dataService()
+				local pr = ds and ds.GetProfile and ds.GetProfile(player)
+				if pr then
+					cprops.level = tonumber(pr.Level) or 0
+					cprops.minutes = math.floor((tonumber(pr.LifePlaySeconds) or 0) / 60)
+				end
+			end
+			AnalyticsService.Log(ev, player.UserId, cprops)
 		end)
 		Players.PlayerRemoving:Connect(function(p: Player)
 			window[p.UserId] = nil

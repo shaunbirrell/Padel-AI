@@ -306,6 +306,16 @@ local function passiveMultAndFlat(profile: Types.PlayerProfile, player: Player?)
 		mult += tonumber(bonusMult) or 0
 		flat = tonumber(bonusFlat) or 0
 	end
+	-- claude-bud JOB 33: the rebirth zones' income per tick (Tank Factory, Refinery ...; 0 while not live / not built)
+	local okRZ, RZ = pcall(function(): any
+		return require(script.Parent.RebirthZoneService)
+	end)
+	if okRZ and RZ and RZ.FlatIncomePerTick then
+		local okF, f = pcall(RZ.FlatIncomePerTick, profile, player)
+		if okF and typeof(f) == "number" and f == f and f > 0 then
+			flat += f
+		end
+	end
 	return mult, flat
 end
 

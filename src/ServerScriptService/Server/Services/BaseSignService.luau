@@ -164,6 +164,14 @@ local function refresh(plotId: number)
 		local army = if profile then math.floor(tonumber(profile.Soldiers) or 0) else 0
 		title = titleOf(owner)
 		line = string.format("LV %d · REBIRTH %d · ARMY %d", level, rebirth, army)
+		-- claude-bud JOB 33: the rebirth title leads the line once earned ("COMMANDER R3 · LV 12 · ARMY 20")
+		local okRC, RC = pcall(function(): any
+			return require(game:GetService("ReplicatedStorage").Shared.Configs.RebirthConfig)
+		end)
+		local rankTitle = if okRC and RC.LiveFor(owner.UserId, "Trims") then RC.TitleFor(rebirth) else nil
+		if rankTitle then
+			line = string.format("%s R%d · LV %d · ARMY %d", string.upper(rankTitle), rebirth, level, army)
+		end
 		image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", owner.UserId)
 	end
 	-- the flag plate shows what the plot's own flags show (NationFlag's view: the owner's pick, art permitting)

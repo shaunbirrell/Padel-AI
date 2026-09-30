@@ -213,6 +213,38 @@ local WeaponConfig = {
 	DefaultWeapon = "StarterRifle",
 }
 
+--[[ claude-bud JOB 33: the 7 REBIRTH GUNS (RebirthConfig.WeaponsLive; granted by PrestigeConfig.RebirthUnlocks at R1 / 3 /
+	5 / 7 / 9 / 12 / 15, only while RebirthConfig.LiveFor(player, "Weapons")). Each is a current gun's frame and model
+	with a modest edge (about +10-15 % damage per second, never a new class), so a rebirth is felt but the base guns
+	stay competitive. Our own made-up names. CostCash 0: never sold (the Shop lists them only once owned); UnlockLevel
+	1: usable at once after the rebirth (Level 1). RebirthOnly / RequiresPrestige are display fields; the grant is the
+	gate. ]]
+local function rebirthGun(baseId: string, id: string, name: string, short: string, prestige: number, over: { [string]: any })
+	local b = WeaponConfig.Weapons[baseId]
+	local d: any = table.clone(b)
+	d.Id = id
+	d.DisplayName = name
+	d.ShortName = short
+	d.Rarity = "Legendary"
+	d.UnlockLevel = 1
+	d.CostCash = 0
+	d.RebirthOnly = true
+	d.RequiresPrestige = prestige
+	for k, v in pairs(over) do
+		d[k] = v
+	end
+	-- the weapon CATALOGUE (this config), not a player's owned-weapons table (XP 4.1 / 4.2 guard the profile's)
+	local catalogue: any = WeaponConfig.Weapons
+	catalogue[id] = d
+end
+rebirthGun("AssaultRifle", "VanguardCarbine", "Vanguard Carbine", "VANGUARD", 1, { Damage = 24, FireRate = 9.5 }) -- 198 -> 228 DPS
+rebirthGun("SMG", "TempestSMG", "Tempest SMG", "TEMPEST", 3, { Damage = 15, FireRate = 14.5, MagazineSize = 36 }) -- 196 -> 218
+rebirthGun("Shotgun", "WardenShotgun", "Warden Shotgun", "WARDEN", 5, { Damage = 13, FireRate = 1.3, Range = 44 }) -- 86 -> 101
+rebirthGun("Sniper", "LongshotDMR", "Longshot DMR", "LONGSHOT", 7, { Damage = 58, FireRate = 1.4, MagazineSize = 8, Range = 300 }) -- a semi-auto marksman: 81 DPS
+rebirthGun("Sniper", "TalonSniper", "Talon Sniper", "TALON", 9, { Damage = 95, FireRate = 0.8, Range = 440 }) -- 68 -> 76
+rebirthGun("RocketLauncher", "HavocLauncher", "Havoc Launcher", "HAVOC", 12, { Damage = 165, MagazineSize = 2 }) -- +10 % per rocket, 2 in the tube
+rebirthGun("StarterRifle", "SovereignRifle", "Sovereign Rifle", "SOVEREIGN", 15, { Damage = 26, FireRate = 9, Range = 140 }) -- 144 -> 234: the late-rebirth all-rounder
+
 --[[ v69: one weapon order for Shop › WEAPONS rows and the Q/E / mobile ◀ ▶ cycle:
 	UnlockLevel, then CostCash, then id. ]]
 function WeaponConfig.SortedIds(): { string }

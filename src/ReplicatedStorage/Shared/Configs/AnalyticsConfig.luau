@@ -56,11 +56,16 @@ local AnalyticsConfig = {
 			-- claude-bud JOB 31: site activities
 			ACTIVITY_START = { Name = "ActivityStarted", Field = "activity" },
 			ACTIVITY_DONE = { Name = "ActivityFinished", Value = "seconds", Field = "activity" },
+			-- claude-bud JOB 33: the rebirth funnel (value = level; field = minutes of play in this life) + zones / nukes
+			REBIRTH_AVAILABLE = { Name = "rebirth_available", Value = "level", Field = "minutes" },
+			REBIRTH_OPENED = { Name = "rebirth_opened", Value = "level", Field = "minutes" },
+			REBIRTH_CONFIRMED = { Name = "rebirth_confirmed", Value = "level", Field = "minutes" },
+			REBIRTH_ZONE_BUILT = { Name = "RebirthZoneBuilt", Value = "level", Field = "zone" },
 		},
 		MaxCustomPerMinute = 100,
 		PerPlayerPerMinute = 10,
 		-- the client may report only these (RequestAnalyticsEvent; a few per minute per player)
-		ClientEvents = { ShopOpened = "SHOP_OPEN", ArmyOpened = "ARMY_OPEN", TipShown = "TUTORIAL_SHOWN", TipClosed = "TUTORIAL_CLOSED" },
+		ClientEvents = { ShopOpened = "SHOP_OPEN", ArmyOpened = "ARMY_OPEN", TipShown = "TUTORIAL_SHOWN", TipClosed = "TUTORIAL_CLOSED", RebirthOpened = "REBIRTH_OPENED" }, -- claude-bud JOB 33: + RebirthOpened
 		ClientPerMinute = 12,
 	},
 	Events = {

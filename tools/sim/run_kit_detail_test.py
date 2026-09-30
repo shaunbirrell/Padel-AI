@@ -98,15 +98,36 @@ INST.__index = function(t, k)
   if type(own) == "function" then return own end -- a test's per-object override
   if k == "SetAttribute" then return function(s, n, v) s.__attr[n] = v end end
   if k == "GetAttribute" then return function(s, n) return s.__attr[n] end end
-  if k == "Destroy" then return function(s) rawset(s, "__destroyed", true); rawset(s, "Parent", nil) end end
-  if k == "IsA" then return function(s, c) return s.ClassName == c or (c == "BasePart" and (s.ClassName == "Part" or s.ClassName == "TrussPart")) end end
-  if k == "GetChildren" or k == "GetDescendants" then return function() return {} end end
+  if k == "Destroy" then return function(s) rawset(s, "__destroyed", true); s.Parent = nil end end
+  if k == "IsA" then return function(s, c) return s.ClassName == c or (c == "BasePart" and (s.ClassName == "Part" or s.ClassName == "TrussPart")) or (c == "Instance") end end
+  if k == "GetChildren" then return function(s) return table.clone(rawget(s, "__kids") or {}) end end
+  if k == "GetDescendants" then return function(s)
+    local out = {}
+    local function walk(o) for _, c in ipairs(rawget(o, "__kids") or {}) do table.insert(out, c); walk(c) end end
+    walk(s)
+    return out
+  end end
   if k == "FindFirstChild" or k == "FindFirstChildOfClass" then return function() return nil end end
   local props = rawget(t, "__props")
   if k == "Position" and props.Position == nil and props.CFrame ~= nil then return props.CFrame.Position end
   return props[k]
 end
-INST.__newindex = function(t, k, v) rawget(t, "__props")[k] = v end
+INST.__newindex = function(t, k, v)
+  local props = rawget(t, "__props")
+  if k == "Parent" then
+    local old = props.Parent
+    if type(old) == "table" and rawget(old, "__kids") then
+      local kids = rawget(old, "__kids")
+      for i = #kids, 1, -1 do if kids[i] == t then table.remove(kids, i) end end
+    end
+    if type(v) == "table" and rawget(v, "__props") then
+      local kids = rawget(v, "__kids")
+      if kids == nil then kids = {}; rawset(v, "__kids", kids) end
+      table.insert(kids, t)
+    end
+  end
+  props[k] = v
+end
 Instance = { new = function(cls) return setmetatable({ ClassName = cls, __attr = {}, __props = {} }, INST) end }
 
 local rawtypeof = typeof

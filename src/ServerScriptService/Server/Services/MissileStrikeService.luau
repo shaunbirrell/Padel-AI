@@ -590,7 +590,16 @@ local function launch(attacker: Player, targetUserId: number): (boolean, string?
 	inFlight[attacker.UserId] = strike
 	incoming[victim.UserId] = strike
 	local aRaid = raidOf(aProfile)
-	aRaid.StrikeCooldownUntil = nowUnix + S.CooldownSeconds
+	-- claude-bud JOB 33: the Artillery Battery cuts the reload (never below 60 s)
+	local cut = 0
+	local okRZ, RZ = pcall(function(): any
+		return require(script.Parent.RebirthZoneService)
+	end)
+	if okRZ and RZ and RZ.MissileReloadCut then
+		local okC, c = pcall(RZ.MissileReloadCut, attacker)
+		cut = if okC and typeof(c) == "number" then math.max(0, c) else 0
+	end
+	aRaid.StrikeCooldownUntil = nowUnix + math.max(60, S.CooldownSeconds - cut)
 	markDirty(attacker)
 	setAttr(attacker, "WE_StrikeCooldownUntil", aRaid.StrikeCooldownUntil)
 

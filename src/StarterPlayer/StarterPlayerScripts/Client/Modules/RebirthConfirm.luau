@@ -360,7 +360,7 @@ local SECTION_COLOR: { [string]: Color3 } = {
 	Gain = COLORS.Gain,
 }
 
-local function fillList(list: ScrollingFrame?, summary: any, other: any)
+local function fillList(list: ScrollingFrame?, summary: any, other: any, next3: any?)
 	if not list then
 		return
 	end
@@ -399,6 +399,15 @@ local function fillList(list: ScrollingFrame?, summary: any, other: any)
 			row(r.Text, COLORS.Text, false, indent)
 		end
 	end
+	-- claude-bud JOB 33: a preview of the next 3 rebirths (the server's PrestigeStateUpdate.Next3, short lines)
+	if typeof(next3) == "table" and #next3 > 0 then
+		row("NEXT REBIRTHS", COLORS.Gain, true, 0)
+		for _, line in ipairs(next3) do
+			if typeof(line) == "string" then
+				row(line, COLORS.Text, false, indent)
+			end
+		end
+	end
 end
 
 local function styleButton(b: TextButton?, st: ButtonState, face: Color3, textColor: Color3, stroke: Color3)
@@ -434,7 +443,7 @@ local function refresh()
 		listsFor = summary
 		local cashSum = if typeof(summary) == "table" then summary.Cash else nil
 		local keepSum = if typeof(summary) == "table" then summary.KeepBase else nil
-		fillList(cashList, cashSum, keepSum)
+		fillList(cashList, cashSum, keepSum, if typeof(state) == "table" then (state :: any).Next3 else nil)
 		fillList(keepList, keepSum, cashSum)
 	end
 end

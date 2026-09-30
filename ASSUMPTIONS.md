@@ -9590,3 +9590,17 @@ ds_territories.luau T3):
 - **Army:** it waits OUTSIDE the door, not on the ground floor. Pathing units up a 43-degree ramp and a ladder is where
   they get stuck.
 - **Ramp slope:** relies on Roblox's default Humanoid MaxSlopeAngle (89 degrees); the ramp is 43.5 degrees.
+
+## 2026-09-30 — claude-bud JOB 33: rebirth overhaul
+- **Zone placement:** zones are annexes outside the 320-stud plot (the plot is full), so they sit partly in the open
+  desert. A blocked annex is skipped on that plot, never forced.
+- **Zone levels:** 3 per zone. They are kept through rebirths, as rebirth rewards, and are never reset.
+- **Zone effects:** each does something real (income, army cap, missile reload, auto-collect, raid shield, nukes).
+  The Artillery Battery shortens the missile reload rather than firing its own shells.
+- **Silo:** 3 levels, capacity 1-3, 60 / 45 / 30 min charges (NukeConfig.Silo's 5-level costs are not used).
+- **Nuke damage:** 260 at the centre down to 15%, radius 150, no line of sight needed. Targets are 360+ studs from any
+  base.
+- **Pacing:** 40 + 4 levels per rebirth (cap 90), measured by the pacing sim. This is a live-feel change, owner-first.
+- **Vehicles:** the gaps are filled with existing vehicles rather than new models. Tank skins were not done.
+- **Rebirth guns:** existing gun frames and models with modest stat edges.
+- **Keep-base product:** RebirthKeepBase is live, contrary to the brief; left as is for the owner to decide.

@@ -4866,7 +4866,25 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	end
 	-- v81: the owner's playtest account (shaunie6 only) skips the level / Helipad / Airfield / Dock / Depot /
 	-- Prestige / rebirth-flag gates so every vehicle (all aircraft) can be tested without building the base first
-	if not VehicleService._IsPlaytestOwner(player) then
+	-- claude-bud JOB 33: a vehicle a rebirth GRANTED him (PrestigeConfig.RebirthUnlocks, its flag set) is usable at once,
+	-- at any level and base (RebirthConfig.Perks.GrantedVehiclesIgnoreRunGates, RebirthConfig.LiveFor "Vehicles")
+	local rebirthGranted = false
+	do
+		local okRC, RC = pcall(function(): any
+			return require(Shared.Configs.RebirthConfig)
+		end)
+		local okPC, PC = pcall(function(): any
+			return require(Shared.Configs.PrestigeConfig)
+		end)
+		if okRC and okPC and RC.Perks.GrantedVehiclesIgnoreRunGates == true and RC.LiveFor(player.UserId, "Vehicles") and typeof(profile.RebirthUnlocks) == "table" then
+			for _, u in ipairs(PC.RebirthUnlocks) do
+				if u.Kind == "Vehicle" and u.Id == vehicleId and profile.RebirthUnlocks[u.Flag] == true then
+					rebirthGranted = true
+				end
+			end
+		end
+	end
+	if not VehicleService._IsPlaytestOwner(player) and not rebirthGranted then
 		if profile.Level < def.UnlockLevel then
 			return false, "LevelTooLow"
 		end

@@ -64,6 +64,8 @@ local ArmourService = safeRequire("ArmourService", Services.ArmourService) -- cl
 local RetentionService = safeRequire("RetentionService", Services.RetentionService) -- claude-bud JOB 29
 local MapService = safeRequire("MapService", Services.MapService) -- claude-bud JOB 30
 local SiteActivityService = safeRequire("SiteActivityService", Services.SiteActivityService) -- claude-bud JOB 31
+local RebirthZoneService = safeRequire("RebirthZoneService", Services.RebirthZoneService) -- claude-bud JOB 33
+local NukeService = safeRequire("NukeService", Services.NukeService) -- claude-bud JOB 33
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
@@ -109,6 +111,8 @@ local deps: { [string]: any } = {
 	MonetizationService = MonetizationService,
 	TutorialService = TutorialService,
 	RetentionService = RetentionService, -- claude-bud JOB 29: FastStart / offline earnings / notification opt-in
+	RebirthZoneService = RebirthZoneService, -- claude-bud JOB 33
+	NukeService = NukeService, -- claude-bud JOB 33
 	BaseSignService = BaseSignService, -- claude-bud JOB 30: the map uses the sign's "<Name>'s Empire" (TitleFor)
 	BattlePassService = BattlePassService,
 	SoldierService = SoldierService,
@@ -577,6 +581,8 @@ safeInit("BaseSignService", BaseSignService, deps) -- claude-bud JOB 25: "<Name>
 safeInit("ArmourService", ArmourService, deps) -- claude-bud JOB 26: personal armour (bonus max health)
 safeInit("MapService", MapService, deps) -- claude-bud JOB 30: the world map feed, no fast travel (v127/v128) (after BaseSign / Ops / Clan / Vehicle)
 safeInit("SiteActivityService", SiteActivityService, deps) -- claude-bud JOB 31: site garrisons + activities (after Combat)
+safeInit("RebirthZoneService", RebirthZoneService, deps) -- claude-bud JOB 33: rebirth zones, effects, rank
+safeInit("NukeService", NukeService, deps) -- claude-bud JOB 33: the silo nukes (after Combat / RebirthZone)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)
 safeInit("PremiumWeaponService", PremiumWeaponService, deps) -- claude-bud PREMIUM: Robux-only vehicle weapons (server-validated)

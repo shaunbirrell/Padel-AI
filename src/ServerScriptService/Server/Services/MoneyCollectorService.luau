@@ -768,7 +768,16 @@ local function completeRaid(thief: Player, victim: Player, hold: RaidHold): bool
 	local oldShield = vRaid.ShieldUntil
 	local oldCooldown = tRaid.RaidCooldownUntil
 	local nowUnix = os.time()
-	vRaid.ShieldUntil = nowUnix + R.ShieldSeconds
+	-- claude-bud JOB 33: the Bunker Complex lengthens the victim's shield
+	local shieldBonus = 0
+	local okRZ, RZ = pcall(function(): any
+		return require(script.Parent.RebirthZoneService)
+	end)
+	if okRZ and RZ and RZ.RaidShieldBonus then
+		local okB, b = pcall(RZ.RaidShieldBonus, vProfile)
+		shieldBonus = if okB and typeof(b) == "number" then math.max(0, b) else 0
+	end
+	vRaid.ShieldUntil = nowUnix + R.ShieldSeconds + shieldBonus
 	tRaid.RaidCooldownUntil = nowUnix + R.ThiefCooldownSeconds
 	-- 4. PendingCash → thief's ATM, 1:1 (existing transfer, no multipliers)
 	local moved = 0

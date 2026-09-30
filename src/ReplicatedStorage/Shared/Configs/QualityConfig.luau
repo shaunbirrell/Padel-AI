@@ -50,7 +50,7 @@ local QualityConfig = {
 	FastCullSeconds = 0.2, -- ... while the camera moves faster than FastStuds per second
 	DebugLog = false, -- true: "[BUILDING DEBUG] UNLOADING|LOADING ..." per change (Studio investigation)
 	-- where the decoration lives (resolved from Workspace by name; missing ones are retried every few seconds)
-	Folders = { "WorldFill", "WarEmpireSetup/WorldDressing" } :: { string },
+	Folders = { "WorldFill", "WarEmpireSetup/WorldDressing", "WE_RebirthZones" } :: { string }, -- claude-bud JOB 33: + the rebirth zones
 }
 
 function QualityConfig.LiveFor(userId: any): boolean

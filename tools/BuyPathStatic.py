@@ -5509,6 +5509,10 @@ def _xp_spendcash_sites() -> None:
         "missile_strike": (svc + "MissileStrikeService.luau", "launch", False),
         "gate_repair": (svc + "GateDefenseService.luau", "GateDefenseService.TryRepair", False),
         "atm_raid_loss": (svc + "MoneyCollectorService.luau", "completeRaid", False),
+        # claude-bud JOB 33 (retired the "exactly 8" count; replacement = these 2 more, 10 in all): the rebirth zone
+        # upgrades and the silo rush spend Cash and pay NO purchase XP (XPService.OnSpend's whitelist does not list them)
+        "rebirthzone_": (svc + "RebirthZoneService.luau", "RebirthZoneService.Upgrade", False),
+        "nuke_rush": (svc + "NukeService.luau", "NukeService.Rush", False),
     }
     fn_head = re.compile(r"^(?:local\s+)?function\s+([\w.:]+)\s*\(", re.M)
     guard_ok = re.compile(r"\s*(?:(?:==|~=)\s*nil\b|\)?\s*then\b)")
@@ -5581,10 +5585,10 @@ def _xp_spendcash_sites() -> None:
             problems.append(f"reason {reason!r}: expected exactly once in {file} {fn}, found {[(h[0].split('/')[-1], h[1], h[2]) for h in hits]}")
     if defs != 1:
         problems.append(f"{defs} definitions of EconomyService.SpendCash (expected 1)")
-    if seen == 8 and not problems:
-        ok("XP: SpendCash has exactly 8 call sites, each reason in its one file and function, none in a nested / anonymous / assigned function; the 4 paying calls pass (player, cost, ...) and sit in no loop (paying: upgrade_ BaseService.PurchaseUpgrade, research_ ResearchService.Purchase, vehicle_ VehicleService.Purchase, weapon_ CombatService.PurchaseWeapon)")
+    if seen == 10 and not problems:
+        ok("XP: SpendCash has exactly 10 call sites (claude-bud JOB 33: + rebirthzone_ / nuke_rush, non-paying), each reason in its one file and function, none in a nested / anonymous / assigned function; the 4 paying calls pass (player, cost, ...) and sit in no loop (paying: upgrade_ BaseService.PurchaseUpgrade, research_ ResearchService.Purchase, vehicle_ VehicleService.Purchase, weapon_ CombatService.PurchaseWeapon)")
     else:
-        bad(f"XP: SpendCash call-site pin — {seen} calls (expected 8); " + "; ".join(problems))
+        bad(f"XP: SpendCash call-site pin — {seen} calls (expected 10); " + "; ".join(problems))
 
 def _xp_onspend_callers() -> None:
     """XPService.OnSpend is reached only from EconomyService.SpendCash's success path (and defined in XPService)."""

@@ -1,4 +1,122 @@
 <!-- Q2-START -->
+## claude-bud JOB 33 (2026-09-30): rebirth overhaul (branch `claude/desktop-bud`)
+**Found:** only PrestigeService (+10% cash, +50 gold, vehicle grants) ran. Zones, nukes, rebirth guns, perks, trims and
+titles were config only, with no service, structures or layout. The admin commands for RebirthExpansionService /
+NukeService pointed at services that did not exist.
+
+**Gating.** Everything below goes through ONE owner-first gate: `RebirthConfig.Live`, with `OwnerFirst = true` and
+per-part kill switches for Zones, Nuke, Weapons, Vehicles, Perks, Trims, Pacing and Screen.
+- `ZonesLive` / `WeaponsLive` stay false (codebot_v101) and now mean "published for everyone".
+- **To launch:** Code Bot sets `OwnerFirst = false` and those two to true.
+
+**1. 7 rebirth zones** (`RebirthZonesConfig`, `RebirthZoneService`, `Modules/RebirthZoneBuilder`)
+- **Placement:** the plot is full, so each zone is a 74 x 60 annex yard attached OUTSIDE the plot, on the side its name
+  says:
+  - West Yard / West Battery / West Flank on the west;
+  - East Yard / Refinery Row on the east;
+  - Strategic Yard / Drone Bay at the rear.
+- **Checked once per plot:** procedural decor inside the yard is cleared; a road, POI, site or anything else blocks
+  that one annex (logged, never built on top).
+- **Visuals:** the curbs are in the base's trim colour.
+- **Locked:** a fence and "Unlocks at Rebirth N".
+- **Reached:** a yard with a BUILD console. Levels 1-3 visibly add structures (276 parts for all 7 at level 3).
+
+| Zone | Opens at | Building | What it does (L1 / L2 / L3) |
+|---|---|---|---|
+| West Yard | R1 | Tank Factory | +$150 / 350 / 700 per tick |
+| Strategic Yard | R2 | Nuclear Silo | 1 / 2 / 3 warheads, 60 / 45 / 30 min each |
+| West Battery | R3 | Artillery Battery | missile reload -90 / 180 / 270 s, + income |
+| Drone Bay | R4 | Drone Hangar | drones empty your ATM every 60 / 40 / 25 s, + income |
+| East Yard | R5 | Elite Barracks (2-4 storeys) | +5 / 10 / 15 soldiers, + income |
+| Refinery Row | R6 | Oil Refinery | +$250 / 600 / 1200 per tick |
+| West Flank | R8 | Bunker Complex | +120 / 240 / 360 s raid shield, + income |
+
+- **Paying:** Cash at the console ("rebirthzone_<Id>", no purchase XP). Levels are kept through rebirths. No Robux.
+
+**2. Nuclear Silo + nukes** (`NukeService`, `NukeController`; numbers tied to NukeConfig)
+- **Charging:** warheads charge over time; RUSH finishes one for $4,000 per minute left.
+- **Launching:** use the silo console's NUKE prompt. Targets are the Central Plaza, an outpost or an enemy site, each at
+  least 360 studs from every base. Bases are never nuked, so no base can be one-shotted.
+- **Countdown:** every player gets a 10 s countdown banner, a red ring on the target and a siren. The sound id is empty
+  until the owner sets `SirenSoundId`; the siren is visual only until then.
+- **Blast:** one `CombatService.ApplyRadiusDamage` (radius 150, 260 at the centre down to 15%). That is the shared PvP
+  rule: novice shields, spawn protection, clan allies and pvp-off are all respected, and NPCs are hit.
+- **Cooldowns:** 30 min per player (saved, so a rejoin does not reset it) and 5 min per server.
+
+**3. Vehicles**
+- The order bug is fixed: Frigate R16 now comes before Cruiser R18, and the track is sorted.
+- Land vehicles fill the gaps: Recon Buggy R6, Command Vehicle R9, Light Tank R11, Mortar Carrier R13, Medium Tank R14,
+  Heavy Tank R17, Battle Tank R19. Every rebirth 1-20 now gives something.
+- Granted vehicles are usable at once, at any level or base (`GrantedVehiclesIgnoreRunGates`).
+- Rebirth-only tank skins were not done.
+
+**4. 7 rebirth guns** (WeaponConfig; granted at R1 / 3 / 5 / 7 / 9 / 12 / 15)
+- Vanguard Carbine, Tempest SMG, Warden Shotgun, Longshot DMR, Talon Sniper, Havoc Launcher, Sovereign Rifle.
+- Each is a current gun's frame and model at x1.10-1.17 DPS. They are never sold and usable at level 1.
+
+**5. Perks**
+- +2 soldiers per rebirth (cap +40), on the server cap and the client mirror (`WE_RebirthArmyBonus`).
+- Starting cash steps from $25k (R1) to $250k (R20).
+- Gold 50 + 10 per rebirth (max 250).
+- +10% cash per rebirth is kept.
+
+**6. Visible rank**
+- Two trim-coloured banners at the base gate.
+- A title above the head (Veteran / Commander / General ..., MaxDistance 40).
+- The base sign reads "COMMANDER R3 · LV 12 · ARMY 20".
+
+**7. Rebirth screen**
+- The GAIN column adds the new zone, the soldiers and the starting cash.
+- The RESET column shows the new starting cash.
+- A "NEXT REBIRTHS" preview shows the next 3.
+- The celebration (Juice) runs as before; the new zone appears on rebuild.
+
+**8. Pacing** (`tools/sim/rebirth_pacing_sim.py` on the real configs)
+- Without a change, later lives got SHORTER: 33.6 min falling to 22 min by life 8.
+- Now `MinLevelFor = 40 + 4 x rebirths` (cap 90). Minutes per life:
+
+  | Life | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | Minutes | 33.6 | 34.1 | 37.4 | 41.5 | 46.8 | 52.9 | 60 | 68 | 77 | 87 |
+
+- Analytics: `rebirth_available` / `rebirth_opened` / `rebirth_confirmed`, with level and this life's play minutes.
+
+**9. Phone performance**
+- The zones' small props (tanks, drones, guns) are under QualityGovernor, so they hide far away on LOW.
+- Buildings are never culled.
+- About 40 parts per zone at level 3, 276 for all 7.
+
+**Checks**
+- tools/checks/claude_bud_job33.py (16 pins).
+- `tools/sim/run_rebirth_test.py`, which runs the real code:
+  - every zone at levels 0-3 grows, stays in its yard, and every cluster is at most 64 studs (this caught the 74-stud
+    yard and fence, now split);
+  - nuke charge maths; 10 targets, none near a base;
+  - zone effects and upgrades (a locked zone refused, one spend per level, max 3);
+  - the sorted track; every granted id exists; the pacing; the next 3; the GAIN / RESET lines;
+  - gun DPS within +20%.
+- All earlier sims still pass. BuyPathStatic PASS=6620 FAIL=0; remote audit OK; rojo ok; no new LSP errors.
+- **Retired pins (claude-bud comment + replacement):** the XP SpendCash site pin now lists 10 sites; the new
+  `rebirthzone_` and `nuke_rush` spends pay no XP.
+
+**Needs the owner**
+- `DevProducts.RebirthKeepBase` is LIVE (Id 3714663721, 50 R$, sold from the Rebirth panel). The brief said it was Id 0
+  / off sale. I did not change it.
+- Set `RebirthZonesConfig.Nuke.SirenSoundId`.
+
+**Test ON HIS PHONE (owner account, R0 -> R3)**
+1. At R0 (use `/setprestige` or rebirth): locked fences with "Unlocks at Rebirth N" round the base.
+2. Rebirth to R1:
+   - the West Yard opens;
+   - start cash is $25k, with +60 gold and +2 soldiers;
+   - the gate banners (Bronze) and the title "VETERAN" appear;
+   - the Vanguard Carbine is in the hotbar, and the Scout Car spawns at Lv 1.
+3. BUILD the Tank Factory, then UPGRADE twice: the hangar, then containers and a tank, then a chimney and a third tank.
+   The income per tick goes up.
+4. At R2 build the Silo, wait for or RUSH a warhead, then NUKE > LAUNCH at the Central Plaza. Everyone sees the
+   countdown banner and the red ring, then the flash. Players there take damage; novice or shielded players are spared.
+5. At R3 build the Artillery Battery (the missile reload shortens). The rebirth screen shows GAIN (zone, soldiers,
+   cash) and NEXT REBIRTHS. Level 52 is needed for the next rebirth.
 ## v130 (Code Bot Roblox, 2026-09-30 ~10:48 Dublin): ship claude-bud JOB 32 enterable plaza + LosRule + army holds at door — FAST TRAVEL STILL OFF — MAP-REDESIGN KEPT — place version 128
 - Cherry-picked Claude `e6a1b56` (JOB 32) onto phase-7-polish (v129 tip `937d197`). **WE_Build 130**. Code commit `14a7c72`. Open Cloud HTTP 200 `versionNumber=128`. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged).
 - **Fast travel stays REMOVED** (v127 owner request). Kept `MapConfig.FastTravelEnabled = false`; no `RequestFastTravel`, no TRAVEL button. **MAP-REDESIGN (v129) kept** — do not revert square map / MapLabelLayout / title-case pills.

@@ -78,7 +78,8 @@ local function synthesizeFromPlayerState(state: any)
 	local baseCap = SoldierConfig.MaxSoldiersBase or 50
 	local per = SoldierConfig.SoldiersPerBarracksLevel or 5
 	local bonus = if entOwned("ExtraSoldierSlot") then armyExpansionBonus() else 0
-	local cap = baseCap + barracks * per + bonus
+	-- claude-bud JOB 33: + the server's rebirth army bonus (perk + Elite Barracks; WE_RebirthArmyBonus)
+	local cap = baseCap + barracks * per + bonus + math.max(0, math.floor(tonumber(player:GetAttribute("WE_RebirthArmyBonus")) or 0))
 	local cost = SoldierConfig.RecruitCostCash or 500
 	local room = math.max(0, cap - count)
 	local tickSec = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.TickSeconds) or 5

@@ -101,7 +101,16 @@ local function maxSoldiers(profile: any): number
 	local base = SoldierConfig.MaxSoldiersBase or 50
 	local per = SoldierConfig.SoldiersPerBarracksLevel or 5
 	-- + Army Expansion (ExtraSoldierSlot DevProduct entitlement): ArmyCapBonus capacity
-	return base + barracksLevel(profile) * per + armyCapBonus(profile)
+	-- claude-bud JOB 33: + the rebirth perk (+2 per rebirth, cap +40) and the Elite Barracks (+5 a level)
+	local rebirth = 0
+	local okRZ, RZ = pcall(function(): any
+		return require(script.Parent.RebirthZoneService)
+	end)
+	if okRZ and RZ and RZ.ArmyBonus then
+		local okB, b = pcall(RZ.ArmyBonus, profile)
+		rebirth = if okB and typeof(b) == "number" and b == b then math.max(0, math.floor(b)) else 0
+	end
+	return base + barracksLevel(profile) * per + armyCapBonus(profile) + rebirth
 end
 
 local function pushState(player: Player)

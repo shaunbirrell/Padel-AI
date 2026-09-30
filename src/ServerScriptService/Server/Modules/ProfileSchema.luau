@@ -209,6 +209,26 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	profile.LastRaidedAt = nonNegInt(profile.LastRaidedAt)
 	profile.ArmyBoostUntil = nonNegInt(profile.ArmyBoostUntil)
 	profile.StarterPayoutDone = if profile.StarterPayoutDone == true then true else nil
+	-- claude-bud JOB 33: rebirth zones (zoneId -> level 0..3), the silo, the life's play time
+	if typeof(profile.RebirthZones) == "table" then
+		local z = {}
+		for id, lv in pairs(profile.RebirthZones) do
+			if typeof(id) == "string" and #id <= 24 then
+				z[id] = math.clamp(nonNegInt(lv), 0, 3)
+			end
+		end
+		profile.RebirthZones = z
+	else
+		profile.RebirthZones = nil
+	end
+	if typeof(profile.NukeSilo) == "table" then
+		profile.NukeSilo = { Ready = math.clamp(nonNegInt(profile.NukeSilo.Ready), 0, 10), ChargeFrom = nonNegInt(profile.NukeSilo.ChargeFrom) }
+	else
+		profile.NukeSilo = nil
+	end
+	profile.NukeLastLaunch = nonNegInt(profile.NukeLastLaunch)
+	profile.LifePlaySeconds = nonNegInt(profile.LifePlaySeconds)
+	profile.RebirthReadyLogged = if profile.RebirthReadyLogged == true then true else nil
 	if typeof(profile.NotifOptIn) == "table" then
 		local n = profile.NotifOptIn
 		local r = if n.Result == "accepted" or n.Result == "declined" or n.Result == "unavailable" then n.Result else nil
