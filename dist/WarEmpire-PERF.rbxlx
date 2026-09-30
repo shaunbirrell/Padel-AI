@@ -33,7 +33,8 @@
 	  * Earner: a popup + sound + the small reward below (server-side AddCash / AddGold / AddXP, reason "achievement").
 	  * Whole server: one styled TextChatService system line ("[WAR EMPIRE] <name> just ..."), rate limited (Shout).
 	    Big = also a short banner at the top for everyone.
-	  * BadgeId: 0 = no badge yet. Code Bot creates them in Creator Hub (docs/BADGES.md) and fills the ids; the server
+	  * BadgeId: 0 = no badge yet. codebot_v134: the first 5 created badges are wired (First Blood, Duelist, First
+	    Building, War Chest, Hunter); the other 16 are wired by the daily badge routine (5 free per 24h GMT). Code Bot creates them in Creator Hub (docs/BADGES.md) and fills the ids; the server
 	    awards only a non-zero id (pcall, UserHasBadgeAsync first, retried, re-synced on join).
 	  * Kill switch: Live (RetentionConfig.Live rule: OwnerFirst = UserId 470626172 + Studio). Off = the old 3-entry
 	    behaviour.
@@ -96,7 +97,7 @@ local AchievementConfig = {
 			Stat = "Stats.UpgradesPurchased",
 			Target = 1,
 			Shout = "just built their first building!",
-			BadgeId = 0,
+			BadgeId = 583497417329015,
 			Order = 3,
 		},
 		Cash10k = {
@@ -108,7 +109,7 @@ local AchievementConfig = {
 			RewardXP = 50,
 			Stat = "Stats.TotalCashEarned",
 			Target = 10000,
-			BadgeId = 0,
+			BadgeId = 1847488248714137,
 			Order = 4,
 		},
 		Level10 = {
@@ -128,17 +129,17 @@ local AchievementConfig = {
 		FirstKillNPC = {
 			Id = "FirstKillNPC", DisplayName = "First Blood", Description = "Defeat your first enemy soldier.",
 			RewardCash = 500, RewardGold = 0, RewardXP = 25, Event = "KillNPC",
-			Shout = "drew first blood!", BadgeId = 0, Order = 1,
+			Shout = "drew first blood!", BadgeId = 772051421546625, Order = 1,
 		},
 		FirstPlayerKill = {
 			Id = "FirstPlayerKill", DisplayName = "Duelist", Description = "Defeat another player.",
 			RewardCash = 1500, RewardGold = 1, RewardXP = 50, Stat = "LB.Kills", Target = 1,
-			Shout = "won their first player duel!", BadgeId = 0, Order = 2,
+			Shout = "won their first player duel!", BadgeId = 2489884143486750, Order = 2,
 		},
 		PlayerKills10 = {
 			Id = "PlayerKills10", DisplayName = "Hunter", Description = "Defeat 10 players.",
 			RewardCash = 5000, RewardGold = 3, RewardXP = 100, Stat = "LB.Kills", Target = 10,
-			Shout = "has defeated 10 players!", BadgeId = 0, Order = 5,
+			Shout = "has defeated 10 players!", BadgeId = 2976613716370877, Order = 5,
 		},
 		PlayerKills100 = {
 			Id = "PlayerKills100", DisplayName = "Warlord", Description = "Defeat 100 players.",
@@ -27375,7 +27376,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 133)
+		player:SetAttribute("WE_Build", 134)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -60544,6 +60545,10 @@ return WorldTerrain
 	    CombineSeconds merge, small lines dropped past MaxQueue).
 	  * Badges: BadgeService:AwardBadge only for BadgeId ~= 0, after UserHasBadgeAsync, pcall + retries; re-synced once
 	    per session on join so a failed award is retried later.
+	  * codebot_v134 badge backfill (BackfillBadges): on every profile load (NOT gated by Live, so the old MissionService
+	    path's unlocks count too) every achievement already in profile.Achievements whose BadgeId ~= 0 is awarded if the
+	    player does not own it; one badge per Badges.SyncGapSeconds (throttled), whole pass in pcall, one in-flight award
+	    per player + badge (so an unlock's award and the backfill never double-call AwardBadge). Admins included.
 	  * Analytics ACHIEVEMENT_UNLOCKED { id, backfill } per unlock.
 	  * The page: RequestAchievements -> FeaturePush "AchState" { List, Earned, Total }.
 	Owner / admin accounts earn and are announced like anyone (they stay off the leaderboards, EngagementService).
@@ -60567,6 +60572,7 @@ export type Shout = { Uid: number, Name: string, Text: string, Big: boolean, Ext
 local deps: { [string]: any } = {}
 local checking: { [Player]: boolean } = {}
 local badgeSynced: { [Player]: boolean } = {}
+local badgeInFlight: { [Player]: { [number]: boolean } } = {} -- codebot_v134: one award chain per player + badge
 local rebirthShouted: { [number]: number } = {} -- uid -> the prestige already announced
 local queue: { Shout } = {}
 local lastSent = -math.huge
@@ -60712,27 +60718,41 @@ local function awardBadge(player: Player, def: Def)
 	if bid <= 0 then
 		return
 	end
+	local fl = badgeInFlight[player]
+	if fl == nil then
+		fl = {}
+		badgeInFlight[player] = fl
+	end
+	if fl[bid] then
+		return
+	end
+	fl[bid] = true
 	local B = AchievementConfig.Badges
 	for attempt = 1, B.Retries do
 		if player.Parent == nil then
-			return
+			break
 		end
 		local okH, has = pcall(function()
 			return BadgeService:UserHasBadgeAsync(player.UserId, bid)
 		end)
 		if okH and has == true then
-			return
+			break
 		end
 		if okH then
 			local okA, res = pcall(function()
 				return BadgeService:AwardBadge(player.UserId, bid)
 			end)
 			if okA and res == true then
-				return
+				print(string.format("[WAR EMPIRE] badge awarded %s (%d) userId=%d", def.Id, bid, player.UserId))
+				break
+			end
+			if not okA then
+				warn(string.format("[WAR EMPIRE] AwardBadge %s (%d) failed: %s", def.Id, bid, tostring(res)))
 			end
 		end
 		task.wait(B.RetryDelaySeconds * attempt)
 	end
+	fl[bid] = nil
 end
 
 function AchievementService.Progress(profile: any, def: Def): (number, number)
@@ -60925,22 +60945,37 @@ function AchievementService.OnRebirth(player: Player)
 	end
 end
 
--- once per session: award any earned achievement's badge the player does not have yet (a failed award retries here)
-local function syncBadges(player: Player)
+-- codebot_v134 backfill, once per session: every achievement already unlocked (profile.Achievements) whose BadgeId is
+-- non-zero is awarded if not owned (awardBadge: UserHasBadgeAsync first, pcall, retried). Throttled SyncGapSeconds per
+-- badge. Not gated by Live; admins / the owner included (only leaderboards exclude admins). Returns the ids tried.
+local function syncBadges(player: Player): { string }
+	local tried: { string } = {}
 	if badgeSynced[player] then
-		return
+		return tried
 	end
 	badgeSynced[player] = true
 	local profile = deps.DataService and deps.DataService.GetProfile(player)
 	if profile == nil or typeof(profile.Achievements) ~= "table" then
-		return
+		return tried
 	end
 	for _, def in ipairs(ORDERED) do
+		if player.Parent == nil then
+			break
+		end
 		if profile.Achievements[def.Id] == true and (tonumber(def.BadgeId) or 0) > 0 then
-			awardBadge(player, def)
+			table.insert(tried, def.Id)
+			local ok, err = pcall(awardBadge, player, def)
+			if not ok then
+				warn("[WAR EMPIRE] badge backfill " .. def.Id .. ": " .. tostring(err))
+			end
 			task.wait(AchievementConfig.Badges.SyncGapSeconds)
 		end
 	end
+	return tried
+end
+
+function AchievementService.BackfillBadges(player: Player): { string }
+	return syncBadges(player)
 end
 
 -- test hooks (tools/sim/run_achievement_test.py)
@@ -60975,13 +61010,16 @@ function AchievementService.Init(d: { [string]: any })
 	end
 	if d.DataService and d.DataService.OnProfileLoaded then
 		d.DataService.OnProfileLoaded(function(player: Player)
-			if not live(player.UserId) then
-				return
-			end
 			task.delay(4, function()
 				if player.Parent then
-					AchievementService.Check(player)
-					syncBadges(player)
+					if live(player.UserId) then
+						AchievementService.Check(player)
+					end
+					-- codebot_v134: the badge backfill runs for every player (Live or not, admins included)
+					local ok, err = pcall(syncBadges, player)
+					if not ok then
+						warn("[WAR EMPIRE] badge backfill: " .. tostring(err))
+					end
 				end
 			end)
 		end)
@@ -60989,6 +61027,7 @@ function AchievementService.Init(d: { [string]: any })
 	Players.PlayerRemoving:Connect(function(player: Player)
 		checking[player] = nil
 		badgeSynced[player] = nil
+		badgeInFlight[player] = nil
 		rebirthShouted[player.UserId] = nil
 	end)
 	print("[WAR EMPIRE] AchievementService Init")
@@ -66387,7 +66426,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 133)
+			player:SetAttribute("WE_Build", 134)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -74214,7 +74253,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 133)
+		player:SetAttribute("WE_Build", 134)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -74356,7 +74395,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=133",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=134",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
