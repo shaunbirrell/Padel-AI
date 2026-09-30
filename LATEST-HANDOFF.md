@@ -1,6 +1,6 @@
 <!-- Q2-START -->
-## v131 (Code Bot Roblox, 2026-09-30 ~11:18 Dublin): ship claude-bud JOB 33 rebirth overhaul + JOB 34 achievements — LAUNCHED FOR EVERYONE — FAST TRAVEL STILL OFF — MAP-REDESIGN KEPT — place version TBD
-- **WE_Build 131**. Code commit TBD. Open Cloud TBD. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged). Fast travel stays REMOVED (`MapConfig.FastTravelEnabled = false`). MAP-REDESIGN (v129) kept.
+## v131 (Code Bot Roblox, 2026-09-30 ~11:18 Dublin): ship claude-bud JOB 33 rebirth overhaul + JOB 34 achievements — LAUNCHED FOR EVERYONE — FAST TRAVEL STILL OFF — MAP-REDESIGN KEPT — place version 129
+- **WE_Build 131**. Code commit `7dd1667`. Open Cloud HTTP 200 `versionNumber=129`. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged). Fast travel stays REMOVED (`MapConfig.FastTravelEnabled = false`). MAP-REDESIGN (v129) kept.
 - **FF-merge** `origin/claude/desktop-bud` tips `f763276` (JOB 33) + `50d19b8` (JOB 34) onto phase-7-polish (was `b23f7f7` v130).
 - **Launch flips (per Claude handoff "To launch"):**
   - `RebirthConfig.Live.OwnerFirst = false`; `ZonesLive = true`; `WeaponsLive = true` (rebirth zones, nukes, guns, vehicles, perks, trims, pacing, screen live for everyone).
