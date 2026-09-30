@@ -172,6 +172,19 @@ local function refresh(plotId: number)
 		if rankTitle then
 			line = string.format("%s R%d · LV %d · ARMY %d", string.upper(rankTitle), rebirth, level, army)
 		end
+		-- claude-bud JOB 39: "EMPIRE 12" after the rank (a gold star from Empire 5, the Marshal title at 30); owner-first
+		local okEG, EG = pcall(function(): any
+			return require(game:GetService("ReplicatedStorage").Shared.Configs.EndgameConfig)
+		end)
+		local empire = if okEG and EG.LiveFor(owner.UserId, "EmpireLevel") and profile and typeof(profile.Endgame) == "table"
+			then math.floor(tonumber(profile.Endgame.EmpireLevel) or 0)
+			else 0
+		if empire > 0 then
+			line ..= string.format(" · %sEMPIRE %d", if empire >= EG.Empire.StarLevel then "★ " else "", empire)
+			if empire >= EG.Empire.MarshalLevel then
+				title ..= " · " .. string.upper(EG.Empire.MarshalTitle)
+			end
+		end
 		image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", owner.UserId)
 	end
 	-- the flag plate shows what the plot's own flags show (NationFlag's view: the owner's pick, art permitting)

@@ -594,6 +594,34 @@ local function ensureBuildXPFields(profile: any)
 	profile.BuildXP = { Owed = math.min(nonNegInt(owed), pool), AtPrestige = nonNegInt(profile.Prestige) }
 end
 
+-- claude-bud JOB 39: profile.Endgame (JOB 39 §5), kept through both rebirth paths (PrestigeService never clears it).
+-- Every number is a whole >= 0 capped at its track's end; each map keeps only string keys.
+local ENDGAME_NUMS = { EmpireLevel = 30, BaseTier = 5, Medicine = 5, MedKits = 3, Revive = 1, HeistKit = 3 }
+local ENDGAME_MAPS = { Elite = 4, Defence = 10, Workshop = 5, Mastery = 5, Warheads = 1 }
+local function ensureEndgameFields(profile: any)
+	local e = if typeof(profile.Endgame) == "table" then profile.Endgame else {}
+	for k, cap in pairs(ENDGAME_NUMS) do
+		e[k] = math.min(nonNegInt(e[k]), cap)
+	end
+	for k, cap in pairs(ENDGAME_MAPS) do
+		local m = if typeof(e[k]) == "table" then e[k] else {}
+		for key, v in pairs(m) do
+			if typeof(key) ~= "string" then
+				m[key] = nil
+			else
+				m[key] = math.min(nonNegInt(v), cap)
+			end
+		end
+		e[k] = m
+	end
+	for _, k in ipairs({ "Attachments", "Camos", "Contracts", "BlackMarket" }) do
+		if typeof(e[k]) ~= "table" then
+			e[k] = {}
+		end
+	end
+	profile.Endgame = e
+end
+
 -- Code Bot v102: redeem codes (idempotent; no DataVersion bump, like ensureFeatureFields).
 --   RedeemedCodes  { [CODE] = os.time() of the redeem | true (pre-v102 saves) }: string keys up to 32 chars only,
 --                  junk values dropped; a code stays redeemed forever (once per player, across rebirths)
@@ -716,6 +744,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		Monetization = defaultMonetization(),
 		AnnouncePurchases = true,
 		VipSupplyAt = 0,
+		Endgame = { EmpireLevel = 0 }, -- claude-bud JOB 39 (ensureEndgameFields fills the rest on load)
 		-- Owner's 11 features: see ensureFeatureFields (Migrate fills the same keys into older saves)
 		KeepBaseRebirths = 0,
 		TutorialOrderVersion = TUTORIAL_ORDER_VERSION,
@@ -991,6 +1020,8 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	ensureBuildXPFields(profile)
 	-- Code Bot v102: redeemed codes + the timed Cash boost (idempotent; no version bump)
 	ensureCodesFields(profile)
+	-- claude-bud JOB 39: the endgame progression (idempotent; no version bump)
+	ensureEndgameFields(profile)
 
 	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
 	if typeof(profile.BaseUpgrades) ~= "table" then

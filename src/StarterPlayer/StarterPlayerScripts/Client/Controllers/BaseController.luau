@@ -230,6 +230,11 @@ local function refreshList(scrollToNext: boolean?)
 			local level = upgrades[structureId] or 0
 			local nextLevel = level + 1
 			local cost = if nextLevel <= def.MaxLevel then def.Costs[nextLevel] else nil
+			-- claude-bud JOB 39: the rebirth price scale the server charges (WE_BaseCostScale; nil = the raw price)
+			local costScale = player:GetAttribute("WE_BaseCostScale")
+			if cost and typeof(costScale) == "number" and costScale > 1 then
+				cost = require(Shared.Configs.EndgameConfig).ScaleStructureCost(structureId, cost, costScale)
+			end
 			local isBusiness = def.Kind ~= nil and def.Kind == BusinessConfig.Kind
 			-- the console rule: the pointer's id AND the level this row would buy next
 			local isNext = nextId ~= nil and structureId == nextId and nextTarget == level + 1
@@ -564,6 +569,43 @@ function BaseController.Init()
 	PanelShell.CloseButton(panel, function()
 		setOpen(false)
 	end)
+
+	-- claude-bud JOB 39: the EMPIRE button (the endgame goals + PIN to each plaza station); only while EndgameConfig is
+	-- live for this player (WE_EndgameLive). Off = no button and the old header widths.
+	do
+		local eb = Instance.new("TextButton")
+		eb.Name = "Empire"
+		eb.AnchorPoint = Vector2.new(1, 0)
+		eb.Position = UDim2.new(1, -(TAP + 20), 0, 6)
+		eb.Size = UDim2.fromOffset(128, TAP)
+		eb.BackgroundColor3 = Color3.fromRGB(200, 150, 40)
+		eb.Font = HudConfig.Fonts.Display
+		eb.TextSize = PanelShell.Text(18)
+		eb.TextColor3 = Color3.fromRGB(255, 255, 255)
+		eb.Text = "EMPIRE"
+		eb.Visible = false
+		eb.Parent = panel
+		corner(eb, 8)
+		local function syncEmpire()
+			local on = player:GetAttribute("WE_EndgameLive") == true
+			eb.Visible = on
+			local w = if on then -(TAP + 28 + 140) else -(TAP + 28)
+			sub.Size = UDim2.new(1, w, 0, subSize + 4)
+			how.Size = UDim2.new(1, w, 0, subSize + 4)
+		end
+		syncEmpire()
+		player:GetAttributeChangedSignal("WE_EndgameLive"):Connect(syncEmpire)
+		eb.Activated:Connect(function()
+			local mod = script.Parent:FindFirstChild("EndgameController")
+			if mod and mod:IsA("ModuleScript") then
+				local ok, EC = pcall(require, mod)
+				if ok and typeof(EC) == "table" and (EC :: any).OpenEmpire then
+					setOpen(false);
+					(EC :: any).OpenEmpire()
+				end
+			end
+		end)
+	end
 
 	local listTop = math.max(TAP + 8, how.Position.Y.Offset + subSize + 10)
 	local scroll = Instance.new("ScrollingFrame")

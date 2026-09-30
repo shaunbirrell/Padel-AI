@@ -74,6 +74,8 @@ local EVENTS = {
 	Constants.RemoteNames.RequestAchievements, -- claude-bud JOB 34
 	Constants.RemoteNames.RequestArmySend, -- claude-bud JOB 38
 	Constants.RemoteNames.RequestArmySendCheck, -- claude-bud JOB 38
+	Constants.RemoteNames.RequestEndgameBuy, -- claude-bud JOB 39
+	Constants.RemoteNames.RequestEndgameState, -- claude-bud JOB 39
 	Constants.RemoteNames.CodeStateUpdate,
 	Constants.RemoteNames.NationColorUpdate,
 	Constants.RemoteNames.RequestSetNation,

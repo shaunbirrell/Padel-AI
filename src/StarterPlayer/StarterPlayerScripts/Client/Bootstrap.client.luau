@@ -149,6 +149,7 @@ safeInit("NukeController", safeRequire("NukeController", Controllers:WaitForChil
 safeInit("AchievementController", safeRequire("AchievementController", Controllers:WaitForChild("AchievementController", 5) :: Instance)) -- claude-bud JOB 34
 safeInit("ArmoryController", safeRequire("ArmoryController", Controllers:WaitForChild("ArmoryController", 5) :: Instance)) -- claude-bud JOB 35
 safeInit("CheckpointController", safeRequire("CheckpointController", Controllers:WaitForChild("CheckpointController", 5) :: Instance)) -- claude-bud JOB 37
+safeInit("EndgameController", safeRequire("EndgameController", Controllers:WaitForChild("EndgameController", 5) :: Instance)) -- claude-bud JOB 39
 safeInit("BuildingTipController", safeRequire("BuildingTipController", Controllers:WaitForChild("BuildingTipController", 5) :: Instance)) -- claude-bud JOB 24 §5
 safeInit("ArmyDebugClient", safeRequire("ArmyDebugClient", Modules:WaitForChild("ArmyDebugClient", 5) :: Instance)) -- v115: owner-only army slot markers + labels (ArmyConfig.Follow3.Debug + WE_ArmyDebug; /armydebug)
 safeInit("MoveDebugClient", safeRequire("MoveDebugClient", Modules:WaitForChild("MoveDebugClient", 5) :: Instance)) -- v123: /movedebug player-movement log (WE_MoveDebug; quiet otherwise)

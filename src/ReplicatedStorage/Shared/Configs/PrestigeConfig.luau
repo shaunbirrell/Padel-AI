@@ -526,6 +526,14 @@ function PrestigeConfig.RebirthSummary(path: RebirthPath, ctx: RebirthSummaryCtx
 	if typeof(x.StartCash) == "number" and x.StartCash > 0 and reset.Cash then
 		resetLines[1] = fitLine("Cash back to $" .. withCommas(x.StartCash))
 	end
+	-- claude-bud JOB 39 (EndgameConfig, only when the server set them): Empire Level and upgrades are kept; the base
+	-- costs more next life (the rebirth price scale)
+	if x.EndgameKeep == true then
+		add(keep, "Empire and upgrades")
+	end
+	if typeof(x.NextBase) == "number" and x.NextBase > 0 and reset.BaseUpgrades then
+		add(resetLines, string.format("Next base $%.1fM", x.NextBase / 1e6))
+	end
 	if typeof(x.Gold) == "number" and x.Gold > 0 then
 		for i, line in ipairs(keep) do
 			if string.sub(line, 1, 4) == "Gold" then

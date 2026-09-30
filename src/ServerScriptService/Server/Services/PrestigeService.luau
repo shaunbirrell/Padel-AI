@@ -264,6 +264,17 @@ local function pushState(player: Player)
 			x.Gold = RebirthConfig.GoldBonus(prestige + 1, false)
 		end
 	end
+	-- claude-bud JOB 39 (EndgameConfig, owner-first): KEEP "Empire and upgrades"; RESET shows the next scaled base price
+	do
+		local EG = require(ReplicatedStorage.Shared.Configs.EndgameConfig)
+		local x: any = ctx
+		if EG.AnyLiveFor(player.UserId) then
+			x.EndgameKeep = true
+		end
+		if EG.LiveFor(player.UserId, "Rebirth") then
+			x.NextBase = EG.LifeCost(EG.RebirthCostScale(prestige + 1))
+		end
+	end
 	local payload: Types.PrestigeStatePayload = {
 		Prestige = prestige,
 		CanPrestige = canPrestige,

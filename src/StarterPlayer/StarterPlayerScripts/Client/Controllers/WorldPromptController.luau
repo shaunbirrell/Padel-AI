@@ -965,6 +965,11 @@ function structureInfo(structureId: string): (string, number, number?, boolean, 
 	end
 	local nextLevel = level + 1
 	local cost = def.Costs[nextLevel]
+	-- claude-bud JOB 39: the rebirth price scale the server charges (WE_BaseCostScale; nil = 1 = the raw price)
+	local scale = player:GetAttribute("WE_BaseCostScale")
+	if cost and typeof(scale) == "number" and scale > 1 then
+		cost = require(Shared.Configs.EndgameConfig).ScaleStructureCost(structureId, cost, scale)
+	end
 	return display, level, cost, false, prereqHint
 end
 

@@ -27,6 +27,7 @@ local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
 local Types = require(Shared.Types)
 
 local EconomyService = {}
+EconomyService._Endgame = nil :: any -- claude-bud JOB 39 (EndgameService, from deps)
 
 local SeasonService: any = nil
 local DataService: any = nil
@@ -213,6 +214,11 @@ local function cashMultFor(player: Player, profile: any, reason: string?): numbe
 		if taxPct > 0 then
 			mult *= (1 + taxPct / 100)
 		end
+		-- claude-bud JOB 39: EMPIRE LEVEL +2 % per level (1 while EndgameConfig's EmpireLevel part is not live)
+		local eg = EconomyService._Endgame
+		if eg and eg.EmpireMultFor then
+			mult *= eg.EmpireMultFor(player, profile)
+		end
 		if MonetizationService and MonetizationService.GetCashMultiplier then
 			mult *= MonetizationService.GetCashMultiplier(player)
 		end
@@ -326,6 +332,7 @@ function EconomyService.Init(deps: { [string]: any })
 	TutorialService = deps.TutorialService
 	MoneyCollectorService = deps.MoneyCollectorService
 	XPService = deps.XPService
+	EconomyService._Endgame = deps.EndgameService -- claude-bud JOB 39: the Empire Level factor
 	if TycoonGuideConfig.Enabled then
 		game:GetService("Players").PlayerRemoving:Connect(function(player: Player)
 			steadyIncome[player.UserId] = nil

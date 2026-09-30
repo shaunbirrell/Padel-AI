@@ -32,6 +32,7 @@ local HollowBuildingBuilder = require(script.Parent.Parent.Modules.HollowBuildin
 local BusinessService = require(script.Parent.BusinessService) -- v72 war businesses: stateless world builder
 
 local BaseService = {}
+BaseService._Endgame = nil :: any -- claude-bud JOB 39 (EndgameService, from deps)
 
 local DataService: any = nil
 local EconomyService: any = nil
@@ -767,6 +768,11 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: 
 	local cost = def.Costs[targetLevel]
 	if not cost then
 		return { Ok = false, Error = "NoCost" }
+	end
+	-- claude-bud JOB 39: the rebirth price scale (EndgameConfig.Rebirth; the raw price while that part is off)
+	local eg = BaseService._Endgame
+	if eg and eg.ScaledCost then
+		cost = eg.ScaledCost(player, profile, structureId, cost)
 	end
 
 	-- Order: reconcile (above) → spend → set upgrade → MarkDirty → return Ok; visuals AFTER in pcall
@@ -1763,6 +1769,7 @@ function BaseService.Init(deps: { [string]: any })
 	TutorialService = deps.TutorialService
 	NotificationService = deps.NotificationService
 	MonetizationService = deps.MonetizationService
+	BaseService._Endgame = deps.EndgameService -- claude-bud JOB 39: the rebirth price scale
 
 	getUpgradeChangedEvent()
 

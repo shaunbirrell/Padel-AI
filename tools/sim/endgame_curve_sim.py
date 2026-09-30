@@ -151,7 +151,7 @@ if __name__ == "__main__":
         print("  %-40s $%s" % (n, f"{c:,.0f}"))
 
 
-def time_to_max(p, pass_mult=1.0, start_cash=None, soldiers_owned=None, max_minutes=600):
+def time_to_max(p, pass_mult=1.0, start_cash=None, soldiers_owned=None, max_minutes=600, cost_scale=1.0):
     """Minutes from a fresh life at `p` rebirths to: every structure + business L5 and every zone open at `p` that was
     not open at p-1 (zones reached earlier are kept) at L3. Greedy cheapest-first (the game's PickCheapest)."""
     st = ps.structures()
@@ -164,6 +164,9 @@ def time_to_max(p, pass_mult=1.0, start_cash=None, soldiers_owned=None, max_minu
         blk = blk[: blk.index("\n\t\t},")]
         req = [(r, int(lv)) for r, lv in re.findall(r'StructureId = "(\w+)", Level = (\d+)', blk)]
         items[bid] = {"Costs": c, "Req": req, "Inc": inc}
+    if cost_scale != 1.0:  # claude-bud JOB 39: the rebirth price scale (structures + businesses; zones never; income unchanged)
+        for d in items.values():
+            d["Costs"] = [int(c * cost_scale + 0.5) for c in d["Costs"]]
     zn = zones()
     owned_zone_tick = 0.0
     for zid, z in zn.items():

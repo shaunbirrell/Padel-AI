@@ -9751,3 +9751,27 @@ ds_territories.luau T3):
   apart beyond the MOST KILLS pair cap.
 - **Walkie size:** the walkie grows to 216 x 346 v on touch while live (SizeTouchPlan); the 5-viewport HUD harness still
   has to confirm it clears the reserved zones.
+
+## 2026-09-30 — claude-bud JOB 39 phase 1: rebirth price scale + Empire Level + Command Office
+- **Stations are built client-side:** the plaza station interiors are built by the client, for live players only
+  (PlazaServicesConfig). The world is shared and the job is owner-first, so nobody else sees a desk, NPC or sign. The
+  world part / light / SurfaceGui budgets are untouched; each station stays under the ROBLOX-BUILD-GUIDE §3 house budget
+  on the viewer's client. The server validates every buy against the same frame (the Enterables registry).
+- **Milestone cosmetics:** the L5 gold star and the L30 Marshal title show on the base sign in phase 1. The L10 gate
+  banner, L15 HQ roof flag, L20 nameplate chevron and L25 finial are base props, so they ship with phase 2's Base Tier
+  builder (the same base-dressing code).
+- **What gets scaled:** only BaseConfig.Structures rows are scaled (the 15 structures + the 4 businesses). The
+  rebirth-zone structures are bought through RebirthZoneService and are never scaled (kept through rebirth, as the spec
+  says).
+- **Rounding:** EmpireCost rounds halves to the even 100k, so the table matches the spec exactly (5M x 1.17 = 5.85M ->
+  5.8M).
+- **Pacing (owner decision):** CostScale 0.20 (as approved) puts R7 at -31 % vs the rebirth-level minutes. The spec's
+  §7 asks +/-25 % for R1-R7; R1-R6 pass (+21 % ... -24 %).
+- **Purchase XP:** a scaled structure buy pays sqrt-scaled purchase XP (XPBalanceConfig.BuildXP(price paid)); the
+  frozen XP pin requires the paid price to be passed. At R3 that is x1.26 build XP per buy.
+- **No combat lock on the server:** the server has no "in combat" state for players, so EndgameService stamps a hurt
+  time from Humanoid.HealthChanged; buying is refused for 6 s after damage (HudConfig RecentCombatSeconds).
+- **Rebirth unlock rows:** the R25-R40 rows (§2.1) reference phase 3 / 5 systems (Mythic, Heavy Warhead), so they are
+  added with those phases, not in phase 1.
+- **§11 proof:** phase 1 is code complete, but §11 item 6 needs Studio captures that this session cannot make.
+  Recorded as NOT DONE in LATEST-HANDOFF; phases 2-5 were not started.

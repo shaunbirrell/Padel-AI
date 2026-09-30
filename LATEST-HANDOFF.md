@@ -1,4 +1,76 @@
 <!-- Q2-START -->
+## claude-bud JOB 39 PHASE 1 (2026-09-30): rebirth price scale + EMPIRE LEVEL + Command Office (branch `claude/desktop-bud`)
+**STATUS: CODE COMPLETE, NOT DONE under JOB 39 §11.** The §11 item 6 Studio proof (screenshots / captures in
+`docs/proof/job39/`) needs Roblox Studio, which this session cannot run. The headless proof is
+`docs/proof/job39/phase1-headless.md` (it lists the captures still owed). Per §11 I stopped here: phases 2-5 and
+JOB 40 are NOT started.
+
+**Flags:** `EndgameConfig.Live` (`Enabled`, `OwnerFirst = true`) + `EndgameConfig.Parts` (phase 1: `Rebirth`,
+`EmpireLevel` on; the other 11 off).
+- **Off / not live:** today's game exactly. Raw BaseConfig prices, no Empire factor in cashMultFor, no station, no
+  EMPIRE button, and nothing reads `profile.Endgame` (run_endgame_test proves the profile is never touched).
+- **To launch:** Code Bot sets `OwnerFirst = false` after the Studio proof.
+
+**1. Rebirth price scale (§2.1)**
+- `BaseService.PurchaseUpgrade` charges `EndgameService.ScaledCost` = Costs[L] x (1 + 0.20 x min(rebirths, 20)) for
+  the 15 structures + 4 businesses.
+- Rebirth-zone structures (bought by RebirthZoneService) and Gold rows are never scaled. Income is unchanged
+  (BalanceConfig reads the raw Costs). Levels already bought are never re-charged.
+- One life: $16.07M (R0) -> $22.5M (R2) -> $80.3M (R20+). `WE_BaseCostScale` tells the console chip and the Base panel
+  the same price.
+- The rebirth modal: KEEP "Empire and upgrades", RESET "Next base $25.7M" (free path only).
+
+**2. EMPIRE LEVEL (§2.2)**
+- `profile.Endgame.EmpireLevel` 0..30, kept through both rebirth paths.
+- Cost(L) = round(5M x 1.17^(L-1), to 100k), halves to even, matching the spec table (L2 5.8M ... L30 474.6M; all 30 =
+  $3.24B).
+- +2 % cash per level: its own factor in the non-exempt stack (L30 = x1.60).
+- The base sign shows "· EMPIRE 12" (★ from L5; "· EMPIRE MARSHAL" in the title at L30).
+
+**3. The Command Office (§3)**
+- **Where:** in NE_N1 (the red-awning plaza hotel), built on the CLIENT only for live players (nobody else sees a part).
+- **What:** a map table, the "Chief of Staff" (static Parts, no Humanoid, not damageable), a flag stand (a plain command
+  banner), a cabinet, one ceiling PointLight (no shadows, range 14), the Empire board upstairs (6 milestone plaques turn
+  gold) and the door sign "COMMAND" (one SurfaceGui, MaxDistance 40). 39 parts.
+- **Prompt:** "Empire Level" (HoldDuration 0, 12 studs) opens the station panel: EMPIRE n, "+x% cash", the next card
+  with price and "ready in 12:05", BUY (64 v), the next milestone and the next rebirth's base price.
+- **Closing:** damage closes the panel, and so does walking 22 studs away.
+- **Server rules:** within 16 studs of the NPC, not hurt in the last 6 s, the price from config, SpendCash
+  "endgame_empire".
+- **Base panel:** a new EMPIRE button (live only) opens the EMPIRE panel: the Empire ring, each live station's next
+  goal + price + ETA, and PIN (the one map pin, no fast travel).
+
+**Checks**
+- `tools/checks/claude_bud_job39.py` (25 pins).
+- `tools/sim/run_endgame_test.py`: 69 checks on the real config / service / client builder / rebirth summary, plus
+  the pacing sims.
+- BuyPathStatic FAIL=0; all 15 sims 0 failed; rojo ok; no new LSP errors; remote audit OK.
+- **Updated pin** (claude-bud comment + replacement): the XP SpendCash call-site pin, 10 -> 11 sites. + `endgame_empire`
+  in EndgameService.Purchase; non-paying: it is not on XPService.OnSpend's list.
+
+**Owner decisions needed**
+- **Pacing:** the spec's 0.20 scale gives R1-R6 within the §7 +/-25 % of the rebirth-level minutes, but **R7 is -31 %**
+  (max the base 46.8 min vs the rebirth level 68.3 min, tools/sim/endgame_curve_sim.py `cost_scale`). Built at 0.20 as
+  approved; the test prints it as a NOTE.
+- **Purchase XP:** purchase XP is sqrt(price), so a scaled buy pays ~sqrt(scale) more build XP (R3: x1.26). The XP pin
+  requires SpendCash to get the price actually paid.
+
+**Not verified here (Shaun / Code Bot must):**
+- the §11 captures above;
+- the station panel and the EMPIRE panel at the 6 viewports (HUD harness);
+- the NPC / table placement inside the real NE_N1 (the frame from Enterables);
+- one real purchase in Studio.
+
+**Test ON HIS PHONE**
+1. Drive to the plaza, walk into the red-awning hotel: the COMMAND sign over the door, the Chief of Staff behind the
+   map table. Tap "Empire Level": the panel shows EMPIRE 0, the next card $5,000,000, BUY.
+2. BUY: "EMPIRE 1! +2% cash", and the cash pill $/s rises by about 2 %. Buy up to L12 with the 170M.
+3. Take a hit in the plaza with the panel open: it closes. Walk out the door: it closes.
+4. Open the Base panel: the gold EMPIRE button. Tap it: the ring shows your level and the Command Office row. Tap PIN:
+   the gold line leads back to the plaza.
+5. Look at a console on your base (after a rebirth): the price is 1.2x per rebirth, and the Base panel shows the same
+   price. Open Rebirth: "Empire and upgrades" under KEEP, "Next base $..." under RESET.
+
 ## v143 (Code Bot Roblox, 2026-09-30 ~16:45 Dublin): ship claude-bud JOB 38 army ATTACK/SEND/RECALL + ARMY KILLS — OWNER-FIRST — place version 141
 - **WE_Build 143**. Cherry-pick `0150edf` from `origin/claude/desktop-bud` as `2003433` onto phase-7-polish (v142 tip `e113293`) + code/dist `b91f409`. Open Cloud HTTP 200 `versionNumber=141`.
 - **Flags:** `ArmyOrdersConfig.Live` Enabled + `OwnerFirst = true` (owner 470626172 + Studio only), as Claude shipped. **Do NOT set OwnerFirst=false until Shaun phone-tests and asks.** That later flip also swaps TOP ARMY → ARMY KILLS for everyone.

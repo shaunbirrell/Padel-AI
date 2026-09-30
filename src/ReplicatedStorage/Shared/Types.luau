@@ -157,6 +157,7 @@ export type PlayerProfile = {
 	Monetization: MonetizationStats?,
 	AnnouncePurchases: boolean?, -- M8 purchase ticker opt-out (true = announce)
 	VipSupplyAt: number?, -- M8 daily VIP supply: os.time() of the last claim
+	Endgame: { [string]: any }?, -- claude-bud JOB 39: EmpireLevel, BaseTier, Elite, Defence, ... (ProfileSchema ensureEndgameFields)
 	-- Owner's 11 features (ProfileSchema default-fill + sanitise; no DataVersion bump)
 	KeepBaseRebirths: number?, -- F7 keep-base rebirth tokens (added only in ProcessReceipt; spent by PrestigeService)
 	TutorialOrderVersion: number?, -- F6 order the saved TutorialStep index uses (missing = 1, the pre-F6 order)
