@@ -369,6 +369,8 @@ local StorePropsConfig = {
 	OFF == OLD (the RadarDome kit and the plain helipad exactly as today). ]]
 local cfg40: any = StorePropsConfig
 cfg40.JOB40 = { Enabled = true, OwnerFirst = true }
+-- Code Bot v151 probe (2026-09-30, docs/PROP-ASSETS.md): 0 of 19 candidates pass (18 not authorized to load in the
+-- live place, 856258654 = 213-part block build with a third-party decal). Both lists stay EMPTY until a probe passes.
 cfg40.ReplaceRows = {
 	-- after the probe, e.g.: { KitPart = "RadarDome", At = Vector3.new(-1053.5, 0, -1009.8), Radius = 20, Id = <radar station id>, Scale = 1, Yaw = 0 },
 } :: { any }

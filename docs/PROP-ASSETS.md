@@ -152,3 +152,34 @@ Code Bot runs `tools/probes/job40_props_probe.luau` (Open Cloud Luau on the live
 | 740042082 | Market | Crossroads Town |
 
 Rejected up front: the SN-75 radar (a real weapon system) and the Phoenix Sky Harbor / Orly control towers (real places).
+
+### JOB 40 part C probe RESULT (Code Bot Roblox v151, 2026-09-30 ~23:00 Dublin, Open Cloud Luau on place 97112936860418)
+Script: `tools/probes/job40c_codebot_probe.luau` (read-only: `InsertService:LoadAsset`, the service's strip list, count,
+destroy). Raw output: `docs/job40c-probe-2026-09-30.txt`. Creators from the public economy asset-details API.
+**Result: 0 of 19 pass. `ReplaceRows` / `BaseRows` stay EMPTY (no world change; the RadarDome kit and plain helipad stay).**
+| Id | Creator | Load in the live place | Verdict |
+|---|---|---|---|
+| 856258654 | VexHavoc | loads | REJECT: 213 parts after the trim (cap 40), 119 plain blocks + 53 built-in-shape meshes, no MeshPart/file mesh (block build); its one decal 77911929 is by botor2, not the creator (origin rule) |
+| 91764409 | barnslig101 | "User is not authorized to access Asset" | REJECT: does not load |
+| 124247102466690 | mdq6r | not authorized | REJECT: does not load |
+| 110033425601385 | mdq6r | not authorized | REJECT: does not load |
+| 37473580 | Ursur3minor | not authorized | REJECT: does not load |
+| 12972439539 | HV11l | not authorized | REJECT: does not load |
+| 10140810871 | group "Philadelphia International Airport" | not authorized | REJECT: does not load; also a real-place copy |
+| 10480494876 | SharkySailor | not authorized | REJECT: does not load |
+| 1660469777 | F15player | not authorized | REJECT: does not load |
+| 5437548774 | group Chill Imperium | not authorized | REJECT: does not load |
+| 9230948087 | group Blox Let Loose | not authorized | REJECT: does not load |
+| 12735882090 | ToffifeeTheExplorer | not authorized | REJECT: does not load |
+| 11921729320 | 2h1ft3d | not authorized | REJECT: does not load |
+| 11921736228 | 2h1ft3d | not authorized | REJECT: does not load |
+| 8887518461 | BaconHair77893 | not authorized | REJECT: does not load |
+| 86311252190175 | IAmASwedishMale | not authorized | REJECT: does not load |
+| 388036950 | WoodReviewer | not authorized | REJECT: does not load |
+| 2033520495 | HaizieR | not authorized | REJECT: does not load |
+| 740042082 | KiratoKun | not authorized | REJECT: does not load |
+
+All 19 are free public models, but none is owned by Roblox or by shaunie6, and the 18 that fail are not in the place
+owner's inventory, so the live place cannot load them. To try them again the owner must "Get" each one on the Creator
+Store with shaunie6 (then re-run the probe). A Creator Store search for Roblox-made radar / sandbag / stall / tower
+models found none.

@@ -27,9 +27,10 @@ _S150 = "src/ServerScriptService/Server/"
 _C150 = "src/ReplicatedStorage/Shared/Configs/"
 _CL150 = "src/StarterPlayer/StarterPlayerScripts/Client/"
 
-for _f in (_S150 + "Services/DataService.luau", _S150 + "Services/BaseService.luau", _S150 + "EarlyRemotes.server.luau"):
-	_cb150('SetAttribute("WE_Build", 150)' in _rd150(_f), "CODEBOT v150: WE_Build=150 " + _f.rsplit("/", 1)[-1])
-_cb150("WE_Build=150" in _rd150(_S150 + "Services/DataService.luau"), "CODEBOT v150: DataService profile-loaded log says WE_Build=150")
+# v151 (Code Bot Roblox): the WE_Build=150 pins are superseded in tools/checks/codebot_v151.py (WE_Build=151).
+# for _f in (_S150 + "Services/DataService.luau", _S150 + "Services/BaseService.luau", _S150 + "EarlyRemotes.server.luau"):
+# 	_cb150('SetAttribute("WE_Build", 150)' in _rd150(_f), "CODEBOT v150: WE_Build=150 " + _f.rsplit("/", 1)[-1])
+# _cb150("WE_Build=150" in _rd150(_S150 + "Services/DataService.luau"), "CODEBOT v150: DataService profile-loaded log says WE_Build=150")
 
 # JOB 40 part A base guards
 _GC = _rd150(_C150 + "GuardConfig.luau")
