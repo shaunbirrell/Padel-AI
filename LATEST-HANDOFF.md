@@ -1,4 +1,24 @@
 <!-- Q2-START -->
+## v149 PUBLISHED (Code Bot Roblox, 2026-09-30 22:18 Dublin): Open Cloud place version 147 — JOB 39 phases 3–5 + JOB 40E base markers OWNER-FIRST
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **149**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":147}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Cherry-picks only** (not a bud-branch merge — JOB 38 already on phase-7): `1cd39a6` Elite Training, `e31c2a0` Field Hospital + Armory/Vehicle Workshop, `658dec1` warheads/heist/Intel/Black Market/R25-R40, `5d5e59f` base owner markers. On phase-7 as `2513e75` / `88be9d9` / `aecdb42` / `a71d326`.
+- **Commits (phase-7-polish):** `cf813b5` WE_Build 149 + `tools/checks/codebot_v149.py`, `4ae1cb4` dist rebuild; this handoff.
+- **What ships (owner-first):**
+  - **Phase 3 Elite:** Heavy / SF split, Veteran→Mythic tiers (HP+dmg through `_UnitDmg`), Recruitment Office (NE_E1 cafe), re-train fees, Instant Army Refill free re-trains, ScaleTo + insignia + Mythic aura, formation spacing.
+  - **Phase 4:** Field Hospital (heal / Med Kits / Combat Medicine / Field Surgeon / army medic) + Armory Workshop (server mastery + attachments, Gold camos) + Vehicle Workshop (HP / speed / plates).
+  - **Phase 5:** Tactical/Heavy warheads, heist kits + the Fixer, Intel Office (contracts / HVT / scout / raided-by), weekly Black Market (cosmetics), plaza bounty scales with income, R25–R40 unlocks.
+  - **JOB 40E markers:** name / @username / nation flag / rebirth rank above every occupied base (AlwaysOnTop world-label exception); fade near base; compact far/overlap; OPEN BASE; owner-first by viewer.
+- **Flags:** `EndgameConfig.Live` Enabled + `OwnerFirst=true`; Parts Elite/Hospital/Mastery/Workshop/Warheads/Heist/Contracts/BlackMarket/RewardScaling = true. `BaseMarkerConfig.Live` OwnerFirst=true. **Do NOT set OwnerFirst=false until Studio §11 proof + owner ask.**
+- **Live state kept:** ArmyOrders OwnerFirst=true; ShopOverhaul + CheckpointGuard OwnerFirst=false; VIP 199; pass Ids; RPG hold 3972151362; WeaponsLive=true; FastTravel removed; PreferMesh OFF; WE_Building* untouched.
+- **Checks:** BuyPathStatic PASS=7173 FAIL=0; claude_bud_job39 PASS; claude_bud_job40 PASS; run_endgame_test 0 failed; run_base_marker_test 0 failed; army orders/march 0 failed; codebot_v149 PASS; rojo deterministic (2 builds identical).
+- **Servers:** not restarted. Owner: "Migrate to Latest Update" (or rejoin a fresh server) to get v149 / place 147.
+- **Phone tests (Migrate to Latest Update, as shaunie6):**
+  1. Plaza teal-awning cafe RECRUITS: Elite Training → buy Infantry Veteran → soldiers grow a little, grey band + 1 chevron; keep buying; walk/turn (no teleport). Lose a trained soldier → re-train fee or RE-TRAIN; Instant Army Refill restores trained.
+  2. Navy-awning ARMORY: Gun Upgrades mastery + red-dot; Tiger camo (Gold); Hospital FREE HEAL / Med Kits / Field Surgeon GET UP; Vehicle Depot Workshop → Air L3 plates on jet.
+  3. HQ console TACTICAL WARHEAD (R25 Heavy); Empire Bank THE FIXER Drill raid; orange INTEL contracts + SCOUT + RAIDED BY SEND; market Trader paint/banner/beret; plaza bounty = minutes of income.
+  4. Far side of the map: every occupied base shows flag/name/@/rank; near a base the marker fades (sign takes over); own base YOU in green; leave → OPEN BASE within 5 s.
+- **Next:** Studio §11 proof still owed; do NOT flip Endgame / BaseMarker OwnerFirst=false until owner asks. JOBs 41/42 still queued. Claude desktop-bud tip was `5d5e59f` (~21:59 Dublin); not a takeover.
+
 ## v148 PUBLISHED (Code Bot Roblox, 2026-09-30 21:44 Dublin): Open Cloud place version 146 — avatar mood animation errors + tower guard nil
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **148**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":146}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Commits (phase-7-polish):** `9dd4117` code + `tools/checks/codebot_v148.py`, `fcf7085` dist rebuild; this handoff. Merged into `claude/desktop-bud` as `62a117c` (clean, on top of Claude's `55a0e73`; BuyPathStatic on the merge 7155/0).
