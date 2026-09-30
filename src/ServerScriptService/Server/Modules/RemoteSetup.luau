@@ -71,6 +71,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestNotifOptInResult, -- claude-bud JOB 29
 	Constants.RemoteNames.RequestSiteActivity, -- claude-bud JOB 31
 	Constants.RemoteNames.RequestNuke, -- claude-bud JOB 33
+	Constants.RemoteNames.RequestAchievements, -- claude-bud JOB 34
 	Constants.RemoteNames.CodeStateUpdate,
 	Constants.RemoteNames.NationColorUpdate,
 	Constants.RemoteNames.RequestSetNation,

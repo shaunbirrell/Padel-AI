@@ -482,6 +482,15 @@ function PrestigeService.DoPrestige(player: Player, opts: PrestigeOpts?): (boole
 			})
 		end
 	end
+	-- claude-bud JOB 34: rebirth achievements + the "REBIRTHED for the Nth time!" line (AchievementConfig.Live)
+	do
+		local okA, AS = pcall(function(): any
+			return require(script.Parent.AchievementService)
+		end)
+		if okA and AS and AS.OnRebirth then
+			pcall(AS.OnRebirth, player)
+		end
+	end
 	-- claude-bud JOB 5d: a purchase prompt after a rebirth (MonetizationConfig.Placement, owner-only first)
 	if MonetizationService and MonetizationService.OfferMoment then
 		task.delay(6, function()

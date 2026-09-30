@@ -9604,3 +9604,26 @@ ds_territories.luau T3):
 - **Vehicles:** the gaps are filled with existing vehicles rather than new models. Tank skins were not done.
 - **Rebirth guns:** existing gun frames and models with modest stat edges.
 - **Keep-base product:** RebirthKeepBase is live, contrary to the brief; left as is for the owner to decide.
+
+## 2026-09-30 — claude-bud JOB 34: achievements, chat shout-outs, badges
+- **First Building:** it is the existing `FirstUpgrade` entry (old toast "First Brick"). The page and popup say
+  "First Building"; with Live off the old toast text is unchanged.
+- **Player kills:** counted from the validated leaderboard counter `LB.Kills` (no self, clan-mate or farmed kills).
+  It was seeded once from the old mixed `Stats.Kills` (JOB 24), so an old player's backfill may count NPC kills from
+  before then.
+- **First NPC kill:** event-only; there is no NPC-only counter. Existing players get it on their next NPC kill.
+- **Counters:**
+  - First Outpost counts the Home Outpost capture (`Stats.TerritoriesCaptured` does).
+  - The 7-day streak is earned at the day-7 claim (the streak wraps after 7).
+  - Army 50 is the current soldier count, not the peak.
+  - Command Center max stays earned after a rebirth resets the base.
+- **Weekly #1:** fires when a player first takes a weekly crown (EngagementService `crownNote`), not at week end.
+  Admins are never crowned (boards unchanged).
+- **Rebirth lines:** every rebirth gets the big chat line and banner (`AnnounceEveryRebirth`), as in the brief's
+  "3rd time" example. Milestones 1 / 5 / 10 / 20 also give the popup, badge and reward.
+- **Names:** chat uses the Roblox username (`player.Name`, e.g. "shaunie6"), not the display name. No nation name
+  ever appears.
+- **Backfill:** the first check of an old profile grants what it already reached QUIETLY (rewards + badges, one toast,
+  no chat), so launching to everyone does not flood chat.
+- **Owner-first chat:** while owner-first, the owner's lines still go to everyone in the server, as the brief asks.
+- **Badges:** none were created (Code Bot, `docs/BADGES.md`); every BadgeId is 0.

@@ -1,4 +1,69 @@
 <!-- Q2-START -->
+## claude-bud JOB 34 (2026-09-30): achievements, chat shout-outs, badges (branch `claude/desktop-bud`)
+**Found:** 3 server-only achievements (First Brick, War Chest, Sergeant) with a toast. There was no page, no chat line,
+no badges, and no BadgeService code anywhere.
+
+**Gating:** `AchievementConfig.Live` (`Enabled`, `OwnerFirst = true`). Off = MissionService's original 3-achievement
+path, unchanged. **To launch:** Code Bot sets `OwnerFirst = false`.
+
+**What it does** (`AchievementConfig`, `Services/AchievementService`, `Controllers/AchievementController`, the Missions
+panel)
+- **21 achievements**, each fires once per player:
+  - saved in the existing `profile.Achievements` map;
+  - unlock times in the new additive field `AchievementsAt`.
+- **Progress reads counters the game already keeps:**
+  - `Stats.TotalCashEarned` and validated PvP kills `LB.Kills`;
+  - `Prestige` and `BaseUpgrades.CommandCenter`;
+  - `Stats.TerritoriesCaptured` / `PlazaCaptures`;
+  - `Soldiers`, `DailyLogin.Streak` and `Level`;
+  - `NukeStats.Launched`: the counter already existed but nothing wrote it, so NukeService now increments it on launch.
+  - The first NPC kill and the weekly #1 crown are events.
+- **Earner:** a popup + sound + the small reward. Cash / Gold / XP are paid server-side with reason "achievement".
+- **Whole server:** one styled TextChatService system line, e.g. `[WAR EMPIRE] shaunie6 just REBIRTHED for the 3rd time!`.
+  - Big ones (every rebirth, $100M, Plaza capture, nuke, weekly #1) also show a short top banner for everyone except
+    the earner, who has the popup.
+  - Rate limited: one line per 3 s per server; a player's lines within 6 s merge into "(+N more)"; small lines drop
+    past 6 queued.
+- **First check of an old profile:** what he already reached is granted QUIETLY: rewards, badges and one toast
+  ("7 achievements unlocked!"), with no popups or chat lines. So launching to everyone does not flood chat.
+- **Badges:** `BadgeId` per achievement, all 0. **Code Bot creates them from `docs/BADGES.md`** (names, descriptions,
+  icon ideas) and fills the ids.
+  - The server awards only a non-zero id: `UserHasBadgeAsync` first, pcall, 3 retries.
+  - They are re-synced once per session on join, so a failed award is retried.
+- **Page:** Missions panel > ACHIEVEMENTS (below the daily missions). It shows earned (gold) and locked rows with
+  progress bars and rewards. Opening the panel refreshes it (`RequestAchievements`, gated and rate limited).
+- **Analytics:** `ACHIEVEMENT_UNLOCKED` { id, backfill } per unlock.
+- **Owner / admin:** they earn and are announced like anyone. They stay off the leaderboards, so they can never be
+  crowned.
+- **Also fixed:** the Missions panel ACTIVITIES header (JOB 31) stacked up a copy on every refresh.
+
+**Checks**
+- `tools/checks/claude_bud_job34.py` (29 pins).
+- `tools/sim/run_achievement_test.py`: 190 checks on the real service, config, ProfileSchema.Migrate and client
+  format:
+  - quiet backfill; each fires once;
+  - popup + reward + ONE FireAllClients chat line per unlock;
+  - a save + Migrate + fresh service instance fires nothing again;
+  - NPC kill / crown / player-kill events; rebirth lines (5th milestone, 6th still announced, never twice);
+  - rate limit merge / gap / drop;
+  - badge retry and "already owned".
+- BuyPathStatic PASS=6672 FAIL=0; remote audit OK; rojo ok; all sims 0 failed; no new LSP errors.
+
+**Test ON HIS PHONE (owner + a second phone/account in the same server)**
+1. Owner joins and gets one toast "N achievements unlocked! See Missions" (the backfill). The second player sees NO
+   chat lines from it.
+2. Owner opens Missions and scrolls down to ACHIEVEMENTS: gold earned rows, locked rows with bars (e.g. Grand Army
+   12 / 50). Text is readable at phone size and nothing overlaps.
+3. Owner kills an enemy soldier at an outpost or site.
+   - Owner: popup "ACHIEVEMENT UNLOCKED · First Blood · +$500 +25 XP" with a sound.
+   - Second player: chat shows `[WAR EMPIRE] shaunie6 drew first blood!` in colour.
+4. Owner rebirths (or launches a nuke once R2 + silo are built).
+   - Second player: the gold chat line AND a short banner at the top ("just REBIRTHED for the Nth time!").
+   - Owner: the popup only.
+5. Owner leaves and rejoins, then repeats step 3. No popup and no chat line (it fired once); the page still shows it
+   earned.
+6. Second player: no popup and no page (not live for him yet), but he does see the owner's chat lines.
+7. Chat stays readable: several unlocks in a few seconds come out as one line "(+N more)".
 ## claude-bud JOB 33 (2026-09-30): rebirth overhaul (branch `claude/desktop-bud`)
 **Found:** only PrestigeService (+10% cash, +50 gold, vehicle grants) ran. Zones, nukes, rebirth guns, perks, trims and
 titles were config only, with no service, structures or layout. The admin commands for RebirthExpansionService /

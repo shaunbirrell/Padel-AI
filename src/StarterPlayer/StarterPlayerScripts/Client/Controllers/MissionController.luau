@@ -37,6 +37,7 @@ local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
 local StreakStrip = require(script.Parent.Parent.Modules.StreakStrip) -- claude-bud JOB 29
 local SiteActivityConfig = require(Shared.Configs.SiteActivityConfig) -- claude-bud JOB 31
 local RetentionConfig = require(Shared.Configs.RetentionConfig) -- claude-bud JOB 31
+local AchievementConfig = require(Shared.Configs.AchievementConfig) -- claude-bud JOB 34
 
 local MissionController = {}
 
@@ -541,6 +542,126 @@ local function onActivities(data: any)
 	end
 end
 
+-- claude-bud JOB 34: ACHIEVEMENTS (AchievementService's FeaturePush "AchState"; earned / locked + progress bars).
+-- Display only (no buttons); below the daily missions.
+local achState: any = nil
+local function achievementsLive(): boolean
+	return RetentionConfig.Live(AchievementConfig.Live, player.UserId)
+end
+local function short(n: number): string
+	n = math.floor(n)
+	if n >= 1e6 then
+		return (string.format("%.1fM", n / 1e6):gsub("%.0M", "M"))
+	elseif n >= 1e4 then
+		return string.format("%dK", math.floor(n / 1000))
+	end
+	return tostring(n)
+end
+local function achievementRows(parent: Instance)
+	if not achievementsLive() or typeof(achState) ~= "table" or typeof(achState.List) ~= "table" then
+		return
+	end
+	local tS, dS = PanelShell.Text(14), PanelShell.Text(11)
+	local barH = math.max(8, math.floor(dS * 0.6))
+	local rH = 6 + tS + 4 + dS + 8 + barH + 10
+	local head = Instance.new("TextLabel")
+	head.Name = "AchievementsHeader"
+	head.LayoutOrder = 1000
+	head.BackgroundTransparency = 1
+	head.Size = UDim2.new(1, -8, 0, tS + 12)
+	head.Font = Enum.Font.GothamBlack
+	head.TextSize = tS
+	head.TextXAlignment = Enum.TextXAlignment.Left
+	head.TextColor3 = Constants.Colors.Gold
+	head.Text = string.format("ACHIEVEMENTS  %d / %d", tonumber(achState.Earned) or 0, tonumber(achState.Total) or #achState.List)
+	head.Parent = parent
+	for i, a in ipairs(achState.List) do
+		local done = a.Done == true
+		local row = Instance.new("Frame")
+		row.Name = "Achievement_" .. tostring(a.Id)
+		row.LayoutOrder = 1000 + i
+		row.Size = UDim2.new(1, -8, 0, rH)
+		row.BackgroundColor3 = Constants.Colors.Background
+		row.BackgroundTransparency = if done then 0 else 0.25
+		row.BorderSizePixel = 0
+		row.Parent = parent
+		corner(row, 8)
+		if done then
+			local st = Instance.new("UIStroke")
+			st.Color = Constants.Colors.Gold
+			st.Thickness = 2
+			st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			st.Parent = row
+		end
+		local tagW = tS * 6
+		local t = Instance.new("TextLabel")
+		t.BackgroundTransparency = 1
+		t.Position = UDim2.fromOffset(10, 6)
+		t.Size = UDim2.new(1, -(tagW + 24), 0, tS + 2)
+		t.Font = Enum.Font.GothamBold
+		t.TextSize = tS
+		t.TextXAlignment = Enum.TextXAlignment.Left
+		t.TextColor3 = if done then Constants.Colors.Gold else Constants.Colors.Text
+		t.TextTruncate = Enum.TextTruncate.AtEnd
+		t.Text = tostring(a.Title)
+		t.Parent = row
+		local tag = Instance.new("TextLabel")
+		tag.BackgroundTransparency = 1
+		tag.AnchorPoint = Vector2.new(1, 0)
+		tag.Position = UDim2.new(1, -10, 0, 6)
+		tag.Size = UDim2.fromOffset(tagW, tS + 2)
+		tag.Font = Enum.Font.GothamBold
+		tag.TextSize = dS
+		tag.TextXAlignment = Enum.TextXAlignment.Right
+		tag.TextColor3 = if done then Constants.Colors.Gold else Constants.Colors.Muted
+		local reward = if (tonumber(a.Gold) or 0) > 0 and (tonumber(a.Cash) or 0) > 0
+			then string.format("$%s + %d Gold", short(tonumber(a.Cash) or 0), tonumber(a.Gold) or 0)
+			elseif (tonumber(a.Gold) or 0) > 0 then string.format("%d Gold", tonumber(a.Gold) or 0)
+			else "$" .. short(tonumber(a.Cash) or 0)
+		tag.Text = if done then "EARNED" else reward
+		tag.Parent = row
+		local dsc = Instance.new("TextLabel")
+		dsc.BackgroundTransparency = 1
+		dsc.Position = UDim2.fromOffset(10, 6 + tS + 4)
+		dsc.Size = UDim2.new(1, -20, 0, dS + 2)
+		dsc.Font = Enum.Font.GothamMedium
+		dsc.TextSize = dS
+		dsc.TextXAlignment = Enum.TextXAlignment.Left
+		dsc.TextColor3 = Constants.Colors.Muted
+		dsc.TextTruncate = Enum.TextTruncate.AtEnd
+		dsc.Text = tostring(a.Desc)
+		dsc.Parent = row
+		local have, target = tonumber(a.Have) or 0, math.max(1, tonumber(a.Target) or 1)
+		local barY = 6 + tS + 4 + dS + 8
+		local countW = dS * 7
+		local bg = Instance.new("Frame")
+		bg.Name = "Bar"
+		bg.Position = UDim2.fromOffset(10, barY)
+		bg.Size = UDim2.new(1, -(countW + 28), 0, barH)
+		bg.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		bg.BorderSizePixel = 0
+		bg.Parent = row
+		corner(bg, barH)
+		local fillBar = Instance.new("Frame")
+		fillBar.Size = UDim2.fromScale(math.clamp(have / target, 0, 1), 1)
+		fillBar.BackgroundColor3 = if done then Constants.Colors.Gold else Constants.Colors.XP
+		fillBar.BorderSizePixel = 0
+		fillBar.Parent = bg
+		corner(fillBar, barH)
+		local cnt = Instance.new("TextLabel")
+		cnt.BackgroundTransparency = 1
+		cnt.AnchorPoint = Vector2.new(1, 0.5)
+		cnt.Position = UDim2.new(1, -10, 0, barY + barH / 2)
+		cnt.Size = UDim2.fromOffset(countW, dS + 2)
+		cnt.Font = Enum.Font.GothamBold
+		cnt.TextSize = dS
+		cnt.TextXAlignment = Enum.TextXAlignment.Right
+		cnt.TextColor3 = Constants.Colors.Text
+		cnt.Text = short(have) .. " / " .. short(target)
+		cnt.Parent = row
+	end
+end
+
 local closePanel: () -> () = function() end -- set after setOpen (START / GO close the panel)
 local function fmtLeft(n: number): string
 	return string.format("%d:%02d", math.floor(n / 60), n % 60)
@@ -552,7 +673,8 @@ local function refresh()
 	end
 	paintSpinner()
 	for _, child in ipairs(listFrame:GetChildren()) do
-		if (child:IsA("Frame") and child ~= spinRow and child ~= dailyRow) or (child:IsA("TextLabel") and child.Name == "EmptyState") then
+		-- claude-bud JOB 34: the section headers are rebuilt too (the ACTIVITIES header used to stack up on each refresh)
+		if (child:IsA("Frame") and child ~= spinRow and child ~= dailyRow) or (child:IsA("TextLabel") and (child.Name == "EmptyState" or child.Name == "ActivitiesHeader" or child.Name == "AchievementsHeader")) then
 			child:Destroy()
 		end
 	end
@@ -705,6 +827,8 @@ local function refresh()
 			end
 		end
 	end
+
+	achievementRows(listFrame) -- claude-bud JOB 34 (LayoutOrder 1000+: below the missions)
 
 	if #state.Daily == 0 then
 		emptyState(listFrame, "No daily missions right now — check back after UTC midnight refresh.")
@@ -864,6 +988,9 @@ local function setOpen(open: boolean)
 	if open then
 		if activitiesLive() then
 			fire(Constants.RemoteNames.RequestSiteActivity, "list") -- claude-bud JOB 31: fresh ACTIVITIES rows
+		end
+		if achievementsLive() then
+			fire(Constants.RemoteNames.RequestAchievements) -- claude-bud JOB 34: fresh progress bars
 		end
 		refresh()
 		local list = listFrame
@@ -1075,6 +1202,11 @@ function MissionController.Init()
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if kind == "Activities" and typeof(data) == "table" then
 			onActivities(data)
+			if menuOpen then
+				refresh()
+			end
+		elseif kind == "AchState" and typeof(data) == "table" then -- claude-bud JOB 34
+			achState = data
 			if menuOpen then
 				refresh()
 			end

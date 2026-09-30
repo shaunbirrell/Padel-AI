@@ -76,6 +76,7 @@ local SecurityConfig = {
 		RequestMapLive = {}, -- claude-bud JOB 30
 		RequestSiteActivity = { "string:8", "string:24?" }, -- claude-bud JOB 31
 		RequestNuke = { "string:8", "string:40?" }, -- claude-bud JOB 33
+		RequestAchievements = {}, -- claude-bud JOB 34
 		RequestNotifOptInResult = { "string:12", "string?" }, -- claude-bud JOB 29: accepted / declined / unavailable, "settings"?
 		RequestArmourLook = { "boolean" }, -- claude-bud JOB 26 -- claude-bud JOB 24 §10 (AnalyticsConfig.Roblox.ClientEvents only)
 		RequestResearch = { "string", "string?" },

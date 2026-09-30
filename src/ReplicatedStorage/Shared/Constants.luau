@@ -90,6 +90,7 @@ Constants.RemoteNames = {
 	RequestBuyArmour = "RequestBuyArmour", -- claude-bud JOB 26: buy the next armour tier (ArmourService)
 	RequestArmourLook = "RequestArmourLook", -- claude-bud JOB 26: hide / show the armour look
 	RequestNuke = "RequestNuke", -- claude-bud JOB 33: (action "panel" | "rush" | "launch", targetId?) NukeService
+	RequestAchievements = "RequestAchievements", -- claude-bud JOB 34: () -> FeaturePush "AchState" (AchievementService)
 	RequestSiteActivity = "RequestSiteActivity", -- claude-bud JOB 31: (action "list" | "start" | "quit", id?) SiteActivityService
 	RequestNotifOptInResult = "RequestNotifOptInResult", -- claude-bud JOB 29: the notification opt-in prompt result
 	CodeStateUpdate = "CodeStateUpdate",

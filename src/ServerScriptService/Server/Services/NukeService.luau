@@ -236,6 +236,13 @@ function NukeService.Launch(player: Player, targetId: any): (boolean, string?)
 	if deps.AnalyticsService then
 		pcall(deps.AnalyticsService.Log, "NUKE_LAUNCH", uid, { target = tg.Id })
 	end
+	-- claude-bud JOB 34: the profile's existing launch counter (NukeStats.Launched) + the "LAUNCHED A NUKE" achievement
+	if typeof(profile.NukeStats) == "table" then
+		profile.NukeStats.Launched = (tonumber(profile.NukeStats.Launched) or 0) + 1
+	end
+	if deps.AchievementService and deps.AchievementService.Check then
+		pcall(deps.AchievementService.Check, player)
+	end
 	task.delay(secs, function()
 		busy = false
 		local cs = deps.CombatService

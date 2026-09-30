@@ -331,6 +331,10 @@ local function crownNote(p: Player, label: string, unix: number)
 	if ns and ns.Notify then
 		pcall(ns.Notify, p, "You're #1 on " .. label .. " this week! Keep it to keep your crown.", "Reward")
 	end
+	local ach = deps.AchievementService -- claude-bud JOB 34: the weekly #1 achievement (+ its chat line)
+	if ach and ach.Note then
+		pcall(ach.Note, p, "Crown", { Label = label })
+	end
 end
 
 -- ONE server-wide fetch per board, published for every client; ranks for the players in this server

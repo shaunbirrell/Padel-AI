@@ -229,6 +229,19 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	profile.NukeLastLaunch = nonNegInt(profile.NukeLastLaunch)
 	profile.LifePlaySeconds = nonNegInt(profile.LifePlaySeconds)
 	profile.RebirthReadyLogged = if profile.RebirthReadyLogged == true then true else nil
+	-- claude-bud JOB 34: when each achievement was earned (id -> os.time()) + the one-time quiet backfill flag
+	if typeof(profile.AchievementsAt) == "table" then
+		local at = {}
+		for id, t in pairs(profile.AchievementsAt) do
+			if typeof(id) == "string" and #id <= 32 then
+				at[id] = nonNegInt(t)
+			end
+		end
+		profile.AchievementsAt = at
+	else
+		profile.AchievementsAt = nil
+	end
+	profile.AchievementsSeeded = if profile.AchievementsSeeded == true then true else nil
 	if typeof(profile.NotifOptIn) == "table" then
 		local n = profile.NotifOptIn
 		local r = if n.Result == "accepted" or n.Result == "declined" or n.Result == "unavailable" then n.Result else nil

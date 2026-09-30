@@ -757,6 +757,15 @@ function MissionService.SetOpsHooks(hooks: OpsHooks?)
 	end
 end
 
+-- claude-bud JOB 34: AchievementService (lazy; nil until it loads). While AchievementConfig.Live is on for a player it
+-- handles every achievement (the full list, chat, badges); off = the old 3-achievement path below, unchanged.
+local function achievements(): any
+	local ok, AS = pcall(function(): any
+		return require(script.Parent.AchievementService)
+	end)
+	return if ok then AS else nil
+end
+
 function MissionService.GrantAchievement(player: Player, achievementId: string): boolean
 	local profile = DataService.GetProfile(player)
 	if not profile then
@@ -797,6 +806,10 @@ function MissionService.GrantAchievement(player: Player, achievementId: string):
 end
 
 function MissionService.CheckAchievements(player: Player)
+	local ach = achievements()
+	if ach and ach.Check and ach.Check(player) then
+		return -- claude-bud JOB 34: the full achievement list handled it
+	end
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return
@@ -853,6 +866,10 @@ function MissionService.TrackProgress(player: Player, objectiveType: string, amo
 		MissionService.Push(player)
 	end
 
+	local ach = achievements()
+	if ach and ach.Note then
+		ach.Note(player, objectiveType) -- claude-bud JOB 34: event achievements (first NPC kill; a player kill re-checks)
+	end
 	MissionService.CheckAchievements(player)
 end
 
@@ -971,6 +988,7 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 			player:SetAttribute("WE_ArmyBoostUntil", untilUnix)
 		end
 	end
+	MissionService.CheckAchievements(player) -- claude-bud JOB 34: the 7-day streak achievement
 	DataService.MarkDirty(player)
 	MissionService.Push(player)
 	return true, nil
