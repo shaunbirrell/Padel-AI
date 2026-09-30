@@ -3636,7 +3636,7 @@ local DailyRewardConfig = {
 	ShowTomorrow = true,
 	StreakCard = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	},
 	BigDays = { [3] = true, [7] = true } :: { [number]: boolean },
 	CardSeconds = 6,
@@ -4088,7 +4088,7 @@ local EconomyConfig = {
 		Kill switch: Enabled = false (no payout, no card). OwnerFirst as TutorialConfig.FastStart. No Robux option. ]]
 	OfflineEarnings = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 		Share = 0.25,
 		CapSeconds = 8 * 3600,
 		MinSeconds = 300,
@@ -6066,7 +6066,7 @@ return ManualDropperConfig
 
 local MapConfig = {
 	Enabled = true,
-	OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+	OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	-- the world square the map shows (studs; north = -Z is up). Dry land is x +-1760, z -1760..1490 (WorldConfig).
 	Extent = { X0 = -2000, X1 = 2000, Z0 = -2000, Z1 = 2000 },
 	RefreshSeconds = 0.5, -- markers (and the server feed) at most 2x a second, only while open
@@ -9807,7 +9807,7 @@ export type Gun = { WeaponId: string, PassKey: string }
 local PremiumGunsConfig = {
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	},
 	-- the playtest owner gets the six guns while live and the passes are Id 0 (so he can test them); off = passes only
 	OwnerTestGrant = true,
@@ -12027,7 +12027,7 @@ local RetentionConfig = {
 		StateStore: one DataStore write per leave, with the fields an external sender reads (docs/NOTIFICATIONS.md). ]]
 	Notifications = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 		NotBeforeSeconds = 60,
 		TutorialDelaySeconds = 25, -- after the Starter Pack offer's slot (3 s after the tutorial)
 		DeclineCooldownDays = 7,
@@ -12450,7 +12450,7 @@ export type ActivityDef = {
 
 local SiteActivityConfig = {
 	Enabled = true,
-	OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+	OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	PushSeconds = 1, -- state push to the player while an activity runs (<= 1 Hz)
 	ZonePadStuds = 12, -- the zone = the site radius + this
 
@@ -12922,7 +12922,7 @@ export type ZoneRow = { Id: number, L0: number, L1: number, X: number, Z: number
 
 local StorePropsConfig = {
 	Enabled = true, -- KILL SWITCH: false = no store props anywhere (the Part builds as before)
-	OwnerFirst = true, -- only the owner (UserId 470626172) + Studio testers until Code Bot sets false = everyone
+	OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	World = true, -- the site / area dressing
 	ZonesOn = true, -- the rebirth zone upgrade visuals
 	LiveAttribute = "WE_StorePropsOff", -- Workspace attribute: true = remove every copy now
@@ -14655,7 +14655,7 @@ end
 	OwnerFirst = true: live only for the owner (and Studio test players) first; see RetentionConfig.Live. ]]
 TutorialConfig.FastStart = {
 	Enabled = true,
-	OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+	OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	StandStuds = 7, -- in front of the console face (ConsolePromptDistance is 10)
 	StarterPayout = 1500,
 	HoldPopupsUntilStep = 3, -- WE_Onboarding clears once TutorialStep >= this (after the Command Center) or at 60 s
@@ -27780,7 +27780,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 135)
+		player:SetAttribute("WE_Build", 136)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -66977,7 +66977,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 135)
+			player:SetAttribute("WE_Build", 136)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -74879,7 +74879,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 135)
+		player:SetAttribute("WE_Build", 136)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -75021,7 +75021,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=135",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=136",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
