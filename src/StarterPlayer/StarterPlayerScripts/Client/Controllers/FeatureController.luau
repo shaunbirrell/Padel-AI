@@ -163,7 +163,12 @@ local function vipPerks()
 			local src = message.TextSource
 			local sender = if src then Players:GetPlayerByUserId(src.UserId) else nil
 			if sender and sender:GetAttribute("WE_VIPTag") == true then
-				props.PrefixText = "<font color='#D4AF37'>" .. tag .. "</font> " .. message.PrefixText
+				if sender:GetAttribute("WE_VIPGold") == true then
+					-- claude-bud JOB 36: the premium VIP's gold chat name (server-set WE_VIPGold, owner-first)
+					props.PrefixText = "<font color='#D4AF37'>" .. tag .. " " .. message.PrefixText .. "</font>"
+				else
+					props.PrefixText = "<font color='#D4AF37'>" .. tag .. "</font> " .. message.PrefixText
+				end
 			end
 			return props
 		end

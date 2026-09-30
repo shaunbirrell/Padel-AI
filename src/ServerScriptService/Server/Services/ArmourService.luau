@@ -130,14 +130,16 @@ function ArmourService.Apply(player: Player)
 		return
 	end
 	local tier = tierOf(player)
-	local mx = ArmourService.MaxHealthFor(tier)
+	-- claude-bud JOB 36: Double HP (WE_PerkDoubleHP, server-set by ShopOverhaulService from pass ownership) doubles the base
+	local hpMult = if player:GetAttribute("WE_PerkDoubleHP") == true then (require(Shared.Configs.ShopOverhaulConfig) :: any).DoubleHP.Mult else 1
+	local mx = math.floor(ArmourService.MaxHealthFor(tier) * hpMult + 0.5)
 	if hum.MaxHealth ~= mx then
 		local ratio = if hum.MaxHealth > 0 then hum.Health / hum.MaxHealth else 1
 		hum.MaxHealth = mx
 		hum.Health = math.max(1, math.floor(mx * ratio + 0.5))
 	end
 	player:SetAttribute("WE_ArmourTier", tier)
-	player:SetAttribute("WE_ArmourBaseHP", baseHp())
+	player:SetAttribute("WE_ArmourBaseHP", math.floor(baseHp() * hpMult + 0.5)) -- JOB 36: the doubled base is not armour
 	player:SetAttribute("WE_ArmourPct", math.floor(ArmourService.ReductionFor(tier) * 100 + 0.5))
 	player:SetAttribute("WE_ArmourLookOff", if lookOff(profile) then true else nil)
 	dressLook(char, tier, lookOff(profile))

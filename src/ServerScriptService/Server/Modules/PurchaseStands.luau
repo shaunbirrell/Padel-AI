@@ -172,6 +172,36 @@ function PurchaseStands.Build(parent: Instance, base: CFrame, o: StandOpts): Bas
 end
 
 --[[ The depot sign behind the stand row (a 2-post board, one SurfaceGui, MaxDistance 60). ]]
+--[[ claude-bud JOB 36: point an existing stand at another offer (the base Speed stand sells Speed Boost while the shop
+	overhaul is live for the plot's owner). Updates what PremiumPadService reads at trigger time (OfferKind / OfferKey)
+	and what the stand shows (title, benefit, price chip, prompt), all from MonetizationConfig. ]]
+function PurchaseStands.Retarget(top: BasePart, kind: string, key: string)
+	local price, name, benefit = PurchaseStands.OfferInfo(kind, key)
+	top:SetAttribute("OfferKind", kind)
+	top:SetAttribute("OfferKey", key)
+	local bb = top:FindFirstChild("WE_PremiumBillboard")
+	if bb then
+		local t = bb:FindFirstChild("Title")
+		if t and t:IsA("TextLabel") then
+			t.Text = name
+		end
+		local b = bb:FindFirstChild("Benefit")
+		if b and b:IsA("TextLabel") then
+			b.Text = benefit
+		end
+		local chip = bb:FindFirstChild("PriceChip")
+		local p = chip and chip:FindFirstChild("Price")
+		if p and p:IsA("TextLabel") then
+			p.Text = ROBUX .. " " .. tostring(price)
+		end
+	end
+	local pp = top:FindFirstChild("WE_BuyPrompt")
+	if pp and pp:IsA("ProximityPrompt") then
+		pp.ActionText = "Buy - " .. ROBUX .. " " .. tostring(price)
+		pp.ObjectText = name
+	end
+end
+
 function PurchaseStands.Sign(parent: Instance, cf: CFrame, text: string)
 	local S: any = MonetizationConfig.PremiumPads.Stand
 	local m = Instance.new("Model")

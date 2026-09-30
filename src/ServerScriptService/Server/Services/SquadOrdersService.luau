@@ -261,21 +261,31 @@ local function armyHealthBase(): number
 	return if c then tonumber(c.Health) or 90 else OrdersConfig.UnitHealth or 90
 end
 
+-- claude-bud JOB 36: Super Soldiers (WE_PerkSuperSoldiers, server-set by ShopOverhaulService from pass ownership):
+-- army damage and soldier HP x ShopOverhaulConfig.SuperSoldiers.Mult. The per-victim PlayerMaxDps cap still applies.
+local function superMult(player: Player?): number
+	if player == nil or player:GetAttribute("WE_PerkSuperSoldiers") ~= true then
+		return 1
+	end
+	return math.clamp(tonumber((require(Shared.Configs.ShopOverhaulConfig) :: any).SuperSoldiers.Mult) or 1, 1, 2)
+end
+
 -- claude-bud JOB 29: the day-7 streak ARMY BOOST (DailyRewardConfig.Day7Boost; MissionService writes WE_ArmyBoostUntil)
+-- claude-bud JOB 36: x Super Soldiers (every army damage site already multiplies this)
 local function armyBoostMult(player: Player?): number
 	if player == nil then
 		return 1
 	end
 	local untilUnix = tonumber(player:GetAttribute("WE_ArmyBoostUntil")) or 0
 	if untilUnix <= os.time() then
-		return 1
+		return superMult(player)
 	end
 	local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig) :: any
 	local b = DailyRewardConfig.Day7Boost
 	if typeof(b) ~= "table" or b.Enabled ~= true then
-		return 1
+		return superMult(player)
 	end
-	return math.clamp(tonumber(b.Mult) or 1, 1, 2)
+	return math.clamp(tonumber(b.Mult) or 1, 1, 2) * superMult(player)
 end
 
 local function researchMult(player: Player?, statId: string): number -- v69 research: ≥1, 1 when absent
@@ -869,7 +879,7 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	weldPart("Rifle", Vector3.new(0.26, 0.26, 2.4), CFrame.new(1.15, 0.15, -0.85), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
 
 	local humanoid = Instance.new("Humanoid")
-	humanoid.MaxHealth = math.floor(armyHealthBase() * researchMult(owner, "SoldierHealth") + 0.5) -- v69 research
+	humanoid.MaxHealth = math.floor(armyHealthBase() * researchMult(owner, "SoldierHealth") * superMult(owner) + 0.5) -- v69 research; JOB 36 Super Soldiers
 	humanoid.Health = humanoid.MaxHealth
 	humanoid.WalkSpeed = OrdersConfig.UnitWalkSpeed or 14
 	humanoid.AutoRotate = true
@@ -3804,7 +3814,7 @@ end
 function SquadOrdersService.ApplyResearch(player: Player) -- v69 research: rescale living units' HP, add units
 	local st = squadByUser[player.UserId]
 	if st then
-		local maxHp = math.floor(armyHealthBase() * researchMult(player, "SoldierHealth") + 0.5)
+		local maxHp = math.floor(armyHealthBase() * researchMult(player, "SoldierHealth") * superMult(player) + 0.5) -- JOB 36
 		for _, u in ipairs(st.Units) do
 			if u.Alive and u.Humanoid.Health > 0 then
 				local ratio = u.Humanoid.Health / math.max(u.Humanoid.MaxHealth, 1)

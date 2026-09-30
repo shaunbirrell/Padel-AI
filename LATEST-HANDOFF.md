@@ -37,6 +37,66 @@
   4. Havoc: hold FIRE — barrel spins, shots after ~0.5s.
   5. Tempest: hold to charge, release; 2-player pierce + PvP protection still holds (novice shield / pvp off).
   6. Non-owner join: no armory / no grants (OwnerFirst).
+
+## claude-bud JOB 36 (2026-09-30): shop overhaul (branch `claude/desktop-bud`)
+**Flags:** `ShopOverhaulConfig.Live` (`Enabled`, `OwnerFirst = true`).
+- **Off:** the old shop exactly.
+- **To launch:** the owner sets VIP to 349 R$ on the Creator Hub and pastes the new Ids, then Code Bot sets
+  `OwnerFirst = false`.
+
+**Ids / prices the owner must set**
+- Create game passes `WarChest` (799), `SuperSoldiers` (349) and `DoubleHP` (199); all are Id 0 now, so hidden and
+  never prompted.
+- VIP: change the Creator Hub price 199 -> **349**. MonetizationConfig keeps `RobuxPrice = 199` and shows
+  `OverhaulRobuxPrice = 349` only while live.
+- Every item is listed in `docs/SHOP.md`.
+
+**What it does (while live)**
+- **Order:** FREE -> War Chest -> 2x Cash (**BEST VALUE**, gold) -> VIP -> Auto Collect -> Starter Pack -> BP Premium
+  -> Bigger Army -> Super Soldiers -> Double HP -> Speed Boost -> Double XP -> armory guns -> premium vehicles -> cash
+  packs -> consumables. Every pass row reads **PERMANENT**.
+- **Cash packs:** grant = max(floor, minutes x the buyer's passive $/min), computed in ProcessReceipt.
+  - S = max($10k, 5 min), M = max($50k, 20 min), L = max($200k, 60 min), Mega = max($2M, 180 min).
+  - The lookup that may yield runs before the first mutation, then re-checks the player / profile.
+  - Rows, the Mega toast, the rebirth offer and the garage "short on cash" offer show the live amount
+    (`WE_PassivePerMin`, published every 10 s).
+- **Duplicates:**
+  - The Speed Pass and Army Expansion leave the Shop.
+  - The base Speed stand (`PurchaseStands.Retarget`) and the death offer sell Speed Boost.
+  - The army-wiped offer sells Bigger Army.
+  - Owners keep their speed and army bonus (the reads are ownership, not the Shop).
+  - Note: the speed multipliers are the current v133 ones: the Speed Pass is x1.5 and Speed Boost x2. The brief's x1.4
+    is outdated.
+- **VIP:** +50 % Cash (was 25 %), a daily supply crate (max($5k, 10 min of income) every 20 h, `VipSupplyAt`,
+  "vip_supply" is multiplier-exempt), the lounge and the [VIP] tag as before, plus a gold chat name (`WE_VIPGold`).
+  Every current VIP owner gets it.
+- **War Chest** counts as owning 2x Cash + Auto Collect + VIP + Bigger Army. MonetizationService marks them owned on
+  the join check and on purchase. The row hides once all four are owned.
+- **Super Soldiers:** army damage and soldier HP x1.25 (`WE_PerkSuperSoldiers`; the per-player army DPS cap stays).
+- **Double HP:** base MaxHealth x2 in ArmourService (`WE_PerkDoubleHP`; armour adds on top; the HUD base follows).
+- **`docs/SHOP.md`:** every item with key, name, price, Id, what it grants and where it is sold.
+
+**Checks**
+- `tools/checks/claude_bud_job36.py` (25 pins).
+- `tools/sim/run_shop_test.py`: the order on the real row names; pack maths with floors / NaN; the VIP crate once per
+  day (real service); perks only while live; the Speed stand retarget and restore (real PurchaseStands); config Ids /
+  prices; the receipt order.
+- BuyPathStatic PASS=6796 FAIL=0; all sims 0 failed; rojo ok; no new LSP errors; remote audit OK.
+
+**Not verified here:** a real Robux purchase (Roblox test purchases in Studio) and the 2-player combat check of Double
+HP / Super Soldiers.
+
+**Test ON HIS PHONE (owner)**
+1. Open Shop > SUPPLY: FREE rows, then 2x Cash marked **BEST VALUE** in gold, then VIP at 349, and so on. Every pass
+   row reads PERMANENT, and the Speed Pass / Army Expansion rows are gone.
+2. The cash pack rows show amounts from your income (for example Cash Pack L = 60 min of your passive income, never
+   under $200k). A test purchase in Studio pays that amount.
+3. Walk to the Supply Depot: the Speed stand reads Speed Boost R$ 99 (a second non-owner phone's base still shows the
+   Speed Pass).
+4. Rejoin as VIP: "VIP supply crate: +$X" arrives once. Your chat name is gold; rejoining the same day gives no second
+   crate.
+5. Lose your whole army: the offer is "Army down! Bigger Army: +10 soldiers". Die with no speed owned: the offer is
+   "Run faster" for Speed Boost.
 ## claude-bud JOB 35 (2026-09-30): premium guns armory (branch `claude/desktop-bud`)
 **Flags:** `PremiumGunsConfig.Live` (`Enabled`, `OwnerFirst = true`).
 - **Off:** no armory, no grants, no gold rows. The six guns stay in WeaponConfig, unowned and unsold.

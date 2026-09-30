@@ -55,6 +55,18 @@ local PANEL_ID = "Shop"
 
 local player = Players.LocalPlayer
 local PremiumGunsConfig = require(Shared.Configs.PremiumGunsConfig) -- claude-bud JOB 35
+local ShopOverhaulConfig = require(Shared.Configs.ShopOverhaulConfig) -- claude-bud JOB 36 (owner-first)
+
+-- claude-bud JOB 36: a cash pack's amount for this player (the live one while the overhaul is on: WE_PassivePerMin)
+local function packCash(key: string, def: any): number
+	if ShopOverhaulConfig.LiveFor(player.UserId) then
+		local live = ShopOverhaulConfig.CashPackAmount(key, tonumber(player:GetAttribute(ShopOverhaulConfig.PerMinAttribute)) or 0)
+		if live then
+			return live
+		end
+	end
+	return tonumber(typeof(def) == "table" and def.Cash) or 0
+end
 local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
 local pendingCashMegaHighlight = false
@@ -499,7 +511,9 @@ local function promptGamePass(passKey: string, source: string?)
 	end
 	-- v69: HideFromShop passes (ExtraPlotCosmetic — theme not implemented) are never offered
 	-- claude-bud JOB 35: premium gun passes (WeaponIds) are HideFromShop for the generic list but sold from WEAPONS
-	if (def :: any).HideFromShop == true and typeof((def :: any).WeaponIds) ~= "table" then
+	if (def :: any).HideFromShop == true and typeof((def :: any).WeaponIds) ~= "table"
+		and not ((def :: any).OverhaulShop == true and ShopOverhaulConfig.LiveFor(player.UserId)) -- claude-bud JOB 36
+	then
 		return
 	end
 	-- F1: an owned pass (or one whose OwnedIfAny key is owned: the Speed Pass for a Speed Boost owner) never prompts
@@ -537,6 +551,9 @@ function ShopController.Init()
 			-- F8: never offer the Speed Pass to a player who owns any SkipIfOwnsAny key (Speed Pass or Speed Boost)
 			if key == speedPassKey and ownsAnyKey(speedOffer.SkipIfOwnsAny) then
 				return nil, nil, nil, nil
+			end
+			if key == ShopOverhaulConfig.DeathOfferProduct and speedOffer and ownsAnyKey(speedOffer.SkipIfOwnsAny) then
+				return nil, nil, nil, nil -- claude-bud JOB 36: no Speed Boost offer to a speed owner
 			end
 			-- Prefer live GamePass, then live DevProduct (DoubleCash is GP; SpeedBoost is DP)
 			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
@@ -578,7 +595,8 @@ function ShopController.Init()
 					local desc = if typeof(def) == "table" and typeof(def.Description) == "string" then def.Description else nil
 					local title = "Back stronger: " .. name
 					local sub = desc or "Boost after death"
-					if k == speedPassKey then
+					if k == speedPassKey or (k == ShopOverhaulConfig.DeathOfferProduct and ShopOverhaulConfig.LiveFor(player.UserId)) then
+						-- claude-bud JOB 36: the overhaul's death offer is Speed Boost (same "Run faster" copy)
 						-- F8 copy: "Run faster" / "Speed Pass  +40% forever" / "GET R$ 99" (from the config values).
 						-- No Cash Pack Mega highlight after this offer (M1: no 799 R$ push after a death).
 						local mult = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
@@ -855,10 +873,13 @@ function ShopController.Init()
 	end
 
 	local order = 0
+	local overhaul = ShopOverhaulConfig.LiveFor(Players.LocalPlayer.UserId) -- claude-bud JOB 36
+	local builtRows: { { Row: Frame, Sub: TextLabel, Key: string } } = {} -- claude-bud JOB 36: reorder + live amounts
 	-- SUPPLY row. onClick nil = display-only row: its button is disabled (never a dead gold BUY).
 	local function addRow(label: string, sub: string, onClick: (() -> ())?, btnText: string?, rowKey: string?, hero: boolean?): TextButton
 		order += 1
-		local _, _, btn = buildRow(list, order, rowKey or tostring(order), label, sub, btnText or "BUY", hero)
+		local rowFrame, rowSub, btn = buildRow(list, order, rowKey or tostring(order), label, sub, btnText or "BUY", hero)
+		table.insert(builtRows, { Row = rowFrame, Sub = rowSub, Key = rowKey or tostring(order) })
 		btn.Activated:Connect(function()
 			if onClick == nil or btn:GetAttribute("WE_Disabled") == true then
 				return
@@ -879,6 +900,9 @@ function ShopController.Init()
 		if def.HideFromShop == true then
 			return
 		end
+		if overhaul and ShopOverhaulConfig.HideWhenLive[key] == true then
+			return -- claude-bud JOB 36: Army Expansion left the Shop (Bigger Army sells the same +10)
+		end
 		-- Id=0 stubs (AutoCollect/DoubleCash/VIPBoost/GoldenPumpjack) stay out of Shop — GamePasses / pads cover them
 		if (tonumber(def.Id) or 0) == 0 then
 			return
@@ -895,7 +919,7 @@ function ShopController.Init()
 		elseif def.GrantEntitlement then
 			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement)))
 		elseif def.Cash and def.Cash > 0 then
-			sub = "+$" .. formatCash(def.Cash) .. " Cash"
+			sub = "+$" .. formatCash(packCash(key, def)) .. " Cash" -- claude-bud JOB 36: the live amount
 		elseif def.Gold and def.Gold > 0 then
 			sub = "+" .. formatCash(def.Gold) .. " Gold"
 		end
@@ -1010,8 +1034,25 @@ function ShopController.Init()
 
 	for _, key in ipairs(sortedKeys(MonetizationConfig.GamePasses)) do
 		local def: any = (MonetizationConfig.GamePasses :: any)[key]
+		-- claude-bud JOB 36: the overhaul Shop lists its own passes (War Chest / Super Soldiers / Double HP) and the armory
+		-- guns (still Id 0 = no row), and drops the Speed Pass (Speed Boost sells the speed)
+		local overhaulRow = overhaul and (def.OverhaulShop == true or typeof(def.WeaponIds) == "table")
+		if overhaul and ShopOverhaulConfig.HideWhenLive[key] == true then
+			continue
+		end
+		if overhaul and typeof(def.Implies) == "table" then
+			local all = true
+			for _, k in ipairs(def.Implies) do
+				if not offerOwned("GamePass", k) then
+					all = false
+				end
+			end
+			if all then
+				continue -- the War Chest hides once its four parts are owned
+			end
+		end
 		-- v69: HideFromShop passes are not sold (ExtraPlotCosmetic "Elite Base Theme": nothing applies it yet)
-		if def.HideFromShop == true then
+		if def.HideFromShop == true and not overhaulRow then
 			continue
 		end
 		-- claude-bud JOB 6: Robux features (Extra Garage Slot, Robux-only vehicles) get a gold ROBUX row. While the Id
@@ -1031,6 +1072,9 @@ function ShopController.Init()
 			continue -- claude-bud rollout gate
 		end
 		local robux = tonumber(def.RobuxPrice) or 0
+		if overhaul and tonumber(def.OverhaulRobuxPrice) then
+			robux = tonumber(def.OverhaulRobuxPrice) or robux -- claude-bud JOB 36: the premium VIP price
+		end
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "PASS"
 		local name = tostring(def.DisplayName or key)
 		-- "Pass: VIP", but "Speed Pass" (not "Pass: Speed Pass")
@@ -1038,7 +1082,18 @@ function ShopController.Init()
 		if robuxFeature then
 			passTitle = "ROBUX · " .. name -- claude-bud JOB 6: the gold Robux row
 		end
-		local btn = addRow(passTitle, tostring(def.Description or ""), function()
+		local passSub = tostring(def.Description or "")
+		if overhaul then -- claude-bud JOB 36: PERMANENT on every pass; BEST VALUE on 2x Cash; gold armory rows
+			passSub = ShopOverhaulConfig.PermanentPrefix .. tostring(def.OverhaulDescription or def.Description or "")
+			if key == ShopOverhaulConfig.BestValueKey then
+				passTitle = ShopOverhaulConfig.BestValueLabel .. " · " .. name
+				robuxFeature = true
+			elseif typeof(def.WeaponIds) == "table" then
+				passTitle = "ROBUX · " .. name
+				robuxFeature = true
+			end
+		end
+		local btn = addRow(passTitle, passSub, function()
 			promptGamePass(key, openSource)
 		end, btnLabel, "Pass_" .. key, robuxFeature)
 		passRows[key] = { Btn = btn, Label = btnLabel }
@@ -1052,6 +1107,24 @@ function ShopController.Init()
 		if ok and LootBoxConfig and LootBoxConfig.PolicyPending then
 			addRow("Supply Crate (locked)", "Random loot is policy-pending — not for sale", nil, "LOCKED", "SupplyCrate")
 		end
+	end
+
+	-- claude-bud JOB 36: the overhaul order (ShopOverhaulConfig.Order; rows in the same place keep their build order), and
+	-- the cash packs' live amounts follow WE_PassivePerMin
+	if overhaul then
+		for _, r in ipairs(builtRows) do
+			r.Row.LayoutOrder = ShopOverhaulConfig.Rank(r.Row.Name) * 1000 + r.Row.LayoutOrder
+		end
+		local function refreshPacks()
+			for _, r in ipairs(builtRows) do
+				local def: any = (MonetizationConfig.DevProducts :: any)[r.Key]
+				if ShopOverhaulConfig.CashPacks[r.Key] ~= nil and typeof(def) == "table" then
+					r.Sub.Text = "+$" .. formatCash(packCash(r.Key, def)) .. " Cash"
+				end
+			end
+		end
+		Players.LocalPlayer:GetAttributeChangedSignal(ShopOverhaulConfig.PerMinAttribute):Connect(refreshPacks)
+		refreshPacks()
 	end
 
 	-- v69: WEAPONS tab — one row per WeaponConfig weapon in the shared order (UnlockLevel, price, id)
@@ -1564,7 +1637,7 @@ function ShopController.Init()
 			end
 			lastMegaToastAt = now
 			local p: any = if typeof(payload) == "table" then payload else {}
-			local cashAmount = tonumber(def.Cash) or 0
+			local cashAmount = packCash("CashMega", def) -- claude-bud JOB 36: the live amount while the overhaul is on
 			return showOffer({
 				Key = "CashMegaToast",
 				Title = "★ BEST OFFER",

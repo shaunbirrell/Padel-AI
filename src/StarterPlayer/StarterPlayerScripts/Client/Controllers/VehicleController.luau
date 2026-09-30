@@ -586,16 +586,22 @@ local function onRowTap(id: string)
 		local place: any = (MonetizationConfig :: any).Placement
 		if lp and typeof(place) == "table" and place.CantAffordVehicle == true and MonetizationConfig.PlacementLiveFor(lp.UserId) then
 			local need = st.Need or 0
+			-- claude-bud JOB 36: while the shop overhaul is live a pack pays max(Floor, minutes x passive $/min)
+			local SOC = require(Shared.Configs.ShopOverhaulConfig) :: any
+			local rate = tonumber(lp:GetAttribute(SOC.PerMinAttribute)) or 0
+			local function packCash(k: string, pk: any): number
+				return (if SOC.LiveFor(lp.UserId) then SOC.CashPackAmount(k, rate) else nil) or tonumber(pk.Cash) or 0
+			end
 			for _, k in ipairs({ "CashSmall", "CashMedium", "CashLarge", "CashMega" }) do
 				local pk: any = (MonetizationConfig.DevProducts :: any)[k]
-				if typeof(pk) == "table" and (tonumber(pk.Id) or 0) ~= 0 and (tonumber(pk.Cash) or 0) >= need then
+				if typeof(pk) == "table" and (tonumber(pk.Id) or 0) ~= 0 and packCash(k, pk) >= need then
 					local okN, NC = pcall(require, script.Parent.NotificationController)
 					local okS, SC = pcall(require, script.Parent.ShopController)
 					if okN and okS then
 						(NC :: any).ShowOffer({
 							Key = "fp_garage_cash",
 							Title = "Short on cash for " .. def.DisplayName,
-							Sub = string.format("%s: $%s", tostring(pk.DisplayName or k), commas(tonumber(pk.Cash) or 0)),
+							Sub = string.format("%s: $%s", tostring(pk.DisplayName or k), commas(packCash(k, pk))),
 							Cta = tostring(pk.RobuxPrice) .. " R$",
 							OnGet = function()
 								(SC :: any).PromptDevProduct(k, "garage")

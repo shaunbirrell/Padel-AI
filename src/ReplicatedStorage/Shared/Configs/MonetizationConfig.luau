@@ -75,6 +75,37 @@ local MonetizationConfig = {
 			RobuxPrice = 199,
 			CashBonusMult = 0.25, -- additive +25% cash earnings
 			Description = "+25% Cash earnings",
+			-- claude-bud JOB 36 (ShopOverhaulConfig, owner-first): the premium VIP. Shown at this price while the overhaul is
+			-- live; TODO(owner): set 349 R$ on the Creator Hub pass before Code Bot turns the overhaul on for everyone.
+			OverhaulRobuxPrice = 349,
+			OverhaulDescription = "+50% Cash, daily supply crate, VIP lounge, gold name",
+		},
+		-- claude-bud JOB 36: new passes (ShopOverhaulConfig). Id 0 = hidden, never prompted. TODO(owner): create each on
+		-- the Creator Hub and paste the Id. Implies = passes this one counts as owning (MonetizationService marks them owned).
+		WarChest = {
+			Id = 0,
+			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
+			DisplayName = "War Chest",
+			RobuxPrice = 799,
+			Implies = { "DoubleCash", "AutoCollect", "VIP", "BiggerArmy" },
+			HideFromShop = true, -- listed by the overhaul Shop only (hidden once all four are owned)
+			Description = "2x Cash + Auto Collect + VIP + Bigger Army",
+		},
+		SuperSoldiers = {
+			Id = 0,
+			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
+			DisplayName = "Super Soldiers",
+			RobuxPrice = 349,
+			HideFromShop = true, -- listed by the overhaul Shop only
+			Description = "+25% army damage and soldier health",
+		},
+		DoubleHP = {
+			Id = 0,
+			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
+			DisplayName = "Double HP",
+			RobuxPrice = 199,
+			HideFromShop = true, -- listed by the overhaul Shop only
+			Description = "Double your max health",
 		},
 		DoubleCash = {
 			Id = 1982865711,
@@ -725,6 +756,7 @@ local MonetizationConfig = {
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {
 		devproduct = true,
+		vip_supply = true, -- claude-bud JOB 36: the VIP crate is already minutes of multiplied income
 		admin = true,
 		purchase_refund = true,
 		prestige = true,

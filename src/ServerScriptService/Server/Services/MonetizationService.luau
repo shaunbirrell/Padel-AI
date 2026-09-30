@@ -25,6 +25,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local ShopOverhaulConfig = require(Shared.Configs.ShopOverhaulConfig) -- claude-bud JOB 36 (owner-first)
 local DevConfig = require(Shared.Configs.DevConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
@@ -180,6 +181,16 @@ local function runListener(label: string, fn: any, ...: any)
 	if not ok then
 		warn("[MonetizationService] " .. label .. " listener error:", err)
 	end
+end
+
+-- claude-bud JOB 36: the passes a bundle pass counts as owning (MonetizationConfig Implies, e.g. the War Chest), only
+-- while the shop overhaul is live for this player; {} otherwise
+local function impliedPasses(player: Player, passKey: string): { string }
+	local def: any = (MonetizationConfig.GamePasses :: any)[passKey]
+	if typeof(def) ~= "table" or typeof(def.Implies) ~= "table" or not ShopOverhaulConfig.LiveFor(player.UserId) then
+		return {}
+	end
+	return def.Implies
 end
 
 local function firePassOwned(player: Player, passKey: string, reason: string)
@@ -377,6 +388,13 @@ function MonetizationService.RefreshGamePassCache(player: Player): { [string]: b
 			end
 			cache[passKey] = true
 			setEntitlementAttr(player, passKey)
+			for _, implied in ipairs(impliedPasses(player, passKey)) do -- claude-bud JOB 36: War Chest parts
+				if cache[implied] ~= true then
+					table.insert(flipped, implied)
+				end
+				cache[implied] = true
+				setEntitlementAttr(player, implied)
+			end
 		elseif cache[passKey] == nil then
 			cache[passKey] = false
 		end
@@ -666,6 +684,9 @@ function MonetizationService.GetCashMultiplier(player: Player): number
 		or MonetizationService.PlayerOwnsGamePass(player, "VIP")
 	if vip and hasVip then
 		local bonus = tonumber(vip.CashBonusMult) or 0
+		if ShopOverhaulConfig.LiveFor(player.UserId) then
+			bonus = tonumber(ShopOverhaulConfig.Vip.CashBonusMult) or bonus -- claude-bud JOB 36: premium VIP +50 %
+		end
 		mult += bonus
 	end
 	local doubleCash = MonetizationConfig.GamePasses.DoubleCash
@@ -676,6 +697,22 @@ function MonetizationService.GetCashMultiplier(player: Player): number
 		mult *= m
 	end
 	return math.max(0, mult)
+end
+
+--[[ claude-bud JOB 36: the player's passive income in $ per minute, cash multipliers included (the base's passive tick
+	x EconomyService.GetCashMult "passive" / TickSeconds x 60). May yield once (a cold pass cache), like any ownership
+	lookup; 0 when unknown. Cash packs, the VIP crate and the Shop's live amounts use it. ]]
+function MonetizationService.PassivePerMin(player: Player, profile: any): number
+	if BaseService == nil or EconomyService == nil or profile == nil then
+		return 0
+	end
+	local okT, perTick = pcall(BaseService.ComputePassiveIncomePerTick, profile, player)
+	local okM, mult = pcall(EconomyService.GetCashMult, player, "passive")
+	local tick = math.max(1, tonumber((require(Shared.Configs.EconomyConfig) :: any).PassiveIncome.TickSeconds) or 5)
+	local t = if okT then tonumber(perTick) or 0 else 0
+	local m = if okM then tonumber(mult) or 1 else 1
+	local v = t * m / tick * 60
+	return if v == v and v > 0 and v < 1e12 then v else 0
 end
 
 function MonetizationService.GetXPMultiplier(player: Player): number
@@ -766,6 +803,13 @@ local function confirmPassPurchase(player: Player, passKey: string, passId: numb
 				logFirstPurchase(player, profile, passKey)
 			end
 			firePassOwned(player, passKey, "purchase")
+			for _, implied in ipairs(impliedPasses(player, passKey)) do -- claude-bud JOB 36: War Chest parts
+				if cache[implied] ~= true then
+					cache[implied] = true
+					setEntitlementAttr(player, implied)
+					firePassOwned(player, implied, "purchase")
+				end
+			end
 		end
 	end)
 end
@@ -891,8 +935,20 @@ function MonetizationService.OfferMoment(player: Player, moment: string)
 		else
 			local cl: any = MonetizationConfig.DevProducts.CashLarge
 			if cl and (tonumber(cl.Id) or 0) ~= 0 then
-				kind, key, title, cta = "DevProduct", "CashLarge", "Fresh start boost: $200,000", tostring(cl.RobuxPrice) .. " R$"
+				local boost = 200000
+				if ShopOverhaulConfig.LiveFor(player.UserId) then -- claude-bud JOB 36: the live pack amount
+					local prof = DataService and DataService.GetProfile(player)
+					boost = ShopOverhaulConfig.CashPackAmount("CashLarge", MonetizationService.PassivePerMin(player, prof)) or boost
+				end
+				local s = tostring(math.floor(boost)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+				kind, key, title, cta = "DevProduct", "CashLarge", "Fresh start boost: $" .. s, tostring(cl.RobuxPrice) .. " R$"
 			end
+		end
+	elseif moment == "army" and place.ArmyWiped == true and ShopOverhaulConfig.LiveFor(player.UserId) then
+		-- claude-bud JOB 36: the army-wiped offer sells Bigger Army (the pass); Army Expansion left the Shop
+		local ba: any = (MonetizationConfig.GamePasses :: any)[ShopOverhaulConfig.ArmyWipedPass]
+		if ba and (tonumber(ba.Id) or 0) ~= 0 and not ownsCached(player, ShopOverhaulConfig.ArmyWipedPass) then
+			kind, key, title, cta = "GamePass", ShopOverhaulConfig.ArmyWipedPass, "Army down! Bigger Army: +10 soldiers", tostring(ba.RobuxPrice) .. " R$"
 		end
 	elseif moment == "army" and place.ArmyWiped == true then
 		local rf: any = (MonetizationConfig.DevProducts :: any).SoldierRefill
@@ -992,6 +1048,9 @@ function MonetizationService.ApplyPassPerks(player: Player)
 	local vip = MonetizationConfig.VIPPerksLiveFor(player.UserId) and ownsCached(player, "VIP")
 	pcall(function()
 		player:SetAttribute("WE_VIPTag", if vip then true else nil)
+		-- claude-bud JOB 36: the premium VIP's gold chat name (ShopOverhaulConfig.Vip.GoldName, owner-first)
+		local gold = vip and ShopOverhaulConfig.Vip.GoldName == true and ShopOverhaulConfig.LiveFor(player.UserId)
+		player:SetAttribute("WE_VIPGold", if gold then true else nil)
 	end)
 end
 
@@ -1466,6 +1525,15 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 	-- v71 money (M1): the whole grant is computed here, before any mutation. StarterFallbackCash: a buyer who
 	-- already owns Auto Collect gets that much more Cash (the Auto Collect grant would add nothing).
 	local cashGrant = nonNegInt(product.Cash)
+	-- claude-bud JOB 36: a cash pack scales with the buyer's passive income (ShopOverhaulConfig.CashPacks, owner-first):
+	-- max(Floor, Minutes x $/min). The lookup may yield, so it is here, before any mutation, and re-checked after.
+	if ShopOverhaulConfig.CashPacks[productKey :: string] ~= nil and ShopOverhaulConfig.LiveFor(player.UserId) then
+		local perMin = MonetizationService.PassivePerMin(player, profile)
+		if not player.Parent or DataService.GetProfile(player) ~= profile then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		cashGrant = nonNegInt(ShopOverhaulConfig.CashPackAmount(productKey :: string, perMin))
+	end
 	local fallbackCash = nonNegInt(product.StarterFallbackCash)
 	if fallbackCash > 0 then
 		if MonetizationService.PlayerOwnsEntitlement(player, "AutoCollect") then
@@ -1754,6 +1822,41 @@ end
 	    none of SkipIfOwnsAny (Speed Pass or Speed Boost);
 	  - a D8 soft-offer slot is free (ClaimSoftOfferSlot, claimed last so a refused offer never spends one).
 	Never yields. Returns true when the offer was sent. The client still refuses it for an owner (WE_Ent_*). ]]
+--[[ claude-bud JOB 36: the death offer while the shop overhaul is live: the Speed Boost dev product (the Speed Pass left
+	the Shop). Same rules as the pass offer: once per session, tutorial done, ownership known, no speed owned yet, the
+	soft-offer budget. ]]
+local function deathSpeedProductOffer(victim: Player, cfg: any, productKey: string): boolean
+	local product: any = (MonetizationConfig.DevProducts :: any)[productKey]
+	if typeof(product) ~= "table" or (tonumber(product.Id) or 0) == 0 then
+		return false
+	end
+	local userId = victim.UserId
+	if cfg.OncePerSession ~= false and deathSpeedSent[userId] == true then
+		return false
+	end
+	local profile = DataService.GetProfile(victim)
+	if not profile or (cfg.RequireTutorialComplete ~= false and profile.TutorialComplete ~= true) then
+		return false
+	end
+	if passCacheFilled[userId] ~= true or passRefreshRetries[userId] ~= nil or ownsSkuCached(victim, productKey) then
+		return false
+	end
+	for _, key in ipairs(if typeof(cfg.SkipIfOwnsAny) == "table" then cfg.SkipIfOwnsAny else {}) do
+		if typeof(key) == "string" and ownsSkuCached(victim, key) then
+			return false
+		end
+	end
+	if not MonetizationService.ClaimSoftOfferSlot(victim) then
+		return false
+	end
+	deathSpeedSent[userId] = true
+	local remote = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.DeathShopOffer)
+	if remote and remote:IsA("RemoteEvent") then
+		(remote :: RemoteEvent):FireClient(victim, { Offers = { productKey } })
+	end
+	return true
+end
+
 function MonetizationService.TryDeathSpeedOffer(victim: Player): boolean
 	if typeof(victim) ~= "Instance" or not victim:IsA("Player") or not victim.Parent or not DataService then
 		return false
@@ -1761,6 +1864,9 @@ function MonetizationService.TryDeathSpeedOffer(victim: Player): boolean
 	local cfg = (MonetizationConfig :: any).DeathSpeedOffer
 	if typeof(cfg) ~= "table" or typeof(cfg.PassKey) ~= "string" then
 		return false
+	end
+	if ShopOverhaulConfig.LiveFor(victim.UserId) then
+		return deathSpeedProductOffer(victim, cfg, ShopOverhaulConfig.DeathOfferProduct) -- claude-bud JOB 36
 	end
 	local passKey: string = cfg.PassKey
 	local pass = (MonetizationConfig.GamePasses :: any)[passKey]

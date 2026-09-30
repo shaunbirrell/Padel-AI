@@ -9677,3 +9677,25 @@ ds_territories.luau T3):
 - **Scope:** scales mouse sensitivity only (`MouseDeltaSensitivity`). Touch camera speed while scoped is Roblox's
   default. RMB also rotates the default camera on PC; the shoulder camera already locks the mouse while drawn.
 - **Shop:** premium rows show in WEAPONS only; the generic pass list skips them (HideFromShop). JOB 36 reorders the Shop.
+
+## 2026-09-30 — claude-bud JOB 36: shop overhaul
+- **VIP price:** the price shown is 349 only while the overhaul is live (`OverhaulRobuxPrice`). The config keeps 199
+  until the owner reprices on the Creator Hub, so no player sees a price different from what Roblox charges before
+  launch.
+- **Speed:** "owners keep x1.4" is read as "owners keep what they have". The Speed Pass is x1.5 and Speed Boost x2
+  since v133; `SpeedMultFor` is unchanged.
+- **Where the old items are still sold:** Army Expansion still sells in the Army panel (the brief only removes it from
+  the Shop). The Speed Pass still sells to non-live players.
+- **Speed stand:** it follows its plot owner. A non-live owner's stand keeps the Speed Pass; it is restored when a live
+  owner leaves.
+- **Shop order:** Double XP (not in the brief's list) sits after Speed Boost; Extra Garage Slot sits with the premium
+  vehicles; Golden Pumpjacks, Instant Army Refill, Plaza Airstrike and the locked crate are "consumables".
+- **Cash packs:** they use the passive income only (not training or oil), multipliers included, the same number the
+  offline earnings use.
+- **VIP crate:** automatic (join + a 10 min check), once per 20 h, floor $5k.
+- **Super Soldiers:** they do not raise the per-player army DPS cap (fairness), so the +25 % shows fully against NPCs,
+  guards and gates.
+- **Double HP:** it rides on ArmourService (the one MaxHealth writer after spawn). If ArmourConfig is ever disabled,
+  Double HP stops too.
+- **War Chest ownership:** the join check / purchase marks the four passes owned for the session, and each runs its
+  OnPassOwned perks (Bigger Army mirrors into Entitlements as before).
