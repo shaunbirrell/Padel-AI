@@ -1466,7 +1466,8 @@ local ArmyConfig = {
 		CatchUpPerStud = 0.9, -- catching up: WalkSpeed = its slot's pace + this per stud from its slot ...
 		CatchUpMaxMult = 1.8, -- ... capped at max(his pace x this, CatchUpMin), never over MaxSpeed
 		CatchUpMin = 30,
-		MaxSpeed = 40,
+		MaxSpeed = 46, -- v133 (Code Bot): was 40; the x2 Speed Boost owner runs 32 (the block: max(FormMaxSpeed, his
+		-- speed x FormSpeedMult) = 40): 46 keeps a soldier's catch-up headroom over his pace (x1.45, as at 25.6)
 		MinSpeed = 8,
 		SpeedUpPerTick = 6, -- WalkSpeed changes at most this much per tick up ...
 		SpeedDownPerTick = 5, -- ... and down
@@ -1540,6 +1541,20 @@ local ArmyConfig = {
 		PreferPlayers = true,
 		AggressorSeconds = 10,
 		TargetLogSeconds = 2, -- debug (/armydebug): the [ArmyTarget] per-candidate verdict line, this often per army
+		-- v133 (Code Bot, phone bug "I stood right in front of another player's army and it never fired; my shots did
+		-- nothing to it"). Proven causes: (1) only ATTACK ever looked at players (pickSquadTarget ran for st.Order ==
+		-- "Attack" only; the FOLLOW / HOLD escort scans WE_NPC models only), and every army is on FOLLOW by default;
+		-- (2) every player shot excluded the whole WarEmpireSquads folder (CombatService shotFilterFor), so bullets
+		-- flew through enemy soldiers and no player could hurt one.
+		-- DefendOnFollow: a FOLLOW / HOLD army engages an enemy player in reach under THE shared rule
+		-- (CombatService.UnitMayHitPlayer; protected / ally / PvP off never), from its slot (no movement change).
+		-- DefendPlayerStuds: an enemy player this close to the army's centre (or its owner); one who hurt the owner or
+		-- his soldiers within AggressorSeconds is answered out to DefendAggressorStuds. PlayersHitUnits: player guns /
+		-- rockets hurt enemy soldiers (CombatService.ArmyHostility); false = the v132 pass-through.
+		DefendOnFollow = true,
+		DefendPlayerStuds = 47, -- (= the fire band OrdersConfig.AttackRange 55 x 0.85: the FOLLOW army does not walk out to him)
+		DefendAggressorStuds = 55, -- (the full AttackRange: he shot first)
+		PlayersHitUnits = true,
 	},
 
 	Gate = {
@@ -3379,7 +3394,7 @@ local ConsoleBuyConfig = {
 
 	-- Server check, horizontal: |HRP - buy point centre|xz <= (ConsolePromptDistance | PadPromptDistance) + ServerSlack.
 	-- The client BUY box (WorldPromptController CONSOLE_MARGIN 5) reaches 8.5 studs horizontally, so the slack covers
-	-- 9.5 studs of the server's HRP trailing the client: 0.59 s at WalkSpeed 16, 0.37 s with the v126 Speed Boost (25.6).
+	-- 9.5 studs of the server's HRP trailing the client: 0.59 s at WalkSpeed 16, 0.37 s with the v126 Speed Boost (25.6), 0.30 s with the v133 x2 (32).
 	ServerSlack = 8,
 	-- Server check, vertical: |HRP.Y - buy point centre.Y|. Covers the client BUY box (-4.7 .. +9.7) and a jump at the
 	-- console (+8.5); refuses the upper floor of a two-storey walk-in (+14.1 above a ground-floor console).
@@ -6552,8 +6567,8 @@ local MonetizationConfig = {
 			Id = 1998656357,
 			DisplayName = "Speed Pass",
 			RobuxPrice = 99, -- 2026-09-29 owner repriced 5 -> 99 in Creator Hub
-			WalkSpeedMult = 1.4, -- v126 (owner: the speed barely felt faster): was 1.15 (16 -> 18.4); now 16 -> 22.4
-			Description = "Run 40% faster, forever",
+			WalkSpeedMult = 1.5, -- v133 (owner: "still not fast"): was 1.4 (v126, 16 -> 22.4); now 16 -> 24
+			Description = "Run 50% faster, forever",
 		},
 		-- v71 money (M1): premium Robux vehicles (plan §2.2, PremiumVehicleConfig.Lineup PassKey). Id = 0 until the
 		-- owner creates each pass (Item for Sale OFF until the M6 publish, J3). HideFromShop until M3's feature gate
@@ -6748,8 +6763,8 @@ local MonetizationConfig = {
 			Gold = 0,
 			GrantEntitlement = "SpeedBoost",
 			OneTime = true, -- v69: permanent boolean flag
-			WalkSpeedMult = 1.6, -- v126 (owner: "barely makes me faster"): was 1.25 (16 -> 20); now 16 -> 25.6. Speed Pass 1.4
-			Description = "Run 60% faster, forever",
+			WalkSpeedMult = 2.0, -- v133 (owner: "still not fast"): was 1.6 (v126, 16 -> 25.6); now 16 -> 32. Speed Pass 1.5
+			Description = "Run 2x faster, forever",
 		},
 		-- Cosmetic oil pump gold dress. v71 money (M0): one-time Developer Product (J29), 49 R$.
 		-- F9 (owner's 11 features): lights up when the Id is pasted. While Id = 0 the Shop skips the row (it skips
@@ -9626,10 +9641,16 @@ return PlazaBountyConfig
 	  * Ground floor: a 6 x 8 door in the front; windows are open GAPS (no glass), so shots through them work.
 	  * Stair: a ramp up the right-hand wall to the upper floor, with a rail round the stair hole. The upper floor has
 	    windows on every side.
-	  * Roof: a ladder (TrussPart) through a hatch in the back-left corner. A 3.2-stud parapet all round (chest-high
+	  * Roof: a ladder (TrussPart) up through a hatch in the back-left corner. v133 (Code Bot): the hatch is a real
+	    5.6 x 5.3 opening with a frame, a railing on its open edges and the lid propped open; the ladder stands on the
+	    hole's inner edge so you climb inside the hole and step off its top onto the roof (tools/sim/run_hatch_test.py). A 3.2-stud parapet all round (chest-high
 	    cover: shoot over it, duck behind it), plus two sandbag rows at the front corners.
 	  * A few crates inside for cover.
-	  * 55 parts each.
+	  * v133 (Code Bot): a town-centre facade per building (Styles): coloured walls, door and window frames, glass in
+	    the gaps (see-through, never collides or answers a ray: shots and sight still pass), striped awnings, a shop
+	    sign board, storey band and cornice, corner quoins, a balcony, planters, a bench, a lantern; rooftop AC units, a
+	    water cistern and an antenna.
+	  * Parts each (was 55).
 	Every shooter uses the one line-of-sight rule (CombatConfig.LineOfSight / Shared/Util/LosRule): the walls stop
 	shots, the window gaps and the roof edge do not.
 	The army (ArmyConfig.Indoors) forms up outside the door while its owner is inside or on the roof. It never walks
@@ -9642,11 +9663,18 @@ return PlazaBountyConfig
 
 local PlazaBuildingsConfig = {
 	Enabled = true,
-	MaxExtraParts = 240,
+	MaxExtraParts = 640, -- v133: 4 x (Parts - the plain TownHouse) with room to spare (was 240 for 55-part houses)
 	-- WorldConfig.Town row Ids: the 4 buildings that face the plaza flag, one on each side
 	Rows = { NE_E1 = true, SW_S1 = true, NE_N1 = true, NW_W1 = true } :: { [string]: boolean },
 	DoorOutStuds = 10, -- where the army waits: this far out from the door, on the street side
-	Parts = 55,
+	Parts = 142, -- v133 (Code Bot): the facade + the real hatch (was 55); tools/sim/run_plaza_test.py counts them
+	-- v133 (Code Bot): the town-centre look, one per row (walls, trim, awning, accent: a cafe, a market, a hotel, a radio shop)
+	Styles = {
+		NE_E1 = { Wall = Color3.fromRGB(214, 172, 104), Trim = Color3.fromRGB(240, 230, 204), Awning = Color3.fromRGB(34, 124, 122), Accent = Color3.fromRGB(92, 64, 44) },
+		SW_S1 = { Wall = Color3.fromRGB(190, 110, 78), Trim = Color3.fromRGB(236, 220, 196), Awning = Color3.fromRGB(34, 52, 96), Accent = Color3.fromRGB(58, 44, 36) },
+		NE_N1 = { Wall = Color3.fromRGB(176, 172, 162), Trim = Color3.fromRGB(226, 224, 216), Awning = Color3.fromRGB(150, 38, 36), Accent = Color3.fromRGB(56, 58, 62) },
+		NW_W1 = { Wall = Color3.fromRGB(168, 156, 112), Trim = Color3.fromRGB(230, 222, 196), Awning = Color3.fromRGB(214, 110, 30), Accent = Color3.fromRGB(62, 66, 48) },
+	} :: { [string]: { Wall: Color3, Trim: Color3, Awning: Color3, Accent: Color3 } },
 }
 
 return PlazaBuildingsConfig
@@ -27347,7 +27375,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 132)
+		player:SetAttribute("WE_Build", 133)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -57501,10 +57529,46 @@ local function wallOpen(b: B, name: string, cf: CFrame, len: number, height: num
 	piece(x, len * 0.5, 0, height)
 end
 
--- 55 parts; see PlazaBuildingsConfig. Front (door) toward local -Z, like the TownHouse it replaces.
+-- v133 (Code Bot): the town-centre look (PlazaBuildingsConfig.Styles, one per row: walls, trim, awning, accent).
+-- Every detail part is small, never casts a shadow, and (except the balcony, AC units and cistern: roof / balcony
+-- cover you can stand on or duck behind) never collides or answers a ray: glass and frames never stop a shot or a
+-- look through a window (the JOB 32 LosRule), and the plaza test checks each window / door gap stays clear of
+-- colliding parts.
+local PH_FRONT_OUT = 1 -- how far the facade reaches out of the front face (see the facade block)
+local PH_STYLE_DEFAULT = { Wall = Color3.fromRGB(212, 176, 122), Trim = Color3.fromRGB(236, 226, 200), Awning = Color3.fromRGB(38, 118, 118), Accent = Color3.fromRGB(96, 70, 48) }
+local function plazaStyle(b: B): any?
+	local cfgP: any = PlazaBuildingsConfig
+	local st = if typeof(cfgP.Styles) == "table" then cfgP.Styles[tostring(b.Cluster.Name)] else nil
+	return if typeof(st) == "table" then st else nil
+end
+
+-- a see-through pane in a window gap: never collides, never answers a ray (shots and sight pass as through the gap)
+local function glass(b: B, size: Vector3, lcf: CFrame)
+	local g = put(b, "PlazaWindowGlass", size, lcf, Color3.fromRGB(150, 190, 205), M.Glass, false)
+	g.Transparency = 0.55
+	g.CanQuery = false
+	return g
+end
+
+-- a window's dressing in the frame `wcf` of a wall face (local -Z = out of the building, z 0 = the face): a head
+-- (lintel trim), a sill and the glass in the gap. proj = how far head and sill stand out of the face (the front
+-- has room for a real sill; the sides and back keep them flush: WorldPOI measures the row's part box).
+local function windowDress(b: B, wcf: CFrame, c: number, w: number, y0: number, y1: number, trim: Color3, proj: number)
+	local outer = -math.max(proj, 0.02) -- the frame's outer face, just proud of the wall (no z-fighting)
+	local d = math.max(proj, 0.3)
+	local zc = outer + d * 0.5
+	put(b, "PlazaWindowFrame", Vector3.new(w + 0.6, 0.3, d), wcf * CFrame.new(c, y1 + 0.15, zc), trim, M.SmoothPlastic, false)
+	put(b, "PlazaWindowFrame", Vector3.new(w + 0.8, 0.25, d), wcf * CFrame.new(c, y0 - 0.125, zc), trim, M.SmoothPlastic, false)
+	glass(b, Vector3.new(w, y1 - y0, 0.1), wcf * CFrame.new(c, (y0 + y1) * 0.5, 0.4))
+end
+
+-- 142 parts (v133; 55 before the facade); see PlazaBuildingsConfig. Front (door) toward local -Z, like the TownHouse it replaces.
 Builders.PlazaHouse = function(b: B)
 	local W, D, T, H = PH.W, PH.D, PH.T, PH.H
-	local wallC = b.Opts.Color or PAL.AdobeLight
+	local rowSty = plazaStyle(b)
+	local sty: any = rowSty or PH_STYLE_DEFAULT
+	local wallC = if rowSty then rowSty.Wall else (b.Opts.Color or PAL.AdobeLight) -- the row's style wins
+	local trimC: Color3 = sty.Trim or PH_STYLE_DEFAULT.Trim
 	local wm = M.Concrete
 	local win1 = function(c: number)
 		return { c = c, w = 3.6, b = 4, t = 7.4 }
@@ -57531,10 +57595,38 @@ Builders.PlazaHouse = function(b: B)
 	-- the ramp: a wedge rising toward +Z (its sloped face looks to -Z), foot at z -5.5, top at z 6.5 on the upper floor
 	put(b, "PlazaStair", Vector3.new(ix - 4.4, H + 0.4, 12), CFrame.new((4.4 + ix) * 0.5, (H + 0.4) * 0.5, 0.5), PAL.Wood, M.WoodPlanks, true, false, Enum.PartType.Wedge)
 	put(b, "PlazaRail", Vector3.new(0.3, 3, 10.5), CFrame.new(4.2, H + 0.4 + 1.5, -0.25), PAL.SteelDark, M.Metal, true)
+	--[[ v133 (Code Bot, phone bug "the ladder ends under a solid ceiling"): JOB 32's hatch was the 2 x 2 truss footprint
+		(x -8.8 .. -5.4, z 5.3 .. 8.7, half of it over the walls): a climber hangs on a FACE of the truss, so his head hit
+		the roof slab 5 studs below the top (tools/sim/run_hatch_test.py: every face blocked). The roof is now 4 slabs
+		round a real 5.6 x 5.3 opening (inside x -8.0 .. -2.4, z 2.6 .. 7.9); the ladder stands against the opening's
+		+X edge (its +X face boxed in), so he climbs any open face inside the hole and steps off its top onto the roof;
+		a hatch frame round the hole, a railing on its open edges, the lid propped open. ]]
 	local roofY = 2 * H + 0.4 -- the roof slab's centre (top 22.8)
-	put(b, "PlazaRoof", Vector3.new(W * 0.5 + 5.4, 0.8, D), CFrame.new((-5.4 + W * 0.5) * 0.5, roofY, 0), PAL.Concrete, M.Concrete, true, true)
-	put(b, "PlazaRoof", Vector3.new(W * 0.5 - 5.4, 0.8, D * 0.5 + 5.3), CFrame.new((-W * 0.5 - 5.4) * 0.5, roofY, (-D * 0.5 + 5.3) * 0.5), PAL.Concrete, M.Concrete, true)
-	truss(b, "PlazaLadder", 14, CFrame.new(-6.7, H + 0.4 + 7, 6.6), PAL.SteelDark)
+	local hx0, hx1, hz0, hz1 = -ix, -2.4, 2.6, iz -- the opening (inside the walls)
+	put(b, "PlazaRoof", Vector3.new(W, 0.8, hz0 + D * 0.5), CFrame.new(0, roofY, (-D * 0.5 + hz0) * 0.5), PAL.Concrete, M.Concrete, true, true)
+	put(b, "PlazaRoof", Vector3.new(W * 0.5 - hx1, 0.8, D * 0.5 - hz0), CFrame.new((hx1 + W * 0.5) * 0.5, roofY, (hz0 + D * 0.5) * 0.5), PAL.Concrete, M.Concrete, true)
+	put(b, "PlazaRoof", Vector3.new(T, 0.8, D * 0.5 - hz0), CFrame.new(-W * 0.5 + T * 0.5, roofY, (hz0 + D * 0.5) * 0.5), PAL.Concrete, M.Concrete, true)
+	put(b, "PlazaRoof", Vector3.new(hx1 - hx0, 0.8, T), CFrame.new((hx0 + hx1) * 0.5, roofY, D * 0.5 - T * 0.5), PAL.Concrete, M.Concrete, true)
+	-- the ladder: 12 tall from the upper floor (11.4) to 0.6 above the roof top, 0.2 in from the opening's +X edge, so
+	-- a climber on its -X, +Z or -Z face hangs inside the hole all the way up. Its +X face (under the roof) is boxed
+	-- in by a shaft panel from the floor to the roof top, which also bridges the ladder's top to the roof.
+	truss(b, "PlazaLadder", 12, CFrame.new(hx1 - 1.2, H + 0.4 + 6, 5.25), PAL.SteelDark)
+	put(b, "PlazaHatchShaft", Vector3.new(0.2, 2 * H + 0.8 - (H + 0.4), 2), CFrame.new(hx1 - 0.1, (H + 0.4 + 2 * H + 0.8) * 0.5, 5.25), PAL.SteelDark, M.Metal, true)
+	local rt = roofY + 0.4 -- the roof top (22.8)
+	-- the hatch frame (a low kerb on the roof round the opening's front and open +X edge, clear of the ladder's top)
+	put(b, "PlazaHatchFrame", Vector3.new(hx1 - hx0 + 0.3, 0.3, 0.3), CFrame.new((hx0 + hx1) * 0.5 + 0.15, rt + 0.15, hz0 - 0.15), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaHatchFrame", Vector3.new(0.3, 0.3, 4.25 - hz0 - 0.2), CFrame.new(hx1 + 0.15, rt + 0.15, (hz0 + 4.05) * 0.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaHatchFrame", Vector3.new(0.3, 0.3, hz1 - 6.45), CFrame.new(hx1 + 0.15, rt + 0.15, (6.45 + hz1) * 0.5), PAL.SteelDark, M.Metal, false)
+	-- the railing: posts + top rail along the front edge and the +X edge either side of the ladder's top
+	local railC = sty.Accent or PAL.SteelDark
+	put(b, "PlazaHatchRail", Vector3.new(hx1 - hx0, 0.25, 0.25), CFrame.new((hx0 + hx1) * 0.5, rt + 3.2, hz0 - 0.15), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 3.2, 0.25), CFrame.new(hx0 + 0.2, rt + 1.6, hz0 - 0.15), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 3.2, 0.25), CFrame.new(hx1 + 0.15, rt + 1.6, hz0 - 0.15), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 0.25, 4.05 - hz0), CFrame.new(hx1 + 0.15, rt + 3.2, (hz0 + 4.05) * 0.5), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 0.25, hz1 - 6.45), CFrame.new(hx1 + 0.15, rt + 3.2, (6.45 + hz1) * 0.5), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 3.2, 0.25), CFrame.new(hx1 + 0.15, rt + 1.6, hz1 - 0.15), railC, M.Metal, true)
+	-- the lid, propped open against the back parapet (see-through for shots: it neither collides nor answers a ray)
+	put(b, "PlazaHatchLid", Vector3.new(4.6, 3.6, 0.15), CFrame.new(-5.2, rt + 1.8, hz1 - 0.3) * rotX(-12), PAL.SteelDark, M.DiamondPlate, false)
 	-- the parapet (chest-high cover) and two sandbag rows at the front corners
 	local py = roofY + 0.4 + 1.6
 	put(b, "PlazaParapet", Vector3.new(W, 3.2, 0.6), CFrame.new(0, py, -D * 0.5 + 0.3), PAL.AdobeDark, M.Concrete, true)
@@ -57548,9 +57640,87 @@ Builders.PlazaHouse = function(b: B)
 	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-5, 1.3, 3) * rotY(10), PAL.CrateOlive, M.Wood, true)
 	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-2.5, 1.3, 5.6) * rotY(-8), PAL.Crate, M.Wood, true)
 	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-4, H + 1.4, -4) * rotY(20), PAL.CrateOlive, M.Wood, true)
+
+	-- ── v133: the facade (issue: "town centre buildings are flat boxes") ──
+	-- Nothing reaches more than PH_FRONT_OUT out of the front face, and nothing past the sides or the back: WorldPOI
+	-- measures the row's part box, and its disc must stay >= 30 from the road line and outside the plaza capture ring
+	-- (the 4 rows have ~1.2 - 1.8 studs to spare; tools/sim/run_plaza_test.py pins the box)
+	local out = PH_FRONT_OUT
+	local fz = -D * 0.5 -- the front face plane (outside)
+	local frontW = CFrame.new(0, 0, fz) -- window dressing frame on the front wall (local -Z = out)
+	local accC: Color3 = sty.Accent or PH_STYLE_DEFAULT.Accent
+	-- door: jambs + head, a step
+	put(b, "PlazaDoorFrame", Vector3.new(0.45, 8.3, 0.4), CFrame.new(-3.2, 4.15, fz - 0.2), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaDoorFrame", Vector3.new(0.45, 8.3, 0.4), CFrame.new(3.2, 4.15, fz - 0.2), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaDoorFrame", Vector3.new(6.9, 0.5, 0.45), CFrame.new(0, 8.25, fz - 0.22), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaDoorStep", Vector3.new(6.4, 0.25, out), CFrame.new(0, 0.125, fz - out * 0.5), PAL.Concrete, M.Concrete, false)
+	-- ground-floor shop windows (glass + frame) with striped awnings, and the door's awning
+	for _, c in ipairs({ -5.4, 5.4 }) do
+		windowDress(b, frontW, c, 3.6, 4, 7.4, trimC, 0.6)
+	end
+	for _, a in ipairs({ { -5.4, 4.6, 8.35 }, { 5.4, 4.6, 8.35 }, { 0, 7.2, 9.3 } }) do
+		local ax, aw, ay = a[1], a[2], a[3]
+		-- a 1.9-long canopy sloped 58 degrees down from the wall: it reaches ~0.95 out
+		put(b, "PlazaAwningCanopy", Vector3.new(aw, 0.15, 1.9), CFrame.new(ax, ay - 0.8, fz - out * 0.44) * rotX(-58), sty.Awning or PH_STYLE_DEFAULT.Awning, M.Fabric, false)
+		put(b, "PlazaAwningStripe", Vector3.new(aw, 0.4, 0.08), CFrame.new(ax, ay - 1.0, fz - out + 0.05), trimC, M.Fabric, false)
+	end
+	-- the shop sign band between the storeys, with a trim inset. No painted text and no light here: WorldPOI counts
+	-- the row's SurfaceGuis and Lights against the Town caps, and a row over a cap is skipped whole.
+	put(b, "PlazaShopSign", Vector3.new(11.5, 1.35, 0.3), CFrame.new(0, 10.05, fz - 0.2), accC, M.Wood, false)
+	put(b, "PlazaShopSignInset", Vector3.new(10.3, 0.55, 0.06), CFrame.new(0, 10.05, fz - 0.38), sty.Awning or PH_STYLE_DEFAULT.Awning, M.SmoothPlastic, false)
+	-- storey band + the roof-line cornice, a coping on the front parapet, corner quoins, a base plinth
+	put(b, "PlazaCornice", Vector3.new(W, 0.45, 0.5), CFrame.new(0, H + 0.1, fz - 0.25), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaCornice", Vector3.new(W, 0.7, out), CFrame.new(0, 2 * H + 0.45, fz - out * 0.5), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaCoping", Vector3.new(W, 0.2, 0.8), CFrame.new(0, py + 1.7, -D * 0.5 + 0.3), trimC, M.SmoothPlastic, false)
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaQuoin", Vector3.new(0.9, 2 * H, 0.35), CFrame.new(s * (W * 0.5 - 0.45), H, fz - 0.175), trimC, M.Concrete, false)
+	end
+	put(b, "PlazaPlinth", Vector3.new(W, 0.9, 0.3), CFrame.new(0, 0.45, fz - 0.15), accC, M.Concrete, false)
+	-- upper-floor windows: front 3 (the middle one opens onto a balcony), back, both sides; the ground-floor side one
+	for _, c in ipairs({ -5.4, 0, 5.4 }) do
+		windowDress(b, frontW * CFrame.new(0, H, 0), c, 3.6, 3.5, 7, trimC, 0.6)
+	end
+	windowDress(b, CFrame.new(0, H, -fz) * rotY(180), 0, 3.6, 3.5, 7, trimC, 0)
+	windowDress(b, CFrame.new(-W * 0.5, H, 0) * rotY(90), 0, 3.6, 3.5, 7, trimC, 0)
+	windowDress(b, CFrame.new(W * 0.5, H, 0) * rotY(-90), 0, 3.6, 3.5, 7, trimC, 0)
+	windowDress(b, CFrame.new(-W * 0.5, 0, 0) * rotY(90), 2, 3.6, 4, 7.4, trimC, 0) -- win1(2) on the left side
+	-- a shallow balcony under the middle upper window: a ledge you can stand on, its railing, two brackets, a planter
+	local by = H + 3.5 -- its top level with the window sill (14.5)
+	put(b, "PlazaBalcony", Vector3.new(5.2, 0.35, out), CFrame.new(0, by - 0.175, fz - out * 0.5), PAL.Concrete, M.Concrete, true)
+	put(b, "PlazaBalconyRail", Vector3.new(5.2, 0.2, 0.2), CFrame.new(0, by + 2.9, fz - out + 0.1), accC, M.Metal, true)
+	for _, x in ipairs({ -2.5, -0.9, 0.9, 2.5 }) do
+		put(b, "PlazaBalconyRail", Vector3.new(0.14, 2.9, 0.14), CFrame.new(x, by + 1.45, fz - out + 0.1), accC, M.Metal, math.abs(x) > 2)
+	end
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaBalconyBracket", Vector3.new(0.3, 1.1, out * 0.9), CFrame.new(s * 2.2, by - 0.9, fz - out * 0.45), trimC, M.Concrete, false, false, Enum.PartType.Wedge)
+	end
+	put(b, "PlazaPlanter", Vector3.new(4.2, 0.6, 0.5), CFrame.new(0, by + 0.3, fz - out + 0.45), PAL.WoodDark, M.Wood, false)
+	put(b, "PlazaPlanterFlora", Vector3.new(3.8, 0.5, 0.4), CFrame.new(0, by + 0.85, fz - out + 0.45), Color3.fromRGB(84, 120, 60), M.Grass, false)
+	-- street level: two planters by the door, a bench under the right window, a wall lantern
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaPlanter", Vector3.new(0.95, 1.0, out * 0.95), CFrame.new(s * 3.9, 0.5, fz - out * 0.5), accC, M.Concrete, false)
+		put(b, "PlazaPlanterFlora", Vector3.new(0.9, 0.9, 0.9), CFrame.new(s * 3.9, 1.35, fz - out * 0.5), Color3.fromRGB(78, 116, 58), M.Grass, false, false, Enum.PartType.Ball)
+	end
+	put(b, "PlazaBenchSeat", Vector3.new(3.4, 0.25, out * 0.8), CFrame.new(5.6, 1.5, fz - out * 0.5), PAL.Wood, M.WoodPlanks, false)
+	put(b, "PlazaBenchLeg", Vector3.new(3.0, 1.35, out * 0.6), CFrame.new(5.6, 0.7, fz - out * 0.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaLampLantern", Vector3.new(0.7, 1, 0.7), CFrame.new(-7.4, 9.0, fz - 0.35), PAL.LampLens, M.SmoothPlastic, false) -- unlit (the row's light cap)
+	-- rooftop: two AC units (cover), a water cistern on a stand (cover), an antenna mast with a dish, a vent pipe; all
+	-- clear of the hatch (x -8 .. -2.4, z 2.6 .. 7.9), the ladder's step-off (x -2.4 .. 0) and the front sandbags
+	for _, ac in ipairs({ { 2.6, 6.2, 0 }, { 5.8, 6.2, 90 } }) do
+		put(b, "PlazaACUnit", Vector3.new(2.4, 1.6, 1.8), CFrame.new(ac[1], rt + 0.8, ac[2]) * rotY(ac[3]), Color3.fromRGB(198, 200, 196), M.Metal, true)
+		vcyl(b, "PlazaACFan", ac[1], rt + 1.6, ac[2], 0.12, 1.3, PAL.SteelDark, M.Metal, false)
+	end
+	put(b, "PlazaCisternStand", Vector3.new(2.8, 1.2, 2.8), CFrame.new(5.8, rt + 0.6, 1.2), PAL.SteelDark, M.Metal, true)
+	vcyl(b, "PlazaCistern", 5.8, rt + 1.2, 1.2, 2.8, 2.6, Color3.fromRGB(70, 88, 104), M.Metal, true)
+	vcyl(b, "PlazaCisternLid", 5.8, rt + 4.0, 1.2, 0.25, 2.8, Color3.fromRGB(60, 74, 88), M.Metal, false)
+	put(b, "PlazaAntennaMast", Vector3.new(0.2, 7, 0.2), CFrame.new(-7.2, rt + 3.5, -1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaAntennaMast", Vector3.new(2.4, 0.12, 0.12), CFrame.new(-7.2, rt + 5.6, -1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaAntennaMast", Vector3.new(1.6, 0.12, 0.12), CFrame.new(-7.2, rt + 6.4, -1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaAntennaDish", Vector3.new(0.2, 1.8, 1.8), CFrame.new(-6.95, rt + 4.4, -1.5) * rotY(-20), Color3.fromRGB(220, 220, 215), M.SmoothPlastic, false, false, Enum.PartType.Cylinder)
+	vcyl(b, "PlazaVentPipe", 1.5, rt, -2.5, 1.4, 0.5, PAL.SteelDark, M.Metal, false)
 end
 
-WorldKits.DetailSpecs.PlazaHouse = 55
+WorldKits.DetailSpecs.PlazaHouse = 142 -- v133 (Code Bot): the facade + the real hatch (was 55)
 WorldKits.PlazaStats = { Built = 0, Extra = 0, Plain = 0 }
 
 -- claude-bud JOB 32: a TownHouse row flagged Enterable (its cluster's WE_Enterable, set by WorldPOI from
@@ -66217,7 +66387,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 132)
+			player:SetAttribute("WE_Build", 133)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -70718,7 +70888,7 @@ end
 
 -- ── W2 Combat Core: target resolution, seat rules, damage APIs ─────────────────────────────────────────────
 
-local FX_KIND: { [string]: string } = { Player = "P", NPC = "N", Vehicle = "V", Gate = "G" }
+local FX_KIND: { [string]: string } = { Player = "P", NPC = "N", Vehicle = "V", Gate = "G", Unit = "N" }
 
 -- The registered vehicle a part belongs to (and its VehicleHealth record), or nil. Every call is pcall'd.
 local function registeredVehicle(inst: Instance): (Model?, any)
@@ -70764,6 +70934,11 @@ local function resolveTarget(inst: Instance): (string, any, Model?)
 			local plr = Players:GetPlayerFromCharacter(node)
 			if plr then
 				return "Player", plr, node :: Model
+			end
+			-- v133 (Code Bot): an army soldier (SquadOrdersService unit) is a target of its own: "Unit", its owner's UserId
+			local unitOwner = node:GetAttribute("OwnerUserId")
+			if typeof(unitOwner) == "number" and node:GetAttribute("SquadUnitId") ~= nil then
+				return "Unit", unitOwner, node :: Model
 			end
 			if CollectionService:HasTag(node, Constants.Tags.NPC) then
 				local npcId = node:GetAttribute("NPCId")
@@ -70881,6 +71056,76 @@ function CombatService.EndNoviceShield(player: Player, reason: string): boolean
 	return true
 end
 
+--[[ v133 (Code Bot, phone bug "I shot another player's army and did no damage; it never shot me"): may `attacker` hurt
+	the soldiers of `owner` (player guns / rockets on his squad units)? The other direction (his soldiers on a player:
+	the ATTACK pick and the v133 FOLLOW / HOLD defend pick) is UnitMayHitPlayer below. Both use the same reasons as
+	pvpBlock: PvP on, not himself, never a clan ally, and a player under the novice shield neither hurts nor is hurt (an
+	army whose owner is shielded is "protected"). The owner's short spawn shield and his being dead do NOT protect his
+	soldiers (they stand in the world).
+	Returns (ok, reason): "ok" | "pvp_off" | "self" | "ally" | "protected" | "bad_args". ]]
+function CombatService.ArmyHostility(attacker: Player, owner: Player): (boolean, string)
+	if typeof(attacker) ~= "Instance" or not attacker:IsA("Player") or typeof(owner) ~= "Instance" or not owner:IsA("Player") then
+		return false, "bad_args"
+	end
+	if not GameConfig.PvPEnabled then
+		return false, "pvp_off"
+	end
+	if attacker == owner then
+		return false, "self"
+	end
+	if isClanAlly(attacker, owner) then
+		return false, "ally"
+	end
+	if NS.Active[owner.UserId] ~= nil then
+		return false, "protected"
+	end
+	return true, "ok"
+end
+
+-- v133: SquadOrdersService hands in the one function that says whether a model is one of its LIVE units:
+-- fn(attacker, unitModel) -> its Humanoid (or nil). CombatService applies the damage itself (the squad service never
+-- deals raw damage: squadfair). nil = soldiers take no player damage (the v132 behaviour).
+local unitHitHandler: ((Player, Model) -> Humanoid?)? = nil
+function CombatService.SetUnitHitHandler(fn: ((Player, Model) -> Humanoid?)?)
+	unitHitHandler = fn
+end
+
+-- v133: hurting a player's soldiers counts as hurting him for his army's aggressor priority (RecentlyHurtBy)
+function CombatService.NoteArmyAggressor(owner: Player, attacker: Player)
+	if owner == attacker then
+		return
+	end
+	local byVictim = pvpHurtAt[owner.UserId]
+	if byVictim == nil then
+		byVictim = {}
+		pvpHurtAt[owner.UserId] = byVictim
+	end
+	byVictim[attacker.UserId] = clock()
+end
+
+-- v133 /armydebug: one [ArmyUnitHit] line per shooter at most every 1 s (printed when the shooter or the owner has it on)
+local unitHitLogAt: { [number]: number } = {}
+local function armyDebugOn(p: Player?): boolean
+	return p ~= nil and p:GetAttribute("WE_ArmyDebug") == true
+end
+local function logUnitHit(attacker: Player, owner: Player?, model: Model, dmg: number, dealt: number, why: string)
+	if not (armyDebugOn(attacker) or armyDebugOn(owner)) then
+		return
+	end
+	local t = clock()
+	if t - (unitHitLogAt[attacker.UserId] or -math.huge) < 1 and why == "ok" then
+		return
+	end
+	unitHitLogAt[attacker.UserId] = t
+	print(string.format("[ArmyUnitHit] %s -> %s's %s dmg=%.1f dealt=%.1f %s", attacker.Name, if owner then owner.Name else "?", model.Name, dmg, dealt, why))
+end
+
+-- v133 tests / live probes: what a hit on this part resolves to ("Player" | "Unit" | "NPC" | "Vehicle" | "Gate" | "None")
+function CombatService._ResolveKind(inst: Instance): string
+	local kind = resolveTarget(inst)
+	return kind
+end
+
 --[[ W2 (contracts §3.1): one hit on whatever `hit` belongs to (player > NPC > registered vehicle > gate).
 	Players / NPCs take amount x VsInfantryMult x (Headshot and HeadshotMult); vehicles go to VehicleHealth
 	(class maths there); gates need an attacker. Unless opts.Quiet the attacker gets CombatHitFeedback. ]]
@@ -70929,6 +71174,58 @@ function CombatService.ApplyHit(attacker: Player?, hit: Instance, amount: number
 			UnitShot = opts.UnitShot,
 		})
 		return { Kind = "NPC", Dealt = dealt, Killed = killed, Target = model }
+	elseif kind == "Unit" then
+		-- v133: a player's shot on an enemy army soldier. THE shared rule (ArmyHostility), then the owning
+		-- SquadOrdersService applies it (the unit's squad remembers the shooter and fights back: NoteArmyAggressor).
+		local unitModel = model :: Model
+		local owner = Players:GetPlayerByUserId(ref :: number)
+		local dmg = amount * (tonumber(opts.VsInfantryMult) or 1) * (if opts.Headshot == true then CombatFeelConfig.HeadshotMult else 1)
+		local acfg = (ArmyConfig :: any).ArmyCombat
+		if attacker == nil or owner == nil or unitHitHandler == nil or typeof(acfg) ~= "table" or acfg.PlayersHitUnits ~= true then
+			return { Kind = "Unit", Dealt = 0, Killed = false, Target = unitModel }
+		end
+		local may, why = CombatService.ArmyHostility(attacker, owner)
+		if may and not NS.allowsAttack(attacker) then -- F6: a shielded attacker's hit ends his shield first
+			may, why = false, "attacker_shielded"
+		end
+		if not may then
+			logUnitHit(attacker, owner, unitModel, dmg, 0, why)
+			if why == "protected" and not quiet and NotificationService then
+				local t = clock()
+				local key = -attacker.UserId
+				if t - (unitHitLogAt[key] or -math.huge) >= 8 then
+					unitHitLogAt[key] = t
+					pcall(NotificationService.Notify, attacker, owner.DisplayName .. "'s army is Protected (new-player shield)", "Warn")
+				end
+			end
+			return { Kind = "Unit", Dealt = 0, Killed = false, Target = unitModel }
+		end
+		local okH, uh = pcall(unitHitHandler :: any, attacker, unitModel)
+		local dealt, killed = 0, false
+		if okH and typeof(uh) == "Instance" and uh:IsA("Humanoid") and uh.Health > 0 then
+			local before = uh.Health
+			uh:TakeDamage(dmg)
+			dealt = math.max(0, before - uh.Health)
+			killed = uh.Health <= 0
+		end
+		logUnitHit(attacker, owner, unitModel, dmg, dealt, if okH then (if dealt > 0 then "ok" else "not_live") else "error " .. tostring(uh))
+		if dealt > 0 then
+			CombatService.NoteArmyAggressor(owner, attacker)
+			if not quiet then
+				hitFeedback(attacker, {
+					Kind = if killed then "Kill" else "Hit",
+					Damage = dealt,
+					TargetName = owner.DisplayName .. "'s soldier",
+					WeaponId = weaponId,
+					IsHeadshot = opts.Headshot == true,
+					Target = unitModel,
+					TargetKind = "NPC",
+					Pos = opts.HitPos,
+					Assist = if opts.Assist then true else nil,
+				})
+			end
+		end
+		return { Kind = "Unit", Dealt = dealt, Killed = killed, Target = unitModel }
 	elseif kind == "Vehicle" then
 		local veh = ref :: Model
 		if veh == firing or not NS.allowsAttack(attacker) then -- F6: a shielded attacker's hit ends the shield first
@@ -71425,18 +71722,46 @@ local function seatFireRule(player: Player): (boolean, Model?, boolean)
 	return false, veh, false
 end
 
--- the shot's Exclude list: the shooter, the vehicle they sit in, every squad unit (units are not player targets)
-local function shotFilterFor(character: Model, veh: Model?): { Instance }
+-- the shot's Exclude list: the shooter, the vehicle they sit in, and army soldiers he may not hurt.
+-- v133 (Code Bot): was EVERY squad unit (the whole WarEmpireSquads folder), so a bullet flew straight through an enemy
+-- army and no player could ever hurt one. Now only his own soldiers and his clan allies' are passed through
+-- (ArmyConfig.ArmyCombat.PlayersHitUnits = false: the old whole-folder filter).
+local function shotFilterFor(character: Model, veh: Model?, shooterUid: number?): { Instance }
 	local f: { Instance } = { character }
 	if veh then
 		table.insert(f, veh)
 	end
 	local squads = Workspace:FindFirstChild("WarEmpireSquads")
 	if squads then
-		table.insert(f, squads)
+		local acfg = (ArmyConfig :: any).ArmyCombat
+		local shooter = Players:GetPlayerFromCharacter(character)
+		local uid = if shooter then shooter.UserId else shooterUid
+		if uid == nil or typeof(acfg) ~= "table" or acfg.PlayersHitUnits ~= true then
+			table.insert(f, squads)
+		else
+			local friendly: { [number]: boolean } = {}
+			for _, m in ipairs(squads:GetChildren()) do
+				local uo = m:GetAttribute("OwnerUserId")
+				if typeof(uo) ~= "number" then
+					table.insert(f, m)
+				else
+					local fr = friendly[uo]
+					if fr == nil then
+						local op = Players:GetPlayerByUserId(uo)
+						-- (an owner who left: his soldiers are about to go; a test uid with no Player: never an ally)
+						fr = uo == uid or (shooter ~= nil and (op == nil or isClanAlly(shooter, op)))
+						friendly[uo] = fr
+					end
+					if fr then
+						table.insert(f, m)
+					end
+				end
+			end
+		end
 	end
 	return f
 end
+CombatService._ShotFilterFor = shotFilterFor -- v133: live probes (tools/checks/codebot_v133.py documents the run)
 
 -- W2 (contracts §1.1): the fire payload's Input field sets the assist class (first valid one at once, then at most
 -- one change per ClassChangeSeconds); anything else is ignored without a strike
@@ -71618,6 +71943,28 @@ local function assistPick(
 			CombatAssist.Offer(rec.Model, torsoOf(rec.Model, rec.Root), nil, id)
 		end
 	end
+	-- v133: enemy army soldiers the shared rule lets him hurt (his own / allies' are in the shot filter already)
+	local acfg = (ArmyConfig :: any).ArmyCombat
+	local squads = if typeof(acfg) == "table" and acfg.PlayersHitUnits == true then Workspace:FindFirstChild("WarEmpireSquads") else nil
+	if squads then
+		local verdict: { [number]: boolean } = {}
+		for _, m in ipairs(squads:GetChildren()) do
+			local uo = m:GetAttribute("OwnerUserId")
+			if typeof(uo) == "number" and uo ~= player.UserId and m:IsA("Model") then
+				local ok = verdict[uo]
+				if ok == nil then
+					local op = Players:GetPlayerByUserId(uo)
+					ok = op ~= nil and (CombatService.ArmyHostility(player, op))
+					verdict[uo] = ok
+				end
+				local hum = if ok then m:FindFirstChildOfClass("Humanoid") else nil
+				local root = if hum then m:FindFirstChild("HumanoidRootPart") else nil
+				if hum and hum.Health > 0 and root and root:IsA("BasePart") and CombatAssist.InCone(root.Position) then
+					CombatAssist.Offer(m, torsoOf(m, root), nil, nil)
+				end
+			end
+		end
+	end
 	return CombatAssist.Finish(filter)
 end
 
@@ -71761,7 +72108,7 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 		local kind = resolveTarget(result.Instance)
 		if kind ~= "None" then
 			how = "Exact"
-			local isHead = (kind == "Player" or kind == "NPC") and result.Instance.Name == "Head"
+			local isHead = (kind == "Player" or kind == "NPC" or kind == "Unit") and result.Instance.Name == "Head"
 			local amount = if kind == "Gate"
 				then damage
 				else damage * CombatDamage.FalloffMult(def, (result.Position - origin).Magnitude)
@@ -73867,7 +74214,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 132)
+		player:SetAttribute("WE_Build", 133)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -74009,7 +74356,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=132",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=133",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -81346,7 +81693,7 @@ return MissionService
 	a whitelisted `source` on RequestPurchase*. Offers: none before the tutorial is complete, the Starter Pack gate
 	TrySoftOfferStarterBundle (TutorialService schedules it), no Speed Boost / death Cash Mega pop-ups, D8 budget.
 	Owner's 11 features, lane M (spec_f11 F7 / F8): SpeedMultFor (the highest WalkSpeedMult among the speed SKUs the
-	player owns: Speed Pass x1.4, Speed Boost x1.6 (v126); never multiplied together), re-applied on respawn, on load and
+	player owns: Speed Pass x1.5, Speed Boost x2 (v133; v126 was x1.4 / x1.6); never multiplied together), re-applied on respawn, on load and
 	when a speed pass flips to owned; TryDeathSpeedOffer (the one death offer, MonetizationConfig.DeathSpeedOffer).
 	The Keep-Base Rebirth receipt needs no branch of its own: CounterGrants.GrantKeepBaseRebirths banks the token,
 	it is saved before PurchaseGranted, and PrestigeService runs the rebirth from OnGranted (never in the receipt).
@@ -81427,7 +81774,7 @@ local sessionStartAt: { [number]: number } = {}
 -- F8: the death speed offer was sent this session (userId -> true; cleared on PlayerRemoving)
 local deathSpeedSent: { [number]: boolean } = {}
 -- F8: sanity cap on a WalkSpeedMult config value (a typo must never launch players across the map)
-local MAX_WALK_SPEED_MULT = 1.75 -- v126: Speed Boost x1.6 fits under it (16 -> 25.6; the cap = 28)
+local MAX_WALK_SPEED_MULT = 2.0 -- v133: Speed Boost x2 fits under it (16 -> 32; the cap = 32). v126 was 1.75 (28)
 
 -- Whole number >= 0; junk (nil, strings, NaN, inf, negatives) becomes 0.
 local function nonNegInt(value: any): number
@@ -81792,8 +82139,8 @@ local function isSpeedKey(key: string): boolean
 end
 
 --[[ F8 (owner's 11 features): the walk-speed multiplier for this player = the HIGHEST WalkSpeedMult among the speed
-	SKUs they own (GamePasses.ImpulseSpeed x1.4, DevProducts.SpeedBoost x1.6; v126), never the product of them: owning
-	both gives x1.6. 1 when none is owned. A pass whose Id is 0 is never owned outside Studio mocks. Never yields. ]]
+	SKUs they own (GamePasses.ImpulseSpeed x1.5, DevProducts.SpeedBoost x2; v133), never the product of them: owning
+	both gives x2. 1 when none is owned. A pass whose Id is 0 is never owned outside Studio mocks. Never yields. ]]
 function MonetizationService.SpeedMultFor(player: Player): number
 	local best = 1
 	if typeof(player) ~= "Instance" or not player:IsA("Player") then
@@ -97907,6 +98254,144 @@ local function attackAimOnly(player: Player, st: SquadState, unit: SquadUnit, no
 	faceYaw(unit.Root, aimPoint(unit, tgt.Root)) -- (the gyro; SoldierController leaves the aim alone after a shot)
 end
 
+--[[ v133 (Code Bot, phone bug "another player's army stood right in front of me and never fired"). PROVEN (tools/sim +
+	the static trace in codebot_v133.py): a player was only ever a candidate in pickSquadTarget, and the think loop ran
+	that for st.Order == "Attack" only; FOLLOW (every army's default order) and HOLD scan WE_NPC models only
+	(nearestHostile / escortPickLive), so an enemy player could stand in the middle of a FOLLOW army untouched.
+	Fix (ArmyConfig.ArmyCombat.DefendOnFollow): once per think pass a FOLLOW / HOLD army picks the enemy player it may
+	engage under THE shared rule (CombatService.UnitMayHitPlayer: PvP on, not an ally, not spawn / novice protected,
+	its owner not shielded) within DefendPlayerStuds of its centre or its owner, or out to DefendAggressorStuds for one
+	who hurt the owner or his soldiers in the last AggressorSeconds (CombatService.RecentlyHurtBy; soldiers hit by a
+	player note him via CombatService.NoteArmyAggressor) - aggressors first, then nearest, the current one sticky.
+	The units shoot it from where they stand (same LOS rule, hit chance, damage and per-victim DPS cap as ATTACK) and
+	keep their FOLLOW / HOLD movement: no teleport, no speed change, no forced damage.
+	/armydebug: [ArmyDefend] lines when the owner OR the candidate player has it on (a victim sees why every enemy
+	army ignores or engages him). ]]
+local defendLogAt: { [number]: number } = {}
+local function pickDefendTarget(player: Player, st: SquadState, proot: BasePart)
+	local ac = armyCombat()
+	if ac == nil or ac.DefendOnFollow ~= true or ac.TargetPlayers ~= true or CombatService == nil or CombatService.UnitMayHitPlayer == nil then
+		(st :: any)._defTarget = nil
+		return
+	end
+	local sum, cnt = Vector3.zero, 0
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Root.Parent then
+			sum += Vector3.new(u.Root.Position.X, 0, u.Root.Position.Z)
+			cnt += 1
+		end
+	end
+	if cnt == 0 then
+		(st :: any)._defTarget = nil
+		return
+	end
+	local centre = sum / cnt
+	local r0 = tonumber(ac.DefendPlayerStuds) or 47
+	local rA = math.max(r0, tonumber(ac.DefendAggressorStuds) or r0)
+	local aggroSecs = tonumber(ac.AggressorSeconds) or 10
+	local cur = (st :: any)._defTarget
+	local acm = SquadOrdersService._AC
+	local now = os.clock()
+	local logDue = now - (defendLogAt[player.UserId] or -math.huge) >= (tonumber(ac.TargetLogSeconds) or 2)
+	local dlines: { string }? = nil
+	local best: any = nil
+	local bestScore = math.huge
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl ~= player then
+			local dbg = logDue and acm ~= nil and acm.DebugFor ~= nil and (acm.DebugFor(player) or acm.DebugFor(pl))
+			local ch = pl.Character
+			local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+			local r = ch and ch:FindFirstChild("HumanoidRootPart")
+			local verdict: string
+			if not (hum and r and r:IsA("BasePart")) then
+				verdict = "no_character"
+			elseif hum.Health <= 0 then
+				verdict = "dead"
+			else
+				local dC = flatDist(r.Position, centre)
+				local dO = flatDist(r.Position, proot.Position)
+				local d = math.min(dC, dO)
+				local okM, may, why = pcall(CombatService.UnitMayHitPlayer, player, pl)
+				local agg = okM and may == true and CombatService.RecentlyHurtBy ~= nil and CombatService.RecentlyHurtBy(player, pl, aggroSecs) == true
+				local lim = if agg then rA else r0
+				if not okM then
+					verdict = "error " .. tostring(may)
+				elseif d > lim then
+					verdict = string.format("out_of_reach d=%.0f>%.0f rule=%s", d, lim, if may then "ok" else tostring(why))
+				elseif not may then
+					verdict = "rejected " .. tostring(why)
+					noteProtected(player, pl, why)
+				else
+					local score = d - (if agg then 1000 else 0) - (if cur and cur.Player == pl then 10 else 0)
+					verdict = string.format("CANDIDATE%s", if agg then " aggressor" else "")
+					if score < bestScore then
+						bestScore = score
+						best = { Hum = hum, Root = r, Kind = "Player", Player = pl, Aggressor = agg }
+					end
+				end
+				verdict ..= string.format(" (dCentre=%.0f dOwner=%.0f)", dC, dO)
+			end
+			if dbg then
+				dlines = dlines or {}
+				table.insert(dlines :: { string }, pl.Name .. ": " .. verdict)
+			end
+		end
+	end
+	(st :: any)._defTarget = best
+	if dlines then
+		defendLogAt[player.UserId] = now
+		print(string.format("[ArmyDefend] %s order=%s units=%d pick=%s | %s", player.Name, tostring(st.Order), cnt,
+			if best then best.Player.Name .. (if best.Aggressor then " (aggressor)" else "") else "none", table.concat(dlines :: { string }, " ; ")))
+	end
+end
+
+-- v133: one FOLLOW / HOLD unit's shot at the defend target (true = it has one in reach: it aims / fires at it)
+local function defendAimOnly(player: Player, st: SquadState, unit: SquadUnit, now: number): boolean
+	local tgt = (st :: any)._defTarget
+	if tgt == nil or tgt.Root.Parent == nil or tgt.Hum.Health <= 0 then
+		return false
+	end
+	local range = OrdersConfig.AttackRange or 55
+	local band = if tgt.Aggressor then range else range * 0.85 -- the ATTACK fire band; an aggressor out to the full range
+	local d = (tgt.Root.Position - unit.Root.Position).Magnitude
+	if d > band then
+		return false -- this unit is out of reach: it does its usual FOLLOW / HOLD thing
+	end
+	if losCheckDue(unit, now) then
+		if unitHasLos(player, unit, tgt.Root) then
+			unit.LosBlocked = false
+			local firedAt = unit.LastFireAt
+			local hit = unitShootAt(player, unit, tgt, tgt.Root, now)
+			unitShotFx(player, unit, tgt.Root, firedAt, hit)
+		else
+			hitLog(player, unit, "Player", tgt.Player.Name, 0, 0, "no_los")
+			losBlockedFor(unit, now)
+		end
+	end
+	unit.AimRoot = nil
+	unit.AimHum = nil
+	faceYaw(unit.Root, tgt.Root.Position)
+	return true
+end
+
+-- v133: a player's gun / rocket hit on one of this service's soldiers (CombatService.ApplyHit "Unit", after THE shared
+-- rule CombatService.ArmyHostility): the unit's Humanoid when `model` is a LIVE unit of its owner's squad, else nil.
+-- CombatService deals the damage (real Humanoid damage); a unit that dies is re-formed by SyncArmy as on any death.
+local function playerHitUnit(_attacker: Player, model: Model): Humanoid?
+	local uo = model:GetAttribute("OwnerUserId")
+	local st = if typeof(uo) == "number" then squadByUser[uo] else nil
+	if st == nil then
+		return nil
+	end
+	for _, u in ipairs(st.Units) do
+		if u.Model == model then
+			return if u.Alive and u.Humanoid.Health > 0 then u.Humanoid else nil
+		end
+	end
+	return nil
+end
+SquadOrdersService._PlayerHitUnit = playerHitUnit -- (tests)
+
 local function reformRootless(uid: number): boolean
 	local rc = (ArmyConfig :: any).Recover
 	-- off with the Recover kill switch; v90: only for a Rollout.Fix owner
@@ -97927,6 +98412,13 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 	if order == "Attack" and SquadOrdersService._AC.AttackLive(player.UserId) then
 		attackAimOnly(player, st, unit, now) -- claude-bud JOB 24: the ArmyController moves it; here it only shoots / aims
 		return
+	end
+	-- v133 (ArmyCombat.DefendOnFollow): FOLLOW / HOLD defend against an enemy player in reach (pickDefendTarget)
+	if (order == "Follow" or order == "Hold") and playerRoot and (st :: any)._defTarget ~= nil then
+		local engaged = defendAimOnly(player, st, unit, now)
+		if engaged and order == "Follow" and SquadOrdersService._AFOn and SquadOrdersService._AC.LiveFor(player.UserId) then
+			return -- Follow3: ArmyController keeps moving it in the formation; here it only shoots / aims
+		end
 	end
 	if order ~= "Follow" then
 		SquadOrdersService._AF.Release(unit, order) -- v99: HOLD / ATTACK / RETREAT drive it now (one controller per unit; JOB 22: its state)
@@ -98558,6 +99050,9 @@ function SquadOrdersService.Init(deps: { [string]: any })
 	BaseService = deps.BaseService
 	ResearchService = deps.ResearchService -- v69 research
 	CombatService = deps.CombatService -- F6 novice shield (Init order does not matter: used only on an order)
+	if CombatService and CombatService.SetUnitHitHandler then
+		CombatService.SetUnitHitHandler(playerHitUnit) -- v133: player guns hurt enemy soldiers (THE shared rule in CombatService)
+	end
 
 	if not OrdersConfig.Enabled then
 		print("[WAR EMPIRE] SquadOrdersService disabled (OrdersConfig.Enabled=false)")
@@ -98737,6 +99232,16 @@ function SquadOrdersService.Init(deps: { [string]: any })
 						end
 					else
 						(st :: any)._acTarget = nil
+					end
+					-- v133: the FOLLOW / HOLD army's defend target (an enemy player in reach, THE shared rule)
+					if (st.Order == "Follow" or st.Order == "Hold") and proot then
+						local okD, errD = pcall(pickDefendTarget :: any, player, st, proot)
+						if not okD then
+							(st :: any)._defTarget = nil
+							thinkError(player, errD, now)
+						end
+					else
+						(st :: any)._defTarget = nil
 					end
 					for _, unit in ipairs(st.Units) do
 						-- army fix (ArmyConfig.Loop): an error in one unit's think never stops the loop for every army
@@ -115144,6 +115649,7 @@ type FeelState = {
 	FilterChar: Instance?,
 	FilterVeh: Instance?,
 	FilterSquads: Instance?,
+	FilterKids: number?, -- v133: the squad folder's child count when the list was built
 	FilterList: { Instance },
 	Shown: boolean?, -- last drawn state pushed to the feel modules
 	Weapon: string?,
@@ -115190,6 +115696,7 @@ do
 		FilterChar = nil,
 		FilterVeh = nil,
 		FilterSquads = nil,
+		FilterKids = nil,
 		FilterList = {},
 		Shown = nil,
 		Weapon = nil,
@@ -116309,8 +116816,12 @@ function W2.shotFilter(): RaycastParams
 		end
 	end
 	local squads = Workspace:FindFirstChild("WarEmpireSquads")
-	if ch ~= Feel.FilterChar or veh ~= Feel.FilterVeh or squads ~= Feel.FilterSquads then
-		Feel.FilterChar, Feel.FilterVeh, Feel.FilterSquads = ch, veh, squads
+	-- v133 (Code Bot): enemy army soldiers are shootable now (server CombatService shotFilterFor): the preview ray passes
+	-- only through HIS OWN soldiers (the server also passes clan allies'); the list is rebuilt when the folder's
+	-- child count changes (a unit spawned / died)
+	local nKids = if squads then #squads:GetChildren() else -1
+	if ch ~= Feel.FilterChar or veh ~= Feel.FilterVeh or squads ~= Feel.FilterSquads or nKids ~= Feel.FilterKids then
+		Feel.FilterChar, Feel.FilterVeh, Feel.FilterSquads, Feel.FilterKids = ch, veh, squads, nKids
 		local list = Feel.FilterList
 		table.clear(list)
 		if ch then
@@ -116320,7 +116831,11 @@ function W2.shotFilter(): RaycastParams
 			table.insert(list, veh)
 		end
 		if squads then
-			table.insert(list, squads)
+			for _, m in ipairs(squads:GetChildren()) do
+				if m:GetAttribute("OwnerUserId") == player.UserId or typeof(m:GetAttribute("OwnerUserId")) ~= "number" then
+					table.insert(list, m)
+				end
+			end
 		end
 		Feel.ShotParams.FilterDescendantsInstances = list
 	end
