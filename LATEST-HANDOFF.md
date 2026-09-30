@@ -1,10 +1,10 @@
 <!-- Q2-START -->
-## v137 (Code Bot Roblox, 2026-09-30 ~14:36 Dublin): wire premium gun passes — place version pending
+## v137 (Code Bot Roblox, 2026-09-30 ~14:37 Dublin): wire premium gun passes — place version 135
 - **WE_Build 137**. Wired only `MonetizationConfig.GamePasses.PG_*` `Id` fields; prices unchanged. PreferMesh OFF; WE_Building* untouched; fast travel stays REMOVED.
 - **Creator Hub verification:** public `apis.roblox.com/game-passes/v1/universes/10767159222/game-passes?passView=Full&pageSize=100` lists all seven IDs, each `isForSale=true`, with prices 99 / 249 / 299 / 349 / 399 / 499 / 1299 matching config. Product-info endpoint also confirms names, sale state, and prices; no mismatch.
 - **Rollout / shop:** PG_* remains outside `RolloutKeys` as the config comment directs; the existing armory and Shop WEAPONS gold-row paths use the real pass IDs. Non-owner armory cases now resolve to Buy with prices, not SOON.
-- **Checks:** `LUAU_COMPILE=$HOME/.local/bin/luau-compile python3 tools/BuyPathStatic.py` PASS=6832 FAIL=0; `python3 tools/sim/run_armory_test.py` 0 failed; `tools/checks/codebot_v137.py` pins all seven IDs and prices.
-- **Live probe:** pending after publish; run a non-owner Open Cloud Luau check for all seven armory cases (Buy / configured price, never SOON).
+- **Checks:** `LUAU_COMPILE=$HOME/.local/bin/luau-compile python3 tools/BuyPathStatic.py` PASS=6832 FAIL=0; `python3 tools/sim/run_armory_test.py` 0 failed; `tools/checks/codebot_v137.py` pins all seven IDs and prices; rojo ok. Commit `3c20551`; Open Cloud HTTP 200 `versionNumber=135`.
+- **Live probe (Open Cloud Luau, v135, uid 12345 / non-owner):** all seven armory cases returned `Buy` with the configured price, not `SOON`: R$99 / 249 / 299 / 349 / 399 / 499 / 1299. Each live config Id matched the Creator Hub public API.
 
 ## v136 (Code Bot Roblox, 2026-09-30 ~14:25 Dublin): LAUNCH FOR EVERYONE (owner Shaun 14:17) + JOB 35 premium guns live — place version 134
 - **WE_Build 136**. Code commit `65d4769` + dist `385deb2`. Open Cloud HTTP 200 `versionNumber=134`. PreferMesh OFF; WE_Building* untouched; fast travel stays REMOVED; no Robux price changed; admins still off leaderboards.
