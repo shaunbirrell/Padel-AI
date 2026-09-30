@@ -139,6 +139,7 @@ Design, build and verify for a **phone in landscape first**, PC second. Anything
 - **Structures:**
   - `PreferMesh` stays OFF for structure kits.
   - Perimeter walls spawn on the DefensiveWalls purchase (`SyncPerimeterWalls`). Do not break this.
+- **Build guide:** every build job (buildings, props, vehicles, interiors, POIs, lighting, NPC or UI polish) follows [`docs/ROBLOX-BUILD-GUIDE.md`](docs/ROBLOX-BUILD-GUIDE.md) and ticks its §11 detail checklist in the DONE reply.
 - **Names and assets:**
   - No real-world brand, vehicle or weapon names. Real countries appear only as a player's own cosmetic nation, chosen by the player from `NationConfig` (current national flag + short name, owner-approved list, ISO 3166 ids). Never: historical, regime, separatist, extremist or party flags; military insignia; a real country on NPCs, map places, vehicles, factions or leaderboards; a nation name in any kill, strike, nuke, raid or capture message; nation-vs-nation rules, bonuses or matchmaking; a flag shown damaged, burning, on the ground, beside strike effects or as a target. Flags in the world are Textures/Decals, never SurfaceGuis. Players never draw flags or type nation names. An IP-derived country is only a suggestion to that player: never auto-applied, shown to others, stored or logged.
   - Never copy another game's assets or code. Re-implement mechanics and use only Roblox-official or permissively licensed parts, with attribution.
