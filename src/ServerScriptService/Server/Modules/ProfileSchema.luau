@@ -249,6 +249,18 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	else
 		profile.NotifOptIn = nil
 	end
+	-- claude-bud JOB 40 part D: the rate reminder's record (missing -> nil = the defaults; Never sticks across servers)
+	if typeof(profile.RatePrompt) == "table" then
+		local rp = profile.RatePrompt
+		profile.RatePrompt = {
+			LastShownUnix = nonNegInt(rp.LastShownUnix),
+			Shows = nonNegInt(rp.Shows),
+			Never = rp.Never == true,
+			PlaySeconds = nonNegInt(rp.PlaySeconds),
+		}
+	else
+		profile.RatePrompt = nil
+	end
 	-- claude-bud BOARDS: the notice boards' own counters (validated kills, the week, the biggest army)
 	if typeof(profile.LB) ~= "table" then
 		profile.LB = nil

@@ -125,6 +125,23 @@ _j40("JOB40LiveFor(owner.UserId)" in _db and "MaxBasePartsPerPlot" in _db and "i
 _j40(_J40P("tools/probes/job40_props_probe.luau").exists() and "InsertService" in _j40_src("tools/probes/job40_props_probe.luau")
      and "HttpService" not in _j40_src("tools/probes/job40_props_probe.luau"), "C: the load probe exists (read-only, no key in the game)")
 
+# ── part D: "Enjoying WAR EMPIRE?" (no reward; server decides; owner-first) ──
+_RPC = _j40_src(_CF + "RatePromptConfig.luau")
+_RPS = _j40_code(_SV + "Services/RatePromptService.luau")
+_RPK = _j40_code(_CL + "Controllers/RatePromptController.luau")
+_j40("Enabled = true," in _RPC and "OwnerFirst = true," in _RPC and "PlaySecondsBeforeShow = 900," in _RPC and "MinGapSeconds = 259200," in _RPC
+     and "CombatQuietSeconds = 20," in _RPC, "D: RatePromptConfig owner-first; 900 s play, 3-day gap, 20 s combat quiet")
+_j40(not any(_j40_re.search(r"\b(AddCash|AddGold|AddXP|SpendCash|SpendGold|Grant\w*|Badge\w*|AwardBadge)\b", x) for x in (_RPS, _RPK)),
+     "D: no AddCash / AddGold / AddXP / Grant / Badge in RatePromptService or its controller (no reward)")
+_j40(not _j40_re.search(r"(?i)\b(reward|free|gift|bonus|prize|claim)\b", _RPC.split("Text = {")[1].split("}")[0]), "D: the card text has no reward words")
+_j40('RequestRatePromptAnswer = { "string:8" }' in _j40_src(_CF + "SecurityConfig.luau") and 'RemoteGate).Check(player, "RequestRatePromptAnswer", answer)' in _RPS
+     and 'Allow(player, "rate_prompt", 2 / 60, 2)' in _RPS, "D: the answer remote: RemoteGate schema + 2 / min, enum checked in the service")
+_j40("PromptSetFavorite(game.PlaceId, Enum.AvatarItemType.Asset, true)" in _RPK and "liked" not in _RPS.lower().replace('"liked"', ""),
+     "D: Favorite reuses the Shop's PromptSetFavorite call; nothing claims or checks a like")
+_j40("profile.RatePrompt = {" in _j40_code(_SV + "Modules/ProfileSchema.luau"), "D: ProfileSchema.Migrate keeps / repairs RatePrompt")
+_j40('RP.Trigger, player, "rebirth"' in _j40_code(_SV + "Services/PrestigeService.luau") and 'RP.Trigger, player, "achievement"' in _j40_code(_SV + "Services/AchievementService.luau"),
+     "D: the rebirth / big-achievement triggers")
+
 _luau = _j40_os.environ.get("LUAU")
 if _luau is None and _j40_os.environ.get("LUAU_COMPILE"):
     _cand = _j40_os.environ["LUAU_COMPILE"].replace("luau-compile", "luau")
@@ -136,5 +153,7 @@ if _luau:
     _j40(_r.returncode == 0 and "BASE GUARDS TEST: 0 failed" in _r.stdout, "A: run_base_guards_test.py (state machine, the hostility table, budgets)")
     _r = _j40_sp.run([_j40_sys.executable, "tools/sim/run_speed_test.py"], capture_output=True, text=True, env=dict(_j40_os.environ, LUAU=_luau))
     _j40(_r.returncode == 0 and "SPEED ALL: 0 failed" in _r.stdout, "B: run_speed_test.py (the helper, the values, the 40-stud/s army sim: 0 teleports)")
+    _r = _j40_sp.run([_j40_sys.executable, "tools/sim/run_rate_prompt_test.py"], capture_output=True, text=True, env=dict(_j40_os.environ, LUAU=_luau))
+    _j40(_r.returncode == 0 and "RATE PROMPT TEST: 0 failed" in _r.stdout, "D: run_rate_prompt_test.py (900 s, triggers, 3-day gap, combat, never across Migrate, no economy)")
 else:
     print("SKIP CLAUDE-BUD J40: Luau CLI tests (set LUAU)")

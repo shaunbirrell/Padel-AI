@@ -52,6 +52,9 @@ local AnalyticsConfig = {
 			ONBOARD_STEP = { Name = "OnboardingSeconds", Value = "seconds", Field = "step" },
 			OFFLINE_EARNED = { Name = "OfflineEarned", Value = "cash", Field = "hours" },
 			NOTIF_OPTIN = { Name = "NotificationOptIn", Field = "result" },
+			-- claude-bud JOB 40 part D: the rate reminder (never a "liked" event: there is no such signal)
+			RATE_PROMPT_SHOWN = { Name = "rate_prompt_shown", Field = "trigger" },
+			RATE_PROMPT_ANSWER = { Name = "rate_prompt_answer", Field = "answer" },
 			STREAK_DAY = { Name = "StreakDay", Value = "day" },
 			-- claude-bud JOB 31: site activities
 			ACTIVITY_START = { Name = "ActivityStarted", Field = "activity" },
@@ -168,6 +171,8 @@ local AnalyticsConfig = {
 		ONBOARD_STEP = "ONBOARD_STEP",
 		OFFLINE_EARNED = "OFFLINE_EARNED",
 		NOTIF_OPTIN = "NOTIF_OPTIN",
+		RATE_PROMPT_SHOWN = "RATE_PROMPT_SHOWN", -- claude-bud JOB 40 D
+		RATE_PROMPT_ANSWER = "RATE_PROMPT_ANSWER",
 		STREAK_DAY = "STREAK_DAY",
 		ACTIVITY_START = "ACTIVITY_START",
 		ACTIVITY_DONE = "ACTIVITY_DONE",

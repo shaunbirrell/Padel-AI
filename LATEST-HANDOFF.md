@@ -34,6 +34,35 @@
   1. As B (another player, not in A's clan), walk onto A's helipad apron: guards turn, aim and shoot. Kill one: respawns at post after 45 s. As A past your own guards: no shots. Clan-mate: the same. B runs out past 45 studs: guard walks back.
   2. With Speed Boost: you run at 40. Army stays together on a straight, corner and U-turn (no teleports). Speed pad / Shop / death card read "Run 75% faster" / "Run 2.5x faster".
 - **Next:** Studio 2-player proof for base-guard hostility (docs/BASE-GUARDS-ROOTCAUSE.md §6) still owed; do NOT flip Posts / SpeedV2 / Endgame / BaseMarker OwnerFirst=false until owner asks. JOBs 41/42 still queued. Claude desktop-bud tip was `6b0fe34` (~22:33 Dublin); not a takeover.
+## claude-bud JOB 40 PART D (2026-09-30): "ENJOYING WAR EMPIRE?" REMINDER, NO REWARD (branch `claude/desktop-bud`)
+**Flag:** `RatePromptConfig` (`Enabled`, `OwnerFirst = true`). OFF / not live = nothing shows; the Shop favourite row is
+unchanged. **To launch:** Code Bot sets `OwnerFirst = false`.
+- **Server decides** (Services/RatePromptService, one 0.2 Hz loop for everyone):
+  - live, profile loaded, tutorial done, onboarding hold off;
+  - never after "Don't show again" (profile.RatePrompt.Never, across servers);
+  - once per session, not in the first minute, 3 days since the last show, 20 s without damage taken;
+  - then 900 s of total play (RatePrompt.PlaySeconds) OR a trigger: every rebirth (PrestigeService) or a
+    big-banner achievement (AchievementService.Shout big), 8 s after the moment.
+- **Client** (Controllers/RatePromptController): a small card top-centre (<= 420 px, 48 px buttons, 15 px+ text).
+  - It waits for a free screen (not driving / dead / in combat / a panel open) for up to 90 s.
+  - It slides in and hides after 20 s.
+  - Buttons: ⭐ Favorite (the Shop's PromptSetFavorite call), Maybe later, Don't show again, X.
+- **Remote:** RequestRatePromptAnswer (RemoteGate "string:8", 2 / min; the enum later | never | favorite | timeout is
+  checked in the service). The show goes out as FeaturePush "RatePrompt" (no new server->client remote).
+- **Saved:** profile.RatePrompt = { LastShownUnix, Shows, Never, PlaySeconds } (ProfileSchema.Migrate repairs it;
+  missing = defaults).
+- **Telemetry:** rate_prompt_shown { trigger }, rate_prompt_answer { answer } only.
+- **No reward:** no cash / gold / XP / items / badges (pinned); no reward words in the text; nothing checks a like.
+- **Checks:** run_rate_prompt_test 0 failed (31 checks, real service + real Migrate); claude_bud_job40 part D pins;
+  BuyPathStatic PASS=7224 FAIL=0; all sims 0 failed; rojo ok; remote audit OK.
+- **Not verified in Studio yet:** the card at 800x360 / 956x440, the favourite prompt (Roblox shows it only live).
+
+**Test ON HIS PHONE**
+1. After 15 min of play (or ~8 s after a rebirth) the "Enjoying WAR EMPIRE?" card appears once, at the top, not over
+   the stick or the fire / jump buttons.
+2. Tap "Don't show again", rejoin: it never comes back.
+3. ⭐ Favorite opens the Roblox favourite prompt; nothing is given.
+
 ## claude-bud JOB 40 PART C (2026-09-30): STORE PROPS AT LANDMARKS AND BASES (branch `claude/desktop-bud`)
 **Flag:** `StorePropsConfig.JOB40` (`Enabled`, `OwnerFirst = true`), on top of the STORE-PROPS switches. OFF = today.
 - **ReplaceRows:** a store model replaces a WorldKits landmark (e.g. the 6-part RadarDome at Radar Hill). The kit parts

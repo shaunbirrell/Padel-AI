@@ -501,6 +501,13 @@ function PrestigeService.DoPrestige(player: Player, opts: PrestigeOpts?): (boole
 		if okA and AS and AS.OnRebirth then
 			pcall(AS.OnRebirth, player)
 		end
+		-- claude-bud JOB 40 part D: a rebirth may bring the (no-reward) rate reminder forward
+		local okR, RP = pcall(function(): any
+			return require(script.Parent.RatePromptService)
+		end)
+		if okR and RP and RP.Trigger then
+			pcall(RP.Trigger, player, "rebirth")
+		end
 	end
 	-- claude-bud JOB 5d: a purchase prompt after a rebirth (MonetizationConfig.Placement, owner-only first)
 	if MonetizationService and MonetizationService.OfferMoment then

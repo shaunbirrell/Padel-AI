@@ -171,6 +171,15 @@ local function pump()
 end
 
 function AchievementService.Shout(player: Player, text: string, big: boolean)
+	if big then
+		-- claude-bud JOB 40 part D: a big-banner moment may bring the (no-reward) rate reminder forward
+		local okR, RP = pcall(function(): any
+			return require(script.Parent.RatePromptService)
+		end)
+		if okR and RP and RP.Trigger then
+			pcall(RP.Trigger, player, "achievement")
+		end
+	end
 	AchievementService.Combine(queue, { Uid = player.UserId, Name = player.Name, Text = text, Big = big, Extra = 0, At = 0 }, clock())
 	pump()
 end

@@ -94,6 +94,7 @@ Constants.RemoteNames = {
 	RequestArmySend = "RequestArmySend", -- claude-bud JOB 38: (plotId) SEND the army (ArmyPlan; the server re-checks everything)
 	RequestArmySendCheck = "RequestArmySendCheck", -- claude-bud JOB 38: (plotId) -> FeaturePush "ArmySendVerdict"
 	RequestEndgameBuy = "RequestEndgameBuy", -- claude-bud JOB 39: (kind, id?) EndgameService.Purchase (the price is config's)
+	RequestRatePromptAnswer = "RequestRatePromptAnswer", -- claude-bud JOB 40 D: later | never | favorite | timeout (no reward)
 	RequestEndgameState = "RequestEndgameState", -- claude-bud JOB 39: () -> FeaturePush "EndgameState"
 	RequestSiteActivity = "RequestSiteActivity", -- claude-bud JOB 31: (action "list" | "start" | "quit", id?) SiteActivityService
 	RequestNotifOptInResult = "RequestNotifOptInResult", -- claude-bud JOB 29: the notification opt-in prompt result

@@ -145,6 +145,7 @@ safeInit("QualityGovernor", safeRequire("QualityGovernor", Modules:WaitForChild(
 safeInit("Juice", safeRequire("Juice", Modules:WaitForChild("Juice", 5) :: Instance)) -- claude-bud JOB 11: purchase burst + rebirth celebration
 safeInit("ArmourController", safeRequire("ArmourController", Controllers:WaitForChild("ArmourController", 5) :: Instance)) -- claude-bud JOB 26
 safeInit("RetentionController", safeRequire("RetentionController", Controllers:WaitForChild("RetentionController", 5) :: Instance)) -- claude-bud JOB 29
+safeInit("RatePromptController", safeRequire("RatePromptController", Controllers:WaitForChild("RatePromptController", 5) :: Instance)) -- claude-bud JOB 40 part D
 safeInit("NukeController", safeRequire("NukeController", Controllers:WaitForChild("NukeController", 5) :: Instance)) -- claude-bud JOB 33
 safeInit("AchievementController", safeRequire("AchievementController", Controllers:WaitForChild("AchievementController", 5) :: Instance)) -- claude-bud JOB 34
 safeInit("ArmoryController", safeRequire("ArmoryController", Controllers:WaitForChild("ArmoryController", 5) :: Instance)) -- claude-bud JOB 35

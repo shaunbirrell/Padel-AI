@@ -9889,3 +9889,16 @@ ds_territories.luau T3):
   as the STORE-PROPS world rows); BaseRows only dress a live owner's own plot.
 - **Kit cluster:** the kit to hide = BaseParts of the named part's model within 9 studs of it (the RadarDome kit is
   6 parts inside that radius).
+
+## 2026-09-30 — claude-bud JOB 40 part D: rate reminder
+- **Show path:** the show uses the existing FeaturePush event (kind "RatePrompt") instead of a new server->client
+  RemoteEvent: same effect, one fewer remote.
+- **Answer remote:** it is named RequestRatePromptAnswer (the repo's Request* convention for client->server).
+- **Play time:** "total play" = RatePrompt.PlaySeconds, counted by the service from the first live session (older
+  play before the flag is not back-filled; Stats.PlayTimeSeconds is never incremented anywhere in the code).
+- **Combat quiet:** on the server this is damage taken (Humanoid.HealthChanged). Firing / hitting is covered on the
+  client, which waits 20 s past its RecentCombat flag.
+- **Purchase prompts:** a Roblox purchase prompt open at that moment is not detected (no client event for "a prompt
+  is open"). The card never covers the centre of the screen.
+- **Counting:** a show counts when the server sends it; a "timeout" (not drawn within 90 s, or auto-hidden) still
+  counts toward the 3-day gap.

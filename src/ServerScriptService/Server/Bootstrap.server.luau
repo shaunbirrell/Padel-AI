@@ -62,6 +62,7 @@ local BuildingTips = safeRequire("BuildingTips", Services.BuildingTips) -- claud
 local BaseSignService = safeRequire("BaseSignService", Services.BaseSignService) -- claude-bud JOB 25
 local ArmourService = safeRequire("ArmourService", Services.ArmourService) -- claude-bud JOB 26
 local RetentionService = safeRequire("RetentionService", Services.RetentionService) -- claude-bud JOB 29
+local RatePromptService = safeRequire("RatePromptService", Services.RatePromptService) -- claude-bud JOB 40 part D
 local MapService = safeRequire("MapService", Services.MapService) -- claude-bud JOB 30
 local SiteActivityService = safeRequire("SiteActivityService", Services.SiteActivityService) -- claude-bud JOB 31
 local RebirthZoneService = safeRequire("RebirthZoneService", Services.RebirthZoneService) -- claude-bud JOB 33
@@ -217,6 +218,7 @@ safeInit("NotificationService", NotificationService, deps)
 -- (TutorialService.Init only needs BaseService.GetUpgradeChangedEvent, which works before BaseService.Init.)
 safeInit("TutorialService", TutorialService, deps)
 safeInit("RetentionService", RetentionService, deps) -- claude-bud JOB 29 (after Data / Tutorial; before the join hooks)
+safeInit("RatePromptService", RatePromptService, deps) -- claude-bud JOB 40 part D: the no-reward "Enjoying WAR EMPIRE?" timing
 safeInit("AntiExploitService", AntiExploitService, deps)
 safeInit("MonetizationService", MonetizationService, deps)
 safeInit("EconomyService", EconomyService, deps)
