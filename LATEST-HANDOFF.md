@@ -1,10 +1,10 @@
 <!-- Q2-START -->
-## v143 (Code Bot Roblox, 2026-09-30 ~16:50 Dublin): ship claude-bud JOB 38 army ATTACK/SEND/RECALL + ARMY KILLS — OWNER-FIRST — place version TBD
-- **WE_Build 143**. Cherry-pick `0150edf` from `origin/claude/desktop-bud` as `2003433` onto phase-7-polish (v142 tip `e113293`). Code + dist commit TBD after publish. Open Cloud place version TBD.
+## v143 (Code Bot Roblox, 2026-09-30 ~16:45 Dublin): ship claude-bud JOB 38 army ATTACK/SEND/RECALL + ARMY KILLS — OWNER-FIRST — place version 141
+- **WE_Build 143**. Cherry-pick `0150edf` from `origin/claude/desktop-bud` as `2003433` onto phase-7-polish (v142 tip `e113293`) + code/dist `b91f409`. Open Cloud HTTP 200 `versionNumber=141`.
 - **Flags:** `ArmyOrdersConfig.Live` Enabled + `OwnerFirst = true` (owner 470626172 + Studio only), as Claude shipped. **Do NOT set OwnerFirst=false until Shaun phone-tests and asks.** That later flip also swaps TOP ARMY → ARMY KILLS for everyone.
 - **Live state kept (v142):** `ShopOverhaulConfig.Live.OwnerFirst = false`; `CheckpointGuardConfig.Live.OwnerFirst = false`; VIP `OverhaulRobuxPrice = 199` (Creator Hub 199; owner has NOT approved 349); guard keep-out 130; Depot.CP_E / Armory.CP_W plain; pass Ids (WarChest / SuperSoldiers / DoubleHP / PG_*); RPG hold 3972151362; SpawnNPC regular-cap fix; WeaponsLive=true; FastTravel removed; PreferMesh OFF; WE_Building* untouched.
 - **What ships (while live for owner):** ATTACK = auto-clear (seek→march→fight→chain→return, leash 300, no PivotTo/teleport during plan); SEND ARMY from map card (verdict, defender ETA + red marker, siege turrets→guards→gate→ATM, 5%/2.5% ArmyRaid loot); RECALL marches home; fairness a–g (online-only, 5 min SEND cooldown, 10 min protect, too-weak block, bully loot half); AutoGun HP; ARMY KILLS board (replaces TOP ARMY only when LiveForAll).
-- **Checks:** BuyPathStatic / claude_bud_job38 / run_army_orders_test / codebot_v143 / rojo — see publish commit.
+- **Checks:** BuyPathStatic PASS=7030 FAIL=0; claude_bud_job38 PASS (33 incl. Luau CLI); run_army_orders_test 0 failed; codebot_v143 PASS; rojo ok.
 - **Phone tests (Migrate to Latest Update, as shaunie6):**
   1. Open the walkie: a third row SEND / RECALL at the same 44 px cells and a status line. Press ATTACK near a camp: status SEEKING → MARCHING → FIGHTING → CLEARED → RETURNING; the block walks there and back in formation (no pops, no teleports).
   2. RECALL mid-march: the army turns and walks back.
