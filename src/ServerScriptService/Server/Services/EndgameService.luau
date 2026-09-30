@@ -189,6 +189,193 @@ function EndgameService.VaultMult(userId: number, army: boolean): number
 	return math.max(0, 1 - per * L)
 end
 
+-- ── phase 3: ELITE TRAINING (per soldier type; the owner's own army) ─────────────────────────────────────────────
+local deaths: { [number]: { [string]: number } } = {} -- trained soldiers that died and will respawn (a fee is due)
+local untrained: { [number]: { [string]: number } } = {} -- soldiers that came back untrained (the fee failed)
+local feeToast: { [number]: { At: number, Sum: number } } = {}
+
+function EndgameService.MaxMult(): number
+	return maxMult()
+end
+
+function EndgameService.EliteTier(profile: any, kind: string): number
+	local e = if typeof(profile) == "table" then profile.Endgame else nil
+	local m = if typeof(e) == "table" and typeof(e.Elite) == "table" then e.Elite else nil
+	if m == nil then
+		return 0
+	end
+	return math.min(nonNeg(m[kind]), #EndgameConfig.Elite.Tiers)
+end
+
+-- the unit record a spawn / re-dress uses: { Kind, Tier, Hp, Dmg, Scale, Untrained }
+function EndgameService.EliteFor(kind: string, tier: number, untrainedNow: boolean?): { [string]: any }
+	local s = EndgameConfig.EliteStats(kind, tier)
+	return { Kind = kind, Tier = tier, Hp = s.Hp, Dmg = s.Dmg, Scale = s.Scale, Untrained = untrainedNow == true }
+end
+
+function EndgameService.RetrainFee(tier: number): number
+	local row: any = EndgameConfig.Elite.Tiers[tier]
+	return if row then tonumber(row.RetrainFee) or 0 else 0
+end
+
+local function bump(map: { [number]: { [string]: number } }, uid: number, kind: string, n: number)
+	local m = map[uid]
+	if m == nil then
+		m = {}
+		map[uid] = m
+	end
+	m[kind] = math.max(0, (m[kind] or 0) + n)
+end
+
+-- SquadOrdersService: a trained soldier died (its respawn owes the re-train fee)
+function EndgameService.NoteUnitDeath(uid: number, kind: string, tier: number, wasUntrained: boolean?)
+	if wasUntrained == true then
+		bump(untrained, uid, kind, -1) -- it will ask again on its respawn
+	end
+	if tier > 0 or wasUntrained == true then
+		bump(deaths, uid, kind, 1)
+	end
+end
+
+--[[ SquadOrdersService.spawnUnit: this slot's soldier (nil while the Elite part is not live = today's soldier). A
+	respawn of a trained soldier that died pays its re-train fee first (a free re-train from the Instant Army Refill,
+	else Cash through the one purchase path); if the fee cannot be paid it comes back untrained. ]]
+function EndgameService.UnitElite(owner: Player, slot: number): { [string]: any }?
+	if not EndgameConfig.LiveFor(owner.UserId, "Elite") then
+		return nil
+	end
+	local profile = getProfile(owner)
+	if profile == nil then
+		return nil
+	end
+	local sf = if typeof(profile.BaseUpgrades) == "table" then nonNeg(profile.BaseUpgrades.SpecialForcesFacility) else 0
+	local kind = EndgameConfig.SlotKind(slot, sf)
+	local tier = EndgameService.EliteTier(profile, kind)
+	if tier <= 0 then
+		return EndgameService.EliteFor(kind, 0)
+	end
+	local d = deaths[owner.UserId]
+	if d and (d[kind] or 0) > 0 then
+		d[kind] -= 1
+		local ok = EndgameService.Purchase(owner, "Retrain", kind, true)
+		if not ok then
+			bump(untrained, owner.UserId, kind, 1)
+			notify(owner, string.format(EndgameConfig.Text.RetrainShort, 1), "Warn")
+			return EndgameService.EliteFor(kind, 0, true)
+		end
+		local fee = EndgameService.RetrainFee(tier)
+		local t = feeToast[owner.UserId]
+		if t == nil or clock() - t.At > 10 then
+			feeToast[owner.UserId] = { At = clock(), Sum = fee }
+			notify(owner, string.format("Re-trained a soldier: -$%dK", math.floor(fee / 1000)), "Info")
+		end
+	end
+	return EndgameService.EliteFor(kind, tier)
+end
+
+-- the untrained soldiers now: (count, the fee to re-train them all)
+function EndgameService.UntrainedNow(player: Player, profile: any): (number, number)
+	local m = untrained[player.UserId]
+	local n, fee = 0, 0
+	for kind, c in pairs(m or {}) do
+		if c > 0 then
+			n += c
+			fee += c * EndgameService.RetrainFee(EndgameService.EliteTier(profile, kind))
+		end
+	end
+	return n, fee
+end
+
+-- the Instant Army Refill (49 R$, SoldierService.ConsumeRefills after the receipt is saved): every soldier comes back
+-- at its trained tier with no fee (the untrained ones now, the dead ones on their respawn)
+function EndgameService.GrantRefill(player: Player)
+	if not EndgameConfig.LiveFor(player.UserId, "Elite") then
+		return
+	end
+	local profile = getProfile(player)
+	if profile == nil then
+		return
+	end
+	local owed = 0
+	for _, c in pairs(deaths[player.UserId] or {}) do
+		owed += c
+	end
+	local e = EndgameService.Data(profile)
+	e.FreeRetrains = math.min(nonNeg(e.FreeRetrains) + owed, EndgameConfig.Elite.MaxFreeRetrains)
+	untrained[player.UserId] = nil
+	if deps.DataService and deps.DataService.MarkDirty then
+		deps.DataService.MarkDirty(player)
+	end
+	local sq = deps.SquadOrdersService
+	if sq and sq._ReapplyElite then
+		pcall(sq._ReapplyElite, player)
+	end
+end
+
+--[[ The look of a trained soldier (server, on the unit model before it is parented, or in place): a helmet trim band in
+	the tier colour, 1 / 2 / 3 gold chevrons on the left arm (Mythic: a gold star plate), Heavy shoulder pads, the rig
+	scaled by the tier (Model:ScaleTo; the hip height follows), and the attributes the damage sites / client read. ]]
+function EndgameService.DressUnit(model: Model, humanoid: Humanoid, elite: { [string]: any }, hip0: number)
+	for _, c in ipairs(model:GetDescendants()) do
+		if c:IsA("BasePart") and c:GetAttribute("WE_EliteDress") == true then
+			c:Destroy()
+		end
+	end
+	local El = EndgameConfig.Elite
+	local tier = if elite.Untrained then 0 else elite.Tier
+	local head = model:FindFirstChild("Head", true)
+	local arm = model:FindFirstChild("Left Arm", true) or model:FindFirstChild("ArmL", true)
+	local torso = model:FindFirstChild("Torso", true) or model:FindFirstChild("Vest", true)
+	local function dress(name: string, host: Instance?, size: Vector3, offset: CFrame, color: Color3)
+		if host == nil or not host:IsA("BasePart") then
+			return
+		end
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.CFrame = host.CFrame * offset
+		p.Color = color
+		p.Material = Enum.Material.Metal
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Massless = true
+		p.CastShadow = false
+		p:SetAttribute("WE_EliteDress", true)
+		p.Parent = model
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = host
+		w.Part1 = p
+		w.Parent = p
+	end
+	if tier > 0 then
+		local trim = El.Trim[tier] or El.TrimAccent
+		dress("EliteTrim", head, Vector3.new(1.32, 0.18, 1.32), CFrame.new(0, 0.42, 0), trim)
+		if tier >= 4 then
+			dress("EliteStar", arm, Vector3.new(0.12, 0.5, 0.5), CFrame.new(-0.52, 0.55, 0) * CFrame.Angles(math.rad(45), 0, 0), El.TrimAccent)
+		else
+			for i = 1, tier do
+				dress("EliteChevron", arm, Vector3.new(0.1, 0.12, 0.7), CFrame.new(-0.52, 0.75 - i * 0.22, 0), El.TrimAccent)
+			end
+		end
+	end
+	if elite.Kind == "Heavy" then
+		for _, s in ipairs({ -1, 1 }) do
+			dress("HeavyPad", torso, Vector3.new(0.9, 0.35, 1.2), CFrame.new(1.05 * s, 1.0, 0), Color3.fromRGB(52, 60, 44))
+		end
+	end
+	local scale = if tier > 0 then elite.Scale else 1
+	pcall(function()
+		model:ScaleTo(scale)
+	end)
+	humanoid.HipHeight = hip0 * scale
+	model:SetAttribute("WE_EliteKind", elite.Kind)
+	model:SetAttribute("WE_EliteTier", tier)
+	model:SetAttribute("WE_EliteDmg", if elite.Untrained then (if elite.Kind == "SpecialForces" then El.SpecialForcesDmgMult else 1) else elite.Dmg)
+	model:SetAttribute("WE_EliteScale", scale)
+	model:SetAttribute("WE_EliteUntrained", if elite.Untrained then true else nil)
+end
+
 local function setAttr(player: Player, name: string, value: any)
 	if player:GetAttribute(name) ~= value then
 		player:SetAttribute(name, value)
@@ -381,6 +568,27 @@ function EndgameService.State(player: Player): { [string]: any }
 		out.Defence = rows
 		out.Rebuild = { Need = needsRebuild(profile), Price = EndgameService.RebuildPrice(player) }
 	end
+	if EndgameConfig.LiveFor(uid, "Elite") then
+		local rows = {}
+		for _, k in ipairs(EndgameConfig.Elite.Types) do
+			local t = EndgameService.EliteTier(profile, k)
+			local nextRow: any = EndgameConfig.Elite.Tiers[t + 1]
+			local need = if nextRow and nextRow.NeedRebirths and nonNeg(profile.Prestige) < nextRow.NeedRebirths then string.format(EndgameConfig.Text.NeedRebirths, nextRow.NeedRebirths) else nil
+			table.insert(rows, {
+				Id = k,
+				Name = EndgameConfig.Elite.Names[k] or k,
+				Tier = t,
+				TierName = if t > 0 then (EndgameConfig.Elite.Tiers :: any)[t].Name else "Recruit",
+				NextName = if nextRow then nextRow.Name else nil,
+				NextCost = if nextRow then nextRow.Cost else nil,
+				Pct = EndgameConfig.Elite.PctPerTier * t,
+				Need = need,
+			})
+		end
+		out.Elite = rows
+		local n, fee = EndgameService.UntrainedNow(player, profile)
+		out.Retrain = { Count = n, Price = fee, Free = nonNeg(EndgameService.Data(profile).FreeRetrains) }
+	end
 	local points: { [string]: any } = {}
 	for kind, st in pairs(PlazaServicesConfig.Stations) do
 		local pt = EndgameService.StationPoint(kind)
@@ -404,10 +612,85 @@ type Plan = { Key: string, Price: number, Apply: (profile: any) -> string, Log: 
 
 --[[ What a purchase would do: (plan) or (nil, why). Every rule the client might skip is checked here: the part is
 	live, the place (station / HQ console), not hurt, the requirement, the level cap. The price is config's. ]]
-function EndgameService._Plan(player: Player, profile: any, kind: string, id: string?): (Plan?, string?)
+function EndgameService._Plan(player: Player, profile: any, kind: string, id: string?, auto: boolean?): (Plan?, string?)
 	local T = EndgameConfig.Text
 	local uid = player.UserId
-	if kind == "Empire" then
+	if kind == "Elite" then
+		local k = id
+		if not EndgameConfig.LiveFor(uid, "Elite") then
+			return nil, T.NotLive
+		end
+		if typeof(k) ~= "string" or EndgameConfig.Elite.Names[k] == nil then
+			return nil, "Unknown"
+		end
+		if not EndgameService.AtStation(player, "Recruits") then
+			return nil, "Go to the Recruitment Office"
+		end
+		if EndgameService.RecentlyHurt(player) then
+			return nil, T.Hurt
+		end
+		local kk: string = k
+		local t = EndgameService.EliteTier(profile, kk) + 1
+		local row: any = EndgameConfig.Elite.Tiers[t]
+		if row == nil then
+			return nil, EndgameConfig.Elite.Names[kk] .. " maxed"
+		end
+		if row.NeedRebirths and nonNeg(profile.Prestige) < row.NeedRebirths then
+			return nil, string.format(T.NeedRebirths, row.NeedRebirths)
+		end
+		return {
+			Key = "elite",
+			Price = row.Cost,
+			Log = string.format("Recruits %s ok T=%d price=%d", kk, t, row.Cost),
+			Apply = function(p: any): string
+				local e = EndgameService.Data(p)
+				if typeof(e.Elite) ~= "table" then
+					e.Elite = {}
+				end
+				e.Elite[kk] = t
+				return string.format(T.EliteBought, EndgameConfig.Elite.Names[kk], row.Name)
+			end,
+		}
+	elseif kind == "Retrain" then
+		if not EndgameConfig.LiveFor(uid, "Elite") then
+			return nil, T.NotLive
+		end
+		local e = EndgameService.Data(profile)
+		if auto == true then
+			-- one respawning soldier of type `id` (called by UnitElite, never by the remote)
+			local k = if typeof(id) == "string" then id else "Infantry"
+			local fee = EndgameService.RetrainFee(EndgameService.EliteTier(profile, k))
+			local free = nonNeg(e.FreeRetrains) > 0
+			return {
+				Key = "retrain",
+				Price = if free then 0 else fee,
+				Log = string.format("Retrain auto %s fee=%d free=%s", k, fee, tostring(free)),
+				Apply = function(p: any): string
+					if free then
+						local d = EndgameService.Data(p)
+						d.FreeRetrains = math.max(0, nonNeg(d.FreeRetrains) - 1)
+					end
+					return T.Retrained
+				end,
+			}
+		end
+		if not EndgameService.AtStation(player, "Recruits") then
+			return nil, "Go to the Recruitment Office"
+		end
+		local n, fee = EndgameService.UntrainedNow(player, profile)
+		if n <= 0 then
+			return nil, "Every soldier is trained"
+		end
+		return {
+			Key = "retrain",
+			Price = fee,
+			Log = string.format("Recruits retrain ok n=%d price=%d", n, fee),
+			Apply = function(_p: any): string
+				untrained[uid] = nil
+				return T.Retrained
+			end,
+		}
+	elseif kind == "Empire" then
 		if not EndgameConfig.LiveFor(uid, "EmpireLevel") then
 			return nil, T.NotLive
 		end
@@ -522,12 +805,12 @@ end
 
 --[[ THE one purchase path. kind: "Empire" | "Tier" | "Defence" (id = the track) | "Rebuild". The client sends only
 	kind / id. Returns (ok, message). ]]
-function EndgameService.Purchase(player: Player, kind: string, id: string?): (boolean, string)
+function EndgameService.Purchase(player: Player, kind: string, id: string?, auto: boolean?): (boolean, string)
 	local profile = getProfile(player)
 	if profile == nil then
 		return false, "Loading"
 	end
-	local plan, why = EndgameService._Plan(player, profile, kind, id)
+	local plan, why = EndgameService._Plan(player, profile, kind, id, auto)
 	if plan == nil then
 		return false, why or "Unknown"
 	end
@@ -541,9 +824,11 @@ function EndgameService.Purchase(player: Player, kind: string, id: string?): (bo
 		return false, string.format(EndgameConfig.Text.Short, short(price - cash))
 	end
 	local key = plan.Key
-	local ok, err = eco.SpendCash(player, price, "endgame_" .. key)
-	if not ok then
-		return false, tostring(err or "SpendFailed")
+	if price > 0 then -- a free re-train (the Instant Army Refill) spends nothing
+		local ok, err = eco.SpendCash(player, price, "endgame_" .. key)
+		if not ok then
+			return false, tostring(err or "SpendFailed")
+		end
 	end
 	profile = getProfile(player) or profile
 	local msg = plan.Apply(profile)
@@ -570,6 +855,15 @@ function EndgameService.Purchase(player: Player, kind: string, id: string?): (bo
 		local ss = deps.SoldierService
 		if key == "tier" and ss and ss.PushState then
 			pcall(ss.PushState, player)
+		end
+	end
+	if (key == "elite" or key == "retrain") and auto ~= true then
+		-- the living soldiers take the new tier in place (HP ratio kept, look re-dressed)
+		local sq = deps.SquadOrdersService
+		if sq and sq._ReapplyElite then
+			task.defer(function()
+				pcall(sq._ReapplyElite, player)
+			end)
 		end
 	end
 	return true, msg
@@ -823,6 +1117,12 @@ end
 function EndgameService._Own(profile: any, uid: number)
 	profileOwner[profile] = uid
 end
+function EndgameService._Untrained(uid: number): { [string]: number }?
+	return untrained[uid]
+end
+function EndgameService._Deaths(uid: number): { [string]: number }?
+	return deaths[uid]
+end
 
 function EndgameService.Init(d: { [string]: any })
 	deps = d
@@ -844,6 +1144,9 @@ function EndgameService.Init(d: { [string]: any })
 	end
 	Players.PlayerRemoving:Connect(function(p: Player)
 		hurtAt[p.UserId] = nil
+		deaths[p.UserId] = nil
+		untrained[p.UserId] = nil
+		feeToast[p.UserId] = nil
 	end)
 	if d.DataService and d.DataService.OnProfileLoaded then
 		d.DataService.OnProfileLoaded(function(player: Player)

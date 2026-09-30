@@ -47,7 +47,8 @@ local PlazaServicesConfig = {
 			NpcAt = Vector3.new(0, 0.3, 1.6),
 			Parts = 32,
 		},
-		Recruits = { Row = "NE_E1", Part = "Elite", Title = "RECRUITMENT OFFICE", Sign = "RECRUITS", Npc = "Drill Sergeant", Action = "Elite Training", NpcAt = Vector3.new(-2.5, 0.3, 1.1), Parts = 0 },
+		-- phase 3: the cafe facade (teal awning). A counter with lockers behind it, the Drill Sergeant, a flag stand.
+		Recruits = { Row = "NE_E1", Part = "Elite", Title = "RECRUITMENT OFFICE", Sign = "RECRUITS", Npc = "Drill Sergeant", Action = "Elite Training", NpcAt = Vector3.new(-2.5, 0.3, 1.1), Parts = 37 },
 		Armory = { Row = "SW_S1", Part = "Mastery", Title = "ARMORY WORKSHOP", Sign = "ARMORY", Npc = "Gunsmith", Action = "Gun Upgrades", NpcAt = Vector3.new(-2.5, 0.3, 1.1), Parts = 0 },
 		Intel = { Row = "NW_W1", Part = "Contracts", Title = "INTEL OFFICE", Sign = "INTEL", Npc = "Signals Officer", Action = "Contracts", NpcAt = Vector3.new(-2.5, 0.3, 1.1), Parts = 0 },
 	} :: { [string]: any },

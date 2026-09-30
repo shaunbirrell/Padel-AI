@@ -596,7 +596,7 @@ end
 
 -- claude-bud JOB 39: profile.Endgame (JOB 39 §5), kept through both rebirth paths (PrestigeService never clears it).
 -- Every number is a whole >= 0 capped at its track's end; each map keeps only string keys.
-local ENDGAME_NUMS = { EmpireLevel = 30, BaseTier = 5, Medicine = 5, MedKits = 3, Revive = 1, HeistKit = 3 }
+local ENDGAME_NUMS = { EmpireLevel = 30, BaseTier = 5, Medicine = 5, MedKits = 3, Revive = 1, HeistKit = 3, FreeRetrains = 200 }
 local ENDGAME_MAPS = { Elite = 4, Defence = 10, Workshop = 5, Mastery = 5, Warheads = 1 }
 local function ensureEndgameFields(profile: any)
 	local e = if typeof(profile.Endgame) == "table" then profile.Endgame else {}

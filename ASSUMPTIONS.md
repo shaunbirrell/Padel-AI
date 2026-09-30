@@ -9797,3 +9797,17 @@ ds_territories.luau T3):
 - **Base Tier soldiers:** they show on the army cap at the next soldier push (SoldierService has no public push).
 - **Tier look:** the Base Tier model is shared (everyone sees a base's tier) and is removed when its owner leaves the
   plot.
+
+## 2026-09-30 — claude-bud JOB 39 phase 3: Elite Training
+- **Type split:** the split is by field SLOT (slot % 5 = Heavy, slot % 10 = Special Forces with the SF Facility L3+).
+  The field army is a handful of units, so a 5-unit army has 1 Heavy.
+- **Heavy speed:** Heavy walks at the normal speed (the spec's -10 % speed would pull a Heavy out of the steered block;
+  "keep MarchSpeed so the block stays coherent").
+- **Re-train fee:** the fee is the only refill cost. The game does not spend soldiers on death (units respawn free), so
+  §2.4's "$500 + fee" is the fee alone.
+- **No insignia swap for SF / Heavy rigs:** SF and Heavy keep the army's rig (the SpecialForces VisualKind has no rig
+  model, a Part kit would look worse). Their type shows as shoulder pads (Heavy) and in the Recruitment Office rows.
+- **Aura quality:** the Mythic aura is client-only and needs Graphics Quality >= 4; "automatic" quality counts only on a
+  keyboard device (PreferredInput), so phones never pay for it.
+- **Retrain timing:** a training buy / RE-TRAIN / refill re-applies to living soldiers in place (MaxHealth rescaled with
+  the HP ratio kept, Model:ScaleTo in place). No move and no PivotTo, so JOB 38's formation standard holds.

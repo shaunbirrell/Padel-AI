@@ -43,6 +43,26 @@ local function cfg(): { [string]: any }
 	return if typeof(c) == "table" then c else {}
 end
 
+-- claude-bud JOB 39: Follow3 with the spacing keys x `scale` (cached per scale; the same table while unchanged)
+local scaledCache: { [number]: { [string]: any } } = {}
+function ArmyController.ScaledCfg(c: { [string]: any }, scale: number): { [string]: any }
+	local key = math.floor(scale * 100 + 0.5)
+	local hit = scaledCache[key]
+	if hit and hit.__src == c then
+		return hit
+	end
+	local out = table.clone(c)
+	for _, k in ipairs({ "FirstRowStuds", "RowSpacing", "ColSpacing", "AisleStuds", "LaneHalfStuds" }) do
+		local v = c[k]
+		if typeof(v) == "number" then
+			out[k] = v * scale
+		end
+	end
+	out.__src = c
+	scaledCache[key] = out
+	return out
+end
+
 local function num(key: string, default: number): number
 	local v = cfg()[key]
 	return if typeof(v) == "number" then v else default
@@ -465,6 +485,17 @@ local function stepArmy(player: Player, st: any, now: number)
 	local snap = jumped or fresh or prevState ~= "FOLLOW" and not (wasDriven and (prevState == "ATTACK" or prevState == "FOLLOW"))
 	a.Driven = true
 	local c = cfg()
+	-- claude-bud JOB 39: trained soldiers are bigger: rows / columns / the aisle grow with the largest scale in the block
+	local es = 1
+	for _, u in ipairs(living) do
+		local s = u.Model:GetAttribute("WE_EliteScale")
+		if typeof(s) == "number" and s > es then
+			es = s
+		end
+	end
+	if es > 1 then
+		c = ArmyController.ScaledCfg(c, es)
+	end
 	local tgt = if attackOn then st._acTarget else nil
 	local troot: BasePart? = if tgt then tgt.Root else nil
 	a.F.Attack = if troot and troot.Parent then { Pos = troot.Position } else nil

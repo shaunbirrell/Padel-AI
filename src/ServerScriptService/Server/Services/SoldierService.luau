@@ -279,6 +279,13 @@ function SoldierService.ConsumeRefills(player: Player)
 	if NotificationService then
 		NotificationService.Notify(player, string.format("Army refilled: %d/%d", profile.Soldiers, cap), "Reward")
 	end
+	-- claude-bud JOB 39 (APPROVED §9 b): the refill also re-trains every soldier at its tier for free (not live = nothing)
+	local okEG, EGS = pcall(function(): any
+		return require(script.Parent.EndgameService)
+	end)
+	if okEG and EGS and EGS.GrantRefill then
+		pcall(EGS.GrantRefill, player)
+	end
 end
 
 function SoldierService.Push(player: Player)

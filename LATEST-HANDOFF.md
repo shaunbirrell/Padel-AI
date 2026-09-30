@@ -30,6 +30,62 @@
 - **Phone tests (Migrate to Latest Update, as shaunie6):** see PHASE 2 section below (HQ Upgrade → Fort..Capital look; ENGINEERS Defences; rebuild after breach; EMPIRE rows + PIN).
 - **Next:** Studio §11 proof still owed; do NOT set Endgame OwnerFirst=false until owner asks. Claude already pushed phase 3 tip `1cd39a6` on desktop-bud (Elite Training) — not in this ship; Code Bot can cherry-pick next. JOBs 40–42 still queued.
 
+## claude-bud JOB 39 PHASE 3 (2026-09-30): ELITE TRAINING + Recruitment Office + re-train fees (branch `claude/desktop-bud`)
+Owner-first (`EndgameConfig.Parts.Elite` = true). Off / not live: `UnitElite` returns nil, so today's soldier exactly.
+
+**1. Soldier types (§2.4)**
+- The field army was one kind. Now every 5th slot is **Heavy** (+20 % HP, shoulder pads) and every 10th is **Special
+  Forces** (+10 % damage) once the SF Facility is L3+.
+- MarchSpeed and walk speed are unchanged (the block stays coherent; the spec's -10 % Heavy speed is not applied, see
+  ASSUMPTIONS).
+
+**2. Training (the Recruitment Office in NE_E1, the cafe)**
+- **Price:** per type, Veteran 2M / Elite 8M / Legendary 30M / Mythic 100M (Mythic needs R30). +8 % HP and damage per
+  tier.
+- **Where it applies:**
+  - on the server at spawn: Humanoid MaxHealth / Health, research x elite capped at MaxMult 3;
+  - at BOTH unit damage sites through the one path: `SquadOrdersService._UnitDmg` = SoldierDamage research x the unit's
+    WE_EliteDmg, capped. PlayerMaxDps is still applied downstream by CombatService;
+  - in the JOB 38 army power (SEND verdict).
+  - A buy re-applies to the living soldiers in place (HP ratio kept, no move).
+- **Look:** a helmet trim band (grey / green / gold / black-gold), 1-3 gold chevrons on the left arm (Mythic: a star
+  plate).
+- **Size:** Model:ScaleTo 1.05 / 1.10 / 1.18 / 1.28, with HipHeight set to 2 x scale. The rig's Motor6Ds scale with it,
+  so the client RigAnimator keeps animating.
+- **Aura:** Mythic gets a client-only gold ParticleEmitter (Rate 3, LightEmission 0.3), only at Graphics Quality >= 4
+  (automatic quality: keyboard devices only).
+- **Formation:** ArmyController scales RowSpacing / ColSpacing / AisleStuds / FirstRowStuds by the largest soldier
+  scale in the block. Nothing else in the steering changed (no PivotTo, no snap).
+
+**3. Re-train fees (the recurring sink)**
+- A trained soldier that dies owes its tier's fee on the respawn: 5k / 15k / 40k / 100k, paid automatically through the
+  one purchase path ("endgame_retrain").
+- Short of cash: it comes back UNTRAINED (plain look, base stats) and the Recruitment Office shows "RE-TRAIN n
+  SOLDIER(S) $x".
+- The existing 49 R$ **Instant Army Refill** (same product / price / Id, APPROVED §9 b): in SoldierService.ConsumeRefills
+  after the receipt is saved, every soldier is re-trained free (untrained ones now, the dead ones on their respawn:
+  profile.Endgame.FreeRetrains).
+- The respawn itself stays free, as today (soldiers are not lost on death in this game): the "$500" part of §2.4 does
+  not apply.
+
+**Checks**
+- run_endgame_test (+ phase 3): the tier maths, the type split, every purchase, the auto fee / untrained / RE-TRAIN /
+  refill flow, the look (chevrons / star / pads / scale / hip height), the Recruitment Office build (37 parts, 1 light,
+  1 sign), static pins on both damage sites + the formation spacing.
+- `[EliteTest] tier=0..4 maxHP x1.00..x1.32 dmg x1.00..x1.32 TTK 100 %..76 %` (headless arithmetic; the §11.2 Studio
+  2-player TTK log is owed).
+- **Retired pin** (claude-bud comment + replacement): claude_bud_job26's exact unit-hit line. It is now the same
+  ApplyUnitHit call with `_UnitDmg`.
+- BuyPathStatic PASS=7087 FAIL=0; all 16 sims 0 failed; rojo ok; no new LSP errors; remote audit OK.
+
+**Test ON HIS PHONE**
+1. Plaza, the teal-awning cafe: the RECRUITS sign, the Drill Sergeant behind a counter with lockers. Tap "Elite
+   Training": 3 rows (Infantry / Heavy / Special Forces). Buy Infantry Veteran.
+2. Your soldiers grow a little, get a grey helmet band and 1 chevron. Keep buying: green / gold bands, 2-3 chevrons,
+   bigger soldiers, the block spacing widens. Walk and turn: nobody pops or teleports.
+3. Lose a trained soldier in a fight: on its respawn "Re-trained a soldier: -$5K". With no cash it comes back plain;
+   RE-TRAIN at the office.
+4. Buy the Instant Army Refill: every soldier is back trained with no fee.
 ## claude-bud JOB 39 PHASE 2 (2026-09-30): BASE TIER + DEFENCE TREE + Engineering Bureau + instant rebuild (branch `claude/desktop-bud`)
 Owner-first (`EndgameConfig.Parts.BaseTier` / `Defence` now true; `Live.OwnerFirst` still true). Per CONTINUE-NOW.md the
 §11 Studio proof is owed later, not blocking. Off / not live: every gate / turret / loot / soldier number is the old one

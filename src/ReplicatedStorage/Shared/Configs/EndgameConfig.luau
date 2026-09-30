@@ -28,7 +28,7 @@ local EndgameConfig = {
 		EmpireLevel = true, -- phase 1: §2.2 + the Command Office
 		BaseTier = true, -- phase 2: §2.3 + the HQ UPGRADE console
 		Defence = true, -- phase 2: §2.5 + the Engineering Bureau + instant rebuild
-		Elite = false, -- phase 3
+		Elite = true, -- phase 3: §2.4 + the Recruitment Office + re-train fees
 		Hospital = false, -- phase 4
 		Mastery = false, -- phase 4
 		Workshop = false, -- phase 4
@@ -93,8 +93,16 @@ local EndgameConfig = {
 			{ Name = "Mythic", Cost = 100_000_000, RetrainFee = 100_000, Scale = 1.28, NeedRebirths = 30 },
 		},
 		PctPerTier = 8, -- +8 % HP and damage per tier
-		HeavyEvery = 5,
-		SpecialForcesEvery = 10,
+		HeavyEvery = 5, -- every 5th field slot is Heavy (+20 % HP) ...
+		SpecialForcesEvery = 10, -- ... every 10th Special Forces (+10 % damage) once the SF Facility is L3+
+		SpecialForcesNeedFacility = 3,
+		HeavyHpMult = 1.2,
+		SpecialForcesDmgMult = 1.1,
+		Names = { Infantry = "Infantry", Heavy = "Heavy", SpecialForces = "Special Forces" } :: { [string]: string },
+		-- the tier look: helmet trim colour, chevrons (4 = the Mythic star), the Mythic aura (client, quality >= 4)
+		Trim = { Color3.fromRGB(150, 154, 160), Color3.fromRGB(70, 150, 70), Color3.fromRGB(214, 178, 64), Color3.fromRGB(28, 26, 22) },
+		TrimAccent = Color3.fromRGB(214, 178, 64),
+		MaxFreeRetrains = 200,
 	},
 
 	-- §2.5 DEFENCE TREE (phase 2): Cost(L) = round(1M x 1.6^(L-1), to 100k)
@@ -203,6 +211,9 @@ local EndgameConfig = {
 		NeedTier = "Needs Base Tier %d",
 		NeedRebirths = "Needs %d rebirths",
 		NeedCC = "Needs Command Center L%d",
+		EliteBought = "%s trained: %s!",
+		Retrained = "Soldiers re-trained",
+		RetrainShort = "%d soldier(s) back untrained: re-train at the Recruitment Office",
 		Short = "Need $%s",
 		Max = "Empire Level maxed",
 		NotLive = "Not open yet",
@@ -342,6 +353,29 @@ function EndgameConfig.TierEffects(t: number): { GateHpPct: number, SoldierCap: 
 		out.RebuildSeconds += tonumber(r.RebuildSeconds) or 0
 	end
 	return out
+end
+
+-- §2.4 one soldier type's multipliers at a training tier (0 = untrained): HP, damage, rig scale
+function EndgameConfig.EliteStats(kind: string, tier: number): { Hp: number, Dmg: number, Scale: number }
+	local El = EndgameConfig.Elite
+	local t = math.clamp(level(tier), 0, #El.Tiers)
+	local m = 1 + El.PctPerTier * t / 100
+	local hp = m * (if kind == "Heavy" then El.HeavyHpMult else 1)
+	local dmg = m * (if kind == "SpecialForces" then El.SpecialForcesDmgMult else 1)
+	local row: any = El.Tiers[t]
+	return { Hp = hp, Dmg = dmg, Scale = if row then tonumber(row.Scale) or 1 else 1 }
+end
+
+-- §2.4 the field slot's soldier type
+function EndgameConfig.SlotKind(slot: number, sfFacilityLevel: number): string
+	local El = EndgameConfig.Elite
+	local s = level(slot)
+	if s > 0 and s % El.SpecialForcesEvery == 0 and level(sfFacilityLevel) >= El.SpecialForcesNeedFacility then
+		return "SpecialForces"
+	elseif s > 0 and s % El.HeavyEvery == 0 then
+		return "Heavy"
+	end
+	return "Infantry"
 end
 
 -- §2.5 the Base Tier a Defence level needs (0 = none)

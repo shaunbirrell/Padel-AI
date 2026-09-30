@@ -62,7 +62,7 @@ _j39("\tlocal cost = def.Costs[targetLevel]\n\tif not cost then\n\t\treturn { Ok
      "the one structure buy path charges the scaled price (BaseService.PurchaseUpgrade)")
 _j39("Endgame" not in _j39_src(_CF + "BalanceConfig.luau"), "structure income reads the raw Costs (income unchanged)")
 # the one purchase path; the client sends only kind / id
-_j39("function EndgameService.Purchase(player: Player, kind: string, id: string?): (boolean, string)" in _ES
+_j39("function EndgameService.Purchase(player: Player, kind: string, id: string?, auto: boolean?): (boolean, string)" in _ES
      and _ES.count("eco.SpendCash(") == 1 and 'local ok, err = eco.SpendCash(player, price, "endgame_" .. key)' in _ES
      and "local price = EndgameConfig.EmpireCost(L + 1)" in _ES and "Price = nx.Cost," in _ES,
      "ONE purchase path, ONE SpendCash (\"endgame_\" .. key); every price comes from config (EndgameService._Plan)")
@@ -121,3 +121,17 @@ if _luau:
     _j39(_r.returncode == 0 and "ENDGAME TEST: 0 failed" in _r.stdout, "run_endgame_test.py (real config / service / station builder / summary)")
 else:
     print("SKIP CLAUDE-BUD J39: Luau CLI test (set LUAU)")
+
+# phase 3: Elite Training (claude-bud JOB 39): server-side stats through the one damage path, the look, the refill
+_SQ39 = _j39_code(_SV + "Services/SquadOrdersService.luau")
+_j39("\t\tElite = true," in _EGC and "Recruits = { Row = \"NE_E1\", Part = \"Elite\"" in _j39_src(_CF + "PlazaServicesConfig.luau"), "phase 3 part on (Elite) + the Recruitment Office in NE_E1")
+_j39("local elite = if eg and eg.UnitElite then eg.UnitElite(owner, slot) else nil" in _SQ39
+     and "armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player), credit)" in _SQ39
+     and "local base = armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player)" in _SQ39
+     and "return math.min(r * e, tonumber((require(Shared.Configs.ResearchConfig) :: any).MaxMult) or 3)" in _SQ39,
+     "Elite HP at spawn, Elite damage at both unit hit sites (research x elite, capped at MaxMult); PlayerMaxDps untouched downstream")
+_j39("if not EndgameConfig.LiveFor(owner.UserId, \"Elite\") then\n\t\treturn nil" in _ES, "OFF = old: no Elite part live = today's soldier (UnitElite nil)")
+_j39("model:ScaleTo(scale)" in _ES and "humanoid.HipHeight = hip0 * scale" in _ES, "trained soldiers are scaled (Model:ScaleTo) with the hip height kept right")
+_j39("pcall(EGS.GrantRefill, player)" in _j39_code(_SV + "Services/SoldierService.luau"), "the Instant Army Refill (same product / price / Id) also pays the re-train fees (APPROVED §9 b)")
+_j39("c = ArmyController.ScaledCfg(c, es)" in _j39_code(_SV + "Modules/ArmyController.luau"), "formation spacing x the largest soldier scale in the block")
+_j39("e.Rate = 3" in _ECT and "e.LightEmission = 0.3" in _ECT and "return lvl >= 4" in _ECT, "the Mythic aura: Rate 3, LightEmission 0.3, client-only, Graphics Quality >= 4")

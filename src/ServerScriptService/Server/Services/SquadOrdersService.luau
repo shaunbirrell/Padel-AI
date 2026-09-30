@@ -72,6 +72,7 @@ SquadOrdersService._AF = require(script.Parent.Parent.Modules.ArmyFollow)
 SquadOrdersService._AC = require(script.Parent.Parent.Modules.ArmyController)
 SquadOrdersService._SC = require(script.Parent.Parent.Modules.SoldierController)
 SquadOrdersService._Plan = nil :: any -- claude-bud JOB 38: ArmyPlan (set by ArmyPlan.Init; nil = no plans, today's orders)
+SquadOrdersService._Endgame = nil :: any -- claude-bud JOB 39: EndgameService (Elite Training; nil / not live = today's soldiers)
 local escortAimOnly = false -- v114: set around escortUnit for a Follow3 owner: shoot / face only, never walk
 SquadOrdersService._AFOn = false
 
@@ -882,6 +883,12 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 
 	local humanoid = Instance.new("Humanoid")
 	humanoid.MaxHealth = math.floor(armyHealthBase() * researchMult(owner, "SoldierHealth") * superMult(owner) + 0.5) -- v69 research; JOB 36 Super Soldiers
+	-- claude-bud JOB 39 phase 3: the slot's type + Elite tier (HP x the tier, with the research bonus capped at MaxMult)
+	local eg = SquadOrdersService._Endgame
+	local elite = if eg and eg.UnitElite then eg.UnitElite(owner, slot) else nil
+	if elite then
+		humanoid.MaxHealth = math.floor(armyHealthBase() * math.min(researchMult(owner, "SoldierHealth") * (if elite.Untrained then 1 else elite.Hp), eg.MaxMult()) * superMult(owner) + 0.5)
+	end
 	humanoid.Health = humanoid.MaxHealth
 	humanoid.WalkSpeed = OrdersConfig.UnitWalkSpeed or 14
 	humanoid.AutoRotate = true
@@ -899,6 +906,9 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 		pcall(function()
 			VisualAssetService.TryAttachCharacterVisual(model, OrdersConfig.VisualKind or "Infantry")
 		end)
+	end
+	if elite then
+		pcall(eg.DressUnit, model, humanoid, elite, 2) -- claude-bud JOB 39: insignia, trim, the tier scale (HipHeight 2 x scale)
 	end
 	-- Friendly only — do NOT tag WE_NPC (CombatNPC would aggro players)
 	CollectionService:AddTag(model, TAG_SQUAD)
@@ -973,6 +983,9 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 				SquadOrdersService.SyncArmy(plr)
 			end
 		end)
+		if elite and eg and eg.NoteUnitDeath then -- claude-bud JOB 39: its respawn owes the re-train fee
+			pcall(eg.NoteUnitDeath, owner.UserId, elite.Kind, elite.Tier, model:GetAttribute("WE_EliteUntrained") == true)
+		end
 		-- claude-bud JOB 5d: his last field soldier just died: one army prompt (MonetizationConfig.Placement)
 		task.defer(function()
 			local stNow = squadByUser[owner.UserId]
@@ -1442,7 +1455,7 @@ local function unitShoot(player: Player, unit: SquadUnit, th: Humanoid, now: num
 	if typeof(setShooter) == "function" then
 		setShooter(unit.Model)
 	end
-	local ok, dealt = pcall(apply, player, th, armyDamageBase() * researchMult(player, "SoldierDamage") * armyBoostMult(player), credit) -- v69 research; JOB 29 boost
+	local ok, dealt = pcall(apply, player, th, armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player), credit) -- v69 research; JOB 29 boost; JOB 39 elite
 	if typeof(setShooter) == "function" then
 		setShooter(nil)
 	end
@@ -2957,7 +2970,7 @@ local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: Base
 	unit.LastFireAt = now
 	local kind = if part ~= tgt.Root and part:GetAttribute("GateGuardPart") ~= true then "Gate" else tgt.Kind
 	local name = if tgt.Player then tgt.Player.Name elseif kind == "Gate" then "gate" else "guard"
-	local base = armyDamageBase() * researchMult(player, "SoldierDamage") * armyBoostMult(player) -- claude-bud JOB 29 boost
+	local base = armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player) -- claude-bud JOB 29 boost; JOB 39 elite
 	if rng:NextNumber() >= unitHitChance((part.Position - unit.Root.Position).Magnitude) then
 		hitLog(player, unit, kind, name, 0, 0, "miss")
 		return false
@@ -3814,7 +3827,9 @@ function SquadOrdersService.UnitPower(player: Player): (number, number, number)
 	end
 	local hp = armyHealthBase() * researchMult(player, "SoldierHealth") * superMult(player)
 	local dps = armyDamageBase() * researchMult(player, "SoldierDamage") * armyBoostMult(player) * rate
-	return units, hp, dps
+	-- claude-bud JOB 39: trained armies are stronger in the SEND verdict (the living units' average Elite HP / damage)
+	local eh, ed = SquadOrdersService._EliteAvg(st)
+	return units, hp * eh, dps * ed
 end
 
 -- army fix (ArmyConfig.Gate): may this owner's army open his gate at `pos`? Only while his squad FOLLOWS him (never
@@ -3880,6 +3895,60 @@ function SquadOrdersService.ApplyResearch(player: Player) -- v69 research: resca
 	SquadOrdersService.SyncArmy(player)
 end
 
+-- claude-bud JOB 39: a unit's damage factor = the SoldierDamage research x its Elite damage, capped at MaxMult
+function SquadOrdersService._UnitDmg(player: Player, unit: SquadUnit): number
+	local r = researchMult(player, "SoldierDamage")
+	local e = tonumber(unit.Model:GetAttribute("WE_EliteDmg")) or 1
+	if e == 1 then
+		return r
+	end
+	return math.min(r * e, tonumber((require(Shared.Configs.ResearchConfig) :: any).MaxMult) or 3)
+end
+
+-- claude-bud JOB 39: the living units' average Elite HP / damage factors (1, 1 without training)
+function SquadOrdersService._EliteAvg(st: SquadState?): (number, number)
+	local eg = SquadOrdersService._Endgame
+	if st == nil or eg == nil then
+		return 1, 1
+	end
+	local n, h, d = 0, 0, 0
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Humanoid.Health > 0 then
+			n += 1
+			local kind = u.Model:GetAttribute("WE_EliteKind")
+			local tier = tonumber(u.Model:GetAttribute("WE_EliteTier")) or 0
+			local s = if typeof(kind) == "string" then (require(Shared.Configs.EndgameConfig) :: any).EliteStats(kind, tier) else nil
+			h += if s then s.Hp else 1
+			d += tonumber(u.Model:GetAttribute("WE_EliteDmg")) or 1
+		end
+	end
+	if n == 0 then
+		return 1, 1
+	end
+	return h / n, d / n
+end
+
+-- claude-bud JOB 39: a training buy / re-train / Instant Army Refill: every living soldier takes its type's tier now
+-- (MaxHealth rescaled keeping the HP ratio, the look re-dressed; no move, no PivotTo)
+function SquadOrdersService._ReapplyElite(player: Player)
+	local eg = SquadOrdersService._Endgame
+	local st = squadByUser[player.UserId]
+	local profile = DataService and DataService.GetProfile(player)
+	if eg == nil or st == nil or profile == nil then
+		return
+	end
+	for _, u in ipairs(st.Units) do
+		local kind = u.Model:GetAttribute("WE_EliteKind")
+		if u.Alive and u.Humanoid.Health > 0 and typeof(kind) == "string" then
+			local elite = eg.EliteFor(kind, eg.EliteTier(profile, kind))
+			local ratio = u.Humanoid.Health / math.max(u.Humanoid.MaxHealth, 1)
+			u.Humanoid.MaxHealth = math.floor(armyHealthBase() * math.min(researchMult(player, "SoldierHealth") * elite.Hp, eg.MaxMult()) * superMult(player) + 0.5)
+			u.Humanoid.Health = u.Humanoid.MaxHealth * ratio
+			pcall(eg.DressUnit, u.Model, u.Humanoid, elite, 2)
+		end
+	end
+end
+
 function SquadOrdersService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	SoldierService = deps.SoldierService
@@ -3891,6 +3960,7 @@ function SquadOrdersService.Init(deps: { [string]: any })
 	VisualAssetService = deps.VisualAssetService
 	BaseService = deps.BaseService
 	ResearchService = deps.ResearchService -- v69 research
+	SquadOrdersService._Endgame = deps.EndgameService -- claude-bud JOB 39
 	CombatService = deps.CombatService -- F6 novice shield (Init order does not matter: used only on an order)
 	if CombatService and CombatService.SetUnitHitHandler then
 		CombatService.SetUnitHitHandler(playerHitUnit) -- v133: player guns hurt enemy soldiers (THE shared rule in CombatService)

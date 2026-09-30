@@ -219,6 +219,51 @@ Builders.Engineers = function(f: CFrame, st: any): (Model, Part)
 	return m, head
 end
 
+-- phase 3: the Recruitment Office inside NE_E1 (the cafe): a service counter, lockers on the left wall, the Drill
+-- Sergeant behind the counter, a flag stand, a practice-rifle rack at the back, a bench, a rug, a stool, one lamp.
+Builders.Recruits = function(house: CFrame, st: any): (Model, Part)
+	local m = Instance.new("Model")
+	m.Name = "Station_Recruits"
+	local wood = Color3.fromRGB(96, 66, 42)
+	local steel = Color3.fromRGB(62, 66, 70)
+	local olive = Color3.fromRGB(80, 92, 62)
+	local cc = house * CFrame.new(-3, 0.3, -1.2)
+	put(m, "CounterBody", Vector3.new(6, 3.2, 1.4), cc * CFrame.new(0, 1.6, 0), wood, M.WoodPlanks, true)
+	put(m, "CounterTop", Vector3.new(6.4, 0.2, 1.8), cc * CFrame.new(0, 3.3, 0), Color3.fromRGB(200, 196, 186), M.Marble)
+	put(m, "CounterKick", Vector3.new(6, 0.4, 0.1), cc * CFrame.new(0, 0.2, -0.75), Color3.fromRGB(40, 36, 30), M.SmoothPlastic)
+	put(m, "Clipboard", Vector3.new(0.8, 0.05, 1.0), cc * CFrame.new(-1.6, 3.43, -0.2) * CFrame.Angles(0, math.rad(12), 0), Color3.fromRGB(230, 226, 214), M.SmoothPlastic)
+	put(m, "HelmetDisplay", Vector3.new(1.1, 0.6, 1.2), cc * CFrame.new(1.8, 3.7, 0), olive, M.Metal, false, Enum.PartType.Ball)
+	for i, z in ipairs({ -4.2, -3.0, -1.8 }) do
+		local lk = house * CFrame.new(-7.25, 0.3, z)
+		put(m, "Locker", Vector3.new(1.3, 5, 1.15), lk * CFrame.new(0, 2.5, 0), if i == 2 then Color3.fromRGB(70, 84, 64) else olive, M.Metal)
+		put(m, "LockerVents", Vector3.new(0.06, 0.8, 0.8), lk * CFrame.new(0.66, 4.1, 0), steel, M.DiamondPlate)
+	end
+	local head = figure(m, house * CFrame.new(st.NpcAt), Color3.fromRGB(64, 78, 52), Color3.fromRGB(214, 176, 72), Color3.fromRGB(40, 52, 36))
+	local fs = house * CFrame.new(-6.6, 0.3, -6.4)
+	put(m, "FlagBase", Vector3.new(1.4, 0.3, 1.4), fs * CFrame.new(0, 0.15, 0), steel, M.Metal)
+	put(m, "FlagPole", Vector3.new(6, 0.2, 0.2), fs * CFrame.new(0, 3.3, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(200, 170, 80), M.Metal, false, Enum.PartType.Cylinder)
+	put(m, "FlagBanner", Vector3.new(0.08, 2.2, 1.6), fs * CFrame.new(0, 4.8, 0.9), Color3.fromRGB(38, 60, 88), M.Fabric)
+	local rk = house * CFrame.new(1.5, 0.3, 7.3)
+	put(m, "RackFrame", Vector3.new(3.2, 3.6, 0.4), rk * CFrame.new(0, 1.8, 0), wood, M.Wood)
+	for i, x in ipairs({ -0.9, 0, 0.9 }) do
+		put(m, "RackRifle" .. i, Vector3.new(0.22, 2.9, 0.28), rk * CFrame.new(x, 1.9, -0.3) * CFrame.Angles(0, 0, math.rad(4)), Color3.fromRGB(34, 34, 36), M.Metal)
+	end
+	put(m, "BenchSeat", Vector3.new(3.2, 0.25, 1.1), house * CFrame.new(0.5, 1.9, -5.4), wood, M.WoodPlanks)
+	put(m, "BenchLegs", Vector3.new(2.8, 1.6, 0.8), house * CFrame.new(0.5, 1.1, -5.4), steel, M.Metal)
+	put(m, "Rug", Vector3.new(5, 0.05, 4), house * CFrame.new(-2.5, 0.325, -3.6), Color3.fromRGB(46, 70, 64), M.Fabric)
+	put(m, "Stool", Vector3.new(1, 2.2, 1), house * CFrame.new(-0.6, 1.4, 1.4), steel, M.Metal, false, Enum.PartType.Cylinder)
+	put(m, "LampRod", Vector3.new(0.15, 1.0, 0.15), house * CFrame.new(-2.5, 10.5, -1.5), steel, M.Metal)
+	local shade = put(m, "LampShade", Vector3.new(1.6, 0.5, 1.6), house * CFrame.new(-2.5, 9.8, -1.5), Color3.fromRGB(236, 224, 190), M.SmoothPlastic)
+	local light = Instance.new("PointLight")
+	light.Range = PSC.LightRange
+	light.Brightness = PSC.LightBrightness
+	light.Shadows = false
+	light.Color = Color3.fromRGB(255, 236, 190)
+	light.Parent = shade
+	doorSign(m, house, st.Sign)
+	return m, head
+end
+
 function EndgameController.BuildStation(kind: string, house: CFrame): (Model?, Part?)
 	local st = PSC.Stations[kind]
 	local b = Builders[kind]
@@ -251,7 +296,7 @@ local listTitle: TextLabel? = nil
 local listSub: TextLabel? = nil
 local listShell: PanelShell.Shell? = nil
 local hqConsole: BasePart? = nil
-local LIST_TITLES = { Engineers = "ENGINEERING BUREAU", HQ = "HQ UPGRADE" }
+local LIST_TITLES = { Engineers = "ENGINEERING BUREAU", HQ = "HQ UPGRADE", Recruits = "RECRUITMENT OFFICE" }
 
 local function short(n: number): string
 	if n >= 1e9 then
@@ -363,6 +408,30 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 				Done = if r.NextCost == nil then "MAX" else nil,
 			})
 		end
+	elseif kind == "Recruits" and typeof(s.Elite) == "table" then
+		for _, r in ipairs(s.Elite) do
+			table.insert(out, {
+				Name = string.format("%s  %s", string.upper(r.Name), string.upper(r.TierName)),
+				Sub = if r.NextName then string.format("+%d%% HP / damage. Next: %s", r.Pct, string.upper(r.NextName)) else string.format("+%d%% HP / damage", r.Pct),
+				Price = r.NextCost,
+				Need = r.Need,
+				Kind = "Elite",
+				Id = r.Id,
+				Done = if r.NextCost == nil then "MAX" else nil,
+			})
+		end
+		local rt = s.Retrain
+		if typeof(rt) == "table" and (tonumber(rt.Count) or 0) > 0 then
+			table.insert(out, {
+				Name = string.format("RE-TRAIN %d SOLDIER(S)", rt.Count),
+				Sub = "They came back untrained",
+				Price = rt.Price,
+				Need = nil,
+				Kind = "Retrain",
+				Id = "Now",
+				Done = nil,
+			})
+		end
 	elseif kind == "HQ" then
 		local t = s.Tier
 		if typeof(t) == "table" then
@@ -409,7 +478,7 @@ local function refreshList()
 	local rows = EndgameController.ListRows(kind, state)
 	local sub = listSub
 	if sub then
-		sub.Text = if #rows == 0 then "Loading..." else (if kind == "HQ" then "Kept through rebirth" else "Tougher turrets, gate and vault")
+		sub.Text = if #rows == 0 then "Loading..." elseif kind == "HQ" then "Kept through rebirth" elseif kind == "Recruits" then "Train each soldier type. Kept through rebirth" else "Tougher turrets, gate and vault"
 	end
 	for i, r in ipairs(rows) do
 		local row = Instance.new("Frame")
@@ -609,10 +678,10 @@ local function empireRowsRefresh()
 				goal.Text = if typeof(e.NextCost) == "number"
 					then string.format("EMPIRE %d  %s  %s", e.Level + 1, short(e.NextCost), EndgameController.EtaText(e.NextCost, cash, perSec))
 					else "EMPIRE MAX"
-			elseif kind == "HQ" or kind == "Engineers" then
+			elseif kind == "HQ" or kind == "Engineers" or kind == "Recruits" then
 				local best: Row? = nil
 				for _, r in ipairs(EndgameController.ListRows(kind, state)) do
-					if r.Price and r.Kind ~= "Rebuild" and (best == nil or (r.Price :: number) < ((best :: Row).Price :: number)) then
+					if r.Price and r.Kind ~= "Rebuild" and r.Kind ~= "Retrain" and (best == nil or (r.Price :: number) < ((best :: Row).Price :: number)) then
 						best = r
 					end
 				end
@@ -969,6 +1038,59 @@ local function syncStations()
 	end
 end
 
+-- phase 3: the Mythic aura: one light ParticleEmitter on a Mythic soldier (Rate 3, LightEmission 0.3, no light), only
+-- at Graphics Quality >= 4 (automatic quality: keyboard devices only, never phones)
+local function auraAllowed(): boolean
+	local ok, lvl = pcall(function(): number
+		return (UserSettings():GetService("UserGameSettings") :: any).SavedQualityLevel.Value
+	end)
+	if not ok then
+		return false
+	end
+	if lvl == 0 then
+		local UIS = game:GetService("UserInputService")
+		local okP, pi = pcall(function(): any
+			return (UIS :: any).PreferredInput
+		end)
+		return okP and pi == Enum.PreferredInput.KeyboardAndMouse
+	end
+	return lvl >= 4
+end
+
+local function syncAura(model: Instance)
+	if not model:IsA("Model") then
+		return
+	end
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if root == nil then
+		return
+	end
+	local has = root:FindFirstChild("WE_MythicAura")
+	local want = model:GetAttribute("WE_EliteTier") == 4 and auraAllowed()
+	if want and has == nil then
+		local e = Instance.new("ParticleEmitter")
+		e.Name = "WE_MythicAura"
+		e.Rate = 3
+		e.Lifetime = NumberRange.new(0.8, 1.2)
+		e.Speed = NumberRange.new(0.5, 1)
+		e.Size = NumberSequence.new(0.35, 0)
+		e.LightEmission = 0.3
+		e.Transparency = NumberSequence.new(0.4, 1)
+		e.Color = ColorSequence.new(Color3.fromRGB(255, 214, 110))
+		e.SpreadAngle = Vector2.new(180, 180)
+		e.Parent = root
+	elseif not want and has then
+		has:Destroy()
+	end
+end
+
+local function watchSquad(model: Instance)
+	syncAura(model)
+	model:GetAttributeChangedSignal("WE_EliteTier"):Connect(function()
+		syncAura(model)
+	end)
+end
+
 local function watchDamage(char: Model)
 	local hum = char:WaitForChild("Humanoid", 10)
 	if hum == nil or not hum:IsA("Humanoid") then
@@ -1020,6 +1142,13 @@ function EndgameController.Init()
 	player.CharacterAdded:Connect(function(c: Model)
 		task.spawn(watchDamage, c)
 	end)
+	do
+		local CollectionService = game:GetService("CollectionService")
+		CollectionService:GetInstanceAddedSignal("WE_SquadUnit"):Connect(watchSquad)
+		for _, m in ipairs(CollectionService:GetTagged("WE_SquadUnit")) do
+			watchSquad(m)
+		end
+	end
 	if player.Character then
 		task.spawn(watchDamage, player.Character)
 	end

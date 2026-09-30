@@ -57,6 +57,23 @@ local prevGame = game
 game = { GetService = function(_, n)
   if n == "Players" then return Players elseif n == "RunService" then return RunService end
   return prevGame:GetService(n) end }
+-- recursive FindFirstChild (DressUnit looks up Head / Left Arm / Torso inside the rig)
+local baseIdx = INST.__index
+INST.__index = function(t, k)
+  if k == "FindFirstChild" then
+    return function(s, n, rec)
+      local function f(o)
+        for _, c in ipairs(rawget(o, "__kids") or {}) do
+          if c.Name == n then return c end
+          if rec then local r = f(c); if r then return r end end
+        end
+        return nil
+      end
+      return f(s)
+    end
+  end
+  return baseIdx(t, k)
+end
 function mkPlayer(uid, pos)
   local root = { Position = pos, IsA = function(_, c) return c == "BasePart" end }
   local char = { FindFirstChild = function(_, n) if n == "HumanoidRootPart" then return root end return nil end }
@@ -221,8 +238,8 @@ check(parts == PSC.Stations.Command.Parts and parts <= PSC.MaxParts, string.form
 check(lights == 1 and guis == 1 and neon == 0 and hum == 0, "one light, one sign, no Neon, no Humanoid (not damageable)")
 check(query == 0 and #collide == 1 and collide[1] == "MapTableTop", "nothing answers a ray; only the table top collides")
 check(head ~= nil and head.Name == "Head", "the Chief of Staff's head anchors the prompt")
-local okNone = CT.BuildStation("Recruits", CFrame.new(0, 0, 0)) == nil
-check(okNone, "phase 1 builds only the Command Office")
+local okNone = CT.BuildStation("Intel", CFrame.new(0, 0, 0)) == nil
+check(okNone, "a station whose phase has not shipped builds nothing (Intel)")
 
 -- ── 4b. phase 2: Base Tier + Defence (the real service; the owner's profile through GetPlayerByUserId) ──
 BY_UID[470626172] = owner
@@ -358,6 +375,91 @@ check(bast == 4 and lint == 1, "Stronghold: 4 corner bastions + the gatehouse li
 local m0 = BTB.Build(ctx, 0)
 check(#m0:GetDescendants() == 0, "tier 0 builds nothing")
 
+-- ── 4c. phase 3: Elite Training (the real service + config) ──
+local ES3 = EG.EliteStats
+check(math.abs(ES3("Infantry", 4).Hp - 1.32) < 1e-9 and math.abs(ES3("Infantry", 4).Dmg - 1.32) < 1e-9 and ES3("Infantry", 4).Scale == 1.28, "Mythic Infantry: +32 % HP and damage, scale 1.28")
+check(math.abs(ES3("Heavy", 0).Hp - 1.2) < 1e-9 and ES3("Heavy", 0).Dmg == 1 and math.abs(ES3("SpecialForces", 2).Dmg - 1.16 * 1.1) < 1e-9, "Heavy +20 % HP; Special Forces x1.1 damage on top of the tier")
+check(ES3("Infantry", 1).Scale == 1.05 and ES3("Infantry", 2).Scale == 1.10 and ES3("Infantry", 3).Scale == 1.18 and ES3("Infantry", 0).Scale == 1, "rig scale 1.05 / 1.10 / 1.18 / 1.28 per tier")
+check(EG.SlotKind(3, 5) == "Infantry" and EG.SlotKind(5, 0) == "Heavy" and EG.SlotKind(10, 3) == "SpecialForces" and EG.SlotKind(10, 2) == "Heavy", "every 5th slot Heavy, every 10th Special Forces (SF Facility L3+)")
+local prevTTK = nil
+local ttkOk = true
+for t = 0, 4 do
+  local s = ES3("Infantry", t)
+  local ttk = 100 / s.Dmg -- time to kill the same untrained target, relative to an untrained shooter (%)
+  print(string.format("[EliteTest] tier=%d maxHP=x%.2f dmg=x%.2f TTK_vs_unit=%.0f%%", t, s.Hp, s.Dmg, ttk))
+  if prevTTK and ttk >= prevTTK then ttkOk = false end
+  prevTTK = ttk
+end
+check(ttkOk, "the time-to-kill drops with every tier (headless arithmetic; the Studio 2-player TTK is owed)")
+ES._SetStation("Recruits", CFrame.new(-300, 5, 0))
+owner.Root.Position = ES.StationPoint("Recruits")
+po.Prestige = 12
+po.Cash = 5e9
+po.BaseUpgrades.SpecialForcesFacility = 3
+for _ = 1, 3 do ES.Purchase(owner, "Elite", "Infantry") end
+ok, msg = ES.Purchase(owner, "Elite", "Infantry")
+check(po.Endgame.Elite.Infantry == 3 and not ok and msg == string.format(EG.Text.NeedRebirths, 30), "Infantry Veteran / Elite / Legendary; Mythic needs 30 rebirths")
+check(spentLog[#spentLog].why == "endgame_elite" and spentLog[#spentLog].n == 30e6, "Legendary $30M as endgame_elite")
+po.Prestige = 30
+ok, msg = ES.Purchase(owner, "Elite", "Infantry")
+check(ok and po.Endgame.Elite.Infantry == 4, "Mythic at R30 (" .. tostring(msg) .. ")")
+check(ES.Purchase(owner, "Elite", "Robux") == false and ES.Purchase(owner, "Elite", "Infantry") == false, "an unknown type is refused; Mythic is the top")
+-- a spawn: slot 1 Infantry Mythic (no death, no fee)
+local e1 = ES.UnitElite(owner, 1)
+check(e1 and e1.Kind == "Infantry" and e1.Tier == 4 and not e1.Untrained, "a Mythic Infantry spawns trained")
+check(ES.UnitElite(other, 1) == nil, "not live: today's soldier (nil)")
+-- it dies: its respawn pays the Mythic re-train fee ($100k) as endgame_retrain
+local n0 = #spentLog
+ES.NoteUnitDeath(470626172, "Infantry", 4)
+local e2 = ES.UnitElite(owner, 1)
+check(e2.Tier == 4 and #spentLog == n0 + 1 and spentLog[#spentLog].n == 100000 and spentLog[#spentLog].why == "endgame_retrain", "a dead Mythic's respawn pays $100,000 (endgame_retrain) and comes back Mythic")
+-- broke: it comes back untrained
+po.Cash = 10
+ES.NoteUnitDeath(470626172, "Infantry", 4)
+local e3 = ES.UnitElite(owner, 1)
+local cnt, fee = ES.UntrainedNow(owner, po)
+check(e3.Untrained and cnt == 1 and fee == 100000, "short of cash: it comes back untrained; RE-TRAIN 1 for $100,000")
+po.Cash = 5e9
+owner.Root.Position = ES.StationPoint("Recruits")
+ok, msg = ES.Purchase(owner, "Retrain", "Now")
+check(ok and select(1, ES.UntrainedNow(owner, po)) == 0 and spentLog[#spentLog].n == 100000, "RE-TRAIN at the Recruitment Office clears it (" .. tostring(msg) .. ")")
+-- the Instant Army Refill: free re-trains for the dead, the untrained re-trained now
+ES.NoteUnitDeath(470626172, "Infantry", 4)
+ES.NoteUnitDeath(470626172, "Infantry", 4)
+ES.GrantRefill(owner)
+local n1 = #spentLog
+local e4 = ES.UnitElite(owner, 1)
+check(e4.Tier == 4 and #spentLog == n1 and po.Endgame.FreeRetrains == 1, "after the Instant Army Refill a respawn is free (FreeRetrains 2 -> 1), no Cash spent")
+-- the look
+local um = Instance.new("Model")
+local hd = Instance.new("Part"); hd.Name = "Head"; hd.CFrame = CFrame.new(0, 5, 0); hd.Parent = um
+local rig = Instance.new("Model"); rig.Name = "WE_Rig"; rig.Parent = um
+local la = Instance.new("Part"); la.Name = "Left Arm"; la.CFrame = CFrame.new(-1.5, 3, 0); la.Parent = rig
+local to = Instance.new("Part"); to.Name = "Torso"; to.CFrame = CFrame.new(0, 3, 0); to.Parent = rig
+local hum = Instance.new("Humanoid"); hum.HipHeight = 2; hum.Parent = um
+ES.DressUnit(um, hum, ES.EliteFor("Heavy", 3), 2)
+local chev, trim, pads = 0, 0, 0
+for _, d in ipairs(um:GetDescendants()) do
+  if d.Name == "EliteChevron" then chev += 1 elseif d.Name == "EliteTrim" then trim += 1 elseif d.Name == "HeavyPad" then pads += 1 end
+end
+check(chev == 3 and trim == 1 and pads == 2 and um:GetAttribute("WE_EliteTier") == 3 and um:GetAttribute("WE_EliteScale") == 1.18 and math.abs(hum.HipHeight - 2.36) < 1e-9,
+  "a Legendary Heavy: 3 chevrons, the gold trim, shoulder pads, scale 1.18, hip height 2.36")
+ES.DressUnit(um, hum, ES.EliteFor("Infantry", 4), 2)
+local star, chev2 = 0, 0
+for _, d in ipairs(um:GetDescendants()) do
+  if d.Name == "EliteStar" then star += 1 elseif d.Name == "EliteChevron" then chev2 += 1 end
+end
+check(star == 1 and chev2 == 0 and um:GetAttribute("WE_EliteDmg") == ES3("Infantry", 4).Dmg, "re-dressed Mythic: the star replaces the chevrons (old insignia removed), damage attribute x1.32")
+local st3 = ES.State(owner)
+check(#st3.Elite == 3 and st3.Retrain ~= nil and #CT.ListRows("Recruits", st3) >= 3, "State: 3 soldier types (+ the re-train row when due)")
+-- the Recruitment Office
+local rmod = CT.BuildStation("Recruits", CFrame.new(0, 0, 0))
+local rp, rl, rg = 0, 0, 0
+for _, d in ipairs(rmod:GetDescendants()) do
+  if d.ClassName == "Part" then rp += 1 elseif d.ClassName == "PointLight" then rl += 1 elseif d.ClassName == "SurfaceGui" then rg += 1 end
+end
+check(rp == PSC.Stations.Recruits.Parts and rp <= PSC.MaxParts and rl == 1 and rg == 1, string.format("the Recruitment Office = %d parts (cap %d), 1 light, 1 sign", rp, PSC.MaxParts))
+
 -- ── 5. rebirth screen ──
 local PC = require(node("Configs/PrestigeConfig"))
 local function has(list, s) for _, l in ipairs(list) do if l == s then return true end end return false end
@@ -418,6 +520,8 @@ def main():
     gds = (SV / "Services/GateDefenseService.luau").read_text(encoding="utf-8")
     mcs = (SV / "Services/MoneyCollectorService.luau").read_text(encoding="utf-8")
     sls = (SV / "Services/SoldierService.luau").read_text(encoding="utf-8")
+    sqs = (SV / "Services/SquadOrdersService.luau").read_text(encoding="utf-8")
+    acs = (SV / "Modules/ArmyController.luau").read_text(encoding="utf-8")
     btb = (SV / "Modules/BaseTierBuilder.luau").read_text(encoding="utf-8")
     new += btb
     for cond, msg in (
@@ -428,6 +532,10 @@ def main():
         ("for slot, sx in ipairs(GateDefenseService.GunSlots(gx, ownerUserId)) do" in gds, "the Base Tier nests are real AutoGun slots"),
         ("R.StealFraction * MoneyCollectorService.VaultMult(victim, false)" in mcs and "* MoneyCollectorService.VaultMult(victim, true)" in mcs, "Vault Plating on the ATM raid and the army raid"),
         ("+ rebirth + tier" in sls, "the soldier cap adds the Base Tier soldiers"),
+        ("local elite = if eg and eg.UnitElite then eg.UnitElite(owner, slot) else nil" in sqs and "armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player), credit)" in sqs
+         and "local base = armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player)" in sqs, "Elite HP at spawn and Elite damage at BOTH unit damage sites (the one damage path)"),
+        ("c = ArmyController.ScaledCfg(c, es)" in acs, "the formation spacing grows with the largest soldier in the block"),
+        ("PivotTo" not in sqs.split("function SquadOrdersService._ReapplyElite")[1].split("function SquadOrdersService.Init")[0], "a re-train in place never moves a soldier"),
         ("Instance.new(\"Humanoid\")" not in btb and "Neon" not in btb, "BaseTierBuilder: no Humanoid, no Neon"),
         ("Endgame" not in bal, "structure income reads the raw Costs (BalanceConfig never sees the scale)"),
         ("profile.Endgame =" not in pres and "profile.Endgame" not in pres.replace("x.EndgameKeep", ""), "PrestigeService never clears profile.Endgame (kept on both paths)"),
