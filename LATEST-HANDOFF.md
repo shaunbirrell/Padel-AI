@@ -1,5 +1,5 @@
 <!-- Q2-START -->
-## v127 (Code Bot Roblox, 2026-09-30 ~09:45 Dublin): ship claude-bud JOB 30 world map + areas + tap-to-pin — FAST TRAVEL REMOVED (owner request)
+## v127 (Code Bot Roblox, 2026-09-30 ~09:45 Dublin): ship claude-bud JOB 30 world map + areas + tap-to-pin — FAST TRAVEL REMOVED (owner request) — place version 125
 - Merged Claude `3471f3d` (JOB 30) into phase-7-polish (v126 tip `a9e1135`). **WE_Build 127**. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged).
 - **Fast travel is REMOVED at Shaun's request.** He wants tap-to-pin only, so players can see where they want to go and then get there themselves. **Claude must NOT re-add fast travel** in any form: no TRAVEL button, no teleport remote, no hint or tutorial copy.
   - Gone: the `MapConfig.FastTravel` block (it is now `FastTravelEnabled = false`, and nothing reads it as true), `RequestFastTravel` (Constants, RemoteSetup, SecurityConfig schema), `MapService.FastTravel` with its handler, cooldown, `TravelIn` field and the StreamPrefetch / TeleportToPlot path, and the MapController TRAVEL button with its refusal copy.
@@ -7,6 +7,7 @@
   - `tools/checks/codebot_v127.py` fails the build if any of that comes back.
 - **Kept:** the full-screen map (MAP tile / M; Missions moved to N), the named areas, the live bases / outposts / bank / crates / jobs, the area card with **GO**, tap open ground to pin, and **CLEAR PIN**. The pin is the ONE yellow tracker (`ObjectiveMarker.ShowWith { Pin = true }`, clears at 15 studs).
 - **OwnerFirst retained:** `MapConfig.OwnerFirst = true` (UserId 470626172 + Studio). Flip it to false after Shaun signs off the phone tests.
+- Code commit `5ce5f8b` (merge of `3471f3d`). Open Cloud HTTP 200 `versionNumber=125`.
 - **Pins:** claude_bud_job30.py was updated (fast-travel pins retired; FastTravelEnabled=false pinned). codebot_v127.py covers WE_Build 127 and fast travel OFF. The codebot_v126 WE_Build pins are retired, and the frozen BuyPathStatic / v110 / v113 WE_Build pins are bumped to 127. **BuyPathStatic PASS=6549 FAIL=0**; MapAreas Luau test 0 failed; rojo ok.
 - **Phone tests (owner account; Migrate to Latest Update):**
   1. Tap MAP: the map fills the screen, with your arrow on your base and the town labelled. The buttons are only GO / CLEAR PIN, with **no TRAVEL anywhere**.
