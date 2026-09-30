@@ -1,4 +1,13 @@
 <!-- Q2-START -->
+## v157 PUBLISHED (Code Bot Roblox, 2026-10-01 00:45 Dublin): Open Cloud place version 155 — the weekly Black Market live for everyone
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **157**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":155}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Commits:** phase-7-polish `867befd` (source, checks, dist); claude/desktop-bud merge `7fd3d8a` (temp worktree); this handoff.
+- **Gate:** new `EndgameConfig.PublicParts = { BlackMarket = true }`. `LiveFor(uid, part)` = Parts[part] AND (public part + Live.Enabled, OR the owner-first rule). `Live.OwnerFirst` stays **true**: every other Endgame part (Empire, Rebirth scale, Tier, Defence, Elite, Hospital, Mastery/Armory, Workshop, Warheads, Heist, Contracts/Intel, RewardScaling) is still owner-only. Kill switch: Parts.BlackMarket=false or Live.Enabled=false = off for everyone. `AnyLiveFor` now asks LiveFor per part, so every player gets WE_EndgameLive, the EMPIRE button (lists only the Black Market + PIN) and the stall.
+- **Camo apply path:** `EndgameConfig.CamoLiveFor` = Mastery OR BlackMarket. CamoFor / EquipCamo work without the Armory, but only for the Black Market camos (Urban, Tiger, Gold); buying at the Armory stays Mastery-only. A bought market camo goes on the owned gun in your hand; the Black Market list has PUT ON / TAKE OFF rows for it.
+- **Banners:** bought banners now show on the gate posts below Tier 4 (`MarketBanners`, 4 parts); SyncBaseTier builds the look for a banner alone. Berets (soldiers) and paint (vehicles) already needed no other part. Trophy cannon works at tier 0 (unchanged).
+- **Stall:** SW_S1 (navy-awning market building, south-west row of the plaza) upper floor; the stall adds its own BLACK MARKET door sign while the Armory downstairs is not live for you (24 parts).
+- **Checks:** BuyPathStatic PASS=7460 FAIL=0; codebot_v157 (41 pins) PASS; new `tools/sim/run_blackmarket_public_test.py` 0 failed (non-owner: Black Market only, all 18 other purchase kinds refused, Cash via SpendCash, Gold via SpendGold, camo/beret/banner apply); run_endgame_test 0 failed (station sign count accounts for the v157 sign).
+
 ## v156 PUBLISHED (Code Bot Roblox, 2026-10-01 00:29 Dublin): Open Cloud place version 154 — real Robux prices + plain Shop text + ARMY KILLS board, live for everyone
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **156**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":154}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Commits:** phase-7-polish `e289e76` (source, checks and dist); claude/desktop-bud merge `3beaae7`; this handoff.
