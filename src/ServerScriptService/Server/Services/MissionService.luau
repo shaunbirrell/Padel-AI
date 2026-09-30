@@ -63,6 +63,49 @@ local function yyyymmdd(unix: number): number
 	return t.year * 10000 + t.month * 100 + t.day
 end
 
+-- claude-bud JOB 29: the streak strip / tomorrow data (DailyRewardConfig.ShowTomorrow), or nil when it is not live
+local function streakStrip(player: Player, profile: any, claimedToday: boolean): { [string]: any }?
+	if not DailyRewardConfig.ShowTomorrowLiveFor(player.UserId) then
+		return nil
+	end
+	local days = DailyRewardConfig.StreakResetsAfterDay
+	local streak = math.max(0, math.floor(tonumber(profile.DailyLogin and profile.DailyLogin.Streak) or 0))
+	local cash: { number } = {}
+	local big: { boolean } = {}
+	for d = 1, days do
+		local r = DailyRewardConfig.Rewards[d]
+		cash[d] = if r then r.Cash else 0
+		big[d] = DailyRewardConfig.BigDays[d] == true
+	end
+	-- tomorrow's day: the day after today's claim, or the day after the one he could claim today
+	local last = tonumber(profile.DailyLogin and profile.DailyLogin.LastClaimDay) or 0
+	if not claimedToday and DailyRewardConfig.MissedDayResetsStreak and last ~= 0 and last ~= yyyymmdd(os.time() - 86400) then
+		streak = 0 -- a missed day: the next claim starts again at day 1
+	end
+	local nextToClaim = (streak % days) + 1
+	local tomorrowDay = if claimedToday then nextToClaim else (nextToClaim % days) + 1
+	local offlineCap = 0
+	local okR, RS = pcall(function(): any
+		return require(script.Parent.RetentionService)
+	end)
+	if okR and RS and RS.OfflineCapCash then
+		local okC, v = pcall(RS.OfflineCapCash, player)
+		offlineCap = if okC and typeof(v) == "number" then math.floor(v) else 0
+	end
+	local boost = DailyRewardConfig.Day7Boost
+	return {
+		Days = days,
+		Today = if claimedToday then (if streak == 0 then 1 else streak) else nextToClaim,
+		Claimed = claimedToday,
+		Cash = cash,
+		Big = big,
+		TomorrowDay = tomorrowDay,
+		TomorrowCash = cash[tomorrowDay] or 0,
+		OfflineCap = offlineCap,
+		Day7Boost = if boost.Enabled == true then boost.Label else nil,
+	}
+end
+
 local function ensureDaily(profile: Types.PlayerProfile)
 	if typeof(profile.DailyMissions) ~= "table" then
 		profile.DailyMissions = {
@@ -634,6 +677,12 @@ local function buildPayload(player: Player, profile: Types.PlayerProfile): (Type
 		},
 	}
 	table.insert(sig, if already then "L1" else "L0")
+	-- claude-bud JOB 29: the 7-day strip + tomorrow goals ride on the payload (nil while ShowTomorrow is off)
+	local strip = streakStrip(player, profile, already)
+	if strip then
+		(payload :: any).Streak7 = strip
+		table.insert(sig, "S" .. tostring(strip.Today) .. ":" .. tostring(strip.OfflineCap))
+	end
 	return payload, table.concat(sig, "|")
 end
 
@@ -864,7 +913,8 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 	return true, nil
 end
 
-function MissionService.ClaimDailyLogin(player: Player): (boolean, string?)
+-- quiet (claude-bud JOB 29): no "Day N reward" toast (the caller shows the streak card instead)
+function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boolean, string?)
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return false, "NoProfile"
@@ -898,15 +948,27 @@ function MissionService.ClaimDailyLogin(player: Player): (boolean, string?)
 		if reward.XP > 0 then
 			XPService.AddXP(player, reward.XP, "daily")
 		end
-		if NotificationService then
+		if NotificationService and quiet ~= true then
+			-- claude-bud JOB 29 (DailyRewardConfig.ShowTomorrow): tomorrow's reward wherever the streak is shown
+			local nextReward = DailyRewardConfig.Rewards[(daily.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1]
 			NotificationService.Notify(
 				player,
-				string.format("Day %d reward: $%d", daily.Streak, reward.Cash),
+				if DailyRewardConfig.ShowTomorrow == true and nextReward
+					then string.format("Day %d: +$%s. Tomorrow: $%s", daily.Streak, commas(reward.Cash), commas(nextReward.Cash))
+					else string.format("Day %d reward: $%d", daily.Streak, reward.Cash),
 				"Reward"
 			)
 		end
 		if AnalyticsService then
 			AnalyticsService.Log(AnalyticsConfig.Events.DAILY_REWARD_CLAIMED, player.UserId, { day = daily.Streak })
+			AnalyticsService.Log("STREAK_DAY", player.UserId, { day = daily.Streak }) -- claude-bud JOB 29
+		end
+		-- claude-bud JOB 29: day 7 = an army damage boost for a while (no Robux; SquadOrdersService reads it)
+		local boost = DailyRewardConfig.Day7Boost
+		if daily.Streak == DailyRewardConfig.StreakResetsAfterDay and boost.Enabled == true and DailyRewardConfig.ShowTomorrowLiveFor(player.UserId) then
+			local untilUnix = os.time() + math.max(1, math.floor(tonumber(boost.Minutes) or 30)) * 60
+			;(profile :: any).ArmyBoostUntil = untilUnix
+			player:SetAttribute("WE_ArmyBoostUntil", untilUnix)
 		end
 	end
 	DataService.MarkDirty(player)
@@ -1073,12 +1135,30 @@ function MissionService.Init(deps: { [string]: any })
 				if player.Parent == nil then
 					return
 				end
+				-- claude-bud JOB 29: nothing covers a new player's screen before the Command Center (FastStart hold)
+				local okR, RS = pcall(function(): any
+					return require(script.Parent.RetentionService)
+				end)
+				if okR and RS and RS.WaitOnboarding and not RS.WaitOnboarding(player, 90) then
+					return
+				end
 				local prof = DataService.GetProfile(player)
 				if prof == nil or prof.DailyLogin == nil or prof.DailyLogin.LastClaimDay == yyyymmdd(os.time()) then
 					return
 				end
-				local okClaim = MissionService.ClaimDailyLogin(player)
-				if okClaim and NotificationService then
+				local card = DailyRewardConfig.ShowTomorrowLiveFor(player.UserId)
+				local okClaim = MissionService.ClaimDailyLogin(player, card)
+				if okClaim and card then
+					-- claude-bud JOB 29: ONE card with the 7-day strip and "Come back tomorrow for $Y"
+					local strip = streakStrip(player, prof, true)
+					local ev = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.FeaturePush)
+					if strip and ev and ev:IsA("RemoteEvent") then
+						strip.Boost = (tonumber((prof :: any).ArmyBoostUntil) or 0) > os.time() and prof.DailyLogin.Streak == DailyRewardConfig.StreakResetsAfterDay
+						strip.BoostMinutes = DailyRewardConfig.Day7Boost.Minutes
+						strip.Seconds = DailyRewardConfig.CardSeconds
+						;(ev :: RemoteEvent):FireClient(player, "Streak", strip)
+					end
+				elseif okClaim and NotificationService then
 					local day = prof.DailyLogin.Streak
 					local nextDay = (day % DailyRewardConfig.StreakResetsAfterDay) + 1
 					local nextReward = DailyRewardConfig.Rewards[nextDay]

@@ -1,4 +1,84 @@
 <!-- Q2-START -->
+## claude-bud JOB 29 (2026-09-30): retention (branch `claude/desktop-bud`, rebased on v124)
+Every part has a kill switch and ships **OwnerFirst** (UserId 470626172 + Studio test players), via
+`RetentionConfig.Live(block, userId)`.
+- **Why a boolean:** codebot_v101 bans `= "owner"` strings in Configs, so owner-first is a boolean.
+- **To launch:** Code Bot sets `OwnerFirst = false`.
+- **Kill switches:** `TutorialConfig.FastStart.Enabled`, `EconomyConfig.OfflineEarnings.Enabled`,
+  `DailyRewardConfig.ShowTomorrow` / `StreakCard.Enabled`, `RetentionConfig.Notifications.Enabled`.
+
+**1. First 60 seconds**
+- **Base:** already auto-assigned and teleported on join (step 1 is instant, as before).
+- **FastStart:** a new player (Command Center not bought, tutorial not done) lands 7 studs in front of HIS Command
+  Center console, facing it, instead of the plot gate. A pulsing gold arrow floats over the console.
+- **Starter payout:** the first BUILD ($1,500 of the $10,000 start) pays +$1,500. It is server-side, once per profile
+  (`StarterPayoutDone`), reason "onboarding", with coins flying to the cash pill.
+- **Onboarding hold:** `WE_Onboarding` stays on until the Command Center step is done, or 60 s. While it is on, the
+  nation picker, the daily-streak card and the welcome-back card wait.
+- **Welcome line:** "Welcome! Press BUILD on the gold console." (41 characters, device-neutral).
+- **Timings:** these are computed from the layout, NOT measured in Studio.
+
+  | | Walk to the first buy | First payout |
+  |---|---|---|
+  | Before | ~168 studs, ~10.5 s at WalkSpeed 16 | the first ATM collect, after that walk |
+  | After | ~7 studs, under 1 s | the starter burst at the first BUILD, well under 30 s |
+
+  First unlock: Barracks ($2,500) is affordable right after the Command Center, so it is inside 2-3 min.
+- **Funnel:** the SAME `AnalyticsConfig.Roblox.Funnel`, extended to 14 steps, each fired at the real moment through
+  `AnalyticsService.Onboard`: Joined, Spawned, BaseClaimed, FirstBuilding, CollectedCash, Recruited, Barracks,
+  FirstOutpost, FirstVehicle, TutorialDone, OpenedArmy, FirstAttack, PurchasePrompt, FirstPurchase.
+  - Seconds-since-join go out as the custom event `OnboardingSeconds`.
+  - Studio prints `[FUNNEL] <step> t=<s>`, so a fresh-profile Studio run gives the real times.
+
+**2. Offline earnings**
+- **Save field:** `LastSeenUnix` (additive, migrated) is stamped on every save.
+- **Formula:** on load, 25% x the live tick's formula (ComputePassiveIncomePerTick x the passive cash multiplier /
+  TickSeconds) x seconds away, capped at 8 h, +10% for Premium.
+- **Payout:** paid into PendingCash (the ATM, reason "offline", not multiplied twice).
+- **No payout:** first join, a negative gap, or a gap under 5 min.
+- **Card:** "WELCOME BACK / While you were away you earned +$X / ... · in your ATM".
+- **Robux:** none.
+
+**3. Streak**
+- **Tomorrow everywhere:** tomorrow's reward is shown wherever the streak is: the claim toast, the Missions daily row,
+  the streak card and the Missions strip.
+- **Owner-first:** one card with the 7-day strip (days 3 and 7 gold, big-day coin burst) instead of two toasts.
+- **Missions panel:** the strip, plus "Tomorrow: Day N reward $Y" and "Away 8 h: earn up to $Z".
+- **Day 7:** an ARMY BOOST (army damage x1.25 for 30 min, no Robux).
+
+**4. Notifications**
+- **When we ask:** 25 s after the tutorial ends (finished or skipped), or from **Settings → NOTIFICATIONS → Game
+  alerts: TURN ON**.
+- **Limits:** never in the first 60 s, once a session, 7 days after a decline, never after an accept.
+- **Code path:** one client path (`Modules/NotifOptIn`).
+- **State for a sender:** DataStore `WE_NotifyState_v1`, written on leave for opted-in players only.
+- **Docs:** `docs/NOTIFICATIONS.md` has the Creator Hub steps, 4 templates, and what we will and won't notify about.
+  No API key is in the game.
+
+**Checks**
+- tools/checks/claude_bud_job29.py (31 pins), plus `tools/sim/run_offline_test.py`, which runs the REAL
+  ComputeOffline in the Luau CLI. All 7 cases pass: first join 0, negative 0, under 5 min 0, +2 h, +20 h capped at
+  8 h, Premium, no income.
+- BuyPathStatic **PASS=6510 FAIL=0**.
+  - On Windows Python, 4 path-separator pins fail on clean HEAD too. They pass under POSIX path strings (a scratchpad
+    wrapper), as on Linux.
+- rojo build ok. No new LSP errors.
+- The headless world sim and the DataService harness are not in the repo, so they were NOT run.
+
+**NOT verified on a device:** the ExperienceNotificationService prompt (Studio cannot show it), the real join
+timings, and the card layouts on a phone.
+
+**Test ON HIS PHONE** (the owner account is OwnerFirst-live):
+1. **Offline earnings:** play, note your ATM, leave for at least 2 h, rejoin. After about 6 s, "WELCOME BACK +$X"
+   appears and the ATM holds it. X should be about a quarter of 2 h of income.
+2. **Streak:** Missions shows the 7-day strip and a "Tomorrow" line. The daily row reads "Day N done · Tomorrow $Y".
+3. **Opt-in:** Settings → NOTIFICATIONS → Game alerts: TURN ON shows Roblox's opt-in prompt.
+4. **FastStart** needs a fresh profile. In Studio, run Start Server + 1 player (a fresh test profile):
+   - you spawn at the Command Center console with the arrow;
+   - BUILD gives the +$1,500 coin burst;
+   - no picker or streak card appears before the Command Center;
+   - the Output shows the `[FUNNEL]` times.
+5. **Second player:** a second phone joining never sees another player's cards or arrow.
 ## v124 (Code Bot Roblox, 2026-09-30 ~00:51 Dublin): ATTACK army now targets the enemy player beside it + ONE shared PvP rule + /armydebug [ArmyTarget] — place version 122
 - **Bug (Shaun, phone, v121+):** in ATTACK the army shot the bank guards (NPCs) but never Stevie (live player) or his base guards, even with Stevie next to the army; kill feed "Stevie > shaunie6 (Starter Rifle)", army idle beside Stevie.
 - **Root cause (target selection, not hostility):** `pickSquadTarget` fed NPCs, players and guards into ONE sticky nearest-first `FormationController.PickTarget`: the current target (a bank guard) is kept unless another candidate is `AttackRetargetStuds` (15) nearer the army centre. The block deploys at `AttackStandoff` 36 from the guard, so any enemy player >= ~21 studs from the army centre was never picked; the per-unit fallback shot (`pickShot`) is NPC-only. Evidence: live Open Cloud Luau run on place v121 with the real module: `PickTarget(cur=BankGuard@36, Stevie@10/20) -> Stevie`, `@25/40/60 -> BankGuard`.

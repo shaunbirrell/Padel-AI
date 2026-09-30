@@ -315,4 +315,28 @@ function TutorialConfig.FirstMinutesLiveFor(userId: any): boolean
 	return false
 end
 
+--[[ claude-bud JOB 29 (2026-09-30): FAST START, the first 60 seconds. A new player (Command Center not bought, tutorial
+	not done) is already given a base on join (BaseService.AssignPlot) and moved onto it; with FastStart he lands
+	StandStuds in front of his OWN Command Center console instead of at the plot gate (~168 studs away), facing it, so
+	the first BUILD ($1,500 of the $10,000 start) is one step away with the gold line and the pulsing arrow on it.
+	His first BUILD pays StarterPayout (server, once per profile: profile.StarterPayoutDone, reason "onboarding") with a
+	coin burst flying to the cash pill. Until the tutorial is past step HoldPopupsUntilStep - 1 (the Command Center
+	step), nothing covers the screen: the daily-streak card, the nation picker and promos wait (WE_Onboarding = true on
+	the player while the hold is on; the server clears it). Kill switch: Enabled = false (the join exactly as before).
+	OwnerFirst = true: live only for the owner (and Studio test players) first; see RetentionConfig.Live. ]]
+TutorialConfig.FastStart = {
+	Enabled = true,
+	OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+	StandStuds = 7, -- in front of the console face (ConsolePromptDistance is 10)
+	StarterPayout = 1500,
+	HoldPopupsUntilStep = 3, -- WE_Onboarding clears once TutorialStep >= this (after the Command Center) or at 60 s
+	HoldMaxSeconds = 60, -- the hold never lasts longer than this, whatever the step
+	WelcomeText = "Welcome! Press BUILD on the gold console.", -- <= 42 characters, no key names
+	PayoutText = "Starter bonus!",
+}
+
+function TutorialConfig.FastStartLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live(TutorialConfig.FastStart, userId)
+end
+
 return TutorialConfig

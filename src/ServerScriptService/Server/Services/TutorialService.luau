@@ -33,6 +33,20 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local MonetizationService: any = nil
 local CombatService: any = nil -- F6: EndNoviceShield (batch A lane C API), pcall + nil-check
+local RetentionService: any = nil -- claude-bud JOB 29: the FastStart onboarding hold follows the step
+local AnalyticsService: any = nil -- claude-bud JOB 29: onboarding timing (Step1..7, BaseClaimed)
+
+-- claude-bud JOB 29: seconds-since-join marks (analytics only) and the FastStart hold; never breaks the tutorial
+local function onboard(player: Player, step: string)
+	if AnalyticsService and AnalyticsService.Onboard then
+		pcall(AnalyticsService.Onboard, player, step)
+	end
+end
+local function retentionStep(player: Player, step: number, complete: boolean)
+	if RetentionService and RetentionService.OnTutorialStep then
+		pcall(RetentionService.OnTutorialStep, player, step, complete)
+	end
+end
 
 -- Step 1 (ClaimBase) is the first step in every order; every other step is found through TutorialConfig
 local STEP_CLAIM = 1
@@ -270,6 +284,10 @@ local function setStep(player: Player, step: number, complete: boolean?)
 	end
 	DataService.MarkDirty(player)
 	pushTutorial(player)
+	retentionStep(player, step, complete == true) -- claude-bud JOB 29
+	if complete then
+		onboard(player, "TutorialDone") -- claude-bud JOB 29
+	end
 	if complete then
 		firstAttackHint(player, TutorialConfig.FirstMinutes.AttackHintDelaySeconds) -- claude-bud JOB 7
 	end
@@ -300,6 +318,11 @@ local function advanceTo(player: Player, targetStep: number)
 	end
 	lastAdvanceAt[player.UserId] = now
 	lastAdvanceStep[player.UserId] = targetStep
+	-- claude-bud JOB 29: the funnel step just finished, at the real moment (ClaimBase = "BaseClaimed", else Tut_<Id>)
+	local doneDef = TutorialConfig.GetStep(targetStep)
+	if doneDef then
+		onboard(player, if doneDef.Id == "ClaimBase" then "BaseClaimed" else "Tut_" .. doneDef.Id)
+	end
 	-- One setStep (one push): the client drops a second TutorialStateUpdate that lands within 0.2 s
 	local nextStep = skipOwnedBuySteps(profile, targetStep + 1)
 	if nextStep > TutorialConfig.StepCount() then
@@ -325,6 +348,8 @@ function TutorialService.Complete(player: Player)
 	if NotificationService then
 		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
+	onboard(player, "TutorialSkipped") -- claude-bud JOB 29
+	retentionStep(player, profile.TutorialStep, true)
 	firstAttackHint(player, TutorialConfig.FirstMinutes.AttackHintDelaySeconds) -- claude-bud JOB 7
 	endNoviceShield(player) -- F6: SKIP ends the novice shield too
 	scheduleStarterOffer(player, true) -- v71 money (M1): the Starter Pack offer 3 s after the tutorial
@@ -390,6 +415,8 @@ function TutorialService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	MonetizationService = deps.MonetizationService -- v71 money (M1): TrySoftOfferStarterBundle (Starter Pack gate)
 	CombatService = deps.CombatService -- F6: EndNoviceShield (CombatService.Init runs later; called only at run time)
+	RetentionService = deps.RetentionService -- claude-bud JOB 29
+	AnalyticsService = deps.AnalyticsService -- claude-bud JOB 29
 
 	local skipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSkipTutorial) :: RemoteEvent
 	skipRemote.OnServerEvent:Connect(function(player: Player)
@@ -490,7 +517,9 @@ function TutorialService.Init(deps: { [string]: any })
 				DataService.MarkDirty(player)
 				task.delay(TutorialConfig.FirstMinutes.WelcomeDelaySeconds, function()
 					if player.Parent and NotificationService then
-						NotificationService.Notify(player, TutorialConfig.FirstMinutes.WelcomeText, "Info", 6)
+						-- claude-bud JOB 29: with FastStart he already stands at the Command Center console
+						local text = if TutorialConfig.FastStartLiveFor(player.UserId) then TutorialConfig.FastStart.WelcomeText else TutorialConfig.FirstMinutes.WelcomeText
+						NotificationService.Notify(player, text, "Info", 6)
 					end
 				end)
 			end

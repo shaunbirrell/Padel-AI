@@ -23,6 +23,21 @@ local DailyRewardConfig = {
 		Rollout = "all", -- v101
 		DelaySeconds = 8,
 	},
+	--[[ claude-bud JOB 29 (2026-09-30): streak visibility.
+		ShowTomorrow (kill switch, everyone): wherever the streak is shown, tomorrow's reward is shown too (the Missions
+		panel's daily row, the auto-claim toast, the streak card).
+		StreakCard (OwnerFirst first): the auto-claim shows ONE card with the 7-day strip (today lit, BigDays gold) and
+		"Come back tomorrow for $Y" instead of two text toasts; the Missions panel shows the same strip plus 1-2
+		"tomorrow" goals; day 7 also gives Day7Boost (army damage x Mult for Minutes; profile.ArmyBoostUntil; no Robux).
+		The card waits while WE_Onboarding is on (FastStart). Both off = the JOB 4.2 toasts exactly as before. ]]
+	ShowTomorrow = true,
+	StreakCard = {
+		Enabled = true,
+		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+	},
+	BigDays = { [3] = true, [7] = true } :: { [number]: boolean },
+	CardSeconds = 6,
+	Day7Boost = { Enabled = true, Mult = 1.25, Minutes = 30, Label = "ARMY BOOST" },
 }
 
 -- claude-bud: is auto-claim live for this player (fail closed)
@@ -37,6 +52,14 @@ function DailyRewardConfig.AutoClaimLiveFor(userId: any): boolean
 		return AdminConfig.IsPlaytestOwner(userId)
 	end
 	return false
+end
+
+-- claude-bud JOB 29: is the streak card / strip / day-7 boost live for this player (fail closed)
+function DailyRewardConfig.ShowTomorrowLiveFor(userId: any): boolean
+	if DailyRewardConfig.ShowTomorrow ~= true then
+		return false
+	end
+	return (require(script.Parent.RetentionConfig) :: any).Live(DailyRewardConfig.StreakCard, userId)
 end
 
 return DailyRewardConfig

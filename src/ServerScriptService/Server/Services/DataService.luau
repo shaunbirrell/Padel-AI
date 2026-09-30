@@ -331,6 +331,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 
 	;(profile :: any).PrevJoinUnix = profile.LastJoinUnix -- claude-bud JOB 13: the comeback reward reads the previous join
+	;(profile :: any).PrevSeenUnix = (profile :: any).LastSeenUnix -- claude-bud JOB 29: offline earnings read the last save
 	profile.LastJoinUnix = os.time()
 	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
 		profile.FirstJoinUnix = os.time()
@@ -412,6 +413,7 @@ local function writeProfile(userId: number, profile: PlayerProfile, releaseLock:
 		end
 		return true -- nothing to persist (Studio without API access)
 	end
+	;(profile :: any).LastSeenUnix = os.time() -- claude-bud JOB 29: the last time this save was written (offline earnings)
 	local snapshot = ProfileSchema.DeepCopy(profile)
 	lastWriteAt[userId] = os.clock() -- claude-bud JOB 24 §4d
 	local ok, err = retryAsync("SetAsync", function()

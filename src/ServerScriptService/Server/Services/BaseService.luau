@@ -516,6 +516,14 @@ function BaseService.TeleportToPlot(player: Player, onArrived: ((boolean) -> ())
 	local cf: CFrame? = nil
 	if plotId ~= nil then
 		cf = BaseService.GetPlotSpawnCFrame(plotId)
+		-- claude-bud JOB 29 FastStart: a new player lands in front of his own Command Center console (nil = as before)
+		local okR, RS = pcall(require, script.Parent.RetentionService)
+		if okR and typeof(RS) == "table" and (RS :: any).FastStartCFrame then
+			local okC, fast = pcall((RS :: any).FastStartCFrame, player, profile, plotId)
+			if okC and typeof(fast) == "CFrame" then
+				cf = fast
+			end
+		end
 	else
 		cf = noPlotDropCFrame()
 	end

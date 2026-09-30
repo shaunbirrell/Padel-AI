@@ -400,6 +400,19 @@ function SettingsController.Init()
 	end)
 	y += TAP + 14
 
+	-- claude-bud JOB 29: game notifications (Roblox experience notifications, opt-in). Only while the switch is live
+	-- for this player (RetentionConfig.Notifications); the tap asks Roblox's own prompt (Modules/NotifOptIn).
+	if (require(Shared.Configs.RetentionConfig) :: any).NotificationsLiveFor(player.UserId) then
+		section("NOTIFICATIONS")
+		local notifBtn = button("NotifOptIn", "Game alerts: TURN ON", UDim.new(0, 16), UDim.new(1, -32))
+		notifBtn.Activated:Connect(function()
+			AudioController.PlayClick()
+			setOpen(false)
+			require(script.Parent.Parent.Modules.NotifOptIn).Ask("settings")
+		end)
+		y += TAP + 14
+	end
+
 	-- Supply spinner (the Missions panel has the same claim row; this section stays per spec §3.7)
 	section("SUPPLY SPINNER")
 	local spinnerBtn = button("SpinnerClaim", "SUPPLY SPINNER — Claim free Cash/Gold", UDim.new(0, 16), UDim.new(1, -32))

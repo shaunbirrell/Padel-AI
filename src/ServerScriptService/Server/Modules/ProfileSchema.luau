@@ -202,6 +202,20 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	profile.FriendsPaid = nonNegInt(profile.FriendsPaid)
 	profile.ComebackPaidFor = nonNegInt(profile.ComebackPaidFor)
 	profile.ComebackPaidAt = nonNegInt(profile.ComebackPaidAt)
+	-- claude-bud JOB 29: retention bookkeeping (os.time() seconds; 0 / nil = never)
+	profile.LastSeenUnix = nonNegInt(profile.LastSeenUnix)
+	profile.PrevSeenUnix = nil -- session-only (DataService sets it on load)
+	profile.OfflineCapFullAt = nonNegInt(profile.OfflineCapFullAt)
+	profile.LastRaidedAt = nonNegInt(profile.LastRaidedAt)
+	profile.ArmyBoostUntil = nonNegInt(profile.ArmyBoostUntil)
+	profile.StarterPayoutDone = if profile.StarterPayoutDone == true then true else nil
+	if typeof(profile.NotifOptIn) == "table" then
+		local n = profile.NotifOptIn
+		local r = if n.Result == "accepted" or n.Result == "declined" or n.Result == "unavailable" then n.Result else nil
+		profile.NotifOptIn = { Result = r, PromptedAt = nonNegInt(n.PromptedAt), DeclinedAt = nonNegInt(n.DeclinedAt) }
+	else
+		profile.NotifOptIn = nil
+	end
 	-- claude-bud BOARDS: the notice boards' own counters (validated kills, the week, the biggest army)
 	if typeof(profile.LB) ~= "table" then
 		profile.LB = nil

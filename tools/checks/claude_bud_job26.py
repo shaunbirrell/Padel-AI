@@ -64,7 +64,7 @@ except Exception as _e:  # noqa: BLE001
 # replacements for the retired squadfair / army A0 pins (same guarantees, JOB 26 numbers)
 _CS26 = read("src/ServerScriptService/Server/Services/CombatService/init.luau") or ""
 _SO26 = read("src/ServerScriptService/Server/Services/SquadOrdersService.luau") or ""
-_j26('local ok, dealt = pcall(apply, player, th, armyDamageBase() * researchMult(player, "SoldierDamage"), credit)' in _SO26,
+_j26('local ok, dealt = pcall(apply, player, th, armyDamageBase() * researchMult(player, "SoldierDamage") * armyBoostMult(player), credit)' in _SO26,  # claude-bud JOB 29: + the day-7 boost
      "squadfair (J26): a unit hit goes through CombatService.ApplyUnitHit (pcall; research damage kept)")
 _j26("\tunit.LosCheckAt = now + 1 / math.max(armyFireRate(unit), 0.1)\n\tunit.LosBlocked = true" in _SO26.replace("\r\n", "\n"),
      "squadfair v2 (J26): a check that found nothing in sight waits one shot cooldown")

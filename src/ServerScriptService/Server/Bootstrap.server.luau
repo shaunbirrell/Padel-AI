@@ -61,6 +61,7 @@ local CodesService = safeRequire("CodesService", Services.CodesService)
 local BuildingTips = safeRequire("BuildingTips", Services.BuildingTips) -- claude-bud JOB 24 §5
 local BaseSignService = safeRequire("BaseSignService", Services.BaseSignService) -- claude-bud JOB 25
 local ArmourService = safeRequire("ArmourService", Services.ArmourService) -- claude-bud JOB 26
+local RetentionService = safeRequire("RetentionService", Services.RetentionService) -- claude-bud JOB 29
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
@@ -105,6 +106,7 @@ local deps: { [string]: any } = {
 	ClanService = ClanService,
 	MonetizationService = MonetizationService,
 	TutorialService = TutorialService,
+	RetentionService = RetentionService, -- claude-bud JOB 29: FastStart / offline earnings / notification opt-in
 	BattlePassService = BattlePassService,
 	SoldierService = SoldierService,
 	BusinessService = BusinessService,
@@ -194,6 +196,7 @@ safeInit("NotificationService", NotificationService, deps)
 -- OnProfileLoaded fires at once for already-loaded players and used to call Notify before this Init → threw.
 -- (TutorialService.Init only needs BaseService.GetUpgradeChangedEvent, which works before BaseService.Init.)
 safeInit("TutorialService", TutorialService, deps)
+safeInit("RetentionService", RetentionService, deps) -- claude-bud JOB 29 (after Data / Tutorial; before the join hooks)
 safeInit("AntiExploitService", AntiExploitService, deps)
 safeInit("MonetizationService", MonetizationService, deps)
 safeInit("EconomyService", EconomyService, deps)

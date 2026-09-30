@@ -113,6 +113,23 @@ local EconomyConfig = {
 		GamepadKey = Enum.KeyCode.ButtonX,
 		Exclusivity = Enum.ProximityPromptExclusivity.OnePerButton,
 	},
+	--[[ claude-bud JOB 29 (2026-09-30): OFFLINE EARNINGS. When the save loads, the server pays for the time away since
+		the last save was written (profile.LastSeenUnix, os.time(), stamped by DataService on every write). The formula is
+		the live passive tick's: BaseService.ComputePassiveIncomePerTick x EconomyService.GetCashMult(player, "passive"),
+		once per PassiveIncome.TickSeconds, for the seconds away (capped at CapSeconds), x Share, x (1 + PremiumBonus)
+		for Roblox Premium. It is paid straight into PendingCash (the ATM, like the tick) with reason "offline" (the
+		multiplier is already in, so never applied twice), then a "Welcome back: +$X while away" card shows.
+		No payout: first join (no LastSeenUnix), a negative gap, or a gap under MinSeconds.
+		Kill switch: Enabled = false (no payout, no card). OwnerFirst as TutorialConfig.FastStart. No Robux option. ]]
+	OfflineEarnings = {
+		Enabled = true,
+		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		Share = 0.25,
+		CapSeconds = 8 * 3600,
+		MinSeconds = 300,
+		PremiumBonus = 0.10,
+		ShowDelaySeconds = 6, -- the card: after the save loads (and after the onboarding hold)
+	},
 }
 
 return EconomyConfig

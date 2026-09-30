@@ -260,6 +260,23 @@ local function armyHealthBase(): number
 	return if c then tonumber(c.Health) or 90 else OrdersConfig.UnitHealth or 90
 end
 
+-- claude-bud JOB 29: the day-7 streak ARMY BOOST (DailyRewardConfig.Day7Boost; MissionService writes WE_ArmyBoostUntil)
+local function armyBoostMult(player: Player?): number
+	if player == nil then
+		return 1
+	end
+	local untilUnix = tonumber(player:GetAttribute("WE_ArmyBoostUntil")) or 0
+	if untilUnix <= os.time() then
+		return 1
+	end
+	local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig) :: any
+	local b = DailyRewardConfig.Day7Boost
+	if typeof(b) ~= "table" or b.Enabled ~= true then
+		return 1
+	end
+	return math.clamp(tonumber(b.Mult) or 1, 1, 2)
+end
+
 local function researchMult(player: Player?, statId: string): number -- v69 research: ≥1, 1 when absent
 	if player == nil or ResearchService == nil or ResearchService.GetBonus == nil then
 		return 1
@@ -1412,7 +1429,7 @@ local function unitShoot(player: Player, unit: SquadUnit, th: Humanoid, now: num
 	if typeof(setShooter) == "function" then
 		setShooter(unit.Model)
 	end
-	local ok, dealt = pcall(apply, player, th, armyDamageBase() * researchMult(player, "SoldierDamage"), credit) -- v69 research
+	local ok, dealt = pcall(apply, player, th, armyDamageBase() * researchMult(player, "SoldierDamage") * armyBoostMult(player), credit) -- v69 research; JOB 29 boost
 	if typeof(setShooter) == "function" then
 		setShooter(nil)
 	end
@@ -2917,7 +2934,7 @@ local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: Base
 	unit.LastFireAt = now
 	local kind = if part ~= tgt.Root and part:GetAttribute("GateGuardPart") ~= true then "Gate" else tgt.Kind
 	local name = if tgt.Player then tgt.Player.Name elseif kind == "Gate" then "gate" else "guard"
-	local base = armyDamageBase() * researchMult(player, "SoldierDamage")
+	local base = armyDamageBase() * researchMult(player, "SoldierDamage") * armyBoostMult(player) -- claude-bud JOB 29 boost
 	if rng:NextNumber() >= unitHitChance((part.Position - unit.Root.Position).Magnitude) then
 		hitLog(player, unit, kind, name, 0, 0, "miss")
 		return false

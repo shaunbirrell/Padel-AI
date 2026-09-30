@@ -800,6 +800,7 @@ local function completeRaid(thief: Player, victim: Player, hold: RaidHold): bool
 		return false
 	end
 	-- 7. persist + mirror
+	;(vProfile :: any).LastRaidedAt = nowUnix -- claude-bud JOB 29: read by the notification state (docs/NOTIFICATIONS.md)
 	markDirty(victim)
 	markDirty(thief)
 	pcall(function()

@@ -9539,3 +9539,18 @@ ds_territories.luau T3):
 - **Load / unload distances:** 220 / 320 (Tier 2) and 480 / 640 (others) for small decor only. The brief's example was
   550 / 700 for loading. Small decor at 480+ studs is not noticeable, and phones keep the benefit.
 - **Not measured:** FPS and memory need a device. The replay model replaces the Studio route, and says so.
+
+
+## 2026-09-30 — claude-bud JOB 29: retention
+- **Owner-first:** a boolean `OwnerFirst` (RetentionConfig.Live), because codebot_v101 forbids `= "owner"` strings in
+  Configs. Studio test players also count, so a fresh-profile Studio run can test FastStart.
+- **Funnel:** the existing funnel is extended and re-indexed (14 steps). Creator Hub funnel data from v121-v124
+  (8 steps) does not line up with the new indexes; only players in their first 15 min at deploy are affected.
+- **Offline pay:** it uses the "passive" cash multiplier at join time (outpost Empire Tax may not be restored yet at
+  load, so it can slightly under-pay). It sits in PendingCash, so an ATM raid can take its usual 10%. Premium +10% is
+  kept from the first JOB 29 brief.
+- **Opt-in result:** "accepted" = Roblox no longer lets us prompt after the dialog closed (opt-in, or Roblox's own
+  limit).
+- **Starter payout:** $1,500 (it refunds the Command Center). It is only paid while the tutorial is running, so a
+  rebirth never re-pays it.
+- **Streak card:** it is owner-first. The "tomorrow" text is for everyone under ShowTomorrow, since it is copy only.

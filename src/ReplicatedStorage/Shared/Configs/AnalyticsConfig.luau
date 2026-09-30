@@ -10,20 +10,30 @@ local AnalyticsConfig = {
 	Roblox = {
 		Enabled = true,
 		FunnelNewPlayerSeconds = 900,
+		-- claude-bud JOB 29: the SAME funnel, extended with every onboarding step at the real moment it happens. "STEP:<x>"
+		-- events come from AnalyticsService.Onboard: RetentionService (Joined / CharacterSpawned on the real join and first
+		-- spawn) and TutorialService (BaseClaimed and Tut_<step Id> when that tutorial step is finished, TutorialDone /
+		-- TutorialSkipped). Order = the owner's tutorial order; a step done early (bought before asked) still counts.
 		Funnel = {
-			{ Step = "Joined", Events = { "PLAYER_JOIN" } },
-			{ Step = "CollectedCash", Events = { "CASH_COLLECT" } },
-			{ Step = "FirstBuilding", Events = { "FIRST_UPGRADE", "UPGRADE_PURCHASED" } },
-			{ Step = "OpenedArmy", Events = { "ARMY_OPEN", "SOLDIER_RECRUIT" } },
+			{ Step = "Joined", Events = { "PLAYER_JOIN", "STEP:Joined" } },
+			{ Step = "Spawned", Events = { "STEP:CharacterSpawned" } },
+			{ Step = "BaseClaimed", Events = { "STEP:BaseClaimed" } },
+			{ Step = "FirstBuilding", Events = { "STEP:Tut_CommandCenter", "FIRST_UPGRADE", "UPGRADE_PURCHASED" } },
+			{ Step = "CollectedCash", Events = { "STEP:Tut_Income", "CASH_COLLECT" } },
+			{ Step = "Recruited", Events = { "STEP:Tut_RecruitSoldiers", "SOLDIER_RECRUIT" } },
+			{ Step = "Barracks", Events = { "STEP:Tut_Barracks" } },
+			{ Step = "FirstOutpost", Events = { "STEP:Tut_Outpost", "FIRST_OUTPOST", "TERRITORY_CAPTURED" } },
+			{ Step = "FirstVehicle", Events = { "STEP:Tut_Jeep", "VEHICLE_SPAWNED" } },
+			{ Step = "TutorialDone", Events = { "STEP:TutorialDone", "STEP:TutorialSkipped" } },
+			{ Step = "OpenedArmy", Events = { "ARMY_OPEN" } },
 			{ Step = "FirstAttack", Events = { "ARMY_ATTACK" } },
-			{ Step = "FirstOutpost", Events = { "FIRST_OUTPOST", "TERRITORY_CAPTURED" } },
 			{ Step = "PurchasePrompt", Events = { "SHOP_PROMPT", "PREMIUM_VEHICLE_PROMPT" } },
 			{ Step = "FirstPurchase", Events = { "FIRST_PURCHASE", "PURCHASE_RECEIPT" } },
 		},
 		EconomyFlushSeconds = 60,
 		-- reason (prefix) -> Enum.AnalyticsEconomyTransactionType name; anything else = Gameplay
 		EconomyTypes = { upgrade_ = "Shop", weapon_ = "Shop", vehicle_ = "Shop", research_ = "Shop", recruit_ = "Shop", devproduct = "IAP",
-			daily = "TimedReward", premium_daily = "TimedReward", spinner = "TimedReward", code = "ContextualPurchase", onboarding = "Onboarding" },
+			daily = "TimedReward", premium_daily = "TimedReward", spinner = "TimedReward", code = "ContextualPurchase", onboarding = "Onboarding", offline = "TimedReward" }, -- claude-bud JOB 29: offline
 		-- in-house event -> Roblox custom event name (value = the Value prop, else 1; field 1 = the Field prop)
 		Custom = {
 			SHOP_OPEN = { Name = "ShopOpened" },
@@ -38,6 +48,11 @@ local AnalyticsConfig = {
 			TUTORIAL_CLOSED = { Name = "TipClosed", Field = "tip" },
 			ARMY_ATTACK = { Name = "ArmyAttack" },
 			SESSION_END = { Name = "SessionLength", Value = "minutes", Field = "bucket" },
+			-- claude-bud JOB 29: seconds to each funnel step (RetentionConfig.Funnel), offline pay, notification opt-in
+			ONBOARD_STEP = { Name = "OnboardingSeconds", Value = "seconds", Field = "step" },
+			OFFLINE_EARNED = { Name = "OfflineEarned", Value = "cash", Field = "hours" },
+			NOTIF_OPTIN = { Name = "NotificationOptIn", Field = "result" },
+			STREAK_DAY = { Name = "StreakDay", Value = "day" },
 		},
 		MaxCustomPerMinute = 100,
 		PerPlayerPerMinute = 10,
@@ -141,6 +156,11 @@ local AnalyticsConfig = {
 		TUTORIAL_CLOSED = "TUTORIAL_CLOSED",
 		MISSILE_STRIKE = "MISSILE_STRIKE",
 		SESSION_END = "SESSION_END",
+		-- claude-bud JOB 29
+		ONBOARD_STEP = "ONBOARD_STEP",
+		OFFLINE_EARNED = "OFFLINE_EARNED",
+		NOTIF_OPTIN = "NOTIF_OPTIN",
+		STREAK_DAY = "STREAK_DAY",
 	},
 }
 

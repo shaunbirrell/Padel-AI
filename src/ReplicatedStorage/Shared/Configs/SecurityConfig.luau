@@ -72,6 +72,7 @@ local SecurityConfig = {
 		RequestTipSetting = { "boolean" }, -- claude-bud JOB 24 §5
 		RequestTipsReplay = {}, -- claude-bud JOB 24 §5
 		RequestBuyArmour = { "number" }, -- claude-bud JOB 26
+		RequestNotifOptInResult = { "string:12", "string?" }, -- claude-bud JOB 29: accepted / declined / unavailable, "settings"?
 		RequestArmourLook = { "boolean" }, -- claude-bud JOB 26 -- claude-bud JOB 24 §10 (AnalyticsConfig.Roblox.ClientEvents only)
 		RequestResearch = { "string", "string?" },
 		RequestMissileStrike = { "table" },

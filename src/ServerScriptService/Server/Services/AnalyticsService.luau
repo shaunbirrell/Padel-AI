@@ -14,6 +14,17 @@
 	  * The client may report a few UI events (Roblox.ClientEvents: shop / Army opened, tips) on RequestAnalyticsEvent,
 	    rate-limited; nothing else from the client is ever logged.
 	Studio (or LogToOutput) still prints every event. Every Roblox call is pcall'd: analytics never breaks gameplay.
+
+	claude-bud JOB 29: onboarding steps (RetentionConfig.Funnel). AnalyticsService.Onboard(player, step) records the
+	seconds since this session's join, once per step per session:
+	  * logged on the SAME funnel above as the event "STEP:<step>" (AnalyticsConfig.Roblox.Funnel lists which row);
+	  * sent as the custom event ONBOARD_STEP ("OnboardingSeconds", value = seconds, field = step) for NEW players only
+	    (same rule as the funnel; marks made before the save loads wait and are sent once it is known);
+	  * printed "[FUNNEL] <step> t=<s>" in Studio for everyone, plus a one-line summary on leave.
+	Steps come from:
+	  * RetentionService: Joined, CharacterSpawned;
+	  * TutorialService: BaseClaimed, Tut_<step Id>, TutorialDone / TutorialSkipped;
+	  * this Log (ONBOARD_FROM_EVENT): first cash collect, first purchase, first recruit, first Robux, SessionEnd.
 ]]
 
 local Players = game:GetService("Players")
@@ -21,6 +32,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local AnalyticsConfig = require(ReplicatedStorage:WaitForChild("Shared").Configs.AnalyticsConfig)
+local RetentionConfig = require(ReplicatedStorage:WaitForChild("Shared").Configs.RetentionConfig) -- claude-bud JOB 29
 
 local AnalyticsService = {}
 AnalyticsService.Stats = { Custom = 0, Funnel = 0, Economy = 0, Dropped = 0, Client = 0 }
@@ -204,6 +216,106 @@ function AnalyticsService.Economy(player: Player, flow: string, amount: number, 
 	row.Balance = balance
 end
 
+-- ── onboarding timing (claude-bud JOB 29) ─────────────────────────────────────────────────────────────────────
+local ONBOARD_FROM_EVENT: { [string]: string } = {
+	CASH_COLLECT = "FirstCash",
+	UPGRADE_PURCHASED = "FirstPurchase",
+	FIRST_UPGRADE = "FirstPurchase",
+	SOLDIER_RECRUIT = "FirstRecruit",
+	PURCHASE_RECEIPT = "FirstRobux",
+}
+local onboardAt: { [number]: number } = {} -- userId -> os.clock() at join (the timing zero)
+local onboardMarks: { [number]: { { Step: string, T: number } } } = {}
+local onboardSeen: { [number]: { [string]: boolean } } = {}
+local onboardNew: { [number]: boolean } = {} -- nil = not decided yet (save not loaded)
+
+local function onboardIsNew(player: Player): boolean?
+	local uid = player.UserId
+	if onboardNew[uid] ~= nil then
+		return onboardNew[uid]
+	end
+	local ds = dataService()
+	local profile = ds and ds.GetProfile and ds.GetProfile(player)
+	if profile == nil then
+		return nil
+	end
+	local first = tonumber(profile.FirstJoinUnix) or 0
+	local isNew = first > 0 and os.time() - first <= (tonumber(RC and RC.FunnelNewPlayerSeconds) or 900)
+	onboardNew[uid] = isNew
+	return isNew
+end
+
+local function onboardSend(player: Player)
+	local marks = onboardMarks[player.UserId]
+	if marks == nil or #marks == 0 then
+		return
+	end
+	local isNew = onboardIsNew(player)
+	if isNew == nil then
+		return -- wait for the save
+	end
+	onboardMarks[player.UserId] = {}
+	if not isNew then
+		return
+	end
+	for _, m in ipairs(marks) do
+		pcall(funnel, player, "STEP:" .. m.Step) -- the same Roblox funnel (AnalyticsConfig.Roblox.Funnel), at the real moment
+		pcall(custom, player, "ONBOARD_STEP", { step = m.Step, seconds = math.floor(m.T * 10 + 0.5) / 10 })
+	end
+end
+
+--[[ Seconds from this session's join to `step`, once per session (RetentionConfig.Funnel). Analytics only. ]]
+function AnalyticsService.Onboard(player: Player, step: string)
+	local F: any = (RetentionConfig :: any).Funnel
+	if typeof(F) ~= "table" or F.Enabled ~= true or typeof(step) ~= "string" then
+		return
+	end
+	local uid = player.UserId
+	if onboardAt[uid] == nil then
+		onboardAt[uid] = os.clock()
+	end
+	local seen = onboardSeen[uid]
+	if seen == nil then
+		seen = {}
+		onboardSeen[uid] = seen
+	end
+	if seen[step] then
+		return
+	end
+	seen[step] = true
+	local t = os.clock() - onboardAt[uid]
+	local marks = onboardMarks[uid]
+	if marks == nil then
+		marks = {}
+		onboardMarks[uid] = marks
+	end
+	table.insert(marks, { Step = step, T = t })
+	if F.PrintInStudio == true and RunService:IsStudio() then
+		print(string.format("[FUNNEL] %s t=%.1fs user=%d", step, t, uid))
+	end
+	onboardSend(player)
+end
+
+local function onboardEnd(player: Player)
+	local uid = player.UserId
+	if onboardAt[uid] ~= nil then
+		pcall(AnalyticsService.Onboard, player, "SessionEnd")
+		local F: any = (RetentionConfig :: any).Funnel
+		if typeof(F) == "table" and F.PrintInStudio == true and RunService:IsStudio() and onboardSeen[uid] then
+			local steps = {}
+			for step in pairs(onboardSeen[uid]) do
+				table.insert(steps, step)
+			end
+			table.sort(steps)
+			print(string.format("[FUNNEL] session end user=%d steps=%s", uid, table.concat(steps, ",")))
+		end
+	end
+	onboardAt[uid] = nil
+	onboardMarks[uid] = nil
+	onboardSeen[uid] = nil
+	onboardNew[uid] = nil
+end
+
 function AnalyticsService.SetSink(fn: (eventName: string, userId: number?, props: { [string]: any }?) -> ())
 	sink = fn
 end
@@ -241,9 +353,16 @@ function AnalyticsService.Log(eventName: string, userId: number?, props: { [stri
 			custom(player, "SESSION_END", { minutes = minutes, bucket = bucketOf(minutes) })
 		end
 		flush(player.UserId)
+		onboardEnd(player) -- claude-bud JOB 29
 	end
 	pcall(funnel, player, eventName)
 	pcall(custom, player, eventName, props)
+	local step = ONBOARD_FROM_EVENT[eventName] -- claude-bud JOB 29: onboarding timing
+	if step then
+		pcall(AnalyticsService.Onboard, player, step)
+	elseif eventName == "PLAYER_JOIN" then
+		pcall(onboardSend, player) -- the save is loaded now: send the marks made before it
+	end
 end
 
 local started = false
@@ -264,6 +383,11 @@ function AnalyticsService.Init()
 	Players.PlayerRemoving:Connect(function(p: Player)
 		pcall(flush, p.UserId)
 		joinedAt[p.UserId] = nil
+		task.defer(onboardEnd, p) -- claude-bud JOB 29 (PLAYER_LEAVE normally ends it first; this only cleans up)
+	end)
+	-- claude-bud JOB 29: the timing zero is the real join (PlayerAdded), before the save loads
+	Players.PlayerAdded:Connect(function(p: Player)
+		onboardAt[p.UserId] = os.clock()
 	end)
 	-- a cancelled Robux prompt (analytics only: never a grant, never trusted for anything else)
 	pcall(function()

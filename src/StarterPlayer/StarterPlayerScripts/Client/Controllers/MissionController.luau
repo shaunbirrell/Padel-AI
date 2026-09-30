@@ -34,6 +34,7 @@ local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
+local StreakStrip = require(script.Parent.Parent.Modules.StreakStrip) -- claude-bud JOB 29
 
 local MissionController = {}
 
@@ -531,6 +532,46 @@ local function refresh()
 		return
 	end
 
+	-- claude-bud JOB 29: the 7-day strip + 1-2 "tomorrow" goals (the server sends Streak7 while ShowTomorrow is live)
+	local s7: any = (state :: any).Streak7
+	if typeof(s7) == "table" then
+		local tSize = PanelShell.Text(13)
+		local tileW = math.max(56, tSize * 3)
+		local tileH = tSize * 2 + 16
+		local lines: { string } = {}
+		local tc = tonumber(s7.TomorrowCash) or 0
+		if tc > 0 then
+			table.insert(lines, string.format("Tomorrow: Day %d reward $%s", tonumber(s7.TomorrowDay) or 1, commas(tc)))
+		end
+		local cap = tonumber(s7.OfflineCap) or 0
+		if cap > 0 then
+			table.insert(lines, string.format("Away 8 h: earn up to $%s", commas(cap)))
+		end
+		local row = Instance.new("Frame")
+		row.Name = "Streak7Row"
+		row.LayoutOrder = -100
+		row.Size = UDim2.new(1, -8, 0, tileH + 12 + #lines * (tSize + 6))
+		row.BackgroundColor3 = Constants.Colors.Background
+		row.BorderSizePixel = 0
+		row.Parent = listFrame
+		corner(row, 8)
+		local strip = StreakStrip.Build(row, s7, tileW, tileH, tSize)
+		strip.Position = UDim2.fromOffset(10, 6)
+		for i, text in ipairs(lines) do
+			local l = Instance.new("TextLabel")
+			l.BackgroundTransparency = 1
+			l.Position = UDim2.fromOffset(10, 6 + tileH + 4 + (i - 1) * (tSize + 6))
+			l.Size = UDim2.new(1, -20, 0, tSize + 4)
+			l.Font = Enum.Font.GothamBold
+			l.TextSize = tSize
+			l.TextXAlignment = Enum.TextXAlignment.Left
+			l.TextColor3 = Constants.Colors.Gold
+			l.TextTruncate = Enum.TextTruncate.AtEnd
+			l.Text = text
+			l.Parent = row
+		end
+	end
+
 	if #state.Daily == 0 then
 		emptyState(listFrame, "No daily missions right now — check back after UTC midnight refresh.")
 	end
@@ -646,15 +687,24 @@ local function refresh()
 		local d = state.DailyLogin
 		local reward = DailyRewardConfig.Rewards[d.NextDay]
 		local rewardText = if reward then "$" .. commas(reward.Cash) else ""
+		-- claude-bud JOB 29 (DailyRewardConfig.ShowTomorrow): tomorrow's reward wherever the streak is shown
+		local days = DailyRewardConfig.StreakResetsAfterDay
+		local tomorrowDay = if d.AlreadyClaimedToday then (d.Streak % days) + 1 else (d.NextDay % days) + 1
+		local tomorrow = DailyRewardConfig.Rewards[tomorrowDay]
+		local showTomorrow = DailyRewardConfig.ShowTomorrow == true and tomorrow ~= nil
 		if d.AlreadyClaimedToday then
-			dailyInfo.Text = string.format("Daily streak: Day %d (claimed)", d.Streak)
+			dailyInfo.Text = if showTomorrow and tomorrow
+				then string.format("Day %d done · Tomorrow $%s", d.Streak, commas(tomorrow.Cash))
+				else string.format("Daily streak: Day %d (claimed)", d.Streak)
 			if dailyBtn then
 				dailyBtn.Text = "CLAIMED"
 				dailyBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 60)
 				dailyBtn.Active = false
 			end
 		else
-			dailyInfo.Text = string.format("Claim Day %d reward %s", d.NextDay, rewardText)
+			dailyInfo.Text = if showTomorrow and tomorrow
+				then string.format("Day %d: %s · then $%s", d.NextDay, rewardText, commas(tomorrow.Cash))
+				else string.format("Claim Day %d reward %s", d.NextDay, rewardText)
 			if dailyBtn then
 				dailyBtn.Text = "CLAIM DAILY"
 				dailyBtn.BackgroundColor3 = Constants.Colors.Gold
