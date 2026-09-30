@@ -30,6 +30,50 @@
 - **Phone tests (Migrate to Latest Update, as shaunie6):** see PHASE 2 section below (HQ Upgrade → Fort..Capital look; ENGINEERS Defences; rebuild after breach; EMPIRE rows + PIN).
 - **Next:** Studio §11 proof still owed; do NOT set Endgame OwnerFirst=false until owner asks. Claude already pushed phase 3 tip `1cd39a6` on desktop-bud (Elite Training) — not in this ship; Code Bot can cherry-pick next. JOBs 40–42 still queued.
 
+## claude-bud JOB 40 PART E (2026-09-30, PRIORITY): BASE OWNER MARKERS, visible from anywhere (branch `claude/desktop-bud`)
+**Flags:** `BaseMarkerConfig.Live` (`Enabled`, `OwnerFirst = true`, by VIEWER).
+- **Off / not live for the viewer:** no marker; the v123 base sign and the map are unchanged.
+- **To launch:** Code Bot sets `OwnerFirst = false`.
+
+**Server (`Services/BaseMarkerService`)**
+- It publishes data only: one Configuration per plot under ReplicatedStorage.WE_BaseMarkers, streaming-safe.
+- Fields: Owner, Name, User, Nation (the flag the owner shows, from the plot's NationFlag view; neutral / hidden = none),
+  Prestige, Clan tag, ClanId, Pos (the plot centre).
+- Written only on change: on a claim (BaseService.OnPlotReady), a leave (+1 s), and a 5 s sweep (rebirths, nation picks,
+  clan changes). Nothing per frame.
+
+**Client (`Controllers/BaseMarkerController`)**
+- **Marker:** one BillboardGui per plot on a local anchor 70 studs over the plot centre. AlwaysOnTop, MaxDistance 5000:
+  the ONE documented exception, now written in CLAUDE.md's world-label bullet and ASSUMPTIONS.
+- **Pill:** the nation flag (NationTexture atlas cell; an army-green chip without one), DisplayName ([CLAN] prefix),
+  @username, and the gold rank chip ("COMMANDER R3"; hidden at R0).
+- **Tints:** own base green + "YOU"; a clan-mate's base blue; OPEN BASE grey and smaller at 60 %.
+- **10 Hz step for all markers:** hidden inside 60 studs, fading to full at 90 (the v123 sign takes over at the gate);
+  size MaxPx 230x58 near -> MinPx 150x42 far.
+- **Compact form** (flag + rank): past 1,800 studs, or the farther of two markers within 90 px on screen.
+- **Not done:** the optional map-icon change (part E.4). The map is untouched.
+
+**Checks**
+- `tools/sim/run_base_marker_test.py` (13 checks): fade / size / rank / compact rule; owned / open / left plots; a
+  hidden or neutral nation shows no flag; the clan tag.
+- `tools/checks/claude_bud_job40.py` (part E pins, incl. AlwaysOnTop only in the documented files).
+- BuyPathStatic PASS=7166 FAIL=0.
+
+**Risk (owner decision):** CLAUDE.md's nation rules forbid a flag shown "as a target". The marker shows the owner's own
+cosmetic flag over his base, and JOB 41 part C turns the markers into raid TARGETS. If that counts, the flag should be
+dropped from markers used as targets (the name + rank stay).
+
+**Not verified (Studio / phone):**
+- the 2-player screenshots (far corner and 100 studs, 800x360 and 1920x1080);
+- the fade at the gate with the v123 sign;
+- a leave -> OPEN BASE within 5 s.
+
+**Test ON HIS PHONE**
+1. From the far side of the map: every occupied base shows a marker (flag, name, @username, rank), readable on the
+   phone.
+2. Walk to a base: the marker fades out near the gate and the base sign shows. Your own base reads YOU in green.
+3. When the other player leaves, his base reads OPEN BASE within 5 s; when he rejoins and claims, his marker is back.
+   He picks a flag or rebirths: it updates within 5 s.
 ## claude-bud JOB 39 PHASE 5 (2026-09-30): WARHEADS + HEIST KITS + INTEL OFFICE + BLACK MARKET + reward scaling + R25-R40 unlocks (branch `claude/desktop-bud`)
 Owner-first (`EndgameConfig.Parts.Warheads / Heist / Contracts / BlackMarket / RewardScaling` = true): every JOB 39 part
 is now on for the owner. Off / not live: the silo, bank, bounty, raid and army code behave exactly as before (each hook

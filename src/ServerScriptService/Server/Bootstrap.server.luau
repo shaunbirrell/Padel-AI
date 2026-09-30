@@ -71,6 +71,7 @@ local PremiumGunService = safeRequire("PremiumGunService", Services.PremiumGunSe
 local ShopOverhaulService = safeRequire("ShopOverhaulService", Services.ShopOverhaulService) -- claude-bud JOB 36
 local CheckpointGuardService = safeRequire("CheckpointGuardService", Services.CheckpointGuardService) -- claude-bud JOB 37
 local EndgameService = safeRequire("EndgameService", Services.EndgameService) -- claude-bud JOB 39
+local BaseMarkerService = safeRequire("BaseMarkerService", Services.BaseMarkerService) -- claude-bud JOB 40 part E
 local StorePropsService = safeRequire("StorePropsService", Services.StorePropsService) -- Code Bot STORE-PROPS v132 (DO NOT REMOVE)
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
@@ -600,6 +601,7 @@ safeInit("PremiumGunService", PremiumGunService, deps) -- claude-bud JOB 35: pre
 safeInit("ShopOverhaulService", ShopOverhaulService, deps) -- claude-bud JOB 36: shop overhaul (after Monetization / Economy / Base / SquadOrders)
 safeInit("CheckpointGuardService", CheckpointGuardService, deps) -- claude-bud JOB 37: road checkpoint guards (after Combat / Mission / Monetization)
 safeInit("EndgameService", EndgameService, deps) -- claude-bud JOB 39: endgame progression (after Economy / Base / BaseSign)
+safeInit("BaseMarkerService", BaseMarkerService, deps) -- claude-bud JOB 40 part E: base owner marker data (after Base / Clan / BaseSign)
 safeInit("ArmyPlan", safeRequire("ArmyPlan", Modules.ArmyPlan), deps) -- claude-bud JOB 38: army ATTACK auto-clear / SEND / RECALL (after SquadOrders / GateDefense / MoneyCollector)
 safeInit("StorePropsService", StorePropsService, deps) -- Code Bot STORE-PROPS v132: Creator Store props (after RebirthZone; lazy, never blocks)
 safeInit("CaptureStipendService", CaptureStipendService, deps)

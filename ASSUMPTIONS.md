@@ -9849,3 +9849,15 @@ ds_territories.luau T3):
   job is not live for see exactly today's rebirth screen. The Legend Parade is client-only.
 - **Bounty scaling:** the bounty's reason ("plaza_bounty") is multiplied, so the income-sized target is divided by the
   player's cash multiplier before scaling (no double count).
+
+## 2026-09-30 — claude-bud JOB 40 part E: base owner markers
+- **The world-label exception:** the base owner marker is the ONE documented exception to the world-label rules
+  (MaxDistance <= 40, AlwaysOnTop only for the objective marker, flags as Textures). The owner approved it (JOB 40
+  part E, Shaun 14:44 Dublin), and it is written into CLAUDE.md's world-label bullet.
+- **Owner-first by viewer:** the flag gates who SEES markers; the data is published for every plot (the same public
+  data as the v123 sign).
+- **The flag:** the flag is the nation the plot's own NationFlag view shows (view.Show and not neutral). There is no
+  clan-flag art, so clans show as a "[TAG]" prefix. Allied = same ClanId as the viewer's own base record.
+- **Data home:** the marker data lives in ReplicatedStorage (not on the workspace plot folders), so a client never
+  depends on a streamed workspace part.
+- **Map icons:** the optional map-icon change (E.4) is not done; the map is untouched.

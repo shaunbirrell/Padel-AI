@@ -113,6 +113,9 @@ Design, build and verify for a **phone in landscape first**, PC second. Anything
   - At most 3 on screen at a base and 5 at an outpost.
   - `AlwaysOnTop` only for the one active objective marker.
   - No debug labels on live.
+  - The one documented exception (owner-approved 2026-09-30, JOB 40 part E): the **base owner marker** (one per
+    occupied base, `BaseMarkerConfig`: name, flag, rank, `MaxDistance` 5000, `AlwaysOnTop`, hidden inside 60 studs).
+    Nothing else gets this.
 - **Pointers:** anything that points a player somewhere (tutorial beam, waypoint, GO line) resolves to **their own** plot or the nearest valid target, never a fixed world marker.
 - **Combat fairness:**
   - The server never trusts a target id sent by the client.
