@@ -9910,3 +9910,25 @@ ds_territories.luau T3):
   The rebirth title is gone from the tag (the "VETERAN" overlap).
 - **Height:** it rises with distance (150 + 6 %, max 260 studs), so far tags stay above the horizon; the tallest base
   kit is under 100 studs.
+
+## 2026-10-01 — Code Bot v156: real Robux prices, plain Shop text, ARMY KILLS board
+- **Price source:** every R$ price and product name in the Shop, the Supply Depot tab, the purchase stands and the
+  offer cards comes from `Shared/Util/LivePrices` (server `MarketplaceService:GetProductInfo`, pcall'd, one round per
+  server at start then every 10 min, published as ReplicatedStorage attributes `WE_Px_<GP|DP>_<Key>` /
+  `WE_PxN_<GP|DP>_<Key>`). The MonetizationConfig `RobuxPrice` / `DisplayName` are only the fallback while the first
+  lookup is in flight or if Roblox fails. Display only: prompts and grants are unchanged.
+- **Fallbacks corrected, prices untouched:** the audit found two dev products whose config disagreed with the Creator
+  Hub: StarterBundle (149 "Commander Starter Pack" vs Roblox 249 "Commander Starter Bundle") and ExtraSoldierSlot (99
+  "Army Expansion (+10)" vs Roblox 79 "Extra Soldier Slot"). The config fallbacks now equal Roblox. No Creator Hub price
+  was changed; the v71 D2 decision to sell the Starter Pack at 149 was never applied on Roblox (owner's call).
+- **Roblox-side text is stale (not changed, owner action):** the Creator Hub description of the Starter Bundle still
+  says "25,000 cash + 25 gold jumpstart" (the game grants $50,000 + Auto Collect) and Extra Soldier Slot says "+1
+  soldier capacity" (the game grants +10).
+- **Plain text budget:** a Shop row sub is at most 56 characters and a title 48 (phone 1024x471: panel capped at 900 v,
+  ~698 v text column, 20 v Gotham ~11-12 v per character). `tools/sim/run_shop_render_test.py` checks every row.
+- **ARMY KILLS:** a leaderboard, so it has its own switch (`LeaderboardConfig.ArmyKillsBoardLive = true`) instead of
+  waiting for army orders to be live for everyone; `ArmyOrdersConfig.Live.OwnerFirst` stays true. Kills made by the
+  army's normal fire (FOLLOW / HOLD / DEFEND escort shots on checkpoint / bank guards, base / tower guards and enemy
+  players) count, not only ATTACK / SEND. Army units do not shoot enemy army soldiers yet (JOB 43), so those kills
+  cannot count until that ships. The weekly and all-time ARMY KILLS stores start empty (earlier kills were never
+  counted for anyone but the owner, who is excluded).

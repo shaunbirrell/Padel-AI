@@ -21,6 +21,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local LivePrices = require(Shared.Util.LivePrices) -- Code Bot v156: the real Roblox price / name
 
 local PurchaseStands = {}
 
@@ -42,8 +43,9 @@ export type StandOpts = {
 -- price + name + benefit, from MonetizationConfig only
 function PurchaseStands.OfferInfo(kind: string, key: string, userId: number?): (number, string, string)
 	local def: any = if kind == "GamePass" then (MonetizationConfig.GamePasses :: any)[key] else (MonetizationConfig.DevProducts :: any)[key]
-	local price = if typeof(def) == "table" then tonumber(def.RobuxPrice) or 0 else 0
-	local name = if typeof(def) == "table" and typeof(def.DisplayName) == "string" then def.DisplayName else key
+	-- Code Bot v156: the real Roblox price and product name (config only as the fallback)
+	local price = if typeof(def) == "table" then LivePrices.Price(kind, key) else 0
+	local name = if typeof(def) == "table" then LivePrices.Name(kind, key) else key
 	local desc = (MonetizationConfig :: any).DescFor(def, userId) or "" -- claude-bud JOB 40: speed text from the helper
 	return price, name, desc
 end

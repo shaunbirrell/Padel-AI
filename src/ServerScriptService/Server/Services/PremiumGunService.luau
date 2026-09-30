@@ -25,6 +25,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local PremiumGunsConfig = require(Shared.Configs.PremiumGunsConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local LivePrices = require(Shared.Util.LivePrices) -- Code Bot v156: the real Roblox price (config = fallback)
 local WeaponConfig = require(Shared.Configs.WeaponConfig)
 local AdminConfig = require(Shared.Configs.AdminConfig)
 local PlotFrame = require(Shared.Util.PlotFrame)
@@ -48,7 +49,7 @@ end
 
 local function passPrice(key: string): number
 	local d = passDef(key)
-	return if typeof(d) == "table" then math.floor(tonumber(d.RobuxPrice) or 0) else 0
+	return if typeof(d) == "table" then LivePrices.Price("GamePass", key) else 0 -- Code Bot v156: the real price
 end
 
 local function passId(key: string): number

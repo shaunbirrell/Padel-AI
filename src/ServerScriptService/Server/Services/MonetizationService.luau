@@ -31,6 +31,7 @@ local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local OfferLedger = require(script.Parent.Parent.Modules.OfferLedger) -- Code Bot v153: shown-confirmed soft offers
+local LivePrices = require(Shared.Util.LivePrices) -- Code Bot v156: the real Roblox price / name on every offer
 
 local MonetizationService = {}
 
@@ -958,8 +959,8 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 			(remote :: RemoteEvent):FireClient(player, {
 				ProductKey = "StarterBundle",
 				ProductId = bundle.Id,
-				DisplayName = bundle.DisplayName or "Starter Pack",
-				RobuxPrice = bundle.RobuxPrice,
+				DisplayName = LivePrices.Name("DevProduct", "StarterBundle"), -- Code Bot v156: the Roblox product name
+				RobuxPrice = LivePrices.Price("DevProduct", "StarterBundle"), -- Code Bot v156: the real price (was config 149)
 				Reason = if typeof(reason) == "string" then reason else "session",
 				EndsUnix = limitedEnds, -- claude-bud JOB 5d: the toast shows the time left (nil = no limit)
 				AckId = ackId, -- Code Bot v153: echo back on OfferResult ("shown" / "dropped" / "refused")
@@ -1161,7 +1162,7 @@ function MonetizationService.OfferMoment(player: Player, moment: string)
 	if moment == "rebirth" and place.AfterRebirth == true then
 		local dc: any = MonetizationConfig.GamePasses.DoubleCash
 		if dc and (tonumber(dc.Id) or 0) ~= 0 and not ownsCached(player, "DoubleCash") then
-			kind, key, title, cta = "GamePass", "DoubleCash", "Rebuild faster: 2x Cash", tostring(dc.RobuxPrice) .. " R$"
+			kind, key, title, cta = "GamePass", "DoubleCash", "Rebuild faster: 2x Cash", LivePrices.Cta("GamePass", "DoubleCash")
 		else
 			local cl: any = MonetizationConfig.DevProducts.CashLarge
 			if cl and (tonumber(cl.Id) or 0) ~= 0 then
@@ -1171,22 +1172,22 @@ function MonetizationService.OfferMoment(player: Player, moment: string)
 					boost = ShopOverhaulConfig.CashPackAmount("CashLarge", MonetizationService.PassivePerMin(player, prof)) or boost
 				end
 				local s = tostring(math.floor(boost)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
-				kind, key, title, cta = "DevProduct", "CashLarge", "Fresh start boost: $" .. s, tostring(cl.RobuxPrice) .. " R$"
+				kind, key, title, cta = "DevProduct", "CashLarge", "Fresh start boost: $" .. s, LivePrices.Cta("DevProduct", "CashLarge")
 			end
 		end
 	elseif moment == "army" and place.ArmyWiped == true and ShopOverhaulConfig.LiveFor(player.UserId) then
 		-- claude-bud JOB 36: the army-wiped offer sells Bigger Army (the pass); Army Expansion left the Shop
 		local ba: any = (MonetizationConfig.GamePasses :: any)[ShopOverhaulConfig.ArmyWipedPass]
 		if ba and (tonumber(ba.Id) or 0) ~= 0 and not ownsCached(player, ShopOverhaulConfig.ArmyWipedPass) then
-			kind, key, title, cta = "GamePass", ShopOverhaulConfig.ArmyWipedPass, "Army down! Bigger Army: +10 soldiers", tostring(ba.RobuxPrice) .. " R$"
+			kind, key, title, cta = "GamePass", ShopOverhaulConfig.ArmyWipedPass, "Army down! Bigger Army: +10 soldiers", LivePrices.Cta("GamePass", ShopOverhaulConfig.ArmyWipedPass)
 		end
 	elseif moment == "army" and place.ArmyWiped == true then
 		local rf: any = (MonetizationConfig.DevProducts :: any).SoldierRefill
 		local ex: any = (MonetizationConfig.DevProducts :: any).ExtraSoldierSlot
 		if rf and (tonumber(rf.Id) or 0) ~= 0 and MonetizationConfig.SkuLiveFor(player.UserId, "SoldierRefill") then
-			kind, key, title, cta = "DevProduct", "SoldierRefill", "Army down! Refill instantly", tostring(rf.RobuxPrice) .. " R$"
+			kind, key, title, cta = "DevProduct", "SoldierRefill", "Army down! Refill instantly", LivePrices.Cta("DevProduct", "SoldierRefill")
 		elseif ex and (tonumber(ex.Id) or 0) ~= 0 and not ownsCached(player, "ExtraSoldierSlot") then
-			kind, key, title, cta = "DevProduct", "ExtraSoldierSlot", "Bigger army: +10 soldiers", tostring(ex.RobuxPrice) .. " R$"
+			kind, key, title, cta = "DevProduct", "ExtraSoldierSlot", "Bigger army: +10 soldiers", LivePrices.Cta("DevProduct", "ExtraSoldierSlot")
 		end
 	end
 	if key == nil or not MonetizationService.ClaimSoftOfferSlot(player) then
@@ -1298,6 +1299,8 @@ function MonetizationService.Init(deps: { [string]: any })
 	MarketplaceService.ProcessReceipt = function(receiptInfo)
 		return MonetizationService.ProcessReceipt(receiptInfo)
 	end
+	-- Code Bot v156: the real Robux prices / names (GetProductInfo, cached, published on ReplicatedStorage)
+	LivePrices.StartServer()
 
 	-- Client may fire to log intent; grants still ONLY happen in ProcessReceipt
 	local shopRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseDevProduct) :: RemoteEvent
@@ -1932,8 +1935,8 @@ function MonetizationService.TrySoftOfferVIP(player: Player, reason: string?)
 				(remote :: RemoteEvent):FireClient(player, {
 					ProductKey = "VIP",
 					GamePassId = gp.Id,
-					DisplayName = gp.DisplayName or "VIP",
-					RobuxPrice = gp.RobuxPrice,
+					DisplayName = LivePrices.Name("GamePass", "VIP"), -- Code Bot v156
+					RobuxPrice = LivePrices.Price("GamePass", "VIP"),
 					Reason = reason or "midgame",
 				})
 			end
@@ -1994,8 +1997,8 @@ function MonetizationService.TrySoftOfferSpeedBoost(player: Player, reason: stri
 				(remote :: RemoteEvent):FireClient(player, {
 					ProductKey = "SpeedBoost",
 					ProductId = dp.Id,
-					DisplayName = dp.DisplayName or "Speed Boost",
-					RobuxPrice = dp.RobuxPrice,
+					DisplayName = LivePrices.Name("DevProduct", "SpeedBoost"), -- Code Bot v156
+					RobuxPrice = LivePrices.Price("DevProduct", "SpeedBoost"),
 					Reason = reason or "vehicle_sit",
 				})
 			end
@@ -2055,8 +2058,8 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 				(remote :: RemoteEvent):FireClient(player, {
 					ProductKey = "CashMega",
 					ProductId = dp.Id,
-					DisplayName = dp.DisplayName or "Cash Pack Mega",
-					RobuxPrice = dp.RobuxPrice,
+					DisplayName = LivePrices.Name("DevProduct", "CashMega"), -- Code Bot v156
+					RobuxPrice = LivePrices.Price("DevProduct", "CashMega"),
 					Reason = reason or "pending_collect",
 				})
 			end

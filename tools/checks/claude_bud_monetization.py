@@ -34,7 +34,8 @@ must_contain(_cbud_sc, "or not MonetizationConfig.SkuLiveFor(player.UserId, prod
 must_contain(_cbud_sc, "or not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then", "CLAUDE-BUD: game pass prompt gated on the client")
 
 # Supersedes the retired body pins (K1 F7/F8/F9 copy, M F8, P F7, S prompt, F9 pad): the Ids are live now; the gates hold.
-must_contain(_cbud_mc, 'Description = "Gold pumpjacks: +50% pump income",', "CLAUDE-BUD: F9 golden pump Shop copy says the income boost")
+# Code Bot v156: plain player text (was "Gold pumpjacks: +50% pump income")
+must_contain(_cbud_mc, 'Description = "Gold oil pumps that earn 50% more, forever",', "CLAUDE-BUD: F9 golden pump Shop copy says the income boost")
 must_contain(_cbud_ps, "KeepBaseLive = keepBaseLive(player),", "CLAUDE-BUD: F7 KeepBaseLive pushed per player (SOON for anyone the rollout skips)")
 must_contain(_cbud_ps, "return PrestigeConfig.KeepBase.Enabled == true\n\t\tand id ~= nil\n\t\tand id ~= 0\n", "CLAUDE-BUD: F7 KeepBaseLive still needs Enabled and a non-zero Id")
 must_contain(_cbud_sc, 'if (tonumber(def.Id) or 0) == 0 or not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then\n\t\ttoast("Coming soon", "Info")\n\t\treturn\n\tend\n\t-- Log intent on server; NEVER treat client confirmation as a grant', "CLAUDE-BUD: promptGamePass stops before any intent or Roblox prompt")

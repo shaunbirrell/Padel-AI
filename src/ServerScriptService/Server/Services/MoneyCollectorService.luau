@@ -31,6 +31,7 @@ local RaidConfig = require(Shared.Configs.RaidConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig) -- atmprompt: the ATM Collect prompt (AtmCollectPrompt)
 local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P0-6 new-thief protection
 local TycoonMath = require(Shared.Util.TycoonMath) -- F4 ATM screen: ShortCash digits, "+$24/s" rate
+local LivePrices = require(Shared.Util.LivePrices) -- Code Bot v156: the real Roblox price / name on the ATM offers
 local ServerModules = script.Parent.Parent.Modules
 local RemoteSetup = require(ServerModules.RemoteSetup)
 
@@ -1186,8 +1187,8 @@ function MoneyCollectorService.Collect(player: Player, silent: boolean?): (boole
 					(remote :: RemoteEvent):FireClient(player, {
 						ProductKey = "AutoCollect",
 						GamePassId = gp.Id,
-						DisplayName = gp.DisplayName or "Auto Collect",
-						RobuxPrice = gp.RobuxPrice,
+						DisplayName = LivePrices.Name("GamePass", "AutoCollect"), -- Code Bot v156
+						RobuxPrice = LivePrices.Price("GamePass", "AutoCollect"),
 					})
 				end
 				-- (no companion Info line: the client's offer toast is the whole offer — spec §4.2)
@@ -1228,8 +1229,8 @@ function MoneyCollectorService.Collect(player: Player, silent: boolean?): (boole
 					(remote :: RemoteEvent):FireClient(player, {
 						ProductKey = "DoubleCash",
 						GamePassId = gp.Id,
-						DisplayName = gp.DisplayName or "2x Cash",
-						RobuxPrice = gp.RobuxPrice,
+						DisplayName = LivePrices.Name("GamePass", "DoubleCash"), -- Code Bot v156
+						RobuxPrice = LivePrices.Price("GamePass", "DoubleCash"),
 					})
 				end
 				-- (no companion Info line: the client's offer toast is the whole offer — spec §4.2)

@@ -75,7 +75,8 @@ _j36("overhaul and ShopOverhaulConfig.HideWhenLive[key] == true" in _SC and "Hid
 # shop order / labels
 _j36("r.Row.LayoutOrder = ShopOverhaulConfig.Rank(r.Row.Name) * 1000 + r.Row.LayoutOrder" in _SC and "passSub = ShopOverhaulConfig.PermanentPrefix" in _SC
      and "passTitle = ShopOverhaulConfig.BestValueLabel" in _SC, "Shop order, PERMANENT passes, BEST VALUE on 2x Cash")
-_j36("r.Sub.Text = \"+$\" .. formatCash(packCash(r.Key, def)) .. \" Cash\"" in _SC and "local cashAmount = packCash(\"CashMega\", def)" in _SC,
+# Code Bot v156: the pack rows read "Get $X cash right away" (cashPackText, still packCash's live amount)
+_j36("r.Sub.Text = cashPackText(r.Key, def)" in _SC and "return \"Get $\" .. s .. \" cash right away\"" in _SC and "local n = math.floor(packCash(key, def))" in _SC and "local cashAmount = packCash(\"CashMega\", def)" in _SC,
      "Shop rows and the Mega offer show the live pack amount")
 # perks
 _j36("return math.clamp(tonumber(b.Mult) or 1, 1, 2) * superMult(player)" in _SQ and "* superMult(owner) + 0.5" in _SQ and "* superMult(player) + 0.5" in _SQ,

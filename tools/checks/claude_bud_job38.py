@@ -89,8 +89,10 @@ _j38("FastTravel" not in _j38_code(_CL + "Controllers/MapController.luau") and '
      "the map adds ONE button (SEND ARMY) and no fast travel")
 # the ARMY KILLS board (addendum)
 _LB = _j38_src("src/ReplicatedStorage/Shared/Configs/LeaderboardConfig.luau")
-_j38('Id = "ArmyKills", Title = "ARMY KILLS", Unit = "kills", AllTime = true, Weekly = true' in _LB and "AOC.LiveForAll()" in _LB and '{ Id = "Army", Title = "TOP ARMY"' in _LB,
-     "ARMY KILLS replaces TOP ARMY in the same slot only once live for everyone (new store key WE_LB2_ArmyKills)")
+# Code Bot v156 (Shaun 2026-10-01): the board has its own switch (ArmyKillsBoardLive), live for everyone while army
+# orders stay owner-first; see tools/checks/codebot_v156.py. TOP ARMY stays defined (the switch off = the old board).
+_j38('Id = "ArmyKills", Title = "ARMY KILLS", Unit = "kills", AllTime = true, Weekly = true' in _LB and "LeaderboardConfig.ArmyKillsBoardLive = true" in _LB and '{ Id = "Army", Title = "TOP ARMY"' in _LB,
+     "ARMY KILLS replaces TOP ARMY in the same slot (its own switch, live for everyone; new store key WE_LB2_ArmyKills)")
 _j38("function EngagementService.NoteArmyKill(" in _j38_code(_SV + "Services/EngagementService.luau") and 'killCounted and killer and typeof(_info) == "table" and _info.WeaponId == "Squad"' in _j38_code(_SV + "Services/EngagementService.luau"),
      "army kills of players reuse the MOST KILLS kill rules (no self / clan / farmed pair)")
 

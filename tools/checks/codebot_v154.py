@@ -26,8 +26,8 @@ _C154 = "src/ReplicatedStorage/Shared/Configs/"
 _CL154 = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for _f in (_S154 + "Services/DataService.luau", _S154 + "Services/BaseService.luau", _S154 + "EarlyRemotes.server.luau"):
-	_cb154('SetAttribute("WE_Build", 155)' in _rd154(_f), "CODEBOT v154: WE_Build=155 " + _f.rsplit("/", 1)[-1])
-_cb154("WE_Build=155" in _rd154(_S154 + "Services/DataService.luau"), "CODEBOT v154: DataService profile-loaded log says WE_Build=155")
+	_cb154('SetAttribute("WE_Build", 156)' in _rd154(_f), "CODEBOT v154: WE_Build=156 " + _f.rsplit("/", 1)[-1])
+_cb154("WE_Build=156" in _rd154(_S154 + "Services/DataService.luau"), "CODEBOT v154: DataService profile-loaded log says WE_Build=156")
 
 _BMC = _rd154(_C154 + "BaseMarkerConfig.luau")
 _BMK = _rd154(_CL154 + "BaseMarkerController.luau")
@@ -82,7 +82,11 @@ try:
 	if _wd:
 		_cb154(not any(l.startswith(("+", "-")) and "WE_Building" in l for l in _wd.splitlines()),
 			"CODEBOT v154: no WE_Building* line changed since v153 tip")
-		_cb154(not any(l.startswith(("+", "-")) and not l.startswith(("+++", "---")) and _re154.search(r"RobuxPrice\s*=|\bId\s*=\s*\d{6,}", l) for l in _wd.splitlines()),
-			"CODEBOT v154: no RobuxPrice / product Id line changed since v153")
+		# v156 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v156.py (the config RobuxPrice is now only the display
+		# fallback; v156 corrected StarterBundle 149->249 and ExtraSoldierSlot 99->79 to the real Creator Hub prices and pins every
+		# config price to the audited Creator Hub price + every Id unchanged since v155):
+		# _cb154(not any(l.startswith(("+", "-")) and not l.startswith(("+++", "---")) and _re154.search(r"RobuxPrice\s*=|\bId\s*=\s*\d{6,}", l) for l in _wd.splitlines()),
+		# 	"CODEBOT v154: no RobuxPrice / product Id line changed since v153")
+		pass
 except Exception:
 	pass

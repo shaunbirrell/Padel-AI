@@ -75,7 +75,11 @@ try:
 	_cb145(not any(l in (_C145 + "WeaponConfig.luau", _C145 + "RebirthConfig.luau") for l in _wb.splitlines()),
 		"CODEBOT v145: RPG hold / WeaponsLive configs untouched since v144 tip (claude-bud JOB 39 replacement)")
 	_md = _sp145.run(["git", "diff", "-U0", "aa7f88e", "--", _C145 + "MonetizationConfig.luau"], capture_output=True, text=True).stdout
-	_cb145(not any(_re145.search(r"\bRobuxPrice\s*=|(^|[\s{,])Id\s*=\s*\d", l) for l in _md.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))),
-		"CODEBOT v145: no Robux price / Id line changed in MonetizationConfig since v144 tip (claude-bud JOB 40 replacement)")
+	# v156 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v156.py (the config RobuxPrice is now only the display
+	# fallback; v156 corrected StarterBundle 149->249 and ExtraSoldierSlot 99->79 to the real Creator Hub prices and pins every
+	# config price to the audited Creator Hub price + every Id unchanged since v155):
+	# _cb145(not any(_re145.search(r"\bRobuxPrice\s*=|(^|[\s{,])Id\s*=\s*\d", l) for l in _md.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))),
+	# 	"CODEBOT v145: no Robux price / Id line changed in MonetizationConfig since v144 tip (claude-bud JOB 40 replacement)")
+	pass
 except Exception:
 	pass

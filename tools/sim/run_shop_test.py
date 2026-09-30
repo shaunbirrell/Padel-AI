@@ -33,6 +33,7 @@ MODS = {
     "Constants": SH / "Constants.luau",
     "Configs/ShopOverhaulConfig": SH / "Configs/ShopOverhaulConfig.luau",
     "Configs/MonetizationConfig": SH / "Configs/MonetizationConfig.luau",
+    "Util/LivePrices": SH / "Util/LivePrices.luau",  # Code Bot v156: the real Roblox price / name (config fallback here)
     "Configs/RetentionConfig": SH / "Configs/RetentionConfig.luau",
     "Configs/AdminConfig": SH / "Configs/AdminConfig.luau",
     "Modules/PurchaseStands": SV / "Modules/PurchaseStands.luau",

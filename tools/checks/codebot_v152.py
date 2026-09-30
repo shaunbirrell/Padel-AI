@@ -69,6 +69,10 @@ try:
 	_wd = _sp152.run(["git", "diff", "-U0", "04492a2", "--", "src"], capture_output=True, text=True).stdout
 	_cb152(not any(l.startswith(("+", "-")) and "WE_Building" in l for l in _wd.splitlines()), "CODEBOT v152: no WE_Building* line changed since v151 tip")
 	_wr = _sp152.run(["git", "diff", "-U0", "04492a2", "--", "src"], capture_output=True, text=True).stdout
-	_cb152(not any(l.startswith(("+", "-")) and _re152.search(r"RobuxPrice\s*=", l) for l in _wr.splitlines()), "CODEBOT v152: no RobuxPrice line changed")
+	# v156 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v156.py (the config RobuxPrice is now only the display
+	# fallback; v156 corrected StarterBundle 149->249 and ExtraSoldierSlot 99->79 to the real Creator Hub prices and pins every
+	# config price to the audited Creator Hub price + every Id unchanged since v155):
+	# _cb152(not any(l.startswith(("+", "-")) and _re152.search(r"RobuxPrice\s*=", l) for l in _wr.splitlines()), "CODEBOT v152: no RobuxPrice line changed")
+	pass
 except Exception:
 	pass

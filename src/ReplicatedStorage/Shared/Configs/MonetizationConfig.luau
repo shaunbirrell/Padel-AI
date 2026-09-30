@@ -74,12 +74,12 @@ local MonetizationConfig = {
 			DisplayName = "VIP",
 			RobuxPrice = 199,
 			CashBonusMult = 0.25, -- additive +25% cash earnings
-			Description = "+25% Cash earnings",
+			Description = "+25% cash on everything you earn", -- Code Bot v156: plain player text
 			-- claude-bud JOB 36 (ShopOverhaulConfig, owner-first): the premium VIP. Shown at this price while the overhaul is
 			-- live. codebot_v142 (2026-09-30): the Creator Hub price stays 199 (owner has NOT approved 349), so the Shop shows
 			-- the real price. Change this only together with the Creator Hub price.
 			OverhaulRobuxPrice = 199,
-			OverhaulDescription = "+50% Cash, daily supply crate, VIP lounge, gold name",
+			OverhaulDescription = "+50% cash, a daily cash crate and VIP lounge", -- Code Bot v156: plain player text
 		},
 		-- claude-bud JOB 36: new passes (ShopOverhaulConfig). codebot_v140 (2026-09-30): owner created them on the Creator
 		-- Hub (universe 10767159222, on sale, prices match); Ids wired. Implies = passes this one counts as owning.
@@ -90,7 +90,7 @@ local MonetizationConfig = {
 			RobuxPrice = 799,
 			Implies = { "DoubleCash", "AutoCollect", "VIP", "BiggerArmy" },
 			HideFromShop = true, -- listed by the overhaul Shop only (hidden once all four are owned)
-			Description = "2x Cash + Auto Collect + VIP + Bigger Army",
+			Description = "2x cash, Auto Collect, VIP and Bigger Army", -- Code Bot v156: plain player text
 		},
 		SuperSoldiers = {
 			Id = 1998231741,
@@ -98,7 +98,7 @@ local MonetizationConfig = {
 			DisplayName = "Super Soldiers",
 			RobuxPrice = 349,
 			HideFromShop = true, -- listed by the overhaul Shop only
-			Description = "+25% army damage and soldier health",
+			Description = "Your soldiers get +25% damage and health", -- Code Bot v156: plain player text
 		},
 		DoubleHP = {
 			Id = 2002214665,
@@ -113,14 +113,14 @@ local MonetizationConfig = {
 			DisplayName = "2x Cash",
 			RobuxPrice = 149,
 			CashMult = 2, -- multiplicative 2x cash earnings
-			Description = "2x Cash earnings",
+			Description = "Double your cash income", -- Code Bot v156: plain player text
 		},
 		DoubleXP = {
 			Id = 1982487698,
 			DisplayName = "Double XP",
 			RobuxPrice = 99,
 			XPMult = 2,
-			Description = "2x XP",
+			Description = "Double the XP you earn", -- Code Bot v156: plain player text
 		},
 		-- v69: HideFromShop — no code applies this theme yet, so it is not sold in the in-game Shop.
 		-- Id kept unchanged (existing owners keep the pass); remove HideFromShop once the theme ships.
@@ -135,7 +135,7 @@ local MonetizationConfig = {
 			Id = 1985115501,
 			DisplayName = "Auto Collect",
 			RobuxPrice = 99,
-			Description = "Auto-claims Money Collector without touch",
+			Description = "Your ATM cash is collected for you", -- Code Bot v156: plain player text
 		},
 		-- F8 (owner's 11 features): 5 R$ Speed Pass, walk speed x WalkSpeedMult forever. Id = 0 until the owner creates
 		-- the pass. The 99 R$ Speed Boost Developer Product (DevProducts.SpeedBoost) stays; owning both gives the higher
@@ -160,7 +160,7 @@ local MonetizationConfig = {
 			VehicleIds = { "PremiumRazorfang" },
 			BundlePassKeys = { "PV_MotorPool" },
 			Feature = "PremiumVehicles",
-			Description = "Premium armored car with twin hood machine guns",
+			Description = "Armored car with twin machine guns", -- Code Bot v156: plain player text
 		},
 		PV_Bastion = {
 			Id = 0,
@@ -179,7 +179,7 @@ local MonetizationConfig = {
 			VehicleIds = { "PremiumWarlord" },
 			BundlePassKeys = { "PV_MotorPool" },
 			Feature = "PremiumVehicles",
-			Description = "Premium heavy tank with a siege cannon",
+			Description = "Heavy tank with a siege cannon", -- Code Bot v156: plain player text
 		},
 		PV_MotorPool = {
 			Id = 0,
@@ -197,7 +197,7 @@ local MonetizationConfig = {
 			RobuxPrice = 999,
 			VehicleIds = { "PremiumStormwing" },
 			Feature = "PremiumVehicles",
-			Description = "Premium attack helicopter",
+			Description = "Attack helicopter with a chin gun", -- Code Bot v156: plain player text
 		},
 		PV_Tidebreaker = { -- M6b (after waterways / boats)
 			Id = 1999263465,
@@ -205,7 +205,7 @@ local MonetizationConfig = {
 			RobuxPrice = 299,
 			VehicleIds = { "PremiumTidebreaker" },
 			Feature = "PremiumVehicles",
-			Description = "Premium assault boat",
+			Description = "Fast assault boat with a machine gun", -- Code Bot v156: plain player text
 		},
 		-- claude-bud JOB 5a: Robux-only jet and capital ship (VehicleConfig Premium defs). TODO(owner): create on the Creator
 		-- Hub, then paste the Ids (tools/wire-monetization-ids.py). Id 0 = hidden everywhere, nothing prompts.
@@ -215,7 +215,7 @@ local MonetizationConfig = {
 			RobuxPrice = 899,
 			VehicleIds = { "PremiumSkylance" },
 			Feature = "PremiumVehicles",
-			Description = "Robux-only interceptor jet",
+			Description = "Fighter jet with an air cannon", -- Code Bot v156: plain player text
 		},
 		-- claude-bud JOB 5b: Bigger Army pass (+ArmyCapBonus army capacity, mirrored into profile.Entitlements.BiggerArmy on
 		-- ownership so SoldierService's cap reads it). TODO(owner): create "Bigger Army" (game pass, 249 R$), paste the Id.
@@ -224,7 +224,7 @@ local MonetizationConfig = {
 			DisplayName = "Bigger Army",
 			RobuxPrice = 249,
 			ArmyCapBonus = 10,
-			Description = "+10 soldiers in your army, forever",
+			Description = "+10 soldiers in your army", -- Code Bot v156: plain player text (the Shop adds PERMANENT)
 		},
 		-- claude-bud JOB 6: Extra Garage Slot: +1 vehicle slot. Spawning a different vehicle PARKS the one you have out
 		-- (it stays in the world, health kept) instead of removing it; sit in it to drive it again (VehicleService
@@ -234,7 +234,7 @@ local MonetizationConfig = {
 			Id = 1999359549,
 			DisplayName = "Extra Garage Slot",
 			RobuxPrice = 199,
-			Description = "+1 vehicle slot: keep a second vehicle out",
+			Description = "Keep 2 vehicles out at the same time", -- Code Bot v156: plain player text
 		},
 		PV_Leviathan = {
 			Id = 2001398410,
@@ -242,7 +242,7 @@ local MonetizationConfig = {
 			RobuxPrice = 1199,
 			VehicleIds = { "PremiumLeviathan" },
 			Feature = "PremiumVehicles",
-			Description = "Robux-only dreadnought",
+			Description = "Giant battleship with a deck cannon", -- Code Bot v156: plain player text
 		},
 		-- claude-bud JOB 35: the PREMIUM GUNS ARMORY (PremiumGunsConfig; WeaponConfig Premium defs). Robux-only guns; owning
 		-- a pass sets profile.Weapons[id] = true (PremiumGunService, on join + OnPassOwned). Id 0 = hidden in the Shop, the
@@ -255,7 +255,7 @@ local MonetizationConfig = {
 			WeaponIds = { "SovereignPistol" },
 			BundlePassKeys = { "PG_ArmoryPass" },
 			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
-			Description = "Gold burst pistol: 2-shot bursts",
+			Description = "Gold pistol that fires 2-shot bursts", -- Code Bot v156: plain player text
 		},
 		PG_Quake = {
 			Id = 2003492417,
@@ -264,7 +264,7 @@ local MonetizationConfig = {
 			WeaponIds = { "QuakeLauncher" },
 			BundlePassKeys = { "PG_ArmoryPass" },
 			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
-			Description = "6-round drum of lobbed grenades",
+			Description = "Lobs grenades, 6 per reload", -- Code Bot v156: plain player text
 		},
 		PG_Longshot = {
 			Id = 2003180431,
@@ -273,7 +273,7 @@ local MonetizationConfig = {
 			WeaponIds = { "LongshotSniper" },
 			BundlePassKeys = { "PG_ArmoryPass" },
 			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
-			Description = "Scoped sniper: 110 damage, 600 range",
+			Description = "Scoped sniper: 110 damage, long range", -- Code Bot v156: plain player text
 		},
 		PG_Havoc = {
 			Id = 2002250646,
@@ -282,7 +282,7 @@ local MonetizationConfig = {
 			WeaponIds = { "HavocRotary" },
 			BundlePassKeys = { "PG_ArmoryPass" },
 			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
-			Description = "Spin-up rotary gun, 150-round belt",
+			Description = "Spinning minigun with a 150-round belt", -- Code Bot v156: plain player text
 		},
 		PG_Thunderhead = {
 			Id = 1999305818,
@@ -291,7 +291,7 @@ local MonetizationConfig = {
 			WeaponIds = { "ThunderheadLauncher" },
 			BundlePassKeys = { "PG_ArmoryPass" },
 			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
-			Description = "Fires a 2-rocket salvo",
+			Description = "Fires 2 rockets at once", -- Code Bot v156: plain player text
 		},
 		PG_Tempest = {
 			Id = 2002682646,
@@ -300,7 +300,7 @@ local MonetizationConfig = {
 			WeaponIds = { "TempestRailgun" },
 			BundlePassKeys = { "PG_ArmoryPass" },
 			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
-			Description = "Charged shot that pierces 3 targets",
+			Description = "Charged shot that goes through 3 enemies", -- Code Bot v156: plain player text
 		},
 		PG_ArmoryPass = {
 			Id = 2002868467,
@@ -309,7 +309,7 @@ local MonetizationConfig = {
 			WeaponIds = { "SovereignPistol", "QuakeLauncher", "LongshotSniper", "HavocRotary", "ThunderheadLauncher", "TempestRailgun" },
 			BundlePassKeys = { "PG_Sovereign", "PG_Quake", "PG_Longshot", "PG_Havoc", "PG_Thunderhead", "PG_Tempest" }, -- hidden once all six are owned
 			HideFromShop = true,
-			Description = "All six premium guns",
+			Description = "All 6 premium guns", -- Code Bot v156: plain player text
 		},
 		-- v71 money (M1): Rebirth Boost (J13: +15% Cash per Rebirth instead of +10%, 1.5x starting Cash; no Gold x2).
 		-- RebirthConfig.Boost.GamePassKey. Id = 0 until created (OFF sale until the M7b/M7d publish).
@@ -339,6 +339,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantsBattlePassPremium = true,
+			Description = "Unlock premium rewards on every Battle Pass tier", -- Code Bot v156: plain player text (was a dev note in the Shop)
 			OneTime = true, -- v69: Premium is a boolean kept across seasons; the Shop shows OWNED once granted
 		},
 		-- Monetization add-ons (Ids = 0 until Creator Dashboard)
@@ -369,14 +370,14 @@ local MonetizationConfig = {
 		-- ExtraSoldierSlot entitlement name stay (receipts, saves and the Army panel use them).
 		ExtraSoldierSlot = {
 			Id = 3713839210,
-			DisplayName = "Army Expansion (+10)",
-			RobuxPrice = 99,
+			DisplayName = "Extra Soldier Slot", -- Code Bot v156: the Roblox product name (was "Army Expansion (+10)")
+			RobuxPrice = 79, -- Code Bot v156: the real Creator Hub price (was 99; display fallback only, LivePrices)
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "ExtraSoldierSlot",
 			ArmyCapBonus = 10,
 			OneTime = true, -- v69: boolean entitlement; a second purchase would add nothing
-			Description = "+10 army capacity, permanent",
+			Description = "+10 soldiers in your army, forever", -- Code Bot v156: plain player text
 		},
 		-- v71 money (M0): not sold any more (Barracks L1 costs $2,500 of early cash; audit F13). Id kept for receipt compat.
 		InstantBarracks = {
@@ -426,22 +427,26 @@ local MonetizationConfig = {
 			GrantEntitlement = "GoldenPumpjack",
 			OneTime = true, -- boolean entitlement: a second purchase adds nothing; the Shop shows OWNED
 			IncomeMult = 1.5, -- claude-bud: plot pump cash per tick x this for an owner (PlotOilPumpService)
-			Description = "Gold pumpjacks: +50% pump income",
+			Description = "Gold oil pumps that earn 50% more, forever", -- Code Bot v156: plain player text
 		},
 		-- v71 money (M1, owner decision D2): Commander Starter Pack v2, same Id, 149 R$, one time (J14: no timer until
 		-- M3's real 72 h window). $50,000 + Auto Collect (permanent); a buyer who already owns Auto Collect gets
 		-- StarterFallbackCash more instead. Old 249 R$ buyers get Auto Collect once (StarterGoodwill below).
 		StarterBundle = {
 			Id = 3713839505,
-			DisplayName = "Commander Starter Pack",
-			RobuxPrice = 149,
+			-- Code Bot v156: the Roblox product name and REAL price (Creator Hub: "Commander Starter Bundle", 249 R$). The
+			-- v71 D2 repricing to 149 never reached the Creator Hub, so the Shop said 149 while Roblox charged 249. These two
+			-- are only the display fallback now (Shared/Util/LivePrices reads the live product); change the price on the
+			-- Creator Hub, never here.
+			DisplayName = "Commander Starter Bundle",
+			RobuxPrice = 249,
 			Cash = 50000,
 			Gold = 0,
 			GrantEntitlement = "StarterBundle", -- OWNED key (WE_Ent_StarterBundle); also in GrantEntitlements
 			GrantEntitlements = { "StarterBundle", "AutoCollect" },
 			StarterFallbackCash = 25000,
 			OneTime = true,
-			Description = "$50,000 Cash + Auto Collect (permanent)",
+			Description = "$50,000 cash plus Auto Collect forever", -- Code Bot v156: plain player text
 		},
 		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
 		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
@@ -483,7 +488,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantSoldierRefills = 1,
-			Description = "Fill your army to its cap right now",
+			Description = "Refill your army to full right now", -- Code Bot v156: plain player text
 		},
 		PlazaAirstrike = {
 			Id = 3715442542,
@@ -492,7 +497,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantAirstrikes = 1,
-			Description = "One airstrike on the Central Plaza (3 s warning, never lethal)",
+			Description = "1 airstrike on the plaza: hurts, never kills", -- Code Bot v156: plain player text
 		},
 		RebirthKeepBase = {
 			Id = 3714663721,

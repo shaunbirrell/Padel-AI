@@ -23,7 +23,8 @@ must_contain(_s_ps, 'pp.ActionText = "Buy - " .. ROBUX .. " " .. tostring(price)
 must_contain(_s_ps, "pp.HoldDuration = S.HoldSeconds", "CLAUDE-BUD J19: a short hold (no accidental buy)")
 
 # prices from config, never typed
-must_contain(_s_ps, "local price = if typeof(def) == \"table\" then tonumber(def.RobuxPrice) or 0 else 0", "CLAUDE-BUD J19: the price comes from MonetizationConfig")
+# Code Bot v156: the real Roblox price (Shared/Util/LivePrices; MonetizationConfig RobuxPrice is its fallback)
+must_contain(_s_ps, "local price = if typeof(def) == \"table\" then LivePrices.Price(kind, key) else 0", "CLAUDE-BUD J19: the price comes from Roblox (config fallback), never typed")
 (ok if not re.search(r"R\$ ?\d|ROBUX \.\. \" \d", _s_p) else bad)("CLAUDE-BUD J19: no hard-coded price in the stand")
 
 # the purchase part keeps the old pad contract

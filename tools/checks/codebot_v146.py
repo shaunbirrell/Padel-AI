@@ -68,8 +68,12 @@ try:
 		"CODEBOT v146: RPG hold / WeaponsLive configs untouched since v145 tip (claude-bud JOB 40 replacement)")
 	import re as _re146
 	_md146 = _sp146.run(["git", "diff", "-U0", "af3a858", "--", _C146 + "MonetizationConfig.luau"], capture_output=True, text=True).stdout
-	_cb146(not any(_re146.search(r"\bRobuxPrice\s*=|(^|[\s{,])Id\s*=\s*\d", l) for l in _md146.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))),
-		"CODEBOT v146: no Robux price / Id line changed in MonetizationConfig since v145 tip (claude-bud JOB 40 replacement)")
+	# v156 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v156.py (the config RobuxPrice is now only the display
+	# fallback; v156 corrected StarterBundle 149->249 and ExtraSoldierSlot 99->79 to the real Creator Hub prices and pins every
+	# config price to the audited Creator Hub price + every Id unchanged since v155):
+	# _cb146(not any(_re146.search(r"\bRobuxPrice\s*=|(^|[\s{,])Id\s*=\s*\d", l) for l in _md146.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))),
+	# 	"CODEBOT v146: no Robux price / Id line changed in MonetizationConfig since v145 tip (claude-bud JOB 40 replacement)")
+	pass
 except Exception:
 	pass
 

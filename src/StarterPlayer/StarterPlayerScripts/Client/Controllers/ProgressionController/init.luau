@@ -26,6 +26,7 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local HudConfig = require(Shared.Configs.HudConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local LivePrices = require(Shared.Util.LivePrices) -- Code Bot v156: the real Roblox price (config = fallback)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
 local ProgressionUI = require(script.ProgressionUI)
 local ProgressionBattlePass = require(script.ProgressionBattlePass)
@@ -120,7 +121,7 @@ local debouncedRefresh = ProgressionUI.Debounce(0.12)
 	(the grant stays ProcessReceipt → BattlePassService.SetPremium). ]]
 local function premiumPrice(): number
 	local def: any = MonetizationConfig.DevProducts.PremiumPass
-	return tonumber(if typeof(def) == "table" then def.RobuxPrice else nil) or 499
+	return if typeof(def) == "table" then LivePrices.Price("DevProduct", "PremiumPass") else 499 -- Code Bot v156
 end
 
 local function commas(n: number): string

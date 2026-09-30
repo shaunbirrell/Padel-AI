@@ -24,6 +24,7 @@ CTL = Path(os.environ.get("SHOP_CONTROLLER") or (ROOT / "src/StarterPlayer/Start
 MODS = {
     "Configs/ShopOverhaulConfig": SH / "Configs/ShopOverhaulConfig.luau",
     "Configs/MonetizationConfig": SH / "Configs/MonetizationConfig.luau",
+    "Util/LivePrices": SH / "Util/LivePrices.luau",  # Code Bot v156: the real Roblox price / name (config fallback here)
     "Configs/RetentionConfig": SH / "Configs/RetentionConfig.luau",
     "Configs/AdminConfig": SH / "Configs/AdminConfig.luau",
     "Configs/PremiumGunsConfig": SH / "Configs/PremiumGunsConfig.luau",
@@ -59,6 +60,17 @@ local Players = { LocalPlayer = LP, PlayerAdded = any, PlayerRemoving = any, Get
 local RunService = { IsStudio = function() return false end, IsServer = function() return false end, IsClient = function() return true end, Heartbeat = any, RenderStepped = any }
 game = { GetService = function(_, n) if n == "ReplicatedStorage" then return RS_ elseif n == "Players" then return Players elseif n == "RunService" then return RunService end return any end, PlaceId = 1 }
 task = { spawn = function() end, delay = function() end, defer = function(fn, ...) fn(...) end, wait = function() return 0 end }
+-- Code Bot v156: ReplicatedStorage attributes (the live prices) + AttributeChanged for LivePrices
+RS_ATTR, RS_CHANGED = {}, {}
+do
+  local mt = getmetatable(RS_)
+  local oldIndex = mt.__index
+  mt.__index = function(t, k)
+    if k == "GetAttribute" then return function(_, n) return RS_ATTR[n] end end
+    if k == "AttributeChanged" then return { Connect = function(_, f) table.insert(RS_CHANGED, f); return any end } end
+    return oldIndex(t, k)
+  end
+end
 SOURCES["Client/Modules/PanelShell"] = function() return setmetatable({ Text = function(n) return n end, TouchMinV = function() return 44 end }, { __index = function() return any end }) end
 '''
 
@@ -80,7 +92,8 @@ table.sort(rows, function(a, b) return P(a, "LayoutOrder") < P(b, "LayoutOrder")
 local names = {}
 for _, r in ipairs(rows) do table.insert(names, (string.gsub(r.Name, "ShopRow_", ""))) end
 print("        rows: " .. table.concat(names, " > "))
-local function subText(r) for _, c in ipairs(r:GetChildren()) do if c.ClassName == "TextLabel" and type(P(c, "Text")) == "string" and string.sub(P(c, "Text"), 1, 2) == "+$" then return P(c, "Text") end end return nil end
+-- Code Bot v156: a cash pack row now reads "Get $50,000 cash right away" (plain words; was "+$50,000 Cash")
+local function subText(r) for _, c in ipairs(r:GetChildren()) do if c.ClassName == "TextLabel" and type(P(c, "Text")) == "string" and string.sub(P(c, "Text"), 1, 5) == "Get $" then return P(c, "Text") end end return nil end
 for _, k in ipairs({ "CashMega", "CashLarge", "CashMedium", "CashSmall" }) do
   local r = byName["ShopRow_" .. k]
   check(r ~= nil and P(r, "Visible") ~= false and P(r, "Parent") == list and subText(r) ~= nil, k .. " row renders (" .. tostring(r and subText(r)) .. ")")
@@ -96,6 +109,32 @@ local vip = byName["ShopRow_Pass_VIP"]
 local vt = if vip then table.concat(texts(vip, {}), " | ") else ""
 check(vip ~= nil and string.find(vt, "199 R$", 1, true) ~= nil and string.find(vt, "349", 1, true) == nil, "VIP row shows 199 R$ (not 349): " .. vt)
 check(vip ~= nil and string.find(vt, "PERMANENT", 1, true) ~= nil, "VIP row is the overhaul row (PERMANENT)")
+-- Code Bot v156: every Robux row: the real price / name, plain words, nothing a phone (1024x471) would truncate
+local function lbl(r, n) for _, c in ipairs(r:GetChildren()) do if c.ClassName == "TextLabel" and c.Name == n then return tostring(P(c, "Text")) end end return "" end
+local function btnText(r) for _, c in ipairs(r:GetChildren()) do if c.ClassName == "TextButton" then return tostring(P(c, "Text")) end end return "" end
+for _, r in ipairs(rows) do
+  local t, s, b = lbl(r, "Title"), lbl(r, "Sub"), btnText(r)
+  print(string.format("        ROW %s | %s | %s | %s", string.gsub(r.Name, "ShopRow_", ""), t, s, b))
+  check(string.find(t .. s, "ProcessReceipt", 1, true) == nil and string.find(t .. s, "Grants ", 1, true) == nil, r.Name .. ": no developer text")
+  -- phone 1024x471: HUD scale 0.70 -> the panel caps at 900 v; the text column is 900 - 32 - 170 = ~698 v. GothamMedium /
+  -- GothamBold at 20 v run ~11-12 v a character, so <= 56 characters always fits (the budget used here)
+  check(utf8.len(s) ~= nil and utf8.len(s) <= 56, r.Name .. ": sub fits a phone row (" .. tostring(utf8.len(s)) .. " chars)")
+  check(utf8.len(t) ~= nil and utf8.len(t) <= 48, r.Name .. ": title fits a phone row (" .. tostring(utf8.len(t)) .. " chars)")
+end
+local sb = byName["ShopRow_StarterBundle"]
+check(sb ~= nil and lbl(sb, "Title") == "Commander Starter Bundle" and btnText(sb) == "249 R$", "Starter row = the Roblox product: Commander Starter Bundle 249 R$ (" .. (sb and (lbl(sb, "Title") .. " " .. btnText(sb)) or "none") .. ")")
+check(sb ~= nil and lbl(sb, "Sub") == "$50,000 cash plus Auto Collect forever", "Starter row says what you get")
+local bp = byName["ShopRow_PremiumPass"]
+check(bp ~= nil and lbl(bp, "Sub") == "Unlock premium rewards on every Battle Pass tier" and btnText(bp) == "499 R$", "Battle Pass Premium row: plain words, 499 R$")
+-- the live Roblox price wins over the config value (the server publishes WE_Px_* on ReplicatedStorage)
+RS_ATTR["WE_Px_DP_CashSmall"] = 59
+RS_ATTR["WE_PxN_DP_CashSmall"] = "Cash Pack S (live)"
+for _, f in ipairs(RS_CHANGED) do f("WE_Px_DP_CashSmall") end
+local cs = byName["ShopRow_CashSmall"]
+check(cs ~= nil and btnText(cs) == "59 R$" and lbl(cs, "Title") == "Cash Pack S (live)", "a live price / name that arrives later updates the row (" .. (cs and (lbl(cs, "Title") .. " " .. btnText(cs)) or "none") .. ")")
+RS_ATTR["WE_Px_DP_CashSmall"] = nil
+RS_ATTR["WE_PxN_DP_CashSmall"] = nil
+for _, f in ipairs(RS_CHANGED) do f("WE_Px_DP_CashSmall") end
 -- the cash "+": OpenCashPacks scrolls to the Mega row
 SC.OpenCashPacks()
 local mega = byName["ShopRow_CashMega"]

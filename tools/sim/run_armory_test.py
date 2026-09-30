@@ -37,6 +37,7 @@ MODS = {
     "Util/GunMechanics": SH / "Util/GunMechanics.luau",
     "Configs/WeaponConfig": SH / "Configs/WeaponConfig.luau",
     "Configs/MonetizationConfig": SH / "Configs/MonetizationConfig.luau",
+    "Util/LivePrices": SH / "Util/LivePrices.luau",  # Code Bot v156: the real Roblox price / name (config fallback here)
     "Configs/PremiumGunsConfig": SH / "Configs/PremiumGunsConfig.luau",
     "Configs/RetentionConfig": SH / "Configs/RetentionConfig.luau",
     "Configs/AdminConfig": SH / "Configs/AdminConfig.luau",

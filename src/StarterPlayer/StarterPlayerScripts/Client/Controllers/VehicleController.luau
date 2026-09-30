@@ -43,6 +43,7 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local VehicleConfig = require(Shared.Configs.VehicleConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig) -- claude-bud JOB 5a: Robux-only vehicles
+local LivePrices = require(Shared.Util.LivePrices) -- Code Bot v156: the real Roblox price (config = fallback)
 
 local HudConfig = require(Shared.Configs.HudConfig)
 
@@ -139,7 +140,7 @@ local function premiumPass(def: any): (string?, number, boolean)
 	end
 	local key = prem.PassKey :: string
 	local pass = (MonetizationConfig.GamePasses :: any)[key]
-	local robux = if typeof(pass) == "table" then (tonumber(pass.RobuxPrice) or 0) else 0
+	local robux = if typeof(pass) == "table" then LivePrices.Price("GamePass", key) else 0 -- Code Bot v156
 	local lp = Players.LocalPlayer
 	local owns = lp ~= nil and lp:GetAttribute("WE_Ent_" .. key) == true
 	return key, robux, owns
@@ -601,8 +602,8 @@ local function onRowTap(id: string)
 						(NC :: any).ShowOffer({
 							Key = "fp_garage_cash",
 							Title = "Short on cash for " .. def.DisplayName,
-							Sub = string.format("%s: $%s", tostring(pk.DisplayName or k), commas(packCash(k, pk))),
-							Cta = tostring(pk.RobuxPrice) .. " R$",
+							Sub = string.format("%s: $%s", LivePrices.Name("DevProduct", k), commas(packCash(k, pk))),
+							Cta = LivePrices.Cta("DevProduct", k), -- Code Bot v156
 							OnGet = function()
 								(SC :: any).PromptDevProduct(k, "garage")
 							end,

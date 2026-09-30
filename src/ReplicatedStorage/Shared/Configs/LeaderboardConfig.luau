@@ -111,18 +111,20 @@ function LeaderboardConfig.AllowKill(log: { [string]: { number } }, killerId: nu
 end
 
 -- claude-bud JOB 38 ADDENDUM (owner 2026-09-30): ARMY KILLS replaces TOP ARMY in the same slot (army size is capped, so
--- TOP ARMY is a tie). Its own store keys ("WE_LB2_ArmyKills", weekly "_W<week>"); the swap happens only once army orders
--- are live for everyone (ArmyOrdersConfig.LiveForAll); until then TOP ARMY stays exactly as it is.
+-- TOP ARMY is a tie). Its own store keys ("WE_LB2_ArmyKills", weekly "_W<week>").
+-- Code Bot v156 (Shaun 2026-10-01: the live plaza still showed TOP ARMY, everyone tied at 75). Root cause: the swap
+-- below waited for ArmyOrdersConfig.LiveForAll(), which is false while army orders stay OwnerFirst = true, AND
+-- EngagementService.NoteArmyKill only counted kills for players army orders were live for (the owner, who is excluded
+-- from every board), so nobody could ever score. The board is only a leaderboard: it now has its own switch,
+-- ArmyKillsBoardLive (true = ARMY KILLS for everyone, whatever the army orders rollout; false = TOP ARMY exactly as
+-- before). Kills count from the army's normal fire too (FOLLOW / HOLD / DEFEND escort shots, not only ATTACK / SEND).
+-- Admin / owner accounts stay off every board (EngagementService.isBoardExcluded, at write and at read).
 LeaderboardConfig.ArmyKillsBoard = { Id = "ArmyKills", Title = "ARMY KILLS", Unit = "kills", AllTime = true, Weekly = true } :: Board
-do
-	local okA, AOC = pcall(function(): any
-		return require(script.Parent.ArmyOrdersConfig)
-	end)
-	if okA and AOC and AOC.LiveForAll() then
-		for i, b in ipairs(LeaderboardConfig.Boards) do
-			if b.Id == "Army" then
-				LeaderboardConfig.Boards[i] = LeaderboardConfig.ArmyKillsBoard
-			end
+LeaderboardConfig.ArmyKillsBoardLive = true
+if LeaderboardConfig.ArmyKillsBoardLive == true then
+	for i, b in ipairs(LeaderboardConfig.Boards) do
+		if b.Id == "Army" then
+			LeaderboardConfig.Boards[i] = LeaderboardConfig.ArmyKillsBoard
 		end
 	end
 end

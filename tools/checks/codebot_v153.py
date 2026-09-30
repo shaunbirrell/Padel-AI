@@ -81,7 +81,11 @@ if _P153(_lu).is_file():
 # unchanged: prices, owner-first flags
 _cb153("		VIP = {" in _MC and "RobuxPrice = 199," in _MC.split("VIP = {", 1)[1][:400], "CODEBOT v153: VIP RobuxPrice stays 199")
 _sb = _MC.split("\t\tStarterBundle = {", 1)[1][:300] if "\t\tStarterBundle = {" in _MC else ""
-_cb153("Id = 3713839505," in _sb and "RobuxPrice = 149," in _sb, "CODEBOT v153: Starter Pack Id / 149 R$ unchanged")
+# v156 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v156.py (the config RobuxPrice is now only the display
+# fallback; v156 corrected StarterBundle 149->249 and ExtraSoldierSlot 99->79 to the real Creator Hub prices and pins every
+# config price to the audited Creator Hub price + every Id unchanged since v155):
+# _cb153("Id = 3713839505," in _sb and "RobuxPrice = 149," in _sb, "CODEBOT v153: Starter Pack Id / 149 R$ unchanged")
+pass
 _cb153("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _rd153(_C153 + "BaseMarkerConfig.luau"), "CODEBOT v153: BaseMarker OwnerFirst stays true")
 _cb153("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MC, "CODEBOT v153: SpeedV2 OwnerFirst stays true")
 _cb153("FastTravelEnabled = false" in _rd153(_C153 + "MapConfig.luau"), "CODEBOT v153: fast travel stays REMOVED")
@@ -90,7 +94,11 @@ try:
 	_wd = _sp153.run(["git", "diff", "-U0", "e2d82d6", "--", "src"], capture_output=True, text=True).stdout
 	if _wd:
 		_cb153(not any(l.startswith(("+", "-")) and "WE_Building" in l for l in _wd.splitlines()), "CODEBOT v153: no WE_Building* line changed since v152 tip")
-		_cb153(not any(l.startswith(("+", "-")) and not l.startswith(("+++", "---")) and _re153.search(r"RobuxPrice\s*=|\bId\s*=\s*\d{6,}", l) for l in _wd.splitlines()),
-			"CODEBOT v153: no RobuxPrice / product Id line changed since v152")
+		# v156 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v156.py (the config RobuxPrice is now only the display
+		# fallback; v156 corrected StarterBundle 149->249 and ExtraSoldierSlot 99->79 to the real Creator Hub prices and pins every
+		# config price to the audited Creator Hub price + every Id unchanged since v155):
+		# _cb153(not any(l.startswith(("+", "-")) and not l.startswith(("+++", "---")) and _re153.search(r"RobuxPrice\s*=|\bId\s*=\s*\d{6,}", l) for l in _wd.splitlines()),
+		# 	"CODEBOT v153: no RobuxPrice / product Id line changed since v152")
+		pass
 except Exception:
 	pass

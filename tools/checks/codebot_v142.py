@@ -50,7 +50,11 @@ for _k, _id, _price in (("WarChest", 2002640637, 799), ("SuperSoldiers", 1998231
 try:
     _diff = _sp142.run(["git", "diff", "758edeb", "--", _C142 + "MonetizationConfig.luau"], capture_output=True, text=True).stdout
     _chg = [l for l in _diff.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---")) and "RobuxPrice" in l]
-    _cb142(all("OverhaulRobuxPrice" in l for l in _chg), "CODEBOT v142: no RobuxPrice changed since v141 except the VIP display value")
+    # v156 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v156.py (the config RobuxPrice is now only the display
+    # fallback; v156 corrected StarterBundle 149->249 and ExtraSoldierSlot 99->79 to the real Creator Hub prices and pins every
+    # config price to the audited Creator Hub price + every Id unchanged since v155):
+    # _cb142(all("OverhaulRobuxPrice" in l for l in _chg), "CODEBOT v142: no RobuxPrice changed since v141 except the VIP display value")
+    pass
 except Exception:
     pass
 

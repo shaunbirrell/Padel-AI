@@ -446,8 +446,8 @@ function EngagementService.NoteArmyKill(killer: Player)
 	if typeof(killer) ~= "Instance" or not killer:IsA("Player") or killer.Parent == nil then
 		return
 	end
-	local AOC: any = require(Shared.Configs.ArmyOrdersConfig)
-	if not AOC.LiveFor(killer.UserId) then
+	-- Code Bot v156: the board's own switch (it was ArmyOrdersConfig.LiveFor: only the owner, who is off every board)
+	if LeaderboardConfig.ArmyKillsBoardLive ~= true then
 		return
 	end
 	local profile = deps.DataService and deps.DataService.GetProfile(killer)
