@@ -26,9 +26,10 @@ _S149 = "src/ServerScriptService/Server/"
 _C149 = "src/ReplicatedStorage/Shared/Configs/"
 _CL149 = "src/StarterPlayer/StarterPlayerScripts/Client/"
 
-for _f in (_S149 + "Services/DataService.luau", _S149 + "Services/BaseService.luau", _S149 + "EarlyRemotes.server.luau"):
-	_cb149('SetAttribute("WE_Build", 149)' in _rd149(_f), "CODEBOT v149: WE_Build=149 " + _f.rsplit("/", 1)[-1])
-_cb149("WE_Build=149" in _rd149(_S149 + "Services/DataService.luau"), "CODEBOT v149: DataService profile-loaded log says WE_Build=149")
+# v150 (Code Bot Roblox): the WE_Build=149 pins are superseded in tools/checks/codebot_v150.py (WE_Build=150).
+# for _f in (_S149 + "Services/DataService.luau", _S149 + "Services/BaseService.luau", _S149 + "EarlyRemotes.server.luau"):
+# 	_cb149('SetAttribute("WE_Build", 149)' in _rd149(_f), "CODEBOT v149: WE_Build=149 " + _f.rsplit("/", 1)[-1])
+# _cb149("WE_Build=149" in _rd149(_S149 + "Services/DataService.luau"), "CODEBOT v149: DataService profile-loaded log says WE_Build=149")
 
 # Endgame phases 3–5
 _EC = _rd149(_C149 + "EndgameConfig.luau")
