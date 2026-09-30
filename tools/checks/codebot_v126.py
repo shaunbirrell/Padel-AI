@@ -30,8 +30,8 @@ def _fn126(src, head):
 
 _S126 = "src/ServerScriptService/Server/"
 for _f in (_S126 + "Services/DataService.luau", _S126 + "Services/BaseService.luau", _S126 + "EarlyRemotes.server.luau"):
-    _cb126('SetAttribute("WE_Build", 126)' in _rd126(_f), "CODEBOT v126: WE_Build=126 " + _f.rsplit("/", 1)[-1])
-_cb126("WE_Build=126" in _rd126(_S126 + "Services/DataService.luau"), "CODEBOT v126: DataService profile-loaded log says WE_Build=126")
+    pass  # v127 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v127.py: #_cb126('SetAttribute("WE_Build", 126)' in _rd126(_f), "CODEBOT v126: WE_Build=126 " + _f.rsplit("/", 1)[-1])
+# v127 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v127.py: #_cb126("WE_Build=126" in _rd126(_S126 + "Services/DataService.luau"), "CODEBOT v126: DataService profile-loaded log says WE_Build=126")
 
 _mc = _rd126("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau")
 _sp = _mc[_mc.find("ImpulseSpeed = {"):][:700]

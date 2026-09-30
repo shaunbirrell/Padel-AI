@@ -954,7 +954,7 @@ function MissionController.Init()
 		end
 	end)
 
-	local missionsKey: Enum.KeyCode = HudConfig.Keys.Missions or Enum.KeyCode.M
+	local missionsKey: Enum.KeyCode = HudConfig.Keys.Missions or Enum.KeyCode.N -- claude-bud JOB 30: M is the map
 	UserInputService.InputBegan:Connect(function(input, gp)
 		if gp then
 			return

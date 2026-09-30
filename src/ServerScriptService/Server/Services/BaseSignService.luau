@@ -138,6 +138,12 @@ local function ensureSign(plotId: number): Sign?
 	return made
 end
 
+-- claude-bud JOB 30: the ONE "<Name>'s Empire" string (the sign and the world map both use it)
+local function titleOf(owner: Player): string
+	local name = if owner.DisplayName ~= "" then owner.DisplayName else owner.Name -- (Roblox-filtered; CustomEmpireNames off)
+	return name .. "'s Empire"
+end
+
 local function refresh(plotId: number)
 	if BaseSignConfig.Enabled ~= true then
 		return
@@ -156,8 +162,7 @@ local function refresh(plotId: number)
 		local level = if profile then math.floor(tonumber(profile.Level) or 1) else 1
 		local rebirth = if profile then math.floor(tonumber(profile.Prestige) or 0) else 0
 		local army = if profile then math.floor(tonumber(profile.Soldiers) or 0) else 0
-		local name = if owner.DisplayName ~= "" then owner.DisplayName else owner.Name -- (Roblox-filtered; CustomEmpireNames off)
-		title = name .. "'s Empire"
+		title = titleOf(owner)
 		line = string.format("LV %d · REBIRTH %d · ARMY %d", level, rebirth, army)
 		image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", owner.UserId)
 	end
@@ -181,6 +186,14 @@ local function refresh(plotId: number)
 		pcall(nf.DressPart, s.Plate, view)
 	end
 	s.Plate.Transparency = if owner then 0 else 1
+end
+
+-- claude-bud JOB 30: "<Name>'s Empire" for an owned plot (the sign's title), nil for an unclaimed one
+function BaseSignService.TitleFor(plotId: number): string?
+	local bs = deps and deps.BaseService
+	local ownerId = if bs and bs.GetOwnerUserId then bs.GetOwnerUserId(plotId) else nil
+	local owner = if ownerId then Players:GetPlayerByUserId(ownerId) else nil
+	return if owner then titleOf(owner) else nil
 end
 
 function BaseSignService.Refresh(plotId: number?)

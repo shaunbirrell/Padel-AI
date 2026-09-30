@@ -235,7 +235,9 @@ HudConfig.Rail = {
 		{ Id = "Rebirth", Name = "DockRebirth", Label = "Rebirth", Icon = "Cycle", Accent = Color3.fromRGB(196, 80, 255), Fill = Color3.fromRGB(50, 18, 74), Key = Enum.KeyCode.K },
 		{ Id = "Army", Name = "DockArmy", Label = "Army", Icon = "Helmet", Accent = Color3.fromRGB(72, 220, 96), Fill = Color3.fromRGB(16, 58, 28), Key = Enum.KeyCode.Y },
 		{ Id = "Garage", Name = "DockGarage", Label = "Garage", Icon = "Car", Accent = Color3.fromRGB(40, 212, 200), Fill = Color3.fromRGB(8, 52, 56), Key = Enum.KeyCode.G },
-		{ Id = "Missions", Name = "DockMissions", Label = "Missions", Icon = "Clipboard", Accent = Color3.fromRGB(255, 150, 32), Fill = Color3.fromRGB(80, 42, 6), Key = Enum.KeyCode.M },
+		{ Id = "Missions", Name = "DockMissions", Label = "Missions", Icon = "Clipboard", Accent = Color3.fromRGB(255, 150, 32), Fill = Color3.fromRGB(80, 42, 6), Key = Enum.KeyCode.N }, -- claude-bud JOB 30: M -> N (M is the map)
+		-- claude-bud JOB 30: the world map (MapController; only while MapConfig is live for the player)
+		{ Id = "Map", Name = "DockMap", Label = "Map", Icon = "Map", Accent = Color3.fromRGB(150, 200, 120), Fill = Color3.fromRGB(30, 52, 24), Key = Enum.KeyCode.M },
 		-- Code Bot v102: redeem codes (CodesController). No key. 6th tile: fits one column on 956x440; on 844x390 /
 		-- 800x360 layoutRail wraps it to the top of a 2nd column (same wrap rule as before)
 		{ Id = "Codes", Name = "DockCodes", Label = "Codes", Icon = "Gift", Accent = Color3.fromRGB(255, 214, 72), Fill = Color3.fromRGB(74, 58, 8) },
@@ -258,6 +260,7 @@ HudConfig.Rail = {
 		Garage = "NewVehicle", -- "!" when a vehicle was bought/unlocked and not spawned yet (clears on Garage open)
 		Missions = "Claimables", -- count = completed-unclaimed missions + claimable daily login + (spinner READY ? 1 : 0)
 		Codes = nil, -- Code Bot v102: no badge
+		Map = nil, -- claude-bud JOB 30: no badge
 	},
 	HideWhen = { "Driving", "Dead" },
 }
@@ -677,7 +680,8 @@ HudConfig.Keys = {
 	Rebirth = Enum.KeyCode.K,
 	Army = Enum.KeyCode.Y, -- was A (strafe-left toggled the Army panel while walking)
 	Garage = Enum.KeyCode.G,
-	Missions = Enum.KeyCode.M,
+	Missions = Enum.KeyCode.N, -- claude-bud JOB 30: was M (M opens the world map)
+	Map = Enum.KeyCode.M, -- claude-bud JOB 30: the world map (MapController)
 	Settings = nil, -- was O (Roblox camera zoom-out). Gear button only.
 	Base = Enum.KeyCode.B, -- Base menu leaves the HUD; B and the Command Center map table remain
 	Weapons = { Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four }, -- draw / holster

@@ -212,6 +212,15 @@ SHAPES.Gift = {
 	{ x = 0.63, y = 0.2, w = 0.2, h = 0.13, role = "Ink", r = 0.5, rot = -30 },
 }
 
+-- claude-bud JOB 30: the MAP rail tile — a folded map (three panels) with a pin
+SHAPES.Map = {
+	box(0.1, 0.22, 0.26, 0.62, "Ink", 0.08),
+	box(0.37, 0.16, 0.26, 0.62, "Fill", 0.08),
+	box(0.64, 0.22, 0.26, 0.62, "Ink", 0.08),
+	{ x = 0.42, y = 0.3, w = 0.16, h = 0.16, role = "Ink", r = 0.5 }, -- pin head
+	box(0.485, 0.44, 0.03, 0.14, "Ink"), -- pin stem
+}
+
 local KINDS: { string } = {}
 for k in pairs(SHAPES) do
 	table.insert(KINDS, k)

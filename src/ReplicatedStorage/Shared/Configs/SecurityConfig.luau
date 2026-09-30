@@ -28,6 +28,7 @@ local SecurityConfig = {
 			RequestVehicleFire = { Rate = 20, Burst = 30 }, -- AircraftWeaponConfig 12 / 16, VehicleWeaponConfig 14 / 20
 			RequestPremiumWeapon = { Rate = 20, Burst = 30 }, -- VehicleConfig.Premium.MaxRequestHz 14
 			RequestPurchaseUpgrade = { Rate = 10, Burst = 20 },
+			RequestMapLive = { Rate = 4, Burst = 8 }, -- claude-bud JOB 30: the open map asks 2x a second
 		} :: { [string]: { Rate: number, Burst: number } },
 		MaxString = 64,
 		MaxTableKeys = 16,
@@ -72,6 +73,7 @@ local SecurityConfig = {
 		RequestTipSetting = { "boolean" }, -- claude-bud JOB 24 §5
 		RequestTipsReplay = {}, -- claude-bud JOB 24 §5
 		RequestBuyArmour = { "number" }, -- claude-bud JOB 26
+		RequestMapLive = {}, -- claude-bud JOB 30
 		RequestNotifOptInResult = { "string:12", "string?" }, -- claude-bud JOB 29: accepted / declined / unavailable, "settings"?
 		RequestArmourLook = { "boolean" }, -- claude-bud JOB 26 -- claude-bud JOB 24 §10 (AnalyticsConfig.Roblox.ClientEvents only)
 		RequestResearch = { "string", "string?" },

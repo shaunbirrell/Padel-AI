@@ -79,6 +79,21 @@ do
 	end
 end
 
+-- claude-bud JOB 30: the world map (MapConfig), required defensively like Codes: a broken map never takes the rail down
+local MapController: any = nil
+do
+	local mod = script.Parent:FindFirstChild("MapController")
+	if mod and mod:IsA("ModuleScript") then
+		local req: any = require
+		local ok, res = pcall(req, mod)
+		if ok and typeof(res) == "table" then
+			MapController = res
+		else
+			warn("[WAR EMPIRE] MapController failed to load — map off:", res)
+		end
+	end
+end
+
 -- Every panel HudLayout keeps exclusive (spec §3.8). A controller that registers itself wins; UIController files a
 -- Fallback registration (IsOpen / Close) for the rest. "Orders" = the Army popover (OrdersController).
 local PANELS: { { Id: string, Controller: any } } = {
@@ -95,6 +110,9 @@ local PANELS: { { Id: string, Controller: any } } = {
 }
 if NationController then
 	table.insert(PANELS, { Id = "Nation", Controller = NationController }) -- nations: the country picker
+end
+if MapController then
+	table.insert(PANELS, { Id = "Map", Controller = MapController }) -- claude-bud JOB 30: the world map
 end
 if CodesController then
 	table.insert(PANELS, { Id = "Codes", Controller = CodesController }) -- Code Bot v102: redeem codes
@@ -196,6 +214,9 @@ function UIController.Init()
 		end
 	end
 	safeInit("Base", BaseController.Init)
+	if MapController and typeof(MapController.Init) == "function" then
+		safeInit("Map", MapController.Init) -- claude-bud JOB 30
+	end
 	safeInit("Tutorial", TutorialController.Init)
 	safeInit("Territory", TerritoryController.Init)
 	safeInit("Mission", MissionController.Init)
@@ -298,6 +319,25 @@ function UIController.Init()
 			Name = "DockCodes",
 			OnClick = function()
 				dockPress("Codes", CodesController.Toggle, "Codes")
+			end,
+		})
+	end
+	-- claude-bud JOB 30: the MAP tile, only while the map is live for this player (MapConfig: kill switch + OwnerFirst)
+	local mapCfgOk, mapLive = pcall(function(): boolean
+		local Shared = game:GetService("ReplicatedStorage"):FindFirstChild("Shared")
+		if Shared == nil then
+			return false
+		end
+		local req: any = require
+		local R = req((Shared :: any).Configs.RetentionConfig)
+		return R.Live(req((Shared :: any).Configs.MapConfig), game:GetService("Players").LocalPlayer.UserId)
+	end)
+	if MapController and typeof(MapController.Toggle) == "function" and mapCfgOk and mapLive == true then
+		table.insert(railActions, {
+			Id = "Map",
+			Name = "DockMap",
+			OnClick = function()
+				dockPress("Map", MapController.Toggle, "Map")
 			end,
 		})
 	end

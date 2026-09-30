@@ -27,6 +27,12 @@
 	  ObjectiveMarker.Ended() -> string?      how the last target ended: "Arrived" | "Timeout" | "Cleared" (Clear(),
 	                                          a ConsoleWaypoint GO); nil while one is set (a Show over a Show just
 	                                          replaces it: Revision() tells the old owner)
+Additive (claude-bud JOB 30, the world map's tap-to-pin; the SAME marker, line and compass, never a second one):
+	  ShowWith(target, { Pin = true, ... })   a MANUAL PIN: while it is set it beats every other Show / ShowWith
+	                                          (missions, jobs, airdrop, bounty: ignored); a plain Clear() and Move()
+	                                          leave it alone; it ends on arrival, timeout, ClearPin() or a new pin
+	  ObjectiveMarker.ClearPin()              removes the manual pin (no-op when none is set)
+	  ObjectiveMarker.Pinned() -> boolean     a manual pin is the current target
 
 	What it draws (client only, nothing replicates, 0 parts): an invisible Attachment in Workspace.Terrain at the
 	target (+ MarkerLift), a thin Beam from the local character to it (the "GO line"), and ONE BillboardGui on it:
@@ -59,7 +65,7 @@ local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
 
 export type Target = { Short: string, X: number, Y: number, Z: number }
-export type Opts = { ArriveStuds: number?, TimeoutSeconds: number? }
+export type Opts = { ArriveStuds: number?, TimeoutSeconds: number?, Pin: boolean? }
 
 local ObjectiveMarker = {}
 
@@ -83,6 +89,7 @@ local revision = 0
 local arriveR = OBJ.ArriveRadius -- this target's (ShowWith opts, else OBJ)
 local timeoutS = OBJ.TimeoutSeconds
 local ended: string? = nil -- Ended()
+local pinned = false -- claude-bud JOB 30: the current target is the player's manual map pin
 local startedAt = 0
 local lastAttemptAt = -math.huge
 local stepConn: RBXScriptConnection? = nil
@@ -304,6 +311,7 @@ end
 local function clearNow(reason: string)
 	stop()
 	destroyVisuals()
+	pinned = false
 	if current ~= nil then
 		current = nil
 		revision += 1
@@ -382,12 +390,17 @@ function ObjectiveMarker.ShowWith(target: Target, opts: Opts?)
 		end
 		return
 	end
+	local o: any = opts
+	local isPin = type(o) == "table" and o.Pin == true
+	if pinned and not isPin then
+		return -- claude-bud JOB 30: the manual map pin beats mission / job / airdrop targets while it is set
+	end
 	stop()
 	endConsoleLine()
-	local o: any = opts
 	arriveR = if type(o) == "table" and finite(o.ArriveStuds) then math.clamp(o.ArriveStuds, 4, 200) else OBJ.ArriveRadius
 	timeoutS = if type(o) == "table" and finite(o.TimeoutSeconds) then math.clamp(o.TimeoutSeconds, 10, 3600) else OBJ.TimeoutSeconds
 	current = { Short = t.Short, X = t.X, Y = t.Y, Z = t.Z }
+	pinned = isPin
 	revision += 1
 	ended = nil
 	startedAt = os.clock()
@@ -402,12 +415,26 @@ function ObjectiveMarker.Show(target: Target)
 end
 
 function ObjectiveMarker.Clear()
+	if pinned then
+		return -- claude-bud JOB 30: only ClearPin() (or arrival / timeout) removes the manual pin
+	end
 	clearNow("Cleared")
+end
+
+-- claude-bud JOB 30: remove the manual map pin
+function ObjectiveMarker.ClearPin()
+	if pinned then
+		clearNow("Cleared")
+	end
+end
+
+function ObjectiveMarker.Pinned(): boolean
+	return pinned and current ~= nil
 end
 
 function ObjectiveMarker.Move(x: number, y: number, z: number): boolean
 	local c = current
-	if c == nil or not (finite(x) and finite(y) and finite(z)) then
+	if c == nil or pinned or not (finite(x) and finite(y) and finite(z)) then
 		return false
 	end
 	if c.X == x and c.Y == y and c.Z == z then

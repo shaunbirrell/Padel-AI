@@ -136,6 +136,7 @@ end
 local FUNCTIONS = {
 	Constants.RemoteNames.GetPlayerState,
 	Constants.RemoteNames.RedeemCode, -- Code Bot v102: CodesService (redeem codes)
+	Constants.RemoteNames.RequestMapLive, -- claude-bud JOB 30
 }
 local FUNCTION_SET: { [string]: boolean } = {}
 for _, name in ipairs(FUNCTIONS) do

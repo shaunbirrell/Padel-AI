@@ -30,7 +30,7 @@ for _rel113 in (
     "src/ServerScriptService/Server/Services/BaseService.luau",
     "src/ServerScriptService/Server/EarlyRemotes.server.luau",
 ):
-    _all113 &= _must113('SetAttribute("WE_Build", 126)' in _P113(_rel113).read_text(), "v113 WE_Build=113 " + _rel113.rsplit("/", 1)[-1])
+    _all113 &= _must113('SetAttribute("WE_Build", 127)' in _P113(_rel113).read_text(), "v113 WE_Build=113 " + _rel113.rsplit("/", 1)[-1])
 
 if "ok" not in globals():
     import sys
