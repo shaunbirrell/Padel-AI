@@ -9871,3 +9871,13 @@ ds_territories.luau T3):
 - **Tower guards:** they keep their anchored platform figures (converting them is not needed for the one rule); only
   their targeting changed.
 - **MaxShootersPerBase:** it stays 6 (the post guards share it with the gate guards / towers / AutoGuns).
+
+## 2026-09-30 — claude-bud JOB 40 part B: speed
+- **Owner-first:** the new multipliers ship owner-first (SpeedV2): the live Speed Pass / Speed Boost stay x1.5 / x2 for
+  everyone else until launch. The texts follow the multiplier each player actually gets (DescFor).
+- **Stand text:** PurchaseStands.OfferInfo takes an optional viewer id; the world stands (shared) pass none, so they read
+  today's text until launch.
+- **Army caps:** the army caps (Follow3 58, CatchUp 60, Lead 48, Follow2 58) are headroom and apply to everyone (they
+  only matter above today's 32 run speed). The default sim is unchanged (FAILS 0).
+- **Turn error:** at a 40-stud/s run the formation's turn error exceeds the spec's 6 (90-degree turn 7.5, hairpin
+  10.7). Reported as a known limit, not fixed by retuning the formation controller outside the brief's numbers.

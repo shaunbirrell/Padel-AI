@@ -43,7 +43,7 @@ def find_luau():
     return c if os.path.exists(c) else None
 
 
-def build(trace=(), j23=False):
+def build(trace=(), j23=False, s40=False):
     sc = SC.read_text(encoding="utf-8")
     sc_body = sc[sc.find("local SoldierController = {}"):]
     code = SIM.read_text(encoding="utf-8")
@@ -53,16 +53,18 @@ def build(trace=(), j23=False):
     code = code.replace("--@@TRACE@@", ", ".join(f"{n} = true" for n in trace))
     if j23:  # claude-bud JOB 23: the turn-transition acceptance set A..J instead of the v115 list
         code = code.replace("local J23 = false --@@J23@@", "local J23 = true")
+    if s40:  # claude-bud JOB 40 part B: the 40-stud/s owner set
+        code = code.replace("local S40 = false --@@S40@@", "local S40 = true")
     return code
 
 
-def run(trace=(), timeout=300, j23=False):
+def run(trace=(), timeout=300, j23=False, s40=False):
     luau = find_luau()
     if not luau:
         return None
     # (claude-bud JOB 23: utf-8, the sources carry box-drawing comment characters; the Windows default codepage failed)
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as fh:
-        fh.write(build(trace, j23))
+        fh.write(build(trace, j23, s40))
         tmp = fh.name
     try:
         r = subprocess.run([luau, tmp], capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace")

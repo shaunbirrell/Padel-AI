@@ -155,7 +155,7 @@ local ArmyConfig = {
 			Enabled = true,
 			Seconds = 0.4, -- = OrdersConfig.ThinkInterval
 			MaxStuds = 4,
-			MaxOwnerSpeed = 40, -- studs/s; faster owner moves are jumps (no lead)
+			MaxOwnerSpeed = 48, -- studs/s; faster owner moves are jumps (no lead). claude-bud JOB 40: was 40 (= the new top run speed)
 			DropOnSlowdown = 0.5,
 			StopHoldStuds = 2,
 			StopHoldSeconds = 1.5, -- ...only right after he stopped (a unit walking back later still does)
@@ -169,7 +169,7 @@ local ArmyConfig = {
 			Enabled = true,
 			StartStuds = 6,
 			SpeedMult = 1.5,
-			MaxSpeed = 40, -- v126: was 28; the Speed Boost owner walks 25.6 (x1.6), 25.6 x 1.5 = 38.4
+			MaxSpeed = 60, -- claude-bud JOB 40: 40 x 1.5 (was 40). v126: was 28; the Speed Boost owner walks 25.6 (x1.6), 25.6 x 1.5 = 38.4
 			-- ship: the pace comes from his speed smoothed over passes (weight PaceSmooth per 0.4 s pass) and moves only in
 			-- PaceStep studs/s steps: every Humanoid.WalkSpeed write replicates to every client, and a client-owned
 			-- character's replicated position jitters (stand-in, +-0.4 studs per step: 20 writes/s per army at step 0).
@@ -331,7 +331,7 @@ local ArmyConfig = {
 		CatchUpPerStud = 0.6,
 		CatchUpMaxMult = 1.8,
 		CatchUpMin = 34, -- the catch-up cap is never under this (v126: Speed Pass 22.4, Speed Boost 25.6; x1.8 = 46 -> MaxSpeed 50)
-		MaxSpeed = 50,
+		MaxSpeed = 58, -- claude-bud JOB 40: was 50 (the fallback path also stays above a 40 runner)
 		SpeedUpPerThink = 8, -- v99: WalkSpeed rises at most this much per think (0.4 s) ...
 		SpeedDownPerThink = 6, -- ... and falls at most this much (smooth catch-up, no lurch)
 		ArriveStuds = 2,
@@ -517,7 +517,7 @@ local ArmyConfig = {
 		CatchUpPerStud = 0.9, -- catching up: WalkSpeed = its slot's pace + this per stud from its slot ...
 		CatchUpMaxMult = 1.8, -- ... capped at max(his pace x this, CatchUpMin), never over MaxSpeed
 		CatchUpMin = 30,
-		MaxSpeed = 46, -- v133 (Code Bot): was 40; the x2 Speed Boost owner runs 32 (the block: max(FormMaxSpeed, his
+		MaxSpeed = 58, -- claude-bud JOB 40: x1.45 of the 40-stud/s Speed Boost owner (v133: 46 for 32). v133 (Code Bot): was 40; the x2 Speed Boost owner runs 32 (the block: max(FormMaxSpeed, his
 		-- speed x FormSpeedMult) = 40): 46 keeps a soldier's catch-up headroom over his pace (x1.45, as at 25.6)
 		MinSpeed = 8,
 		SpeedUpPerTick = 6, -- WalkSpeed changes at most this much per tick up ...

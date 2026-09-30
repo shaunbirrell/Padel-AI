@@ -146,7 +146,8 @@ local MonetizationConfig = {
 			DisplayName = "Speed Pass",
 			RobuxPrice = 99, -- 2026-09-29 owner repriced 5 -> 99 in Creator Hub
 			WalkSpeedMult = 1.5, -- v133 (owner: "still not fast"): was 1.4 (v126, 16 -> 22.4); now 16 -> 24
-			Description = "Run 50% faster, forever",
+			WalkSpeedMultV2 = 1.75, -- claude-bud JOB 40 (SpeedV2 live): 16 -> 28, "Run 75% faster"
+			-- Description: set below from MonetizationConfig.SpeedText (one source for every speed string)
 		},
 		-- v71 money (M1): premium Robux vehicles (plan §2.2, PremiumVehicleConfig.Lineup PassKey). Id = 0 until the
 		-- owner creates each pass (Item for Sale OFF until the M6 publish, J3). HideFromShop until M3's feature gate
@@ -409,7 +410,8 @@ local MonetizationConfig = {
 			GrantEntitlement = "SpeedBoost",
 			OneTime = true, -- v69: permanent boolean flag
 			WalkSpeedMult = 2.0, -- v133 (owner: "still not fast"): was 1.6 (v126, 16 -> 25.6); now 16 -> 32. Speed Pass 1.5
-			Description = "Run 2x faster, forever",
+			WalkSpeedMultV2 = 2.5, -- claude-bud JOB 40 (SpeedV2 live): 16 -> 40, "Run 2.5x faster"
+			-- Description: set below from MonetizationConfig.SpeedText
 		},
 		-- Cosmetic oil pump gold dress. v71 money (M0): one-time Developer Product (J29), 49 R$.
 		-- F9 (owner's 11 features): lights up when the Id is pasted. While Id = 0 the Shop skips the row (it skips
@@ -884,5 +886,73 @@ function MonetizationConfig.PadOwnedKeys(slot: PremiumPadSlot): { string }
 	local offer = MonetizationConfig.LivePadOffer(slot)
 	return if offer then { offer.Key } else {}
 end
+
+--[[ claude-bud JOB 40 part B: SPEED, with text that cannot go stale. SpeedV2 (owner-first) switches the speed SKUs to
+	their WalkSpeedMultV2 (Speed Pass x1.75 = 28, Speed Boost x2.5 = 40; owning both = the higher); off = x1.5 / x2 as
+	today. Every speed string comes from SpeedText (the Descriptions below, the stands, the Shop rows, the death card,
+	the Speed Boost toast). MaxWalkSpeedMult is the sanity cap MonetizationService applies (it was a local 2.0). Robux
+	prices and Ids are unchanged. ]]
+local cfg: any = MonetizationConfig
+cfg.SpeedV2 = {
+	Enabled = true,
+	OwnerFirst = true, -- only UserId 470626172 (+ Studio) until Code Bot sets false = everyone
+}
+cfg.MaxWalkSpeedMult = 2.5
+
+function cfg.SpeedV2LiveFor(userId: any): boolean
+	local b = cfg.SpeedV2
+	if b.Enabled ~= true then
+		return false
+	end
+	if b.OwnerFirst ~= true then
+		return true
+	end
+	local okR, RS = pcall(function(): any
+		return game:GetService("RunService")
+	end)
+	if okR and RS and RS:IsStudio() then
+		return true
+	end
+	return AdminConfig.IsPlaytestOwner(userId)
+end
+
+-- "Run 75% faster" (x < 2) / "Run 2x faster" / "Run 2.5x faster" (x >= 2); forever adds ", forever"
+function cfg.SpeedText(mult: number, forever: boolean?): string
+	local m = tonumber(mult) or 1
+	local s
+	if m < 2 then
+		s = string.format("Run %d%% faster", math.floor((m - 1) * 100 + 0.5))
+	elseif math.abs(m - math.floor(m + 0.5)) < 0.001 then
+		s = string.format("Run %dx faster", math.floor(m + 0.5))
+	else
+		s = string.format("Run %sx faster", (string.gsub(string.format("%.2f", m), "0+$", "")))
+	end
+	return if forever then s .. ", forever" else s
+end
+
+-- a speed SKU's multiplier for this player (V2 while live; nil userId = today's)
+function cfg.SpeedMultOf(def: any, userId: any): number
+	if typeof(def) ~= "table" then
+		return 1
+	end
+	if userId ~= nil and typeof(def.WalkSpeedMultV2) == "number" and cfg.SpeedV2LiveFor(userId) then
+		return def.WalkSpeedMultV2
+	end
+	return tonumber(def.WalkSpeedMult) or 1
+end
+
+-- the description a player should read for a SKU (speed SKUs from SpeedText, everything else its Description)
+function cfg.DescFor(def: any, userId: any): string?
+	if typeof(def) ~= "table" then
+		return nil
+	end
+	if typeof(def.WalkSpeedMult) == "number" and def.WalkSpeedMult > 1 then
+		return cfg.SpeedText(cfg.SpeedMultOf(def, userId), true)
+	end
+	return if typeof(def.Description) == "string" then def.Description else nil
+end
+
+cfg.GamePasses.ImpulseSpeed.Description = cfg.SpeedText(cfg.GamePasses.ImpulseSpeed.WalkSpeedMult, true)
+cfg.DevProducts.SpeedBoost.Description = cfg.SpeedText(cfg.DevProducts.SpeedBoost.WalkSpeedMult, true)
 
 return MonetizationConfig

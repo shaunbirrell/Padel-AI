@@ -1,4 +1,59 @@
 <!-- Q2-START -->
+## claude-bud JOB 40 PART B (2026-09-30): SPEED HIGHER, WITH TEXT THAT CAN'T GO STALE (branch `claude/desktop-bud`)
+**Flags:** `MonetizationConfig.SpeedV2` (`Enabled`, `OwnerFirst = true`).
+- **Live:** Speed Pass x1.75 (WalkSpeed 28, "Run 75% faster"), Speed Boost x2.5 (40, "Run 2.5x faster"), both = the
+  higher (40). Cap `MonetizationConfig.MaxWalkSpeedMult` 2.5 (was the local MAX_WALK_SPEED_MULT 2.0).
+- **Off:** x1.5 / x2 and the same texts as today.
+- **To launch:** Code Bot sets `OwnerFirst = false`.
+- Robux prices and Ids are unchanged.
+
+**Root cause of "Run 40% faster"**
+- It is not in the v133+ source.
+- The Creator Hub pass description (product-info API, fetched 2026-09-30) is "Run faster everywhere in WAR EMPIRE.":
+  not 40 %, so it is not the purchase prompt.
+- git history: `Description = "Run 40% faster, forever"` was the Speed Pass text from v126 (fab245f, x1.4) until v133
+  (106f32e).
+- So the owner was on a server still running pre-v133 code (running servers are not restarted on publish).
+
+**One source for the text**
+- `MonetizationConfig.SpeedText(mult, forever)` + `SpeedMultOf(def, userId)` + `DescFor(def, userId)`.
+- Both Descriptions are set from the helper. The stands (PurchaseStands.OfferInfo), the Shop pass / product rows, the
+  Speed Boost toast and the death card all read DescFor / SpeedText.
+- grep: no typed speed string outside the helper (pinned).
+
+**The army keeps up (ArmyConfig):** Follow3.MaxSpeed 46 -> 58, Follow.Lead.MaxOwnerSpeed 40 -> 48,
+Follow.CatchUp.MaxSpeed 40 -> 60, Follow2 MaxSpeed 50 -> 58. SpeedUp / Down 6 / 5 and CatchUpMin 30 are kept.
+- **Sim:** tools/sim/army_follow_sim.luau has a new S40 set (a 40-stud/s owner; the REAL FormationController /
+  SoldierController / Follow3). Old caps -> new caps:
+  - **straight:** mean error 4.40 -> 3.07, worst after 3 s 5.67 (<= the spec's 6).
+  - **90-degree turn:** 7.34 -> 3.46, worst after 3 s **7.49 (over 6)**.
+  - **hairpin:** 10.95 -> 3.92, worst after 3 s **10.72** (v115's about-turn allowance is 12), and one soldier passes
+    **0.23 studs** from the owner on the hairpin.
+  - Always: 0 teleports / PivotTo, every slot <= the soldier top speed (50.1 <= 58), every scenario settles (final
+    error <= 1.2).
+  - The default army sim still passes (FAILS 0).
+- **Needs a decision:** the turn / hairpin numbers are reported, not hidden. The formation controller's turn behaviour
+  at 40 needs tuning or a spec relaxation (owner / Code Bot decision).
+- **Recover / march:** Recover.FollowFarStuds 80 is not reached on these runs (0 recovers). JOB 38 marches have no
+  owner pace (unaffected).
+
+**Retired pins** (JOB 40 comments + replacements):
+- codebot_v133 speed literals / cap / MaxSpeed 46;
+- codebot_v126 CatchUp MaxSpeed 40 and Follow2 MaxSpeed 50;
+- BPS "+%d%% forever" death card and the CatchUp range 20..40 -> 20..60;
+- codebot_v145 / v146 whole-file MonetizationConfig guards -> "no Robux price / Id line changed".
+
+**Checks:** run_speed_test (helper texts, off / live values, cap, prices / Ids, the 40 sim); claude_bud_job40 part B
+pins; BuyPathStatic PASS=7183 FAIL=0; all sims 0 failed; rojo ok; audit OK; no new LSP errors.
+
+**Creator Hub (required note):** Creator Hub: the Speed Pass (1998656357) and Speed Boost (3713839342) descriptions must
+be updated to 'Run 75% faster, forever' and 'Run 2.5x faster, forever'. Code Bot does this on Creator Hub (not
+Claude). Prices unchanged.
+
+**Test ON HIS PHONE**
+1. With the Speed Boost: you run at 40. Your army block stays together behind you on a straight, a corner and a
+   U-turn: no teleports (watch the U-turn).
+2. The Speed pad, the Shop and the death card read "Run 75% faster" / "Run 2.5x faster".
 ## claude-bud JOB 40 PART A (2026-09-30): REAL BASE GUARDS + THE ONE HOSTILITY RULE (branch `claude/desktop-bud`)
 **Flags:** `GuardConfig.Posts` (`Enabled`, `OwnerFirst = true`, by the BASE OWNER).
 - **Off / not live owner:** today's statues, gate guards, towers and AutoGuns exactly, with their JOB 20 checks.

@@ -62,8 +62,14 @@ _cb146("WeaponsLive = true" in _RC or "WeaponsLive = true," in _RC, "CODEBOT v14
 try:
 	_wb = _sp146.run(["git", "diff", "--name-only", "af3a858"], capture_output=True, text=True).stdout
 	_cb146(not any("WE_Building" in l for l in _wb.splitlines()), "CODEBOT v146: no WE_Building* file touched since v145 tip")
-	_cb146(not any(l in (_C146 + "MonetizationConfig.luau", _C146 + "WeaponConfig.luau", _C146 + "RebirthConfig.luau") for l in _wb.splitlines()),
-		"CODEBOT v146: VIP / pass Ids / RPG hold / WeaponsLive configs untouched since v145 tip")
+	# claude-bud JOB 40 part B: retired the whole-file MonetizationConfig guard (it now carries the speed helper);
+	# replacement: WeaponConfig / RebirthConfig untouched, and no Robux price / Id line changed in MonetizationConfig
+	_cb146(not any(l in (_C146 + "WeaponConfig.luau", _C146 + "RebirthConfig.luau") for l in _wb.splitlines()),
+		"CODEBOT v146: RPG hold / WeaponsLive configs untouched since v145 tip (claude-bud JOB 40 replacement)")
+	import re as _re146
+	_md146 = _sp146.run(["git", "diff", "-U0", "af3a858", "--", _C146 + "MonetizationConfig.luau"], capture_output=True, text=True).stdout
+	_cb146(not any(_re146.search(r"\bRobuxPrice\s*=|(^|[\s{,])Id\s*=\s*\d", l) for l in _md146.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))),
+		"CODEBOT v146: no Robux price / Id line changed in MonetizationConfig since v145 tip (claude-bud JOB 40 replacement)")
 except Exception:
 	pass
 

@@ -2898,7 +2898,9 @@ must_not_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Shop
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'stroke.Thickness = if hero then HERO_ROW_STROKE else 0', 'S: F2 the + highlight returns to the hero look')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'if key == speedPassKey and ownsAnyKey(speedOffer.SkipIfOwnsAny) then', 'S: F8 no death offer for owners of any SkipIfOwnsAny key')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'title = "Run faster"', 'S: F8 death offer title')
-must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', '"%s  +%d%% forever"', 'S: F8 death offer sub (Speed Pass  +15% forever)')
+# claude-bud JOB 40 part B: retired the literal "+%d%% forever" (the death card text now comes from the one speed helper);
+# replacement: the death card builds its line from MonetizationConfig.SpeedText with the player's multiplier
+must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'string.format("%s  %s", name, (MonetizationConfig :: any).SpeedText(mult, true))', 'S: F8 death offer sub (claude-bud JOB 40: "Speed Pass  Run 75% faster, forever" from the helper)')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'promptGamePass(offerKey, "death_card")', 'S: F8 death offer prompts report source death_card')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'promptGamePass("AutoCollect", "offer")', 'S: AutoCollect offer source')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'promptDevProduct("CashMega", "offer")', 'S: CashMega offer source')
@@ -9244,10 +9246,11 @@ def _army_fix_pins() -> None:
         bad(f"army fix: Follow.ThreatStuds must be > 0 and <= CombatFairnessConfig.EscortEngageRadius (got {ts} / {er}); 130 slowed the army on every camp / checkpoint approach, behind the phone camera")
     mult, maxs = _af_num(cu, "SpeedMult"), _af_num(cu, "MaxSpeed")
     # v126 (Code Bot Roblox): MaxSpeed range 20..30 -> 20..40 (Speed Boost x1.6 = 25.6; 25.6 x 1.5 = 38.4)
-    if mult is not None and maxs is not None and 1.0 < mult <= 1.6 and 20 <= maxs <= 40:
+    # claude-bud JOB 40 part B: 20..40 -> 20..60 (the x2.5 Speed Boost owner runs 40; 40 x 1.5 = 60)
+    if mult is not None and maxs is not None and 1.0 < mult <= 1.6 and 20 <= maxs <= 60:
         ok(f"army fix: CatchUp SpeedMult {mult} / MaxSpeed {maxs} (keeps up with an owner at 16 / 22.4 / 25.6)")
     else:
-        bad(f"army fix: CatchUp SpeedMult must be in (1, 1.6] and MaxSpeed in [20, 40] (got {mult} / {maxs})")
+        bad(f"army fix: CatchUp SpeedMult must be in (1, 1.6] and MaxSpeed in [20, 60] (got {mult} / {maxs})")
     # 2) a unit model is removed only on the lifecycle paths: Humanoid.Died (spawnUnit), the SyncArmy not-living cull and
     #    trim, clearSquad on OrdersConfig.Enabled = false (SyncArmy) and on PlayerRemoving (Init). Nothing else.
     spans = _af_fn_spans(so)

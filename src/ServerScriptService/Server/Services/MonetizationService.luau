@@ -94,7 +94,9 @@ local sessionStartAt: { [number]: number } = {}
 -- F8: the death speed offer was sent this session (userId -> true; cleared on PlayerRemoving)
 local deathSpeedSent: { [number]: boolean } = {}
 -- F8: sanity cap on a WalkSpeedMult config value (a typo must never launch players across the map)
-local MAX_WALK_SPEED_MULT = 2.0 -- v133: Speed Boost x2 fits under it (16 -> 32; the cap = 32). v126 was 1.75 (28)
+-- claude-bud JOB 40: the sanity cap lives in config now (MonetizationConfig.MaxWalkSpeedMult 2.5 = 40: the x2.5 Speed
+-- Boost fits; today's x1.5 / x2 are unchanged under it). v133 was a local 2.0; v126 1.75.
+local MAX_WALK_SPEED_MULT = tonumber((MonetizationConfig :: any).MaxWalkSpeedMult) or 2.0
 
 -- Whole number >= 0; junk (nil, strings, NaN, inf, negatives) becomes 0.
 local function nonNegInt(value: any): number
@@ -454,8 +456,9 @@ local function ownsSkuCached(player: Player, key: string): boolean
 end
 
 -- F8: WalkSpeedMult of one config entry (1 when missing or junk; capped at MAX_WALK_SPEED_MULT)
-local function walkSpeedMultOf(def: any): number
-	local m = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
+local function walkSpeedMultOf(def: any, userId: number?): number
+	-- claude-bud JOB 40: the SKU's V2 multiplier while SpeedV2 is live for the player (else WalkSpeedMult)
+	local m = if typeof(def) == "table" then (if userId ~= nil then (MonetizationConfig :: any).SpeedMultOf(def, userId) else tonumber(def.WalkSpeedMult)) else nil
 	if m == nil or m ~= m or m <= 1 then
 		return 1
 	end
@@ -484,14 +487,14 @@ function MonetizationService.SpeedMultFor(player: Player): number
 		return best
 	end
 	for passKey, def in pairs(MonetizationConfig.GamePasses :: any) do
-		local m = walkSpeedMultOf(def)
+		local m = walkSpeedMultOf(def, player.UserId)
 		-- claude-bud: the Speed Pass counts only while MonetizationConfig.Rollout is live for this player
 		if m > best and MonetizationConfig.SkuLiveFor(player.UserId, passKey) and ownsCached(player, passKey) then
 			best = m
 		end
 	end
 	for productKey, def in pairs(MonetizationConfig.DevProducts :: any) do
-		local m = walkSpeedMultOf(def)
+		local m = walkSpeedMultOf(def, player.UserId)
 		if m > best and ownsSkuCached(player, productKey) then
 			best = m
 		end

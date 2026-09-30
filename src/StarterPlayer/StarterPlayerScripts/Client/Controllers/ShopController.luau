@@ -607,18 +607,16 @@ function ShopController.Init()
 						then (MonetizationConfig.GamePasses :: any)[k]
 						else (MonetizationConfig.DevProducts :: any)[k]
 					local robux = if typeof(def) == "table" then tonumber(def.RobuxPrice) else nil
-					local desc = if typeof(def) == "table" and typeof(def.Description) == "string" then def.Description else nil
+					local desc = (MonetizationConfig :: any).DescFor(def, player.UserId) -- claude-bud JOB 40: speed text from the helper
 					local title = "Back stronger: " .. name
 					local sub = desc or "Boost after death"
 					if k == speedPassKey or (k == ShopOverhaulConfig.DeathOfferProduct and ShopOverhaulConfig.LiveFor(player.UserId)) then
 						-- claude-bud JOB 36: the overhaul's death offer is Speed Boost (same "Run faster" copy)
 						-- F8 copy: "Run faster" / "Speed Pass  +40% forever" / "GET R$ 99" (from the config values).
 						-- No Cash Pack Mega highlight after this offer (M1: no 799 R$ push after a death).
-						local mult = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
+						local mult = (MonetizationConfig :: any).SpeedMultOf(def, player.UserId)
 						title = "Run faster"
-						sub = if mult and mult > 1
-							then string.format("%s  +%d%% forever", name, math.floor((mult - 1) * 100 + 0.5))
-							else name
+						sub = if mult > 1 then string.format("%s  %s", name, (MonetizationConfig :: any).SpeedText(mult, true)) else name -- JOB 40: the helper
 					else
 						pendingCashMegaHighlight = true -- v35: CashMega highlight if the shop opens next
 					end
@@ -930,11 +928,11 @@ function ShopController.Init()
 		end
 		local robux = tonumber(def.RobuxPrice) or 0
 		local stub = false -- kept for "coming soon" path if ever re-enabled
-		local sub = def.Description or ""
+		local sub = (MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or "" -- claude-bud JOB 40
 		if def.GrantsBattlePassPremium then
 			sub = "Unlocks Battle Pass Premium (ProcessReceipt only)"
 		elseif def.GrantEntitlement then
-			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement)))
+			sub = ((MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or ("Grants " .. tostring(def.GrantEntitlement)))
 		elseif def.Cash and def.Cash > 0 then
 			sub = "+$" .. formatCash(packCash(key, def)) .. " Cash" -- claude-bud JOB 36: the live amount
 		elseif def.Gold and def.Gold > 0 then
@@ -1099,7 +1097,7 @@ function ShopController.Init()
 		if robuxFeature then
 			passTitle = "ROBUX · " .. name -- claude-bud JOB 6: the gold Robux row
 		end
-		local passSub = tostring(def.Description or "")
+		local passSub = tostring((MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or "") -- claude-bud JOB 40
 		if overhaul then -- claude-bud JOB 36: PERMANENT on every pass; BEST VALUE on 2x Cash; gold armory rows
 			passSub = ShopOverhaulConfig.PermanentPrefix .. tostring(def.OverhaulDescription or def.Description or "")
 			if key == ShopOverhaulConfig.BestValueKey then
@@ -1627,7 +1625,7 @@ function ShopController.Init()
 			return showOffer({
 				Key = "SpeedBoostToast",
 				Title = tostring(p.DisplayName or def.DisplayName or "Speed Boost"),
-				Sub = if typeof(def.Description) == "string" and def.Description ~= "" then def.Description else "Run faster across the map",
+				Sub = (MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or "Run faster across the map", -- claude-bud JOB 40
 				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
 				OnGet = function()
 					promptDevProduct("SpeedBoost", "offer")

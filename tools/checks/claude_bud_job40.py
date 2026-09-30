@@ -87,6 +87,26 @@ _spawn = _GD.split("local function spawnGuardModel")[1].split("\nend\n")[0]
 _j40("root.Anchored = false" in _spawn and "WE_RigStatic" not in _spawn, "A: the live guards are unanchored Humanoid rigs (never WE_RigStatic)")
 _j40("bgR.RestoreStatues, plotId" in _GD and "bgMod.CollectPosts(plotFolder, plotId)" in _GD, "A: the statues are parked for a live plot and restored when it clears")
 
+# ── part B: speed (JOB 40 replacements for the retired codebot_v133 / v126 speed pins) ──
+_MCF = _j40_src(_CF + "MonetizationConfig.luau")
+_j40("WalkSpeedMultV2 = 1.75," in _MCF and "WalkSpeedMultV2 = 2.5," in _MCF and "cfg.MaxWalkSpeedMult = 2.5" in _MCF
+     and "cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MCF,
+     "B: Speed Pass x1.75 (28) / Speed Boost x2.5 (40), cap 2.5, owner-first (SpeedV2); off = x1.5 / x2")
+_j40("cfg.GamePasses.ImpulseSpeed.Description = cfg.SpeedText(" in _MCF and "cfg.DevProducts.SpeedBoost.Description = cfg.SpeedText(" in _MCF
+     and 'Description = "Run' not in _MCF, "B: the speed Descriptions come from the helper (no typed speed string)")
+_speed_strings = [p.as_posix() for p in _J40P("src").rglob("*.luau") if p.name != "MonetizationConfig.luau"
+                  and _j40_re.search(r'"[^"\n]*\d+(\.\d+)?(%|x) faster', p.read_text(encoding="utf-8"))]
+_j40(_speed_strings == [], "B: no hard-coded speed string outside the helper (" + ", ".join(_speed_strings) + ")")
+_MSV = _j40_code(_SV + "Services/MonetizationService.luau")
+_j40("local MAX_WALK_SPEED_MULT = tonumber((MonetizationConfig :: any).MaxWalkSpeedMult) or 2.0" in _MSV and "walkSpeedMultOf(def, player.UserId)" in _MSV,
+     "B: the cap from config; SpeedMultFor reads the player's (V2 while live) multiplier")
+_SHC = _j40_code(_CL + "Controllers/ShopController.luau")
+_j40(_SHC.count("DescFor(def,") >= 5 and "(MonetizationConfig :: any).SpeedText(mult, true)" in _SHC, "B: Shop rows / toast / death card read the helper")
+_AY = _j40_src(_CF + "ArmyConfig.luau")
+_j40("MaxSpeed = 58, -- claude-bud JOB 40: x1.45" in _AY and "MaxOwnerSpeed = 48," in _AY and "MaxSpeed = 60, -- claude-bud JOB 40: 40 x 1.5" in _AY
+     and "MaxSpeed = 58, -- claude-bud JOB 40: was 50" in _AY and "SpeedUpPerTick = 6," in _AY and "SpeedDownPerTick = 5," in _AY,
+     "B: the army keeps up (Follow3 58, Lead 48, CatchUp 60, Follow2 58; no lurch: +6 / -5 per tick)")
+
 _luau = _j40_os.environ.get("LUAU")
 if _luau is None and _j40_os.environ.get("LUAU_COMPILE"):
     _cand = _j40_os.environ["LUAU_COMPILE"].replace("luau-compile", "luau")
@@ -96,5 +116,7 @@ if _luau:
     _j40(_r.returncode == 0 and "BASE MARKER TEST: 0 failed" in _r.stdout, "E: run_base_marker_test.py (real config / data service)")
     _r = _j40_sp.run([_j40_sys.executable, "tools/sim/run_base_guards_test.py"], capture_output=True, text=True, env=dict(_j40_os.environ, LUAU=_luau))
     _j40(_r.returncode == 0 and "BASE GUARDS TEST: 0 failed" in _r.stdout, "A: run_base_guards_test.py (state machine, the hostility table, budgets)")
+    _r = _j40_sp.run([_j40_sys.executable, "tools/sim/run_speed_test.py"], capture_output=True, text=True, env=dict(_j40_os.environ, LUAU=_luau))
+    _j40(_r.returncode == 0 and "SPEED ALL: 0 failed" in _r.stdout, "B: run_speed_test.py (the helper, the values, the 40-stud/s army sim: 0 teleports)")
 else:
     print("SKIP CLAUDE-BUD J40: Luau CLI tests (set LUAU)")

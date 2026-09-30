@@ -40,11 +40,11 @@ export type StandOpts = {
 }
 
 -- price + name + benefit, from MonetizationConfig only
-function PurchaseStands.OfferInfo(kind: string, key: string): (number, string, string)
+function PurchaseStands.OfferInfo(kind: string, key: string, userId: number?): (number, string, string)
 	local def: any = if kind == "GamePass" then (MonetizationConfig.GamePasses :: any)[key] else (MonetizationConfig.DevProducts :: any)[key]
 	local price = if typeof(def) == "table" then tonumber(def.RobuxPrice) or 0 else 0
 	local name = if typeof(def) == "table" and typeof(def.DisplayName) == "string" then def.DisplayName else key
-	local desc = if typeof(def) == "table" and typeof(def.Description) == "string" then def.Description else ""
+	local desc = (MonetizationConfig :: any).DescFor(def, userId) or "" -- claude-bud JOB 40: speed text from the helper
 	return price, name, desc
 end
 

@@ -150,6 +150,16 @@ if J23 then
 	add("J_maxArmy", { seg(4, 16), seg(0.3, 16, 300), seg(4, 16), seg(2 * math.pi / circ, 16, math.deg(circ)), seg(0.15, 16, 1200), seg(5, 16), seg(4, 0) }, E8)
 end
 
+-- claude-bud JOB 40 part B: a 40-stud/s owner (the x2.5 Speed Boost): a straight run, a 90-degree turn and a hairpin
+-- (run_army_sim.py builds it with S40 = true; off = the lists above unchanged)
+local S40 = false --@@S40@@
+if S40 then
+	SCEN = {}
+	add("S40_straight", { seg(20, 40), seg(4, 0) }, E5)
+	add("S40_right90", { seg(5, 40), seg(0.3, 40, -300), seg(8, 40), seg(4, 0) }, E5)
+	add("S40_hairpin", { seg(6, 40), seg(0.15, 40, 1200), seg(8, 40), seg(4, 0) }, E5)
+end
+
 -- segment intersection (strict) for path crossings
 local function cross(a1, a2, b1, b2)
 	local function o(p, q, r) return (q.X - p.X) * (r.Z - p.Z) - (q.Z - p.Z) * (r.X - p.X) end
@@ -301,6 +311,7 @@ for _, sc in ipairs(SCEN) do
 				local rms = math.sqrt(err2 / math.max(1, cnt))
 				if moving then m.rmsSum += rms; m.rmsN += 1 end
 				m.rmsMax = math.max(m.rmsMax, rms)
+				if t >= 3 then m.rmsMax3 = math.max(m.rmsMax3 or 0, rms) end -- claude-bud JOB 40: the worst after the first 3 s
 				for _, list in pairs(ranks) do
 					if #list >= 2 then
 						local lo, hi, dlo, dhi = math.huge, -math.huge, math.huge, -math.huge
@@ -387,9 +398,9 @@ for _, sc in ipairs(SCEN) do
 			sc.Name, m.jErrMove or 0, if (m.jN or 0) > 0 then m.jSum / m.jN else 0, m.jCatch or 0, N, m.jErrStand or 0, m.jCatchStand or 0, m.jSlotV or 0,
 			m.jStandMove or 0, m.slotChanges, m.teleports, m.minOwner, m.minOwnerSlot))
 	end
-	print(string.format("METRIC,%s,slotChanges=%d,teleports=%d,rmsMean=%.2f,rmsMax=%.2f,finalRms=%.2f,widthRatio=%.2f,rankViol=%d,rankYield=%d,crossings=%d,minOwner=%.2f,minOwnerSlot=%.2f,slotAhead=%d,soldierAhead=%d,orbit=%d,maxSlotSpeed=%.1f,cap=%.1f,movesPerSec=%.2f,maxRowTurn=%.0f",
+	print(string.format("METRIC,%s,slotChanges=%d,teleports=%d,rmsMean=%.2f,rmsMax=%.2f,finalRms=%.2f,widthRatio=%.2f,rankViol=%d,rankYield=%d,crossings=%d,minOwner=%.2f,minOwnerSlot=%.2f,slotAhead=%d,soldierAhead=%d,orbit=%d,maxSlotSpeed=%.1f,cap=%.1f,movesPerSec=%.2f,maxRowTurn=%.0f,rmsMax3=%.2f",
 		sc.Name, m.slotChanges, m.teleports, m.rmsMean, m.rmsMax, m.finalRms, m.widthRatio, m.rankViol, m.rankYield, m.crossings, m.minOwner, m.minOwnerSlot,
-		m.slotAhead, m.soldierAhead, m.orbit, m.maxSlotSpeed, cap, m.movesPerSec, m.maxTurnDeg))
+		m.slotAhead, m.soldierAhead, m.orbit, m.maxSlotSpeed, cap, m.movesPerSec, m.maxTurnDeg, m.rmsMax3 or 0))
 end
 
 -- ── thresholds ────────────────────────────────────────────────────────────────────────────────────────────────────

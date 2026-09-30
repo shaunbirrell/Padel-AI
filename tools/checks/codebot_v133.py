@@ -99,13 +99,12 @@ _cb133("PreferMesh = true" not in _rd133("src/ReplicatedStorage/Shared/Configs/V
 _mc = _rd133("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau")
 _sp = _mc[_mc.find("ImpulseSpeed = {"):][:700]
 _sb = _mc[_mc.find("\t\tSpeedBoost = {"):][:900]
-_cb133("Id = 1998656357," in _sp and "RobuxPrice = 99," in _sp and "WalkSpeedMult = 1.5," in _sp and 'Description = "Run 50% faster, forever"' in _sp,
-       "CODEBOT v133: Speed Pass Id / 99 R$ unchanged, x1.5 (24), 'Run 50% faster, forever'")
-_cb133("Id = 3713839342," in _sb and "RobuxPrice = 99," in _sb and "OneTime = true" in _sb and "WalkSpeedMult = 2.0," in _sb and 'Description = "Run 2x faster, forever"' in _sb,
-       "CODEBOT v133: Speed Boost Id / 99 R$ / OneTime unchanged, x2 (32), 'Run 2x faster, forever'")
-_cb133("local MAX_WALK_SPEED_MULT = 2.0" in _rd133(_S133 + "Services/MonetizationService.luau"), "CODEBOT v133: MAX_WALK_SPEED_MULT = 2 (the cap 32)")
-_cb133("MaxSpeed = 46, -- v133" in _AY and "FormMaxSpeed = 24," in _AY and "FormSpeedMult = 1.25," in _AY,
-       "CODEBOT v133: Follow3 soldiers MaxSpeed 46; the block runs max(24, his speed x 1.25) = 40 behind a 32 runner")
+# JOB 40: retired, superseded in tools/checks/claude_bud_job40.py: #_cb133(... 'Description = "Run 50% faster, forever"' ...) Speed Pass x1.5 text literal
+# JOB 40: retired, superseded in tools/checks/claude_bud_job40.py: #_cb133(... 'Description = "Run 2x faster, forever"' ...) Speed Boost x2 text literal
+# JOB 40: retired, superseded in tools/checks/claude_bud_job40.py: #_cb133("local MAX_WALK_SPEED_MULT = 2.0" ...) (the cap is MonetizationConfig.MaxWalkSpeedMult)
+# JOB 40: retired, superseded in tools/checks/claude_bud_job40.py: #_cb133("MaxSpeed = 46, -- v133" ...) (Follow3.MaxSpeed 58)
+_cb133("Id = 1998656357," in _sp and "RobuxPrice = 99," in _sp and "WalkSpeedMult = 1.5," in _sp and "Id = 3713839342," in _sb and "RobuxPrice = 99," in _sb and "OneTime = true" in _sb and "WalkSpeedMult = 2.0," in _sb,
+       "CODEBOT v133 (kept by JOB 40): the speed SKUs' Ids / 99 R$ / OneTime and today's x1.5 / x2 (the off values)")
 
 # ── the Luau CLI tests ──
 _luau = _os133.environ.get("LUAU")

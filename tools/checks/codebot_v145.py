@@ -70,7 +70,12 @@ try:
 	# claude-bud JOB 39 phase 2: retired "no config changed since v144 tip" (every later job adds config: EndgameConfig parts,
 	# PlazaServicesConfig stations). Replacement: the configs this guard protected (VIP / pass Ids = MonetizationConfig,
 	# RPG hold = WeaponConfig, WeaponsLive = RebirthConfig) are still untouched since the v144 tip.
-	_cb145(not any(l in (_C145 + "MonetizationConfig.luau", _C145 + "WeaponConfig.luau", _C145 + "RebirthConfig.luau") for l in _wb.splitlines()),
-		"CODEBOT v145: VIP / pass Ids / RPG hold / WeaponsLive configs untouched since v144 tip (claude-bud JOB 39 replacement)")
+	# claude-bud JOB 40 part B: MonetizationConfig now carries the speed helper (no price / Id change): the guard is the
+	# Robux lines themselves. WeaponConfig / RebirthConfig stay untouched.
+	_cb145(not any(l in (_C145 + "WeaponConfig.luau", _C145 + "RebirthConfig.luau") for l in _wb.splitlines()),
+		"CODEBOT v145: RPG hold / WeaponsLive configs untouched since v144 tip (claude-bud JOB 39 replacement)")
+	_md = _sp145.run(["git", "diff", "-U0", "aa7f88e", "--", _C145 + "MonetizationConfig.luau"], capture_output=True, text=True).stdout
+	_cb145(not any(_re145.search(r"\bRobuxPrice\s*=|(^|[\s{,])Id\s*=\s*\d", l) for l in _md.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))),
+		"CODEBOT v145: no Robux price / Id line changed in MonetizationConfig since v144 tip (claude-bud JOB 40 replacement)")
 except Exception:
 	pass
