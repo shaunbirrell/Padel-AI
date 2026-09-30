@@ -1,0 +1,76 @@
+# Code Bot Roblox v146 (2026-09-30): cherry-pick claude-bud JOB 39 phase 2 (Base Tier + Defence tree +
+# Engineering Bureau + instant rebuild) owner-first onto phase-7-polish. Feature tip 9e15f27.
+# EndgameConfig.Live OwnerFirst=true; Parts.BaseTier + Defence true; PreferMesh OFF; WE_Building* untouched; WE_Build 146.
+# JOB 38 army SEND/ATTACK fix (v145) kept on phase-7 (bud was behind; cherry-pick only, no bud merge).
+import os as _os146
+import re as _re146
+import subprocess as _sp146
+from pathlib import Path as _P146
+
+
+def _cb146(cond, label):
+	if "ok" in globals() and "bad" in globals():
+		(ok if cond else bad)(label)
+	else:
+		print(("PASS " if cond else "FAIL ") + label)
+		if not cond:
+			raise SystemExit(1)
+
+
+def _rd146(p):
+	q = _P146(p)
+	return q.read_text(encoding="utf-8") if q.is_file() else ""
+
+
+_S146 = "src/ServerScriptService/Server/"
+_C146 = "src/ReplicatedStorage/Shared/Configs/"
+_CL146 = "src/StarterPlayer/StarterPlayerScripts/Client/"
+for _f in (_S146 + "Services/DataService.luau", _S146 + "Services/BaseService.luau", _S146 + "EarlyRemotes.server.luau"):
+	_cb146('SetAttribute("WE_Build", 146)' in _rd146(_f), "CODEBOT v146: WE_Build=146 " + _f.rsplit("/", 1)[-1])
+_cb146("WE_Build=146" in _rd146(_S146 + "Services/DataService.luau"), "CODEBOT v146: DataService profile-loaded log says WE_Build=146")
+
+# phase 2 feature presence
+_EC = _rd146(_C146 + "EndgameConfig.luau")
+_cb146("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _EC, "CODEBOT v146: EndgameConfig.Live Enabled + OwnerFirst=true")
+_cb146("\t\tBaseTier = true," in _EC and "\t\tDefence = true," in _EC, "CODEBOT v146: Parts.BaseTier + Defence true (phase 2)")
+_cb146(_P146(_S146 + "Modules/BaseTierBuilder.luau").is_file(), "CODEBOT v146: BaseTierBuilder present")
+_cb146(_P146(_S146 + "Services/EndgameService.luau").is_file(), "CODEBOT v146: EndgameService present")
+_cb146(_P146(_CL146 + "Controllers/EndgameController.luau").is_file(), "CODEBOT v146: EndgameController present")
+_ES = _rd146(_S146 + "Services/EndgameService.luau")
+_cb146("endgame_" in _ES and "function EndgameService.Purchase" in _ES, "CODEBOT v146: EndgameService.Purchase path present")
+_GD = _rd146(_S146 + "Services/GateDefenseService.luau")
+_cb146("GateHpMult" in _GD or "RebuildSeconds" in _GD, "CODEBOT v146: GateDefenseService hooks for tier/defence")
+_cb146("VaultMult" in _rd146(_S146 + "Services/MoneyCollectorService.luau"), "CODEBOT v146: MoneyCollectorService.VaultMult")
+
+# JOB 38 army fix must still be on phase-7 (do not regress)
+_AP = _rd146(_S146 + "Modules/ArmyPlan.luau")
+_cb146("local start = if c then c else plan.Lead" in _AP and "ArmyRoute.PointAlong(start, route, standoff)" in _AP,
+	"CODEBOT v146: JOB 38 army routes still start at the block (v145 kept)")
+
+# live state kept
+_AOC = _rd146(_C146 + "ArmyOrdersConfig.luau")
+_cb146("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _AOC, "CODEBOT v146: ArmyOrdersConfig OwnerFirst stays true")
+_cb146("OwnerFirst = false, -- codebot_v142 launch" in _rd146(_C146 + "ShopOverhaulConfig.luau"), "CODEBOT v146: ShopOverhaul stays OwnerFirst=false")
+_cb146("OwnerFirst = false, -- codebot_v142 launch" in _rd146(_C146 + "CheckpointGuardConfig.luau"), "CODEBOT v146: CheckpointGuard stays OwnerFirst=false")
+_cb146("PreferMeshWhenAssetIdSet = false" in _rd146(_C146 + "StructureVisualConfig.luau"), "CODEBOT v146: PreferMesh stays OFF")
+_cb146("FastTravelEnabled = false" in _rd146(_C146 + "MapConfig.luau"), "CODEBOT v146: fast travel stays REMOVED")
+
+# VIP 199 still (not 349); WeaponsLive stays true
+_MC = _rd146(_C146 + "MonetizationConfig.luau")
+_cb146("		VIP = {" in _MC and "RobuxPrice = 199," in _MC.split("VIP = {", 1)[1][:400], "CODEBOT v146: VIP RobuxPrice stays 199")
+_RC = _rd146(_C146 + "RebirthConfig.luau")
+_cb146("WeaponsLive = true" in _RC or "WeaponsLive = true," in _RC, "CODEBOT v146: WeaponsLive stays true")
+
+try:
+	_wb = _sp146.run(["git", "diff", "--name-only", "af3a858"], capture_output=True, text=True).stdout
+	_cb146(not any("WE_Building" in l for l in _wb.splitlines()), "CODEBOT v146: no WE_Building* file touched since v145 tip")
+	_cb146(not any(l in (_C146 + "MonetizationConfig.luau", _C146 + "WeaponConfig.luau", _C146 + "RebirthConfig.luau") for l in _wb.splitlines()),
+		"CODEBOT v146: VIP / pass Ids / RPG hold / WeaponsLive configs untouched since v145 tip")
+except Exception:
+	pass
+
+# endgame sim when LUAU is available
+_luau = _os146.environ.get("LUAU") or str(_P146.home() / ".local/bin/luau")
+if _P146(_luau).is_file():
+	_r = _sp146.run(["python3", "tools/sim/run_endgame_test.py"], capture_output=True, text=True, env=dict(_os146.environ, LUAU=_luau))
+	_cb146(_r.returncode == 0, "CODEBOT v146: run_endgame_test 0 failed")

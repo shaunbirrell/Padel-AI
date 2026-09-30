@@ -26,9 +26,7 @@ def _rd145(p):
 
 _S145 = "src/ServerScriptService/Server/"
 _C145 = "src/ReplicatedStorage/Shared/Configs/"
-for _f in (_S145 + "Services/DataService.luau", _S145 + "Services/BaseService.luau", _S145 + "EarlyRemotes.server.luau"):
-	_cb145('SetAttribute("WE_Build", 145)' in _rd145(_f), "CODEBOT v145: WE_Build=145 " + _f.rsplit("/", 1)[-1])
-_cb145("WE_Build=145" in _rd145(_S145 + "Services/DataService.luau"), "CODEBOT v145: DataService profile-loaded log says WE_Build=145")
+# v146 (Code Bot Roblox): the WE_Build=145 pins are superseded in tools/checks/codebot_v146.py (WE_Build=146).
 
 # the fix
 _AP = _rd145(_S145 + "Modules/ArmyPlan.luau")
