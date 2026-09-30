@@ -62,6 +62,113 @@
   5. Tempest: hold to charge, release; 2-player pierce + PvP protection still holds (novice shield / pvp off).
   6. Non-owner join: no armory / no grants (OwnerFirst).
 
+## claude-bud JOB 37 (2026-09-30): real road checkpoint + killable guards (branch `claude/desktop-bud`)
+**Flags**
+- **Detail:** `WorldDetailConfig.Kits.Checkpoint`. False builds today's 8-part kit exactly. The world is built once for
+  everyone.
+- **Guards:** `CheckpointGuardConfig.Live` (`Enabled`, `OwnerFirst = true`). Off / not live = no guards, no rewards,
+  no map or mission change.
+
+**1. The kit** (`WorldKits Detail.Checkpoint`): **99 parts** (plain 8, so +91 extra each).
+- **Booth:** plinth, framed windows on 3 sides (glass 0.4 + mullion + sill), door with frame + handle, roof with
+  fascia, AC unit, a door lamp head. `CheckpointBooth` keeps its name / size / place. It is solid, so no interior is
+  modelled.
+- **Boom gate:** cabinet, hinge, counterweight, raised arm in 6 red / white bands (never collides), rest post on the
+  far shoulder.
+- **2-course sandbag L and U** firing positions.
+- **The JOB 31 braced watchtower** with a searchlight.
+- **4 jersey barriers** as a staggered chicane on the shoulders.
+- **A razor-wire fence** (posts, 2 wires, 2 coils).
+- **2 floodlight poles** (lamp heads, no light).
+- **A flag:** our own olive cloth with a gold diamond, not a real flag.
+- **STOP / HALT - SHOW PASS / CHECKPOINT boards** (3 SurfaceGuis via the world sign budget), a speed disc and a
+  warning triangle.
+- **Supplies:** 3 crates + strap, 2 ammo boxes on a field table, a jerry can.
+- **Road lane:** every part is >= 13.2 studs from the road line (WorldPOI road gaps); span 53 x 33 (<= 64).
+
+**Lights: ONE per checkpoint**, the tower searchlight: SpotLight, Shadows off, night only (WE_NightLight), range 18,
+brightness 0.8.
+- The world light cap is `WorldConfig.Lights.MaxWorld` 24, and hygiene deletes extras.
+- The brief's booth PointLight and 2 floodlight SpotLights would have taken the whole world budget, so the floodlights
+  and booth lamp are lamp-coloured heads (never Neon).
+- The client sweeps the searchlight (`CheckpointController`, within 250 studs; one RenderStepped loop only while one is
+  near).
+
+**Part budget**
+- `MaxExtraParts` 900 -> **1446 (+546)**. The +546 is the checkpoint's own share (`KitCaps.Checkpoint`), so the JOB 31
+  kits keep exactly their 900.
+- 546 = 6 detailed checkpoints; the others (about 14 in the world) build plain. Guards only live at detailed ones.
+- WorldPOI: a detailed street cluster refused (neighbour disc, row light / sign caps) is rebuilt PLAIN once and its
+  detail refunded (`WorldKits.RefundDetail`), so a checkpoint is never dropped because of its detail. Log:
+  `[WorldDetail] <poi> <cluster> refused detailed (...): rebuilt plain`.
+- Per-checkpoint log: `[WorldDetail] Checkpoint extra=91 (share N / 546)`.
+
+**2. Guards** (`CheckpointGuardService`, `CheckpointGuardConfig`)
+- **Posts:** 5 per detailed checkpoint (Attachments `WE_GuardPost1..5` on the booth; #5 on the tower deck, a Static
+  post).
+- **NPC type** `CheckpointGuard` (140 HP, 9 dmg, 1.1/s, range 70, aggro 80); the bank guards' R6 rig + RigAnimator.
+- **Combat:** CombatService.SpawnNPC (GroupId `CP.<id>`, NoRespawn, Home, Leash = 30 + 20). CombatNPC's line of sight +
+  hit chance + real shots, the protections and caps; no Health writes / TakeDamage / immunity.
+- **Target filter:** a new `TargetFilter` spawn option. CombatNPC picks the nearest player the filter accepts (nil =
+  unchanged), so guards ignore players the switch is not live for.
+- **Wake / sleep:** a live player within 220 studs wakes the group; nobody live within 340 despawns it (no NPC slot).
+  **NPC slots:** not a SpecialNPCType; they use the regular 18-slot pool (never the +4 bank / fort / rig headroom). A
+  full pool spawns fewer.
+- **Rewards:**
+  - per kill: the NPC type's $150 + 45 XP (CombatService, like every NPC);
+  - "Checkpoint cleared" when the last guard dies: 250 XP + max($2,500, 2 min of passive income) capped at $25,000
+    (half in private servers). It goes to every live player who hurt a guard in the last 30 s or killed one (army kills
+    count), once per cycle, and not again within 300 s. One toast.
+  - Mission objective "Checkpoint" +1; analytics checkpoint_guard_kill / checkpoint_cleared.
+- **Respawn:** as a group 180 s after the last death, only near a live player, never while a player stands on a post.
+- **Map / GO:** the world map shows each checkpoint as hostile (red) or "CLEAR m:ss" (live players only). The mission
+  GO "Checkpoint" points at the checkpoints with guards up (tap-to-pin tracker, no fast travel). The daily objective is
+  only offered once the switch is live for everyone (the mission offer is global).
+
+**Checks**
+- `tools/checks/claude_bud_job37.py` (19 pins).
+- `run_kit_detail_test.py`: 99 parts, lane clear, span, arm never collides, booth kept, 5 posts, one light Shadows off,
+  small parts no shadow, off = plain 8.
+- `run_checkpoint_guards_test.py`: 30 checks (site, wake only for live, spawn opts, target filter, credit / cleared
+  once / non-live and stale contributors unpaid, 180 s respawn, not on a player, cooldown, sleep, map / GO, config).
+- BuyPathStatic PASS=6897 FAIL=0; all sims 0 failed; rojo ok; no new LSP errors; remote audit OK.
+- **Retired pins** (claude-bud comments + replacements in claude_bud_job37.py): BPS W3s2 K "kits add no spot lights"
+  (now: exactly one SpotLight, the searchlight); claude_bud_job31 MaxExtraParts 900 + the single-allowance test.
+
+**Build guide §11**
+- **Done:**
+  - silhouette broken (tower, roof, AC);
+  - plinth / ground contact;
+  - trims and frames;
+  - 2-3 tones;
+  - materials fit;
+  - scale reference (booth > avatar);
+  - storytelling (supplies, fence, flag);
+  - PreferMesh untouched, no WE_Building*, nothing real-world;
+  - the flag is fictional Parts;
+  - no fast travel;
+  - behind flags;
+  - small parts CastShadow false;
+  - decor non-colliding;
+  - cover (sandbags, jerseys, booth, walls) CanQuery on;
+  - one glass pane per window;
+  - light / sign caps;
+  - no per-frame scans;
+  - server-validated combat;
+  - NPCs on the shared state machine.
+- **Not done here:** greybox playtest, a phone walk-round, day / dusk / night check, Graphics Quality 3 FPS, the
+  5-viewport HUD harness (no new UI beyond map labels).
+
+**Test ON HIS PHONE**
+1. Walk up to a desert checkpoint at night: the floodlight heads, the searchlight sweeping from the tower. Check FPS.
+2. Get shot by the guards: real hits and misses, taking cover works, a novice shield / spawn shield is respected. A
+   second non-owner phone standing there is ignored by them.
+3. Kill all 5 (one is on the tower deck): cash + XP per kill, then ONE "Checkpoint cleared +$X +250 XP".
+4. Wait 3 min nearby: the guards respawn on their posts, never on you. The map shows "CLEAR m:ss" in the meantime.
+5. Open the map: checkpoints show red while guarded. Tap one to pin it (no fast travel). The mission GO for a
+   Checkpoint objective appears only after the everyone-launch.
+
+Not device-verified; the 2-player Studio combat test is still owed.
 ## claude-bud JOB 36 (2026-09-30): shop overhaul (branch `claude/desktop-bud`)
 **Flags:** `ShopOverhaulConfig.Live` (`Enabled`, `OwnerFirst = true`).
 - **Off:** the old shop exactly.

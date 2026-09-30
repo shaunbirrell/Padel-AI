@@ -9699,3 +9699,22 @@ ds_territories.luau T3):
   Double HP stops too.
 - **War Chest ownership:** the join check / purchase marks the four passes owned for the session, and each runs its
   OnPassOwned perks (Bigger Army mirrors into Entitlements as before).
+
+## 2026-09-30 — claude-bud JOB 37: real road checkpoint + guards
+- **Lights:** one real light per checkpoint (the searchlight). The world light cap is 24 and hygiene deletes extras,
+  so the booth PointLight and floodlight SpotLights asked for would have used the whole budget. The floodlights are
+  lamp-coloured heads instead.
+- **Part budget:** only 6 checkpoints get the detailed build (+546 parts, their own share); the rest stay plain.
+  Guards exist only at detailed checkpoints (they need the posts and the tower). A detailed build WorldPOI refuses is
+  rebuilt plain instead of being dropped.
+- **Booth:** it stays the solid plain part (name / size / place kept for the anchors), so the windows are panes on its
+  faces and there is no desk / stool inside.
+- **Boom arm:** stays raised; lowering it across the lane would break the road rules and the "never blocks a vehicle"
+  rule.
+- **NPC slots:** CheckpointGuard is not a SpecialNPCType (the 18-slot pool); when the pool is full, fewer guards
+  spawn. OpsGarrison's ledger is not used: its owner (OpsService) is off.
+- **Targeting:** guards ignore non-live players through a new optional `TargetFilter` spawn option. Non-live players
+  can still shoot them (the normal weapon path) and get the NPC per-kill reward, but never the cleared bonus.
+- **Mission:** the daily "Checkpoint" objective is offered only once the switch is live for everyone, because the
+  offer is global. While owner-first, the owner tests through the map (hostile / cleared) and the tracker.
+- **Cleared bonus:** "checkpoint" cash is multiplier-exempt (it is already minutes of multiplied income).

@@ -1405,6 +1405,7 @@ local VisualAssetConfig = {
 		BankGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
 		OilRigGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
 		FortGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		CheckpointGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet", Note = "claude-bud JOB 37: the bank guards' rig" } :: AssetRef,
 		CampCommander = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
 		GateGuard = { ModelAssetId = SOLDIER_ASSET_ID, FallbackAssetId = SOLDIER_FALLBACK_ID, Rig = "R6", Headwear = "Beret", Note = "v119 Army Soldier 7703684779: base gate / tower guards" } :: AssetRef,
 		-- W1 CFG drop (country / real-world weapon in the source): 0 → CharacterAlt (0) → Part kit

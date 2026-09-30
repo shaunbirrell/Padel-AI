@@ -757,6 +757,7 @@ local MonetizationConfig = {
 	CashMultExemptReasons = {
 		devproduct = true,
 		vip_supply = true, -- claude-bud JOB 36: the VIP crate is already minutes of multiplied income
+		checkpoint = true, -- claude-bud JOB 37: the checkpoint-cleared bonus is already minutes of multiplied income
 		admin = true,
 		purchase_refund = true,
 		prestige = true,

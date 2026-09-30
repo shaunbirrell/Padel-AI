@@ -69,6 +69,7 @@ local NukeService = safeRequire("NukeService", Services.NukeService) -- claude-b
 local AchievementService = safeRequire("AchievementService", Services.AchievementService) -- claude-bud JOB 34
 local PremiumGunService = safeRequire("PremiumGunService", Services.PremiumGunService) -- claude-bud JOB 35
 local ShopOverhaulService = safeRequire("ShopOverhaulService", Services.ShopOverhaulService) -- claude-bud JOB 36
+local CheckpointGuardService = safeRequire("CheckpointGuardService", Services.CheckpointGuardService) -- claude-bud JOB 37
 local StorePropsService = safeRequire("StorePropsService", Services.StorePropsService) -- Code Bot STORE-PROPS v132 (DO NOT REMOVE)
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
@@ -120,6 +121,7 @@ local deps: { [string]: any } = {
 	AchievementService = AchievementService, -- claude-bud JOB 34: achievements, chat shout-outs, badges
 	PremiumGunService = PremiumGunService, -- claude-bud JOB 35: the premium guns armory
 	ShopOverhaulService = ShopOverhaulService, -- claude-bud JOB 36: shop overhaul (VIP crate, perks, live pack amounts)
+	CheckpointGuardService = CheckpointGuardService, -- claude-bud JOB 37: road checkpoint guards
 	StorePropsService = StorePropsService, -- Code Bot STORE-PROPS v132
 	BaseSignService = BaseSignService, -- claude-bud JOB 30: the map uses the sign's "<Name>'s Empire" (TitleFor)
 	BattlePassService = BattlePassService,
@@ -594,6 +596,7 @@ safeInit("NukeService", NukeService, deps) -- claude-bud JOB 33: the silo nukes 
 safeInit("AchievementService", AchievementService, deps) -- claude-bud JOB 34: achievements (after Soldier / Mission / Economy)
 safeInit("PremiumGunService", PremiumGunService, deps) -- claude-bud JOB 35: premium guns armory (after Monetization / Combat / Base)
 safeInit("ShopOverhaulService", ShopOverhaulService, deps) -- claude-bud JOB 36: shop overhaul (after Monetization / Economy / Base / SquadOrders)
+safeInit("CheckpointGuardService", CheckpointGuardService, deps) -- claude-bud JOB 37: road checkpoint guards (after Combat / Mission / Monetization)
 safeInit("StorePropsService", StorePropsService, deps) -- Code Bot STORE-PROPS v132: Creator Store props (after RebirthZone; lazy, never blocks)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)

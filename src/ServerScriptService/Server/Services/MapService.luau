@@ -140,6 +140,18 @@ local function sameClan(player: Player, userId: number): boolean
 	return okA and okB and a ~= nil and a == b
 end
 
+-- claude-bud JOB 37: the road checkpoints for this player (CheckpointGuardService; nil when not live)
+local function checkpointRows(player: Player): { any }?
+	local okC, CG = pcall(function(): any
+		return require(script.Parent.CheckpointGuardService)
+	end)
+	if not okC or CG == nil or CG.MapList == nil then
+		return nil
+	end
+	local ok, list = pcall(CG.MapList, player)
+	return if ok then list else nil
+end
+
 function MapService.Live(player: Player): { [string]: any }?
 	if not live(player.UserId) then
 		return nil
@@ -160,6 +172,7 @@ function MapService.Live(player: Player): { [string]: any }?
 		Drops = s.Drops,
 		Jobs = s.Jobs,
 		Sites = s.Sites, -- claude-bud JOB 31
+		Checkpoints = checkpointRows(player), -- claude-bud JOB 37: hostile / cleared + respawn countdown (live players only)
 		Bank = { X = math.floor(BankRaidConfig.Position.X), Z = math.floor(BankRaidConfig.Position.Z) },
 	}
 end

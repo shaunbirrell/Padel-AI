@@ -3543,7 +3543,7 @@ must_contain(WK_, 'Builders.Runway = function(b: B)', 'W3s2 K: the airstrip runw
 must_contain(WK_, 'Watchtower = spec(8, 8, Vector3.new(9, 23, 9), "manmade", true, 2, "POI"),', 'W3s2 K: watchtower catalogue row (8 parts, 23 tall with the headroom)')
 must_not_contain(WK_, 'Instance.new("ParticleEmitter")', 'W3s2 K: kits never add particles (phones)')
 must_not_contain(WK_, 'Instance.new("Fire")', 'W3s2 K: burn drums / flare stack are painted, no Fire')
-must_not_contain(WK_, 'Instance.new("SpotLight")', 'W3s2 K: kits add no spot lights (world light budget)')
+# claude-bud JOB 37: retired (the road checkpoint's tower searchlight is ONE SpotLight, Shadows off, night only; replaced by tools/checks/claude_bud_job37.py: exactly one SpotLight in WorldKits, inside Detail.Checkpoint): must_not_contain(WK_, 'Instance.new("SpotLight")', 'W3s2 K: kits add no spot lights (world light budget)')
 
 # --- W3 step 2 lane P (platform): WorldPOI layouts + activity anchors, camp exemption, hygiene, Dockside, owner lights ---
 must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'WE_ActivityAnchor', 'W3s2 P (spec 8): WorldPOI stamps the activity anchors (header names the tag; the pins below pin the calls)')

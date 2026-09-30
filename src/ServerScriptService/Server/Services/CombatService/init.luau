@@ -127,6 +127,7 @@ type NPCRecord = {
 	Static: boolean, -- WE_Static: never MoveTo (implies Post)
 	OverCap: boolean, -- may use the SpecialOverCap headroom
 	SpawnOpts: NPCSpawnOpts?, -- a copy of the opts, reused by a respawn (nil for a 2-argument spawn)
+	TargetFilter: ((Player) -> boolean)?, -- claude-bud JOB 37: CombatNPC targets only players this accepts
 	Returning: boolean, -- walking back past the leash (targets ignored until home)
 	DeathFired: boolean, -- OnNPCDeath fired (or silenced by DespawnNPC): once per death
 	-- claude-bud (CombatConfig.GuardsFightBack / NpcUnstick; CombatNPC)
@@ -180,6 +181,7 @@ export type NPCSpawnOpts = {
 	ProvokeRadius: number?, -- Passive only (default: never provoked by proximity)
 	OverCap: boolean?, -- may use the SpecialOverCap headroom like a special type (event NPCs)
 	Static: boolean?, -- model attribute WE_Static = true; never MoveTo (tower deck, interior); implies Stance "Post"
+	TargetFilter: ((Player) -> boolean)?, -- claude-bud JOB 37: only players this returns true for are targeted (nil = all)
 }
 export type NPCInfo = { Id: string, TypeId: string, GroupId: string?, Alive: boolean, Position: Vector3, Provoked: boolean, Stance: string }
 export type NPCDeathInfo = { Id: string, TypeId: string, GroupId: string?, Killer: Player?, ByUnit: boolean, Position: Vector3 }
@@ -965,6 +967,7 @@ local function npcSpawnOpts(opts: any, at: CFrame)
 		OverCap = o ~= nil and o.OverCap == true,
 		Static = static,
 		Copy = if o ~= nil then (table.clone(o) :: any) :: NPCSpawnOpts else nil,
+		TargetFilter = if o ~= nil and typeof(o.TargetFilter) == "function" then o.TargetFilter else nil, -- claude-bud JOB 37
 	}
 end
 
@@ -1142,6 +1145,7 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame, opts: NPCSpawnOpts?
 		Leash = o.Leash,
 		Stance = o.Stance,
 		ProvokeRadius = o.ProvokeRadius,
+		TargetFilter = o.TargetFilter, -- claude-bud JOB 37
 		Static = o.Static,
 		OverCap = o.OverCap,
 		SpawnOpts = o.Copy,

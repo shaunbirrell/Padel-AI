@@ -1703,6 +1703,154 @@ Detail.Tent = function(b: B): boolean
 	return true
 end
 
+--[[ claude-bud JOB 37: the REAL road checkpoint (WorldDetailConfig.Kits.Checkpoint; 99 parts, the plain kit is 8).
+	Same frame as the plain kit: pivot on the road centre line, X across the road, the booth on the +X shoulder, -Z faces
+	arriving traffic. Every part stays >= 13.2 studs from the road line (WorldPOI CollideRoadGap 13 / VisibleRoadGap 9),
+	the arm is raised and never collides, the span stays inside 64 (x -24.5 .. 28.5, z -18.7 .. 15).
+	The CheckpointBooth part keeps its name, size and place (CheckpointAnchors clearances, WorldPOI stamping). It is a
+	solid block (the plain kit's), so its windows are panes on its faces over a dark shade, and no interior is modelled.
+	ONE light per checkpoint (the world cap is WorldConfig.Lights.MaxWorld 24): the tower searchlight, a SpotLight
+	(Shadows off, night only, WE_NightLight); the client sweeps it (CheckpointClient). The floodlight and door lamps are
+	lamp-coloured heads (SmoothPlastic, never Neon). 3 painted boards through WorldKits.Sign (the world sign budget).
+	Guard posts: Attachments WE_GuardPost1..5 on the booth (CheckpointGuardService reads them; 0 parts); the booth is
+	tagged WE_CheckpointSite. ]]
+local CP_WHITE = Color3.fromRGB(232, 230, 222)
+local CP_RED = Color3.fromRGB(178, 38, 34)
+local function cpGlass(p: Part, t: number)
+	p.Transparency = t
+	p.CastShadow = false
+end
+Detail.Checkpoint = function(b: B): boolean
+	local cl, cd, cm = PAL.ConcreteLight, PAL.Concrete, M.Concrete
+	local steel, wood = PAL.SteelDark, PAL.WoodDark
+	-- booth (19)
+	local booth = put(b, "CheckpointBooth", Vector3.new(4, 7, 4.4), CFrame.new(17.5, 3.5, 2.0), cl, cm, true)
+	put(b, "BoothPlinth", Vector3.new(4.8, 0.5, 5.2), CFrame.new(17.5, 0.25, 2.0), cd, cm, true)
+	put(b, "BoothRoof", Vector3.new(6, 0.4, 6.4), CFrame.new(17.5, 7.2, 1.6), steel, M.Metal, false)
+	put(b, "BoothFascia", Vector3.new(6.1, 0.5, 0.2), CFrame.new(17.5, 6.85, -1.6), PAL.Hazard, M.SmoothPlastic, false)
+	put(b, "BoothAC", Vector3.new(1.6, 0.9, 1.2), CFrame.new(18.4, 7.85, 3.0), PAL.ConcreteLight:Lerp(steel, 0.4), M.Metal, false)
+	type Win = { G: CFrame, GS: Vector3, M: CFrame, MS: Vector3, S: CFrame, SS: Vector3 }
+	local wins: { Win } = {
+		{ G = CFrame.new(17.5, 4.6, -0.26), GS = Vector3.new(2.6, 1.2, 0.12), M = CFrame.new(17.5, 4.6, -0.3), MS = Vector3.new(0.15, 1.2, 0.16), S = CFrame.new(17.5, 3.92, -0.35), SS = Vector3.new(3.0, 0.18, 0.35) },
+		{ G = CFrame.new(15.44, 5.0, 2.0), GS = Vector3.new(0.12, 1.8, 3.0), M = CFrame.new(15.4, 5.0, 2.0), MS = Vector3.new(0.16, 1.8, 0.15), S = CFrame.new(15.35, 4.0, 2.0), SS = Vector3.new(0.35, 0.18, 3.4) },
+		{ G = CFrame.new(17.5, 5.0, 4.26), GS = Vector3.new(2.6, 1.8, 0.12), M = CFrame.new(17.5, 5.0, 4.3), MS = Vector3.new(0.15, 1.8, 0.16), S = CFrame.new(17.5, 4.0, 4.35), SS = Vector3.new(3.0, 0.18, 0.35) },
+	}
+	for _, w in ipairs(wins) do
+		cpGlass(put(b, "BoothWindow", w.GS, w.G, PAL.Window, M.Glass, false), 0.4)
+		put(b, "WindowMullion", w.MS, w.M, steel, M.Metal, false)
+		put(b, "WindowSill", w.SS, w.S, cd, cm, false)
+	end
+	put(b, "BoothDoor", Vector3.new(0.15, 5.2, 2.0), CFrame.new(19.58, 3.1, 2.0), steel, M.DiamondPlate, false)
+	put(b, "DoorFrame", Vector3.new(0.2, 0.3, 2.4), CFrame.new(19.62, 5.85, 2.0), cd, cm, false)
+	put(b, "DoorHandle", Vector3.new(0.2, 0.2, 0.4), CFrame.new(19.72, 3.0, 1.3), PAL.Hazard, M.Metal, false)
+	local sign = put(b, "CheckpointSign", Vector3.new(3.2, 1.2, 0.2), CFrame.new(17.5, 6.15, -0.3), PAL.TarpRed, M.SmoothPlastic, false)
+	put(b, "DoorLamp", Vector3.new(0.6, 0.4, 0.4), CFrame.new(19.75, 6.2, 2.0), PAL.LampLens, M.SmoothPlastic, false)
+	-- boom gate (11): cabinet, hinge, counterweight, a raised arm in 6 red / white bands (never collides), the rest post
+	put(b, "GateCabinet", Vector3.new(1.2, 3.2, 1.2), CFrame.new(14.4, 1.6, -0.9), PAL.Hazard, M.Metal, true)
+	put(b, "GateHinge", Vector3.new(0.8, 0.7, 0.7), CFrame.new(14.4, 3.35, -0.9) * rotY(90), steel, M.Metal, false, false, Enum.PartType.Cylinder)
+	put(b, "GateCounterweight", Vector3.new(0.9, 0.9, 0.7), CFrame.new(15.1, 2.6, -0.9), steel, M.Metal, false)
+	local dir = Vector3.new(math.sin(math.rad(8)), math.cos(math.rad(8)), 0)
+	local hinge = Vector3.new(13.75, 3.35, -0.9)
+	for i = 1, 6 do
+		local c = hinge + dir * ((i - 0.5) * (13 / 6))
+		put(b, "CheckpointArm", Vector3.new(0.45, 13 / 6, 0.45), CFrame.new(c.X, c.Y, c.Z) * rotZ(-8), if i % 2 == 1 then CP_RED else CP_WHITE, M.SmoothPlastic, false)
+	end
+	put(b, "GateRestPost", Vector3.new(0.4, 2.6, 0.4), CFrame.new(-13.8, 1.3, -0.9), CP_WHITE, M.Metal, true)
+	put(b, "GateRestFork", Vector3.new(0.8, 0.3, 0.4), CFrame.new(-13.8, 2.7, -0.9), CP_RED, M.Metal, false)
+	-- sandbag firing positions (8): an L on the far shoulder, a U in front of the booth, two courses each
+	local sb, sl = PAL.Sandbag, PAL.SandbagLight
+	put(b, "Sandbag", Vector3.new(1.7, 1.1, 5), CFrame.new(-16.5, 0.55, -5.5), sb, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(1.35, 0.9, 4.6), CFrame.new(-16.5, 1.55, -5.5), sl, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(5, 1.1, 1.7), CFrame.new(-20, 0.55, -8.3), sl, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(4.6, 0.9, 1.35), CFrame.new(-20, 1.55, -8.3), sb, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(5, 1.1, 1.7), CFrame.new(18.5, 0.55, -5.5), sb, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(4.6, 0.9, 1.35), CFrame.new(18.5, 1.55, -5.5), sl, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(1.7, 1.1, 3.5), CFrame.new(21.8, 0.55, -3.6), sl, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(1.35, 0.9, 3.1), CFrame.new(21.8, 1.55, -3.6), sb, M.Sand, true)
+	-- guard tower (16): the JOB 31 braced watchtower behind the booth + a searchlight on its front wall
+	local towerAt = CFrame.new(24, 0, 10.5)
+	local tb: B = { Cluster = b.Cluster, CF = b.CF * towerAt, Opts = b.Opts, Parts = b.Parts, Rng = b.Rng, Overlays = b.Overlays }
+	Detail.Watchtower(tb)
+	local deckY = KC.WatchtowerDeckY
+	local housing = put(tb, "SearchlightHousing", Vector3.new(1.2, 0.9, 1.4), CFrame.new(2.5, deckY + 3.85, -4.3), steel, M.Metal, false)
+	put(tb, "SearchlightLens", Vector3.new(0.9, 0.7, 0.12), CFrame.new(2.5, deckY + 3.85, -5.06), PAL.LampLens, M.Glass, false)
+	local spot = Instance.new("SpotLight")
+	spot.Name = "Searchlight"
+	spot.Face = Enum.NormalId.Front
+	spot.Angle = 40
+	spot.Brightness = math.min(0.8, WorldConfig.Lights.MaxBrightness)
+	spot.Range = math.min(18, WorldConfig.Lights.MaxRange)
+	spot.Color = PAL.LampLens
+	spot.Shadows = false
+	spot.Enabled = nightOn()
+	CollectionService:AddTag(spot, WorldConfig.Atmosphere.NightLightTag)
+	spot.Parent = housing
+	CollectionService:AddTag(housing, "WE_Searchlight")
+	-- concrete barriers (12): a staggered chicane on both shoulders (the jersey profile in 3 pieces)
+	for _, j in ipairs({ { -14.4, -10.5, 0 }, { 14.4, -14.0, 0 }, { -15.6, -15.5, 0 }, { 18.2, -16.6, 70 } }) do
+		local cf = CFrame.new(j[1], 0, j[2]) * rotY(90 + j[3])
+		put(b, "JerseyBarrier", Vector3.new(4.5, 0.45, 1.1), cf * CFrame.new(0, 0.225, 0), cl, cm, true)
+		put(b, "JerseyWeb", Vector3.new(4.5, 1.35, 0.45), cf * CFrame.new(0, 1.12, 0), cl, cm, true)
+		put(b, "JerseyCap", Vector3.new(4.5, 0.15, 0.5), cf * CFrame.new(0, 1.87, 0), cd, cm, false)
+	end
+	-- razor-wire fence (8) along the far side of the compound
+	for _, z in ipairs({ -4, 1.5, 7, 12 }) do
+		put(b, "FencePost", Vector3.new(0.3, 3.2, 0.3), CFrame.new(-24, 1.6, z), steel, M.Metal, true)
+	end
+	for _, y in ipairs({ 1.2, 2.4 }) do
+		put(b, "FenceWire", Vector3.new(0.08, 0.08, 16), CFrame.new(-24, y, 4), steel, M.Metal, false)
+	end
+	for _, z in ipairs({ 0, 8 }) do
+		put(b, "RazorCoil", Vector3.new(7.6, 0.9, 0.9), CFrame.new(-24, 3.5, z) * rotY(90), PAL.SteelDark:Lerp(CP_WHITE, 0.25), M.DiamondPlate, false, false, Enum.PartType.Cylinder)
+	end
+	-- floodlights (6): pole + head + lens, aimed down at the lane (lamp-coloured lens, no light: the world cap)
+	for _, f in ipairs({ { 14.6, -3.2, 90 }, { -14.6, 1.5, -90 } }) do
+		vcyl(b, "FloodPole", f[1], 0, f[2], 9, 0.4, steel, M.Metal, true)
+		local head = CFrame.new(f[1], 9.3, f[2]) * rotY(f[3]) * CFrame.Angles(math.rad(-30), 0, 0)
+		put(b, "FloodHead", Vector3.new(1.2, 0.7, 0.9), head, steel, M.Metal, false)
+		put(b, "FloodLens", Vector3.new(1.0, 0.55, 0.08), head * CFrame.new(0, 0, -0.48), PAL.LampLens, M.SmoothPlastic, false)
+	end
+	-- flag (3): a pole, an olive cloth and our own gold diamond emblem (a fictional faction, no real flag)
+	put(b, "FlagPole", Vector3.new(0.25, 10, 0.25), CFrame.new(-20, 5, 4), steel, M.Metal, true)
+	put(b, "FlagCloth", Vector3.new(0.08, 2.2, 3.4), CFrame.new(-20, 8.7, 5.85), PAL.CrateOlive, M.Fabric, false)
+	put(b, "FlagEmblem", Vector3.new(0.12, 0.9, 0.9), CFrame.new(-20, 8.7, 5.85) * CFrame.Angles(math.rad(45), 0, 0), PAL.Hazard, M.SmoothPlastic, false)
+	-- signs (7): STOP and HALT boards facing arrivals, a speed-limit disc, a warning triangle
+	put(b, "SignPost", Vector3.new(0.25, 3.4, 0.25), CFrame.new(-18.6, 1.7, -13.2), steel, M.Metal, false)
+	local stop = put(b, "SignBoard", Vector3.new(2.6, 1.2, 0.15), CFrame.new(-18.6, 3.6, -13.3), CP_RED, M.SmoothPlastic, false)
+	put(b, "SignPost", Vector3.new(0.25, 3.4, 0.25), CFrame.new(18.5, 1.7, -13.0), steel, M.Metal, false)
+	local halt = put(b, "SignBoard", Vector3.new(3.4, 1.2, 0.15), CFrame.new(18.5, 3.6, -13.1), PAL.Hazard, M.SmoothPlastic, false)
+	put(b, "SpeedPost", Vector3.new(0.2, 2.8, 0.2), CFrame.new(14.6, 1.4, -18.0), steel, M.Metal, false)
+	put(b, "SpeedDisc", Vector3.new(0.1, 1.3, 1.3), CFrame.new(14.6, 3.2, -18.08) * rotY(90), CP_WHITE, M.SmoothPlastic, false, false, Enum.PartType.Cylinder)
+	put(b, "WarnTriangle", Vector3.new(0.1, 1.1, 1.3), CFrame.new(18.5, 2.3, -13.12) * rotY(90), PAL.Hazard, M.SmoothPlastic, false, false, Enum.PartType.Wedge)
+	WorldKits.Sign(sign, Enum.NormalId.Front, "CHECKPOINT")
+	WorldKits.Sign(stop, Enum.NormalId.Front, "STOP")
+	WorldKits.Sign(halt, Enum.NormalId.Front, "HALT - SHOW PASS")
+	-- supplies (9): a stack of crates with a strap, 2 ammo boxes on a small table, a jerry can
+	local olive = PAL.CrateOlive
+	put(b, "SupplyCrate", Vector3.new(1.6, 1.6, 1.6), CFrame.new(25, 0.8, -6) * rotY(6), olive, M.Wood, true)
+	put(b, "SupplyCrate", Vector3.new(1.5, 1.4, 1.5), CFrame.new(25, 2.3, -6) * rotY(-8), olive:Lerp(wood, 0.2), M.Wood, false)
+	put(b, "SupplyCrate", Vector3.new(1.6, 1.6, 1.6), CFrame.new(26.8, 0.8, -4.6) * rotY(14), olive:Lerp(PAL.Sandbag, 0.15), M.Wood, true)
+	put(b, "CrateStrap", Vector3.new(1.62, 0.12, 0.25), CFrame.new(25, 1.2, -6) * rotY(6), steel, M.Fabric, false)
+	put(b, "FieldTable", Vector3.new(2.2, 0.15, 1.2), CFrame.new(24.2, 1.25, -1.2), wood, M.Wood, false)
+	put(b, "FieldTableLegs", Vector3.new(2.0, 1.15, 1.0), CFrame.new(24.2, 0.6, -1.2), wood:Lerp(steel, 0.4), M.Wood, true)
+	put(b, "AmmoBox", Vector3.new(1.0, 0.55, 0.5), CFrame.new(23.8, 1.6, -1.3) * rotY(10), PAL.DrumOlive, M.Metal, false)
+	put(b, "AmmoBox", Vector3.new(1.0, 0.55, 0.5), CFrame.new(24.8, 1.6, -1.0) * rotY(-12), PAL.DrumOlive, M.Metal, false)
+	put(b, "JerryCan", Vector3.new(0.5, 0.9, 0.7), CFrame.new(26.9, 0.45, -2.2) * rotY(20), CP_RED, M.Metal, false)
+	-- guard posts (0 parts): kit-local points the guard service reads; the booth hosts them
+	local posts = { Vector3.new(18.5, 0, -3.8), Vector3.new(-18.0, 0, -4.6), Vector3.new(15.8, 0, -2.4), Vector3.new(-15.4, 0, 3.8), Vector3.new(24, deckY, 9.0) }
+	for i, p in ipairs(posts) do
+		local a = Instance.new("Attachment")
+		a.Name = "WE_GuardPost" .. i
+		a.Position = p - Vector3.new(17.5, 3.5, 2.0)
+		if i == #posts then
+			a:SetAttribute("WE_Static", true) -- the tower deck: a Post guard (never walks off)
+		end
+		a.Parent = booth
+	end
+	CollectionService:AddTag(booth, "WE_CheckpointSite")
+	return true
+end
+
 -- exact part counts of the detailed builds (per unit for SandbagLine), checked by the headless kit test
 WorldKits.DetailSpecs = {
 	Wreck = { tank = 21, truck = 15, gun = 10 },
@@ -1713,10 +1861,30 @@ WorldKits.DetailSpecs = {
 	Watchtower = 14,
 	Bunker = 9,
 	Tent = 7,
+	Checkpoint = 99, -- claude-bud JOB 37 (the plain kit is 8)
 } :: { [string]: any }
 
 -- the running tally of detail parts beyond the plain kits (WorldDetailConfig.MaxExtraParts caps it)
 WorldKits.DetailStats = { Kits = 0, Extra = 0, Plain = 0 }
+-- claude-bud JOB 37: the extra parts per kit with its own share (WorldDetailConfig.KitCaps), and which kit a cluster spent
+WorldKits.DetailByKit = {} :: { [string]: number }
+local extraKitBy: { [Instance]: { [string]: number } } = setmetatable({}, { __mode = "k" }) :: any
+
+-- claude-bud JOB 37: give a discarded cluster's detail parts back to the allowances (WorldPOI rebuilds it plain)
+function WorldKits.RefundDetail(cluster: Instance)
+	local byKit = extraKitBy[cluster]
+	local n = extraBy[cluster] or 0
+	if n <= 0 then
+		return
+	end
+	WorldKits.DetailStats.Extra = math.max(0, WorldKits.DetailStats.Extra - n)
+	for kit, k in pairs(byKit or {}) do
+		WorldKits.DetailByKit[kit] = math.max(0, (WorldKits.DetailByKit[kit] or 0) - k)
+		WorldKits.DetailStats.Kits = math.max(0, WorldKits.DetailStats.Kits - 1)
+	end
+	extraBy[cluster] = nil
+	extraKitBy[cluster] = nil
+end
 
 local function detailWanted(kitId: string, o: KitOpts): boolean
 	local cfg: any = WorldDetailConfig
@@ -1743,7 +1911,21 @@ local function tryDetail(kitId: string, b: B): boolean
 	end
 	local extra = (#b.Parts - before) - plainN
 	local cap = math.max(0, tonumber((WorldDetailConfig :: any).MaxExtraParts) or 0)
-	if WorldKits.DetailStats.Extra + extra > cap then
+	-- claude-bud JOB 37: a kit with its own share (KitCaps) spends only that share; every other kit spends the rest
+	local kitCaps: { [string]: number } = (WorldDetailConfig :: any).KitCaps or {}
+	local over: boolean
+	if kitCaps[kitId] ~= nil then
+		over = (WorldKits.DetailByKit[kitId] or 0) + extra > kitCaps[kitId]
+	else
+		local shared = cap
+		local othersExtra = 0
+		for k, c in pairs(kitCaps) do
+			shared -= c
+			othersExtra += WorldKits.DetailByKit[k] or 0
+		end
+		over = (WorldKits.DetailStats.Extra - othersExtra) + extra > math.max(0, shared)
+	end
+	if over then
 		-- the allowance is spent: undo this detailed build; the plain one runs instead
 		for i = #b.Parts, before + 1, -1 do
 			b.Parts[i]:Destroy()
@@ -1755,6 +1937,15 @@ local function tryDetail(kitId: string, b: B): boolean
 	WorldKits.DetailStats.Extra += extra
 	WorldKits.DetailStats.Kits += 1
 	extraBy[b.Cluster] = (extraBy[b.Cluster] or 0) + extra
+	if kitCaps[kitId] ~= nil then
+		WorldKits.DetailByKit[kitId] = (WorldKits.DetailByKit[kitId] or 0) + extra
+		local byKit = extraKitBy[b.Cluster] or {}
+		byKit[kitId] = (byKit[kitId] or 0) + extra
+		extraKitBy[b.Cluster] = byKit
+	end
+	if kitId == "Checkpoint" then
+		print(string.format("[WorldDetail] Checkpoint extra=%d (share %d / %d)", extra, WorldKits.DetailByKit[kitId] or 0, kitCaps[kitId] or cap))
+	end
 	return true
 end
 

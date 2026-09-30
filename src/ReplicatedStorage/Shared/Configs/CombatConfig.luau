@@ -97,6 +97,22 @@ local CombatConfig = {
 			XPReward = 28,
 			Color = Color3.fromRGB(90, 40, 40),
 		},
+		-- claude-bud JOB 37: road checkpoint guards (CheckpointGuardConfig; rewards set there). Between Infantry and the
+		-- bank guard. NOT a SpecialNPCType: they use the regular 18-slot pool (never the +4 headroom the bank / fort /
+		-- oil-rig guards need), sleep with no slot while no live player is near, and a full pool simply spawns fewer.
+		CheckpointGuard = {
+			Id = "CheckpointGuard",
+			DisplayName = "Checkpoint Guard",
+			Health = 140,
+			Damage = 9,
+			FireRate = 1.1,
+			Range = 70,
+			WalkSpeed = 13,
+			AggroRange = 80,
+			CashReward = (require(script.Parent.CheckpointGuardConfig) :: any).KillCash,
+			XPReward = (require(script.Parent.CheckpointGuardConfig) :: any).KillXP,
+			Color = Color3.fromRGB(95, 90, 60),
+		},
 		OilRigGuard = {
 			Id = "OilRigGuard",
 			DisplayName = "Oil Rig Guard",

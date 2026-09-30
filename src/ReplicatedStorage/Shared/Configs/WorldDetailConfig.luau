@@ -27,7 +27,12 @@
 
 local WorldDetailConfig = {
 	Enabled = true,
-	MaxExtraParts = 900,
+	-- claude-bud JOB 37: 900 -> 1446 (+546), and the +546 is the road checkpoint's own share (KitCaps): the JOB 31 kits
+	-- keep exactly their 900 (MaxExtraParts minus every KitCaps share), the checkpoints never take theirs
+	MaxExtraParts = 1446,
+	KitCaps = {
+		Checkpoint = 546, -- 6 detailed checkpoints x 91 extra; the rest build plain (their guards need the detailed one)
+	} :: { [string]: number },
 	-- which kits (and Wreck variants) get the detailed build; the car wreck and crates keep their Roblox-made mesh overlay
 	Kits = {
 		Wreck = { tank = true, truck = true, gun = true },
@@ -38,6 +43,7 @@ local WorldDetailConfig = {
 		Watchtower = true,
 		Bunker = true,
 		Tent = true,
+		Checkpoint = true, -- claude-bud JOB 37: the real road checkpoint (false = today's 8-part kit exactly)
 	} :: { [string]: any },
 }
 

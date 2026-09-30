@@ -94,12 +94,13 @@ function CombatNPC.Destroy(rec: any)
 	end
 end
 
-function CombatNPC.NearestPlayer(position: Vector3, maxRange: number): (Player?, number)
+function CombatNPC.NearestPlayer(position: Vector3, maxRange: number, filter: ((Player) -> boolean)?): (Player?, number)
 	local best: Player? = nil
 	local bestDistSq = maxRange * maxRange
 	for _, player in ipairs(Players:GetPlayers()) do
 		local _, hum, root = B.characterParts(player)
-		if hum and root and hum.Health > 0 then
+		-- claude-bud JOB 37: a filtered NPC (checkpoint guards, owner-first) never picks a player its filter refuses
+		if hum and root and hum.Health > 0 and (filter == nil or filter(player)) then
 			local delta = root.Position - position
 			local dSq = delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z
 			if dSq < bestDistSq then
@@ -554,6 +555,10 @@ local function thinkStance(rec: any, now: number)
 	local target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)
 	if target and g and provoked then
 		g.LastContact = now -- contact keeps a provoked group fighting
+	end
+	if target and rec.TargetFilter ~= nil and not rec.TargetFilter(target) then
+		-- claude-bud JOB 37: a filtered NPC (checkpoint guards, owner-first) picks the nearest player its filter accepts
+		target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange, rec.TargetFilter)
 	end
 	local held = holdsFire(rec, g)
 	if held then

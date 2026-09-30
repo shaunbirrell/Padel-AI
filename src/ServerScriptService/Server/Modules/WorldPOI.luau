@@ -275,8 +275,12 @@ local function insideFootprint(poi: WorldConfig.POI, x: number, z: number, r: nu
 end
 
 -- the WorldKits options of one cluster kit row (text only for a real build)
+-- claude-bud JOB 37: true while WorldPOI rebuilds a refused detailed cluster plain (kitOpts then asks for NoDetail)
+local plainRebuild = false
+
 local function kitOpts(k: WorldConfig.KitPlace, text: string?): WorldKits.KitOpts
 	return {
+		NoDetail = if plainRebuild then true else nil, -- claude-bud JOB 37
 		Variant = k.Variant,
 		Count = k.Count,
 		Length = k.Length,
@@ -542,36 +546,48 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 			skip(ctx, c.Id, string.format("caps: parts %d + %d > %d or lights %d + %d > %d", row.Parts, pParts, partsCap, row.Lights, pLights, lightsCap))
 			continue
 		end
-		local model = WorldKits.NewCluster(c.Id, { Source = "poi", Kind = c.Role, Anchor = anchor, AnchorX = c.X, AnchorZ = c.Z, Tier = c.Tier, InWater = c.InWater })
 		local frame = CFrame.new(c.X, GROUND_Y, c.Z) * CFrame.Angles(0, math.rad(c.Yaw), 0)
-		local built: Built = { First = nil, Host = nil, Booths = {}, MissingBooths = 0 }
-		local signsHere = 0
-		-- claude-bud JOB 32: the plaza rows named in PlazaBuildingsConfig build the enterable PlazaHouse (WorldKits reads it)
 		local PBC: any = require(game:GetService("ReplicatedStorage").Shared.Configs.PlazaBuildingsConfig)
-		if PBC.Enabled == true and PBC.Rows[c.Id] == true then
-			model:SetAttribute("WE_Enterable", true)
+		local model: Model, built: Built
+		-- claude-bud JOB 37: the cluster's kits (noDetail = the plain rebuild of a refused detailed cluster)
+		local function buildCluster(noDetail: boolean)
+			plainRebuild = noDetail
+			model = WorldKits.NewCluster(c.Id, { Source = "poi", Kind = c.Role, Anchor = anchor, AnchorX = c.X, AnchorZ = c.Z, Tier = c.Tier, InWater = c.InWater })
+			built = { First = nil, Host = nil, Booths = {}, MissingBooths = 0 }
+			local signsHere = 0
+			-- claude-bud JOB 32: the plaza rows named in PlazaBuildingsConfig build the enterable PlazaHouse (WorldKits reads it)
+			if PBC.Enabled == true and PBC.Rows[c.Id] == true then
+				model:SetAttribute("WE_Enterable", true)
+			end
+			for _, k in ipairs(c.Kits) do
+				local text = k.Text
+				if text == nil and k.Kit == "PoiBoard" then
+					text = rows.Board
+				end
+				if text ~= nil and row.Signs + signsHere + 1 > signsCap then
+					text = nil -- the POI's sign cap: the board stays, unpainted
+				end
+				if text ~= nil then
+					signsHere += 1
+				end
+				local kcf = frame * CFrame.new(k.X, 0, k.Z) * CFrame.Angles(0, math.rad(k.Yaw or 0), 0)
+				local before = childSet(model)
+				WorldKits.Add(model, k.Kit, kcf, kitOpts(k, text))
+				noteKit(built, k.Kit, freshParts(model, before), kcf)
+			end
+			plainRebuild = false
 		end
-		for _, k in ipairs(c.Kits) do
-			local text = k.Text
-			if text == nil and k.Kit == "PoiBoard" then
-				text = rows.Board
-			end
-			if text ~= nil and row.Signs + signsHere + 1 > signsCap then
-				text = nil -- the POI's sign cap: the board stays, unpainted
-			end
-			if text ~= nil then
-				signsHere += 1
-			end
-			local kcf = frame * CFrame.new(k.X, 0, k.Z) * CFrame.Angles(0, math.rad(k.Yaw or 0), 0)
-			local before = childSet(model)
-			WorldKits.Add(model, k.Kit, kcf, kitOpts(k, text))
-			noteKit(built, k.Kit, freshParts(model, before), kcf)
-		end
-		local m = measure(model, roads, poi.Rect)
-		local cx, cz = (m.X0 + m.X1) * 0.5, (m.Z0 + m.Z1) * 0.5
-		local r = 0.5 * math.sqrt((m.X1 - m.X0) ^ 2 + (m.Z1 - m.Z0) ^ 2)
+		buildCluster(false)
+		local m: Measure = measure(model, roads, poi.Rect)
+		local cx, cz, r = 0, 0, 0
 		local hostOnly = isHostCluster(c)
 		local why: string? = nil
+		-- claude-bud JOB 37: judged once; a refused cluster that holds detail parts is rebuilt plain and judged again
+		for attempt = 1, 2 do
+		m = measure(model, roads, poi.Rect)
+		cx, cz = (m.X0 + m.X1) * 0.5, (m.Z0 + m.Z1) * 0.5
+		r = 0.5 * math.sqrt((m.X1 - m.X0) ^ 2 + (m.Z1 - m.Z0) ^ 2)
+		why = nil
 		if m.Parts == 0 then
 			why = "no parts"
 		elseif c.Street then
@@ -602,6 +618,15 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 		end
 		if why == nil and row.Signs + m.Signs > signsCap then
 			why = string.format("signs %d + %d > %d", row.Signs, m.Signs, signsCap)
+		end
+		if why ~= nil and attempt == 1 and WorldKits.ExtraParts(model) > 0 then
+			print(string.format("[WorldDetail] %s %s refused detailed (%s): rebuilt plain", poi.Id, c.Id, why))
+			WorldKits.RefundDetail(model)
+			WorldKits.Discard(model)
+			buildCluster(true)
+		else
+			break
+		end
 		end
 		if why ~= nil then
 			WorldKits.Discard(model)

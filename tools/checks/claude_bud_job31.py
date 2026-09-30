@@ -44,8 +44,9 @@ _MC = _j31_code("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Missi
 _MD = _j31_code("src/ServerScriptService/Server/Modules/MapDressing.luau")
 
 # detail: kill switch, one allowance, plain planning untouched
-_j31("local WorldDetailConfig = {\n\tEnabled = true,\n\tMaxExtraParts = 900," in _DC, "kill switch WorldDetailConfig.Enabled; ONE world allowance for the extra parts")
-_j31("if tryDetail(kitId, b) then" in _WK and "return if plain then plain.Parts else #b.Parts" in _WK and "WorldKits.DetailStats.Extra + extra > cap" in _WK,
+# claude-bud JOB 37: retired (MaxExtraParts 900 -> 1446; the +546 is the checkpoint's own KitCaps share, the JOB 31 kits keep 900), replaced by tools/checks/claude_bud_job37.py: _j31("local WorldDetailConfig = {\n\tEnabled = true,\n\tMaxExtraParts = 900," in _DC, "kill switch WorldDetailConfig.Enabled; ONE world allowance for the extra parts")
+# claude-bud JOB 37: "WorldKits.DetailStats.Extra + extra > cap" became the per-share test (over = ...), checked in claude_bud_job37.py
+_j31("if tryDetail(kitId, b) then" in _WK and "return if plain then plain.Parts else #b.Parts" in _WK and "local over: boolean" in _WK,
      "detailed kits return the PLAIN count (section caps unchanged) and stop at MaxExtraParts")
 _j31("Builders[kitId](b)" in _WK and "local function tryDetail(" in _WK, "Footprint (the planner) still measures the plain kit")
 _j31('WorldKits.DetailSpecs = {\n\tWreck = { tank = 21, truck = 15, gun = 10 },' in _j31_src("src/ServerScriptService/Server/Modules/WorldKits.luau"),

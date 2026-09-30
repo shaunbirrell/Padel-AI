@@ -701,6 +701,12 @@ local function paint()
 		for i, j in ipairs(live.Jobs or {}) do
 			mark("Job" .. tostring(i), j.X, j.Z, C.Job, I.Job, "circle", nil)
 		end
+		-- claude-bud JOB 37: road checkpoints (server: hostile while the guards are up, cleared with the respawn countdown)
+		for i, cp in ipairs(live.Checkpoints or {}) do
+			local left = tonumber(cp.T) or 0
+			local label = if cp.Up then "CHECKPOINT" else string.format("CLEAR %d:%02d", math.floor(left / 60), left % 60)
+			mark("CP" .. tostring(i), cp.X, cp.Z, if cp.Up then C.OutpostEnemy else C.OutpostMine, I.Job, "circle", label)
+		end
 	end
 	if ObjectiveMarker.Pinned() then
 		local t = ObjectiveMarker.Current()

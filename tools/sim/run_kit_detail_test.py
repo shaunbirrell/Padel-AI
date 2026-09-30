@@ -234,6 +234,56 @@ for _, c in ipairs(cases) do
       label .. string.format(" footprint x %.1f..%.1f z %.1f..%.1f within plain x %.1f..%.1f z %.1f..%.1f +-%.1f", x0, x1, z0, z1, plain.X0, plain.X1, plain.Z0, plain.Z1, slack))
   end
 end
+-- claude-bud JOB 37: the real road checkpoint (its own share: WorldDetailConfig.KitCaps.Checkpoint)
+do
+  local realSign = WK.Sign
+  WK.Sign = function() return nil end -- the world sign budget needs the live workspace
+  local plain = WK.Footprint("Checkpoint", {}) -- first (it builds the plain kit once to measure it)
+  record = {}
+  local cluster = Instance.new("Model")
+  local ret = WK.Add(cluster, "Checkpoint", frame, {})
+  local parts = {}
+  for _, p in ipairs(record) do if not rawget(p, "__destroyed") then table.insert(parts, p) end end
+  record = nil
+  check(#parts == WK.DetailSpecs.Checkpoint - 1, "Checkpoint detailed parts " .. #parts .. " (+ the tower's TrussPart ladder) = DetailSpecs " .. WK.DetailSpecs.Checkpoint)
+  check(WK.DetailSpecs.Checkpoint <= 110, "Checkpoint <= 110 parts (" .. WK.DetailSpecs.Checkpoint .. ")")
+  check(plain ~= nil and ret == plain.Parts, "Checkpoint Add returns the plain count " .. tostring(ret))
+  local x0, x1, z0, z1, laneBad, armCollide, booth, bigShadow = math.huge, -math.huge, math.huge, -math.huge, {}, 0, nil, 0
+  for _, p in ipairs(parts) do
+    local rel = frame:ToObjectSpace(p.CFrame)
+    local s = p.Size
+    local r, u, l = rel.RightVector * s.X * 0.5, rel.UpVector * s.Y * 0.5, rel.LookVector * s.Z * 0.5
+    local hx = math.abs(r.X) + math.abs(u.X) + math.abs(l.X)
+    local hz = math.abs(r.Z) + math.abs(u.Z) + math.abs(l.Z)
+    local cp = rel.Position
+    x0, x1, z0, z1 = math.min(x0, cp.X - hx), math.max(x1, cp.X + hx), math.min(z0, cp.Z - hz), math.max(z1, cp.Z + hz)
+    local edge = math.abs(cp.X) - hx
+    if edge < 13.2 then table.insert(laneBad, string.format("%s %.2f", p.Name, edge)) end
+    if p.Name == "CheckpointArm" and p.CanCollide then armCollide += 1 end
+    if p.Name == "CheckpointBooth" then booth = p end
+    if math.max(s.X, s.Y, s.Z) < 4 and p.CastShadow then bigShadow += 1 end
+  end
+  check(#laneBad == 0, "Checkpoint: every part >= 13.2 studs from the road line (lane clear) " .. table.concat(laneBad, ", "))
+  check(x1 - x0 <= 64 and z1 - z0 <= 64, string.format("Checkpoint span %.1f x %.1f <= 64 (WorldKits.Finish)", x1 - x0, z1 - z0))
+  check(armCollide == 0, "Checkpoint: the boom arm never collides")
+  check(booth ~= nil and booth.Size.X == 4 and booth.Size.Y == 7 and math.abs(booth.Size.Z - 4.4) < 1e-6 and booth.CanCollide
+    and math.abs(frame:ToObjectSpace(booth.CFrame).Position.X - 17.5) < 1e-6, "Checkpoint: CheckpointBooth name / size / place kept (anchor clearances)")
+  check(bigShadow == 0, "Checkpoint: every small part CastShadow = false")
+  local posts, lights, shadowLights = 0, 0, 0
+  for _, d in ipairs(booth and booth:GetChildren() or {}) do if d.ClassName == "Attachment" then posts += 1 end end
+  for _, p in ipairs(parts) do for _, d in ipairs(p:GetChildren()) do
+    if d.ClassName == "SpotLight" or d.ClassName == "PointLight" then lights += 1; if d.Shadows ~= false then shadowLights += 1 end end
+  end end
+  check(posts == 5, "Checkpoint: 5 guard posts on the booth (" .. posts .. ")")
+  check(lights == 1 and shadowLights == 0, "Checkpoint: one light (the searchlight), Shadows = false (" .. lights .. ")")
+  DC.Kits.Checkpoint = false
+  record = {}
+  WK.Add(Instance.new("Model"), "Checkpoint", frame, {})
+  check(#record == plain.Parts, "Kits.Checkpoint = false: today's plain kit exactly (" .. #record .. " parts)")
+  DC.Kits.Checkpoint = true
+  record = nil
+  WK.Sign = realSign
+end
 -- the allowance: spent -> plain; off -> plain
 DC.MaxExtraParts = WK.DetailStats.Extra
 record = {}

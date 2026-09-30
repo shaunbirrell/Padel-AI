@@ -251,6 +251,18 @@ local function resolveGo(kind: string): ({ MissionConfig.GoTarget }, boolean)
 			return cleanTargets(res), true
 		end
 	end
+	-- claude-bud JOB 37: the road checkpoints with guards up (CheckpointGuardService) when Ops serves none
+	if kind == "Checkpoint" then
+		local okC, CG = pcall(function(): any
+			return require(script.Parent.CheckpointGuardService)
+		end)
+		if okC and CG and CG.GoTargets then
+			local okT, list = pcall(CG.GoTargets)
+			if okT and type(list) == "table" and #list > 0 then
+				return cleanTargets(list), true
+			end
+		end
+	end
 	local p: Vector3? = nil
 	if kind == "Bank" then
 		-- no Ops bank site (yet): the bank job is BankRaidService's until the cutover
@@ -372,6 +384,9 @@ end
 local function objectiveLive(objectiveType: any): boolean
 	if type(objectiveType) ~= "string" then
 		return false
+	end
+	if objectiveType == "Checkpoint" and (require(Shared.Configs.CheckpointGuardConfig) :: any).LiveForAll() then
+		return true -- claude-bud JOB 37: the checkpoint guards report it (global offer: only once live for everyone)
 	end
 	if MissionConfig.OpsObjectives[objectiveType] == true then
 		return opsObjectiveLive(objectiveType)
