@@ -1,9 +1,9 @@
 <!-- Q2-START -->
-## v130 (Code Bot Roblox, 2026-09-30): ship claude-bud JOB 32 enterable plaza + LosRule + army holds at door — FAST TRAVEL STILL OFF — MAP-REDESIGN KEPT
-- Cherry-picked Claude `e6a1b56` (JOB 32) onto phase-7-polish (v129 tip `937d197`). **WE_Build 130**. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged).
+## v130 (Code Bot Roblox, 2026-09-30 ~10:48 Dublin): ship claude-bud JOB 32 enterable plaza + LosRule + army holds at door — FAST TRAVEL STILL OFF — MAP-REDESIGN KEPT — place version 128
+- Cherry-picked Claude `e6a1b56` (JOB 32) onto phase-7-polish (v129 tip `937d197`). **WE_Build 130**. Code commit `14a7c72`. Open Cloud HTTP 200 `versionNumber=128`. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged).
 - **Fast travel stays REMOVED** (v127 owner request). Kept `MapConfig.FastTravelEnabled = false`; no `RequestFastTravel`, no TRAVEL button. **MAP-REDESIGN (v129) kept** — do not revert square map / MapLabelLayout / title-case pills.
 - **JOB 32:** PlazaBuildingsConfig + PlazaHouse (4 enterable plaza buildings); CombatConfig.LineOfSight + Shared/Util/LosRule (one shot/sight rule); ArmyConfig.Indoors + Modules/Enterables (army holds at the door). Kill switches: PlazaBuildingsConfig.Enabled, LineOfSight.Unified as Claude wrote.
-- **Pins:** `tools/checks/claude_bud_job32.py` + `tools/sim/run_plaza_test.py`; `tools/checks/codebot_v130.py` (WE_Build 130, JOB 32 files, no fast travel, PreferMesh OFF, MAP-REDESIGN kept). Retired codebot_v129 WE_Build pins; BuyPathStatic / v110 / v113 WE_Build pins bumped to 130.
+- **Pins:** `tools/checks/claude_bud_job32.py` + `tools/sim/run_plaza_test.py`; `tools/checks/codebot_v130.py` (WE_Build 130, JOB 32 files, no fast travel, PreferMesh OFF, MAP-REDESIGN kept). Retired codebot_v129 WE_Build pins; BuyPathStatic / v110 / v113 WE_Build pins bumped to 130. **BuyPathStatic PASS=6623 FAIL=0**; plaza test 0 failed; rojo ok.
 - Do **not** re-add fast travel. Do **not** turn PreferMesh on. Do **not** touch WE_Building*. Do **not** revert the v129 map UI.
 - **Phone tests (owner account; Migrate to Latest Update):** see JOB 32 list below (enter plaza door / ramp / ladder / roof; roof vs ground shooting; window gaps; army holds at door; phone thumbstick).
 
