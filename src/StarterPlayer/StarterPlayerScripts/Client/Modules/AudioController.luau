@@ -745,12 +745,37 @@ function AudioController.Init()
 	end
 	initDone = true
 	ensureFolder()
-	-- warm one 2D voice per UI / Stinger key so the first cue does not wait on a cold asset load
+	-- warm one 2D voice per UI / Stinger key so the first cue does not wait on a cold asset load.
+	-- v147 (live error report: client "HTTP 429" sound loads): this used to make ~20 Sounds in the same frame at join,
+	-- 14 of them asset downloads of only 7 distinct files (9113849492 five times, the siren three times), on top of the
+	-- join's map / mesh downloads. Now: engine files (rbxasset://) at once (no download); each DISTINCT asset id once,
+	-- one every Mix.WarmGapSeconds after Mix.WarmDelaySeconds. A key whose file is already warm (or already played)
+	-- loads it from the client cache on its first play.
+	local warmKeys: { string } = {}
+	local seenIds: { [string]: boolean } = {}
 	for key, def in pairs(SoundConfig.Sounds) do
-		if (def.Bus == "Stinger" or def.Bus == "UI") and soundIdOf(def) ~= nil and pools[key] == nil then
-			pools[key] = { newVoice(key, def, false) }
+		local id = soundIdOf(def)
+		if (def.Bus == "Stinger" or def.Bus == "UI") and id ~= nil and pools[key] == nil then
+			if string.sub(id, 1, 11) == "rbxasset://" then
+				pools[key] = { newVoice(key, def, false) }
+			elseif not seenIds[id] then
+				seenIds[id] = true
+				table.insert(warmKeys, key)
+			end
 		end
 	end
+	table.sort(warmKeys) -- stable order (pairs order is not)
+	local warmDelay = tonumber((Mix :: any).WarmDelaySeconds) or 4
+	local warmGap = tonumber((Mix :: any).WarmGapSeconds) or 0.35
+	task.delay(warmDelay, function()
+		for _, key in ipairs(warmKeys) do
+			local def = SoundConfig.Sounds[key]
+			if def and pools[key] == nil then
+				pools[key] = { newVoice(key, def, false) }
+			end
+			task.wait(warmGap)
+		end
+	end)
 	ClientSettings.OnChanged(applySettings)
 	AudioController.Loop("Music", SoundConfig.Music.Base, SoundConfig.Music.FadeSeconds)
 end

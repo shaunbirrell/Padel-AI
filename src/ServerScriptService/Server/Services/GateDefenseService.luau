@@ -907,7 +907,7 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 	end
 
 	-- Scatter sandbags
-	local bagId = if gd and gd.Sandbags then gd.Sandbags.ModelAssetId else 3525056989
+	local bagId = if gd and gd.Sandbags then gd.Sandbags.ModelAssetId else 0 -- v147: 3525056989 is not authorized for this place
 	if typeof(bagId) == "number" and bagId > 0 then
 		local bagT = loadCatalogModel(bagId)
 		if bagT then

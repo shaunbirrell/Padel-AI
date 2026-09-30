@@ -25,9 +25,7 @@ def _rd146(p):
 _S146 = "src/ServerScriptService/Server/"
 _C146 = "src/ReplicatedStorage/Shared/Configs/"
 _CL146 = "src/StarterPlayer/StarterPlayerScripts/Client/"
-for _f in (_S146 + "Services/DataService.luau", _S146 + "Services/BaseService.luau", _S146 + "EarlyRemotes.server.luau"):
-	_cb146('SetAttribute("WE_Build", 146)' in _rd146(_f), "CODEBOT v146: WE_Build=146 " + _f.rsplit("/", 1)[-1])
-_cb146("WE_Build=146" in _rd146(_S146 + "Services/DataService.luau"), "CODEBOT v146: DataService profile-loaded log says WE_Build=146")
+# v147 (Code Bot Roblox): the WE_Build=146 pins are superseded in tools/checks/codebot_v147.py (WE_Build=147).
 
 # phase 2 feature presence
 _EC = _rd146(_C146 + "EndgameConfig.luau")

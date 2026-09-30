@@ -180,12 +180,18 @@ local function publish(player: Player, st: any, a: any, plans: { [any]: any }, d
 					m:SetAttribute("FormationSlot", idx)
 					m:SetAttribute("WE_FormSlot", idx)
 				end)
+				-- v147: debug output only for a player with the army debug on (ArmyController.DebugFor); the live error
+				-- report counted these SLOT CHANGE warns for every normal player (a normal roster change, not a fault)
 				if old == nil then
-					print(string.format("[ArmyDebug] SLOT ASSIGN %s %s -> slot %d (first assignment)", player.Name, unitName(u), idx))
+					if debugOn then
+						print(string.format("[ArmyDebug] SLOT ASSIGN %s %s -> slot %d (first assignment)", player.Name, unitName(u), idx))
+					end
 				else
 					ArmyController.Stats.SlotChanges += 1
-					warn(string.format("[ArmyDebug] SLOT CHANGE %s %s %d -> %d reason=roster change (death / removal / new unit)",
-						player.Name, unitName(u), old, idx))
+					if debugOn then
+						warn(string.format("[ArmyDebug] SLOT CHANGE %s %s %d -> %d reason=roster change (death / removal / new unit)",
+							player.Name, unitName(u), old, idx))
+					end
 				end
 			end
 			local p = plans[u]

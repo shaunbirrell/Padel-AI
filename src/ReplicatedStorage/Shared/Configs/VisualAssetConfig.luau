@@ -1457,7 +1457,7 @@ local VisualAssetConfig = {
 		AutoGunElevated = { ModelAssetId = 0, Note = "W1 CFG drop (uploader not the author) — unused key" } :: AssetRef,
 		AutoGunElevatedAlt = { ModelAssetId = 10354803684, Note = "Military turret — L2/corner only" } :: AssetRef,
 		SandbagNest = { ModelAssetId = 0, Note = "Circular sandbag ring under HMG" } :: AssetRef,
-		Sandbags = { ModelAssetId = 3525056989, Note = "Realistic Sandbag scatter at posts" } :: AssetRef,
+		Sandbags = { ModelAssetId = 0, Note = "v147: was 3525056989 (not authorized: live LoadAsset 2026-09-30; never loaded, a wasted LoadAsset per server) - sandbag scatter at posts" } :: AssetRef,
 	},
 
 	-- Owner asset list hooks (2026-09-25): war-business line dress. BusinessService.SyncBusiness defers
@@ -1522,7 +1522,7 @@ local VisualAssetConfig = {
 	MoneyBagFX = { ModelAssetId = 38451313, Note = "Collect cash burst VFX (StripScripts)" } :: AssetRef,
 	VfxSparkles = { ModelAssetId = 4221608224, Note = "Collect/upgrade sparkles VFX" } :: AssetRef,
 	CashCrate = { ModelAssetId = 16803204916, Note = "Cash crate alt overlay" } :: AssetRef,
-	UpgradeFlag = { ModelAssetId = 1679839739, Note = "L5 structure flag pop" } :: AssetRef,
+	UpgradeFlag = { ModelAssetId = 0, Note = "v147: was 1679839739 (not authorized: live LoadAsset 2026-09-30; the Part kit look stays) - L5 structure flag pop" } :: AssetRef,
 	FloodlightTower = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 107381977457431 (not authorized (live LoadAsset); the Part kit look stays) - Floodlight tower PROP (not vehicle)" } :: AssetRef,
 	-- VehicleDepot showroom catalog (Part-kit podium remains fallback)
 	ShowroomPodium = { ModelAssetId = 5267267960, Note = "Showroom podium mesh" } :: AssetRef,
@@ -1546,15 +1546,15 @@ local VisualAssetConfig = {
 		BarbedWire = { ModelAssetId = 1291725699, Note = "Warzone BarbedWire" } :: AssetRef,
 		Tent = { ModelAssetId = 182529039, Note = "owner pick: Military Canvas Tent by Quenty (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		RadioAntenna = { ModelAssetId = 19277831, PendingAssetId = 1439808070, Note = "owner pick Antenna (Sereinmachy): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
-		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
+		Floodlight = { ModelAssetId = 0, Note = "v147: was 116763933 (not authorized: live LoadAsset in place 97112936860418, 2026-09-30; the Part kit look stays) - Warzone Floodlight" } :: AssetRef,
 		FloodlightTower = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 107381977457431 (not authorized (live LoadAsset); the Part kit look stays) - Floodlight tower prefer" } :: AssetRef,
-		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
+		Flag = { ModelAssetId = 0, Note = "v147: was 1679839739 (not authorized: live LoadAsset 2026-09-30; the Part kit flag stays) - L5 upgrade flag" } :: AssetRef,
 		Lantern = { ModelAssetId = 0, Note = "W1 CFG drop (extracted from another game) — Part kit host" } :: AssetRef,
 		TentAlt = { ModelAssetId = 3133150032, Note = "Tent alt if primary Tent fails" } :: AssetRef,
 		RadioAntennaAlt = { ModelAssetId = 42209845, Note = "HQ roof antenna alt" } :: AssetRef,
 		FloodlightAlt = { ModelAssetId = 4893998573, Note = "Depot bay floodlight" } :: AssetRef,
 		FuelCans = { ModelAssetId = 1160141839, PendingAssetId = 112426091, Note = "owner pick Gas Can (Maximum_ADHD): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
-		FlagPole = { ModelAssetId = 1679839739, PendingAssetId = 172755983, Note = "owner pick Flagpole (Quenty): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
+		FlagPole = { ModelAssetId = 0, PendingAssetId = 172755983, Note = "owner pick Flagpole (Quenty): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
 		FlagPoleHD = { ModelAssetId = 1454179642, Note = "HQ prestige flag pole" } :: AssetRef,
 		-- Map densify P0/P1 (Design MAP_BUILD_OUT_WIRE 2026-09-21)
 		JerseyBarrier = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; WorldKits Jersey is our Part kit) — Part kit" } :: AssetRef,
@@ -1581,7 +1581,7 @@ local VisualAssetConfig = {
 		CamoNetAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		Fence = { ModelAssetId = 25623924, Note = "legacy alias of the old OilBarrel id (no caller; WarzoneProps.OilBarrel is the Roblox barrel now)" } :: AssetRef,
 		Radio = { ModelAssetId = 19277831, PendingAssetId = 1439808070, Note = "owner pick Antenna (Sereinmachy): pending, P1i (inert while PreferMesh is off); alias of RadioAntenna" } :: AssetRef,
-		Lamp = { ModelAssetId = 116763933, Note = "alias → Floodlight" } :: AssetRef,
+		Lamp = { ModelAssetId = 0, Note = "v147: was 116763933 (not authorized) - alias → Floodlight" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	DesertProps = {

@@ -208,7 +208,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 146)
+		player:SetAttribute("WE_Build", 147)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -350,7 +350,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=146",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=147",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -419,9 +419,12 @@ local function writeProfile(userId: number, profile: PlayerProfile, releaseLock:
 	local ok, err = retryAsync("SetAsync", function()
 		ds:SetAsync(keyFor(userId), snapshot)
 	end)
-	if ok then
+	if ok and not releaseLock then
+		-- v147: a leave / shutdown save goes straight to Release below. Refresh + Release are two UpdateAsync calls on the
+		-- same lock_<userId> key back to back, and the second one always hit the ~6 s per-key write limit ("DataStore
+		-- request was added to queue"). Release writes the free tombstone either way, so the Refresh there did nothing.
 		SessionLock.Refresh(userId)
-	else
+	elseif not ok then
 		warn("[DataService] Save failed for", userId, err)
 	end
 	if releaseLock then

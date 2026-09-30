@@ -164,6 +164,10 @@ SoundConfig.Mix = {
 	BandsLive = false,
 	MaxConcurrent = 12, -- one-shot voices playing at once, 2D + 3D (loops are separate: music, ambience, engine)
 	MaxConcurrent2D = 4, -- of those, non-positional (UI + Stinger)
+	-- v147: AudioController.Init warms each distinct UI / Stinger asset id once, WarmGapSeconds apart, starting
+	-- WarmDelaySeconds after join (was: ~20 Sounds in one frame -> client HTTP 429 sound loads in the error report)
+	WarmDelaySeconds = 4,
+	WarmGapSeconds = 0.35,
 	PoolPerKey = 4, -- pooled Sound instances per key; a 5th overlapping play of one key restarts its oldest voice
 	StingerWindowSeconds = 0.35, -- one audible Stinger per window (higher Priority replaces a lower one)
 	DefaultLengthSeconds = 2, -- voice busy time when neither the file length nor LengthSeconds is known

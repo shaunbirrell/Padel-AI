@@ -1859,6 +1859,10 @@ local function worldLabelPass()
 	end
 end
 
+-- v147: the last padKey each pad had in the overlap loop (weak keys: a lost entry only means one recompute)
+local padKeyCache: { [BasePart]: string } = setmetatable({}, { __mode = "k" }) :: any
+local PAD_MAX_MARGIN = math.max(OVERLAP_MARGIN, CONSOLE_MARGIN)
+
 local function startOverlapLoop()
 	if overlapConn then
 		overlapConn:Disconnect()
@@ -1902,9 +1906,21 @@ local function startOverlapLoop()
 		local bestSid: string? = nil
 		for part in pairs(slotParts) do
 			if part.Parent then
+				-- v147 (phone FPS): this runs every frame over every upgrade pad of all 10 plots (150 live), and each pad
+				-- cost two attribute reads and two new strings (padKey). A pad whose bounding sphere of the pointInPad
+				-- box (half size + the larger margin, +8 up) is farther than the player can never be "inside", so it is
+				-- skipped unless it is still marked entered (its leave must fire). Same result as before, no allocation.
+				local h = part.Size * 0.5
+				local rx, ry, rz = h.X + PAD_MAX_MARGIN, h.Y + 8, h.Z + PAD_MAX_MARGIN
+				local d = pos - part.Position
+				local ck = padKeyCache[part]
+				if d.X * d.X + d.Y * d.Y + d.Z * d.Z > rx * rx + ry * ry + rz * rz and ck ~= nil and not lastOverlap[ck] then
+					continue
+				end
 				local structureId = part:GetAttribute("StructureId")
 				if typeof(structureId) == "string" then
 					local key = padKey(part, structureId)
+					padKeyCache[part] = key
 					local inside = pointInPad(pos, part)
 					if inside then
 						if not lastOverlap[key] then

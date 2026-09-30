@@ -25,6 +25,7 @@
 ]]
 
 local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
 local PathfindingService = game:GetService("PathfindingService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -233,8 +234,12 @@ function SoldierController.Reposition(unit: any, cf: CFrame, why: string, skipCo
 	local dbg = unit._scDbg
 	local toSlot = if dbg and dbg.Goal then flatDist(from, dbg.Goal) else -1
 	local toOwner = if dbg and dbg.Owner then flatDist(from, dbg.Owner) else -1
-	warn(string.format("[ArmyDebug] REPOSITION unit %s slot %s reason=%s prevState=%s distToSlot=%.1f distToPlayer=%.1f jump=%.1f owner=%s",
-		tostring(unit.Id), tostring(unit._acIdx), why, tostring(unit._scState or unit.MoveState), toSlot, toOwner, flatDist(from, cf.Position), tostring(unit.OwnerUserId)))
+	-- v147: the line goes out only while the owner has the army debug on (WE_ArmyDebug: /armydebug, admin allowlist);
+	-- for normal players it was error-report noise (the reposition itself is unchanged)
+	local ownerPlayer = if typeof(unit.OwnerUserId) == "number" then Players:GetPlayerByUserId(unit.OwnerUserId) else nil
+	local loud = ownerPlayer ~= nil and ownerPlayer:GetAttribute("WE_ArmyDebug") == true
+	if loud then warn(string.format("[ArmyDebug] REPOSITION unit %s slot %s reason=%s prevState=%s distToSlot=%.1f distToPlayer=%.1f jump=%.1f owner=%s",
+		tostring(unit.Id), tostring(unit._acIdx), why, tostring(unit._scState or unit.MoveState), toSlot, toOwner, flatDist(from, cf.Position), tostring(unit.OwnerUserId))) end
 	unit.Model:PivotTo(cf)
 	unit.Root.AssemblyLinearVelocity = Vector3.zero
 	unit.Root.AssemblyAngularVelocity = Vector3.zero
