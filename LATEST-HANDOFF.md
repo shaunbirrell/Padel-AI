@@ -1,5 +1,5 @@
 <!-- Q2-START -->
-## v134 (Code Bot Roblox, 2026-09-30 ~13:45 Dublin): 5 Roblox badges wired + badge backfill on join - place version 132
+## v134 (Code Bot Roblox, 2026-09-30 ~13:28 Dublin): 5 Roblox badges wired + badge backfill on join - place version 132
 - **WE_Build 134**. Code commit `b457917` (+ dist `e2c6225`). Open Cloud HTTP 200 `versionNumber=132`. PreferMesh OFF; WE_Building* untouched; fast travel stays REMOVED. Badges only (JOB 40 guards / speed / props are Claude's, untouched).
 - **Root cause (owner: every badge 0% "Impossible"):** `AchievementConfig` BadgeIds were all 0, so `AchievementService.awardBadge` returned before `AwardBadge` for every unlock.
 - **Wired (badges.roblox.com: all enabled, awardingUniverse 10767159222; BadgeService:GetBadgeInfoAsync live OK):** `FirstKillNPC` = First Blood `772051421546625`; `FirstPlayerKill` = Duelist `2489884143486750`; `FirstUpgrade` (Title "First Building") = First Building `583497417329015`; `Cash10k` = War Chest `1847488248714137`; `PlayerKills10` = Hunter `2976613716370877`. The other 16 stay 0; the daily badge routine creates / wires 5 per 24 h (GMT) (`/workspace/badges/progress.json`).
