@@ -28,9 +28,7 @@ _S147 = "src/ServerScriptService/Server/"
 _C147 = "src/ReplicatedStorage/Shared/Configs/"
 _CL147 = "src/StarterPlayer/StarterPlayerScripts/Client/"
 
-for _f in (_S147 + "Services/DataService.luau", _S147 + "Services/BaseService.luau", _S147 + "EarlyRemotes.server.luau"):
-	_cb147('SetAttribute("WE_Build", 147)' in _rd147(_f), "CODEBOT v147: WE_Build=147 " + _f.rsplit("/", 1)[-1])
-_cb147("WE_Build=147" in _rd147(_S147 + "Services/DataService.luau"), "CODEBOT v147: DataService profile-loaded log says WE_Build=147")
+# v148 (Code Bot Roblox): the WE_Build=147 pins are superseded in tools/checks/codebot_v148.py (WE_Build=148).
 
 # DataStore queue
 _DS = _rd147(_S147 + "Services/DataService.luau")

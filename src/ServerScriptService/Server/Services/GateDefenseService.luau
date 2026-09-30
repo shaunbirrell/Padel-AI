@@ -542,9 +542,11 @@ local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, st
 	weldPart("RifleSight", Vector3.new(0.12, 0.22, 0.35), CFrame.new(1.2, 0.45, -0.5), Color3.fromRGB(35, 35, 38), Enum.Material.Metal, nil)
 
 	local humanoid = Instance.new("Humanoid")
-	humanoid.MaxHealth = stats.GuardHealth
-	humanoid.Health = stats.GuardHealth
-	humanoid.WalkSpeed = stats.GuardWalkSpeed
+	-- Code Bot v148: a caller that leaves a field out (BaseGuards towers did) keeps the Humanoid default, not nil
+	local guardHp = tonumber(stats.GuardHealth) or humanoid.MaxHealth
+	humanoid.MaxHealth = guardHp
+	humanoid.Health = guardHp
+	humanoid.WalkSpeed = tonumber(stats.GuardWalkSpeed) or humanoid.WalkSpeed
 	humanoid.AutoRotate = true
 	humanoid.HipHeight = 2
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None

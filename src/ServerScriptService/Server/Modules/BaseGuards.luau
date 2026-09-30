@@ -440,7 +440,10 @@ local function spawnTower(def: any, i: number, plat: BasePart, H: any): any?
 	local centre: Vector3 = def.PadCenter or def.GateCf.Position
 	local out = Vector3.new(top.X - centre.X, 0, top.Z - centre.Z)
 	local cf = CFrame.lookAt(top, top + (if out.Magnitude > 0.1 then out.Unit else Vector3.new(0, 0, -1))) -- facing out of the base
-	local stats = { GuardHealth = C.Tower.Health, GuardDamage = C.Tower.Damage }
+	-- Code Bot v148: GuardWalkSpeed was missing, so spawnGuardModel set humanoid.WalkSpeed = nil ("value of type nil
+	-- cannot be converted to a number", 134 + 53 + 48 live warnings, GateDefenseService line 541/542). A tower guard's
+	-- root is anchored on the platform (below), so it never walks: 0.
+	local stats = { GuardHealth = C.Tower.Health, GuardDamage = C.Tower.Damage, GuardWalkSpeed = 0 }
 	local ok, g = pcall(H.SpawnGuardModel, def.OwnerUserId, 100 + i, cf, stats, def.Folder, def.PlotId)
 	if not ok or g == nil then
 		return nil

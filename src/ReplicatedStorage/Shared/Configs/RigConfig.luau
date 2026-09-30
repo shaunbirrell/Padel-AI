@@ -19,6 +19,18 @@ local RigConfig = {
 	Enabled = true, -- false: VisualAssetService never rigs (every soldier keeps its Part kit, no escorts) and clients do nothing
 	Tag = "WE_Rig", -- CollectionService tag on every server-built soldier rig (clients find figures by it)
 
+	-- Code Bot v148 (Server/AvatarMoodGuard): PLAYER avatars only (never soldiers / guards). A dynamic-head "mood"
+	-- (the character's Animate.mood Animation) whose animation this place may not load is swapped for Roblox's
+	-- default mood before the client plays it. Live proof 2026-09-30: Roblox's own bundles The Winning Smile (957),
+	-- Shiny Teeth (265345), Silly Fun (299652) and Woman Face (948) ship moods whose animations are uploaded by user
+	-- 8923762 (not Roblox, not this game's owner): "Failed to load animation with sanitized ID" x 1,878 client + 277 server.
+	AvatarMood = {
+		Enabled = true,
+		FallbackId = "rbxassetid://14366558676", -- Mood_StevieStandard, creator Roblox (1): the Animate default mood; loads here
+		-- known not loadable in this place (AnimationClipProvider, live place): swapped with no lookup
+		KnownBad = { 104666063103723, 114302219876492, 122193759333439, 96806611330323, 121132383996019 },
+	},
+
 	-- The host Humanoid (server, set once at attach). RigType "Keep" leaves the kit's default untouched (HEAD
 	-- behaviour); "R15" is the Studio fallback if the Humanoid ever measures hip height from the rig's legs (spec §10).
 	Host = {
