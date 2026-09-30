@@ -4,7 +4,9 @@ Written by Code Bot Roblox on 2026-09-30 from the code at `phase-7-polish` 39e68
 
 IN-FLIGHT NOTE (2026-09-30 ~13:40 Dublin): while this job was written, Code Bot had uncommitted v134 work in the main checkout that overlaps parts A and B: GuardConfig.PostGuards (the rear-gate / sea-gate statues become real guards, RespawnSeconds 60, AlertSeconds 0.5, LeashSlackStuds 8, VehicleTargets, a CombatService.GuardMayHitPlayer rule, WE_GuardState Idle / Alert / Attack / Return) and speed Speed Pass x1.75 / Speed Boost x2.25 (36) with Follow3.MaxSpeed 52. When you start, read what v134 actually shipped on origin/phase-7-polish. Do NOT build a second copy: audit it against this spec, keep what matches, and finish the gaps (for example: GuardMayHitPlayer must BE or call UnitMayHitPlayer / ArmyHostility, not a third rule; the statues must be animated rigs; the speed text must come from one helper). Where v134's numbers differ from this spec, Shaun's numbers here win (Speed Boost x2.5 = 40, cap 40, text "Run 2.5x faster"; respawn = whatever v134 shipped if Shaun asked Code Bot for it, else 45). List every difference you found in COMPLETED.
 
-ORDER RULE (strict): start JOB 40 only AFTER JOB 39 is finished and pushed. Do the 5 parts in order (A guards, B speed, C props, D reminder, E base owner markers), one at a time: finish, test, commit, push claude/desktop-bud after each part. If blocked, write it in LATEST-HANDOFF and stop. Never skip.
+PRIORITY (owner change 2026-09-30 19:05 Dublin): part E (the base owner markers: the name above each base, visible from anywhere on the map) is done FIRST, before A-D. The owner wants the markers to drive attacks (players see who is out there and go raid them; JOB 41 part C builds on them).
+
+ORDER RULE (strict): start JOB 40 only AFTER JOB 39 is finished and pushed. Do the 5 parts in this order (E base owner markers FIRST, then A guards, B speed, C props, D reminder), one at a time: finish, test, commit, push claude/desktop-bud after each part. If blocked, write it in LATEST-HANDOFF and stop. Never skip.
 
 GIT/RULES: same as JOB 35-39. git fetch; rebase claude/desktop-bud on the latest origin/phase-7-polish. Push only claude/desktop-bud. Never bump WE_Build, publish, build dist/, or push phase-7-polish/main (Code Bot integrates). Ship new gameplay owner-first behind boolean flags (OwnerFirst = true + an Enabled kill switch, AdminConfig.IsPlaytestOwner; codebot_v101 bans "owner" strings in new configs). OFF must equal today's game exactly. Phone first (44 px real taps, 14 px real text, 800x360 viewport). Build guide: docs/ROBLOX-BUILD-GUIDE.md §2 (read as real), §6 (performance), §7 (guard state machine, "NPC guards" bullet) and the §11 checklist, ticked in your DONE reply. Checks: tools/checks/claude_bud_job40.py + LUAU_COMPILE=$HOME/.local/bin/luau-compile python3 tools/BuyPathStatic.py = 0 FAIL, rojo build ok.
 
@@ -121,7 +123,7 @@ TESTS (part D): tools/sim/run_rate_prompt_test.py (the real service with a fake 
 
 ---
 
-== E. BASE OWNER MARKER, VISIBLE FROM ANYWHERE (added by Shaun 2026-09-30 13:27) ==
+== E. BASE OWNER MARKER, VISIBLE FROM ANYWHERE (added by Shaun 2026-09-30 13:27) — PRIORITY: DO THIS PART FIRST (owner 2026-09-30 19:05) ==
 APPROVED by owner 2026-09-30: visible from anywhere on the map. (Shaun confirmed 14:44 Dublin: the base owner marker is the ONE approved exception to the world-labels-within-40-studs rule; see RULE EXCEPTION below.)
 Owner: "Above each occupied base, show a clean marker with the owner's name, flag and rebirth rank, visible from anywhere on the map."
 

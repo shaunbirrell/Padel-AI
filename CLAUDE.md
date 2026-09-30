@@ -15,6 +15,13 @@
   [`docs/claude-queue/JOB39-endgame-progression.md`](docs/claude-queue/JOB39-endgame-progression.md).
 - After JOB 39 is finished and pushed, do JOB 40 exactly as written in
   [`docs/claude-queue/JOB40-guards-speed-props-like-reminder.md`](docs/claude-queue/JOB40-guards-speed-props-like-reminder.md).
+  **PRIORITY (owner 2026-09-30 19:05): do part E (base owner markers: name above each base, visible from anywhere) FIRST
+  within JOB 40, then A-D.** The owner wants the markers to drive attacks.
+- After JOB 40 is finished and pushed, do JOB 41 (the first minutes: a guided goal chain with a real first fight and
+  capture, funnel analytics, a ~49 R$ Recruit Pack offered only after the first capture or 10 min, rival TARGETS with
+  SEND ARMY, and a big-win rate prompt with NO reward) exactly as written in
+  [`docs/claude-queue/JOB41-first-minutes-retention.md`](docs/claude-queue/JOB41-first-minutes-retention.md). Owner-first
+  flags, no fast travel, servers stay at 10 players.
 - **Store props (Code Bot STORE-PROPS, v132): DO NOT REMOVE.** The owner's Creator Store buildings / props live in
   `Shared/Configs/StorePropsConfig.luau` (placed by `Services/StorePropsService.luau`; list in
   [`docs/PROP-ASSETS.md`](docs/PROP-ASSETS.md)). They dress the JOB 31 sites / named areas and swap in as the JOB 33
