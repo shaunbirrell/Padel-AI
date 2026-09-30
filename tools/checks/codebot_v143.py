@@ -24,9 +24,7 @@ def _rd143(p):
 
 _S143 = "src/ServerScriptService/Server/"
 _C143 = "src/ReplicatedStorage/Shared/Configs/"
-for _f in (_S143 + "Services/DataService.luau", _S143 + "Services/BaseService.luau", _S143 + "EarlyRemotes.server.luau"):
-	_cb143('SetAttribute("WE_Build", 143)' in _rd143(_f), "CODEBOT v143: WE_Build=143 " + _f.rsplit("/", 1)[-1])
-_cb143("WE_Build=143" in _rd143(_S143 + "Services/DataService.luau"), "CODEBOT v143: DataService profile-loaded log says WE_Build=143")
+# v144 (Code Bot Roblox): the WE_Build=143 pins are superseded in tools/checks/codebot_v144.py (WE_Build=144).
 
 # JOB 38 present + owner-first (do NOT flip OwnerFirst to false on this ship)
 _AOC = _rd143(_C143 + "ArmyOrdersConfig.luau")

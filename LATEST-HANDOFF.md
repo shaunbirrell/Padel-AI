@@ -1,4 +1,19 @@
 <!-- Q2-START -->
+## v144 (Code Bot Roblox, 2026-09-30 ~17:15 Dublin): merge claude-bud JOB 39 phase 1 endgame — OWNER-FIRST — NOT published
+- **WE_Build 144**. Cherry-pick `cd47047` from `origin/claude/desktop-bud` as `d06064b` onto phase-7-polish (v143 tip `83eeb88`) + Code Bot bump commit. **NOT published** to Open Cloud (handoff STATUS: CODE COMPLETE, NOT DONE under JOB 39 §11 until Studio proof / captures in `docs/proof/job39/`).
+- **Flags:** `EndgameConfig.Live` Enabled + `OwnerFirst = true` (owner 470626172 + Studio only). **Do NOT set OwnerFirst=false until Studio §11 proof + owner ask.** PreferMesh OFF; WE_Building* untouched.
+- **What merges (owner-first):** rebirth price scale (Costs × (1 + 0.20 × min(rebirths, 20))); EMPIRE LEVEL 0..30 (+2% cash/level); Command Office client-only interior in NE_N1 + station panel + Base EMPIRE button/PIN.
+- **Live state kept:** ArmyOrdersConfig OwnerFirst=true; ShopOverhaul + CheckpointGuard OwnerFirst=false; VIP OverhaulRobuxPrice 199; PreferMesh OFF; FastTravel removed; WE_Building* untouched; place stays at Open Cloud v141 / last publish WE_Build 143.
+- **Checks:** BuyPathStatic PASS=7063 FAIL=0; claude_bud_job39 PASS (22 + Luau SKIP); run_endgame_test 0 failed; codebot_v144 PASS; rojo ok.
+- **Phone tests (when published / Migrate to Latest Update, as shaunie6):**
+  1. Drive to the plaza, walk into the red-awning hotel: the COMMAND sign over the door, the Chief of Staff behind the map table. Tap "Empire Level": the panel shows EMPIRE 0, the next card $5,000,000, BUY.
+  2. BUY: "EMPIRE 1! +2% cash", and the cash pill $/s rises by about 2 %. Buy up to L12 with the 170M.
+  3. Take a hit in the plaza with the panel open: it closes. Walk out the door: it closes.
+  4. Open the Base panel: the gold EMPIRE button. Tap it: the ring shows your level and the Command Office row. Tap PIN: the gold line leads back to the plaza.
+  5. Look at a console on your base (after a rebirth): the price is 1.2x per rebirth, and the Base panel shows the same price. Open Rebirth: "Empire and upgrades" under KEEP, "Next base $..." under RESET.
+- **Servers:** unchanged (no publish). Running servers stay on v143 / place 141.
+- **Next:** Studio §11 proof still owed (Shaun / Studio on his machine). Then owner ask to set `EndgameConfig.Live.OwnerFirst = false` + publish. JOBs 39 phases 2–5 + JOB 40 still queued on desktop-bud docs (not started).
+
 ## claude-bud JOB 39 PHASE 1 (2026-09-30): rebirth price scale + EMPIRE LEVEL + Command Office (branch `claude/desktop-bud`)
 **STATUS: CODE COMPLETE, NOT DONE under JOB 39 §11.** The §11 item 6 Studio proof (screenshots / captures in
 `docs/proof/job39/`) needs Roblox Studio, which this session cannot run. The headless proof is
