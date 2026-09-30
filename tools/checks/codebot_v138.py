@@ -22,9 +22,7 @@ def _rd138(p):
 
 _S138 = "src/ServerScriptService/Server/"
 _C138 = "src/ReplicatedStorage/Shared/Configs/"
-for _f in (_S138 + "Services/DataService.luau", _S138 + "Services/BaseService.luau", _S138 + "EarlyRemotes.server.luau"):
-    _cb138('SetAttribute("WE_Build", 138)' in _rd138(_f), "CODEBOT v138: WE_Build=138 " + _f.rsplit("/", 1)[-1])
-_cb138("WE_Build=138" in _rd138(_S138 + "Services/DataService.luau"), "CODEBOT v138: DataService profile-loaded log says WE_Build=138")
+# v139 (Code Bot Roblox): the WE_Build=138 pins are superseded in tools/checks/codebot_v139.py (WE_Build=139).
 
 # ── aircraft weapons live for everyone ──
 _AWC = _rd138(_C138 + "AircraftWeaponConfig.luau")
