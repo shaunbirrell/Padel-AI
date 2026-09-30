@@ -58,7 +58,10 @@ must_contain(_g20_bg, 'reward(attacker, C.Rewards.GuardKillCash, C.Rewards.Guard
 # owner / friend / clan / own army safety
 must_contain(_g20_bg, "return p.UserId == ownerUserId or H.IsAlly(ownerUserId, p) or areFriends(ownerUserId, p.UserId)", "CLAUDE-BUD J20: never the owner, his clan or his friends")
 must_contain(_g20_bg, "if unitOwner == ownerUserId or areFriends(ownerUserId, unitOwner) then", "CLAUDE-BUD J20: never his own (or a friend's) army")
-must_contain(_g20_bg, "if not friendlyPlayer(def.OwnerUserId, p, H) and not H.InSpawnGrace(p) then", "CLAUDE-BUD J20: spawn grace respected")
+# claude-bud JOB 40 part A: retired the exact JOB 20 line (the check now picks the one rule for a live base owner);
+# replacement = the same JOB 20 expression on the off path, and the grace kept as a throttle on the live path
+must_contain(_g20_bg, "else (not friendlyPlayer(def.OwnerUserId, p, H) and not H.InSpawnGrace(p))", "CLAUDE-BUD J20: spawn grace respected (off path, JOB 40 replacement)")
+must_contain(_g20_bg, "return not (H and H.InSpawnGrace and H.InSpawnGrace(p))", "CLAUDE-BUD J20: spawn grace respected (live path, JOB 40 replacement)")
 # leash, plot, return, LOS, hit chance, caps
 must_contain(_g20_bg, "if flat.Magnitude > C.LeashStuds then", "CLAUDE-BUD J20: leash from the post")
 must_contain(_g20_bg, "return H.ClampInside(def, goal)", "CLAUDE-BUD J20: never out of the plot")

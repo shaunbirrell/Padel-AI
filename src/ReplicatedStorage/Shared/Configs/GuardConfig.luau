@@ -21,6 +21,7 @@
 local GuardConfig = {
 	Enabled = true,
 
+
 	RespawnSeconds = 45,
 	LeashStuds = 60,
 	ReturnAfterSeconds = 8,
@@ -32,6 +33,32 @@ local GuardConfig = {
 	MaxShootersPerBase = 6,
 	UnitTargets = true, -- enemy army units are targets too
 	UnitTag = "WE_SquadUnit",
+	--[[ claude-bud JOB 40 part A (2026-09-30): REAL BASE GUARDS at every guard post inside a live plot (the rear-gate
+		and sea-gate statues become armed, animated, killable guards; Modules/BaseGuards state machine IDLE / ALERT /
+		ATTACK / RETURN / DEAD) and THE ONE hostility rule for every base defence (CombatService.UnitMayHitPlayer /
+		ArmyHostility; hits through CombatService). Owner-first by the BASE OWNER: a plot whose owner is not live keeps
+		today's statues, gate guards and turrets exactly (their old checks included). ]]
+	Posts = {
+		Enabled = true,
+		OwnerFirst = true, -- only UserId 470626172's base (+ Studio) until Code Bot sets false = every base
+		StatuePatterns = { "^GateGuard_%a+[LR]$", "^GateGuard_Sea%d*$" }, -- MapSetup's rear-gate / sea-gate statues
+		ModelPrefix = "BaseGuard_",
+		AlertStuds = 80, -- a hostile outside the plot this close to the post (with line of sight) is noticed
+		ReactionSeconds = 0.5, -- ALERT -> ATTACK
+		AlertForgetSeconds = 3, -- ALERT with the target lost this long -> RETURN
+		TurnDegPerSec = 360,
+		FireRate = 1.2,
+		Damage = 10,
+		Range = 90,
+		LeashStuds = 45,
+		Health = 150, -- the statue's value
+		RegenAfterSeconds = 5, -- HP back to full once at the post and out of combat this long
+		RespawnSeconds = 45,
+		RespawnRetrySeconds = 2, -- a player standing on the post delays the respawn
+		RespawnClearStuds = 4,
+		ProtectCollectorRadius = 40, -- tier 2 of the target pick (near the ATM)
+	},
+
 
 	-- Defenses research (ResearchConfig): HP multiplier and extra guards
 	HealthStat = "GuardHP",
@@ -76,6 +103,46 @@ local GuardConfig = {
 }
 
 -- pure: the hire price of a tower guard for a player with `rebirths` rebirths
+-- claude-bud JOB 40: the post guards + the one rule are live for this BASE OWNER
+function GuardConfig.PostsLiveFor(ownerUserId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live((GuardConfig :: any).Posts, ownerUserId)
+end
+
+--[[ claude-bud JOB 40: the post guard state machine's decision (pure; tests call it). s = the current state,
+	c = { Target: boolean (a hostile picked this tick), Since: seconds in this state, LostFor: seconds since the target
+	was last seen, FromPost: studs from the post, AtPost: boolean, Dead: boolean }. Returns the next state. ]]
+function GuardConfig.PostNext(s: string, c: { [string]: any }): string
+	local P: any = (GuardConfig :: any).Posts
+	if c.Dead then
+		return "DEAD"
+	end
+	if s == "DEAD" then
+		return "IDLE" -- a respawned guard starts idle at its post
+	end
+	if (tonumber(c.FromPost) or 0) > P.LeashStuds then
+		return "RETURN"
+	end
+	if s == "IDLE" then
+		return if c.Target then "ALERT" else "IDLE"
+	elseif s == "ALERT" then
+		if not c.Target and (tonumber(c.LostFor) or 0) >= P.AlertForgetSeconds then
+			return "RETURN"
+		end
+		return if c.Target and (tonumber(c.Since) or 0) >= P.ReactionSeconds then "ATTACK" else "ALERT"
+	elseif s == "ATTACK" then
+		if not c.Target and (tonumber(c.LostFor) or 0) >= (GuardConfig :: any).ReturnAfterSeconds then
+			return "RETURN"
+		end
+		return "ATTACK"
+	elseif s == "RETURN" then
+		if c.Target and (tonumber(c.FromPost) or 0) < P.LeashStuds - 5 then
+			return "ALERT"
+		end
+		return if c.AtPost then "IDLE" else "RETURN"
+	end
+	return "IDLE"
+end
+
 function GuardConfig.TowerCost(rebirths: number): number
 	local T = GuardConfig.Tower
 	local r = math.max(0, math.floor(tonumber(rebirths) or 0))

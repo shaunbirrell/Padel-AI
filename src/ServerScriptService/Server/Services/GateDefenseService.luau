@@ -46,6 +46,7 @@ local Constants = require(Shared.Constants)
 local GateDefenseConfig = require(Shared.Configs.GateDefenseConfig)
 local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
 local RaidConfig = require(Shared.Configs.RaidConfig)
+local GuardConfig = require(Shared.Configs.GuardConfig) -- claude-bud JOB 40 part A (Posts / the one rule)
 local HudConfig = require(Shared.Configs.HudConfig)
 local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
 local AircraftWeaponConfig = require(Shared.Configs.AircraftWeaponConfig) -- aircraft weapon reach (ApplyDamage)
@@ -441,6 +442,10 @@ local function clearDefense(plotId: number)
 		if t.Model and t.Model.Parent then
 			t.Model:Destroy()
 		end
+	end
+	local bgR = (GateDefenseService :: any)._BG -- claude-bud JOB 40: the parked statues come back (OFF == OLD for the plot)
+	if bgR and bgR.RestoreStatues then
+		pcall(bgR.RestoreStatues, plotId)
 	end
 	if def.Folder and def.Folder.Parent then
 		def.Folder:Destroy()
@@ -964,6 +969,11 @@ function GateDefenseService.IsAlly(ownerUserId: number, player: Player): boolean
 end
 
 local function isEnemyPlayer(ownerUserId: number, player: Player): boolean
+	-- claude-bud JOB 40 part A: a live base owner's defences use THE one rule (off = the old ally check)
+	local bgMod = (GateDefenseService :: any)._BG
+	if bgMod and bgMod.PlayerHostileOneRule and GuardConfig.PostsLiveFor(ownerUserId) then
+		return bgMod.PlayerHostileOneRule(ownerUserId, player, (GateDefenseService :: any)._H)
+	end
 	return not GateDefenseService.IsAlly(ownerUserId, player)
 end
 
@@ -1253,6 +1263,17 @@ local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceM
 	local char = player.Character
 	local srcOwner = sourceModel:GetAttribute("OwnerUserId")
 	if char and (char:GetAttribute("FriendlySquad") or (srcOwner ~= nil and char:GetAttribute("OwnerUserId") == srcOwner)) then
+		return
+	end
+	-- claude-bud JOB 40 part A: a live base's AutoGun / gate guard hits through CombatService (the one rule, credited)
+	local liveOwner = if typeof(srcOwner) == "number" and GuardConfig.PostsLiveFor(srcOwner) then Players:GetPlayerByUserId(srcOwner) else nil
+	if liveOwner then
+		local bgH = (GateDefenseService :: any)._BG -- BaseGuards holds CombatService (never a dep here: the join hotfix)
+		if bgH and bgH.DefenceHit then
+			pcall(bgH.DefenceHit, liveOwner, player, amount, if sourceModel:GetAttribute("GateGuard") == true then "BaseGuard" else "AutoGun")
+		end
+		local d0 = if plotId ~= nil then defenses[plotId] else nil
+		alertBaseUnderAttack(plotId, if d0 then d0.OwnerUserId else (srcOwner :: number), player)
 		return
 	end
 	hum:TakeDamage(amount)
@@ -1629,6 +1650,20 @@ local function applyDamageFrom(attacker: Player, hitPart: BasePart, amount: numb
 	end
 	if GateDefenseService.IsAlly(def.OwnerUserId, attacker) then
 		return false
+	end
+	-- claude-bud JOB 40 part A: a live base: the attacker needs the same rule the other way round (ArmyHostility)
+	if GuardConfig.PostsLiveFor(def.OwnerUserId) then
+		local owner = Players:GetPlayerByUserId(def.OwnerUserId)
+		local bgH = (GateDefenseService :: any)._BG -- BaseGuards holds CombatService (the join hotfix)
+		if owner and bgH and bgH.AttackerMay then
+			local may, why = bgH.AttackerMay(attacker, owner)
+			if not may then
+				if why == "protected" and NotificationService then
+					pcall(NotificationService.Notify, attacker, owner.DisplayName .. "'s base is Protected (new-player shield)", "Warn")
+				end
+				return false
+			end
+		end
 	end
 	graceFrom[attacker.UserId] = nil -- attacking the defenses ends the spawn grace
 
@@ -2056,7 +2091,24 @@ respawnGuard = function(plotId: number, slot: number, ownerUserId: number, def: 
 	if not idx or not stats or not def.Folder.Parent then
 		return
 	end
+	local deadAny: any = dead
+	if deadAny.IsPost == true then
+		-- claude-bud JOB 40: never respawn on top of a player (retry every RespawnRetrySeconds)
+		for _, p in ipairs(Players:GetPlayers()) do
+			local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+			if r and r:IsA("BasePart") and (r.Position - dead.PostCf.Position).Magnitude < GuardConfig.Posts.RespawnClearStuds then
+				task.delay(GuardConfig.Posts.RespawnRetrySeconds, respawnGuard, plotId, slot, ownerUserId, def, dead)
+				return
+			end
+		end
+	end
 	local g = spawnGuardModel(ownerUserId, slot, dead.PostCf, stats, def.Folder, plotId)
+	if deadAny.IsPost == true then
+		local gu: any = g
+		gu.IsPost = true
+		gu.PostName = deadAny.PostName
+		g.Model.Name = GuardConfig.Posts.ModelPrefix .. tostring(deadAny.PostName)
+	end
 	-- the spawn can yield (catalog visual): drop it if the plot was rebuilt / struck meanwhile
 	if defenses[plotId] ~= def or isDown(def) or def.Guards[idx] ~= dead or not def.Folder.Parent then
 		g.Alive = false
@@ -2067,7 +2119,9 @@ respawnGuard = function(plotId: number, slot: number, ownerUserId: number, def: 
 	end
 	def.Guards[idx] = g
 	local bgMod = (GateDefenseService :: any)._BG -- claude-bud JOB 20: the research HP multiplier on every respawn
-	if bgMod and bgMod.Live() then
+	if bgMod and (g :: any).IsPost == true and bgMod.AfterSpawnPost then
+		bgMod.AfterSpawnPost(g, ownerUserId) -- claude-bud JOB 40: the post guard's HP
+	elseif bgMod and bgMod.Live() then
 		bgMod.AfterSpawn(g, ownerUserId)
 	end
 end
@@ -2179,6 +2233,19 @@ local function syncPlotNow(plotId: number)
 				local g = spawnGuardModel(ownerUserId, 2 + k, at, stats, folder, plotId)
 				g.Model:SetAttribute("OwnerUserId", ownerUserId)
 				bgMod.AfterSpawn(g, ownerUserId)
+				table.insert(guards, g)
+			end
+		end
+		-- claude-bud JOB 40 part A: every guard post inside a live plot gets a real guard (the statue is parked)
+		if bgMod and bgMod.CollectPosts and GuardConfig.PostsLiveFor(ownerUserId) then
+			for k, post in ipairs(bgMod.CollectPosts(plotFolder, plotId)) do
+				local g = spawnGuardModel(ownerUserId, 10 + k, post.CF, stats, folder, plotId)
+				local gu: any = g
+				gu.IsPost = true
+				gu.PostName = post.Name
+				g.Model.Name = GuardConfig.Posts.ModelPrefix .. post.Name
+				g.Model:SetAttribute("OwnerUserId", ownerUserId)
+				bgMod.AfterSpawnPost(g, ownerUserId)
 				table.insert(guards, g)
 			end
 		end

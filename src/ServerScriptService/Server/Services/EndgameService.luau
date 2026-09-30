@@ -175,6 +175,11 @@ function EndgameService.TurretDmgMult(userId: number, research: number): number
 	return math.min(research * (1 + g * EndgameConfig.Defence.GunsPct / 100), maxMult())
 end
 
+-- claude-bud JOB 40: a Defence track level for a base owner (0 while the part is not live), for the post guards
+function EndgameService.DefenceLevelFor(userId: number, track: string): number
+	return defOf(userId, track)
+end
+
 function EndgameService.ExtraNests(userId: number): number
 	return EndgameConfig.TierEffects(tierOf(userId)).Nests
 end

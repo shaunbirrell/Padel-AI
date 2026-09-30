@@ -9861,3 +9861,13 @@ ds_territories.luau T3):
 - **Data home:** the marker data lives in ReplicatedStorage (not on the workspace plot folders), so a client never
   depends on a streamed workspace part.
 - **Map icons:** the optional map-icon change (E.4) is not done; the map is untouched.
+
+## 2026-09-30 — claude-bud JOB 40 part A: real base guards + one rule
+- **Statues:** statues are parked (ServerStorage) rather than never built, because MapSetup builds plots before any
+  owner. They come back when the plot's defences clear, so OFF == OLD for the next owner.
+- **Friends:** friends outside the clan are now hostile to a live base (the owner's decision in the job file).
+- **Guard regen:** the post guard's at-post HP regen writes the guard NPC's own Health (the one Health write in the new
+  code); players are only ever hurt through CombatService.
+- **Tower guards:** they keep their anchored platform figures (converting them is not needed for the one rule); only
+  their targeting changed.
+- **MaxShootersPerBase:** it stays 6 (the post guards share it with the gate guards / towers / AutoGuns).

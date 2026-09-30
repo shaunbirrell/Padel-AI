@@ -2230,6 +2230,24 @@ function CombatService.ApplyUnitPlayerHit(owner: Player, victim: Player, damage:
 	return dealt, killed, if dealt > 0 then "ok" else "no_damage"
 end
 
+-- claude-bud JOB 40 part A: a base defence's hit on a player (post / gate / tower guards, AutoGuns of a live base):
+-- THE same rule as the owner's army (UnitMayHitPlayer, re-checked here) and the same hurtPlayer (the creator tag credits
+-- the base owner; the kill feed names the defence kind). Returns (dealt, killed, reason).
+function CombatService.ApplyDefenceHit(owner: Player, victim: Player, damage: number, kind: string?): (number, boolean, string)
+	if typeof(owner) ~= "Instance" or not owner:IsA("Player") or typeof(victim) ~= "Instance" or not victim:IsA("Player") then
+		return 0, false, "bad_args"
+	end
+	if typeof(damage) ~= "number" or not (damage > 0) or damage == math.huge then
+		return 0, false, "bad_damage"
+	end
+	local may, why = CombatService.UnitMayHitPlayer(owner, victim)
+	if not may then
+		return 0, false, why
+	end
+	local dealt, killed = hurtPlayer(owner, victim, damage, if typeof(kind) == "string" then kind else "BaseGuard", { UnitShot = true })
+	return dealt, killed, if dealt > 0 then "ok" else "no_damage"
+end
+
 -- ── army lane A0 (SPEC-ARMY-FINAL §7.1): the escort's NPC reads + visible unit shots ─────────────────────────────
 --[[ One hostile list per squad think pass (SquadOrdersService), instead of a CollectionService:GetTagged("WE_NPC") per
 	unit. `out` is refilled IN PLACE (entries 1..n, the old tail cleared; no table is made) with the Model of every NPC

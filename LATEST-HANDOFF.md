@@ -1,4 +1,57 @@
 <!-- Q2-START -->
+## claude-bud JOB 40 PART A (2026-09-30): REAL BASE GUARDS + THE ONE HOSTILITY RULE (branch `claude/desktop-bud`)
+**Flags:** `GuardConfig.Posts` (`Enabled`, `OwnerFirst = true`, by the BASE OWNER).
+- **Off / not live owner:** today's statues, gate guards, towers and AutoGuns exactly, with their JOB 20 checks.
+- **To launch:** Code Bot sets `OwnerFirst = false`.
+- **v134 audit:** v134's PostGuards / GuardMayHitPlayer never shipped (not on phase-7-polish), so this is the only copy.
+
+**Posts (MapSetup statues, plot-local)**
+- The rear-gate pairs `GateGuard_AirfieldL/R` (inner wall X -100), `GateGuard_HelipadL/R` (X 40, the HeliApron) and
+  `GateGuard_DockL/R` (X 92), each at the gate +-(half + 3.6), Z = the inner wall -60 + 2.4.
+- The sea-gate quay `GateGuard_Sea*`.
+- For a live owner they are parked in ServerStorage.WE_ParkedStatues and replaced by live `BaseGuard_<post>` guards: the
+  gate guards' unanchored Humanoid + rig (GateDefenseService.spawnGuardModel), never WE_RigStatic. The statues are put
+  back when the plot's defences clear.
+- **Tower guards:** still anchored on their platforms (not converted); their TARGETING now uses the one rule.
+
+**Brain:** BaseGuards.ThinkPost, a state machine (GuardConfig.PostNext decides) ticked from the existing 5 Hz loop.
+- IDLE -> ALERT (a hostile in the plot, or within 80 of the post with line of sight) -> ATTACK after 0.5 s.
+- ATTACK: 1.2 shots / s, 10 dmg (x Research TurretDamage x JOB 39 Turret Guns, capped at 3), range 90; line of sight
+  and the hit chance on every shot. It moves only to regain sight, never past the 45-stud leash or out of the plot.
+- -> RETURN after 8 s quiet or past the leash (walks / paths back, no teleport). IDLE at the post regens HP after 5 s.
+- DEAD -> the existing respawn after 45 s at the post (retried every 2 s while a player stands on it).
+- **HP:** 150 x Research GuardHP x JOB 39 Gate & Walls (+12 % / level), capped at x3.
+- **Target order:** the raider of this plot, then near the ATM, then the nearest; players before units.
+- **Logs:** `[BaseGuard]` / `[BaseGuardHit]` under /armydebug.
+
+**The one rule** (root cause proof in `docs/BASE-GUARDS-ROOTCAUSE.md` + `tools/sim/run_base_guards_test.py`)
+- The JOB 20 base spared a FRIEND outside the clan, and still shot with PvP off and while its owner was novice-shielded.
+- For a live owner, every defence uses `CombatService.UnitMayHitPlayer` / `ArmyHostility` (+ `PvPBlockReason` so a
+  shielded owner fires at nobody): post, gate and tower guards through BaseGuards.hostiles, AutoGuns through
+  isEnemyPlayer.
+- **Hit paths:** player hits go through the new `CombatService.ApplyDefenceHit` (the same hurtPlayer; credited to the
+  base owner; kind "BaseGuard" / "AutoGun", so not an army kill); army units through `CombatService.ApplyHit`. No
+  TakeDamage on the live path.
+- **Attackers:** they need `ArmyHostility(attacker, owner)`; a shielded owner's base answers "Protected".
+- **Friends:** the FRIENDS exemption is gone for live bases. Friends who are not in your clan are hostile to your base,
+  as they already are to your army.
+- **Pins:** GateDefenseService still never holds CombatService (the join hotfix pin): it goes through BaseGuards.
+  Retired pin (claude-bud comment + replacement): claude_bud_guards "spawn grace respected".
+
+**Checks**
+- run_base_guards_test (state transitions, the hostility table old vs one rule, caps, pair limit);
+  claude_bud_job40 part A pins.
+- BuyPathStatic PASS=7178 FAIL=0; all sims 0 failed; rojo ok; remote audit OK; no new LSP errors.
+
+**Not verified (Studio 2-player, rule 6):** the 6 scenarios with logs both ways (docs/BASE-GUARDS-ROOTCAUSE.md lists
+them).
+
+**Test ON HIS PHONE**
+1. As B (another player, not in A's clan), walk onto A's helipad apron: the guards turn, aim and shoot. Kill one: it
+   respawns at its post after 45 s.
+2. As A walk past your own guards: no shots. A clan-mate: the same.
+3. B runs out past 45 studs from a post: the guard stops and walks back.
+
 ## v149 PUBLISHED (Code Bot Roblox, 2026-09-30 22:18 Dublin): Open Cloud place version 147 — JOB 39 phases 3–5 + JOB 40E base markers OWNER-FIRST
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **149**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":147}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Cherry-picks only** (not a bud-branch merge — JOB 38 already on phase-7): `1cd39a6` Elite Training, `e31c2a0` Field Hospital + Armory/Vehicle Workshop, `658dec1` warheads/heist/Intel/Black Market/R25-R40, `5d5e59f` base owner markers. On phase-7 as `2513e75` / `88be9d9` / `aecdb42` / `a71d326`.

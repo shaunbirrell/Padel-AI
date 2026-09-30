@@ -62,6 +62,31 @@ _j40("ReplicatedStorage:WaitForChild(BaseMarkerConfig.FolderName, 120)" in _BMK 
      "E: streaming-safe data (ReplicatedStorage), bounded wait")
 _j40("one documented exception" in (_j40_src("CLAUDE.md")).lower() or "base owner marker" in _j40_src("CLAUDE.md").lower(), "E: the world-label exception is written in CLAUDE.md")
 
+# ── part A: real base guards + the one hostility rule ──
+_GC = _j40_src(_CF + "GuardConfig.luau")
+_BG = _j40_code(_SV + "Modules/BaseGuards.luau")
+_GD = _j40_code(_SV + "Services/GateDefenseService.luau")
+_j40("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _GC and "Live((GuardConfig :: any).Posts, ownerUserId)" in _GC,
+     "A: GuardConfig.Posts kill switch, owner-first by the base owner")
+_post = _BG.split("function BaseGuards.ThinkPost")[1].split("function BaseGuards.PostDamageMult")[0]
+_j40("TakeDamage" not in _post and [l.strip() for l in _post.splitlines() if ".Health =" in l] == ["g.Humanoid.Health = g.Humanoid.MaxHealth"],
+     "A: the post guard brain never deals raw damage; its one Health write is the at-post regen of the guard itself")
+_one = _BG.split("function BaseGuards.PlayerHostileOneRule")[1].split("local function friendlyPlayer")[0]
+_j40("cs.UnitMayHitPlayer(owner, p)" in _one and "cs.ArmyHostility(owner, uo)" in _one and "AreFriends" not in _one and "areFriends" not in _one,
+     "A: the live rule calls only UnitMayHitPlayer / ArmyHostility (no friends exemption, no private rule)")
+_j40("if live then BaseGuards.PlayerHostileOneRule" in _BG and "if live then BaseGuards.UnitHostileOneRule" in _BG,
+     "A: every guard / tower target check goes through the one rule when live (off = JOB 20 exactly)")
+_j40("pcall(cs.ApplyDefenceHit, owner, victim, amt, sourceId)" in _BG and "pcall(cs.ApplyHit, owner, t.Root, amt," in _BG,
+     "A: live hits go through CombatService (ApplyDefenceHit / ApplyHit), no TakeDamage")
+_j40("bgMod.PlayerHostileOneRule(ownerUserId, player" in _GD and "pcall(bgH.DefenceHit, liveOwner, player, amount" in _GD and "bgH.AttackerMay(attacker, owner)" in _GD
+     and "return cs.ApplyDefenceHit(owner, victim, amount, kind)" in _BG and "return cs.ArmyHostility(attacker, owner)" in _BG,
+     "A: the AutoGuns / gate guards use the same rule and hit path; attackers need ArmyHostility the other way round")
+_j40("PivotTo" not in _BG and "SetPrimaryPartCFrame" not in _BG, "A: no PivotTo / SetPrimaryPartCFrame in BaseGuards")
+_j40(all(("\"%s\"" % s) in _GC for s in ("IDLE", "ALERT", "ATTACK", "RETURN", "DEAD")), "A: the states IDLE / ALERT / ATTACK / RETURN / DEAD")
+_spawn = _GD.split("local function spawnGuardModel")[1].split("\nend\n")[0]
+_j40("root.Anchored = false" in _spawn and "WE_RigStatic" not in _spawn, "A: the live guards are unanchored Humanoid rigs (never WE_RigStatic)")
+_j40("bgR.RestoreStatues, plotId" in _GD and "bgMod.CollectPosts(plotFolder, plotId)" in _GD, "A: the statues are parked for a live plot and restored when it clears")
+
 _luau = _j40_os.environ.get("LUAU")
 if _luau is None and _j40_os.environ.get("LUAU_COMPILE"):
     _cand = _j40_os.environ["LUAU_COMPILE"].replace("luau-compile", "luau")
@@ -69,5 +94,7 @@ if _luau is None and _j40_os.environ.get("LUAU_COMPILE"):
 if _luau:
     _r = _j40_sp.run([_j40_sys.executable, "tools/sim/run_base_marker_test.py"], capture_output=True, text=True, env=dict(_j40_os.environ, LUAU=_luau))
     _j40(_r.returncode == 0 and "BASE MARKER TEST: 0 failed" in _r.stdout, "E: run_base_marker_test.py (real config / data service)")
+    _r = _j40_sp.run([_j40_sys.executable, "tools/sim/run_base_guards_test.py"], capture_output=True, text=True, env=dict(_j40_os.environ, LUAU=_luau))
+    _j40(_r.returncode == 0 and "BASE GUARDS TEST: 0 failed" in _r.stdout, "A: run_base_guards_test.py (state machine, the hostility table, budgets)")
 else:
     print("SKIP CLAUDE-BUD J40: Luau CLI tests (set LUAU)")

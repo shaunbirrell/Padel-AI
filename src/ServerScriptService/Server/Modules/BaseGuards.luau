@@ -58,6 +58,62 @@ local function areFriends(a: number, b: number): boolean
 	return false
 end
 
+-- claude-bud JOB 40 part A: THE one rule (CombatService.UnitMayHitPlayer / ArmyHostility) for a live base owner
+local function combat(): any?
+	return deps.CombatService
+end
+
+local function oneRuleLive(ownerUserId: number): boolean
+	return GuardConfig.PostsLiveFor(ownerUserId)
+end
+
+-- may this base's defences shoot player p? (live: the one rule; the 4 s spawn grace only spares, never adds)
+function BaseGuards.PlayerHostileOneRule(ownerUserId: number, p: Player, H: any): boolean
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	local cs = combat()
+	if owner == nil or cs == nil or cs.UnitMayHitPlayer == nil then
+		return false
+	end
+	local ok = cs.UnitMayHitPlayer(owner, p)
+	if not ok then
+		return false
+	end
+	return not (H and H.InSpawnGrace and H.InSpawnGrace(p))
+end
+
+-- may this base's defences shoot the soldiers of unitOwner? (ArmyHostility; a shielded base owner fires at nobody)
+function BaseGuards.UnitHostileOneRule(ownerUserId: number, unitOwner: number): boolean
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	local uo = Players:GetPlayerByUserId(unitOwner)
+	local cs = combat()
+	if owner == nil or uo == nil or cs == nil or cs.ArmyHostility == nil then
+		return false
+	end
+	local ok = cs.ArmyHostility(owner, uo)
+	if not ok then
+		return false
+	end
+	local why = if cs.PvPBlockReason then cs.PvPBlockReason(owner, uo) else nil
+	return why ~= "owner_shielded"
+end
+
+-- GateDefenseService's AutoGun / gate-guard hits and attacker checks (it never holds CombatService: the join hotfix)
+function BaseGuards.DefenceHit(owner: Player, victim: Player, amount: number, kind: string): (number, boolean, string)
+	local cs = combat()
+	if cs == nil or cs.ApplyDefenceHit == nil then
+		return 0, false, "no_combat"
+	end
+	return cs.ApplyDefenceHit(owner, victim, amount, kind)
+end
+
+function BaseGuards.AttackerMay(attacker: Player, owner: Player): (boolean, string)
+	local cs = combat()
+	if cs == nil or cs.ArmyHostility == nil then
+		return true, "ok"
+	end
+	return cs.ArmyHostility(attacker, owner)
+end
+
 -- a player the base must never shoot: the owner, his clan (H.IsAlly), his friends
 local function friendlyPlayer(ownerUserId: number, p: Player, H: any): boolean
 	return p.UserId == ownerUserId or H.IsAlly(ownerUserId, p) or areFriends(ownerUserId, p.UserId)
@@ -74,8 +130,10 @@ end
 -- every hostile with inside == true (in the plot) or inside == false (outside it, within range of `from`)
 local function hostiles(def: any, H: any, inside: boolean, from: Vector3, range: number): { Target }
 	local out: { Target } = {}
+	local live = oneRuleLive(def.OwnerUserId) -- JOB 40: the one rule (off = JOB 20's owner / clan / friends / grace)
 	for _, p in ipairs(Players:GetPlayers()) do
-		if not friendlyPlayer(def.OwnerUserId, p, H) and not H.InSpawnGrace(p) then
+		local hostile = if live then BaseGuards.PlayerHostileOneRule(def.OwnerUserId, p, H) else (not friendlyPlayer(def.OwnerUserId, p, H) and not H.InSpawnGrace(p))
+		if hostile then
 			local char = p.Character
 			local hum = char and char:FindFirstChildOfClass("Humanoid")
 			local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -90,7 +148,8 @@ local function hostiles(def: any, H: any, inside: boolean, from: Vector3, range:
 	if C.UnitTargets then
 		for _, m in ipairs(CollectionService:GetTagged(C.UnitTag)) do
 			local uo = m:GetAttribute("OwnerUserId")
-			if m:IsA("Model") and typeof(uo) == "number" and not friendlyUnitOwner(def.OwnerUserId, uo, H) then
+			local unitHostile = typeof(uo) == "number" and (if live then BaseGuards.UnitHostileOneRule(def.OwnerUserId, uo) else not friendlyUnitOwner(def.OwnerUserId, uo, H))
+			if m:IsA("Model") and unitHostile then
 				local hum = m:FindFirstChildOfClass("Humanoid")
 				local root = m:FindFirstChild("HumanoidRootPart")
 				if hum and root and root:IsA("BasePart") and hum.Health > 0 then
@@ -143,6 +202,36 @@ local function hurt(def: any, t: Target, amount: number, sourceId: string, H: an
 	end
 	win.Taken += amt
 	local owner = Players:GetPlayerByUserId(def.OwnerUserId)
+	if oneRuleLive(def.OwnerUserId) then
+		-- JOB 40: through CombatService (the rule re-checked at every shot; the creator tag credits the owner)
+		local cs = combat()
+		if owner == nil or cs == nil then
+			return 0
+		end
+		if t.Kind == "Player" then
+			local victim = t.Player :: Player
+			if not BaseGuards.PlayerHostileOneRule(def.OwnerUserId, victim, H) then
+				return 0
+			end
+			local okD, dealt = pcall(cs.ApplyDefenceHit, owner, victim, amt, sourceId)
+			if okD and typeof(dealt) == "number" and dealt > 0 then
+				pcall(H.Alert, def.PlotId, def.OwnerUserId, victim)
+				BaseGuards._Log(def, "[BaseGuardHit] from=%s to=%s dmg=%d hp=%d", sourceId, victim.Name, dealt, t.Humanoid.Health)
+				return dealt
+			end
+			return 0
+		end
+		if not BaseGuards.UnitHostileOneRule(def.OwnerUserId, t.OwnerUserId) then
+			return 0
+		end
+		local before = t.Humanoid.Health
+		pcall(cs.ApplyHit, owner, t.Root, amt, { WeaponId = sourceId, UnitShot = true, Quiet = true })
+		local dealt = math.max(0, before - t.Humanoid.Health)
+		if t.Humanoid.Health <= 0 and dealt > 0 and not isPrivateServer() and GuardConfig.AllowPair(pairLog, owner.UserId, t.OwnerUserId, now) then
+			reward(owner, C.Rewards.UnitKillCash, C.Rewards.UnitKillXP, "guard_unit_kill")
+		end
+		return dealt
+	end
 	if t.Kind == "Player" then
 		local victim = t.Player :: Player
 		if H.InSpawnGrace(victim) then
@@ -229,8 +318,254 @@ local function leashed(def: any, g: any, goal: Vector3, H: any): Vector3
 	return H.ClampInside(def, goal)
 end
 
+-- claude-bud JOB 40: /armydebug lines for a live base (only while its owner has WE_ArmyDebug on; 1 per 0.5 s per base)
+local logAt: { [number]: number } = {}
+function BaseGuards._Log(def: any, fmt: string, ...: any)
+	local owner = Players:GetPlayerByUserId(def.OwnerUserId)
+	if owner == nil or owner:GetAttribute("WE_ArmyDebug") ~= true then
+		return
+	end
+	local t = os.clock()
+	if t - (logAt[def.PlotId] or 0) < 0.5 then
+		return
+	end
+	logAt[def.PlotId] = t
+	print(string.format(fmt, ...))
+end
+
+-- the post guard's target: the raider of this plot first, then near the ATM, then the nearest; players before units
+local function pickPostTarget(def: any, g: any, H: any): (Target?, number)
+	local P = C.Posts
+	local pos = g.Root.Position
+	local cands: { Target } = hostiles(def, H, true, pos, math.huge)
+	for _, t in ipairs(hostiles(def, H, false, g.PostCf.Position, P.AlertStuds)) do
+		if H.HasLos(pos, t.Root.Position, { g.Model, def.Folder, t.Root.Parent :: Instance }) then
+			table.insert(cands, t)
+		end
+	end
+	local best: Target? = nil
+	local bestScore = math.huge
+	local bestD = math.huge
+	for _, t in ipairs(cands) do
+		local d = (t.Root.Position - pos).Magnitude
+		local tier = 3
+		if t.Player and (t.Player :: Player):GetAttribute("WE_RaidingPlot") == def.PlotId then
+			tier = 1
+		elseif def.CollectorPos and (t.Root.Position - def.CollectorPos).Magnitude <= P.ProtectCollectorRadius then
+			tier = 2
+		end
+		local score = tier * 100000 + (if t.Kind == "Unit" then 50000 else 0) + d
+		if score < bestScore then
+			best, bestScore, bestD = t, score, d
+		end
+	end
+	return best, bestD
+end
+
+--[[ claude-bud JOB 40 part A: one POST guard, one think (the state machine; GuardConfig.PostNext decides, this acts).
+	IDLE at the post facing out; ALERT faces the hostile for ReactionSeconds; ATTACK fires with line of sight on every
+	shot (FireRate / Damage / Range, the hit chance, the one rule re-checked in hurt), moving only to regain sight,
+	never past LeashStuds from the post or out of the plot; RETURN walks back (a path when blocked, never a teleport);
+	HP back to full only at the post after RegenAfterSeconds out of combat. DEAD / respawn = GateDefenseService's. ]]
+function BaseGuards.ThinkPost(def: any, g: any, tnow: number, H: any)
+	local P = C.Posts
+	local ps = g._ps
+	if ps == nil then
+		ps = { State = "IDLE", Since = tnow, SeenAt = -math.huge, HurtAt = -math.huge, LastHp = g.Humanoid.Health }
+		g._ps = ps
+	end
+	local st: any = ps
+	local dead = not g.Alive or g.Humanoid.Health <= 0 or not g.Root.Parent
+	if g.Humanoid.Health < st.LastHp then
+		st.HurtAt = tnow
+	end
+	st.LastHp = g.Humanoid.Health
+	local pos = if dead then g.PostCf.Position else g.Root.Position
+	local post = g.PostCf.Position
+	local fromPost = Vector3.new(pos.X - post.X, 0, pos.Z - post.Z).Magnitude
+	local t: Target?, d = nil, math.huge
+	if not dead then
+		t, d = pickPostTarget(def, g, H)
+	end
+	if t then
+		st.SeenAt = tnow
+		st.Target = t
+	end
+	local nextS = GuardConfig.PostNext(st.State, {
+		Dead = dead,
+		Target = t ~= nil,
+		Since = tnow - st.Since,
+		LostFor = tnow - st.SeenAt,
+		FromPost = fromPost,
+		AtPost = fromPost <= 2,
+	})
+	if nextS ~= st.State then
+		st.State = nextS
+		st.Since = tnow
+		g.Model:SetAttribute("WE_GuardState", nextS)
+	end
+	if dead then
+		return
+	end
+	BaseGuards._Log(def, "[BaseGuard] plot=%s post=%s state=%s target=%s dist=%d", tostring(def.PlotId), tostring(g.PostName), st.State, if t then (if t.Player then (t.Player :: Player).Name else "unit") else "-", if t then math.floor(d) else -1)
+	if st.State == "IDLE" then
+		g.Humanoid:MoveTo(pos)
+		H.FaceYaw(g.Root, post + g.PostCf.LookVector * 10)
+		if g.Humanoid.Health < g.Humanoid.MaxHealth and tnow - st.HurtAt >= P.RegenAfterSeconds then
+			g.Humanoid.Health = g.Humanoid.MaxHealth -- the post regen (the guard NPC, never a player)
+		end
+	elseif st.State == "ALERT" then
+		g.Humanoid:MoveTo(pos)
+		if t then
+			H.FaceYaw(g.Root, t.Root.Position)
+		end
+	elseif st.State == "ATTACK" then
+		if t == nil then
+			g.Humanoid:MoveTo(pos)
+			return
+		end
+		local tt = t :: Target
+		H.FaceYaw(g.Root, tt.Root.Position)
+		local sees = H.HasLos(pos, tt.Root.Position, { g.Model, def.Folder, tt.Root.Parent :: Instance })
+		if sees then
+			g._bgPath = nil
+			g.Humanoid:MoveTo(if d > P.Range * 0.85 then leashed(def, g, tt.Root.Position, H) else pos)
+		else
+			local path = g._bgPath
+			if path and path.I <= #path.Points then
+				local wp = path.Points[path.I]
+				if (pos - wp.Position).Magnitude < 3 then
+					path.I += 1
+				end
+				g.Humanoid:MoveTo(leashed(def, g, wp.Position, H))
+			else
+				requestPath(g, leashed(def, g, tt.Root.Position, H), tnow)
+			end
+		end
+		local interval = 1 / math.max(P.FireRate, 0.1)
+		if sees and d <= P.Range and tnow - g.LastFireAt >= interval and claimShooter(def, tnow) then
+			g.LastFireAt = tnow
+			if rng:NextNumber() <= hitChance(d, P.Range) then
+				hurt(def, tt, P.Damage * BaseGuards.PostDamageMult(def.OwnerUserId, H), "BaseGuard", H)
+			end
+			pcall(H.ShotFx, def, g, pos, tt.Root.Position)
+		end
+	elseif st.State == "RETURN" then
+		local blocked = not H.HasLos(pos, post, { g.Model, def.Folder })
+		if blocked then
+			local path = g._bgPath
+			if path and path.I <= #path.Points then
+				local wp = path.Points[path.I]
+				if (pos - wp.Position).Magnitude < 3 then
+					path.I += 1
+				end
+				g.Humanoid:MoveTo(wp.Position)
+			else
+				requestPath(g, post, tnow)
+			end
+		else
+			g._bgPath = nil
+			g.Humanoid:MoveTo(post)
+		end
+	end
+end
+
+-- the post guard's damage multiplier: Research TurretDamage x the JOB 39 Turret Guns, capped at MaxMult (3)
+function BaseGuards.PostDamageMult(ownerUserId: number, H: any): number
+	local r = H.ResearchMult(ownerUserId)
+	local eg = deps.EndgameService
+	if eg and eg.TurretDmgMult then
+		local ok, m = pcall(eg.TurretDmgMult, ownerUserId, r)
+		if ok and typeof(m) == "number" then
+			return m
+		end
+	end
+	return r
+end
+
+-- the post guards' HP: Posts.Health x Research GuardHP (min 3) x the JOB 39 Gate & Walls (+12 % a level), <= x3
+function BaseGuards.AfterSpawnPost(g: any, ownerUserId: number)
+	local P = C.Posts
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	local m = 1
+	local rs = deps.ResearchService
+	if owner and rs and rs.GetBonus then
+		local ok, v = pcall(rs.GetBonus, owner, C.HealthStat)
+		if ok and typeof(v) == "number" and v == v then
+			m = math.clamp(v, 1, 3)
+		end
+	end
+	local eg = deps.EndgameService
+	if eg and eg.DefenceLevelFor then
+		local ok, L = pcall(eg.DefenceLevelFor, ownerUserId, "Gate")
+		if ok and typeof(L) == "number" then
+			m *= 1 + 0.12 * L
+		end
+	end
+	m = math.min(m, 3)
+	g.Humanoid.MaxHealth = math.floor(P.Health * m + 0.5)
+	g.Humanoid.Health = g.Humanoid.MaxHealth -- AfterSpawn only
+	g.Model:SetAttribute("WE_GuardState", "IDLE")
+end
+
+-- the statues this live plot's posts replace: parked in ServerStorage while live, put back when the plot clears
+local parked: { [number]: { { Name: string, CF: CFrame, Model: Model, Parent: Instance } } } = {}
+function BaseGuards.CollectPosts(plotFolder: Instance, plotId: number): { { Name: string, CF: CFrame } }
+	local list = parked[plotId]
+	if list == nil then
+		local found = {}
+		local store = game:GetService("ServerStorage"):FindFirstChild("WE_ParkedStatues")
+		if store == nil then
+			local f = Instance.new("Folder")
+			f.Name = "WE_ParkedStatues"
+			f.Parent = game:GetService("ServerStorage")
+			store = f
+		end
+		for _, m in ipairs(plotFolder:GetDescendants()) do -- once per plot sync (claim / walls), never per frame
+			if m:IsA("Model") and m:GetAttribute("GateGuard") ~= true and m:GetAttribute("NPCType") == "Guard" then
+				local match = false
+				for _, pat in ipairs(C.Posts.StatuePatterns) do
+					if string.match(m.Name, pat) then
+						match = true
+					end
+				end
+				if match and m.Parent then
+					table.insert(found, { Name = m.Name, CF = m:GetPivot(), Model = m, Parent = m.Parent :: Instance })
+				end
+			end
+		end
+		for _, r in ipairs(found) do
+			r.Model.Parent = store
+		end
+		parked[plotId] = found
+		list = found
+	end
+	local out = {}
+	for _, r in ipairs(list :: any) do
+		table.insert(out, { Name = r.Name, CF = r.CF })
+	end
+	return out
+end
+
+function BaseGuards.RestoreStatues(plotId: number)
+	local list = parked[plotId]
+	if list == nil then
+		return
+	end
+	for _, r in ipairs(list) do
+		if r.Parent and r.Parent.Parent then
+			r.Model.Parent = r.Parent
+		end
+	end
+	parked[plotId] = nil
+end
+
 --[[ One gate / extra guard, one think. Returns true (GateDefenseService's old think is skipped). ]]
 function BaseGuards.ThinkGuard(def: any, g: any, stats: any, tnow: number, H: any): boolean
+	if g.IsPost == true then
+		BaseGuards.ThinkPost(def, g, tnow, H) -- JOB 40: the post guards' state machine
+		return true
+	end
 	if not g.Alive or g.Humanoid.Health <= 0 or not g.Root.Parent then
 		return true
 	end
