@@ -30,7 +30,7 @@ the game owner play in a game, so these are the only kind we use. Source: `docs/
 |---|---|---|
 | Rifle / carbine / SMG / shotgun / long rifle hold | 3972151362 | RifleHold |
 | Pistol hold (stand-in) | 507768375 | R15Tool |
-| Launcher hold (stand-in) | 3972164452 | NewRifleAim |
+| Launcher hold (stand-in) | 3972151362 | RifleHold (was 3972164452 NewRifleAim, a pitch-scrub aim sheet, until the RPG fix) |
 | Reload (every gun) | 3972131105 | RifleReload |
 
 ## 3. Audio (`src/ReplicatedStorage/Shared/Configs/SoundConfig.luau`)

@@ -253,7 +253,7 @@ They need code first: the player weapon-animation controller (roadmap W2) and th
 | P0 | `Player.RifleReload` | reload, used for every gun | **3972131105** | RifleReload | none |
 | P1 | `Player.RifleAimDownSights` | aim down the sights | **3972157449** | NewRifleADS | 4713633512 (Soldier Assault Rifle Aim) |
 | P1 | `Player.PistolHold` | one-hand hold (stand-in) | **507768375** | R15Tool | 3972164452 (NewRifleAim) |
-| P1 | `Player.LauncherHold` | shoulder aim (stand-in) | **3972164452** | NewRifleAim | 3972157449 (NewRifleADS) |
+| P1 | `Player.LauncherHold` | shoulder aim (stand-in) | **3972151362** | RifleHold | none |
 | P1 | `Player.GrenadeThrow` | overhand swing (stand-in) | **522635514** | R15 Sword Slash | 522638767 (R15 Sword Lunge) |
 | P1 | `NPC.Idle` | idle | **507766388** | R15Idle | 2510196951 (Rthro Idle1 Animation) |
 | P1 | `NPC.Walk` | walk | **507777826** | R15Walk | 2510202577 (Rthro Walk Animation) |
@@ -264,6 +264,8 @@ They need code first: the player weapon-animation controller (roadmap W2) and th
 | P2 | `NPC.Salute` | salute (face tracks ignored on non-dynamic heads) | **10714389988** | Salute Face | 507770239 (R15Wave) |
 | P1 | `NPC.Crouch (training-yard T-pose fix)` | NOT FOUND | - | - | owner authors it in the Animation Editor (or ragdoll); search: "crouch" |
 | P2 | `NPC.Die / Player.Death` | NOT FOUND | - | - | owner authors it in the Animation Editor (or ragdoll); search: "death animation r15  (use a ragdoll instead)" |
+
+RPG fix (2026-09-30): 3972164452 (NewRifleAim, the kit's "RifleAim") and 3972157449 (NewRifleADS) are NOT holds. They are pitch-scrub pose sheets: keyframes Down (t 0) → Level (t 1) → Up (t 2), keyed on the Waist (UpperTorso), Head and both arms; the Weapons Kit (BulletWeapon:onRenderStepped) freezes them (AdjustSpeed 0.001) and sets TimePosition = 2 × (pitch + 80) / 160. Played Looped at normal speed they sweep the torso and the gun from 80° down to near vertical every 2 s and snap back. Never use them as a looped Hold / backup.
 
 ### 3.5 Sounds (`SoundConfig.Sounds`)
 

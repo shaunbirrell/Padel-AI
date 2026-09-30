@@ -622,7 +622,13 @@ HudConfig.CombatFx = {
 	TargetBar = { Seconds = 2.5, Width = 120, Height = 6, NamePx = 14 }, -- real px, under the reticle
 	Haptics = { Enabled = true, Hit = 0.2, Kill = 0.5 }, -- touch only (HapticService)
 	-- Roblox-owned animation ids (docs/ASSET_SHORTLIST.md §3.4, creator Roblox); 0 disables
-	Anims = { Hold = { Rifle = 3972151362, Pistol = 507768375, Launcher = 3972164452 }, Reload = 3972131105 },
+	-- A Hold id is played Looped at normal speed (WeaponVisuals.playHold), so it must be a real idle loop. Never
+	-- 3972164452 (the Weapons Kit "RifleAim"): that is a pitch-scrub pose sheet (t = 0 aims 80° down, t = 1 level,
+	-- t = 2 aims 80° up; the kit freezes it and sets TimePosition from the camera pitch) that keys the Waist
+	-- (UpperTorso ~50° twist, -73° -> +28° pitch). Looped it swept the torso and the launcher from down to near
+	-- vertical every 2 s and snapped back: the RPG / launcher wobble (owner report 2026-09-30). The launchers use
+	-- RifleHold (arms only; its UpperTorso pose has Weight 0, t = 0 and t = 2 are the same pose).
+	Anims = { Hold = { Rifle = 3972151362, Pistol = 507768375, Launcher = 3972151362 }, Reload = 3972131105 },
 	-- gun placement in the hand (device tuning knob; zero = the Roblox Tool default: barrel along the
 	-- RightGripAttachment's -Z, top along its +Y). Handle = grip * Rotation(deg, X/Y/Z order) * Offset(studs).
 	Grip = { RotationDeg = Vector3.zero, OffsetStuds = Vector3.zero },
