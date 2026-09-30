@@ -37,7 +37,7 @@ export type ZoneRow = { Id: number, L0: number, L1: number, X: number, Z: number
 
 local StorePropsConfig = {
 	Enabled = true, -- KILL SWITCH: false = no store props anywhere (the Part builds as before)
-	OwnerFirst = true, -- only the owner (UserId 470626172) + Studio testers until Code Bot sets false = everyone
+	OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	World = true, -- the site / area dressing
 	ZonesOn = true, -- the rebirth zone upgrade visuals
 	LiveAttribute = "WE_StorePropsOff", -- Workspace attribute: true = remove every copy now

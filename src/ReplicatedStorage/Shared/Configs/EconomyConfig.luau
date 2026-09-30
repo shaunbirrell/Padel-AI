@@ -123,7 +123,7 @@ local EconomyConfig = {
 		Kill switch: Enabled = false (no payout, no card). OwnerFirst as TutorialConfig.FastStart. No Robux option. ]]
 	OfflineEarnings = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 		Share = 0.25,
 		CapSeconds = 8 * 3600,
 		MinSeconds = 300,

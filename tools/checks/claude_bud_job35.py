@@ -48,8 +48,8 @@ _SC = _j35_code(_CL + "Controllers/ShopController.luau")
 _SCO = _j35_code(_CL + "Modules/Scope.luau")
 
 # gate + no Robux changes elsewhere: every new pass Id 0, prices in MonetizationConfig only, not in RolloutKeys
-_j35("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- only UserId 470626172" in _PGC and "RetentionConfig.Live(PremiumGunsConfig.Live, userId)" in _PGC,
-     "one owner-first kill switch (PremiumGunsConfig.Live)")
+_j35("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false, -- codebot_v136 launch" in _PGC and "RetentionConfig.Live(PremiumGunsConfig.Live, userId)" in _PGC,
+     "one kill switch (PremiumGunsConfig.Live; v136: OwnerFirst=false, everyone; superseded in codebot_v136.py)")
 for _k, _p in (("PG_Sovereign", 99), ("PG_Quake", 249), ("PG_Longshot", 299), ("PG_Havoc", 349), ("PG_Thunderhead", 399), ("PG_Tempest", 499), ("PG_ArmoryPass", 1299)):
     _j35(("\t\t%s = {\n\t\t\tId = 0,\n" % _k) in _MCF and ("RobuxPrice = %d," % _p) in _MCF, "%s: Id 0 (hidden / SOON), R$ %d in MonetizationConfig" % (_k, _p))
 _j35('"PG_' not in _MCF.split("RolloutKeys", 1)[1].split("\n", 1)[0], "PG_* passes are not in RolloutKeys (they are Id 0)")

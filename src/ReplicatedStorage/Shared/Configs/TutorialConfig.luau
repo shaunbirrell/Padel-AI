@@ -326,7 +326,7 @@ end
 	OwnerFirst = true: live only for the owner (and Studio test players) first; see RetentionConfig.Live. ]]
 TutorialConfig.FastStart = {
 	Enabled = true,
-	OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+	OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	StandStuds = 7, -- in front of the console face (ConsolePromptDistance is 10)
 	StarterPayout = 1500,
 	HoldPopupsUntilStep = 3, -- WE_Onboarding clears once TutorialStep >= this (after the Command Center) or at 60 s

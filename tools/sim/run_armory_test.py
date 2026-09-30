@@ -254,10 +254,18 @@ passCb(owner, "PG_ArmoryPass", "join")
 local n = 0
 for id in pairs(want) do if profiles[470626172].Weapons[id] then n += 1 end end
 check(n == 6, "the Armory Pass grants all six (" .. n .. ")")
+-- v136 (Code Bot Roblox): the shipped config is OwnerFirst = false (everyone); the owner-first rule is still tested
+local launched = PG.Live.OwnerFirst
+check(launched == false, "v136 launch: PremiumGunsConfig.Live.OwnerFirst = false (everyone)")
+PG.Live.OwnerFirst = true
 passCb(other, "PG_Havoc", "purchase")
 check(profiles[5].Weapons.HavocRotary == nil, "not live for another player (owner-first): no grant")
 passCb(owner, "VIP", "join")
 check(synced == 2, "an unrelated pass grants nothing")
+PG.Live.OwnerFirst = launched
+passCb(other, "PG_Havoc", "purchase")
+check(profiles[5].Weapons.HavocRotary == true and synced == 3, "v136 launch: live for another player: a bought pass grants his gun")
+check(PS.CaseState(profiles[5], PG.Guns[2]) == "Soon", "v136 launch: another player sees SOON on an Id-0 case (never prompted)")
 
 -- ── 5. placement ──
 local BL = require(node("Configs/BaseLayoutConfig"))

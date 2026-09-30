@@ -84,9 +84,9 @@ _cb128('RequestSiteActivity' in _code128("src/ReplicatedStorage/Shared/Constants
 _cb128("PreferMeshWhenAssetIdSet = false" in _rd128("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau"),
        "CODEBOT v128: PreferMesh stays OFF")
 _AC128 = _rd128("src/ReplicatedStorage/Shared/Configs/SiteActivityConfig.luau")
-_cb128("\tEnabled = true,\n\tOwnerFirst = true, -- only UserId 470626172" in _AC128,
+_cb128("\tEnabled = true,\n\tOwnerFirst = false, -- codebot_v136 launch" in _AC128,  # v136: was OwnerFirst = true, superseded in codebot_v136.py
        "CODEBOT v128: SiteActivityConfig OwnerFirst retained (JOB 31)")
-_cb128("\tOwnerFirst = true, -- only UserId 470626172" in _MC128,
+_cb128("\tOwnerFirst = false, -- codebot_v136 launch" in _MC128,  # v136: was OwnerFirst = true, superseded in codebot_v136.py
        "CODEBOT v128: MapConfig OwnerFirst retained")
 _cb128("safeInit(\"SiteActivityService\"" in _rd128(_S128 + "Bootstrap.server.luau")
        and "SiteActivityService" in _rd128(_S128 + "Bootstrap.server.luau"),

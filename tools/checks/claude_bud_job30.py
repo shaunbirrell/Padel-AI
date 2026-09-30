@@ -42,7 +42,7 @@ _HC = _j30_src("src/ReplicatedStorage/Shared/Configs/HudConfig.luau")
 _UI = _j30_code("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau")
 _BSS = _j30_code("src/ServerScriptService/Server/Services/BaseSignService.luau")
 
-_OWN = "OwnerFirst = true, -- only UserId 470626172"
+_OWN = "OwnerFirst = false, -- codebot_v136 launch"  # v136 (Code Bot Roblox): was "OwnerFirst = true, -- only UserId 470626172"; launched for everyone, superseded in tools/checks/codebot_v136.py
 _j30("local MapConfig = {\n\tEnabled = true,\n\t" + _OWN in _MC and "\tFastTravelEnabled = false,\n" in _MC,
      "kill switch MapConfig.Enabled, owner-first; Code Bot v127: FastTravelEnabled = false (fast travel removed)")
 _j30("RefreshSeconds = 0.5," in _MC and "PinArriveStuds = 15," in _MC, "markers at most 2x a second; pin arrives at 15 studs")

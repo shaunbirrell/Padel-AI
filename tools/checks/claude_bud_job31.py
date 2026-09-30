@@ -60,7 +60,7 @@ _j31("clearOfParts(cand[1], cand[2], kind.R)" in _WS and "WorldSites.PlaceOk(can
 _j31('Source = "site",' in _WS and "wk.Finish(cluster, folder)" in _WS, "sites are WorldKits clusters (QualityGovernor decor rules; buildings never culled)")
 _j31('getWorldModule("WorldSites")' in _MD and "pcall(wsites.Build, quality, wk)" in _MD, "sites build right after WorldFill")
 # activities: owner-first, server-authoritative
-_j31("local SiteActivityConfig = {\n\tEnabled = true,\n\tOwnerFirst = true, -- only UserId 470626172" in _AC, "kill switch SiteActivityConfig.Enabled, owner-first")
+_j31("local SiteActivityConfig = {\n\tEnabled = true,\n\tOwnerFirst = false, -- codebot_v136 launch" in _AC, "kill switch SiteActivityConfig.Enabled (v136: OwnerFirst=false, everyone; superseded in codebot_v136.py)")
 _j31('RemoteGate).Check(player, "RequestSiteActivity", action, id)' in _AS and 'pcall(es.AddCash, player, d.Cash, "activity")' in _AS,
      "activities are gated and paid on the server")
 _j31("killer == player and onPerch" in _AS and "who.UserId ~= owner" in _AS and "(r0.Position - crate.Position).Magnitude > C.PromptStuds + 4" in _AS,

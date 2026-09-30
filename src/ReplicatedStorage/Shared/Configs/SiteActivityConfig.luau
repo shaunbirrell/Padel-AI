@@ -46,7 +46,7 @@ export type ActivityDef = {
 
 local SiteActivityConfig = {
 	Enabled = true,
-	OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+	OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	PushSeconds = 1, -- state push to the player while an activity runs (<= 1 Hz)
 	ZonePadStuds = 12, -- the zone = the site radius + this
 

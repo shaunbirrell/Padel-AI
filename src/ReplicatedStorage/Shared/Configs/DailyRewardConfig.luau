@@ -33,7 +33,7 @@ local DailyRewardConfig = {
 	ShowTomorrow = true,
 	StreakCard = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	},
 	BigDays = { [3] = true, [7] = true } :: { [number]: boolean },
 	CardSeconds = 6,

@@ -18,12 +18,13 @@ def _rd135(p):
 
 
 _S135 = "src/ServerScriptService/Server/"
+# v136 (Code Bot Roblox): retired WE_Build pins, superseded in tools/checks/codebot_v136.py
 for _f in (_S135 + "Services/DataService.luau", _S135 + "Services/BaseService.luau", _S135 + "EarlyRemotes.server.luau"):
-	_cb135('SetAttribute("WE_Build", 135)' in _rd135(_f), "CODEBOT v135: WE_Build=135 " + _f.rsplit("/", 1)[-1])
-_cb135("WE_Build=135" in _rd135(_S135 + "Services/DataService.luau"), "CODEBOT v135: DataService profile-loaded log says WE_Build=135")
+	pass  # v136 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v136.py: #_cb135('SetAttribute("WE_Build", 135)' in _rd135(_f), "CODEBOT v135: WE_Build=135 " + _f.rsplit("/", 1)[-1])
+# v136 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v136.py: #_cb135("WE_Build=135" in _rd135(_S135 + "Services/DataService.luau"), "CODEBOT v135: DataService profile-loaded log says WE_Build=135")
 
 _PG = _rd135("src/ReplicatedStorage/Shared/Configs/PremiumGunsConfig.luau")
-_cb135("OwnerFirst = true" in _PG and "Enabled = true" in _PG, "CODEBOT v135: PremiumGunsConfig Live Enabled + OwnerFirst=true")
+# v136 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v136.py (launched for everyone): #_cb135("OwnerFirst = true" in _PG and "Enabled = true" in _PG, "CODEBOT v135: PremiumGunsConfig Live Enabled + OwnerFirst=true")
 _cb135("OwnerTestGrant = true" in _PG, "CODEBOT v135: OwnerTestGrant=true while pass Ids are 0")
 _cb135(_P135(_S135 + "Services/PremiumGunService.luau").is_file(), "CODEBOT v135: PremiumGunService present")
 _cb135(_P135("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ArmoryController.luau").is_file(), "CODEBOT v135: ArmoryController present")

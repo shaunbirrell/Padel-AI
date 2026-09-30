@@ -28,5 +28,5 @@ for _f in (_S125 + "Services/DataService.luau", _S125 + "Services/BaseService.lu
 
 # JOB 29 retention still OwnerFirst; PreferMesh stays OFF; WE_Building* untouched (pin presence only)
 _rc = _P125("src/ReplicatedStorage/Shared/Configs/RetentionConfig.luau").read_text(encoding="utf-8")
-_cb125("OwnerFirst = true" in _rc and "function RetentionConfig.Live(" in _rc, "CODEBOT v125: RetentionConfig OwnerFirst=true + Live()")
+_cb125("OwnerFirst = false, -- codebot_v136 launch" in _rc and "function RetentionConfig.Live(" in _rc, "CODEBOT v125: RetentionConfig Live() (v136: OwnerFirst=false, superseded in codebot_v136.py)")
 _cb125(_P125("tools/checks/claude_bud_job29.py").is_file(), "CODEBOT v125: claude_bud_job29.py present")

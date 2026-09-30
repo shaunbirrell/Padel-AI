@@ -50,7 +50,7 @@ _NC = _j29_code("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Natio
 _MC = _j29_code("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MissionController.luau")
 
 # ── kill switches + owner-first (RetentionConfig.Live: Enabled, OwnerFirst) ──────────────────────────────────────────
-_OWN = "OwnerFirst = true, -- only UserId 470626172"
+_OWN = "OwnerFirst = false, -- codebot_v136 launch"  # v136 (Code Bot Roblox): was "OwnerFirst = true, -- only UserId 470626172"; launched for everyone, superseded in tools/checks/codebot_v136.py
 _j29("TutorialConfig.FastStart = {\n\tEnabled = true,\n\t" + _OWN in _TC, "kill switch TutorialConfig.FastStart.Enabled, owner-first")
 _j29("\tOfflineEarnings = {\n\t\tEnabled = true,\n\t\t" + _OWN in _EC and "\t\tShare = 0.25,\n\t\tCapSeconds = 8 * 3600," in _EC,
      "kill switch EconomyConfig.OfflineEarnings.Enabled, owner-first: 25 % of income, capped at 8 h")

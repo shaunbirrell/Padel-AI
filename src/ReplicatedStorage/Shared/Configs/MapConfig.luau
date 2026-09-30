@@ -17,7 +17,7 @@
 
 local MapConfig = {
 	Enabled = true,
-	OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+	OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 	-- the world square the map shows (studs; north = -Z is up). Dry land is x +-1760, z -1760..1490 (WorldConfig).
 	Extent = { X0 = -2000, X1 = 2000, Z0 = -2000, Z1 = 2000 },
 	RefreshSeconds = 0.5, -- markers (and the server feed) at most 2x a second, only while open

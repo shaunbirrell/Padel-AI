@@ -33,7 +33,7 @@ local RetentionConfig = {
 		StateStore: one DataStore write per leave, with the fields an external sender reads (docs/NOTIFICATIONS.md). ]]
 	Notifications = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
 		NotBeforeSeconds = 60,
 		TutorialDelaySeconds = 25, -- after the Starter Pack offer's slot (3 s after the tutorial)
 		DeclineCooldownDays = 7,
