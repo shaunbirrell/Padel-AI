@@ -1,4 +1,15 @@
 <!-- Q2-START -->
+## v156 PUBLISHED (Code Bot Roblox, 2026-10-01 Dublin): Open Cloud place version 154 — real Robux prices + plain Shop text + ARMY KILLS board, live for everyone
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **156**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":154}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Commits:** phase-7-polish `e289e76` (source, checks and dist); claude/desktop-bud merge `3beaae7`; this handoff.
+- **Prices:** new `Shared/Util/LivePrices` (server GetProductInfo cache -> RS attributes `WE_Px_*` / `WE_PxN_*`, refresh 10 min). The Shop, Supply Depot, stands and every offer card (including the ~2 min Starter offer) show the Roblox price and name; the config is the fallback only. Mismatches found (config vs Roblox): StarterBundle 149 "Commander Starter Pack" vs **249 "Commander Starter Bundle"**; ExtraSoldierSlot 99 "Army Expansion (+10)" vs **79 "Extra Soldier Slot"**. Fallbacks now match Roblox. No Creator Hub price changed. All game passes matched.
+- **Owner action (Creator Hub text, stale):** Starter Bundle description says "25,000 cash + 25 gold" (game grants $50,000 + Auto Collect); Extra Soldier Slot says "+1 soldier capacity" (game grants +10).
+- **Descriptions:** every Robux item rewritten in plain player language (no "ProcessReceipt only"), max 56 characters per row sub (render test at 1024x471).
+- **ARMY KILLS:** `LeaderboardConfig.ArmyKillsBoardLive = true` swaps TOP ARMY for ARMY KILLS for everyone (was gated on ArmyOrdersConfig.LiveForAll, and NoteArmyKill on AOC.LiveFor = owner only, who is excluded, so it never scored). ArmyOrders OwnerFirst stays true. Normal follow/defend army kills count (guards, base/tower guards, enemy players). Army-vs-army kills are not possible yet: **JOB 43 part 2 (the board) is DONE by v156; JOB 43 part 1 (army-vs-army brawl) still open.** Boards start empty.
+- **Flags unchanged:** Endgame, ArmyOrders, GuardConfig.Posts, SpeedV2 OwnerFirst=true; BaseMarker false.
+- **Checks:** BuyPathStatic PASS=7419 FAIL=0; codebot_v156 PASS; run_shop_render_test 0 failed (both uids); run_armory_test 0 failed.
+- **Phone tests:** open SUPPLY · R$: "Commander Starter Bundle 249 R$" matches the Roblox prompt; Battle Pass Premium row reads "Unlock premium rewards on every Battle Pass tier"; plaza board says ARMY KILLS.
+
 ## v155 PUBLISHED (Code Bot Roblox, 2026-10-01 00:12 Dublin): Open Cloud place version 153 — JOB 40E base owner name tags live for everyone
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **155**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":153}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Flag:** `BaseMarkerConfig.Live.OwnerFirst = false` (everyone). Endgame, ArmyOrders, GuardConfig.Posts, SpeedV2 and StorePropsConfig OwnerFirst remain true.
