@@ -13620,6 +13620,10 @@ SoundConfig.Mix = {
 	BandsLive = false,
 	MaxConcurrent = 12, -- one-shot voices playing at once, 2D + 3D (loops are separate: music, ambience, engine)
 	MaxConcurrent2D = 4, -- of those, non-positional (UI + Stinger)
+	-- v147: AudioController.Init warms each distinct UI / Stinger asset id once, WarmGapSeconds apart, starting
+	-- WarmDelaySeconds after join (was: ~20 Sounds in one frame -> client HTTP 429 sound loads in the error report)
+	WarmDelaySeconds = 4,
+	WarmGapSeconds = 0.35,
 	PoolPerKey = 4, -- pooled Sound instances per key; a 5th overlapping play of one key restarts its oldest voice
 	StingerWindowSeconds = 0.35, -- one audible Stinger per window (higher Priority replaces a lower one)
 	DefaultLengthSeconds = 2, -- voice busy time when neither the file length nor LengthSeconds is known
@@ -18707,7 +18711,7 @@ local VisualAssetConfig = {
 		AutoGunElevated = { ModelAssetId = 0, Note = "W1 CFG drop (uploader not the author) — unused key" } :: AssetRef,
 		AutoGunElevatedAlt = { ModelAssetId = 10354803684, Note = "Military turret — L2/corner only" } :: AssetRef,
 		SandbagNest = { ModelAssetId = 0, Note = "Circular sandbag ring under HMG" } :: AssetRef,
-		Sandbags = { ModelAssetId = 3525056989, Note = "Realistic Sandbag scatter at posts" } :: AssetRef,
+		Sandbags = { ModelAssetId = 0, Note = "v147: was 3525056989 (not authorized: live LoadAsset 2026-09-30; never loaded, a wasted LoadAsset per server) - sandbag scatter at posts" } :: AssetRef,
 	},
 
 	-- Owner asset list hooks (2026-09-25): war-business line dress. BusinessService.SyncBusiness defers
@@ -18772,7 +18776,7 @@ local VisualAssetConfig = {
 	MoneyBagFX = { ModelAssetId = 38451313, Note = "Collect cash burst VFX (StripScripts)" } :: AssetRef,
 	VfxSparkles = { ModelAssetId = 4221608224, Note = "Collect/upgrade sparkles VFX" } :: AssetRef,
 	CashCrate = { ModelAssetId = 16803204916, Note = "Cash crate alt overlay" } :: AssetRef,
-	UpgradeFlag = { ModelAssetId = 1679839739, Note = "L5 structure flag pop" } :: AssetRef,
+	UpgradeFlag = { ModelAssetId = 0, Note = "v147: was 1679839739 (not authorized: live LoadAsset 2026-09-30; the Part kit look stays) - L5 structure flag pop" } :: AssetRef,
 	FloodlightTower = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 107381977457431 (not authorized (live LoadAsset); the Part kit look stays) - Floodlight tower PROP (not vehicle)" } :: AssetRef,
 	-- VehicleDepot showroom catalog (Part-kit podium remains fallback)
 	ShowroomPodium = { ModelAssetId = 5267267960, Note = "Showroom podium mesh" } :: AssetRef,
@@ -18796,15 +18800,15 @@ local VisualAssetConfig = {
 		BarbedWire = { ModelAssetId = 1291725699, Note = "Warzone BarbedWire" } :: AssetRef,
 		Tent = { ModelAssetId = 182529039, Note = "owner pick: Military Canvas Tent by Quenty (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		RadioAntenna = { ModelAssetId = 19277831, PendingAssetId = 1439808070, Note = "owner pick Antenna (Sereinmachy): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
-		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
+		Floodlight = { ModelAssetId = 0, Note = "v147: was 116763933 (not authorized: live LoadAsset in place 97112936860418, 2026-09-30; the Part kit look stays) - Warzone Floodlight" } :: AssetRef,
 		FloodlightTower = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 107381977457431 (not authorized (live LoadAsset); the Part kit look stays) - Floodlight tower prefer" } :: AssetRef,
-		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
+		Flag = { ModelAssetId = 0, Note = "v147: was 1679839739 (not authorized: live LoadAsset 2026-09-30; the Part kit flag stays) - L5 upgrade flag" } :: AssetRef,
 		Lantern = { ModelAssetId = 0, Note = "W1 CFG drop (extracted from another game) — Part kit host" } :: AssetRef,
 		TentAlt = { ModelAssetId = 3133150032, Note = "Tent alt if primary Tent fails" } :: AssetRef,
 		RadioAntennaAlt = { ModelAssetId = 42209845, Note = "HQ roof antenna alt" } :: AssetRef,
 		FloodlightAlt = { ModelAssetId = 4893998573, Note = "Depot bay floodlight" } :: AssetRef,
 		FuelCans = { ModelAssetId = 1160141839, PendingAssetId = 112426091, Note = "owner pick Gas Can (Maximum_ADHD): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
-		FlagPole = { ModelAssetId = 1679839739, PendingAssetId = 172755983, Note = "owner pick Flagpole (Quenty): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
+		FlagPole = { ModelAssetId = 0, PendingAssetId = 172755983, Note = "owner pick Flagpole (Quenty): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
 		FlagPoleHD = { ModelAssetId = 1454179642, Note = "HQ prestige flag pole" } :: AssetRef,
 		-- Map densify P0/P1 (Design MAP_BUILD_OUT_WIRE 2026-09-21)
 		JerseyBarrier = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; WorldKits Jersey is our Part kit) — Part kit" } :: AssetRef,
@@ -18831,7 +18835,7 @@ local VisualAssetConfig = {
 		CamoNetAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		Fence = { ModelAssetId = 25623924, Note = "legacy alias of the old OilBarrel id (no caller; WarzoneProps.OilBarrel is the Roblox barrel now)" } :: AssetRef,
 		Radio = { ModelAssetId = 19277831, PendingAssetId = 1439808070, Note = "owner pick Antenna (Sereinmachy): pending, P1i (inert while PreferMesh is off); alias of RadioAntenna" } :: AssetRef,
-		Lamp = { ModelAssetId = 116763933, Note = "alias → Floodlight" } :: AssetRef,
+		Lamp = { ModelAssetId = 0, Note = "v147: was 116763933 (not authorized) - alias → Floodlight" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	DesertProps = {
@@ -28683,7 +28687,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 146)
+		player:SetAttribute("WE_Build", 147)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -30120,12 +30124,18 @@ local function publish(player: Player, st: any, a: any, plans: { [any]: any }, d
 					m:SetAttribute("FormationSlot", idx)
 					m:SetAttribute("WE_FormSlot", idx)
 				end)
+				-- v147: debug output only for a player with the army debug on (ArmyController.DebugFor); the live error
+				-- report counted these SLOT CHANGE warns for every normal player (a normal roster change, not a fault)
 				if old == nil then
-					print(string.format("[ArmyDebug] SLOT ASSIGN %s %s -> slot %d (first assignment)", player.Name, unitName(u), idx))
+					if debugOn then
+						print(string.format("[ArmyDebug] SLOT ASSIGN %s %s -> slot %d (first assignment)", player.Name, unitName(u), idx))
+					end
 				else
 					ArmyController.Stats.SlotChanges += 1
-					warn(string.format("[ArmyDebug] SLOT CHANGE %s %s %d -> %d reason=roster change (death / removal / new unit)",
-						player.Name, unitName(u), old, idx))
+					if debugOn then
+						warn(string.format("[ArmyDebug] SLOT CHANGE %s %s %d -> %d reason=roster change (death / removal / new unit)",
+							player.Name, unitName(u), old, idx))
+					end
 				end
 			end
 			local p = plans[u]
@@ -48320,6 +48330,12 @@ local ACQUIRE_POLL_SECONDS = 2
 -- v70: userIds whose lock THIS server released (leave / shutdown). Refresh never re-claims those; for the
 -- rest it takes over a free or stale lock, so a session whose TryAcquire timed out still ends up holding it.
 local releasedHere: { [number]: boolean } = {}
+-- v147: os.clock() of this server's last lock_<userId> write. A DataStore key written twice within ~6 s queues the
+-- second request ("DataStore request was added to queue"). The 15 s heartbeat and the 60 s autosave's own Refresh both
+-- start at DataService.Init, so every 4th heartbeat landed in the same instant as an autosave Refresh. A Refresh
+-- within REFRESH_MIN_GAP of the last write is skipped: the lock stays fresh (TTL 45 s, worst gap 15 + 7 = 22 s).
+local lastLockWriteAt: { [number]: number } = {}
+local REFRESH_MIN_GAP = 7
 local store: DataStore? = nil
 
 local function getStore(): DataStore?
@@ -48467,6 +48483,11 @@ function SessionLock.Refresh(userId: number)
 	end
 	local key = "lock_" .. tostring(userId)
 	local jobId = thisJobId()
+	local nowClock = os.clock()
+	if nowClock - (lastLockWriteAt[userId] or -math.huge) < REFRESH_MIN_GAP then
+		return -- v147: written moments ago (autosave + heartbeat in the same instant): no second write on the key
+	end
+	lastLockWriteAt[userId] = nowClock
 	pcall(function()
 		ds:UpdateAsync(key, function(old)
 			local ours = typeof(old) == "table" and tostring((old :: LockInfo).JobId or "") == jobId
@@ -48570,6 +48591,7 @@ return SessionLock
 ]]
 
 local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
 local PathfindingService = game:GetService("PathfindingService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -48778,8 +48800,12 @@ function SoldierController.Reposition(unit: any, cf: CFrame, why: string, skipCo
 	local dbg = unit._scDbg
 	local toSlot = if dbg and dbg.Goal then flatDist(from, dbg.Goal) else -1
 	local toOwner = if dbg and dbg.Owner then flatDist(from, dbg.Owner) else -1
-	warn(string.format("[ArmyDebug] REPOSITION unit %s slot %s reason=%s prevState=%s distToSlot=%.1f distToPlayer=%.1f jump=%.1f owner=%s",
-		tostring(unit.Id), tostring(unit._acIdx), why, tostring(unit._scState or unit.MoveState), toSlot, toOwner, flatDist(from, cf.Position), tostring(unit.OwnerUserId)))
+	-- v147: the line goes out only while the owner has the army debug on (WE_ArmyDebug: /armydebug, admin allowlist);
+	-- for normal players it was error-report noise (the reposition itself is unchanged)
+	local ownerPlayer = if typeof(unit.OwnerUserId) == "number" then Players:GetPlayerByUserId(unit.OwnerUserId) else nil
+	local loud = ownerPlayer ~= nil and ownerPlayer:GetAttribute("WE_ArmyDebug") == true
+	if loud then warn(string.format("[ArmyDebug] REPOSITION unit %s slot %s reason=%s prevState=%s distToSlot=%.1f distToPlayer=%.1f jump=%.1f owner=%s",
+		tostring(unit.Id), tostring(unit._acIdx), why, tostring(unit._scState or unit.MoveState), toSlot, toOwner, flatDist(from, cf.Position), tostring(unit.OwnerUserId))) end
 	unit.Model:PivotTo(cf)
 	unit.Root.AssemblyLinearVelocity = Vector3.zero
 	unit.Root.AssemblyAngularVelocity = Vector3.zero
@@ -69864,7 +69890,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 146)
+			player:SetAttribute("WE_Build", 147)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -78266,7 +78292,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 146)
+		player:SetAttribute("WE_Build", 147)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -78408,7 +78434,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=146",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=147",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -78477,9 +78503,12 @@ local function writeProfile(userId: number, profile: PlayerProfile, releaseLock:
 	local ok, err = retryAsync("SetAsync", function()
 		ds:SetAsync(keyFor(userId), snapshot)
 	end)
-	if ok then
+	if ok and not releaseLock then
+		-- v147: a leave / shutdown save goes straight to Release below. Refresh + Release are two UpdateAsync calls on the
+		-- same lock_<userId> key back to back, and the second one always hit the ~6 s per-key write limit ("DataStore
+		-- request was added to queue"). Release writes the free tombstone either way, so the Refresh there did nothing.
 		SessionLock.Refresh(userId)
-	else
+	elseif not ok then
 		warn("[DataService] Save failed for", userId, err)
 	end
 	if releaseLock then
@@ -82220,7 +82249,7 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 	end
 
 	-- Scatter sandbags
-	local bagId = if gd and gd.Sandbags then gd.Sandbags.ModelAssetId else 3525056989
+	local bagId = if gd and gd.Sandbags then gd.Sandbags.ModelAssetId else 0 -- v147: 3525056989 is not authorized for this place
 	if typeof(bagId) == "number" and bagId > 0 then
 		local bagT = loadCatalogModel(bagId)
 		if bagT then
@@ -150088,6 +150117,10 @@ local function worldLabelPass()
 	end
 end
 
+-- v147: the last padKey each pad had in the overlap loop (weak keys: a lost entry only means one recompute)
+local padKeyCache: { [BasePart]: string } = setmetatable({}, { __mode = "k" }) :: any
+local PAD_MAX_MARGIN = math.max(OVERLAP_MARGIN, CONSOLE_MARGIN)
+
 local function startOverlapLoop()
 	if overlapConn then
 		overlapConn:Disconnect()
@@ -150131,9 +150164,21 @@ local function startOverlapLoop()
 		local bestSid: string? = nil
 		for part in pairs(slotParts) do
 			if part.Parent then
+				-- v147 (phone FPS): this runs every frame over every upgrade pad of all 10 plots (150 live), and each pad
+				-- cost two attribute reads and two new strings (padKey). A pad whose bounding sphere of the pointInPad
+				-- box (half size + the larger margin, +8 up) is farther than the player can never be "inside", so it is
+				-- skipped unless it is still marked entered (its leave must fire). Same result as before, no allocation.
+				local h = part.Size * 0.5
+				local rx, ry, rz = h.X + PAD_MAX_MARGIN, h.Y + 8, h.Z + PAD_MAX_MARGIN
+				local d = pos - part.Position
+				local ck = padKeyCache[part]
+				if d.X * d.X + d.Y * d.Y + d.Z * d.Z > rx * rx + ry * ry + rz * rz and ck ~= nil and not lastOverlap[ck] then
+					continue
+				end
 				local structureId = part:GetAttribute("StructureId")
 				if typeof(structureId) == "string" then
 					local key = padKey(part, structureId)
+					padKeyCache[part] = key
 					local inside = pointInPad(pos, part)
 					if inside then
 						if not lastOverlap[key] then
@@ -153154,12 +153199,37 @@ function AudioController.Init()
 	end
 	initDone = true
 	ensureFolder()
-	-- warm one 2D voice per UI / Stinger key so the first cue does not wait on a cold asset load
+	-- warm one 2D voice per UI / Stinger key so the first cue does not wait on a cold asset load.
+	-- v147 (live error report: client "HTTP 429" sound loads): this used to make ~20 Sounds in the same frame at join,
+	-- 14 of them asset downloads of only 7 distinct files (9113849492 five times, the siren three times), on top of the
+	-- join's map / mesh downloads. Now: engine files (rbxasset://) at once (no download); each DISTINCT asset id once,
+	-- one every Mix.WarmGapSeconds after Mix.WarmDelaySeconds. A key whose file is already warm (or already played)
+	-- loads it from the client cache on its first play.
+	local warmKeys: { string } = {}
+	local seenIds: { [string]: boolean } = {}
 	for key, def in pairs(SoundConfig.Sounds) do
-		if (def.Bus == "Stinger" or def.Bus == "UI") and soundIdOf(def) ~= nil and pools[key] == nil then
-			pools[key] = { newVoice(key, def, false) }
+		local id = soundIdOf(def)
+		if (def.Bus == "Stinger" or def.Bus == "UI") and id ~= nil and pools[key] == nil then
+			if string.sub(id, 1, 11) == "rbxasset://" then
+				pools[key] = { newVoice(key, def, false) }
+			elseif not seenIds[id] then
+				seenIds[id] = true
+				table.insert(warmKeys, key)
+			end
 		end
 	end
+	table.sort(warmKeys) -- stable order (pairs order is not)
+	local warmDelay = tonumber((Mix :: any).WarmDelaySeconds) or 4
+	local warmGap = tonumber((Mix :: any).WarmGapSeconds) or 0.35
+	task.delay(warmDelay, function()
+		for _, key in ipairs(warmKeys) do
+			local def = SoundConfig.Sounds[key]
+			if def and pools[key] == nil then
+				pools[key] = { newVoice(key, def, false) }
+			end
+			task.wait(warmGap)
+		end
+	end)
 	ClientSettings.OnChanged(applySettings)
 	AudioController.Loop("Music", SoundConfig.Music.Base, SoundConfig.Music.FadeSeconds)
 end
