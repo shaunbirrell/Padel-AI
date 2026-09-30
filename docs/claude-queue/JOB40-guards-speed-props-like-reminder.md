@@ -4,7 +4,7 @@ Written by Code Bot Roblox on 2026-09-30 from the code at `phase-7-polish` 39e68
 
 IN-FLIGHT NOTE (2026-09-30 ~13:40 Dublin): while this job was written, Code Bot had uncommitted v134 work in the main checkout that overlaps parts A and B: GuardConfig.PostGuards (the rear-gate / sea-gate statues become real guards, RespawnSeconds 60, AlertSeconds 0.5, LeashSlackStuds 8, VehicleTargets, a CombatService.GuardMayHitPlayer rule, WE_GuardState Idle / Alert / Attack / Return) and speed Speed Pass x1.75 / Speed Boost x2.25 (36) with Follow3.MaxSpeed 52. When you start, read what v134 actually shipped on origin/phase-7-polish. Do NOT build a second copy: audit it against this spec, keep what matches, and finish the gaps (for example: GuardMayHitPlayer must BE or call UnitMayHitPlayer / ArmyHostility, not a third rule; the statues must be animated rigs; the speed text must come from one helper). Where v134's numbers differ from this spec, Shaun's numbers here win (Speed Boost x2.5 = 40, cap 40, text "Run 2.5x faster"; respawn = whatever v134 shipped if Shaun asked Code Bot for it, else 45). List every difference you found in COMPLETED.
 
-ORDER RULE (strict): start JOB 40 only AFTER JOB 39 is finished and pushed. Do the 4 parts in order (A guards, B speed, C props, D reminder), one at a time: finish, test, commit, push claude/desktop-bud after each part. If blocked, write it in LATEST-HANDOFF and stop. Never skip.
+ORDER RULE (strict): start JOB 40 only AFTER JOB 39 is finished and pushed. Do the 5 parts in order (A guards, B speed, C props, D reminder, E base owner markers), one at a time: finish, test, commit, push claude/desktop-bud after each part. If blocked, write it in LATEST-HANDOFF and stop. Never skip.
 
 GIT/RULES: same as JOB 35-39. git fetch; rebase claude/desktop-bud on the latest origin/phase-7-polish. Push only claude/desktop-bud. Never bump WE_Build, publish, build dist/, or push phase-7-polish/main (Code Bot integrates). Ship new gameplay owner-first behind boolean flags (OwnerFirst = true + an Enabled kill switch, AdminConfig.IsPlaytestOwner; codebot_v101 bans "owner" strings in new configs). OFF must equal today's game exactly. Phone first (44 px real taps, 14 px real text, 800x360 viewport). Build guide: docs/ROBLOX-BUILD-GUIDE.md §2 (read as real), §6 (performance), §7 (guard state machine, "NPC guards" bullet) and the §11 checklist, ticked in your DONE reply. Checks: tools/checks/claude_bud_job40.py + LUAU_COMPILE=$HOME/.local/bin/luau-compile python3 tools/BuyPathStatic.py = 0 FAIL, rojo build ok.
 
@@ -121,11 +121,34 @@ TESTS (part D): tools/sim/run_rate_prompt_test.py (the real service with a fake 
 
 ---
 
+== E. BASE OWNER MARKER, VISIBLE FROM ANYWHERE (added by Shaun 2026-09-30 13:27) ==
+Owner: "Above each occupied base, show a clean marker with the owner's name, flag and rebirth rank, visible from anywhere on the map."
+
+WHAT EXISTS (reuse, do not duplicate):
+- Shared/Configs/BaseSignConfig.luau + Services/BaseSignService.luau (claude-bud JOB 25, restyled v123): the "<DisplayName>'s Empire" BillboardGui above each plot's main gate (HeightStuds 26, MaxDistanceStuds 220, SizePx 250x78, AlwaysOnTop = false, headshot + "LV 12 · REBIRTH 2 · ARMY 8", UnclaimedTitle "UNCLAIMED BASE", checked every UpdateSeconds 5) and the SignFlag plate dressed by Modules/NationFlag (NationId view). The new marker must NOT overlap or duplicate this sign: it sits much higher and hides when the viewer is close enough to read the sign.
+- Flag images: Shared/Configs/NationFlagIds.luau + NationConfig (the owner's chosen nation flag, the same ids NationFlag uses). There is no separate clan-flag art today: use the nation flag, and the clan tag text only if ClanService exposes one. No new uploads.
+- Rebirth rank: profile.Prestige + RebirthConfig.Titles (Veteran R1, Commander R3, General R5, Marshal R10, Legend R20, and the JOB 39 additions if shipped).
+- World map: MapController draws live.Bases (P = plot id, N = name, Mine) from MapService.
+
+RULE EXCEPTION (owner-approved, write it in ASSUMPTIONS and CLAUDE.md's world-label bullet): CLAUDE.md limits world labels to MaxDistance <= 40, AlwaysOnTop only for the one objective marker, and says flags in the world are Textures, never GUIs. Shaun asked for exactly this marker, so it is the ONE documented exception: one marker per occupied base, nothing else gets AlwaysOnTop.
+
+NEW CONFIG: Shared/Configs/BaseMarkerConfig.luau: Enabled = true, OwnerFirst = true (shown to viewers the switch is live for; OFF == OLD = no marker), HeightStuds 70 above the plot centre (well above the v123 sign at 26 and every building), MaxDistance 5000 (the whole map), AlwaysOnTop = true, FadeInsideStuds 90 -> hidden inside 60 (the v123 sign takes over; no clutter in the base), ShowOpenBases = true ("OPEN BASE" in grey, smaller, 60 % opacity; false = nothing on open plots), MinPx / MaxPx scale.
+1. BUILD IT ON THE CLIENT (one Controller, e.g. BaseMarkerController): the server only publishes the data (plot id, owner UserId, DisplayName, Name, NationId, Prestige, clan tag) as attributes on the plot folder or via MapService's existing live.Bases payload (extend it; no new per-frame remote). The client makes one BillboardGui per plot and fades / scales it per viewer. Update on PlayerAdded / PlayerRemoving / plot claim (BaseService claim / ReleasePlot), nation pick and rebirth: event-driven plus a 5 s refresh at most, nothing per frame on the server. The client fade/scale runs at most 10 Hz for all markers together.
+2. LOOK (phone first, build guide §8): a compact pill: the flag image (ImageLabel, 4:3, rounded 4 px, from NationFlagIds; plain army-green chip when no flag), then DisplayName in GothamBold 16 px real, "@username" 12 px muted on the line below (the only text under 14 px: it is secondary), and a rank badge (the RebirthConfig title + "R<n>", gold chip; hidden at R0). Dark translucent backing (the theme Plate colour at 0.25 transparency), 1 px UIStroke, no neon. Size scales with distance between MinPx (far, still legible on an 800x360 phone) and MaxPx (near), never overlapping the HUD safe zones. Own base: a small "YOU" tint in the theme accent. Allied base: the ally colour used elsewhere (clan). Nothing for the viewer's own base while he stands inside it (FadeInsideStuds).
+3. NO CLUTTER: at most one marker per plot; markers of bases behind the camera are not drawn (Billboard does this); when two markers overlap on screen from far away, the farther one drops to its compact form (flag + rank only). No marker is ever built for admins differently (they show like anyone; no leaderboard effect).
+4. OPTIONAL (do it if it stays small): the world map base icons (MapController) show the same flag chip + owner name from the same data; do not restyle the map (one small change in the base icon builder), and keep the map labels non-overlapping (tools/sim/run_map_layout_test.py stays 0 failed).
+5. OFF == OLD: Enabled = false / not live: no marker, the v123 sign and the map unchanged.
+
+TESTS (part E): tools/checks/claude_bud_job40.py pins (BaseMarkerConfig flags, AlwaysOnTop only in BaseMarkerController + the objective marker, no server per-frame loop, flag ids from NationFlagIds only). tools/sim/run_base_marker_test.py: the data for owned / open / left / re-claimed plots, the rank title table, the fade curve (hidden < 60, full > 90), the far-compact rule. 2-PLAYER STUDIO TEST: A and B each claim a base: each sees both markers from across the map (screenshot from the far corner and from 100 studs), A's marker hides at A's gate while the v123 sign shows, B leaves -> B's plot shows "OPEN BASE" (or nothing) within 5 s, B rejoins and claims -> his marker returns; B picks a nation flag / rebirths -> the flag / rank update. Screenshots in docs/screens/job40/marker_*.png at 800x360 and 1920x1080.
+
+---
+
 == ACCEPTANCE (all parts) ==
 - A: the 2-player Studio test in part A passes with the logs; statues are gone only for live plots; the one hostility rule is the only rule in every base defence path.
 - B: WalkSpeed 28 with the Speed Pass, 40 with the Speed Boost or both (logged in Studio with a mocked pass); every speed text reads "Run 75% faster" / "Run 2.5x faster" from the helper; the army sim at 40 passes with PivotTo = 0; the Creator Hub note is in the handoff.
 - C: Radar Hill, the base helipad, one more capture site and Crossroads Town have real detailed models; before / after screenshots; part totals inside the caps (or a justified raise); floating = 0; the probe proves every new id loads.
 - D: the reminder shows once per rule, never rewards, and "Don't show again" sticks across a rejoin.
+- E: every occupied base shows its owner marker (name, @username, flag, rank) from anywhere on the map, fades near the base, never overlaps the v123 sign or the map UI; open bases read "OPEN BASE" (or nothing); join / leave / claim update it; the 2-player screenshots.
 - Every part: OFF == OLD, BuyPathStatic 0 FAIL, rojo build ok, the §11 checklist ticked, no WE_Building* diff, PreferMesh OFF, no Robux price diff (git diff on RobuxPrice / Id lines is empty).
 
 == HANDOFF + REPORT FORMAT ==
@@ -136,9 +159,10 @@ Update LATEST-HANDOFF.md (a "claude-bud JOB 40" section at the top): the flags a
  4. The Speed pad, Shop and death card all read "Run 75% faster" / "Run 2.5x faster".
  5. Visit Radar Hill, your helipad and Crossroads Town: real buildings, nothing floating, FPS OK.
  6. After 15 min of play (or right after a rebirth) the "Enjoying WAR EMPIRE?" card appears once; "Don't show again" and rejoin: it never comes back.
+ 7. From the far side of the map you can see every occupied base's marker (name, flag, rank), readable on the phone; walking up to a base it fades out and the base sign shows; when the other player leaves, his base reads OPEN BASE.
 
 Reply to Code Bot in exactly this format:
-COMPLETED: <each part A-D: done / partly done / blocked, one line each, with the reason for anything not done>
+COMPLETED: <each part A-E: done / partly done / blocked, one line each, with the reason for anything not done>
 FILES: <every file added or changed, one per line, with a few words on why>
 TESTING: <every check / sim / Studio test run with its result (PASS=.. FAIL=..), the 2-player logs, screenshot paths, and what is NOT verified until Shaun tests on his phone>
 NEXT: <what Code Bot must do (flip flags, Creator Hub descriptions, run the Open Cloud probe if you could not), open questions for Shaun, and known risks>
