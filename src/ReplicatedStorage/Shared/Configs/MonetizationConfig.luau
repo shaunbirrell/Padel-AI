@@ -718,6 +718,31 @@ local MonetizationConfig = {
 		DelaySeconds = 8,
 		AfterTutorialSeconds = 3,
 	},
+	-- Code Bot v153 (Shaun: "ship the sales fixes"; ~1,100 ad visits, 0 sales, 2.8-minute sessions, almost nobody saw
+	-- an offer). Live for everyone (a timing / bug fix, not owner-first). While Enabled:
+	--   * the soft-offer quiet window is the first AtPlaySeconds of the session, WHATEVER the tutorial state (it was:
+	--     none until the 7-step tutorial is done, or SoftOfferQuietMaxSeconds 900 s for players who never finish);
+	--   * MonetizationService.ScheduleFirstOffer sends the Starter Pack at AtPlaySeconds (TutorialService schedules it
+	--     at load for every player; after the tutorial when that comes later). When the pack is not wanted (owned /
+	--     window over / already SHOWN), the first FallbackKeys offer that is live and unowned goes instead, once;
+	--   * the Starter Pack is marked StarterBundleOffered only when the client confirms it SHOWED (OfferResult
+	--     remote, OfferLedger). A dropped / refused / unanswered card is re-queued RequeueSeconds later (slot
+	--     refunded), at most MaxSendsPerSession sends a session;
+	--   * a seated player (driving) is waited for up to SeatedWaitSeconds before the send; on the client the card
+	--     still waits out active combat (RecentCombat, a few seconds), a modal, death, an alert, and driving.
+	-- The D8 budget stays: SoftOfferSessionMax per session, SoftOfferSessionCooldownSeconds apart (and HudConfig.Offer
+	-- MaxPerSession / MinGapSeconds on the client). Prices / passes / products are unchanged.
+	FirstOffer = {
+		Enabled = true,
+		AtPlaySeconds = 120,
+		SeatedWaitSeconds = 30,
+		SeatedCheckSeconds = 1,
+		AckTimeoutSeconds = 100, -- > the client's 60 s queue drop + a pump tick
+		RequeueSeconds = 45, -- > ShopController's 30 s Starter toast debounce
+		MaxSendsPerSession = 4,
+		MaxSlotWaits = 6, -- slot busy (another offer's cooldown): wait for it this many times, then stop
+		FallbackKeys = { "SpeedBoost" } :: { string }, -- 99 R$ Speed Boost (existing product, TrySoftOfferSpeedBoost)
+	},
 	-- v33: one-shot soft offer after first manual ATM collect (server marks AutoCollectOffered)
 	AutoCollectOffer = {
 		DelaySeconds = 1.2,

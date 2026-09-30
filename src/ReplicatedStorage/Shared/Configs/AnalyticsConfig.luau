@@ -64,6 +64,11 @@ local AnalyticsConfig = {
 			REBIRTH_OPENED = { Name = "rebirth_opened", Value = "level", Field = "minutes" },
 			REBIRTH_CONFIRMED = { Name = "rebirth_confirmed", Value = "level", Field = "minutes" },
 			REBIRTH_ZONE_BUILT = { Name = "RebirthZoneBuilt", Value = "level", Field = "zone" },
+			-- Code Bot v153: the offer / pass funnel in Creator Hub (which offers were SEEN, dropped unseen, and bought).
+			-- ProductPrompted / RobuxPurchase read productKey (MonetizationService now sends it; it sent only `key`).
+			OFFER_SHOWN = { Name = "OfferShown", Field = "productKey" }, -- the client confirmed the card showed
+			OFFER_RESULT = { Name = "OfferDropped", Field = "productKey" }, -- sent but never shown (re-queued)
+			PASS_OWNED = { Name = "PassBought", Value = "price", Field = "productKey" }, -- a confirmed game pass purchase
 		},
 		MaxCustomPerMinute = 100,
 		PerPlayerPerMinute = 10,

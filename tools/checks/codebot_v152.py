@@ -23,9 +23,10 @@ def _rd152(p):
 _S152 = "src/ServerScriptService/Server/"
 _C152 = "src/ReplicatedStorage/Shared/Configs/"
 
-for _f in (_S152 + "Services/DataService.luau", _S152 + "Services/BaseService.luau", _S152 + "EarlyRemotes.server.luau"):
-	_cb152('SetAttribute("WE_Build", 152)' in _rd152(_f), "CODEBOT v152: WE_Build=152 " + _f.rsplit("/", 1)[-1])
-_cb152("WE_Build=152" in _rd152(_S152 + "Services/DataService.luau"), "CODEBOT v152: DataService profile-loaded log says WE_Build=152")
+# v153 (Code Bot Roblox): the WE_Build=152 pins are superseded in tools/checks/codebot_v153.py (WE_Build=153).
+# for _f in (_S152 + "Services/DataService.luau", _S152 + "Services/BaseService.luau", _S152 + "EarlyRemotes.server.luau"):
+# 	_cb152('SetAttribute("WE_Build", 152)' in _rd152(_f), "CODEBOT v152: WE_Build=152 " + _f.rsplit("/", 1)[-1])
+# _cb152("WE_Build=152" in _rd152(_S152 + "Services/DataService.luau"), "CODEBOT v152: DataService profile-loaded log says WE_Build=152")
 
 # JOB 40 part C: only probe-passing ids are wired
 _SPC = _rd152(_C152 + "StorePropsConfig.luau")

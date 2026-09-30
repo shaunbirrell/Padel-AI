@@ -50,6 +50,13 @@ export type OfferDef = {
 	Sub: string?,
 	Cta: string,
 	OnGet: () -> (),
+	-- Code Bot v153 (all optional): First = the server-timed first offer (MonetizationConfig.FirstOffer): it is not
+	-- held for the tutorial card or a drawn weapon (still for active combat, a modal, death, an alert and driving) and
+	-- skips FirstAfterJoinSeconds (the server already waited ~2 minutes). OnShown runs once when the card is really
+	-- on screen; OnDropped(why) when it is refused or leaves the queue unseen ("expired" / "throttled" / "evicted").
+	First: boolean?,
+	OnShown: (() -> ())?,
+	OnDropped: ((why: string) -> ())?,
 }
 
 local player = Players.LocalPlayer
@@ -610,10 +617,34 @@ local offerGetLabel: TextLabel? = nil
 local offerClose: TextButton? = nil
 local offerIcon: Frame? = nil
 
-local function offerDeferred(): boolean
-	local rule = { HideWhen = table.clone(OFFER.DeferWhen) }
+-- Code Bot v153: flags a First offer is NOT held for (the tutorial card stacks above it in the TopStack; a drawn gun
+-- is not combat: RecentCombat is)
+local FIRST_IGNORES: { [string]: boolean } = { Tutorial = true, Drawn = true }
+
+local function offerDeferred(entry: OfferEntry?): boolean
+	local rule = { HideWhen = {} :: { string } }
+	local first = entry ~= nil and entry.Def.First == true
+	for _, flag in ipairs(OFFER.DeferWhen) do
+		if not (first and FIRST_IGNORES[flag]) then
+			table.insert(rule.HideWhen, flag)
+		end
+	end
 	table.insert(rule.HideWhen, "Dead")
 	return not HudLayout.EvalRule(rule) or alertVisible()
+end
+
+-- Code Bot v153: the caller's OnShown / OnDropped, deferred and pcall'd (never breaks the queue)
+local function offerCallback(def: OfferDef, which: string, why: string?)
+	local fn: any = if which == "shown" then def.OnShown else def.OnDropped
+	if type(fn) ~= "function" then
+		return
+	end
+	task.defer(function()
+		local ok, err = pcall(fn, why)
+		if not ok then
+			warn("[NotificationController] offer " .. which .. " callback failed:", def.Key, err)
+		end
+	end)
 end
 
 local function touchMinV(): number
@@ -705,6 +736,10 @@ local function presentOffer(entry: OfferEntry)
 			pop.Scale = TOAST.PopFrom
 			tween(pop, 0.16, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		end
+		-- Code Bot v153: really on screen → the server may mark it offered
+		offerCallback(entry.Def, if f.Visible then "shown" else "dropped", if f.Visible then nil else "hidden")
+	else
+		offerCallback(entry.Def, "dropped", "nogui")
 	end
 	playSound("Reward")
 	offerToken += 1
@@ -741,6 +776,7 @@ local function pumpOffers()
 			if OFFER.ShopBadgeWhenDropped and offerBlockedReason(e, now) == nil then
 				HudLayout.SetBadge("Shop", "!")
 			end
+			offerCallback(e.Def, "dropped", "expired") -- Code Bot v153: the server re-queues it
 		else
 			i += 1
 		end
@@ -753,20 +789,22 @@ local function pumpOffers()
 			HudLayout.RelayoutTopStack()
 		end
 	end
-	if offerShowing or #offerQueue == 0 or offerDeferred() then
+	if offerShowing or #offerQueue == 0 then
 		return
 	end
 	local j = 1
 	while j <= #offerQueue do
 		local e = offerQueue[j]
-		if e.EligibleAt <= now then
+		-- Code Bot v153: per entry (a First offer is not held for the tutorial card / a drawn gun)
+		if e.EligibleAt <= now and not offerDeferred(e) then
 			local why = offerBlockedReason(e, now)
 			table.remove(offerQueue, j)
 			if why == nil then
 				presentOffer(e)
 				return
 			end
-			-- throttled while it waited (another offer won the slot): silently gone
+			-- throttled while it waited (another offer won the slot): gone (Code Bot v153: the server hears it)
+			offerCallback(e.Def, "dropped", "throttled")
 		else
 			j += 1
 		end
@@ -797,7 +835,8 @@ function NotificationController.ShowOffer(def: OfferDef): boolean
 	local entry: OfferEntry = {
 		Def = def,
 		Death = string.find(def.Key, NotificationConfig.Offer.DeathKeyPattern) ~= nil,
-		EligibleAt = math.max(now, joinClock + OFFER.FirstAfterJoinSeconds),
+		-- Code Bot v153: a First offer is timed by the server (~2 minutes of play): no extra join wait
+		EligibleAt = if def.First == true then now else math.max(now, joinClock + OFFER.FirstAfterJoinSeconds),
 		QueuedAt = now,
 	}
 	if offerBlockedReason(entry, now) ~= nil then
@@ -806,7 +845,7 @@ function NotificationController.ShowOffer(def: OfferDef): boolean
 	if not offerFrame then
 		return false
 	end
-	if entry.EligibleAt <= now and not offerShowing and not offerDeferred() then
+	if entry.EligibleAt <= now and not offerShowing and not offerDeferred(entry) then
 		presentOffer(entry)
 		return true
 	end
@@ -814,7 +853,10 @@ function NotificationController.ShowOffer(def: OfferDef): boolean
 		return false -- one at a time; a second offer inside the gap would be refused anyway
 	end
 	while #offerQueue >= NotificationConfig.Offer.QueueMax do
-		table.remove(offerQueue, 1)
+		local gone = table.remove(offerQueue, 1)
+		if gone then
+			offerCallback(gone.Def, "dropped", "evicted") -- Code Bot v153
+		end
 	end
 	table.insert(offerQueue, entry)
 	return true

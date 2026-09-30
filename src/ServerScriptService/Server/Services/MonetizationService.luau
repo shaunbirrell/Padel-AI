@@ -30,6 +30,7 @@ local DevConfig = require(Shared.Configs.DevConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local OfferLedger = require(script.Parent.Parent.Modules.OfferLedger) -- Code Bot v153: shown-confirmed soft offers
 
 local MonetizationService = {}
 
@@ -91,6 +92,14 @@ local passCacheFilled: { [number]: boolean } = {}
 -- D8 session soft-offer budget, and the session start used by the tutorial quiet window
 local softOffersClaimed: { [number]: number } = {}
 local sessionStartAt: { [number]: number } = {}
+-- Code Bot v153: soft offers sent but not yet confirmed shown by the client (MonetizationConfig.FirstOffer)
+local offerLedger = OfferLedger.new({
+	AckTimeoutSeconds = tonumber(((MonetizationConfig :: any).FirstOffer or {}).AckTimeoutSeconds) or 100,
+	RequeueSeconds = tonumber(((MonetizationConfig :: any).FirstOffer or {}).RequeueSeconds) or 45,
+	MaxSendsPerSession = tonumber(((MonetizationConfig :: any).FirstOffer or {}).MaxSendsPerSession) or 4,
+})
+local firstOfferToken: { [number]: number } = {} -- userId -> the pending ScheduleFirstOffer run (one at a time)
+local firstOfferSeq = 0
 -- F8: the death speed offer was sent this session (userId -> true; cleared on PlayerRemoving)
 local deathSpeedSent: { [number]: boolean } = {}
 -- F8: sanity cap on a WalkSpeedMult config value (a typo must never launch players across the map)
@@ -118,15 +127,60 @@ local function setEntitlementAttr(player: Player, key: any)
 	end)
 end
 
+-- Code Bot v153: MonetizationConfig.FirstOffer (nil when off)
+local function firstOfferCfg(): any?
+	local f = (MonetizationConfig :: any).FirstOffer
+	if typeof(f) == "table" and f.Enabled == true then
+		return f
+	end
+	return nil
+end
+
+--[[ Code Bot v153: seconds until ClaimSoftOfferSlot could succeed for this player (0 = now), or nil when it never
+	will this session (the session cap is spent). Never yields; claims nothing. ]]
+function MonetizationService.SoftOfferSlotWait(player: Player): number?
+	if not player then
+		return nil
+	end
+	local cfg = MonetizationConfig :: any
+	local now = os.clock()
+	local uid = player.UserId
+	local maxPerSession = tonumber(cfg.SoftOfferSessionMax)
+	if maxPerSession and (softOffersClaimed[uid] or 0) >= maxPerSession then
+		return nil
+	end
+	local wait = 0
+	local first = firstOfferCfg()
+	if first then
+		local started = sessionStartAt[uid]
+		local quiet = tonumber(first.AtPlaySeconds) or 120
+		wait = if started == nil then quiet else math.max(0, quiet - (now - started))
+	end
+	local cd = tonumber(cfg.SoftOfferSessionCooldownSeconds) or 60
+	local last = lastSoftOfferAt[uid]
+	if last ~= nil then
+		wait = math.max(wait, cd - (now - last))
+	end
+	return math.max(0, wait)
+end
+
 function MonetizationService.ClaimSoftOfferSlot(player: Player): boolean
 	if not player then
 		return false
 	end
 	local cfg = MonetizationConfig :: any
 	local now = os.clock()
+	local first = firstOfferCfg()
+	if first then
+		-- Code Bot v153: the quiet window is the first FirstOffer.AtPlaySeconds (120 s) of the session, whatever the
+		-- tutorial state (it was: none until the tutorial was done, or 900 s for players who never finish it)
+		local started = sessionStartAt[player.UserId]
+		if started == nil or now - started < (tonumber(first.AtPlaySeconds) or 120) then
+			return false
+		end
 	-- v71 money (M1): no pop-ups during the tutorial (the Starter Pack offer comes right after it). A player who
 	-- never finishes it becomes offerable after SoftOfferQuietMaxSeconds of play this session.
-	if cfg.SoftOfferQuietUntilTutorialComplete == true and DataService then
+	elseif cfg.SoftOfferQuietUntilTutorialComplete == true and DataService then
 		local profile = DataService.GetProfile(player)
 		if profile and profile.TutorialComplete ~= true then
 			local started = sessionStartAt[player.UserId]
@@ -149,6 +203,19 @@ function MonetizationService.ClaimSoftOfferSlot(player: Player): boolean
 	lastSoftOfferAt[player.UserId] = now
 	softOffersClaimed[player.UserId] = (softOffersClaimed[player.UserId] or 0) + 1
 	return true
+end
+
+--[[ Code Bot v153: give back a slot whose offer the client never showed (OfferLedger drop). slot = { Prev, At } from
+	the claim: the cooldown clock goes back to Prev unless another offer claimed a slot since. ]]
+local function refundSoftOfferSlot(player: Player, slot: any)
+	if typeof(slot) ~= "table" then
+		return
+	end
+	local uid = player.UserId
+	softOffersClaimed[uid] = math.max(0, (softOffersClaimed[uid] or 0) - 1)
+	if lastSoftOfferAt[uid] == slot.At then
+		lastSoftOfferAt[uid] = slot.Prev
+	end
 end
 
 --[[ v71 money (M1): listener registries. Each returns a function that removes the listener. Listeners run
@@ -798,6 +865,7 @@ local function confirmPassPurchase(player: Player, passKey: string, passId: numb
 			if AnalyticsService then
 				AnalyticsService.Log(AnalyticsConfig.Events.PASS_OWNED, player.UserId, {
 					key = passKey,
+					productKey = passKey, -- Code Bot v153: Custom "PassBought" (value = price, field = productKey)
 					price = price,
 					source = source,
 				})
@@ -837,8 +905,16 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 	end
 	local bundle = starterBundleLive()
 	local profile = DataService.GetProfile(player)
-	if not bundle or not profile or profile.StarterBundleOffered == true or profile.TutorialComplete ~= true then
+	local first = firstOfferCfg()
+	-- Code Bot v153: with FirstOffer on the tutorial state no longer matters (the 120 s quiet window times it)
+	if not bundle or not profile or profile.StarterBundleOffered == true or (first == nil and profile.TutorialComplete ~= true) then
 		return nil
+	end
+	if first and offerLedger:IsPending(player.UserId, "StarterBundle") then
+		return true -- already out, waiting for the client's answer
+	end
+	if first and offerLedger:Exhausted(player.UserId, "StarterBundle") then
+		return nil -- every send this session was dropped: next session (the flag is still unset)
 	end
 	if MonetizationService.PlayerOwnsEntitlement(player, "StarterBundle") then
 		return nil
@@ -857,11 +933,25 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 			return nil -- the limited window is over: never offered again
 		end
 	end
+	local prevSlotAt = lastSoftOfferAt[player.UserId]
 	if not MonetizationService.ClaimSoftOfferSlot(player) then
 		return false
 	end
-	profile.StarterBundleOffered = true
-	DataService.MarkDirty(player)
+	local ackId: number? = nil
+	if first then
+		-- Code Bot v153 (root cause of "the Starter Pack is lost for good"): NOT marked offered here any more. The
+		-- client often held this card (driving the 4x4 right after the tutorial) and dropped it 60 s later, while
+		-- the saved flag already said "offered". The flag is set when the client answers "shown" (onOfferResult);
+		-- a drop / refusal / no answer re-queues it.
+		ackId = offerLedger:Sent(player.UserId, "StarterBundle", os.clock(), { Prev = prevSlotAt, At = lastSoftOfferAt[player.UserId] })
+		local myAck = ackId
+		task.delay(tonumber(first.AckTimeoutSeconds) or 100, function()
+			MonetizationService._OfferResult(player, "StarterBundle", "timeout", myAck)
+		end)
+	else
+		profile.StarterBundleOffered = true
+		DataService.MarkDirty(player)
+	end
 	if RemoteSetup then
 		local remote = RemoteSetup.Get(Constants.RemoteNames.StarterBundleOffer)
 		if remote and remote:IsA("RemoteEvent") then
@@ -872,11 +962,148 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 				RobuxPrice = bundle.RobuxPrice,
 				Reason = if typeof(reason) == "string" then reason else "session",
 				EndsUnix = limitedEnds, -- claude-bud JOB 5d: the toast shows the time left (nil = no limit)
+				AckId = ackId, -- Code Bot v153: echo back on OfferResult ("shown" / "dropped" / "refused")
+				First = ackId ~= nil, -- Code Bot v153: the first offer: not held for the tutorial card
 			})
 		end
 	end
 	-- (no companion Info line: the client offer toast carries the offer — HUD v70 spec §4.2)
 	return true
+end
+
+--[[ Code Bot v153: the client's answer about a confirmed-shown offer (OfferResult remote), or "timeout" from the
+	send's own AckTimeoutSeconds timer. "shown" = mark it (StarterBundleOffered, saved) + OFFER_SHOWN; "dropped" /
+	"refused" / "timeout" = refund the soft-offer slot and re-queue RequeueSeconds later (up to MaxSendsPerSession
+	sends; then it waits for the next session, still unmarked). Only keys the ledger has a pending send for count. ]]
+function MonetizationService._OfferResult(player: Player, key: string, result: string, ackId: number?)
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return
+	end
+	local action, slot = offerLedger:Result(player.UserId, key, result, ackId, os.clock())
+	if action == "ignore" then
+		return
+	end
+	if action == "mark" then
+		local profile = DataService and DataService.GetProfile(player)
+		if profile and key == "StarterBundle" then
+			profile.StarterBundleOffered = true
+			DataService.MarkDirty(player)
+		end
+		if AnalyticsService then
+			AnalyticsService.Log(AnalyticsConfig.Events.OFFER_SHOWN, player.UserId, { productKey = key, key = key })
+		end
+		return
+	end
+	-- dropped / refused / timeout: the player never saw it
+	if player.Parent then
+		refundSoftOfferSlot(player, slot)
+	end
+	if AnalyticsService then
+		AnalyticsService.Log(AnalyticsConfig.Events.OFFER_RESULT, player.UserId, { productKey = key, key = key, result = result, requeued = action == "requeue" })
+	end
+	if action == "requeue" and player.Parent and key == "StarterBundle" then
+		local first = firstOfferCfg()
+		-- the new run starts after the wait (the answer can land while the sending run is still unwinding)
+		task.delay(if first then tonumber(first.RequeueSeconds) or 45 else 45, function()
+			if player.Parent then
+				MonetizationService.ScheduleFirstOffer(player, "requeue", 0)
+			end
+		end)
+	end
+end
+
+-- Code Bot v153: sitting in any seat (driving or riding)
+local function seatedNow(player: Player): boolean
+	local char = player.Character
+	local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+	return hum ~= nil and hum.SeatPart ~= nil
+end
+
+-- Code Bot v153: FirstOffer.FallbackKeys: the best cheap offer when the Starter Pack is not wanted (once per profile;
+-- the existing one-shot TrySoftOffer* gates decide). Returns true when one was sent.
+local function tryFallbackOffer(player: Player, first: any): boolean
+	local keys = if typeof(first.FallbackKeys) == "table" then first.FallbackKeys else {}
+	for _, key in ipairs(keys) do
+		if typeof(key) == "string" and MonetizationConfig.SkuLiveFor(player.UserId, key) and not ownsSkuCached(player, key) then
+			if key == "SpeedBoost" then
+				local profile = DataService and DataService.GetProfile(player)
+				if profile and profile.SpeedBoostOffered ~= true then
+					MonetizationService.TrySoftOfferSpeedBoost(player, "first_offer")
+					return profile.SpeedBoostOffered == true
+				end
+			end
+		end
+	end
+	return false
+end
+
+--[[ Code Bot v153: THE first-offer schedule (MonetizationConfig.FirstOffer). TutorialService calls it at load for
+	every player (delay AtPlaySeconds) and when the tutorial ends; OfferResult re-queues through it. One run per
+	player at a time (a second call while one waits is ignored). Each attempt: wait while seated (SeatedWaitSeconds
+	in total), then TrySoftOfferStarterBundle: true = out (the ledger takes over), false = slot busy / quiet window
+	(wait exactly until it frees, MaxSlotWaits times), nil = not wanted (reason "first_offer": the fallback, once). ]]
+function MonetizationService.ScheduleFirstOffer(player: Player, reason: string, delaySec: number?)
+	local first = firstOfferCfg()
+	if not first or typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return
+	end
+	local uid = player.UserId
+	if firstOfferToken[uid] ~= nil then
+		return
+	end
+	firstOfferSeq += 1
+	local my = firstOfferSeq
+	firstOfferToken[uid] = my
+	local seatedLeft = math.max(0, tonumber(first.SeatedWaitSeconds) or 30)
+	local seatedStep = math.max(0.25, tonumber(first.SeatedCheckSeconds) or 1)
+	local maxWaits = math.max(0, tonumber(first.MaxSlotWaits) or 6)
+	local function attempt(n: number)
+		if firstOfferToken[uid] ~= my then
+			return
+		end
+		if not player.Parent then
+			firstOfferToken[uid] = nil
+			return
+		end
+		if seatedLeft > 0 and seatedNow(player) then
+			seatedLeft -= seatedStep
+			task.delay(seatedStep, attempt, n)
+			return
+		end
+		local ok, res = pcall(MonetizationService.TrySoftOfferStarterBundle, player, reason)
+		if firstOfferToken[uid] ~= my then
+			return
+		end
+		if not ok then
+			warn("[MonetizationService] first offer failed:", res)
+			firstOfferToken[uid] = nil
+			return
+		end
+		if res == true then
+			firstOfferToken[uid] = nil
+			return
+		end
+		if res == nil then
+			firstOfferToken[uid] = nil
+			if reason == "first_offer" then
+				pcall(tryFallbackOffer, player, first)
+			end
+			return
+		end
+		-- false: the quiet window or another offer's cooldown: wait exactly until the slot frees
+		local wait = MonetizationService.SoftOfferSlotWait(player)
+		if wait == nil or n > maxWaits then
+			firstOfferToken[uid] = nil
+			return
+		end
+		task.delay(math.max(1, wait + 0.5), attempt, n + 1)
+	end
+	task.delay(math.max(0, tonumber(delaySec) or 0), attempt, 1)
+end
+
+-- test hook (tools/sim/run_first_offer_test.py reads the ledger through the pure module; this exposes the live one)
+function MonetizationService._Ledger(): any
+	return offerLedger
 end
 
 --[[ v71 money (M1, D2): players who bought the old 249 R$ Starter Bundle get Auto Collect once. Only onto a
@@ -1102,6 +1329,7 @@ function MonetizationService.Init(deps: { [string]: any })
 			AnalyticsService.Log(AnalyticsConfig.Events.SHOP_PROMPT, player.UserId, {
 				kind = "DevProduct",
 				key = productKey,
+				productKey = productKey, -- Code Bot v153: AnalyticsConfig Custom ProductPrompted reads productKey
 				productId = def.Id,
 				source = source,
 			})
@@ -1139,6 +1367,7 @@ function MonetizationService.Init(deps: { [string]: any })
 			AnalyticsService.Log(AnalyticsConfig.Events.SHOP_PROMPT, player.UserId, {
 				kind = "GamePass",
 				key = passKey,
+				productKey = passKey, -- Code Bot v153: AnalyticsConfig Custom ProductPrompted reads productKey
 				productId = def.Id,
 				source = source,
 			})
@@ -1291,7 +1520,28 @@ function MonetizationService.Init(deps: { [string]: any })
 		sessionStartAt[player.UserId] = nil
 		purchaseIntents[player.UserId] = nil
 		deathSpeedSent[player.UserId] = nil -- F8: the next session may get one death offer again
+		offerLedger:Forget(player.UserId) -- Code Bot v153
+		firstOfferToken[player.UserId] = nil
 	end)
+
+	-- Code Bot v153: the client confirms a soft offer SHOWED (or was dropped / refused unseen): OfferLedger
+	do
+		local resultRemote = RemoteSetup.Get(Constants.RemoteNames.OfferResult)
+		if resultRemote and resultRemote:IsA("RemoteEvent") then
+			(resultRemote :: RemoteEvent).OnServerEvent:Connect(function(player: Player, key: any, result: any, ackId: any)
+				if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "OfferResult", key, result, ackId) then
+					return
+				end
+				if typeof(key) ~= "string" or typeof(result) ~= "string" or (ackId ~= nil and typeof(ackId) ~= "number") then
+					return
+				end
+				if RateLimitService and not RateLimitService.Allow(player, "offer_result", 2, 4) then
+					return
+				end
+				MonetizationService._OfferResult(player, key, result, ackId)
+			end)
+		end
+	end
 
 	-- F8: a speed pass that flips to owned (the join check, a retried check or a confirmed purchase) applies at once
 	MonetizationService.OnPassOwned(function(player: Player, passKey: string)

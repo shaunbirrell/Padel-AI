@@ -135,6 +135,19 @@ local function scheduleStarterOffer(player: Player, afterTutorial: boolean)
 	if not mon or typeof(mon.TrySoftOfferStarterBundle) ~= "function" or not DataService then
 		return
 	end
+	-- Code Bot v153 (MonetizationConfig.FirstOffer): the first offer at ~2 minutes of play for EVERY player, whatever
+	-- the tutorial state; MonetizationService.ScheduleFirstOffer owns the timing, the seated wait, the retries and the
+	-- shown-confirmed re-queue. At load: FirstOffer.AtPlaySeconds; after the tutorial: AfterTutorialSeconds (the
+	-- 120 s quiet window still holds it back when the tutorial ends sooner; a run already waiting is kept).
+	local first: any = (MonetizationConfig :: any).FirstOffer
+	if typeof(first) == "table" and first.Enabled == true and typeof(mon.ScheduleFirstOffer) == "function" then
+		local sbo: any = (MonetizationConfig :: any).StarterBundleOffer
+		local delaySec = if afterTutorial
+			then tonumber(sbo and sbo.AfterTutorialSeconds) or STARTER_AFTER_TUTORIAL_SECONDS
+			else tonumber(first.AtPlaySeconds) or 120
+		mon.ScheduleFirstOffer(player, if afterTutorial then "tutorial_complete" else "first_offer", delaySec)
+		return
+	end
 	local def: any = MonetizationConfig.DevProducts.StarterBundle
 	local profile = DataService.GetProfile(player)
 	if typeof(def) ~= "table" or (tonumber(def.Id) or 0) == 0 or not profile or profile.StarterBundleOffered == true then
@@ -529,7 +542,9 @@ function TutorialService.Init(deps: { [string]: any })
 		end
 		onProfileLoaded(player, profile)
 		-- v71 money (M1): the tutorial is already done at load → the Starter Pack offer 8 s in (the gate decides)
-		if profile.TutorialComplete == true then
+		-- Code Bot v153: with MonetizationConfig.FirstOffer on, EVERY player gets the first offer at ~2 minutes of play
+		local firstOn = typeof((MonetizationConfig :: any).FirstOffer) == "table" and (MonetizationConfig :: any).FirstOffer.Enabled == true
+		if profile.TutorialComplete == true or firstOn then
 			scheduleStarterOffer(player, false)
 		end
 	end)

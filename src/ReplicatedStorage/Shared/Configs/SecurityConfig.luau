@@ -93,6 +93,7 @@ local SecurityConfig = {
 		RequestGroupReward = {},
 		RequestPremiumWeapon = { "string", "Vector3" },
 		RequestBoardSetting = { "boolean" }, -- claude-bud BOARDS
+		OfferResult = { "string:32", "string:12", "number?" }, -- Code Bot v153: offer key, shown / dropped / refused, AckId
 	} :: { [string]: { string } },
 }
 

@@ -287,7 +287,7 @@ local function ownsAnyKey(keys: any): boolean
 end
 
 --[[ v70 (spec §4.3): every upsell goes through ONE offer toast (throttled / deferred by NotificationController). ]]
-type OfferDef = { Key: string, Title: string, Sub: string?, Cta: string, OnGet: () -> () }
+type OfferDef = { Key: string, Title: string, Sub: string?, Cta: string, OnGet: () -> (), First: boolean?, OnShown: (() -> ())?, OnDropped: ((why: string) -> ())? } -- Code Bot v153: + First / OnShown / OnDropped
 local function showOffer(def: OfferDef): boolean
 	local fn = (NotificationController :: any).ShowOffer
 	if typeof(fn) ~= "function" then
@@ -1479,7 +1479,15 @@ function ShopController.Init()
 		local lastStarterToastAt = -math.huge
 		local STARTER_TOAST_DEBOUNCE = 30
 
-		local function StarterBundleToast(payload: any): boolean
+		-- Code Bot v153: tell the server whether the Starter card really showed (it marks the pack offered only on
+		-- "shown"; "dropped" / "refused" = it comes back later). No AckId (old server) = nothing to answer.
+		local function starterAnswer(ackId: number?, result: string)
+			if ackId ~= nil then
+				task.spawn(Remotes.FireServer, Constants.RemoteNames.OfferResult, "StarterBundle", result, ackId)
+			end
+		end
+
+		local function starterBundleToastInner(payload: any, ackId: number?): boolean
 			local now = os.clock()
 			if now - lastStarterToastAt < STARTER_TOAST_DEBOUNCE then
 				return false
@@ -1510,7 +1518,23 @@ function ShopController.Init()
 					-- PromptProductPurchase only — grants via ProcessReceipt
 					promptDevProduct("StarterBundle", "starter_offer")
 				end,
+				First = p.First == true, -- Code Bot v153: not held for the tutorial card
+				OnShown = function()
+					starterAnswer(ackId, "shown")
+				end,
+				OnDropped = function()
+					starterAnswer(ackId, "dropped")
+				end,
 			})
+		end
+
+		local function StarterBundleToast(payload: any): boolean
+			local ackId = if typeof(payload) == "table" then tonumber(payload.AckId) else nil
+			local queued = starterBundleToastInner(payload, ackId)
+			if not queued then
+				starterAnswer(ackId, "refused") -- debounce / owned / window over / throttled: not seen
+			end
+			return queued
 		end
 
 		Remotes.BindEvent(Constants.RemoteNames.StarterBundleOffer, StarterBundleToast)
