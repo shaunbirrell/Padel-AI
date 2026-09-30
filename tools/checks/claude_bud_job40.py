@@ -45,8 +45,12 @@ _BMS = _j40_code(_SV + "Services/BaseMarkerService.luau")
 _BMK = _j40_code(_CL + "Controllers/BaseMarkerController.luau")
 _j40("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- only UserId 470626172" in _BMC and "RetentionConfig.Live(BaseMarkerConfig.Live, userId)" in _BMC,
      "E: one owner-first kill switch (BaseMarkerConfig.Live, by viewer)")
-_j40("MaxDistance = 5000," in _BMC and "HeightStuds = 70," in _BMC and "HideInsideStuds = 60," in _BMC and "FadeInsideStuds = 90," in _BMC,
-     "E: visible from anywhere (5000), 70 studs up, hidden inside 60 / full past 90 (the v123 sign takes over)")
+# JOB 40E FIX: retired "HeightStuds = 70," (the owner: too low / too big); replacement: high, slim, capped, never empty
+_j40("MaxDistance = 5000," in _BMC and "HeightStuds = 150," in _BMC and "HideInsideStuds = 60," in _BMC and "FadeInsideStuds = 90," in _BMC
+     and "ShowOpenBases = false," in _BMC and "MaxShown = 5," in _BMC and "PillHeight = 24," in _BMC,
+     "E (40E fix): 150+ studs up (rising with distance), a 24 px pill, max 5 rivals, no open / empty tags; hidden inside 60 / full past 90")
+_j40("B.VisibleSet(list)" in _BMK and "B.HasTag(owner, nm)" in _BMK and "g.Enabled = false" in _BMK and "VETERAN" not in _BMK and "Text.Open" not in _BMK,
+     "E (40E fix): the step shows only VisibleSet (no overlaps), a tag only with a live owner + name")
 _on_top = sorted(p.relative_to(_J40P("src")).as_posix() for p in _J40P("src").rglob("*.luau") if "AlwaysOnTop = true" in p.read_text(encoding="utf-8"))
 _j40(_on_top == ["ReplicatedStorage/Shared/Configs/BaseMarkerConfig.luau", "StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau",
                  "StarterPlayer/StarterPlayerScripts/Client/Modules/ArmyDebugClient.luau", "StarterPlayer/StarterPlayerScripts/Client/Modules/ConsoleWaypoint.luau",

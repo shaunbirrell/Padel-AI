@@ -9,6 +9,19 @@
 	  * the CLIENT builds one BillboardGui per plot (Controllers/BaseMarkerController) and fades / scales / compacts
 	    them together at most 10 Hz.
 	Owner-first by VIEWER (Live: Enabled + OwnerFirst): off = no marker, the v123 base sign and the map unchanged.
+
+	claude-bud JOB 40E FIX (2026-09-30, the owner's phone screenshots): the tags were too big (150-230 px boxes, a fifth
+	of a phone screen each), too low (70 studs: from 1,000+ studs that is ~4 degrees above eye level, across the skyline),
+	showed grey empty "OPEN BASE" / "?" tags, and a "VETERAN" title in the view. Now:
+	  * HIGH in the sky: HeightAt(dist) = 150 studs + 6 % of the distance (max 260), so a far tag still sits well above
+	    the horizon (1,000 studs away: 210 up = ~12 degrees);
+	  * a SLIM pill sized to its text: a small flag + the short name (14-17 px real); the @handle and a short "R3" only
+	    inside DetailStuds; never the rebirth title;
+	  * small far, a little bigger near (ScaleAt: 1.0 far .. 1.2 near, clamped; a far tag is never bigger than a near
+	    one); fades out past FarFadeStart .. FarFadeEnd;
+	  * at most MaxShown rival tags (the nearest), and never two overlapping on screen (the farther one hides);
+	  * no tag for a base without a live owner or a name (never grey / empty); "YOU" on the own base, which still fades
+	    out inside HideInsideStuds.
 ]]
 
 local RetentionConfig = require(script.Parent.RetentionConfig)
@@ -20,20 +33,30 @@ local BaseMarkerConfig = {
 	},
 	FolderName = "WE_BaseMarkers", -- ReplicatedStorage (streaming-safe: never a workspace lookup on the client)
 	RefreshSeconds = 5, -- the server's fallback refresh (claims / leaves / nation / rebirth also push at once)
-	HeightStuds = 70, -- above the plot centre (the v123 sign is at 26 over the gate)
-	MaxDistance = 5000, -- the whole map
+	HeightStuds = 150, -- JOB 40E FIX: the minimum height above the plot centre (was 70; the tallest base kit is < 100)
+	HeightPerStud = 0.06, -- + this x the viewer's distance, so a far tag stays in the sky
+	MaxHeightStuds = 260,
+	MaxDistance = 5000, -- the BillboardGui limit; the tags fade out much sooner (FarFade*)
 	AlwaysOnTop = true,
 	HideInsideStuds = 60, -- hidden this close (the v123 sign takes over) ...
 	FadeInsideStuds = 90, -- ... fading in to full at this distance
-	ShowOpenBases = true, -- "OPEN BASE" in grey, smaller, 60 % opacity
-	OpenOpacity = 0.6,
+	FarFadeStart = 1800, -- JOB 40E FIX: full up to here ...
+	FarFadeEnd = 2400, -- ... gone past here
+	ShowOpenBases = false, -- JOB 40E FIX: never a grey / empty tag for a base without a live owner
 	-- size (real px on the screen; BillboardGui offsets are not under the HUD UIScale)
-	MaxPx = Vector2.new(230, 58), -- near
-	MinPx = Vector2.new(150, 42), -- far (still legible on an 800x360 phone)
-	NearStuds = 150, -- MaxPx at or under this ...
-	FarStuds = 1500, -- ... MinPx at or past this
-	CompactFarStuds = 1800, -- past this the marker is compact (flag + rank)
-	OverlapPx = 90, -- two markers closer than this on screen: the farther one goes compact
+	PillHeight = 24, -- the slim pill at scale 1 (far)
+	DetailHeight = 40, -- inside DetailStuds: a second line with the @handle and "R<n>"
+	DetailStuds = 300,
+	NameTextSize = 14, -- 14 px real at scale 1 (the CLAUDE.md minimum), up to 16.8 near
+	UserTextSize = 12, -- the secondary @handle line (near only)
+	MaxNameWidth = 96, -- longer names are cut with "..."
+	PadPx = 6,
+	MinScale = 1.0, -- far
+	MaxScale = 1.2, -- near
+	NearStuds = 150, -- MaxScale at or under this ...
+	FarStuds = 1500, -- ... MinScale at or past this
+	MaxShown = 5, -- rival tags at once (the nearest); the own base is always allowed
+	OverlapPadPx = 4, -- two tags whose screen boxes come closer than this: the farther one hides
 	UpdateHz = 10,
 	Colors = {
 		Plate = Color3.fromRGB(24, 26, 21),
@@ -53,49 +76,69 @@ function BaseMarkerConfig.LiveFor(userId: any): boolean
 	return RetentionConfig.Live(BaseMarkerConfig.Live, userId)
 end
 
--- 0 (hidden) .. 1 (full) by the viewer's distance to the plot centre
+-- 0 (hidden) .. 1 (full) by the viewer's distance to the plot centre: fades in past 60..90 (the v123 sign takes over
+-- near the base) and out past FarFadeStart..FarFadeEnd
 function BaseMarkerConfig.Fade(dist: number): number
-	local lo, hi = BaseMarkerConfig.HideInsideStuds, BaseMarkerConfig.FadeInsideStuds
-	if dist <= lo then
-		return 0
-	elseif dist >= hi then
-		return 1
-	end
-	return (dist - lo) / (hi - lo)
+	local B = BaseMarkerConfig
+	local near = math.clamp((dist - B.HideInsideStuds) / (B.FadeInsideStuds - B.HideInsideStuds), 0, 1)
+	local far = 1 - math.clamp((dist - B.FarFadeStart) / (B.FarFadeEnd - B.FarFadeStart), 0, 1)
+	return math.min(near, far)
 end
 
--- the marker's pixel size at a distance (MaxPx near .. MinPx far, linear between)
-function BaseMarkerConfig.SizeAt(dist: number): Vector2
-	local a = math.clamp((dist - BaseMarkerConfig.NearStuds) / (BaseMarkerConfig.FarStuds - BaseMarkerConfig.NearStuds), 0, 1)
-	local mx, mn = BaseMarkerConfig.MaxPx, BaseMarkerConfig.MinPx
-	return Vector2.new(mx.X + (mn.X - mx.X) * a, mx.Y + (mn.Y - mx.Y) * a)
+-- how high above the plot centre the tag floats for a viewer at `dist` (in the sky, never across the ground view)
+function BaseMarkerConfig.HeightAt(dist: number): number
+	local B = BaseMarkerConfig
+	return math.clamp(B.HeightStuds + B.HeightPerStud * math.max(0, dist), B.HeightStuds, B.MaxHeightStuds)
 end
 
--- the rank chip text: "COMMANDER R3"; nil at R0 (hidden)
-function BaseMarkerConfig.RankText(prestige: number, titleFor: (number) -> string?): string?
+-- the tag's scale at a distance: MaxScale near .. MinScale far (clamped; never bigger far than near)
+function BaseMarkerConfig.ScaleAt(dist: number): number
+	local B = BaseMarkerConfig
+	local a = math.clamp((dist - B.NearStuds) / (B.FarStuds - B.NearStuds), 0, 1)
+	return B.MaxScale + (B.MinScale - B.MaxScale) * a
+end
+
+-- the short rank for the near line: "R3"; nil at R0 (no rebirth title on the tag any more: JOB 40E FIX)
+function BaseMarkerConfig.RankText(prestige: number, _titleFor: any?): string?
 	local p = math.max(0, math.floor(tonumber(prestige) or 0))
-	if p <= 0 then
-		return nil
-	end
-	local t = titleFor(p)
-	return if t then string.format("%s R%d", string.upper(t), p) else string.format("R%d", p)
+	return if p > 0 then string.format("R%d", p) else nil
 end
 
---[[ the far-compact rule: markers = { { Key, Dist, X, Y } } (screen px); returns { [Key] = true } for the compact
-	ones: past CompactFarStuds, or the farther of two closer than OverlapPx on screen ]]
-function BaseMarkerConfig.CompactSet(markers: { { Key: any, Dist: number, X: number, Y: number } }): { [any]: boolean }
-	local out: { [any]: boolean } = {}
-	for _, m in ipairs(markers) do
-		if m.Dist > BaseMarkerConfig.CompactFarStuds then
-			out[m.Key] = true
+-- a tag is drawn only for a base with a live owner AND a name (never grey, never empty)
+function BaseMarkerConfig.HasTag(owner: any, name: any): boolean
+	return typeof(owner) == "number" and typeof(name) == "string" and string.match(name, "%S") ~= nil
+end
+
+--[[ which tags show this step. tags = { { Key, Dist, X, Y, W, H, Mine } } (screen px, centre + size; only tags on
+	screen with a fade > 0). The own base first, then the nearest rivals up to MaxShown; a tag whose screen box comes
+	within OverlapPadPx of one already shown hides (so the farther of two overlapping tags hides). ]]
+function BaseMarkerConfig.VisibleSet(tags: { any }): { [any]: boolean }
+	local B = BaseMarkerConfig
+	local list = table.clone(tags)
+	table.sort(list, function(a, b)
+		if (a.Mine == true) ~= (b.Mine == true) then
+			return a.Mine == true
 		end
-	end
-	for i = 1, #markers do
-		for j = i + 1, #markers do
-			local a, b = markers[i], markers[j]
-			local dx, dy = a.X - b.X, a.Y - b.Y
-			if dx * dx + dy * dy < BaseMarkerConfig.OverlapPx * BaseMarkerConfig.OverlapPx then
-				out[if a.Dist >= b.Dist then a.Key else b.Key] = true
+		return a.Dist < b.Dist
+	end)
+	local out: { [any]: boolean } = {}
+	local shown: { any } = {}
+	local rivals = 0
+	for _, t in ipairs(list) do
+		if t.Mine == true or rivals < B.MaxShown then
+			local clear = true
+			for _, s in ipairs(shown) do
+				if math.abs(t.X - s.X) * 2 < t.W + s.W + 2 * B.OverlapPadPx and math.abs(t.Y - s.Y) * 2 < t.H + s.H + 2 * B.OverlapPadPx then
+					clear = false
+					break
+				end
+			end
+			if clear then
+				out[t.Key] = true
+				table.insert(shown, t)
+				if t.Mine ~= true then
+					rivals += 1
+				end
 			end
 		end
 	end

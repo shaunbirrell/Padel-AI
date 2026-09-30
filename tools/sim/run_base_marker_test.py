@@ -46,17 +46,32 @@ local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if no
 local BM = require(node("Configs/BaseMarkerConfig"))
 local RC = require(node("Configs/RebirthConfig"))
 
--- ── 1. config ──
-check(BM.Fade(0) == 0 and BM.Fade(60) == 0 and BM.Fade(75) == 0.5 and BM.Fade(90) == 1 and BM.Fade(5000) == 1, "fade: hidden inside 60 (the v123 sign takes over), half at 75, full past 90")
-local near, far, mid = BM.SizeAt(50), BM.SizeAt(4000), BM.SizeAt((BM.NearStuds + BM.FarStuds) / 2)
-check(near.X == BM.MaxPx.X and far.X == BM.MinPx.X and mid.X < near.X and mid.X > far.X, "size: MaxPx near, MinPx far, between in the middle")
-check(BM.MinPx.Y >= 40, "the far marker stays >= 40 px tall (legible on an 800x360 phone)")
-check(BM.RankText(0, RC.TitleFor) == nil, "R0: no rank chip")
-local r3 = BM.RankText(3, RC.TitleFor)
-check(r3 ~= nil and string.find(r3, "R3$") ~= nil and (RC.TitleFor(3) == nil or string.find(r3, string.upper(RC.TitleFor(3)), 1, true) == 1), "R3: the rebirth title + R3 (" .. tostring(r3) .. ")")
-local cs = BM.CompactSet({ { Key = "far", Dist = BM.CompactFarStuds + 1, X = 0, Y = 0 }, { Key = "a", Dist = 300, X = 500, Y = 200 }, { Key = "b", Dist = 700, X = 520, Y = 210 }, { Key = "c", Dist = 400, X = 900, Y = 200 } })
-check(cs.far and cs.b and not cs.a and not cs.c, "compact: past CompactFarStuds, and the farther of two overlapping (b behind a); c stays full")
-check(BM.MaxDistance >= 5000 and BM.AlwaysOnTop == true and BM.HeightStuds >= 60, "visible from anywhere (MaxDistance 5000, AlwaysOnTop), high above the v123 sign (70 > 26)")
+-- ── 1. config (JOB 40E FIX: slim, high, capped, never empty) ──
+check(BM.Fade(0) == 0 and BM.Fade(60) == 0 and BM.Fade(75) == 0.5 and BM.Fade(90) == 1 and BM.Fade(1500) == 1, "fade: hidden inside 60 (the v123 sign takes over), half at 75, full past 90")
+check(BM.Fade(BM.FarFadeStart) == 1 and BM.Fade((BM.FarFadeStart + BM.FarFadeEnd) / 2) == 0.5 and BM.Fade(BM.FarFadeEnd) == 0 and BM.Fade(5000) == 0, "fades out past FarFadeStart .. FarFadeEnd (" .. BM.FarFadeStart .. " .. " .. BM.FarFadeEnd .. ")")
+check(BM.HeightAt(0) >= 150 and BM.HeightAt(1000) >= 200 and BM.HeightAt(99999) == BM.MaxHeightStuds and BM.HeightAt(500) <= BM.HeightAt(1000),
+  "HIGH: >= 150 studs over the base, rising with distance (1000 away: " .. BM.HeightAt(1000) .. " studs), capped at " .. BM.MaxHeightStuds)
+local ang = math.deg(math.atan((BM.HeightAt(1000) - 5) / 1000))
+check(ang >= 10, string.format("a base 1000 studs away: the tag is %.1f deg above eye level (was ~3.7 deg at 70 studs)", ang))
+check(BM.ScaleAt(50) == BM.MaxScale and BM.ScaleAt(4000) == BM.MinScale and BM.ScaleAt(800) < BM.ScaleAt(200) and BM.MinScale <= BM.MaxScale, "scale: 1.2 near, 1.0 far, a far tag is never bigger than a near one")
+check(BM.PillHeight <= 26 and BM.NameTextSize >= 14 and BM.NameTextSize * BM.MinScale >= 14, "SLIM: a 24 px pill at scale 1 with 14 px real name text")
+local wMax = BM.PadPx + math.floor((BM.PillHeight - 10) * 4 / 3) + 5 + BM.MaxNameWidth + BM.PadPx + 2
+check(wMax * BM.MaxScale <= 1024 * 0.16, string.format("the widest (near, longest name) pill is %d px (<= 16%% of a 1024 px phone; was 150-230 px min/max)", math.ceil(wMax * BM.MaxScale)))
+check(BM.RankText(0) == nil and BM.RankText(3) == "R3", "rank: a short R3 only (no VETERAN / title text on the tag)")
+check(BM.ShowOpenBases == false and not BM.HasTag(nil, "Shaun") and not BM.HasTag(470626172, nil) and not BM.HasTag(470626172, "  ") and BM.HasTag(470626172, "Shaun"),
+  "NO EMPTY TAGS: no live owner or no name yet -> no tag at all")
+-- the visible set: own first, the nearest MaxShown rivals, never two overlapping on screen
+local tags = {}
+for i = 1, 8 do table.insert(tags, { Key = "r" .. i, Dist = 200 * i, X = 100 * i, Y = 50, W = 80, H = 24 }) end
+table.insert(tags, { Key = "me", Dist = 900, X = 950, Y = 300, W = 60, H = 24, Mine = true })
+local vs = BM.VisibleSet(tags)
+local n = 0
+for k in pairs(vs) do if k ~= "me" then n += 1 end end
+check(vs.me and n == BM.MaxShown and vs.r1 and vs.r5 and not vs.r6, "cap: the own tag + the nearest " .. BM.MaxShown .. " rivals")
+local ov = BM.VisibleSet({ { Key = "near", Dist = 300, X = 500, Y = 100, W = 90, H = 24 }, { Key = "far", Dist = 900, X = 540, Y = 110, W = 90, H = 24 },
+  { Key = "clear", Dist = 1200, X = 800, Y = 100, W = 90, H = 24 } })
+check(ov.near and not ov.far and ov.clear, "never overlapping: of two tags on top of each other the farther hides")
+check(BM.MaxDistance >= 5000 and BM.AlwaysOnTop == true, "AlwaysOnTop (the one documented exception) kept")
 
 -- ── 2. data ──
 local S = require(node("Services/BaseMarkerService"))
@@ -81,7 +96,7 @@ check(S.PlotData(1).Nation == nil, "a hidden nation view: no flag")
 view[1].Show = true
 view[1].NationId = NC.NeutralId
 check(S.PlotData(1).Nation == nil, "neutral: no flag")
-check(next(S.PlotData(2)) == nil, "an open plot: no data (the client shows OPEN BASE)")
+check(next(S.PlotData(2)) == nil, "an open plot: no data (no tag at all)")
 BY_UID[470626172] = nil
 check(next(S.PlotData(1)) == nil, "the owner left: open again")
 

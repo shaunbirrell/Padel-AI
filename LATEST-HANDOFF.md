@@ -68,6 +68,41 @@
   1. As B (another player, not in A's clan), walk onto A's helipad apron: guards turn, aim and shoot. Kill one: respawns at post after 45 s. As A past your own guards: no shots. Clan-mate: the same. B runs out past 45 studs: guard walks back.
   2. With Speed Boost: you run at 40. Army stays together on a straight, corner and U-turn (no teleports). Speed pad / Shop / death card read "Run 75% faster" / "Run 2.5x faster".
 - **Next:** Studio 2-player proof for base-guard hostility (docs/BASE-GUARDS-ROOTCAUSE.md §6) still owed; do NOT flip Posts / SpeedV2 / Endgame / BaseMarker OwnerFirst=false until owner asks. JOBs 41/42 still queued. Claude desktop-bud tip was `6b0fe34` (~22:33 Dublin); not a takeover.
+## claude-bud JOB 40E FIX (2026-09-30): BASE OWNER TAGS SMALLER, HIGHER, NEVER EMPTY (branch `claude/desktop-bud`)
+**Flag unchanged:** `BaseMarkerConfig.Live` OwnerFirst = true.
+
+**Root cause** (from the owner's phone screenshots + the v149 code):
+- **Too big:** a fixed 150-230 px box (never smaller than 150 px, about a fifth of a phone screen).
+- **Too low:** HeightStuds 70 over the plot centre, which from 1,000 studs is ~3.7 deg above eye level, right across
+  the skyline.
+- **Grey empty tags:** ShowOpenBases = true drew grey "OPEN BASE" tags, and a base whose name had not arrived showed
+  "?".
+- **"VETERAN" in the view:** the rank chip printed the rebirth title.
+
+**Now:**
+- **High in the sky:** HeightAt(dist) = 150 studs + 6 % of the viewer distance (cap 260). 1,000 studs away = 210
+  studs = 11.6 deg up.
+- **A slim pill sized to its text:** a small flag + the short name, 24 px tall, 14 px real text, names cut at 96 px.
+  The widest tag is ~160 px near; a typical one is ~110 px. The @handle and a short "R3" show only inside 300 studs.
+  No rebirth title.
+- **Scale:** 1.0 far .. 1.2 near (clamped; a far tag is never bigger than a near one). Fade in past 60-90 studs
+  (the v123 sign takes over at your gate), fade out past 1,800-2,400 studs.
+- **At most 5 rival tags** (the nearest) + your own "YOU". Two tags never overlap on screen: the farther one hides.
+- **No tag without a live owner and a name:** never grey, never empty.
+
+**Checks:** run_base_marker_test 0 failed (fade, height / angle, scale, width, no-empty, cap, no-overlap);
+claude_bud_job40 part E pins (the "HeightStuds = 70" pin retired with a replacement); BuyPathStatic PASS=7268 FAIL=0;
+all sims 0 failed; rojo ok; no new LSP errors.
+
+**Owed (§11):** the before / after phone-size screenshots (1024x471, the plaza looking out + a base road at night)
+need Studio / a device; I cannot take Roblox screenshots from here.
+
+**Test ON HIS PHONE**
+1. From the plaza, look out: tags are small pills high in the sky, not across the bases or the army.
+2. No grey or empty tags anywhere; at most 5 rival tags at once and none on top of each other.
+3. Walk up to a rival base: its tag grows a little and shows @handle / R<n>. At your own gate "YOU" fades out and
+   your base sign shows.
+
 ## claude-bud JOB 40 PART D (2026-09-30): "ENJOYING WAR EMPIRE?" REMINDER, NO REWARD (branch `claude/desktop-bud`)
 **Flag:** `RatePromptConfig` (`Enabled`, `OwnerFirst = true`). OFF / not live = nothing shows; the Shop favourite row is
 unchanged. **To launch:** Code Bot sets `OwnerFirst = false`.

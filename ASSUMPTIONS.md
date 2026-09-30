@@ -9902,3 +9902,11 @@ ds_territories.luau T3):
   is open"). The card never covers the centre of the screen.
 - **Counting:** a show counts when the server sends it; a "timeout" (not drawn within 90 s, or auto-hidden) still
   counts toward the 3-day gap.
+
+## 2026-09-30 — claude-bud JOB 40E fix: base owner tags
+- **Far fade:** tags now fade out past 1,800-2,400 studs and cap at the nearest 5 rivals. The owner asked for a fade
+  "past a sensible distance" + a cap, which replaces "visible from anywhere" for the far edge of the map.
+- **Detail line:** the @handle and "R<n>" show only inside 300 studs (the owner: "drop the @handle at a distance").
+  The rebirth title is gone from the tag (the "VETERAN" overlap).
+- **Height:** it rises with distance (150 + 6 %, max 260 studs), so far tags stay above the horizon; the tallest base
+  kit is under 100 studs.
