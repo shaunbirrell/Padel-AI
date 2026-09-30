@@ -9829,3 +9829,23 @@ ds_territories.luau T3):
   the last sweep.
 - **Vehicle Workshop timing:** the Workshop applies at the next spawn (a spawned vehicle keeps the numbers it spawned
   with).
+
+## 2026-09-30 — claude-bud JOB 39 phase 5: warheads, heist, Intel, Black Market, reward scaling, R25-R40
+- **Where warheads are bought:** they are sold at the HQ console (the player's own Command Center; the HQ UPGRADE
+  list), not inside the silo's own panel, so NukeService's JOB 33 UI is untouched. The Tactical Warhead only loads a
+  slot (NukeService.FillSlot = the Rush path without its fee); the Heavy Warhead is a one-shot upgrade on the next
+  launch.
+- **Heist station:** the Fixer is a world-anchored desk inside the bank hall (the hall has no NPC). Heist guards are
+  extra BankGuard NPCs through CombatService.SpawnNPC (the bank's own GUARD_OPTS), removed 120 s later. The saved bank
+  cooldown cap is now 30 min, so the Vault Cracker's cooldown survives a rejoin; a no-kit raid still sets 5 min.
+- **Contracts:** contracts are claimed at the Intel Office (a reason to visit), not auto-paid. "Defend a raid" counts
+  an in-person ATM raid the owner stopped (MoneyCollector's "Defended" phase). A failed SEND siege is not counted.
+- **Scouting:** it lists only players online in this server (offline bases cannot be raided). The report is shown in
+  the Intel panel, not a pop-up.
+- **Black Market effects:** the Black Market items are cosmetics with a visible effect each. The trophy is 16 Parts on
+  the parade ground; a paint recolours the 6 biggest visible body parts at spawn (textured catalog meshes may keep
+  their texture); a beret tint uses the hat's SpecialMesh VertexColor when it is textured.
+- **R25-R40 unlocks:** they live in EndgameConfig (their own track) rather than as PrestigeConfig rows, so players the
+  job is not live for see exactly today's rebirth screen. The Legend Parade is client-only.
+- **Bounty scaling:** the bounty's reason ("plaza_bounty") is multiplied, so the income-sized target is divided by the
+  player's cash multiplier before scaling (no double count).

@@ -665,6 +665,9 @@ local function cancelHold(thief: Player, reason: string, secs: number?, victim: 
 			pcall(function() -- claude-bud JOB 14: the raid report (GameFeelService)
 				require(script.Parent.GameFeelService).NoteRaid(owner.UserId, "AtmDefended", thief)
 			end)
+			pcall(function() -- claude-bud JOB 39: the Intel Office's "defend a raid" contract
+				(require(script.Parent.EndgameService) :: any).NoteContract(owner, "DefendRaid", 1)
+			end)
 		end
 	end
 end
@@ -846,6 +849,9 @@ function MoneyCollectorService._RaidDone(thief: Player, victim: Player, vProfile
 	local R = RaidConfig.Raid
 	-- 7. persist + mirror
 	;(vProfile :: any).LastRaidedAt = nowUnix -- claude-bud JOB 29: read by the notification state (docs/NOTIFICATIONS.md)
+	pcall(function() -- claude-bud JOB 39: the victim's "Raided by" list (Intel Office revenge)
+		(require(script.Parent.EndgameService) :: any).NoteRaidedBy(victim, thief)
+	end)
 	markDirty(victim)
 	markDirty(thief)
 	pcall(function()
@@ -948,6 +954,9 @@ function MoneyCollectorService.ArmyRaid(sender: Player, victim: Player, fraction
 		return 0
 	end
 	;(vProfile :: any).LastRaidedAt = nowUnix
+	pcall(function() -- claude-bud JOB 39: the victim's "Raided by" list (Intel Office revenge)
+		(require(script.Parent.EndgameService) :: any).NoteRaidedBy(victim, sender)
+	end)
 	markDirty(victim)
 	markDirty(sender)
 	pcall(function()

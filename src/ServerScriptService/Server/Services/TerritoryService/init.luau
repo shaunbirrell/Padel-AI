@@ -1108,6 +1108,9 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	if MissionService and MissionService.TrackProgress then
 		MissionService.TrackProgress(player, "CaptureTerritory", 1)
 	end
+	pcall(function() -- claude-bud JOB 39: the Intel Office's "capture outposts" contract
+		(require(script.Parent.EndgameService) :: any).NoteContract(player, "Outpost", 1)
+	end)
 	if TutorialService and TutorialService.Notify then
 		TutorialService.Notify(player, "CaptureTerritory", rt.Id)
 	end

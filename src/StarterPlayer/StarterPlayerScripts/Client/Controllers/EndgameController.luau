@@ -369,6 +369,132 @@ Builders.Hospital = function(f: CFrame, st: any): (Model, Part)
 	return m, head
 end
 
+-- phase 5: the Intel Office inside NW_W1 (the radio shop): a radio desk with a set, a handset and an antenna, a map wall
+-- with pins, the Signals Officer, a chair, a filing cabinet, one lamp, the INTEL sign.
+Builders.Intel = function(house: CFrame, st: any): (Model, Part)
+	local m = Instance.new("Model")
+	m.Name = "Station_Intel"
+	local wood = Color3.fromRGB(96, 66, 42)
+	local steel = Color3.fromRGB(62, 66, 70)
+	local dc = house * CFrame.new(-2.5, 0.3, -1.3)
+	put(m, "DeskTop", Vector3.new(4.8, 0.25, 2.2), dc * CFrame.new(0, 3.1, 0), wood, M.WoodPlanks, true)
+	put(m, "DeskPedestal", Vector3.new(1.4, 2.9, 2), dc * CFrame.new(-1.6, 1.5, 0), wood, M.Wood)
+	put(m, "DeskPedestal", Vector3.new(1.4, 2.9, 2), dc * CFrame.new(1.6, 1.5, 0), wood, M.Wood)
+	put(m, "RadioSet", Vector3.new(1.8, 1.0, 1.0), dc * CFrame.new(-0.6, 3.72, 0.3), Color3.fromRGB(72, 80, 60), M.Metal)
+	put(m, "RadioDial", Vector3.new(0.4, 0.4, 0.06), dc * CFrame.new(-1.0, 3.8, -0.22), Color3.fromRGB(220, 200, 120), M.SmoothPlastic)
+	put(m, "RadioAntenna", Vector3.new(0.08, 1.6, 0.08), dc * CFrame.new(0.1, 4.95, 0.5), steel, M.Metal)
+	put(m, "Handset", Vector3.new(0.9, 0.25, 0.3), dc * CFrame.new(0.9, 3.35, -0.2), Color3.fromRGB(30, 30, 32), M.SmoothPlastic)
+	put(m, "Logbook", Vector3.new(0.9, 0.08, 1.2), dc * CFrame.new(1.6, 3.27, 0.2), Color3.fromRGB(150, 40, 36), M.SmoothPlastic)
+	local head = figure(m, house * CFrame.new(st.NpcAt), Color3.fromRGB(64, 72, 88), Color3.fromRGB(214, 176, 72), Color3.fromRGB(34, 40, 56))
+	-- the map wall on the back wall (clear of the back window upstairs; the ground floor back wall has none)
+	local mw = house * CFrame.new(-3, 4.6, 7.75)
+	put(m, "MapWallFrame", Vector3.new(6.4, 3.8, 0.2), mw, wood, M.Wood)
+	put(m, "MapWall", Vector3.new(6, 3.4, 0.08), mw * CFrame.new(0, 0, -0.12), Color3.fromRGB(176, 170, 128), M.Fabric)
+	for i, c in ipairs({ { -2, 0.8 }, { -0.6, -0.4 }, { 0.8, 1.0 }, { 2.1, -0.9 }, { 1.2, 0.1 }, { -1.5, -1.1 } }) do
+		put(m, "MapPin" .. i, Vector3.new(0.22, 0.22, 0.22), mw * CFrame.new(c[1], c[2], -0.2), if i % 2 == 0 then Color3.fromRGB(170, 40, 40) else Color3.fromRGB(40, 70, 170), M.SmoothPlastic, false, Enum.PartType.Ball)
+	end
+	put(m, "MapString", Vector3.new(2.6, 0.05, 0.05), mw * CFrame.new(-0.7, 0.2, -0.2) * CFrame.Angles(0, 0, math.rad(35)), Color3.fromRGB(200, 40, 40), M.Fabric)
+	put(m, "ChairSeat", Vector3.new(1.4, 0.25, 1.4), house * CFrame.new(-2.5, 1.9, 2.4), wood, M.Wood)
+	put(m, "ChairBack", Vector3.new(1.4, 1.6, 0.2), house * CFrame.new(-2.5, 2.8, 3.1), wood, M.Wood)
+	put(m, "ChairLegs", Vector3.new(1.2, 1.6, 1.2), house * CFrame.new(-2.5, 1.0, 2.4), steel, M.Metal)
+	local cab = house * CFrame.new(-7.3, 0.3, -1.8)
+	put(m, "Cabinet", Vector3.new(1.2, 3.2, 1.6), cab * CFrame.new(0, 1.6, 0), Color3.fromRGB(88, 96, 90), M.Metal)
+	put(m, "CabinetDrawers", Vector3.new(0.06, 2.6, 1.2), cab * CFrame.new(0.63, 1.6, 0), steel, M.Metal)
+	put(m, "LampRod", Vector3.new(0.15, 1.0, 0.15), house * CFrame.new(-2.5, 10.5, -1.5), steel, M.Metal)
+	local shade = put(m, "LampShade", Vector3.new(1.6, 0.5, 1.6), house * CFrame.new(-2.5, 9.8, -1.5), Color3.fromRGB(236, 224, 190), M.SmoothPlastic)
+	local light = Instance.new("PointLight")
+	light.Range = PSC.LightRange
+	light.Brightness = PSC.LightBrightness
+	light.Shadows = false
+	light.Color = Color3.fromRGB(255, 236, 190)
+	light.Parent = shade
+	doorSign(m, house, st.Sign)
+	return m, head
+end
+
+-- phase 5: the Black Market on SW_S1's upper floor: a counter of crates, the Trader behind it facing the stair, a
+-- covered rack, a hanging lamp (no second light: the Armory's is downstairs; this one is a dim unlit lantern), a board.
+Builders.BlackMarket = function(house: CFrame, st: any): (Model, Part)
+	local m = Instance.new("Model")
+	m.Name = "Station_BlackMarket"
+	local crate = Color3.fromRGB(110, 86, 58)
+	local dark = Color3.fromRGB(34, 34, 36)
+	local up = house * CFrame.new(0, 11.4, 0)
+	for i, x in ipairs({ -0.9, 0.9, 2.7 }) do
+		put(m, "CounterCrate" .. i, Vector3.new(1.8, 2.8, 1.6), up * CFrame.new(x - 0.4, 1.4, -3.9) * CFrame.Angles(0, math.rad(i * 3), 0), crate, M.WoodPlanks, true)
+	end
+	put(m, "CounterCloth", Vector3.new(5.6, 0.08, 1.8), up * CFrame.new(0.5, 2.85, -3.9), Color3.fromRGB(60, 24, 30), M.Fabric)
+	put(m, "Lockbox", Vector3.new(0.9, 0.5, 0.6), up * CFrame.new(1.4, 3.15, -3.8), dark, M.Metal)
+	put(m, "Pouch", Vector3.new(0.6, 0.4, 0.6), up * CFrame.new(-0.6, 3.1, -3.7), Color3.fromRGB(150, 120, 60), M.Fabric, false, Enum.PartType.Ball)
+	-- the Trader faces +Z (the stair arrives at the back of the room)
+	local head = figure(m, house * CFrame.new(st.NpcAt) * CFrame.Angles(0, math.pi, 0), Color3.fromRGB(46, 42, 40), Color3.fromRGB(120, 90, 60), Color3.fromRGB(28, 26, 24))
+	put(m, "RackTarp", Vector3.new(0.2, 3.6, 3.4), up * CFrame.new(-7.6, 1.9, -5.4), Color3.fromRGB(70, 80, 60), M.Fabric)
+	put(m, "RackPole", Vector3.new(0.15, 4, 0.15), up * CFrame.new(-7.4, 2, -3.6), dark, M.Metal)
+	put(m, "Lantern", Vector3.new(0.6, 0.9, 0.6), up * CFrame.new(0.5, 8.6, -5), Color3.fromRGB(200, 170, 110), M.Glass)
+	put(m, "LanternChain", Vector3.new(0.06, 1.8, 0.06), up * CFrame.new(0.5, 9.9, -5), dark, M.Metal)
+	-- the board behind the Trader (one SurfaceGui, MaxDistance 40)
+	local board = put(m, "MarketBoard", Vector3.new(4.2, 1.2, 0.15), up * CFrame.new(0.5, 6.4, -7.7), dark, M.Wood)
+	local g = Instance.new("SurfaceGui")
+	g.Name = "SignGui"
+	g.Face = Enum.NormalId.Back
+	g.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	g.PixelsPerStud = 40
+	g.LightInfluence = 0
+	g.MaxDistance = PSC.SignMaxDistance
+	g.Parent = board
+	local t = Instance.new("TextLabel")
+	t.BackgroundTransparency = 1
+	t.Size = UDim2.fromScale(1, 1)
+	t.Font = Enum.Font.GothamBlack
+	t.TextScaled = true
+	t.TextColor3 = Color3.fromRGB(255, 210, 90)
+	t.Text = st.Sign
+	t.Parent = g
+	return m, head
+end
+
+-- phase 5: the Fixer's side desk in the bank hall: a desk, a briefcase, a blueprint roll, two cash stacks, a floor
+-- safe, the Fixer (a dark suit), a small HEIST board (one SurfaceGui). No light (the hall is lit).
+Builders.Heist = function(f: CFrame, st: any): (Model, Part)
+	local m = Instance.new("Model")
+	m.Name = "Station_Heist"
+	local wood = Color3.fromRGB(70, 46, 32)
+	local dark = Color3.fromRGB(30, 30, 32)
+	local dc = f * CFrame.new(0, 0, -0.4)
+	put(m, "DeskTop", Vector3.new(3.6, 0.2, 1.8), dc * CFrame.new(0, 3.1, 0), wood, M.WoodPlanks, true)
+	put(m, "DeskPedestal", Vector3.new(1.0, 3.0, 1.6), dc * CFrame.new(-1.2, 1.5, 0), wood, M.Wood)
+	put(m, "DeskPedestal", Vector3.new(1.0, 3.0, 1.6), dc * CFrame.new(1.2, 1.5, 0), wood, M.Wood)
+	put(m, "Briefcase", Vector3.new(1.4, 0.35, 1.0), dc * CFrame.new(-0.8, 3.38, 0.1) * CFrame.Angles(0, math.rad(10), 0), dark, M.SmoothPlastic)
+	put(m, "BriefcaseHandle", Vector3.new(0.5, 0.12, 0.12), dc * CFrame.new(-0.8, 3.6, -0.35), Color3.fromRGB(150, 130, 90), M.Metal)
+	put(m, "BlueprintRoll", Vector3.new(1.6, 0.25, 0.25), dc * CFrame.new(0.9, 3.33, 0.3) * CFrame.Angles(0, math.rad(-20), 0), Color3.fromRGB(46, 86, 160), M.SmoothPlastic, false, Enum.PartType.Cylinder)
+	for i, x in ipairs({ 0.3, 0.55 }) do
+		put(m, "CashStack" .. i, Vector3.new(0.6, 0.18 * i, 0.3), dc * CFrame.new(x, 3.2 + 0.09 * i, -0.4), Color3.fromRGB(110, 150, 90), M.SmoothPlastic)
+	end
+	local sf = f * CFrame.new(1.9, 0, 0.9)
+	put(m, "SafeBody", Vector3.new(1.6, 1.8, 1.4), sf * CFrame.new(0, 0.9, 0), Color3.fromRGB(60, 64, 66), M.Metal)
+	put(m, "SafeDoor", Vector3.new(1.2, 1.4, 0.08), sf * CFrame.new(0, 0.9, -0.74), Color3.fromRGB(80, 84, 86), M.Metal)
+	put(m, "SafeDial", Vector3.new(0.1, 0.4, 0.4), sf * CFrame.new(0, 1.0, -0.8) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(200, 180, 110), M.Metal, false, Enum.PartType.Cylinder)
+	local head = figure(m, f * CFrame.new(st.NpcAt), Color3.fromRGB(34, 34, 40), Color3.fromRGB(120, 120, 128), Color3.fromRGB(24, 24, 28))
+	local board = put(m, "HeistBoard", Vector3.new(2.6, 0.8, 0.1), f * CFrame.new(0, 6.4, 2.4), dark, M.Wood)
+	local g = Instance.new("SurfaceGui")
+	g.Name = "SignGui"
+	g.Face = Enum.NormalId.Front
+	g.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	g.PixelsPerStud = 40
+	g.LightInfluence = 0
+	g.MaxDistance = PSC.SignMaxDistance
+	g.Parent = board
+	local t = Instance.new("TextLabel")
+	t.BackgroundTransparency = 1
+	t.Size = UDim2.fromScale(1, 1)
+	t.Font = Enum.Font.GothamBlack
+	t.TextScaled = true
+	t.TextColor3 = Color3.fromRGB(255, 210, 90)
+	t.Text = st.Sign
+	t.Parent = g
+	return m, head
+end
+
 function EndgameController.BuildStation(kind: string, house: CFrame): (Model?, Part?)
 	local st = PSC.Stations[kind]
 	local b = Builders[kind]
@@ -401,7 +527,7 @@ local listTitle: TextLabel? = nil
 local listSub: TextLabel? = nil
 local listShell: PanelShell.Shell? = nil
 local hqConsole: BasePart? = nil
-local LIST_TITLES = { Engineers = "ENGINEERING BUREAU", HQ = "HQ UPGRADE", Recruits = "RECRUITMENT OFFICE", Hospital = "FIELD HOSPITAL", Armory = "ARMORY WORKSHOP", Workshop = "VEHICLE WORKSHOP" }
+local LIST_TITLES = { Engineers = "ENGINEERING BUREAU", HQ = "HQ UPGRADE", Recruits = "RECRUITMENT OFFICE", Hospital = "FIELD HOSPITAL", Armory = "ARMORY WORKSHOP", Workshop = "VEHICLE WORKSHOP", Intel = "INTEL OFFICE", BlackMarket = "BLACK MARKET", Heist = "THE FIXER" }
 local depotConsole: BasePart? = nil
 
 local function short(n: number): string
@@ -576,6 +702,66 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 				end
 			end
 		end
+	elseif kind == "Intel" and typeof(s.Intel) == "table" then
+		local it = s.Intel
+		for i, r in ipairs(it.Rows or {}) do
+			local done = r.Have >= r.Need
+			table.insert(out, {
+				Name = string.upper(r.Text), Sub = string.format("%d/%d  reward %s", r.Have, r.Need, short(it.Reward or 0)),
+				Price = if done and not r.Paid then 0 else nil, Need = nil, Kind = "Claim", Id = "D" .. i,
+				Done = if r.Paid then "PAID" elseif not done then string.format("%d/%d", r.Have, r.Need) else nil, Label = "CLAIM",
+			})
+		end
+		local h = it.Hvt
+		if typeof(h) == "table" then
+			local done = h.Have >= h.Need
+			table.insert(out, {
+				Name = string.upper(h.Text), Sub = string.format("%d/%d  reward %s + 50 Gold", h.Have, h.Need, short(it.HvtReward or 0)),
+				Price = if done and not h.Paid then 0 else nil, Need = nil, Kind = "Claim", Id = "HVT",
+				Done = if h.Paid then "PAID" elseif not done then string.format("%d/%d", h.Have, h.Need) else nil, Label = "CLAIM",
+			})
+		end
+		local rep = it.Report
+		if typeof(rep) == "table" then
+			table.insert(out, {
+				Name = "REPORT: " .. string.upper(tostring(rep.Name)),
+				Sub = string.format("Tier %s, %s turrets, %s guards, gate %s HP. %s", tostring(rep.Tier or 0), tostring(rep.Turrets or 0), tostring(rep.Guards or 0), tostring(rep.GateHp and math.floor(rep.GateHp) or "?"), tostring(rep.Verdict or "")),
+				Price = nil, Need = nil, Kind = "Info", Id = "Report", Done = "INFO",
+			})
+		end
+		for _, b in ipairs(it.Bases or {}) do
+			table.insert(out, { Name = "SCOUT " .. string.upper(b.Name), Sub = "Turrets, guards, defences and the SEND verdict", Price = it.ScoutPrice, Need = nil, Kind = "Scout", Id = tostring(b.PlotId) })
+		end
+		for _, rb in ipairs(it.RaidedBy or {}) do
+			table.insert(out, {
+				Name = "RAIDED BY " .. string.upper(tostring(rb.Name)), Sub = "Revenge: SEND your army (the normal SEND rules)",
+				Price = if rb.PlotId then 0 else nil, Need = nil, Kind = "Revenge", Id = tostring(rb.PlotId), Label = "SEND", Done = if rb.PlotId then nil else "GONE",
+			})
+		end
+	elseif kind == "BlackMarket" and typeof(s.Market) == "table" then
+		local mk = s.Market
+		local days = math.floor((tonumber(mk.EndsIn) or 0) / 86400)
+		local hours = math.floor(((tonumber(mk.EndsIn) or 0) % 86400) / 3600)
+		for _, r in ipairs(mk.Rows or {}) do
+			table.insert(out, {
+				Name = string.upper(r.Name), Sub = string.format("%s, this week only (new stock in %dd %dh)", r.Kind, days, hours),
+				Price = if r.Owned then nil else r.Price, Need = nil, Kind = "Market", Id = r.Id, Gold = r.Gold, Done = if r.Owned then "OWNED" else nil,
+			})
+		end
+		for _, r in ipairs(mk.Owned or {}) do
+			table.insert(out, {
+				Name = string.upper(r.Name), Sub = "Yours", Price = 0, Need = nil, Kind = "MarketEquip",
+				Id = if r.On then "None:" .. r.Kind else r.Id, Label = if r.On then "TAKE OFF" else "PUT ON",
+			})
+		end
+	elseif kind == "Heist" and typeof(s.Heist) == "table" then
+		local hs = s.Heist
+		local nx = hs.Next
+		table.insert(out, {
+			Name = if nx then string.upper(nx.Name) .. string.format(" (VAULT %d)", hs.Kit + 2) else "EVERY KIT OWNED",
+			Sub = if nx then string.format("Pays %d min of your income, +%d guards, %d s hold", nx.Minutes, nx.Guards, nx.Hold) else "Raid the Deep Vault at the bank",
+			Price = if nx then nx.Cost else nil, Need = nil, Kind = "Heist", Id = "Next", Done = if nx then nil else "MAX",
+		})
 	elseif kind == "Workshop" and typeof(s.Workshop) == "table" then
 		for _, w in ipairs(s.Workshop) do
 			table.insert(out, {
@@ -605,6 +791,14 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 				Done = if nx == nil then "MAX" else nil,
 			})
 		end
+		local wh = s.Warheads
+		if typeof(wh) == "table" then
+			table.insert(out, { Name = "TACTICAL WARHEAD", Sub = "Loads one silo slot now (the cooldowns stay)", Price = wh.TacticalCost, Need = wh.TacticalNeed, Kind = "Warhead", Id = "Tactical" })
+			table.insert(out, {
+				Name = "HEAVY WARHEAD", Sub = "Your next launch: x1.3 radius, x1.2 damage", Price = if wh.Heavy >= 1 then nil else wh.HeavyCost,
+				Need = wh.HeavyNeed, Kind = "Warhead", Id = "Heavy", Done = if wh.Heavy >= 1 then "READY" else nil,
+			})
+		end
 		local rb = s.Rebuild
 		if typeof(rb) == "table" then
 			table.insert(out, {
@@ -620,6 +814,8 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 	end
 	return out
 end
+
+local setListOpen: (kind: string?) -> () -- forward (refreshList's REVENGE row closes the panel)
 
 local function refreshList()
 	local kind = listOpen
@@ -637,7 +833,7 @@ local function refreshList()
 	local rows = EndgameController.ListRows(kind, state)
 	local sub = listSub
 	if sub then
-		sub.Text = if #rows == 0 then "Loading..." elseif kind == "HQ" then "Kept through rebirth" elseif kind == "Recruits" then "Train each soldier type. Kept through rebirth" elseif kind == "Hospital" then "Heal, Med Kits, more max HP, a revive" elseif kind == "Armory" then "Upgrade your guns. Attachments and camos for the gun in your hand" elseif kind == "Workshop" then "Tougher, faster vehicles. Applies on the next spawn" else "Tougher turrets, gate and vault"
+		sub.Text = if #rows == 0 then "Loading..." elseif kind == "HQ" then "Kept through rebirth" elseif kind == "Recruits" then "Train each soldier type. Kept through rebirth" elseif kind == "Hospital" then "Heal, Med Kits, more max HP, a revive" elseif kind == "Armory" then "Upgrade your guns. Attachments and camos for the gun in your hand" elseif kind == "Workshop" then "Tougher, faster vehicles. Applies on the next spawn" elseif kind == "Intel" then "Daily contracts, the weekly target, scouting, revenge" elseif kind == "BlackMarket" then "Cosmetics only. New stock every Monday" elseif kind == "Heist" then "Heist kits open bigger vaults at this bank" else "Tougher turrets, gate and vault"
 	end
 	for i, r in ipairs(rows) do
 		local row = Instance.new("Frame")
@@ -702,14 +898,18 @@ local function refreshList()
 			sb.Text = r.Sub .. "  (" .. r.Need .. ")"
 		end
 		b.Activated:Connect(function()
-			if can then
+			if can and r.Kind == "Revenge" then
+				-- the Intel Office's revenge: the JOB 38 SEND (the server re-checks every fairness rule)
+				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySend, tonumber(r.Id))
+				setListOpen(nil)
+			elseif can then
 				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestEndgameBuy, r.Kind, r.Id)
 			end
 		end)
 	end
 end
 
-local function setListOpen(kind: string?)
+function setListOpen(kind: string?)
 	listOpen = kind
 	local p = listPanel
 	if p then
@@ -1345,6 +1545,46 @@ local function syncMed(h: Humanoid?)
 	b.Text = string.format("MED KIT x%d", n)
 end
 
+-- phase 5: the R40 Legend Parade: 6 static honour-guard figures lining the owner's parade road (client-only Parts,
+-- built only within 300 studs of the viewer, dropped past 350)
+local parades: { [number]: any } = {} -- owner UserId -> the local parade Model
+local function syncParades()
+	local c = player.Character
+	local r = c and c:FindFirstChild("HumanoidRootPart")
+	local me = if r and r:IsA("BasePart") then r.Position else nil
+	local want: { [number]: any } = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		local cf = p:GetAttribute("WE_ParadeCF")
+		if typeof(cf) == "CFrame" and me then
+			local d = (cf.Position - me).Magnitude
+			if d < 300 or (parades[p.UserId] ~= nil and d < 350) then
+				want[p.UserId] = cf
+			end
+		end
+	end
+	for uid, m in pairs(parades) do
+		if want[uid] == nil then
+			m:Destroy()
+			parades[uid] = nil
+		end
+	end
+	for uid, cf in pairs(want) do
+		if parades[uid] == nil then
+			local m = Instance.new("Model")
+			m.Name = "WE_LegendParade"
+			for _, x in ipairs({ -9, 9 }) do
+				for _, z in ipairs({ -4, 2, 8 }) do
+					local f = cf * CFrame.new(x, 0, z) * CFrame.Angles(0, math.rad(if x < 0 then -90 else 90), 0)
+					figure(m, f, Color3.fromRGB(120, 28, 30), Color3.fromRGB(214, 176, 72), Color3.fromRGB(30, 30, 34))
+					put(m, "ParadeRifle", Vector3.new(0.22, 3.2, 0.28), f * CFrame.new(0.95, 3.4, -0.55), Color3.fromRGB(34, 34, 36), M.Metal)
+				end
+			end
+			m.Parent = Workspace
+			parades[uid] = m
+		end
+	end
+end
+
 local function watchDamage(char: Model)
 	char:GetAttributeChangedSignal("WE_GunCamo"):Connect(function()
 		local gun = char:FindFirstChild("WE_Gun")
@@ -1402,6 +1642,12 @@ function EndgameController.Init()
 	end
 	buildPanels(pg)
 	makeHudButtons(pg)
+	task.spawn(function()
+		while true do
+			task.wait(2)
+			pcall(syncParades)
+		end
+	end)
 	player:GetAttributeChangedSignal("WE_MedKits"):Connect(function()
 		local c = player.Character
 		syncMed(c and c:FindFirstChildOfClass("Humanoid"))

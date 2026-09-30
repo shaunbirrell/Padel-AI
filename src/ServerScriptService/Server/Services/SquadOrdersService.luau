@@ -910,6 +910,9 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	if elite then
 		pcall(eg.DressUnit, model, humanoid, elite, 2) -- claude-bud JOB 39: insignia, trim, the tier scale (HipHeight 2 x scale)
 	end
+	if eg and eg.CosmeticUnit then
+		pcall(eg.CosmeticUnit, owner, model) -- claude-bud JOB 39 phase 5: the Black Market beret colour (nothing while not live)
+	end
 	-- Friendly only — do NOT tag WE_NPC (CombatNPC would aggro players)
 	CollectionService:AddTag(model, TAG_SQUAD)
 	model.Parent = ensureFolder()

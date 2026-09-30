@@ -32,11 +32,11 @@ local EndgameConfig = {
 		Hospital = true, -- phase 4: §2.8 the Field Hospital (heal, Med Kits, Combat Medicine, Field Surgeon, army medic)
 		Mastery = true, -- phase 4: §2.9 the Armory Workshop (mastery, attachments, camos)
 		Workshop = true, -- phase 4: §2.6 the Vehicle Workshop (the Vehicle Depot console)
-		Warheads = false, -- phase 5
-		Heist = false, -- phase 5
-		Contracts = false, -- phase 5
-		BlackMarket = false, -- phase 5
-		RewardScaling = false, -- phase 5
+		Warheads = true, -- phase 5: §2.7 Tactical / Heavy Warheads at the Nuclear Silo
+		Heist = true, -- phase 5: §2.12 the bank heist kits + the Fixer's desk
+		Contracts = true, -- phase 5: §2.11 the Intel Office (daily contracts, the weekly HVT, scouting, raided-by)
+		BlackMarket = true, -- phase 5: §2.10 the weekly Black Market (cosmetics only; Cash + Gold, never Robux)
+		RewardScaling = true, -- phase 5: the plaza bounty scales with income
 	} :: { [string]: boolean },
 
 	-- §2.1 price(structure or business, level) = Costs[level] x (1 + 0.20 x min(rebirths, 20)). Income is unchanged
@@ -186,10 +186,50 @@ local EndgameConfig = {
 		Pool = { "PaintSand", "PaintNight", "PaintArctic", "BannerStripes", "BannerChevron", "BeretRed", "BeretBlue", "CamoUrban", "CamoTiger", "TrophyCannon" },
 		GoldPool = { "CamoGold", "BeretGold", "BannerGold" },
 		GoldPrices = { 100, 150, 250 },
+		-- every item is cosmetic (never power): Kind = what it recolours / adds; one of each per player
+		Items = {
+			PaintSand = { Name = "Desert Sand paint", Kind = "Paint", Color = Color3.fromRGB(196, 170, 120) },
+			PaintNight = { Name = "Night Ops paint", Kind = "Paint", Color = Color3.fromRGB(40, 44, 52) },
+			PaintArctic = { Name = "Arctic paint", Kind = "Paint", Color = Color3.fromRGB(220, 226, 230) },
+			BannerStripes = { Name = "Striped banners", Kind = "Banner", Color = Color3.fromRGB(150, 40, 36) },
+			BannerChevron = { Name = "Chevron banners", Kind = "Banner", Color = Color3.fromRGB(30, 60, 110) },
+			BannerGold = { Name = "Gold banners", Kind = "Banner", Color = Color3.fromRGB(214, 178, 64) },
+			BeretRed = { Name = "Red berets", Kind = "Beret", Color = Color3.fromRGB(150, 30, 30) },
+			BeretBlue = { Name = "Blue berets", Kind = "Beret", Color = Color3.fromRGB(30, 60, 140) },
+			BeretGold = { Name = "Gold berets", Kind = "Beret", Color = Color3.fromRGB(214, 178, 64) },
+			CamoUrban = { Name = "Urban camo", Kind = "Camo", Camo = "Urban" },
+			CamoTiger = { Name = "Tiger camo", Kind = "Camo", Camo = "Tiger" },
+			CamoGold = { Name = "Gold camo", Kind = "Camo", Camo = "Gold" },
+			TrophyCannon = { Name = "Trophy cannon", Kind = "Trophy" },
+		} :: { [string]: any },
 	},
 
 	-- §2.11 CONTRACTS (phase 5)
-	Contracts = { Daily = 3, Floor = 50_000, Minutes = 8, HvtMinutes = 20, HvtGold = 50, ScoutMinutes = 1, RaidedByKeep = 5 },
+	Contracts = {
+		Daily = 3,
+		Floor = 50_000,
+		Minutes = 8,
+		HvtMinutes = 20,
+		HvtGold = 50,
+		ScoutMinutes = 1,
+		ScoutFloor = 10_000,
+		RaidedByKeep = 5,
+		-- the pool: Kind = the event that counts (EndgameService.NoteContract), Need = how many
+		Pool = {
+			{ Kind = "Garrison", Need = 2, Text = "Clear %d site garrisons" },
+			{ Kind = "Outpost", Need = 2, Text = "Capture %d outposts" },
+			{ Kind = "CheckpointGuard", Need = 10, Text = "Kill %d checkpoint guards" },
+			{ Kind = "DefendRaid", Need = 1, Text = "Defend your base from a raid" },
+			{ Kind = "WinSend", Need = 1, Text = "Win a SEND ARMY raid" },
+			{ Kind = "Warhead", Need = 1, Text = "Launch a warhead" },
+		},
+		Hvt = {
+			{ Kind = "WinSend", Need = 3, Text = "HIGH-VALUE: win %d SEND ARMY raids" },
+			{ Kind = "Outpost", Need = 6, Text = "HIGH-VALUE: capture %d outposts" },
+			{ Kind = "Garrison", Need = 6, Text = "HIGH-VALUE: clear %d site garrisons" },
+		},
+		DayEpochUnix = 0, -- days are UTC days (os.time() // 86400)
+	},
 
 	-- §2.12 HEIST (phase 5)
 	Heist = {
@@ -440,6 +480,42 @@ end
 -- §2.5 the Base Tier a Defence level needs (0 = none)
 function EndgameConfig.DefenceNeedTier(L: number): number
 	return tonumber((EndgameConfig.Defence.NeedTier :: any)[level(L)]) or 0
+end
+
+-- §2.1 the endgame's own rebirth unlocks (granted by EndgameService while the Rebirth part is live; the shared
+-- PrestigeConfig track is untouched, so players the job is not live for see exactly today's rebirth screen)
+EndgameConfig.RebirthUnlocks = {
+	{ At = 25, Flag = "HeavyWarhead", Name = "Heavy Warhead" },
+	{ At = 30, Flag = "MythicTraining", Name = "Mythic Training" },
+	{ At = 35, Flag = "BastionCrest", Name = "Bastion Crest" },
+	{ At = 40, Flag = "LegendParade", Name = "Legend Parade" },
+}
+
+-- §2.11 today's 3 contracts for a player: a pure function of (UserId, UTC day) over the pool, no repeats
+function EndgameConfig.DailyContracts(userId: number, day: number): { any }
+	local Ct = EndgameConfig.Contracts
+	local pool = Ct.Pool
+	local n = #pool
+	local out = {}
+	local seed = (math.floor(tonumber(userId) or 0) % 9973) * 31 + math.floor(tonumber(day) or 0) * 7
+	local order = {}
+	for k = 1, n do
+		local x = (seed + k * 7919) % 1000003
+		table.insert(order, { K = k, H = (x * x * 31 + x * 17 + k) % 1000003 }) -- a non-linear mix: each day reshuffles
+	end
+	table.sort(order, function(a, b)
+		return a.H < b.H
+	end)
+	for j = 1, math.min(Ct.Daily, n) do
+		table.insert(out, pool[order[j].K])
+	end
+	return out
+end
+
+-- §2.11 this week's High-Value Target (the same for everyone in a week)
+function EndgameConfig.WeeklyHvt(week: number): any
+	local h = EndgameConfig.Contracts.Hvt
+	return h[(math.floor(tonumber(week) or 0) % #h) + 1]
 end
 
 -- §2.10 the week number since the first Monday 00:00 UTC (every server agrees)

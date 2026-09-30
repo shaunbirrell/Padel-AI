@@ -69,7 +69,7 @@ _j39("function EndgameService.Purchase(player: Player, kind: string, id: string?
 _j39('Remotes.FireServer, Constants.RemoteNames.RequestEndgameBuy, "Empire", "Next")' in _ECT and "NextCost" not in _ECT.split("RequestEndgameBuy")[1][:40],
      "the client sends only the kind and id (never a price)")
 _j39("if not EndgameService.AtStation(player, \"Command\") then" in _ES and "if not EndgameService.AtStation(player, \"Engineers\") then" in _ES
-     and _ES.count("if not EndgameService.AtHQ(player) then") == 2 and _ES.count("if EndgameService.RecentlyHurt(player) then") >= 3,
+     and _ES.count("if not EndgameService.AtHQ(player) then") >= 3 and _ES.count("if EndgameService.RecentlyHurt(player) then") >= 3,
      "buying needs the station / HQ console reach and no damage in the last HurtLockSeconds")
 # phase 2: every effect is the old number while the part is not live for the base owner
 _GD = _j39_code(_SV + "Services/GateDefenseService.luau")
@@ -128,6 +128,22 @@ _j39("local want = live and EndgameConfig.LiveFor(player.UserId, st.Part)" in _E
 # never touched
 _j39(all("WE_Building" not in _j39_src(p) for p in (_SV + "Services/EndgameService.luau", _CL + "Controllers/EndgameController.luau", _SV + "Modules/BaseTierBuilder.luau")), "no WE_Building* edits")
 _j39("PreferMesh" not in _NEW, "PreferMesh untouched")
+
+# phase 5 (claude-bud JOB 39): warheads, heist kits, Intel contracts, the Black Market, reward scaling
+_NS39 = _j39_code(_SV + "Services/NukeService.luau")
+_j39("R *= rm" in _NS39 and "N.Damage * heavyDmg" in _NS39 and "function NukeService.FillSlot(player: Player): boolean" in _NS39,
+     "warheads: Tactical fills a silo slot, Heavy rides the ONE ApplyRadiusDamage call (x1.3 radius, x1.2 damage); the cooldowns stay")
+_BR39 = _j39_code(_SV + "Services/BankRaidService.luau")
+_j39("if prog >= heistNeed then" in _BR39 and "local cd = heistCd" in _BR39 and "BankRaidService._SpawnExtraGuards(extraGuards)" in _BR39,
+     "heist kits change the bank's own hold / payout / cooldown and add BankGuard reinforcements (the existing NPC path)")
+_j39("mult *= (require(script.Parent.Parent.Services.EndgameService) :: any).BountyScale(player, PlazaBountyConfig.Cash)" in _j39_code(_SV + "Modules/PlazaBounty.luau"),
+     "the plaza bounty scales with income (x1 while not live; the grant line itself is unchanged)")
+_j39("Robux" not in _j39_code(_CF + "EndgameConfig.luau").split("BlackMarket = {")[1].split("Contracts = {")[0],
+     "the Black Market has no Robux item (owner decision 2026-09-30)")
+_j39('Key = "market",' in _ES and "Gold = isGold," in _ES and 'if table.find(stock.Cash, sid) == nil' not in _ES,
+     "Black Market: Cash slots priced by income, the Gold slot in Gold, stock = a pure function of the week")
+_j39('endgame_reward = true,' in _j39_src(_SV + "Services/EconomyService.luau"), "contract rewards (already income-sized) are never multiplied again")
+_j39('Remotes.FireServer, Constants.RemoteNames.RequestArmySend, tonumber(r.Id))' in _ECT, "revenge uses the JOB 38 SEND remote (the server re-checks every fairness rule)")
 
 _luau = _j39_os.environ.get("LUAU")
 if _luau is None and _j39_os.environ.get("LUAU_COMPILE"):

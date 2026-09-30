@@ -66,10 +66,27 @@ local PlazaServicesConfig = {
 			NpcAt = Vector3.new(0, 0.3, 1.6),
 			Parts = 37,
 		},
-		Intel = { Row = "NW_W1", Part = "Contracts", Title = "INTEL OFFICE", Sign = "INTEL", Npc = "Signals Officer", Action = "Contracts", NpcAt = Vector3.new(-2.5, 0.3, 1.1), Parts = 0 },
+		-- phase 5: the radio-shop facade (orange awning): a radio desk, a map wall, the Signals Officer
+		Intel = { Row = "NW_W1", Part = "Contracts", Title = "INTEL OFFICE", Sign = "INTEL", Npc = "Signals Officer", Action = "Intel", NpcAt = Vector3.new(-2.5, 0.3, 1.1), Parts = 37 },
+		-- phase 5: the market's UPPER floor (SW_S1): the Trader behind a crate counter facing the stair; no door sign
+		-- (the ARMORY sign is the building's), a small board instead
+		BlackMarket = { Row = "SW_S1", Part = "BlackMarket", Title = "BLACK MARKET", Sign = "BLACK MARKET", Npc = "Trader", Action = "Black Market", NpcAt = Vector3.new(0.5, 11.4, -6), Parts = 23, Upstairs = true },
+		-- phase 5: the Fixer's side desk inside the Empire Bank hall (x 208..232, z -236..-214, floor top 1.6), against
+		-- the east wall, facing the hall (WorldAt + Face: the frame's -Z looks along Face)
+		Heist = {
+			WorldAt = Vector3.new(229.6, 1.6, -218.5),
+			Face = Vector3.new(-1, 0, 0),
+			Part = "Heist",
+			Title = "THE FIXER",
+			Sign = "HEIST",
+			Npc = "Fixer",
+			Action = "Heist kits",
+			NpcAt = Vector3.new(0, 0, 1.4),
+			Parts = 24,
+		},
 	} :: { [string]: any },
 	-- the order the base EMPIRE panel lists them in
-	Order = { "Command", "Engineers", "Recruits", "Armory", "Hospital", "Intel" },
+	Order = { "Command", "Engineers", "Recruits", "Armory", "Hospital", "Intel", "BlackMarket", "Heist" },
 }
 
 return PlazaServicesConfig

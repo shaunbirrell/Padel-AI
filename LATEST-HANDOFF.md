@@ -30,6 +30,82 @@
 - **Phone tests (Migrate to Latest Update, as shaunie6):** see PHASE 2 section below (HQ Upgrade → Fort..Capital look; ENGINEERS Defences; rebuild after breach; EMPIRE rows + PIN).
 - **Next:** Studio §11 proof still owed; do NOT set Endgame OwnerFirst=false until owner asks. Claude already pushed phase 3 tip `1cd39a6` on desktop-bud (Elite Training) — not in this ship; Code Bot can cherry-pick next. JOBs 40–42 still queued.
 
+## claude-bud JOB 39 PHASE 5 (2026-09-30): WARHEADS + HEIST KITS + INTEL OFFICE + BLACK MARKET + reward scaling + R25-R40 unlocks (branch `claude/desktop-bud`)
+Owner-first (`EndgameConfig.Parts.Warheads / Heist / Contracts / BlackMarket / RewardScaling` = true): every JOB 39 part
+is now on for the owner. Off / not live: the silo, bank, bounty, raid and army code behave exactly as before (each hook
+returns the old numbers).
+
+**1. Warheads** (the HQ console list: HQ UPGRADE panel)
+- **Tactical Warhead** $5M (R2+): loads one silo slot now (NukeService.FillSlot; the cooldowns stay).
+- **Heavy Warhead** $25M (the R25 unlock): holds 1. The next launch hits x1.3 radius and x1.2 damage through the ONE
+  ApplyRadiusDamage call. BaseClearStuds, the player cooldown (1800 s) and the server cooldown (300 s) are unchanged.
+
+**2. Heist kits** (the Fixer's side desk in the Empire Bank hall, a world anchor at 229.6, -218.5)
+- Drill 2M / Thermal Lance 8M / Vault Cracker 25M.
+- The bank's own raid loop (BankRaidService) reads the raider's best kit: hold 8 / 10 / 14 s, payout max($35k, 4 / 8 /
+  15 min of income), +3 / 5 / 7 BankGuard reinforcements (the existing NPC path: LOS + hit chance; cleared after
+  120 s), and a 30-min cooldown for the Deep Vault.
+- **Pay reason:** "bank_raid" is already exempt, so the income-sized payout is not multiplied again.
+
+**3. Intel Office** (NW_W1, the orange-awning radio shop; 37 parts, 1 lamp, the INTEL sign)
+- **3 daily contracts:** a pure function of UserId + UTC day, drawn from garrison / outposts / checkpoint guards / defend
+  a raid / win a SEND / launch a warhead. Each is fed from the game's own hook. CLAIM at the office pays max($50k, 8 min
+  of income).
+- **The weekly High-Value Target:** 20 min of income + 50 Gold. Reward reason "endgame_reward" (added to
+  EconomyService's NEVER_MULTIPLIED: already income-sized).
+- **SCOUT:** any ONLINE base, 1 min of income. The report: tier, turrets, guards, gate HP, and the JOB 38 SEND verdict.
+- **RAIDED BY:** the last 5 raiders (in-person ATM raids and army raids), with SEND = the JOB 38 SEND remote. The server
+  re-checks every fairness rule.
+
+**4. Black Market** (SW_S1 upstairs, the Trader at a crate counter; 23 parts, an unlit lantern, a board)
+- **Stock:** 3 Cash slots at max($1M / $3M / $8M, 20 / 45 / 90 min of income) + 1 Gold slot (100-250). It is a pure
+  function of the week (the same on every server), and turns over Monday 00:00 UTC.
+- **COSMETIC ONLY:**
+  - vehicle paints (the spawn recolours the biggest body parts);
+  - banner colours (the Base Tier banners);
+  - beret colours (your soldiers; a textured hat is tinted);
+  - camos (join the Armory's camos);
+  - a Part-built trophy cannon on your parade ground.
+- One of each. PUT ON / TAKE OFF rows. **No Robux item.**
+
+**5. Reward scaling**
+- The plaza bounty becomes max($15k, 3 min of income). It is scaled through the bounty's `mult`, with the cash
+  multiplier divided back out; the pinned grant line is unchanged.
+
+**6. Rebirth unlocks R25-R40** (the endgame's own track in EndgameConfig.RebirthUnlocks)
+- They are granted by the 5 s sweep while live. The shared PrestigeConfig track is untouched, so non-live players see
+  today's rebirth screen.
+- R25 Heavy Warhead, R30 Mythic Training.
+- R35 Bastion Crest: a gold crest over his gate.
+- R40 Legend Parade: 6 static honour-guard figures lining his parade road. They are client-only and built within 300
+  studs.
+
+**Checks**
+- run_endgame_test (+ phase 5): contracts per day / week, unlocks, both warheads, all 3 kits, the bounty scale, the
+  market (stock, income price, Gold slot, one of each, the item takes effect), claims (not done / paid once / HVT
+  Gold), raided-by 5, scouting (online only), the 3 new stations built and counted, the crest + trophy, every list.
+- BuyPathStatic PASS=7136 FAIL=0; all 16 sims 0 failed; rojo ok; remote audit OK; no new LSP errors (the pre-existing
+  FormationController / ArmyController / HudConfig / Remotes ones show because their dependents changed; HEAD has
+  them).
+
+**JOB 39 status:** phases 1-5 are all built and pushed, owner-first. The §11 Studio proof list (per CONTINUE-NOW.md, not
+blocking) is still owed:
+- Base Tier screenshots per tier from 100+ studs + the per-base part / light counts;
+- the 2-player Elite TTK log;
+- the gun range test in Studio;
+- the Defence loot tests;
+- each station on an 800x360 phone.
+
+**Test ON HIS PHONE**
+1. At your HQ console: TACTICAL WARHEAD (a silo slot fills), and once you reach R25, HEAVY WARHEAD: the next nuke ring
+   is visibly bigger.
+2. The Empire Bank: THE FIXER at a desk by the east wall. Buy the Drill, raid the vault: 8 s hold, 3 extra guards run
+   in, a much bigger payout.
+3. The orange radio shop: INTEL. 3 contracts + the weekly target; finish one and CLAIM. SCOUT the second phone's base.
+   After being raided, the RAIDED BY row: SEND sends your army.
+4. The market upstairs: the Trader. Buy a paint / banner / beret: your next vehicle, your base banners or your soldiers'
+   berets change colour.
+5. Capture the plaza: the bounty is now a few minutes of your income.
 ## claude-bud JOB 39 PHASE 4 (2026-09-30): FIELD HOSPITAL + ARMORY WORKSHOP (mastery / attachments / camos) + VEHICLE WORKSHOP (branch `claude/desktop-bud`)
 Owner-first (`EndgameConfig.Parts.Hospital / Mastery / Workshop` = true). Off / not live: the WeaponConfig row itself,
 no max-HP bonus, vehicle x1, no stations.

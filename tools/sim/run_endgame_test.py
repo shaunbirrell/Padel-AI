@@ -84,7 +84,7 @@ function mkPlayer(uid, pos)
   local char = { FindFirstChild = function(_, n) if n == "HumanoidRootPart" then return root end return nil end, cattrs = {} }
   char.GetAttribute = function(self, k) return self.cattrs[k] end
   char.SetAttribute = function(self, k, v) self.cattrs[k] = v end
-  local p = { UserId = uid, Parent = true, attrs = {}, Character = char, Root = root }
+  local p = { UserId = uid, Parent = true, attrs = {}, Character = char, Root = root, DisplayName = "Player" .. uid }
   p.SetAttribute = function(self, k, v) self.attrs[k] = v end
   p.GetAttribute = function(self, k) return self.attrs[k] end
   return p
@@ -245,8 +245,8 @@ check(parts == PSC.Stations.Command.Parts and parts <= PSC.MaxParts, string.form
 check(lights == 1 and guis == 1 and neon == 0 and hum == 0, "one light, one sign, no Neon, no Humanoid (not damageable)")
 check(query == 0 and #collide == 1 and collide[1] == "MapTableTop", "nothing answers a ray; only the table top collides")
 check(head ~= nil and head.Name == "Head", "the Chief of Staff's head anchors the prompt")
-local okNone = CT.BuildStation("Intel", CFrame.new(0, 0, 0)) == nil
-check(okNone, "a station whose phase has not shipped builds nothing (Intel)")
+local okNone = CT.BuildStation("Nope", CFrame.new(0, 0, 0)) == nil
+check(okNone, "an unknown station builds nothing")
 
 -- ── 4b. phase 2: Base Tier + Defence (the real service; the owner's profile through GetPlayerByUserId) ──
 BY_UID[470626172] = owner
@@ -337,7 +337,9 @@ local st2 = ES.State(owner)
 check(st2.Tier and st2.Tier.Level == 5 and st2.Tier.Next == nil and #st2.Defence == 4 and st2.Rebuild ~= nil, "State: the tier, 4 defence rows, the rebuild row")
 local rowsE = CT.ListRows("Engineers", st2)
 local rowsH = CT.ListRows("HQ", st2)
-check(#rowsE == 4 and rowsE[1].Kind == "Defence" and #rowsH == 2 and rowsH[1].Done == "MAX" and rowsH[2].Kind == "Rebuild", "the list panel rows: 4 tracks; HQ = tier (MAX) + rebuild")
+local hasRebuild = false
+for _, r in ipairs(rowsH) do if r.Kind == "Rebuild" then hasRebuild = true end end
+check(#rowsE == 4 and rowsE[1].Kind == "Defence" and rowsH[1].Done == "MAX" and hasRebuild, "the list panel rows: 4 tracks; HQ = tier (MAX) + rebuild (+ the warheads)")
 
 -- the Engineering Bureau stand
 local em = CT.BuildStation("Engineers", CFrame.new(0, 0, 0))
@@ -550,6 +552,119 @@ for _, kind in ipairs({ "Armory", "Hospital" }) do
   check(sp == PSC.Stations[kind].Parts and sp <= PSC.MaxParts and sl == 1 and sg == 1, string.format("the %s station = %d parts (cap %d), 1 light, 1 sign", kind, sp, PSC.MaxParts))
 end
 
+-- ── 4e. phase 5: warheads, heist kits, Intel contracts, the Black Market, reward scaling, rebirth unlocks ──
+local d1 = EG.DailyContracts(470626172, 20000)
+local d1b = EG.DailyContracts(470626172, 20000)
+local d2 = EG.DailyContracts(470626172, 20001)
+local distinct = d1[1].Kind ~= d1[2].Kind and d1[2].Kind ~= d1[3].Kind and d1[1].Kind ~= d1[3].Kind
+check(#d1 == 3 and distinct and d1[1].Kind == d1b[1].Kind and d1[3].Kind == d1b[3].Kind, "3 different daily contracts, the same all day (pure of UserId + UTC day)")
+check(d1[1].Kind ~= d2[1].Kind or d1[2].Kind ~= d2[2].Kind or d1[3].Kind ~= d2[3].Kind, "the next day brings a different set")
+check(EG.WeeklyHvt(2800).Kind ~= nil and EG.WeeklyHvt(2800) == EG.WeeklyHvt(2800), "the weekly High-Value Target is the same for everyone in a week")
+-- rebirth unlocks (the endgame's own track)
+po.Prestige = 24
+ES.SyncUnlocks(owner)
+check(not ES.HasUnlock(470626172, "HeavyWarhead"), "R24: no Heavy Warhead unlock")
+po.Prestige = 40
+ES.SyncUnlocks(owner)
+check(ES.HasUnlock(470626172, "HeavyWarhead") and ES.HasUnlock(470626172, "LegendParade") and ES.HasUnlock(470626172, "BastionCrest") and not ES.HasUnlock(9, "HeavyWarhead"), "R40: Heavy Warhead, Mythic Training, Bastion Crest, Legend Parade unlocked (only for him)")
+-- warheads at the HQ console
+atHQ = true
+po.Cash = 5e9
+ok, msg = ES.Purchase(owner, "Warhead", "Tactical")
+check(ok and spentLog[#spentLog].n == 5e6 and spentLog[#spentLog].why == "endgame_warhead", "Tactical Warhead $5M (endgame_warhead)")
+ok, msg = ES.Purchase(owner, "Warhead", "Heavy")
+local rm, dm, held = ES.HeavyWarheadMults(owner)
+check(ok and held and rm == 1.3 and dm == 1.2 and spentLog[#spentLog].n == 25e6, "Heavy Warhead $25M: the next launch x1.3 radius, x1.2 damage")
+check(ES.Purchase(owner, "Warhead", "Heavy") == false, "holds 1 Heavy")
+ES.SpendHeavy(owner)
+check(select(3, ES.HeavyWarheadMults(owner)) == false and ES.HeavyWarheadMults(other) == 1, "spent on a launch; not live = x1")
+-- heist kits at the Fixer
+ES._SetStation("Heist", CFrame.new(229.6, 1.6, -218.5))
+owner.Root.Position = ES.StationPoint("Heist")
+local h0, c0, cd0, g0 = ES.HeistRules(owner, 6, 20000, 300)
+check(h0 == 6 and c0 == 20000 and cd0 == 300 and g0 == 0, "no kit: the bank's own vault (6 s, $15-35k, 5 min)")
+for _ = 1, 3 do ES.Purchase(owner, "Heist", "Next") end
+local h3, c3, cd3, g3 = ES.HeistRules(owner, 6, 20000, 300)
+check(po.Endgame.HeistKit == 3 and h3 == 14 and g3 == 7 and cd3 == 1800 and c3 == 15 * 60 * 23700, "Vault Cracker: 14 s hold, +7 guards, 30-min cooldown, 15 min of income ($21.3M)")
+check(ES.Purchase(owner, "Heist", "Next") == false and ES.HeistRules(other, 6, 20000, 300) == 6, "every kit owned; not live = the old vault")
+-- the plaza bounty scale
+deps.EconomyService.GetCashMult = function() return 2 end
+check(math.abs(ES.BountyScale(owner, 15000) - (180 * 23700 / 2) / 15000) < 1e-6 and ES.BountyScale(other, 15000) == 1, "plaza bounty: 3 min of income / the cash multiplier (x142.2 of $15k at 23.7k/s, x2); not live = x1")
+-- the Black Market
+ES._SetStation("BlackMarket", CFrame.new(0, 5, 300))
+owner.Root.Position = ES.StationPoint("BlackMarket")
+local stock = ES.MarketStock()
+local cashItem = stock.Cash[1]
+local item1 = EG.BlackMarket.Items[cashItem]
+local before = #spentLog
+ok, msg = ES.Purchase(owner, "Market", cashItem)
+check(ok and #spentLog == before + (if item1.Kind == "Camo" then 1 else 1) and spentLog[#spentLog].n == math.max(1e6, 20 * 60 * 23700) and spentLog[#spentLog].why == "endgame_market", "Black Market slot 1: max($1M, 20 min of income) = $28.4M (" .. cashItem .. ")")
+check(ES.Purchase(owner, "Market", cashItem) == false, "one of each")
+local notInStock = nil
+for id in pairs(EG.BlackMarket.Items) do if table.find(stock.Cash, id) == nil and id ~= stock.Gold then notInStock = id end end
+check(notInStock == nil or ES.Purchase(owner, "Market", notInStock) == false, "an item not in this week's stock is refused")
+po.Gold = 1000
+local gold0 = po.Gold
+ok, msg = ES.Purchase(owner, "Market", stock.Gold)
+check(ok and po.Gold == gold0 - stock.GoldPrice, "the Gold slot costs Gold only (" .. stock.Gold .. " " .. stock.GoldPrice .. " Gold)")
+local anyKind = EG.BlackMarket.Items[cashItem].Kind
+if anyKind == "Paint" then check(ES.PaintColor(470626172) ~= nil and ES.PaintColor(9) == nil, "the paint is on his vehicles (not live: none)")
+elseif anyKind == "Banner" then check(ES.BannerColor(470626172) ~= nil, "the banner colour is on his base")
+elseif anyKind == "Beret" then check(ES.BeretColor(470626172) ~= nil, "the beret colour is on his soldiers")
+elseif anyKind == "Trophy" then check(ES.HasTrophy(470626172), "the trophy stands on his parade ground")
+else check(po.Endgame.Camos[item1.Camo] == true, "the camo is owned") end
+-- the Intel Office
+ES._SetStation("Intel", CFrame.new(-300, 5, 300))
+owner.Root.Position = ES.StationPoint("Intel")
+local paid = {}
+deps.EconomyService.AddCash = function(p, n, why) table.insert(paid, { n = n, why = why }); return true end
+deps.EconomyService.AddGold = function(p, n, why) table.insert(paid, { n = n, why = why, gold = true }); return true end
+local st5 = ES.State(owner)
+local r1 = st5.Intel.Rows[1]
+ok, msg = ES.Purchase(owner, "Claim", "D1")
+check(not ok and string.find(msg, "0/") ~= nil, "a contract not done yet cannot be claimed (" .. tostring(msg) .. ")")
+ES.NoteContract(owner, r1.Kind, r1.Need)
+ok, msg = ES.Purchase(owner, "Claim", "D1")
+check(ok and paid[1].n == math.max(50000, 8 * 60 * 23700) and paid[1].why == "endgame_reward", "contract done -> claimed: 8 min of income ($11.4M) as endgame_reward (never multiplied again)")
+check(ES.Purchase(owner, "Claim", "D1") == false, "a contract pays once")
+ES.NoteContract(other, r1.Kind, 5)
+local hv = ES.State(owner).Intel.Hvt
+ES.NoteContract(owner, hv.Kind, hv.Need)
+ok, msg = ES.Purchase(owner, "Claim", "HVT")
+check(ok and paid[#paid].gold == true and paid[#paid].n == 50 and paid[#paid - 1].n == 20 * 60 * 23700, "the weekly HVT: 20 min of income + 50 Gold")
+-- raided-by + scouting
+for i = 1, 7 do ES.NoteRaidedBy(owner, other) end
+check(#ES.State(owner).Intel.RaidedBy == 5, "raided-by keeps the last 5")
+profiles[9].BasePlotId = 4
+BY_UID[9] = other
+local prevGet = Players.GetPlayers
+Players.GetPlayers = function() return { owner, other } end
+ok, msg = ES.Purchase(owner, "Scout", "4")
+local rep = ES.State(owner).Intel.Report
+check(ok and rep and rep.Name ~= nil and spentLog[#spentLog].why == "endgame_scout" and spentLog[#spentLog].n == math.max(10000, 60 * 23700), "scouting an online base: 1 min of income ($1.42M), the report is stored")
+check(ES.Purchase(owner, "Scout", "5") == false, "nobody on that plot: refused (offline bases are never scouted)")
+Players.GetPlayers = prevGet
+-- the new stations + the base extras
+for _, kind in ipairs({ "Intel", "BlackMarket", "Heist" }) do
+  local sm = CT.BuildStation(kind, CFrame.new(0, 0, 0))
+  local sp, sl, sg = 0, 0, 0
+  for _, dd in ipairs(sm:GetDescendants()) do
+    if dd.ClassName == "Part" then sp += 1 elseif dd.ClassName == "PointLight" then sl += 1 elseif dd.ClassName == "SurfaceGui" then sg += 1 end
+  end
+  check(sp == PSC.Stations[kind].Parts and sp <= PSC.MaxParts and sl <= 1 and sg == 1, string.format("the %s station = %d parts (cap %d), %d light, 1 sign", kind, sp, PSC.MaxParts, sl))
+end
+local ctxX = table.clone(ctx)
+ctxX.Crest = true
+ctxX.Trophy = true
+local mx0 = BTB.Build(ctxX, 0)
+local crest, trophy = 0, 0
+for _, dd in ipairs(mx0:GetDescendants()) do
+  if dd.ClassName == "Part" and string.sub(dd.Name, 1, 5) == "Crest" then crest += 1 elseif dd.ClassName == "Part" and string.sub(dd.Name, 1, 6) == "Trophy" then trophy += 1 end
+end
+check(crest == 3 and trophy > 0 and trophy <= 30, string.format("the Bastion Crest (3 parts) and the trophy cannon (%d parts, cap 30) even at tier 0", trophy))
+local st6 = ES.State(owner)
+check(#CT.ListRows("Intel", st6) >= 4 and #CT.ListRows("BlackMarket", st6) >= 4 and #CT.ListRows("Heist", st6) == 1 and #CT.ListRows("HQ", st6) >= 3, "list rows: Intel, Black Market, Heist, the HQ warheads")
+
 -- ── 5. rebirth screen ──
 local PC = require(node("Configs/PrestigeConfig"))
 local function has(list, s) for _, l in ipairs(list) do if l == s then return true end end return false end
@@ -622,6 +737,10 @@ def main():
         ("for slot, sx in ipairs(GateDefenseService.GunSlots(gx, ownerUserId)) do" in gds, "the Base Tier nests are real AutoGun slots"),
         ("R.StealFraction * MoneyCollectorService.VaultMult(victim, false)" in mcs and "* MoneyCollectorService.VaultMult(victim, true)" in mcs, "Vault Plating on the ATM raid and the army raid"),
         ("+ rebirth + tier" in sls, "the soldier cap adds the Base Tier soldiers"),
+        ("R *= rm" in (SV / "Services/NukeService.luau").read_text(encoding="utf-8") and "N.Damage * heavyDmg" in (SV / "Services/NukeService.luau").read_text(encoding="utf-8"), "the Heavy Warhead rides on the one ApplyRadiusDamage call (radius + damage)"),
+        ("if prog >= heistNeed then" in (SV / "Services/BankRaidService.luau").read_text(encoding="utf-8") and "local cd = heistCd" in (SV / "Services/BankRaidService.luau").read_text(encoding="utf-8"), "the heist kit's hold / payout / cooldown in the bank's own raid loop"),
+        (all("NoteContract" in (p).read_text(encoding="utf-8") for p in (SV / "Services/SiteActivityService.luau", SV / "Services/TerritoryService/init.luau", SV / "Services/CheckpointGuardService.luau", SV / "Services/MoneyCollectorService.luau", SV / "Modules/ArmyPlan.luau", SV / "Services/NukeService.luau")),
+         "every contract event is fed from the game's own hook (garrison, outpost, checkpoint guard, defended raid, SEND win, warhead)"),
         ("local elite = if eg and eg.UnitElite then eg.UnitElite(owner, slot) else nil" in sqs and "armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player), credit)" in sqs
          and "local base = armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player)" in sqs, "Elite HP at spawn and Elite damage at BOTH unit damage sites (the one damage path)"),
         ("c = ArmyController.ScaledCfg(c, es)" in acs, "the formation spacing grows with the largest soldier in the block"),

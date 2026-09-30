@@ -73,6 +73,9 @@ function PlazaBounty.OnCaptured(player: Player, zoneId: string, position: Vector
 			pcall(function()
 				mult = (require(script.Parent.Parent.Services.EngagementService) :: any).PlazaBountyMult(player)
 			end)
+			pcall(function() -- claude-bud JOB 39 phase 5: the bounty scales to 3 min of income (x1 while not live)
+				mult *= (require(script.Parent.Parent.Services.EndgameService) :: any).BountyScale(player, PlazaBountyConfig.Cash)
+			end)
 			local econ = deps.EconomyService
 			if econ and econ.AddCash then
 				econ.AddCash(player, math.floor(PlazaBountyConfig.Cash * mult), "plaza_bounty")

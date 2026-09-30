@@ -197,6 +197,28 @@ function NukeService.Rush(player: Player): boolean
 	return true
 end
 
+-- claude-bud JOB 39 phase 5: the Tactical Warhead (EndgameService's one purchase path pays; this only loads the slot)
+function NukeService.CanFillSlot(player: Player): boolean
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil or not live(player.UserId) or siloLevel(player) < 1 then
+		return false
+	end
+	local ready, cap = silo(player, profile)
+	return ready < cap
+end
+
+function NukeService.FillSlot(player: Player): boolean
+	if not NukeService.CanFillSlot(player) then
+		return false
+	end
+	local profile = deps.DataService.GetProfile(player)
+	local ready, cap = silo(player, profile)
+	profile.NukeSilo = { Ready = math.min(cap, ready + 1), ChargeFrom = if ready + 1 >= cap then 0 else os.time() }
+	deps.DataService.MarkDirty(player)
+	NukeService.OpenPanel(player)
+	return true
+end
+
 function NukeService.Launch(player: Player, targetId: any): (boolean, string?)
 	local uid = player.UserId
 	local profile = deps.DataService and deps.DataService.GetProfile(player)
@@ -231,6 +253,24 @@ function NukeService.Launch(player: Player, targetId: any): (boolean, string?)
 	serverLastLaunch = os.clock()
 	busy = true
 	local R = radius()
+	-- claude-bud JOB 39 phase 5: a held Heavy Warhead rides on this launch (x1.3 radius, x1.2 damage; x1 while not live)
+	local heavyDmg = 1
+	do
+		local okE, EGS = pcall(function(): any
+			return require(script.Parent.EndgameService)
+		end)
+		if okE and EGS and EGS.HeavyWarheadMults then
+			local rm, dm, held = EGS.HeavyWarheadMults(player)
+			if held then
+				R *= rm
+				heavyDmg = dm
+				pcall(EGS.SpendHeavy, player)
+			end
+		end
+		if okE and EGS and EGS.NoteContract then
+			pcall(EGS.NoteContract, player, "Warhead", 1)
+		end
+	end
 	local secs = countdown()
 	pushAll("NukeIncoming", { Name = tg.Name, X = tg.Pos.X, Z = tg.Pos.Z, Radius = R, Seconds = secs, Siren = N.SirenSoundId })
 	if deps.AnalyticsService then
@@ -248,7 +288,7 @@ function NukeService.Launch(player: Player, targetId: any): (boolean, string?)
 		local cs = deps.CombatService
 		local res: any = nil
 		if cs and cs.ApplyRadiusDamage then
-			local okD, r = pcall(cs.ApplyRadiusDamage, if player.Parent then player else nil, tg.Pos, R, N.Damage, {
+			local okD, r = pcall(cs.ApplyRadiusDamage, if player.Parent then player else nil, tg.Pos, R, N.Damage * heavyDmg, {
 				WeaponId = "Nuke",
 				MinMult = N.MinMult,
 				RequireLos = false,

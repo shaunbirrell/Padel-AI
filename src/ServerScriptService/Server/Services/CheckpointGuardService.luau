@@ -337,6 +337,9 @@ local function onDeath(info: any)
 	local killer = info.Killer
 	if typeof(killer) == "Instance" and killer:IsA("Player") then
 		s.Contrib[killer.UserId] = now -- his own kill or his army's (ByUnit)
+		pcall(function() -- claude-bud JOB 39: the Intel Office's "kill checkpoint guards" contract
+			(require(script.Parent.EndgameService) :: any).NoteContract(killer, "CheckpointGuard", 1)
+		end)
 		if deps.AnalyticsService then
 			pcall(deps.AnalyticsService.Log, "checkpoint_guard_kill", killer.UserId, { site = s.Id, byUnit = info.ByUnit == true })
 		end

@@ -122,6 +122,7 @@ local NEVER_MULTIPLIED: { [string]: boolean } = {
 	admin = true,
 	collector = true,
 	atm_raid = true,
+	endgame_reward = true, -- claude-bud JOB 39: contract rewards are already sized from the player's own (multiplied) income
 }
 
 --[[ F3 Empire Tax (EconomyConfig.OutpostIncomeBuff). A Home Outpost row (TerritoryConfig.Starter, F10) is never a

@@ -5015,6 +5015,9 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			if wsL > 0 then
 				pcall(EGS.DressVehicle, model, wsL)
 			end
+			if EGS.PaintVehicle then
+				pcall(EGS.PaintVehicle, model, player.UserId) -- phase 5: the Black Market paint (nothing while not live)
+			end
 		end
 	end
 	-- W2: vehicle HP (VehicleHealth). At 0 HP: the wreck look at once, the normal teardown after DebrisSeconds.

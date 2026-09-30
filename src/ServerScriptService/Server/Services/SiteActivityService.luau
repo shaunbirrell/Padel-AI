@@ -441,6 +441,12 @@ local function onDeath(info: any)
 				gs.Awake = false
 				gs.ClearedAt = os.clock()
 				table.clear(gs.Recs)
+				local k = info.Killer -- claude-bud JOB 39: the Intel Office's "clear a site garrison" contract
+				if typeof(k) == "Instance" and k:IsA("Player") then
+					pcall(function()
+						(require(script.Parent.EndgameService) :: any).NoteContract(k, "Garrison", 1)
+					end)
+				end
 			end
 		end
 	end

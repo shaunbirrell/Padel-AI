@@ -36,6 +36,9 @@ export type Ctx = {
 	Gate: CFrame?, -- GateDefenseService gate frame (local -Z = inside)
 	Nests: { CFrame }, -- the Base Tier AutoGun nests (T2 first, T4 second)
 	HQ: { CFrame: CFrame, Size: Vector3 }?, -- the Command Center building's box
+	BannerColor: Color3?, -- phase 5: the Black Market banner colour (nil = the base green)
+	Crest: boolean?, -- phase 5: the R35 Bastion Crest (a gold crest over the gate)
+	Trophy: boolean?, -- phase 5: the Black Market trophy cannon on the parade ground
 }
 
 local M = Enum.Material
@@ -150,9 +153,10 @@ local function bastion(m: Model, pos: Vector3, groundY: number, top: number)
 end
 
 -- a flag on a mast: pole, banner, gold finial (3 parts); `trim` adds the Capital strip (1 more)
+local bannerColor: Color3 = C.Banner
 local function flagMast(m: Model, base: CFrame, height: number, trim: boolean)
 	put(m, "FlagMast", Vector3.new(height, 0.3, 0.3), base * CFrame.new(0, height * 0.5, 0) * CFrame.Angles(0, 0, math.rad(90)), C.Steel, M.Metal, true, Enum.PartType.Cylinder)
-	put(m, "FlagBanner", Vector3.new(0.1, 2.6, 4), base * CFrame.new(0, height - 1.6, 2.1), C.Banner, M.Fabric)
+	put(m, "FlagBanner", Vector3.new(0.1, 2.6, 4), base * CFrame.new(0, height - 1.6, 2.1), bannerColor, M.Fabric)
 	put(m, "FlagFinial", Vector3.new(0.6, 0.6, 0.6), base * CFrame.new(0, height + 0.3, 0), C.Gold, M.Metal, false, Enum.PartType.Ball)
 	if trim then
 		put(m, "CapitalTrim", Vector3.new(0.12, 0.35, 4), base * CFrame.new(0, height - 3.0, 2.1), C.Gold, M.Metal)
@@ -189,6 +193,7 @@ function BaseTierBuilder.Build(ctx: Ctx, tier: number): (Model, number, number)
 	root.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	local t = math.clamp(math.floor(tier), 0, #EndgameConfig.BaseTier.Tiers)
 	root:SetAttribute("WE_Tier", t)
+	bannerColor = ctx.BannerColor or C.Banner
 	local G = ctx.Ground
 	local roofTop: CFrame? = nil
 	local rw, rd = 0, 0
@@ -284,7 +289,7 @@ function BaseTierBuilder.Build(ctx: Ctx, tier: number): (Model, number, number)
 			if i <= 2 then
 				local top = p.CFrame * CFrame.new(0, p.Size.Y * 0.5 + 2.8, 0)
 				put(m, "GateMast", Vector3.new(4.5, 0.25, 0.25), top * CFrame.new(0, 2.25, 0) * CFrame.Angles(0, 0, math.rad(90)), C.Steel, M.Metal, false, Enum.PartType.Cylinder)
-				put(m, "GateBanner", Vector3.new(0.1, 1.8, 2.6), top * CFrame.new(0, 3.3, 1.4), C.Banner, M.Fabric)
+				put(m, "GateBanner", Vector3.new(0.1, 1.8, 2.6), top * CFrame.new(0, 3.3, 1.4), bannerColor, M.Fabric)
 			end
 		end
 	end
@@ -301,6 +306,37 @@ function BaseTierBuilder.Build(ctx: Ctx, tier: number): (Model, number, number)
 			flagMast(m, G * CFrame.new(x, 0, -14), 14, true)
 		end
 	end
+	-- phase 5 extras (any tier): the R35 Bastion Crest over the gate, the Black Market trophy cannon on the parade ground
+	local gate = ctx.Gate
+	if ctx.Crest and gate then
+		local m = tierFolder(root, 0)
+		m.Name = "Crest"
+		local ch = math.max(ctx.WallTop - ctx.GroundY, 12) + 4.6
+		put(m, "CrestShield", Vector3.new(2.6, 3.0, 0.4), gate * CFrame.new(0, ch, -2.3), C.Gold, M.Metal)
+		put(m, "CrestInlay", Vector3.new(1.6, 2.0, 0.1), gate * CFrame.new(0, ch, -2.55), bannerColor, M.SmoothPlastic)
+		put(m, "CrestPoint", Vector3.new(1.4, 1.4, 0.4), gate * CFrame.new(0, ch - 1.6, -2.3) * CFrame.Angles(0, 0, math.rad(45)), C.Gold, M.Metal)
+	end
+	if ctx.Trophy then
+		local m = tierFolder(root, 0)
+		m.Name = "Trophy"
+		local tb = G * CFrame.new(18, 0, 20) * CFrame.Angles(0, math.rad(180), 0)
+		put(m, "TrophyPlinth", Vector3.new(7, 1, 4.4), tb * CFrame.new(0, 0.5, 0), C.ConcreteDark, M.Granite, true)
+		put(m, "TrophyPlinthCap", Vector3.new(7.4, 0.3, 4.8), tb * CFrame.new(0, 1.15, 0), C.Trim, M.Marble)
+		for _, s in ipairs({ -1, 1 }) do
+			put(m, "TrophyWheel", Vector3.new(0.5, 2.6, 2.6), tb * CFrame.new(1.3 * s, 2.6, 0.6) * CFrame.Angles(0, 0, math.rad(90)), C.Bronze, M.Metal, false, Enum.PartType.Cylinder)
+			put(m, "TrophyHub", Vector3.new(0.7, 0.6, 0.6), tb * CFrame.new(1.3 * s, 2.6, 0.6) * CFrame.Angles(0, 0, math.rad(90)), C.Gold, M.Metal, false, Enum.PartType.Cylinder)
+		end
+		put(m, "TrophyCarriage", Vector3.new(1.8, 0.7, 3.4), tb * CFrame.new(0, 2.2, 0.9), C.Bronze, M.Wood)
+		put(m, "TrophyTrail", Vector3.new(0.6, 0.5, 2.6), tb * CFrame.new(0, 1.6, 2.6) * CFrame.Angles(math.rad(-14), 0, 0), C.Bronze, M.Wood)
+		put(m, "TrophyBarrel", Vector3.new(4.6, 0.8, 0.8), tb * CFrame.new(0, 3.1, -0.6) * CFrame.Angles(0, math.rad(90), math.rad(12)), C.Bronze, M.Metal, false, Enum.PartType.Cylinder)
+		put(m, "TrophyMuzzle", Vector3.new(0.5, 1.0, 1.0), tb * CFrame.new(0, 3.55, -2.8) * CFrame.Angles(0, math.rad(90), math.rad(12)), C.Gold, M.Metal, false, Enum.PartType.Cylinder)
+		put(m, "TrophyBreech", Vector3.new(0.9, 0.9, 0.9), tb * CFrame.new(0, 2.75, 1.5), C.Bronze, M.Metal, false, Enum.PartType.Ball)
+		for i, x in ipairs({ -2.6, -2.0, 2.3 }) do
+			put(m, "TrophyShot" .. i, Vector3.new(0.6, 0.6, 0.6), tb * CFrame.new(x, 1.6, -1.4), C.Steel, M.Metal, false, Enum.PartType.Ball)
+		end
+		put(m, "TrophyPlaque", Vector3.new(2.2, 0.6, 0.08), tb * CFrame.new(0, 0.6, -2.24), C.Gold, M.Metal)
+	end
+
 	local parts = 0
 	for _, d in ipairs(root:GetDescendants()) do
 		if d:IsA("BasePart") then

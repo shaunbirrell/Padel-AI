@@ -68,6 +68,11 @@ local function nonNeg(v: any): number
 	return math.max(0, math.floor(n))
 end
 
+-- the steady income (EconomyService's WE_IncomePerSec, display attribute) the income-scaled prices read
+local function incomePerSec(player: Player): number
+	return tonumber(player:GetAttribute("WE_IncomePerSec")) or 0
+end
+
 local function maxMult(): number
 	return tonumber((ResearchConfig :: any).MaxMult) or 3
 end
@@ -657,6 +662,274 @@ function EndgameService.DressVehicle(model: Model, L: number)
 	end
 end
 
+-- ── phase 5: the BLACK MARKET (cosmetics), the rebirth UNLOCKS, the INTEL OFFICE (contracts / scouting / raided-by) ──
+local scoutReport: { [number]: { [string]: any } } = {}
+
+local function nowUnix(): number
+	return os.time()
+end
+
+function EndgameService.MarketStock(): { [string]: any }
+	local week = EndgameConfig.WeekIndex(nowUnix())
+	local s = EndgameConfig.BlackMarketStock(week)
+	local nextMonday = EndgameConfig.BlackMarket.EpochMondayUnix + (week + 1) * 604800
+	return { Week = week, Cash = s.Cash, Gold = s.Gold, GoldPrice = s.GoldPrice, EndsIn = math.max(0, nextMonday - nowUnix()) }
+end
+
+local function marketData(profile: any): { [string]: any }
+	local bm = endgameMap(profile, "BlackMarket")
+	if typeof(bm.Bought) ~= "table" then
+		bm.Bought = {}
+	end
+	if typeof(bm.Equip) ~= "table" then
+		bm.Equip = {}
+	end
+	return bm
+end
+
+-- the equipped Black Market item of a kind for a base owner (nil = none / not live)
+local function equipped(userId: number, kind: string): any
+	if not EndgameConfig.LiveFor(userId, "BlackMarket") then
+		return nil
+	end
+	local profile = profileOf(userId)
+	if profile == nil then
+		return nil
+	end
+	local id = marketData(profile).Equip[kind]
+	local item = if typeof(id) == "string" then EndgameConfig.BlackMarket.Items[id] else nil
+	return if item and marketData(profile).Bought[id] == true then item else nil
+end
+
+function EndgameService.BannerColor(userId: number): Color3?
+	local it = equipped(userId, "Banner")
+	return if it then it.Color else nil
+end
+function EndgameService.BeretColor(userId: number): Color3?
+	local it = equipped(userId, "Beret")
+	return if it then it.Color else nil
+end
+function EndgameService.PaintColor(userId: number): Color3?
+	local it = equipped(userId, "Paint")
+	return if it then it.Color else nil
+end
+function EndgameService.HasTrophy(userId: number): boolean
+	return equipped(userId, "Trophy") ~= nil
+end
+
+-- the endgame rebirth unlocks this player holds (granted by SyncUnlocks while the Rebirth part is live)
+function EndgameService.HasUnlock(userId: number, flag: string): boolean
+	if not EndgameConfig.LiveFor(userId, "Rebirth") then
+		return false
+	end
+	local profile = profileOf(userId)
+	local e = if profile then profile.Endgame else nil
+	return typeof(e) == "table" and typeof(e.Unlocks) == "table" and e.Unlocks[flag] == true
+end
+
+function EndgameService.SyncUnlocks(player: Player)
+	if not EndgameConfig.LiveFor(player.UserId, "Rebirth") then
+		return
+	end
+	local profile = getProfile(player)
+	if profile == nil then
+		return
+	end
+	local u = endgameMap(profile, "Unlocks")
+	for _, row in ipairs(EndgameConfig.RebirthUnlocks) do
+		if nonNeg(profile.Prestige) >= row.At and u[row.Flag] ~= true then
+			u[row.Flag] = true
+			notify(player, "Rebirth unlock: " .. row.Name, "Success")
+			if deps.DataService and deps.DataService.MarkDirty then
+				deps.DataService.MarkDirty(player)
+			end
+		end
+	end
+end
+
+-- a soldier's beret in the owner's Black Market colour (SquadOrdersService.spawnUnit; nothing while not live)
+function EndgameService.CosmeticUnit(owner: Player, model: Model)
+	local c = EndgameService.BeretColor(owner.UserId)
+	if c == nil then
+		return
+	end
+	local beret = model:FindFirstChild("Beret", true) or model:FindFirstChild("Helmet", true)
+	if beret and beret:IsA("BasePart") then
+		beret.Color = c
+		local sm = beret:FindFirstChildOfClass("SpecialMesh")
+		if sm and sm.TextureId ~= "" then
+			sm.VertexColor = Vector3.new(c.R, c.G, c.B) * 1.6 -- a textured hat takes the colour as a tint
+		end
+	end
+end
+
+-- a vehicle in the owner's Black Market paint (VehicleService spawn): the biggest body parts take the paint
+function EndgameService.PaintVehicle(model: Model, userId: number)
+	local c = EndgameService.PaintColor(userId)
+	if c == nil then
+		return
+	end
+	local parts: { BasePart } = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 0.5 and d:GetAttribute("WE_WorkshopPiece") ~= true and d.Size.Magnitude > 3 then
+			table.insert(parts, d)
+		end
+	end
+	table.sort(parts, function(a, b)
+		return a.Size.Magnitude > b.Size.Magnitude
+	end)
+	for i = 1, math.min(#parts, 6) do
+		parts[i].Color = c
+	end
+end
+
+-- ── phase 5: WARHEADS (the silo; NukeService asks), the HEIST kits (BankRaidService asks), the bounty scale ──
+function EndgameService.HeavyWarheadMults(player: Player): (number, number, boolean)
+	if not EndgameConfig.LiveFor(player.UserId, "Warheads") then
+		return 1, 1, false
+	end
+	local profile = getProfile(player)
+	local w = if profile and typeof(profile.Endgame) == "table" and typeof(profile.Endgame.Warheads) == "table" then profile.Endgame.Warheads else nil
+	if w == nil or nonNeg(w.Heavy) < 1 then
+		return 1, 1, false
+	end
+	local H = EndgameConfig.Warheads.Heavy
+	return H.RadiusMult, H.DamageMult, true
+end
+
+-- NukeService.Launch spent a Heavy warhead (it rode on this launch)
+function EndgameService.SpendHeavy(player: Player)
+	local profile = getProfile(player)
+	if profile then
+		local w = endgameMap(profile, "Warheads")
+		w.Heavy = math.max(0, nonNeg(w.Heavy) - 1)
+		if deps.DataService and deps.DataService.MarkDirty then
+			deps.DataService.MarkDirty(player)
+		end
+	end
+end
+
+function EndgameService.HeistKit(player: Player): number
+	if not EndgameConfig.LiveFor(player.UserId, "Heist") then
+		return 0
+	end
+	local profile = getProfile(player)
+	local e = if profile then profile.Endgame else nil
+	return if typeof(e) == "table" then math.min(nonNeg(e.HeistKit), #EndgameConfig.Heist.Kits) else 0
+end
+
+-- BankRaidService: the vault the raider's kit opens: (hold seconds, payout, cooldown, extra guards); the old
+-- numbers without a kit / while not live
+function EndgameService.HeistRules(player: Player, hold: number, cash: number, cooldown: number): (number, number, number, number)
+	local k = EndgameService.HeistKit(player)
+	local row: any = EndgameConfig.Heist.Kits[k]
+	if row == nil then
+		return hold, cash, cooldown, 0
+	end
+	local pay = EndgameConfig.IncomeMinutesPrice(row.Floor, row.Minutes, incomePerSec(player))
+	return row.Hold, pay, (tonumber(row.Cooldown) or cooldown), row.Guards
+end
+
+-- PlazaBounty: the bounty grows to 3 min of the claimer's income (the reason is multiplied, so the cash
+-- multiplier is divided back out; 1 = the config's $15,000 while not live)
+function EndgameService.BountyScale(player: Player, base: number): number
+	if not EndgameConfig.LiveFor(player.UserId, "RewardScaling") or base <= 0 then
+		return 1
+	end
+	local eco = deps.EconomyService
+	local okM, m = pcall(function()
+		return eco and eco.GetCashMult and eco.GetCashMult(player, "plaza_bounty")
+	end)
+	local mult = if okM and typeof(m) == "number" and m > 0 then m else 1
+	local target = EndgameConfig.IncomeMinutesPrice(EndgameConfig.Heist.BountyFloor, EndgameConfig.Heist.BountyMinutes, incomePerSec(player)) / mult
+	return math.max(1, target / base)
+end
+
+-- ── the Intel Office's contracts ──
+local function dayIndex(): number
+	return math.floor(nowUnix() / 86400)
+end
+
+local function contractsOf(player: Player, profile: any): { [string]: any }
+	local c = endgameMap(profile, "Contracts")
+	local day = dayIndex()
+	if c.Day ~= day or typeof(c.Rows) ~= "table" then
+		c.Day = day
+		local rows = {}
+		for _, def in ipairs(EndgameConfig.DailyContracts(player.UserId, day)) do
+			table.insert(rows, { Kind = def.Kind, Need = def.Need, Have = 0, Paid = false, Text = string.format(def.Text, def.Need) })
+		end
+		c.Rows = rows
+	end
+	local week = EndgameConfig.WeekIndex(nowUnix())
+	if c.Week ~= week or typeof(c.Hvt) ~= "table" then
+		c.Week = week
+		local h = EndgameConfig.WeeklyHvt(week)
+		c.Hvt = { Kind = h.Kind, Need = h.Need, Have = 0, Paid = false, Text = string.format(h.Text, h.Need) }
+	end
+	if typeof(c.RaidedBy) ~= "table" then
+		c.RaidedBy = {}
+	end
+	return c
+end
+
+-- an event that counts for contracts (the game's own hooks call this; nothing while not live)
+function EndgameService.NoteContract(player: Player?, kind: string, n: number?)
+	if player == nil or not EndgameConfig.LiveFor(player.UserId, "Contracts") then
+		return
+	end
+	local profile = getProfile(player)
+	if profile == nil then
+		return
+	end
+	local c = contractsOf(player, profile)
+	local add = math.max(1, math.floor(tonumber(n) or 1))
+	local changed = false
+	for _, r in ipairs(c.Rows) do
+		if r.Kind == kind and r.Have < r.Need then
+			r.Have = math.min(r.Need, r.Have + add)
+			changed = true
+			if r.Have >= r.Need then
+				notify(player, "Contract done: claim it at the Intel Office", "Success")
+			end
+		end
+	end
+	local h = c.Hvt
+	if h and h.Kind == kind and h.Have < h.Need then
+		h.Have = math.min(h.Need, h.Have + add)
+		changed = true
+	end
+	if changed and deps.DataService and deps.DataService.MarkDirty then
+		deps.DataService.MarkDirty(player)
+	end
+end
+
+-- a raid on `victim` by `attacker` (the in-person ATM raid and the SEND raid): the victim's "Raided by" list, and a
+-- DefendRaid contract step for the defender when a raid on him FAILED (called with defended = true)
+function EndgameService.NoteRaidedBy(victim: Player, attacker: Player)
+	if not EndgameConfig.LiveFor(victim.UserId, "Contracts") then
+		return
+	end
+	local profile = getProfile(victim)
+	local ap = getProfile(attacker)
+	if profile == nil then
+		return
+	end
+	local c = contractsOf(victim, profile)
+	table.insert(c.RaidedBy, 1, { UserId = attacker.UserId, Name = attacker.DisplayName, At = nowUnix(), PlotId = if ap then tonumber(ap.BasePlotId) else nil })
+	while #c.RaidedBy > EndgameConfig.Contracts.RaidedByKeep do
+		table.remove(c.RaidedBy)
+	end
+	if deps.DataService and deps.DataService.MarkDirty then
+		deps.DataService.MarkDirty(victim)
+	end
+end
+
+function EndgameService.ContractReward(player: Player, hvt: boolean): number
+	local Ct = EndgameConfig.Contracts
+	return EndgameConfig.IncomeMinutesPrice(Ct.Floor, if hvt then Ct.HvtMinutes else Ct.Minutes, incomePerSec(player))
+end
+
 local function setAttr(player: Player, name: string, value: any)
 	if player:GetAttribute(name) ~= value then
 		player:SetAttribute(name, value)
@@ -686,6 +959,23 @@ function EndgameService.SyncAttributes(player: Player)
 	setAttr(player, "WE_MedKits", if hosp and nonNeg(eg.MedKits) > 0 then nonNeg(eg.MedKits) else nil)
 	setAttr(player, "WE_Revive", if hosp and nonNeg(eg.Revive) > 0 then true else nil)
 	setAttr(player, "WE_GunMods", EndgameService.GunModsString(player))
+	-- phase 5: the R40 Legend Parade (clients build 6 honour-guard figures on his parade ground; the frame is published)
+	local parade: CFrame? = nil
+	if EndgameService.HasUnlock(player.UserId, "LegendParade") then
+		local setup = Workspace:FindFirstChild("WarEmpireSetup")
+		local bases = setup and setup:FindFirstChild("Bases")
+		local f = bases and bases:FindFirstChild("Plot" .. tostring(profile.BasePlotId))
+		local pad = f and f:FindFirstChild("PlotPad")
+		if pad and pad:IsA("BasePart") then
+			local okL, BL = pcall(function(): any
+				return require(script.Parent.Parent.Modules.BaseLayout)
+			end)
+			if okL and BL then
+				parade = BL.PlotCFrame(pad.Position) * CFrame.new(0, pad.Size.Y * 0.5, 14)
+			end
+		end
+	end
+	setAttr(player, "WE_ParadeCF", parade)
 end
 
 -- the station frame for a station kind, or nil until the world registered it
@@ -740,9 +1030,6 @@ local function short(n: number): string
 	return tostring(math.floor(n))
 end
 
-local function incomePerSec(player: Player): number
-	return tonumber(player:GetAttribute("WE_IncomePerSec")) or 0
-end
 
 function EndgameService.RebuildPrice(player: Player): number
 	local D = EndgameConfig.Defence
@@ -854,6 +1141,73 @@ function EndgameService.State(player: Player): { [string]: any }
 		end
 		out.Defence = rows
 		out.Rebuild = { Need = needsRebuild(profile), Price = EndgameService.RebuildPrice(player) }
+	end
+	if EndgameConfig.LiveFor(uid, "Warheads") then
+		local W = EndgameConfig.Warheads
+		local w = endgameMap(profile, "Warheads")
+		out.Warheads = {
+			TacticalCost = W.Tactical.Cost,
+			TacticalNeed = if nonNeg(profile.Prestige) < W.Tactical.NeedRebirths then string.format(EndgameConfig.Text.NeedRebirths, W.Tactical.NeedRebirths) else nil,
+			HeavyCost = W.Heavy.Cost,
+			HeavyNeed = if EndgameService.HasUnlock(uid, "HeavyWarhead") then nil else string.format(EndgameConfig.Text.NeedRebirths, W.Heavy.NeedRebirths),
+			Heavy = nonNeg(w.Heavy),
+		}
+	end
+	if EndgameConfig.LiveFor(uid, "Heist") then
+		local k = math.min(nonNeg(EndgameService.Data(profile).HeistKit), #EndgameConfig.Heist.Kits)
+		local nextRow: any = EndgameConfig.Heist.Kits[k + 1]
+		local cur: any = EndgameConfig.Heist.Kits[k]
+		out.Heist = {
+			Kit = k,
+			KitName = if cur then cur.Name else nil,
+			Next = if nextRow then { Name = nextRow.Name, Cost = nextRow.Cost, Minutes = nextRow.Minutes, Guards = nextRow.Guards, Hold = nextRow.Hold } else nil,
+		}
+	end
+	if EndgameConfig.LiveFor(uid, "BlackMarket") then
+		local stock = EndgameService.MarketStock()
+		local B = EndgameConfig.BlackMarket
+		local bm = marketData(profile)
+		local camos = endgameMap(profile, "Camos")
+		local rows = {}
+		local function row(id: string, price: number, gold: boolean)
+			local it = B.Items[id]
+			if it then
+				local owned = if it.Kind == "Camo" then camos[it.Camo] == true else bm.Bought[id] == true
+				table.insert(rows, { Id = id, Name = it.Name, Kind = it.Kind, Price = price, Gold = gold, Owned = owned, On = bm.Equip[it.Kind] == id })
+			end
+		end
+		for i, id in ipairs(stock.Cash) do
+			row(id, EndgameConfig.IncomeMinutesPrice(B.Slots[i].Floor, B.Slots[i].Minutes, incomePerSec(player)), false)
+		end
+		row(stock.Gold, stock.GoldPrice, true)
+		local owned = {}
+		for id, yes in pairs(bm.Bought) do
+			local it = B.Items[id]
+			if yes == true and it and table.find(stock.Cash, id) == nil and id ~= stock.Gold then
+				table.insert(owned, { Id = id, Name = it.Name, Kind = it.Kind, On = bm.Equip[it.Kind] == id })
+			end
+		end
+		out.Market = { Rows = rows, Owned = owned, EndsIn = stock.EndsIn, Gold = nonNeg(profile.Gold) }
+	end
+	if EndgameConfig.LiveFor(uid, "Contracts") then
+		local c = contractsOf(player, profile)
+		local bases = {}
+		for _, p in ipairs(Players:GetPlayers()) do
+			local pp = getProfile(p)
+			if p ~= player and pp and tonumber(pp.BasePlotId) then
+				table.insert(bases, { Name = p.DisplayName, PlotId = tonumber(pp.BasePlotId) })
+			end
+		end
+		out.Intel = {
+			Rows = c.Rows,
+			Hvt = c.Hvt,
+			Reward = EndgameService.ContractReward(player, false),
+			HvtReward = EndgameService.ContractReward(player, true),
+			RaidedBy = c.RaidedBy,
+			Bases = bases,
+			ScoutPrice = EndgameConfig.IncomeMinutesPrice(EndgameConfig.Contracts.ScoutFloor, EndgameConfig.Contracts.ScoutMinutes, incomePerSec(player)),
+			Report = scoutReport[uid],
+		}
 	end
 	if EndgameConfig.LiveFor(uid, "Mastery") then
 		local Ma = EndgameConfig.Mastery
@@ -1138,6 +1492,238 @@ function EndgameService._Plan(player: Player, profile: any, kind: string, id: st
 				endgameMap(p, "Workshop")[cl] = L
 				local hp, sp = EndgameConfig.WorkshopMults(L)
 				return string.format("%s vehicles: +%d%% HP, +%d%% speed (next spawn)", cl, math.floor((hp - 1) * 100 + 0.5), math.floor((sp - 1) * 100 + 0.5))
+			end,
+		}
+	elseif kind == "Warhead" then
+		local W = EndgameConfig.Warheads
+		if not EndgameConfig.LiveFor(uid, "Warheads") then
+			return nil, T.NotLive
+		end
+		if not EndgameService.AtHQ(player) then
+			return nil, T.NotAtHQ
+		end
+		local okN, NS = pcall(function(): any
+			return (require :: any)(script.Parent:FindFirstChild("NukeService")) -- lazy (NukeService requires this module too)
+		end)
+		if id == "Tactical" then
+			if nonNeg(profile.Prestige) < W.Tactical.NeedRebirths then
+				return nil, string.format(T.NeedRebirths, W.Tactical.NeedRebirths)
+			end
+			if not (okN and NS and NS.CanFillSlot and NS.CanFillSlot(player)) then
+				return nil, "Your silo is full (or not built)"
+			end
+			return {
+				Key = "warhead",
+				Price = W.Tactical.Cost,
+				Log = string.format("HQ warhead Tactical ok price=%d", W.Tactical.Cost),
+				Apply = function(_p: any): string
+					if NS.FillSlot then
+						NS.FillSlot(player)
+					end
+					return "Tactical Warhead loaded: one silo slot is ready"
+				end,
+			}
+		elseif id == "Heavy" then
+			if not EndgameService.HasUnlock(uid, "HeavyWarhead") then
+				return nil, string.format(T.NeedRebirths, W.Heavy.NeedRebirths)
+			end
+			local w = endgameMap(profile, "Warheads")
+			if nonNeg(w.Heavy) >= W.Heavy.Hold then
+				return nil, "You hold a Heavy Warhead already"
+			end
+			return {
+				Key = "warhead",
+				Price = W.Heavy.Cost,
+				Log = string.format("HQ warhead Heavy ok price=%d", W.Heavy.Cost),
+				Apply = function(p: any): string
+					endgameMap(p, "Warheads").Heavy = 1
+					return "Heavy Warhead ready: your next launch hits bigger and harder"
+				end,
+			}
+		end
+		return nil, "Unknown"
+	elseif kind == "Heist" then
+		local Hk = EndgameConfig.Heist.Kits
+		if not EndgameConfig.LiveFor(uid, "Heist") then
+			return nil, T.NotLive
+		end
+		if not EndgameService.AtStation(player, "Heist") then
+			return nil, "Go to the Fixer at the bank"
+		end
+		if EndgameService.RecentlyHurt(player) then
+			return nil, T.Hurt
+		end
+		local e = EndgameService.Data(profile)
+		local L = math.min(nonNeg(e.HeistKit), #Hk) + 1
+		local row: any = Hk[L]
+		if row == nil then
+			return nil, "You have every kit"
+		end
+		return {
+			Key = "heist",
+			Price = row.Cost,
+			Log = string.format("Bank heist kit %s ok price=%d", row.Name, row.Cost),
+			Apply = function(p: any): string
+				EndgameService.Data(p).HeistKit = L
+				return row.Name .. ": a bigger vault opens for you"
+			end,
+		}
+	elseif kind == "Market" or kind == "MarketEquip" then
+		local B = EndgameConfig.BlackMarket
+		if not EndgameConfig.LiveFor(uid, "BlackMarket") then
+			return nil, T.NotLive
+		end
+		if typeof(id) ~= "string" then
+			return nil, "Unknown"
+		end
+		local sid: string = id
+		if kind == "MarketEquip" then
+			-- free, anywhere: "None:<Kind>" takes that kind off
+			local offKind = string.match(sid, "^None:(%a+)$")
+			local item = B.Items[sid]
+			if offKind == nil and (item == nil or marketData(profile).Bought[sid] ~= true or item.Kind == "Camo") then
+				return nil, "You don't own that"
+			end
+			return {
+				Key = "market_equip",
+				Price = 0,
+				Log = "Market equip " .. sid,
+				Apply = function(p: any): string
+					local bm = marketData(p)
+					if offKind then
+						bm.Equip[offKind] = nil
+						return "Taken off"
+					end
+					bm.Equip[item.Kind] = sid
+					return item.Name .. " on"
+				end,
+			}
+		end
+		local item = B.Items[sid]
+		if item == nil then
+			return nil, "Unknown item"
+		end
+		if not EndgameService.AtStation(player, "BlackMarket") then
+			return nil, "Go to the Black Market"
+		end
+		if EndgameService.RecentlyHurt(player) then
+			return nil, T.Hurt
+		end
+		local stock = EndgameService.MarketStock()
+		local slot = table.find(stock.Cash, sid)
+		local isGold = stock.Gold == sid
+		if slot == nil and not isGold then
+			return nil, "Not in stock this week"
+		end
+		local owned = if item.Kind == "Camo" then endgameMap(profile, "Camos")[item.Camo] == true else marketData(profile).Bought[sid] == true
+		if owned then
+			return nil, "Owned"
+		end
+		local si: number = slot or 1
+		local price = if isGold then stock.GoldPrice else EndgameConfig.IncomeMinutesPrice(B.Slots[si].Floor, B.Slots[si].Minutes, incomePerSec(player))
+		return {
+			Key = "market",
+			Price = price,
+			Gold = isGold,
+			Log = string.format("Market %s ok price=%d gold=%s", sid, price, tostring(isGold)),
+			Apply = function(p: any): string
+				if item.Kind == "Camo" then
+					endgameMap(p, "Camos")[item.Camo] = true
+				else
+					local bm = marketData(p)
+					bm.Bought[sid] = true
+					bm.Equip[item.Kind] = sid
+				end
+				return item.Name .. " bought"
+			end,
+		}
+	elseif kind == "Claim" or kind == "Scout" then
+		local Ct = EndgameConfig.Contracts
+		if not EndgameConfig.LiveFor(uid, "Contracts") then
+			return nil, T.NotLive
+		end
+		if not EndgameService.AtStation(player, "Intel") then
+			return nil, "Go to the Intel Office"
+		end
+		local c = contractsOf(player, profile)
+		if kind == "Claim" then
+			local row = if id == "HVT" then c.Hvt else c.Rows[tonumber(string.match(tostring(id), "^D(%d)$")) or 0]
+			if row == nil then
+				return nil, "Unknown"
+			end
+			if row.Paid then
+				return nil, "Claimed"
+			end
+			if row.Have < row.Need then
+				return nil, string.format("%d/%d done", row.Have, row.Need)
+			end
+			local hvt = id == "HVT"
+			local reward = EndgameService.ContractReward(player, hvt)
+			return {
+				Key = "claim",
+				Price = 0,
+				Log = string.format("Intel claim %s reward=%d", tostring(id), reward),
+				Apply = function(_p: any): string
+					row.Paid = true
+					local eco = deps.EconomyService
+					if eco and eco.AddCash then
+						eco.AddCash(player, reward, "endgame_reward")
+					end
+					if hvt and eco and eco.AddGold then
+						eco.AddGold(player, Ct.HvtGold, "endgame_reward")
+					end
+					return string.format("Contract paid: +$%s%s", short(reward), if hvt then string.format(" +%d Gold", Ct.HvtGold) else "")
+				end,
+			}
+		end
+		-- Scout: a report on an ONLINE player's base (offline bases cannot be raided, so they are never shown)
+		local pid = tonumber(id)
+		local target: Player? = nil
+		for _, p in ipairs(Players:GetPlayers()) do
+			local pp = getProfile(p)
+			if p ~= player and pp and tonumber(pp.BasePlotId) == pid then
+				target = p
+			end
+		end
+		if pid == nil or target == nil then
+			return nil, "Nobody holds that base now"
+		end
+		local price = EndgameConfig.IncomeMinutesPrice(Ct.ScoutFloor, Ct.ScoutMinutes, incomePerSec(player))
+		local tgt: Player = target
+		return {
+			Key = "scout",
+			Price = price,
+			Log = string.format("Intel scout plot=%d price=%d", pid, price),
+			Apply = function(_p: any): string
+				local rep: { [string]: any } = { Name = tgt.DisplayName, PlotId = pid, At = nowUnix() }
+				local gd = deps.GateDefenseService
+				local okI, info = pcall(function()
+					return gd and gd.SiegeInfo and gd.SiegeInfo(pid)
+				end)
+				if okI and typeof(info) == "table" then
+					rep.Turrets = #(info.TurretPower or {})
+					rep.Guards = #(info.GuardPower or {})
+					rep.GateHp = info.GateHp
+				end
+				local tp = getProfile(tgt)
+				if tp then
+					rep.Tier = EndgameService.Tier(tp)
+					rep.Defence = {}
+					for _, tr in ipairs(EndgameConfig.Defence.Tracks) do
+						rep.Defence[tr] = EndgameService.DefenceLevel(tp, tr)
+					end
+				end
+				local okP, AP = pcall(function(): any
+					return require(script.Parent.Parent.Modules.ArmyPlan)
+				end)
+				if okP and AP and AP.CheckSend then
+					local okV, v = pcall(AP.CheckSend, player, pid)
+					if okV and typeof(v) == "table" then
+						rep.Verdict = v.Text
+					end
+				end
+				scoutReport[uid] = rep
+				return "Scouting report ready: " .. tgt.DisplayName
 			end,
 		}
 	elseif kind == "Heal" or kind == "MedKit" or kind == "Medicine" or kind == "Revive" or kind == "UseMedKit" or kind == "UseRevive" then
@@ -1576,7 +2162,10 @@ function EndgameService.SyncBaseTier(player: Player)
 	end
 	local existing = plotFolder:FindFirstChild("WE_BaseTier")
 	local tier = tierOf(player.UserId)
-	if tier <= 0 then
+	local crest = EndgameService.HasUnlock(player.UserId, "BastionCrest")
+	local trophy = EndgameService.HasTrophy(player.UserId)
+	local banner = EndgameService.BannerColor(player.UserId)
+	if tier <= 0 and not crest and not trophy then
 		if existing then
 			existing:Destroy()
 		end
@@ -1588,7 +2177,10 @@ function EndgameService.SyncBaseTier(player: Player)
 	end
 	-- the key: the owner, the tier, the Command Center level (its building is rebuilt on a level change), the walls
 	local cc = if typeof(profile.BaseUpgrades) == "table" then tonumber(profile.BaseUpgrades.CommandCenter) or 0 else 0
-	local key = string.format("%d|%d|%d|%s|%.1f|%d|%d", player.UserId, tier, cc, tostring(ctx.HQ ~= nil), ctx.WallTop, #ctx.Nests, #ctx.Posts)
+	ctx.Crest = crest
+	ctx.Trophy = trophy
+	ctx.BannerColor = banner
+	local key = string.format("%d|%d|%d|%s|%.1f|%d|%d|%s|%s|%s", player.UserId, tier, cc, tostring(ctx.HQ ~= nil), ctx.WallTop, #ctx.Nests, #ctx.Posts, tostring(crest), tostring(trophy), tostring(banner))
 	if existing and existing:GetAttribute("WE_TierKey") == key then
 		return
 	end
@@ -1714,6 +2306,8 @@ local function publishStations()
 					else
 						missing = true
 					end
+				elseif st.WorldAt then
+					publish(kind, CFrame.lookAt(st.WorldAt, st.WorldAt + st.Face), "world anchor")
 				elseif st.StoreProp then
 					local wf = Workspace:FindFirstChild("WorldFill")
 					local sp = wf and wf:FindFirstChild("StoreProps")
@@ -1786,6 +2380,7 @@ function EndgameService.Init(d: { [string]: any })
 		untrained[p.UserId] = nil
 		healAt[p.UserId] = nil
 		gunCache[p.UserId] = nil
+		scoutReport[p.UserId] = nil
 		diedAt[p.UserId] = nil
 		healing[p.UserId] = nil
 		feeToast[p.UserId] = nil
@@ -1803,6 +2398,7 @@ function EndgameService.Init(d: { [string]: any })
 				pcall(EndgameService.SyncAttributes, p)
 				pcall(EndgameService.SyncBaseTier, p)
 				pcall(EndgameService.MedicTick, p, 5)
+				pcall(EndgameService.SyncUnlocks, p)
 			end
 			pcall(sweepOrphans)
 		end
