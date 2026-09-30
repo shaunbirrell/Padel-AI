@@ -107,6 +107,24 @@ _j40("MaxSpeed = 58, -- claude-bud JOB 40: x1.45" in _AY and "MaxOwnerSpeed = 48
      and "MaxSpeed = 58, -- claude-bud JOB 40: was 50" in _AY and "SpeedUpPerTick = 6," in _AY and "SpeedDownPerTick = 5," in _AY,
      "B: the army keeps up (Follow3 58, Lead 48, CatchUp 60, Follow2 58; no lurch: +6 / -5 per tick)")
 
+# ── part C: store props at landmarks / bases (owner-first JOB40; rows wired only after the probe) ──
+_SPC = _j40_src(_CF + "StorePropsConfig.luau")
+_SPS = _j40_code(_SV + "Services/StorePropsService.luau")
+_j40("cfg40.JOB40 = { Enabled = true, OwnerFirst = true }" in _SPC and "cfg40.Budget.MaxBasePartsPerPlot = 600" in _SPC
+     and "cfg40.BaseKeepOut = {" in _SPC and "function cfg40.JOB40LiveFor(" in _SPC, "C: JOB40 owner-first, 600-part base cap, keep-out boxes")
+_cand = _j40_re.findall(r"\{ Id = (\d+), Name = \"([^\"]+)\"", _SPC.split("cfg40.Candidates = {")[1].split("\n}")[0])
+_j40(len(_cand) >= 10 and not any(_j40_re.search(r"(?i)sn-75|phoenix|orly|f-16|apache|black hawk", n) for _, n in _cand),
+     "C: %d candidates, none a real weapon system / real place" % len(_cand))
+_pr = _SPS.split("function StorePropsService.PlaceReplaceRows")[1].split("function StorePropsService.RestoreReplaced")[0]
+_j40("JOB40LiveFor(p.UserId)" in _pr and _pr.index("spawnCopy(") < _pr.index("p.Transparency = 1") and "if copy == nil then" in _pr,
+     "C: a kit is hidden only after its store copy placed; owner-first")
+_j40("pcall(StorePropsService.RestoreReplaced)" in _SPS.split("local function killAll")[1].split("\nend\n")[0]
+     and 'p:GetAttribute("WE_ReplacedC") ~= false' in _SPS, "C: the live kill puts every kit back exactly (transparency / collide / query)")
+_db = _SPS.split("function StorePropsService.DressBase")[1].split("\nend\n")[0]
+_j40("JOB40LiveFor(owner.UserId)" in _db and "MaxBasePartsPerPlot" in _db and "inKeepOut(" in _db, "C: base dressing: live owners only, the part cap, never on a helipad / runway / basin")
+_j40(_J40P("tools/probes/job40_props_probe.luau").exists() and "InsertService" in _j40_src("tools/probes/job40_props_probe.luau")
+     and "HttpService" not in _j40_src("tools/probes/job40_props_probe.luau"), "C: the load probe exists (read-only, no key in the game)")
+
 _luau = _j40_os.environ.get("LUAU")
 if _luau is None and _j40_os.environ.get("LUAU_COMPILE"):
     _cand = _j40_os.environ["LUAU_COMPILE"].replace("luau-compile", "luau")

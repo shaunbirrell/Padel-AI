@@ -691,6 +691,7 @@ local function worldLoop()
 	end
 	task.wait(2)
 	placeWorld()
+	pcall(StorePropsService.PlaceReplaceRows) -- claude-bud JOB 40 part C (no-op while ReplaceRows is empty)
 end
 
 -- ── rebirth zone visuals ──────────────────────────────────────────────────────────────────────────────────────────
@@ -913,6 +914,7 @@ end
 -- live kill: remove every copy, rebuild the Part zones
 local function killAll()
 	killed = true
+	pcall(StorePropsService.RestoreReplaced) -- claude-bud JOB 40: the RadarDome kit etc. come back
 	if worldFolder then
 		(worldFolder :: Folder):ClearAllChildren()
 	end
@@ -924,6 +926,153 @@ local function killAll()
 		end
 	end
 	log("live kill: every store prop removed")
+end
+
+-- ── claude-bud JOB 40 part C: ReplaceRows (a store copy replaces a WorldKits landmark) + BaseRows (per live plot) ──
+local replaced: { { Parts: { BasePart }, Copy: Model? } } = {}
+function StorePropsService.PlaceReplaceRows(): number
+	local cfg: any = Cfg
+	if off() or typeof(cfg.ReplaceRows) ~= "table" or #cfg.ReplaceRows == 0 then
+		return 0
+	end
+	-- owner first: only once a player JOB 40 is live for is in this server (then it stays, like the world rows)
+	local liveHere = false
+	for _, p in ipairs(Players:GetPlayers()) do
+		if cfg.JOB40LiveFor(p.UserId) then
+			liveHere = true
+		end
+	end
+	if not liveHere then
+		return 0
+	end
+	local wf = Workspace:FindFirstChild("WorldFill")
+	local n = 0
+	for _, row in ipairs(cfg.ReplaceRows) do
+		local tpl = loadTemplate(row.Id)
+		if tpl.State ~= "ok" or tpl.Model == nil then
+			log("replace %s: template %s (%s): the kit stays", tostring(row.KitPart), tostring(row.Id), tostring(tpl.Err))
+			continue
+		end
+		-- the kit: its named part within Radius of the slot, and every part of its cluster within the kit footprint
+		local kitPart: BasePart? = nil
+		for _, d in ipairs(if wf then wf:GetDescendants() else {}) do -- once, at placement (never per frame)
+			if d:IsA("BasePart") and d.Name == row.KitPart and Vector3.new(d.Position.X - row.At.X, 0, d.Position.Z - row.At.Z).Magnitude <= row.Radius then
+				kitPart = d
+				break
+			end
+		end
+		if kitPart == nil then
+			log("replace %s: no kit near %s: nothing to replace", tostring(row.KitPart), tostring(row.At))
+			continue
+		end
+		local kp = kitPart :: BasePart
+		local cluster = kp:FindFirstAncestorWhichIsA("Model") or kp.Parent
+		local parts: { BasePart } = {}
+		local lowY = math.huge
+		for _, d in ipairs((cluster :: Instance):GetDescendants()) do
+			if d:IsA("BasePart") and Vector3.new(d.Position.X - kp.Position.X, 0, d.Position.Z - kp.Position.Z).Magnitude <= 9 then
+				table.insert(parts, d)
+				lowY = math.min(lowY, d.Position.Y - d.Size.Y * 0.5)
+			end
+		end
+		local cf = CFrame.new(kp.Position.X, lowY, kp.Position.Z) * CFrame.Angles(0, math.rad(row.Yaw or 0), 0)
+		local copy, np = spawnCopy(tpl, cf, row.Scale or 1, "replace", row.Id, wf or Workspace)
+		if copy == nil then
+			log("replace %s: the copy failed: the kit stays", tostring(row.KitPart))
+			continue
+		end
+		-- sit the copy's bottom on the kit's base (never floats)
+		local ccf, csize = (copy :: Model):GetBoundingBox()
+		;(copy :: Model):PivotTo((copy :: Model):GetPivot() + Vector3.new(0, lowY - (ccf.Position.Y - csize.Y * 0.5), 0))
+		for _, p in ipairs(parts) do
+			p:SetAttribute("WE_ReplacedT", p.Transparency)
+			p:SetAttribute("WE_ReplacedC", p.CanCollide)
+			p:SetAttribute("WE_ReplacedQ", p.CanQuery)
+			p.Transparency = 1
+			p.CanCollide = false
+			p.CanQuery = false
+		end
+		table.insert(replaced, { Parts = parts, Copy = copy })
+		n += 1
+		log("replace %s at %s: store %d placed (%d parts), %d kit parts hidden", tostring(row.KitPart), tostring(row.At), row.Id, np, #parts)
+	end
+	return n
+end
+
+-- put every replaced kit back (the live kill / Enabled off)
+function StorePropsService.RestoreReplaced()
+	for _, r in ipairs(replaced) do
+		if r.Copy and r.Copy.Parent then
+			r.Copy:Destroy()
+		end
+		for _, p in ipairs(r.Parts) do
+			local t0 = p:GetAttribute("WE_ReplacedT")
+			p.Transparency = if typeof(t0) == "number" then t0 else 0
+			p.CanCollide = p:GetAttribute("WE_ReplacedC") ~= false
+			p.CanQuery = p:GetAttribute("WE_ReplacedQ") ~= false
+		end
+	end
+	table.clear(replaced)
+end
+
+-- a plot-local box test against Cfg.BaseKeepOut (helipad spots, runway, basin, apron lane)
+local function inKeepOut(x: number, z: number, hx: number, hz: number): boolean
+	local cfg: any = Cfg
+	for _, k in ipairs(cfg.BaseKeepOut or {}) do
+		if math.abs(x - k.X) < hx + k.HX and math.abs(z - k.Z) < hz + k.HZ then
+			return true
+		end
+	end
+	return false
+end
+StorePropsService._InKeepOut = inKeepOut
+
+-- the BaseRows for one plot of a LIVE owner (rebuilt on a claim / level change by the caller)
+function StorePropsService.DressBase(plotId: number, owner: Player): number
+	local cfg: any = Cfg
+	if off() or typeof(cfg.BaseRows) ~= "table" or #cfg.BaseRows == 0 or not cfg.JOB40LiveFor(owner.UserId) then
+		return 0
+	end
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local bases = setup and setup:FindFirstChild("Bases")
+	local f = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
+	local pad = f and f:FindFirstChild("PlotPad")
+	if pad == nil or not pad:IsA("BasePart") then
+		return 0
+	end
+	local old = (f :: Instance):FindFirstChild("WE_StoreBase")
+	if old then
+		old:Destroy()
+	end
+	local holder = Instance.new("Folder")
+	holder.Name = "WE_StoreBase"
+	holder.Parent = f
+	local okL, BL = pcall(function(): any
+		return require(script.Parent.Parent.Modules.BaseLayout)
+	end)
+	if not okL or BL == nil then
+		return 0
+	end
+	local profile = deps.DataService and deps.DataService.GetProfile(owner)
+	local used, placed = 0, 0
+	for _, row in ipairs(cfg.BaseRows) do
+		local lvl = if profile and typeof(profile.BaseUpgrades) == "table" then tonumber(profile.BaseUpgrades[row.Anchor]) or 0 else 0
+		local tpl = loadTemplate(row.Id)
+		local size = if tpl.State == "ok" and tpl.Model then tpl.Model:GetExtentsSize() * (row.Scale or 1) else nil
+		if lvl >= (row.MinLevel or 0) and size and used + (tpl.Parts or 0) <= cfg.Budget.MaxBasePartsPerPlot
+			and not inKeepOut(row.X, row.Z, size.X * 0.5, size.Z * 0.5) then
+			local cf = BL.PlotLocalCFrame(pad.Position, row.X, pad.Size.Y * 0.5, row.Z, row.Yaw or 0)
+			local copy, np = spawnCopy(tpl, cf, row.Scale or 1, "base", row.Id, holder)
+			if copy then
+				local ccf, csize = copy:GetBoundingBox()
+				copy:PivotTo(copy:GetPivot() + Vector3.new(0, (pad.Position.Y + pad.Size.Y * 0.5) - (ccf.Position.Y - csize.Y * 0.5), 0))
+				used += np
+				placed += 1
+			end
+		end
+	end
+	log("base plot %d: %d copies, %d parts (cap %d)", plotId, placed, used, cfg.Budget.MaxBasePartsPerPlot)
+	return placed
 end
 
 -- test hooks (server only, never behind a remote): the Open Cloud / Studio harness places without a player
@@ -983,6 +1132,26 @@ function StorePropsService.Init(d: { [string]: any })
 	end
 	if Cfg.ZonesOn then
 		task.spawn(watchZones)
+	end
+	-- claude-bud JOB 40 part C: base dressing for LIVE owners (0.1 Hz poll; nothing runs while BaseRows is empty)
+	local cfgB: any = Cfg
+	if typeof(cfgB.BaseRows) == "table" and #cfgB.BaseRows > 0 then
+		task.spawn(function()
+			local dressed: { [number]: number } = {}
+			while not off() do
+				for plotId = 1, BaseConfig.MaxPlots do
+					local owner = ownerOfPlot(plotId)
+					local uid = if owner then owner.UserId else 0
+					if dressed[plotId] ~= uid then
+						dressed[plotId] = uid
+						if owner then
+							pcall(StorePropsService.DressBase, plotId, owner)
+						end
+					end
+				end
+				task.wait(10)
+			end
+		end)
 	end
 	log("Init (OwnerFirst=%s, World=%s, Zones=%s)", tostring(Cfg.OwnerFirst), tostring(Cfg.World), tostring(Cfg.ZonesOn))
 end

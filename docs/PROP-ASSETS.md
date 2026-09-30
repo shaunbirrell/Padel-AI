@@ -124,3 +124,31 @@ To change what goes where, edit the `WorldRows` / `ZoneRows` rows there (and thi
 | 608760179 | Racing Buggy | Rebirth vehicle | sheenamoonFun | yes | 97 | 5.7 x 5.5 x 10.4 | world | World: area:Oasis x1 @1.0 (placed 1 in the live-world test) |
 | 6192529467 | Military Jeep, This is for transport. | Rebirth vehicle | boogalooSaint | yes | 52 | 7.7 x 7.2 x 19.2 | world | World: site:CampViper x1 @1.0; area:Armory x1 @1.0 (placed 2 in the live-world test) |
 | 4928101363 | Tank (Works) public! | Rebirth vehicle | xFavihx | yes | 157 | 17.0 x 17.2 x 45.8 | both | World: area:Armory x2 @0.42 (placed 2 in the live-world test) <br> Rebirth: Tank Factory (WestYard) L1,2,3 |
+
+## JOB 40 part C candidates (claude-bud, 2026-09-30): PENDING the probe
+Found by a Creator Store search; **none is wired yet**. `StorePropsConfig.ReplaceRows` / `BaseRows` stay empty until
+Code Bot runs `tools/probes/job40_props_probe.luau` (Open Cloud Luau on the live place) plus WE_CHECK2 and
+`tools/wire-asset-ids.py`. Wire only ids that load, have <= 40 parts after the trim and pass the origin rule.
+| Id | Name | Intended use |
+|---|---|---|
+| 856258654 | Radar Station | Radar Hill (replaces the 6-part RadarDome kit) |
+| 91764409 | Radar Station | Radar Hill |
+| 124247102466690 | Radar Station Military Dish Satellite | Radar Hill |
+| 110033425601385 | Military Satellite Dish Radar Station | Radar Hill / North Ridge |
+| 37473580 | Pre-War Radar/Radio Station | Radar Hill |
+| 12972439539 | ATC tower | base helipad BaseRow |
+| 10140810871 | ATC Tower | base helipad BaseRow |
+| 10480494876 | ATC Tower | base airfield BaseRow |
+| 1660469777 | Military Cargo HQ | base airfield BaseRow |
+| 5437548774 | Radio Command | capture sites |
+| 9230948087 | Sandbag Bunker | base guard post / capture sites |
+| 12735882090 | Sandbags Bunker | capture sites |
+| 11921729320 | Sandbag Bunker small | base BaseRow |
+| 11921736228 | Sandbag Bunker medium | base BaseRow |
+| 8887518461 | Firebase Sandbag Bunker | capture sites |
+| 86311252190175 | Market stall | Crossroads Town |
+| 388036950 | Market Stand | Crossroads Town |
+| 2033520495 | Stall V2 | Crossroads Town |
+| 740042082 | Market | Crossroads Town |
+
+Rejected up front: the SN-75 radar (a real weapon system) and the Phoenix Sky Harbor / Orly control towers (real places).

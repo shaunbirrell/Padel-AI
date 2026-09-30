@@ -16,6 +16,22 @@
   1. As B (another player, not in A's clan), walk onto A's helipad apron: guards turn, aim and shoot. Kill one: respawns at post after 45 s. As A past your own guards: no shots. Clan-mate: the same. B runs out past 45 studs: guard walks back.
   2. With Speed Boost: you run at 40. Army stays together on a straight, corner and U-turn (no teleports). Speed pad / Shop / death card read "Run 75% faster" / "Run 2.5x faster".
 - **Next:** Studio 2-player proof for base-guard hostility (docs/BASE-GUARDS-ROOTCAUSE.md §6) still owed; do NOT flip Posts / SpeedV2 / Endgame / BaseMarker OwnerFirst=false until owner asks. JOBs 41/42 still queued. Claude desktop-bud tip was `6b0fe34` (~22:33 Dublin); not a takeover.
+## claude-bud JOB 40 PART C (2026-09-30): STORE PROPS AT LANDMARKS AND BASES (branch `claude/desktop-bud`)
+**Flag:** `StorePropsConfig.JOB40` (`Enabled`, `OwnerFirst = true`), on top of the STORE-PROPS switches. OFF = today.
+- **ReplaceRows:** a store model replaces a WorldKits landmark (e.g. the 6-part RadarDome at Radar Hill). The kit parts
+  are hidden only AFTER the copy placed; the copy's bottom sits on the kit's base; the live kill restores every kit
+  exactly (transparency, collide, query). Owner-first: runs once a player it is live for is in the server.
+- **BaseRows:** per-plot dressing for a LIVE owner by base-upgrade level; 600 parts per plot cap; never inside
+  `BaseKeepOut` (helipad spots, runway, basin, apron lane). A 0.1 Hz poll re-dresses a plot on a claim.
+- **Both lists are EMPTY.** I cannot run the Open Cloud load probe (no API key, and none goes in the game).
+  19 candidates are in `StorePropsConfig.Candidates` and `docs/PROP-ASSETS.md`.
+- **Code Bot:** run `tools/probes/job40_props_probe.luau` on the live place, then WE_CHECK2 + wire-asset-ids, then add
+  the passing ids as rows. Until then nothing changes in the world.
+- **Owed:** the §11 before / after screenshots (need the wired rows + Studio).
+- **Checks:** claude_bud_job40 part C pins; BuyPathStatic FAIL=0; sims 0 failed; rojo ok; audit OK.
+
+**Test ON HIS PHONE** (after Code Bot wires rows): Radar Hill shows the store radar, not the block dome, and nothing
+floats; your base helipad / runway stay clear; frame rate at your base is unchanged.
 
 ## claude-bud JOB 40 PART B (2026-09-30): SPEED HIGHER, WITH TEXT THAT CAN'T GO STALE (branch `claude/desktop-bud`)
 **Flags:** `MonetizationConfig.SpeedV2` (`Enabled`, `OwnerFirst = true`).

@@ -355,6 +355,74 @@ local StorePropsConfig = {
 }
 
 -- live for this player? (OwnerFirst: the owner + Studio testers only)
+--[[ claude-bud JOB 40 part C (2026-09-30): two more row types (owner-first, JOB40.OwnerFirst):
+	  * ReplaceRows: a store copy REPLACES a WorldKits landmark (e.g. the 6-part RadarDome at Radar Hill's Frontier
+	    "Dome" slot): the copy is placed on the kit's footprint first and only THEN the kit's parts are hidden
+	    (Transparency 1, no collision / query); any failed check keeps the kit. { Kit part name, At (world X / Z of the
+	    slot), Radius (studs to find it), Id, Scale, Yaw }.
+	  * BaseRows: per-plot military dressing for a LIVE owner (the helipad / airfield / dock areas that
+	    Place.BaseClearStuds keeps every WorldRow out of): plot-local X / Z / Yaw from BaseLayoutConfig's frame, MinLevel
+	    of the Anchor structure, Budget.MaxBasePartsPerPlot. Never on VehicleConfig.HelipadSpots / the runway / basin,
+	    never touching another part (Place.Pad).
+	Both lists stay EMPTY until the Open Cloud probe (tools/probes/job40_props_probe.luau) proves each id loads (rule:
+	wire only ids the probe shows loading). The candidates are listed in Candidates + docs/PROP-ASSETS.md. Empty lists =
+	OFF == OLD (the RadarDome kit and the plain helipad exactly as today). ]]
+local cfg40: any = StorePropsConfig
+cfg40.JOB40 = { Enabled = true, OwnerFirst = true }
+cfg40.ReplaceRows = {
+	-- after the probe, e.g.: { KitPart = "RadarDome", At = Vector3.new(-1053.5, 0, -1009.8), Radius = 20, Id = <radar station id>, Scale = 1, Yaw = 0 },
+} :: { any }
+cfg40.BaseRows = {
+	-- after the probe, e.g.: { Id = <ops building id>, Anchor = "Helipad", MinLevel = 1, X = 58, Z = -110, Yaw = 180, Scale = 1 },
+} :: { any }
+cfg40.Budget.MaxBasePartsPerPlot = 600
+cfg40.BaseKeepOut = { -- plot-local boxes no BaseRow may touch (centre X / Z, half sizes): helipad spots, runway, basin
+	{ X = 40, Z = -125, HX = 18, HZ = 18 }, -- the helipad pad (HelipadSpots inside)
+	{ X = -63, Z = -80, HX = 97, HZ = 16 }, -- the runway
+	{ X = 128, Z = -112, HX = 27, HZ = 37 }, -- the dock basin
+	{ X = 40, Z = -86, HX = 8, HZ = 26 }, -- the HeliApron lane
+}
+-- JOB 40 candidates (Creator Store search 2026-09-30), PENDING the probe; rejected up front: SN-75 radar (a real weapon
+-- system), the Phoenix Sky Harbor / Orly control towers (real places)
+cfg40.Candidates = {
+	{ Id = 856258654, Name = "Radar Station", Use = "Radar Hill ReplaceRow" },
+	{ Id = 91764409, Name = "Radar Station", Use = "Radar Hill ReplaceRow" },
+	{ Id = 124247102466690, Name = "Radar Station Military Dish Satellite", Use = "Radar Hill ReplaceRow" },
+	{ Id = 110033425601385, Name = "Military Satellite Dish Radar Station", Use = "Radar Hill / North Ridge" },
+	{ Id = 37473580, Name = "Pre-War Radar/Radio Station", Use = "Radar Hill" },
+	{ Id = 12972439539, Name = "ATC tower", Use = "base helipad BaseRow" },
+	{ Id = 10140810871, Name = "ATC Tower", Use = "base helipad BaseRow" },
+	{ Id = 10480494876, Name = "ATC Tower", Use = "base airfield BaseRow" },
+	{ Id = 1660469777, Name = "Military Cargo HQ", Use = "base airfield BaseRow" },
+	{ Id = 5437548774, Name = "Radio Command", Use = "capture sites" },
+	{ Id = 9230948087, Name = "Sandbag Bunker", Use = "base guard post / capture sites" },
+	{ Id = 12735882090, Name = "Sandbags Bunker", Use = "capture sites" },
+	{ Id = 11921729320, Name = "Sandbag Bunker small", Use = "base BaseRow" },
+	{ Id = 11921736228, Name = "Sandbag Bunker medium", Use = "base BaseRow" },
+	{ Id = 8887518461, Name = "Firebase Sandbag Bunker", Use = "capture sites" },
+	{ Id = 86311252190175, Name = "Market stall", Use = "Crossroads Town" },
+	{ Id = 388036950, Name = "Market Stand", Use = "Crossroads Town" },
+	{ Id = 2033520495, Name = "Stall V2", Use = "Crossroads Town" },
+	{ Id = 740042082, Name = "Market", Use = "Crossroads Town" },
+}
+
+function cfg40.JOB40LiveFor(userId: any): boolean
+	local b = cfg40.JOB40
+	if b.Enabled ~= true then
+		return false
+	end
+	if b.OwnerFirst ~= true then
+		return true
+	end
+	local okR, RS = pcall(function(): any
+		return game:GetService("RunService")
+	end)
+	if okR and RS and RS:IsStudio() then
+		return true
+	end
+	return (require(script.Parent.AdminConfig) :: any).IsPlaytestOwner(userId)
+end
+
 function StorePropsConfig.LiveFor(userId: any): boolean
 	if StorePropsConfig.Enabled ~= true then
 		return false

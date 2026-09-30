@@ -9881,3 +9881,11 @@ ds_territories.luau T3):
   only matter above today's 32 run speed). The default sim is unchanged (FAILS 0).
 - **Turn error:** at a 40-stud/s run the formation's turn error exceeds the spec's 6 (90-degree turn 7.5, hairpin
   10.7). Reported as a known limit, not fixed by retuning the formation controller outside the brief's numbers.
+
+## 2026-09-30 — claude-bud JOB 40 part C: store props
+- **Rows empty:** the rows ship empty because the load / origin probe needs Open Cloud (Code Bot). The code paths are
+  no-ops until rows exist, so this is safe to publish.
+- **Replace scope:** ReplaceRows change the shared world for everyone in a server once the owner is there (same model
+  as the STORE-PROPS world rows); BaseRows only dress a live owner's own plot.
+- **Kit cluster:** the kit to hide = BaseParts of the named part's model within 9 studs of it (the RadarDome kit is
+  6 parts inside that radius).
