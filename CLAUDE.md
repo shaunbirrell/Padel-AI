@@ -17,7 +17,26 @@
   [`docs/claude-queue/JOB40-guards-speed-props-like-reminder.md`](docs/claude-queue/JOB40-guards-speed-props-like-reminder.md).
   **PRIORITY (owner 2026-09-30 19:05): do part E (base owner markers: name above each base, visible from anywhere) FIRST
   within JOB 40, then A-D.** The owner wants the markers to drive attacks.
-- After JOB 40 is finished and pushed, do JOB 41 (the first minutes: a guided goal chain with a real first fight and
+- **NEXT, TOP PRIORITY (Shaun 2026-09-30 23:19 Dublin; queued by Code Bot v153): when the job you are on right now is
+  finished and pushed, do JOB 40E-FIX (base owner name tags: high in the sky, compact flag + short name, @handle only
+  when close, distance scale with a clamp, fade + only the nearest 4-5, no overlapping tags, no tag without a live
+  owner, YOU kept on your own base, phone test at 1024x471 with before / after screenshots, BaseMarker OwnerFirst stays
+  true) exactly as written in
+  [`docs/claude-queue/JOB40E-FIX-base-tags.md`](docs/claude-queue/JOB40E-FIX-base-tags.md) (`0f210ab` may already cover
+  most of it: verify, finish, screenshot). THEN JOB 41 (moved to the front: it comes before every other queued job),
+  then JOB 42.**
+- **JOB 41 note (Code Bot v153, already LIVE for everyone on phase-7-polish):** Code Bot already shipped (a) the
+  first-offer timing: the first paid offer (the Commander Starter Pack, or the 99 R$ Speed Boost when the pack is not
+  wanted) comes at ~2 minutes of play whatever the tutorial state (`MonetizationConfig.FirstOffer`, the
+  `ClaimSoftOfferSlot` quiet window, `MonetizationService.ScheduleFirstOffer`); (b) the Starter Pack re-queue: it is
+  marked `StarterBundleOffered` only when the client confirms the card SHOWED (`OfferResult` remote +
+  `Server/Modules/OfferLedger`), a dropped / refused / unanswered card comes back 45 s later; (c) the analytics keys:
+  ProductPrompted now gets `productKey`, plus custom `PassBought` / `OfferShown` / `OfferDropped`. JOB 41 must NOT redo
+  any of these. Its part B Recruit Pack must plug into the same path (ClaimSoftOfferSlot budget, FirstOffer schedule,
+  OfferLedger "shown" ack, the same analytics fields); it must not push the first offer back to 10 minutes or the
+  tutorial end, and must not mark an offer at send. If part B's "only after the first capture or 10 min" rule clashes
+  with the 2-minute first offer, keep the 2-minute Starter Pack and ask Shaun in LATEST-HANDOFF.
+- After JOB 40E-FIX is finished and pushed, do JOB 41 (the first minutes: a guided goal chain with a real first fight and
   capture, funnel analytics, a ~49 R$ Recruit Pack offered only after the first capture or 10 min, rival TARGETS with
   SEND ARMY, and a big-win rate prompt with NO reward) exactly as written in
   [`docs/claude-queue/JOB41-first-minutes-retention.md`](docs/claude-queue/JOB41-first-minutes-retention.md). Owner-first
