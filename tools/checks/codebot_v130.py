@@ -27,8 +27,8 @@ def _code130(p):
 
 _S130 = "src/ServerScriptService/Server/"
 for _f in (_S130 + "Services/DataService.luau", _S130 + "Services/BaseService.luau", _S130 + "EarlyRemotes.server.luau"):
-    _cb130('SetAttribute("WE_Build", 130)' in _rd130(_f), "CODEBOT v130: WE_Build=130 " + _f.rsplit("/", 1)[-1])
-_cb130("WE_Build=130" in _rd130(_S130 + "Services/DataService.luau"), "CODEBOT v130: DataService profile-loaded log says WE_Build=130")
+    _cb130('SetAttribute("WE_Build", 131)' in _rd130(_f), "CODEBOT v130: WE_Build=131 " + _f.rsplit("/", 1)[-1])
+_cb130("WE_Build=131" in _rd130(_S130 + "Services/DataService.luau"), "CODEBOT v130: DataService profile-loaded log says WE_Build=131")
 
 # JOB 32: plaza enterables + LosRule + army Indoors
 _cb130(_P130("src/ReplicatedStorage/Shared/Configs/PlazaBuildingsConfig.luau").is_file()

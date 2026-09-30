@@ -48,7 +48,7 @@ _MC = _j34_code(_CL + "Controllers/MissionController.luau")
 _PSC = _j34_code(_SV + "Modules/ProfileSchema.luau")
 
 # gate: owner-first kill switch; off = the old 3-achievement path
-_j34("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- only UserId 470626172" in _AC and "RetentionConfig.Live(AchievementConfig.Live, uid)" in _AS,
+_j34("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false, -- codebot_v131 launch: everyone (JOB 34 handoff)" in _AC and "RetentionConfig.Live(AchievementConfig.Live, uid)" in _AS,
      "one owner-first kill switch (AchievementConfig.Live, the RetentionConfig.Live rule)")
 _j34("if ach and ach.Check and ach.Check(player) then" in _MS and 'MissionService.GrantAchievement(player, "FirstUpgrade")' in _MS
      and "if deps.DataService == nil or not live(player.UserId) then\n\t\treturn false" in _AS,

@@ -44,14 +44,14 @@ local RebirthConfig = {
 	-- claude-bud JOB 33: ZonesLive / WeaponsLive = PUBLISHED FOR EVERYONE (codebot_v101 keeps them false). While
 	-- Live.OwnerFirst is true the owner (+ Studio) gets the zones and guns anyway; to launch, Code Bot sets OwnerFirst =
 	-- false AND these two true.
-	ZonesLive = false, -- the 7 rebirth zones round the base (RebirthZonesConfig), locked fences + "Unlocks at Rebirth N"
-	WeaponsLive = false, -- the 7 rebirth guns (WeaponConfig rebirth rows, granted by PrestigeConfig.RebirthUnlocks)
+	ZonesLive = true, -- codebot_v131 launch: published for everyone (JOB 33 handoff)
+	WeaponsLive = true, -- codebot_v131 launch: published for everyone (JOB 33 handoff)
 	--[[ claude-bud JOB 33: the owner-first gate of the whole rebirth overhaul. Enabled = false: every part off (the
 		rebirth exactly as before). OwnerFirst = true: live only for the owner (+ Studio test players). Parts can be
 		switched off one by one. ]]
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v131 launch: everyone (JOB 33 handoff)
 		Parts = {
 			Zones = true, -- RebirthZoneService: zones, locked fences, buildings, their effects
 			Nuke = true, -- NukeService: silo charging, launch, blast

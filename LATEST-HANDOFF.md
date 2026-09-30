@@ -1,4 +1,21 @@
 <!-- Q2-START -->
+## v131 (Code Bot Roblox, 2026-09-30 ~11:18 Dublin): ship claude-bud JOB 33 rebirth overhaul + JOB 34 achievements — LAUNCHED FOR EVERYONE — FAST TRAVEL STILL OFF — MAP-REDESIGN KEPT — place version TBD
+- **WE_Build 131**. Code commit TBD. Open Cloud TBD. PreferMesh OFF; WE_Building* untouched; admins stay off leaderboards (unchanged). Fast travel stays REMOVED (`MapConfig.FastTravelEnabled = false`). MAP-REDESIGN (v129) kept.
+- **FF-merge** `origin/claude/desktop-bud` tips `f763276` (JOB 33) + `50d19b8` (JOB 34) onto phase-7-polish (was `b23f7f7` v130).
+- **Launch flips (per Claude handoff "To launch"):**
+  - `RebirthConfig.Live.OwnerFirst = false`; `ZonesLive = true`; `WeaponsLive = true` (rebirth zones, nukes, guns, vehicles, perks, trims, pacing, screen live for everyone).
+  - `AchievementConfig.Live.OwnerFirst = false` (21 achievements + Missions ACHIEVEMENTS page + chat shout-outs live for everyone).
+  - **BadgeIds stay 0** — `docs/BADGES.md` lists names/descriptions for Creator Hub; creating badges costs Robux (owner call). Server awards only non-zero ids.
+- **JOB 33:** 7 rebirth annex zones (Tank Factory / Silo / Artillery / Drone Hangar / Elite Barracks / Oil Refinery / Bunker), silo nukes (shared PvP ApplyRadiusDamage, never near bases), land vehicle + gun grants, perks, rank banners/titles, richer rebirth screen, pacing MinLevelFor = 40+4/rebirth.
+- **JOB 34:** 21 once-only achievements, quiet backfill, popup + reward, rate-limited TextChatService shout-outs, big banners, Missions > ACHIEVEMENTS page, ACTIVITIES header stack fix.
+- **Checks:** BuyPathStatic PASS=6675 FAIL=0; claude_bud_job33/34 pins; run_rebirth_test 0 failed; run_achievement_test 0 failed; codebot_v131; rojo ok.
+- **Phone tests (Migrate to Latest Update):**
+  1. Rebirth at a high enough level: GAIN shows new zone + soldiers + starting cash; NEXT REBIRTHS preview; after confirm, annex yard appears outside the plot with BUILD console (not on a road).
+  2. Build Tank Factory L1 at West Yard (Cash): income ticks; locked fences on later zones still read "Unlocks at Rebirth N".
+  3. At R2+ with Silo: charge / rush a warhead; launch at plaza or outpost — everyone sees 10s countdown + ring; bases never targeted; shared PvP rules apply.
+  4. Join: one toast "N achievements unlocked!" if backfill; Missions > ACHIEVEMENTS shows gold earned + locked progress bars; nothing overlaps at phone size.
+  5. Get First Blood (kill enemy soldier): popup for you; other phone sees `[WAR EMPIRE] … drew first blood!` chat line; rejoin and kill again — no second popup/chat.
+  6. MAP still tap-to-pin only (no TRAVEL); labels do not overlap.
 ## claude-bud JOB 34 (2026-09-30): achievements, chat shout-outs, badges (branch `claude/desktop-bud`)
 **Found:** 3 server-only achievements (First Brick, War Chest, Sergeant) with a toast. There was no page, no chat line,
 no badges, and no BadgeService code anywhere.

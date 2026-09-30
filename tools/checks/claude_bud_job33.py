@@ -43,11 +43,11 @@ _PS = _j33_code("src/ServerScriptService/Server/Services/PrestigeService.luau")
 _VS = _j33_code("src/ServerScriptService/Server/Services/VehicleService.luau")
 _MO = _j33_src("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau")
 
-_OWN = "OwnerFirst = true, -- only UserId 470626172"
+_OWN = "OwnerFirst = false, -- codebot_v131 launch: everyone (JOB 33 handoff)"
 _j33("\tLive = {\n\t\tEnabled = true,\n\t\t" + _OWN in _RC and "function RebirthConfig.LiveFor(userId: any, part: string): boolean" in _RC,
      "one owner-first gate with per-part kill switches (RebirthConfig.Live)")
-_j33("\tZonesLive = false," in _RC and "\tWeaponsLive = false," in _RC and "return RebirthConfig.ZonesLive == true" in _RC,
-     "ZonesLive / WeaponsLive stay the publish-to-everyone switches (codebot_v101); owner-first runs before them")
+_j33("\tZonesLive = true," in _RC and "\tWeaponsLive = true," in _RC and "return RebirthConfig.ZonesLive == true" in _RC,
+     "ZonesLive / WeaponsLive published for everyone (codebot_v131 launch); LiveFor still gates parts")
 # no new Robux items
 _ZC = _j33_src("src/ReplicatedStorage/Shared/Configs/RebirthZonesConfig.luau")
 _j33("MarketplaceService" not in _ZS + _NS and "ProductId" not in _ZC and "DevProduct" not in _ZS + _NS + _ZC and "GamePass" not in _ZS + _NS + _ZC,

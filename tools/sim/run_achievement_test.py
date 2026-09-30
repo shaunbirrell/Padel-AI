@@ -138,7 +138,7 @@ for id, d in pairs(AC.Achievements) do
 end
 check(n == 21, "21 achievements (19 from the brief, First Building = the original First Brick, + War Chest / Sergeant): " .. n)
 check(AC.Achievements.CommandCenterMax.Target == BC.Structures.CommandCenter.MaxLevel, "Command Center target = BaseConfig max level " .. tostring(BC.Structures.CommandCenter.MaxLevel))
-check(AC.Live.Enabled == true and AC.Live.OwnerFirst == true, "kill switch on, owner-first")
+check(AC.Live.Enabled == true and AC.Live.OwnerFirst == false, "kill switch on, launched for everyone")
 
 -- ── 2. helpers ──
 local AS = freshService()
@@ -148,9 +148,14 @@ check(table.concat(ords, " ") == "1st 2nd 3rd 4th 11th 12th 13th 21st 22nd 23rd 
 check(AS.StatValue({ Stats = { TotalCashEarned = 5 } }, "Stats.TotalCashEarned") == 5 and AS.StatValue({}, "LB.Kills") == 0 and AS.StatValue({ Level = 7 }, "Level") == 7, "dotted stat reader")
 
 -- ── 3. owner-first ──
-check(AS.LiveFor(OWNER.UserId) == true and AS.LiveFor(OTHER.UserId) == false, "owner live, other player not (not Studio)")
+check(AS.LiveFor(OWNER.UserId) == true and AS.LiveFor(OTHER.UserId) == true, "everyone live after codebot_v131 launch")
+-- codebot_v131: OwnerFirst=false so everyone is live; prove the kill switch still works when Enabled=false
+local savedOF, savedEn = AC.Live.OwnerFirst, AC.Live.Enabled
+AC.Live.Enabled = false
 PROFILES[OTHER.UserId] = { Achievements = {}, Stats = { TotalCashEarned = 5e6 } }
 check(AS.Check(OTHER) == false and next(PROFILES[OTHER.UserId].Achievements) == nil, "not live: Check returns false (MissionService's old path runs) and grants nothing")
+AC.Live.Enabled = savedEn
+AC.Live.OwnerFirst = savedOF
 
 -- ── 4. first check = quiet backfill ──
 local owner = PS.CreateDefault()

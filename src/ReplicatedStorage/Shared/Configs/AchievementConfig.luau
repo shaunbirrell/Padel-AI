@@ -39,7 +39,7 @@ export type Achievement = {
 local AchievementConfig = {
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v131 launch: everyone (JOB 34 handoff)
 	},
 
 	-- the chat line: "[WAR EMPIRE] <name> <text>" (rich text colours; the client formats it)
