@@ -780,6 +780,11 @@ local AnalyticsConfig = {
 			-- claude-bud JOB 40 part D: the rate reminder (never a "liked" event: there is no such signal)
 			RATE_PROMPT_SHOWN = { Name = "rate_prompt_shown", Field = "trigger" },
 			RATE_PROMPT_ANSWER = { Name = "rate_prompt_answer", Field = "answer" },
+			-- claude-bud JOB 41: the Guided first minutes (Funnels.FirstMinutes is logged separately)
+			GUIDED_STEP = { Name = "GuidedStepSeconds", Value = "seconds", Field = "step" },
+			GUIDED_SKIPPED = { Name = "GuidedSkipped", Field = "step" },
+			GUIDED_STUCK = { Name = "GuidedStuck", Field = "step" },
+			RECRUIT_PACK_OFFERED = { Name = "RecruitPackOffered", Field = "trigger" }, -- claude-bud JOB 41 B
 			STREAK_DAY = { Name = "StreakDay", Value = "day" },
 			-- claude-bud JOB 31: site activities
 			ACTIVITY_START = { Name = "ActivityStarted", Field = "activity" },
@@ -903,6 +908,10 @@ local AnalyticsConfig = {
 		NOTIF_OPTIN = "NOTIF_OPTIN",
 		RATE_PROMPT_SHOWN = "RATE_PROMPT_SHOWN", -- claude-bud JOB 40 D
 		RATE_PROMPT_ANSWER = "RATE_PROMPT_ANSWER",
+		GUIDED_STEP = "GUIDED_STEP", -- claude-bud JOB 41
+		GUIDED_SKIPPED = "GUIDED_SKIPPED",
+		GUIDED_STUCK = "GUIDED_STUCK",
+		RECRUIT_PACK_OFFERED = "RECRUIT_PACK_OFFERED", -- claude-bud JOB 41 B
 		STREAK_DAY = "STREAK_DAY",
 		ACTIVITY_START = "ACTIVITY_START",
 		ACTIVITY_DONE = "ACTIVITY_DONE",
@@ -3349,6 +3358,8 @@ export type NPCTypeDef = {
 	CashReward: number,
 	XPReward: number,
 	Color: Color3,
+	HitChanceNear: number?, -- claude-bud JOB 41: an optional per-type CAP on CombatNPC.HitChance (near / far)
+	HitChanceFar: number?,
 }
 
 local AdminConfig = require(script.Parent.AdminConfig)
@@ -3404,6 +3415,22 @@ local CombatConfig = {
 	},
 
 	NPCTypes = {
+		-- claude-bud JOB 41: the Guided training camp (TutorialConfig.Guided.Camp): weak on purpose, a first win
+		Recruit = {
+			Id = "Recruit",
+			DisplayName = "Camp Recruit",
+			Health = 40,
+			Damage = 4,
+			FireRate = 1.2,
+			Range = 50,
+			WalkSpeed = 10,
+			AggroRange = 60,
+			CashReward = 50,
+			XPReward = 15,
+			Color = Color3.fromRGB(120, 100, 70),
+			HitChanceNear = 0.35,
+			HitChanceFar = 0.2,
+		},
 		Infantry = {
 			Id = "Infantry",
 			DisplayName = "Hostile Infantry",
@@ -6475,6 +6502,7 @@ local JuiceConfig = {
 		Confetti = 26,
 		Colors = { Color3.fromRGB(255, 205, 60), Color3.fromRGB(255, 255, 255), Color3.fromRGB(110, 200, 90) } :: { Color3 },
 	},
+	Guided = { BannerSeconds = 3, Confetti = 26 }, -- claude-bud JOB 41: the Guided "BASE SECURED!" banner (Rebirth path)
 }
 
 function JuiceConfig.LiveFor(userId: any): boolean
@@ -7970,6 +7998,11 @@ local MonetizationConfig = {
 			OneTime = true,
 			Description = "$50,000 cash plus Auto Collect forever", -- Code Bot v156: plain player text
 		},
+		-- claude-bud JOB 41 part B: the Recruit Pack (one time). Id 0 until the owner OKs 49 R$ and Code Bot creates the
+		-- product. Cash is computed in ProcessReceipt from his income (RecruitPackOffer: 30 min of income, $25k..$150k), plus a
+		-- 2x cash boost for 30 min (CodesService.GrantCashBoost) and the gold "RECRUIT" base trim (entitlement, no stat).
+		-- NOT pay-to-win: no damage / health / armour / army / raid / protection key in this row (pinned).
+		RecruitPack = { Id = 0, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, Description = "Cash, 2x cash for 30 min and a gold base trim" },
 		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
 		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
 		Nuke = {
@@ -8200,6 +8233,7 @@ local MonetizationConfig = {
 		prompt came from). Analytics only; anything not listed is logged as "other". A receipt within
 		IntentAttributionSeconds of the intent for the same key inherits its source. ]]
 	PurchaseSources = {
+		recruit_offer = true, -- claude-bud JOB 41 B: the Recruit Pack card
 		shop = true,
 		featured = true,
 		hud_plus = true,
@@ -8445,6 +8479,43 @@ end
 	the Speed Boost toast). MaxWalkSpeedMult is the sanity cap MonetizationService applies (it was a local 2.0). Robux
 	prices and Ids are unchanged. ]]
 local cfg: any = MonetizationConfig
+
+--[[ claude-bud JOB 41 part B: WHEN the Recruit Pack is offered (owner-first; RetentionConfig.Live). Once per profile
+	(profile.RecruitPackOffered), at the FIRST of: his first capture, or OfferAfterPlaySeconds of total play
+	(Stats.PlayTimeSeconds); never in the Guided hold, combat, a seat or another card; through ClaimSoftOfferSlot (busy =
+	retry every RetrySeconds this session). While it is live for a player the old after-tutorial Starter Pack pop-up does
+	NOT fire for him (the StarterBundle row stays in the Shop). Id 0 = never offered. ]]
+cfg.RecruitPackOffer = {
+	Enabled = true,
+	OwnerFirst = true,
+	IncomeMinutes = 30, -- cash = this many minutes of his passive income ...
+	MinCash = 25000, -- ... at least (2.5x the 49 R$ Cash Pack S $10,000) ...
+	MaxCash = 150000, -- ... at most
+	BoostMinutes = 30,
+	BoostMult = 2,
+	OfferAfterPlaySeconds = 600,
+	CombatQuietSeconds = 20,
+	RetrySeconds = 30,
+	MaxTriesPerSession = 6,
+	TickSeconds = 5,
+	AutoHideSeconds = 20,
+	ClientWaitMaxSeconds = 90,
+	Lines = { Cash = "$%s Cash", Boost = "2x Cash for 30 min", Trim = "Gold base trim" },
+}
+
+function cfg.RecruitPackLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live(cfg.RecruitPackOffer, userId)
+end
+
+-- the pack's cash for an income of `perMin` $/min (clamped; never below MinCash)
+function cfg.RecruitPackCash(perMin: number): number
+	local o = cfg.RecruitPackOffer
+	local p = tonumber(perMin) or 0
+	if p ~= p or p < 0 then
+		p = 0
+	end
+	return math.clamp(math.floor(o.IncomeMinutes * p + 0.5), o.MinCash, o.MaxCash)
+end
 cfg.SpeedV2 = {
 	Enabled = true,
 	OwnerFirst = true, -- only UserId 470626172 (+ Studio) until Code Bot sets false = everyone
@@ -13746,6 +13817,7 @@ local SecurityConfig = {
 		RequestArmySendCheck = { "number" }, -- claude-bud JOB 38
 		RequestEndgameBuy = { "string:16", "string:32?" }, -- claude-bud JOB 39: kind + id only, never a price
 		RequestEndgameState = {}, -- claude-bud JOB 39
+		RequestRecruitPackResult = { "string:8" }, -- claude-bud JOB 41 B: "shown" | "dropped" (checked in the service)
 		RequestRatePromptAnswer = { "string:8" }, -- claude-bud JOB 40 D: one answer word (the service checks the enum)
 		RequestNotifOptInResult = { "string:12", "string?" }, -- claude-bud JOB 29: accepted / declined / unavailable, "settings"?
 		RequestArmourLook = { "boolean" }, -- claude-bud JOB 26 -- claude-bud JOB 24 §10 (AnalyticsConfig.Roblox.ClientEvents only)
@@ -13811,6 +13883,7 @@ local ShopOverhaulConfig = {
 		premium vehicles -> cash packs -> consumables. ]]
 	Order = {
 		"^ShopRow_fr_",
+		"^ShopRow_RecruitPack$", -- claude-bud JOB 41 B: the Recruit Pack on top (shown only once its Id is set)
 		"^ShopRow_Pass_WarChest$",
 		"^ShopRow_Pass_DoubleCash$",
 		"^ShopRow_Pass_VIP$",
@@ -15978,6 +16051,8 @@ local TutorialConfig = {
 	SavedOrders = {
 		[2] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Jeep", "Outpost" },
 		[3] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Outpost", "Jeep" },
+		-- claude-bud JOB 41: the Guided order (only while TutorialConfig.Guided is live for a NEW player; see GuidedSteps)
+		[4] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "FirstFight", "Outpost", "Reward", "Barracks", "Jeep" },
 	} :: { [number]: { string } },
 	-- Lane Z: the steps whose finish is carried (DoneAhead) when a new order puts them after the step a save moves to:
 	-- the Outpost / 4x4 pair the Home Outpost switch reorders. Any other done step after it is asked again (K2's "first
@@ -16245,6 +16320,106 @@ TutorialConfig.FastStart = {
 
 function TutorialConfig.FastStartLiveFor(userId: any): boolean
 	return (require(script.Parent.RetentionConfig) :: any).Live(TutorialConfig.FastStart, userId)
+end
+
+--[[ claude-bud JOB 41 part A (2026-09-30): THE GUIDED FIRST 3-4 MINUTES, owner-first. A NEW player (tutorial not done,
+	Command Center not bought, no building, first join < NewPlayerSeconds ago) is stamped with OrderVersion 4 (SavedOrders
+	[4] / GuidedSteps): Command Center (the FastStart BUILD + payout: the big win inside ~60 s) -> collect at the ATM ->
+	recruit -> FIRST FIGHT (a 2-Recruit training camp at HIS Home Outpost, real CombatService NPCs, hostile only to him)
+	-> capture it -> REWARD ("BASE SECURED!", confetti, GuidedRewardCash) -> the Barracks / 4x4 as the next goals.
+	Versions 2 / 3 are untouched; a v4 save whose Guided switch went off migrates back like any other order.
+	OFF (Enabled = false, or not live for him): OrderVersion 3, no camp, no banner, no new events (today's game). ]]
+TutorialConfig.Guided = {
+	Enabled = true,
+	OwnerFirst = true, -- RetentionConfig.Live: the playtest owner (and Studio) until Code Bot flips it
+	OrderVersion = 4,
+	NewPlayerSeconds = 900, -- a profile older than this (FirstJoinUnix) never enters Guided
+	HoldMaxSeconds = 300, -- the WE_Onboarding hold covers the whole chain up to Reward, never longer than this
+	StuckSeconds = 90, -- "GuidedStuck" once a step has been open this long (analytics only)
+	RecruitCount = 3, -- the recruit step wants him able to afford this many soldiers
+	GuidedRecruitCashMax = 5000, -- the one-time top-up that covers exactly the gap to RecruitCount soldiers (0 = never)
+	GuidedRewardCash = 2500, -- the one-time REWARD (reason "onboarding"): enough for the next building right away
+	RewardText = "BASE SECURED!",
+	RewardSub = "Your outpost is yours. Next: the Barracks.",
+	CampSkipText = "The camp pulled out. Take the outpost!", -- the never-soft-lock line after MaxCampSpawns
+	Camp = {
+		Npc = { "Recruit", "Recruit" }, -- CombatConfig NPC types (weak on purpose)
+		-- the 2 sandbag posts, relative to the Home Outpost centre (studs; on the Starter ring, Radius 20)
+		Posts = { { X = -9, Z = -12 }, { X = 9, Z = -12 } },
+		MaxCampSpawns = 3, -- a death / respawn / rejoin re-spawns them at full health at most this often, then auto-complete
+		Label = "ENEMY CAMP",
+		SandbagColor = Color3.fromRGB(150, 130, 90),
+	},
+	Funnel = {
+		Name = "FirstMinutes",
+		Steps = { "Spawned", "FirstBuild", "Collected", "Recruited", "FightStarted", "FirstKill", "Captured", "Reward",
+			"NextBuilding", "Offered", "Bought" },
+	},
+}
+
+function TutorialConfig.GuidedLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live(TutorialConfig.Guided, userId)
+end
+
+-- the two new steps of the Guided order (the other seven are the owner's steps above, unchanged)
+local GUIDED_NEW: { [string]: TutorialStepDef } = {
+	FirstFight = {
+		Id = "FirstFight",
+		Title = "Clear the camp",
+		Hint = "Beat the 2 enemies at your outpost.",
+		MarkerName = "Tutorial_Outpost",
+		HighlightHint = "Territory",
+		CtaAction = "Capture",
+		CtaLabel = "GO",
+		AdvanceOn = { "CampCleared" },
+	},
+	Reward = {
+		Id = "Reward",
+		Title = "Base secured!",
+		Hint = "Great win! Your next goal is up.",
+		MarkerName = "Tutorial_Outpost",
+		CtaAction = "WatchHud",
+		CtaLabel = "OK",
+		AdvanceOn = { "GuidedReward" },
+	},
+}
+
+local function buildGuided(): { TutorialStepDef }
+	local list: { TutorialStepDef } = {}
+	for _, id in ipairs(TutorialConfig.SavedOrders[4]) do
+		local def = GUIDED_NEW[id]
+		if def == nil then
+			for _, d in ipairs(OWNER_STEPS) do
+				if d.Id == id then
+					def = d
+				end
+			end
+		end
+		table.insert(list, def :: TutorialStepDef)
+	end
+	return list
+end
+TutorialConfig.GuidedSteps = buildGuided()
+
+-- the step list a saved order version plays (4 = GuidedSteps; anything else = today's Steps)
+function TutorialConfig.StepsFor(version: any): { TutorialStepDef }
+	if tonumber(version) == TutorialConfig.Guided.OrderVersion then
+		return TutorialConfig.GuidedSteps
+	end
+	return TutorialConfig.Steps
+end
+
+function TutorialConfig.GetStepFor(version: any, index: number): TutorialStepDef?
+	return TutorialConfig.StepsFor(version)[index]
+end
+
+-- a step definition by Id in either list (the client's per-Id lookups)
+function TutorialConfig.ById(id: string): TutorialStepDef?
+	local i = TutorialConfig.IndexOf(id)
+	if i then
+		return TutorialConfig.Steps[i]
+	end
+	return GUIDED_NEW[id]
 end
 
 return TutorialConfig
@@ -22347,6 +22522,7 @@ Constants.RemoteNames = {
 	RequestArmySend = "RequestArmySend", -- claude-bud JOB 38: (plotId) SEND the army (ArmyPlan; the server re-checks everything)
 	RequestArmySendCheck = "RequestArmySendCheck", -- claude-bud JOB 38: (plotId) -> FeaturePush "ArmySendVerdict"
 	RequestEndgameBuy = "RequestEndgameBuy", -- claude-bud JOB 39: (kind, id?) EndgameService.Purchase (the price is config's)
+	RequestRecruitPackResult = "RequestRecruitPackResult", -- claude-bud JOB 41 B: shown | dropped (the card; grants stay ProcessReceipt)
 	RequestRatePromptAnswer = "RequestRatePromptAnswer", -- claude-bud JOB 40 D: later | never | favorite | timeout (no reward)
 	RequestEndgameState = "RequestEndgameState", -- claude-bud JOB 39: () -> FeaturePush "EndgameState"
 	RequestSiteActivity = "RequestSiteActivity", -- claude-bud JOB 31: (action "list" | "start" | "quit", id?) SiteActivityService
@@ -22914,6 +23090,7 @@ export type PlayerStatePayload = {
 	TrainingIncomePerTick: number?,
 	Base: BaseStatePayload,
 	TutorialStep: number?,
+	TutorialOrderVersion: number?, -- claude-bud JOB 41: 4 = the Guided step list
 	TutorialComplete: boolean,
 	Vehicles: { [string]: boolean },
 	Weapons: { [string]: boolean },
@@ -28951,6 +29128,8 @@ local BaseSignService = safeRequire("BaseSignService", Services.BaseSignService)
 local ArmourService = safeRequire("ArmourService", Services.ArmourService) -- claude-bud JOB 26
 local RetentionService = safeRequire("RetentionService", Services.RetentionService) -- claude-bud JOB 29
 local RatePromptService = safeRequire("RatePromptService", Services.RatePromptService) -- claude-bud JOB 40 part D
+local GuidedService = safeRequire("GuidedService", Services.GuidedService) -- claude-bud JOB 41 part A
+local RecruitPackService = safeRequire("RecruitPackService", Services.RecruitPackService) -- claude-bud JOB 41 part B
 local MapService = safeRequire("MapService", Services.MapService) -- claude-bud JOB 30
 local SiteActivityService = safeRequire("SiteActivityService", Services.SiteActivityService) -- claude-bud JOB 31
 local RebirthZoneService = safeRequire("RebirthZoneService", Services.RebirthZoneService) -- claude-bud JOB 33
@@ -29006,6 +29185,9 @@ local deps: { [string]: any } = {
 	ClanService = ClanService,
 	MonetizationService = MonetizationService,
 	TutorialService = TutorialService,
+	GuidedService = GuidedService, -- claude-bud JOB 41: TutorialService calls its hooks (nil = the old tutorial)
+	RecruitPackService = RecruitPackService, -- claude-bud JOB 41 B
+	RatePromptService = RatePromptService, -- claude-bud JOB 41 B: SinceHurt (the combat-quiet rule)
 	RetentionService = RetentionService, -- claude-bud JOB 29: FastStart / offline earnings / notification opt-in
 	RebirthZoneService = RebirthZoneService, -- claude-bud JOB 33
 	NukeService = NukeService, -- claude-bud JOB 33
@@ -29107,6 +29289,8 @@ safeInit("NotificationService", NotificationService, deps)
 safeInit("TutorialService", TutorialService, deps)
 safeInit("RetentionService", RetentionService, deps) -- claude-bud JOB 29 (after Data / Tutorial; before the join hooks)
 safeInit("RatePromptService", RatePromptService, deps) -- claude-bud JOB 40 part D: the no-reward "Enjoying WAR EMPIRE?" timing
+safeInit("GuidedService", GuidedService, deps) -- claude-bud JOB 41 part A: the Guided first minutes (camp, reward, funnel)
+safeInit("RecruitPackService", RecruitPackService, deps) -- claude-bud JOB 41 part B: when the Recruit Pack card is offered
 safeInit("AntiExploitService", AntiExploitService, deps)
 safeInit("MonetizationService", MonetizationService, deps)
 safeInit("EconomyService", EconomyService, deps)
@@ -29705,7 +29889,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 157)
+		player:SetAttribute("WE_Build", 158)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -46998,6 +47182,30 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	else
 		profile.NotifOptIn = nil
 	end
+	-- claude-bud JOB 41 part B: the Recruit Pack card was shown (once per profile)
+	profile.RecruitPackOffered = if profile.RecruitPackOffered == true then true else nil
+	-- claude-bud JOB 41: the Guided first minutes record (missing -> nil; each flag only ever turns on)
+	if typeof(profile.Guided) == "table" then
+		local g = profile.Guided
+		local funnel = {}
+		if typeof(g.Funnel) == "table" then
+			for k, v in pairs(g.Funnel) do
+				if typeof(k) == "string" and #k <= 24 and v == true then
+					funnel[k] = true
+				end
+			end
+		end
+		profile.Guided = {
+			SessionId = if typeof(g.SessionId) == "string" and #g.SessionId <= 64 then g.SessionId else nil,
+			CampDone = g.CampDone == true or nil,
+			CampSpawns = nonNegInt(g.CampSpawns),
+			RewardDone = g.RewardDone == true or nil,
+			RecruitTopUp = if g.RecruitTopUp ~= nil then nonNegInt(g.RecruitTopUp) else nil,
+			Funnel = funnel,
+		}
+	else
+		profile.Guided = nil
+	end
 	-- claude-bud JOB 40 part D: the rate reminder's record (missing -> nil = the defaults; Never sticks across servers)
 	if typeof(profile.RatePrompt) == "table" then
 		local rp = profile.RatePrompt
@@ -49022,6 +49230,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestEndgameBuy, -- claude-bud JOB 39
 	Constants.RemoteNames.RequestEndgameState, -- claude-bud JOB 39
 	Constants.RemoteNames.RequestRatePromptAnswer, -- claude-bud JOB 40 part D
+	Constants.RemoteNames.RequestRecruitPackResult, -- claude-bud JOB 41 part B
 	Constants.RemoteNames.CodeStateUpdate,
 	Constants.RemoteNames.NationColorUpdate,
 	Constants.RemoteNames.RequestSetNation,
@@ -67983,6 +68192,29 @@ local function onboardSend(player: Player)
 	end
 end
 
+--[[ claude-bud JOB 41: the separate "FirstMinutes" Roblox funnel (TutorialConfig.Guided.Funnel; the onboarding funnel
+	above is left as it is). GuidedService logs each step once per profile, with its own funnel session id. ]]
+function AnalyticsService.GuidedFunnel(player: Player, sessionId: string, index: number, name: string, seconds: number?)
+	if not AnalyticsConfig.Enabled then
+		return
+	end
+	local F: any = (RetentionConfig :: any).Funnel
+	if typeof(F) == "table" and F.PrintInStudio == true and RunService:IsStudio() then
+		print(string.format("[FUNNEL] FirstMinutes %d %s t=%.1fs user=%d", index, name, tonumber(seconds) or 0, player.UserId))
+	end
+	local svc = rbx()
+	if svc == nil then
+		return
+	end
+	local funnelName = (require(ReplicatedStorage.Shared.Configs.TutorialConfig) :: any).Guided.Funnel.Name
+	local ok = pcall(function()
+		svc:LogFunnelStepEvent(player, funnelName, sessionId, index, name)
+	end)
+	if ok then
+		AnalyticsService.Stats.Funnel += 1
+	end
+end
+
 --[[ Seconds from this session's join to `step`, once per session (RetentionConfig.Funnel). Analytics only. ]]
 function AnalyticsService.Onboard(player: Player, step: string)
 	local F: any = (RetentionConfig :: any).Funnel
@@ -69629,6 +69861,12 @@ function BaseMarkerService.PlotData(plotId: number): { [string]: any }
 	out.User = owner.Name
 	local profile = deps.DataService and deps.DataService.GetProfile(owner)
 	out.Prestige = if profile then math.max(0, math.floor(tonumber(profile.Prestige) or 0)) else 0
+	-- claude-bud JOB 41 part B: the Recruit Pack's gold trim (an entitlement, no stat; the pack's owner-first flag)
+	local okRec, live = pcall(function(): boolean
+		local MC: any = require(Shared.Configs.MonetizationConfig)
+		return MC.RecruitPackLiveFor(owner.UserId) == true and owner:GetAttribute("WE_Ent_RecruitPack") == true
+	end)
+	out.Recruit = if okRec and live == true then true else nil
 	local view = if NationFlagMod and NationFlagMod.ViewOf then NationFlagMod.ViewOf(plotId) else nil
 	if view and view.Show == true and typeof(view.NationId) == "string" then
 		local okN, NC = pcall(function(): any
@@ -69680,7 +69918,7 @@ function BaseMarkerService.Refresh(plotId: number)
 	local d = BaseMarkerService.PlotData(plotId)
 	setAttr(conf, "PlotId", plotId)
 	setAttr(conf, "Pos", plotCentre(plotId) or conf:GetAttribute("Pos"))
-	for _, k in ipairs({ "Owner", "Name", "User", "Nation", "Prestige", "Clan", "ClanId" }) do
+	for _, k in ipairs({ "Owner", "Name", "User", "Nation", "Prestige", "Clan", "ClanId", "Recruit" }) do
 		setAttr(conf, k, d[k])
 	end
 end
@@ -71337,6 +71575,7 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 			PassiveIncomePerTick = BaseService.ComputePassiveIncomePerTick(profile, player),
 		},
 		TutorialStep = profile.TutorialStep,
+		TutorialOrderVersion = profile.TutorialOrderVersion, -- claude-bud JOB 41: 4 = the Guided step list
 		TutorialComplete = profile.TutorialComplete,
 		Vehicles = profile.Vehicles,
 		Weapons = profile.Weapons,
@@ -71703,7 +71942,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 157)
+			player:SetAttribute("WE_Build", 158)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -72015,6 +72254,7 @@ local function refresh(plotId: number)
 	local ownerId = if bs and bs.GetOwnerUserId then bs.GetOwnerUserId(plotId) else nil
 	local owner = if ownerId then Players:GetPlayerByUserId(ownerId) else nil
 	local key: string
+	local recruit = false -- claude-bud JOB 41 B
 	local title, line, image = BaseSignConfig.UnclaimedTitle, BaseSignConfig.UnclaimedLine, ""
 	if owner then
 		local profile = deps.DataService and deps.DataService.GetProfile(owner)
@@ -72045,6 +72285,12 @@ local function refresh(plotId: number)
 			end
 		end
 		image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", owner.UserId)
+		-- claude-bud JOB 41 part B: the Recruit Pack's gold "RECRUIT" trim (an entitlement, no stat; owner-first flag)
+		local MC: any = require(game:GetService("ReplicatedStorage").Shared.Configs.MonetizationConfig)
+		if MC.RecruitPackLiveFor(owner.UserId) and owner:GetAttribute("WE_Ent_RecruitPack") == true then
+			line = "RECRUIT · " .. line
+			recruit = true
+		end
 	end
 	-- the flag plate shows what the plot's own flags show (NationFlag's view: the owner's pick, art permitting)
 	local nf = NationFlagMod
@@ -72053,13 +72299,17 @@ local function refresh(plotId: number)
 		view = nil
 	end
 	local flagKey = if view then tostring(view.NationId) .. tostring(view.Show) else "-"
-	key = title .. "|" .. line .. "|" .. image .. "|" .. flagKey
+	key = title .. "|" .. line .. "|" .. image .. "|" .. flagKey .. (if recruit then "|R" else "")
 	if shownKey[plotId] == key then
 		return
 	end
 	shownKey[plotId] = key
 	s.Title.Text = title
 	s.Line.Text = line
+	local trim = s.Title.Parent and s.Title.Parent:FindFirstChildOfClass("UIStroke")
+	if trim then
+		trim.Thickness = if recruit then 3 else 1.5 -- claude-bud JOB 41 B: the gold Recruit trim (existing Part / stroke colour)
+	end
 	s.Head.Image = image
 	s.Head.Visible = image ~= ""
 	if nf and nf.DressPart then
@@ -79237,15 +79487,21 @@ end
 
 --[[ Hit chance of one NPC shot: NpcNearHitChance at <= NpcNearStuds, falling linearly to NpcFarHitChance at the
 	type's max range; minus NpcFastTargetPenalty against a target faster than NpcFastTargetSpeed studs/s. ]]
-function CombatNPC.HitChance(dist: number, maxRange: number, targetSpeed: number): number
+-- claude-bud JOB 41: `def` (optional) = the NPC type; its HitChanceNear / HitChanceFar cap the two ends (the Recruit).
+function CombatNPC.HitChance(dist: number, maxRange: number, targetSpeed: number, def: any?): number
 	local C = CombatFairnessConfig
 	local nearD = C.NpcNearStuds
+	local nearC, farC = C.NpcNearHitChance, C.NpcFarHitChance
+	if typeof(def) == "table" then
+		nearC = math.min(nearC, tonumber(def.HitChanceNear) or nearC)
+		farC = math.min(farC, tonumber(def.HitChanceFar) or farC)
+	end
 	local chance: number
 	if dist <= nearD or maxRange <= nearD then
-		chance = C.NpcNearHitChance
+		chance = nearC
 	else
 		local t = math.clamp((dist - nearD) / (maxRange - nearD), 0, 1)
-		chance = C.NpcNearHitChance + (C.NpcFarHitChance - C.NpcNearHitChance) * t
+		chance = nearC + (farC - nearC) * t
 	end
 	if targetSpeed > C.NpcFastTargetSpeed then
 		chance -= C.NpcFastTargetPenalty
@@ -79429,7 +79685,7 @@ local function engage(rec: any, target: Player, dist: number, now: number, canMo
 			if aimed and now - rec.LastFireAt >= interval and dist <= rec.Def.Range then
 				rec.LastFireAt = now
 				local tState = B.combatStates[target.UserId]
-				local chance = CombatNPC.HitChance(dist, rec.Def.Range, speedOf[target.UserId] or 0)
+				local chance = CombatNPC.HitChance(dist, rec.Def.Range, speedOf[target.UserId] or 0, rec.Def)
 				local eye = rec.Root.Position + Vector3.new(0, C.NpcEyeHeight, 0)
 				if not (tState and now < tState.InvulnerableUntil) and rng:NextNumber() < chance then
 					if redirectToVehicle(target, rec.Def.Damage) then
@@ -79787,7 +80043,7 @@ local function fightUnit(rec: any, now: number): boolean
 	local interval = 1 / math.max(rec.Def.FireRate, 0.1)
 	if now - rec.UnitAimSince >= C.NpcReactionSeconds and now - rec.LastFireAt >= interval and dist <= rec.Def.Range then
 		rec.LastFireAt = now
-		local chance = CombatNPC.HitChance(dist, rec.Def.Range, froot.AssemblyLinearVelocity.Magnitude)
+		local chance = CombatNPC.HitChance(dist, rec.Def.Range, froot.AssemblyLinearVelocity.Magnitude, rec.Def)
 		if rng:NextNumber() < chance then
 			fh:TakeDamage(rec.Def.Damage * math.clamp(tonumber(cfg.DamageMult) or 1, 0, 3))
 			sendFx(rec, eye, froot.Position, "P")
@@ -80143,7 +80399,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 157)
+		player:SetAttribute("WE_Build", 158)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -80285,7 +80541,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=157",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=158",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -87581,6 +87837,503 @@ return GateDefenseService
         </Item>
         <Item class="ModuleScript" referent="237">
           <Properties>
+            <string name="Name">GuidedService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 41 part A (2026-09-30): THE GUIDED FIRST 3-4 MINUTES (TutorialConfig.Guided, owner-first).
+	TutorialService plays the steps (OrderVersion 4 = TutorialConfig.GuidedSteps) and calls the hooks below; this service
+	only adds what the old tutorial did not have. It never moves a player or a soldier (no teleport / PivotTo) and it
+	never writes Humanoid health: the camp NPCs are ordinary CombatService NPCs and die to real shots.
+
+	  * Wants(player, profile): a NEW player (tutorial not done, Command Center not bought, no building, first join <
+	    Guided.NewPlayerSeconds) or a Guided save still mid-chain, while Guided is live for him.
+	  * RECRUIT: when the recruit step opens, a one-time top-up (reason "onboarding") covers EXACTLY the gap to
+	    Guided.RecruitCount soldiers (with the $10,000 start + the $1,500 payout - the $1,500 Command Center it is 0).
+	  * FIRST FIGHT: a 2-Recruit training camp at HIS Home Outpost (Starter_P<plot>): CombatService.SpawnNPC with a
+	    TargetFilter = only him (they shoot nobody else), leashed to the ring, 2 sandbag posts. Capture is blocked while
+	    they live (Blocking, read by TerritoryService). Both dead -> CampDone, TutorialService.Notify "CampCleared".
+	    A death of his / a rejoin re-spawns them at full health, at most Camp.MaxCampSpawns times; after that the step
+	    completes with a friendly line (never a soft-lock). Skip clears them at once.
+	  * REWARD: GuidedRewardCash once (profile.Guided.RewardDone), FeaturePush "GuidedReward" (banner + confetti) and
+	    "StarterPayout" (the coin burst), then TutorialService.Notify "GuidedReward" -> the Barracks goal.
+	  * FUNNEL: a separate Roblox funnel "FirstMinutes" (one session per profile: Guided.SessionId), each step once,
+	    plus the custom events GuidedStepSeconds / GuidedSkipped / GuidedStuck (AnalyticsConfig.Roblox.Custom).
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Constants = require(Shared.Constants)
+local TutorialConfig = require(Shared.Configs.TutorialConfig)
+local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
+local SoldierConfig = require(Shared.Configs.SoldierConfig)
+
+local GuidedService = {}
+
+local G: any = TutorialConfig.Guided
+local deps: { [string]: any } = {}
+
+type Camp = { PlotId: number, Ids: { string }, Alive: { [string]: boolean }, Folder: Instance?, Token: number }
+local camps: { [number]: Camp } = {} -- userId -> the live camp
+local stepAt: { [number]: { Id: string, At: number } } = {} -- userId -> the open step (stuck timer)
+local spawnAt: { [number]: number } = {} -- userId -> clock of this session's first spawn (step seconds)
+local campSeq = 0
+
+GuidedService._clock = os.clock -- tests replace these
+GuidedService._unix = os.time
+GuidedService._delay = function(s: number, fn: (...any) -> (), ...: any)
+	task.delay(s, fn, ...)
+end
+
+-- ── helpers ────────────────────────────────────────────────────────────────────────────────────────────────────
+local function rec(profile: any): any
+	local g = profile.Guided
+	if typeof(g) ~= "table" then
+		g = {}
+		profile.Guided = g
+	end
+	if typeof(g.Funnel) ~= "table" then
+		g.Funnel = {}
+	end
+	return g
+end
+
+local function dirty(player: Player)
+	if deps.DataService then
+		pcall(deps.DataService.MarkDirty, player)
+	end
+end
+
+local function push(player: Player, kind: string, data: any)
+	local rs = deps.RemoteSetup
+	local ev = rs and rs.Get(Constants.RemoteNames.FeaturePush)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireClient(player, kind, data)
+	end
+end
+
+local function notify(player: Player, text: string, kind: string?)
+	local N = deps.NotificationService
+	if N and N.Notify then
+		pcall(N.Notify, player, text, kind or "Info", 5)
+	end
+end
+
+local function isGuided(profile: any): boolean
+	return profile ~= nil and tonumber(profile.TutorialOrderVersion) == G.OrderVersion
+end
+
+local function anyBuilding(profile: any): boolean
+	if typeof(profile.BaseUpgrades) ~= "table" then
+		return false
+	end
+	for _, lvl in pairs(profile.BaseUpgrades) do
+		if (tonumber(lvl) or 0) >= 1 then
+			return true
+		end
+	end
+	return false
+end
+
+-- a NEW player (or a Guided save mid-chain) the switch is live for
+function GuidedService.Wants(player: Player, profile: any): boolean
+	if profile == nil or profile.TutorialComplete == true or not TutorialConfig.GuidedLiveFor(player.UserId) then
+		return false
+	end
+	if isGuided(profile) then
+		return true
+	end
+	local first = tonumber(profile.FirstJoinUnix) or 0
+	return not anyBuilding(profile)
+		and (tonumber(profile.TutorialStep) or 1) <= 2
+		and first > 0
+		and GuidedService._unix() - first <= G.NewPlayerSeconds
+end
+
+-- ── funnel ─────────────────────────────────────────────────────────────────────────────────────────────────────
+function GuidedService.FunnelIndex(name: string): number?
+	return table.find(G.Funnel.Steps, name)
+end
+
+function GuidedService.Funnel(player: Player, profile: any, name: string)
+	if not isGuided(profile) then
+		return
+	end
+	local idx = GuidedService.FunnelIndex(name)
+	local g = rec(profile)
+	if idx == nil or g.Funnel[name] then
+		return
+	end
+	g.Funnel[name] = true
+	if typeof(g.SessionId) ~= "string" then
+		g.SessionId = HttpService:GenerateGUID(false)
+	end
+	dirty(player)
+	local A = deps.AnalyticsService
+	local secs = math.floor((GuidedService._clock() - (spawnAt[player.UserId] or GuidedService._clock())) * 10 + 0.5) / 10
+	if A and A.GuidedFunnel then
+		pcall(A.GuidedFunnel, player, g.SessionId, idx, name, secs)
+	end
+	if A and A.Log then
+		pcall(A.Log, "GUIDED_STEP", player.UserId, { step = name, seconds = secs })
+	end
+end
+
+local FUNNEL_OF_STEP = {
+	CommandCenter = "FirstBuild",
+	Income = "Collected",
+	RecruitSoldiers = "Recruited",
+	Outpost = "Captured",
+	Reward = "Reward",
+	Barracks = "NextBuilding",
+}
+
+-- ── the camp ───────────────────────────────────────────────────────────────────────────────────────────────────
+local function starterDef(plotId: number): any?
+	local T: any = TerritoryConfig
+	local list = T.Territories
+	return if typeof(list) == "table" then list[T.Starter.IdPrefix .. tostring(plotId)] else nil
+end
+
+local function groundAt(x: number, z: number, fallbackY: number): number
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local ex: { Instance } = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then
+			table.insert(ex, p.Character)
+		end
+	end
+	params.FilterDescendantsInstances = ex
+	local hit = Workspace:Raycast(Vector3.new(x, fallbackY + 80, z), Vector3.new(0, -200, 0), params)
+	return if hit then hit.Position.Y else fallbackY
+end
+
+function GuidedService.ClearCamp(player: Player)
+	local c = camps[player.UserId]
+	if c == nil then
+		return
+	end
+	camps[player.UserId] = nil
+	local CS = deps.CombatService
+	for _, id in ipairs(c.Ids) do
+		if CS and CS.DespawnNPC then
+			pcall(CS.DespawnNPC, id)
+		end
+	end
+	if c.Folder then
+		(c.Folder :: Instance):Destroy()
+	end
+end
+
+local function finishCamp(player: Player, profile: any, auto: boolean)
+	GuidedService.ClearCamp(player)
+	local g = rec(profile)
+	if g.CampDone == true then
+		return
+	end
+	g.CampDone = true
+	dirty(player)
+	if auto then
+		notify(player, G.CampSkipText, "Info")
+	end
+	local TS = deps.TutorialService
+	if TS and TS.Notify then
+		pcall(TS.Notify, player, "CampCleared")
+	end
+end
+
+function GuidedService.SpawnCamp(player: Player, profile: any): boolean
+	if not isGuided(profile) or camps[player.UserId] then
+		return false
+	end
+	local g = rec(profile)
+	if g.CampDone == true then
+		return false
+	end
+	local plotId = tonumber(profile.BasePlotId)
+	local def = plotId and starterDef(plotId :: number)
+	local CS = deps.CombatService
+	if def == nil or CS == nil or CS.SpawnNPC == nil then
+		return false
+	end
+	g.CampSpawns = (tonumber(g.CampSpawns) or 0) + 1
+	dirty(player)
+	if g.CampSpawns > G.Camp.MaxCampSpawns then
+		finishCamp(player, profile, true) -- never a soft-lock
+		return false
+	end
+	campSeq += 1
+	local c: Camp = { PlotId = plotId :: number, Ids = {}, Alive = {}, Folder = nil, Token = campSeq }
+	camps[player.UserId] = c
+	local folder = Instance.new("Folder")
+	folder.Name = "WE_GuidedCamp_" .. tostring(player.UserId)
+	folder.Parent = Workspace
+	c.Folder = folder
+	local centre: Vector3 = def.Position
+	local look = Vector3.new(centre.X, 0, centre.Z)
+	for i, typeId in ipairs(G.Camp.Npc) do
+		local post = G.Camp.Posts[i] or G.Camp.Posts[1]
+		local x, z = centre.X + post.X, centre.Z + post.Z
+		local y = groundAt(x, z, centre.Y)
+		-- the sandbag post (one plain part, removed with the camp)
+		local bag = Instance.new("Part")
+		bag.Name = "GuidedSandbag"
+		bag.Anchored = true
+		bag.CanTouch = false
+		bag.CastShadow = false
+		bag.Material = Enum.Material.Sand
+		bag.Color = G.Camp.SandbagColor
+		bag.Size = Vector3.new(5, 2.2, 1.6)
+		bag.CFrame = CFrame.lookAt(Vector3.new(x, y + 1.1, z), Vector3.new(look.X, y + 1.1, look.Z)) * CFrame.new(0, 0, -2.2)
+		bag.Parent = folder
+		local cf = CFrame.lookAt(Vector3.new(x, y + 3, z), Vector3.new(look.X, y + 3, look.Z))
+		local target = player
+		local ok, r = pcall(CS.SpawnNPC, typeId, cf, {
+			GroupId = "Guided." .. tostring(player.UserId),
+			NoRespawn = true,
+			Home = cf,
+			Leash = (tonumber(def.Radius) or 20) + 15,
+			OverCap = true,
+			-- the one hostility rule stays CombatService's: this only narrows WHO they may pick (him alone)
+			TargetFilter = function(p: Player): boolean
+				return p == target
+			end,
+		})
+		if ok and r and typeof(r.Id) == "string" then
+			table.insert(c.Ids, r.Id)
+			c.Alive[r.Id] = true
+		end
+	end
+	if #c.Ids == 0 then
+		GuidedService.ClearCamp(player)
+		return false
+	end
+	GuidedService.Funnel(player, profile, "FightStarted")
+	push(player, "Hint", { Kind = "Attack", Text = TutorialConfig.FirstMinutes.AttackHintText, Seconds = TutorialConfig.FirstMinutes.AttackHintSeconds })
+	return true
+end
+
+-- TerritoryService: capture of this Home Outpost waits while its camp stands
+function GuidedService.Blocking(territoryId: any): boolean
+	if typeof(territoryId) ~= "string" then
+		return false
+	end
+	for _, c in pairs(camps) do
+		if TerritoryConfig.Starter.IdPrefix .. tostring(c.PlotId) == territoryId then
+			for _, alive in pairs(c.Alive) do
+				if alive then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+-- CombatService.OnNPCDeath
+function GuidedService.OnNPCDeath(info: any)
+	if typeof(info) ~= "table" or typeof(info.GroupId) ~= "string" or string.sub(info.GroupId, 1, 7) ~= "Guided." then
+		return
+	end
+	local uid = tonumber(string.sub(info.GroupId, 8))
+	local c = uid and camps[uid :: number]
+	if c == nil or not c.Alive[info.Id] then
+		return
+	end
+	c.Alive[info.Id] = false
+	local player = Players:GetPlayerByUserId(uid :: number)
+	local profile = player and deps.DataService and deps.DataService.GetProfile(player)
+	if player == nil or profile == nil then
+		return
+	end
+	GuidedService.Funnel(player, profile, "FirstKill")
+	for _, alive in pairs(c.Alive) do
+		if alive then
+			return
+		end
+	end
+	finishCamp(player, profile, false)
+end
+
+-- his death mid-fight: the camp comes back at full health when he respawns (MaxCampSpawns caps it)
+local function onDied(player: Player)
+	local c = camps[player.UserId]
+	if c == nil then
+		return
+	end
+	GuidedService.ClearCamp(player)
+	GuidedService._delay(6, function()
+		local profile = player.Parent and deps.DataService and deps.DataService.GetProfile(player)
+		local cur = profile and stepAt[player.UserId]
+		if profile and cur and cur.Id == "FirstFight" then
+			GuidedService.SpawnCamp(player, profile)
+		end
+	end)
+end
+
+-- ── the recruit top-up and the reward ──────────────────────────────────────────────────────────────────────────
+function GuidedService.RecruitGap(cash: number): number
+	local need = (tonumber(G.RecruitCount) or 3) * (tonumber(SoldierConfig.RecruitCostCash) or 500)
+	return math.clamp(math.ceil(need - cash), 0, math.max(0, tonumber(G.GuidedRecruitCashMax) or 0))
+end
+
+local function recruitTopUp(player: Player, profile: any)
+	local g = rec(profile)
+	if g.RecruitTopUp ~= nil then
+		return
+	end
+	local gap = GuidedService.RecruitGap(tonumber(profile.Cash) or 0)
+	g.RecruitTopUp = gap
+	dirty(player)
+	local E = deps.EconomyService
+	if gap > 0 and E and E.AddCash then
+		pcall(E.AddCash, player, gap, "onboarding")
+	end
+end
+
+local function reward(player: Player, profile: any)
+	local g = rec(profile)
+	if g.RewardDone ~= true then
+		g.RewardDone = true
+		dirty(player)
+		local cash = math.max(0, math.floor(tonumber(G.GuidedRewardCash) or 0))
+		local E = deps.EconomyService
+		if cash > 0 and E and E.AddCash then
+			pcall(E.AddCash, player, cash, "onboarding")
+		end
+		push(player, "GuidedReward", { Title = G.RewardText, Sub = G.RewardSub })
+		if cash > 0 then
+			push(player, "StarterPayout", { Cash = cash, Text = G.RewardText })
+		end
+	end
+	local TS = deps.TutorialService
+	if TS and TS.Notify then
+		GuidedService._delay(3, function()
+			if player.Parent then
+				pcall(TS.Notify, player, "GuidedReward")
+			end
+		end)
+	end
+end
+
+-- ── TutorialService hooks ──────────────────────────────────────────────────────────────────────────────────────
+local function openStep(player: Player, profile: any, def: any)
+	local uid = player.UserId
+	local id = if def then def.Id else nil
+	if id == nil then
+		stepAt[uid] = nil
+		return
+	end
+	local mark = { Id = id :: string, At = GuidedService._clock() }
+	stepAt[uid] = mark
+	GuidedService._delay(G.StuckSeconds, function()
+		if stepAt[uid] == mark and player.Parent then
+			local A = deps.AnalyticsService
+			if A and A.Log then
+				pcall(A.Log, "GUIDED_STUCK", uid, { step = id })
+			end
+		end
+	end)
+	if id == "RecruitSoldiers" then
+		recruitTopUp(player, profile)
+	elseif id == "FirstFight" then
+		GuidedService.SpawnCamp(player, profile)
+	elseif id == "Reward" then
+		reward(player, profile)
+	end
+end
+
+function GuidedService.OnStep(player: Player, profile: any, def: any, complete: boolean)
+	if not isGuided(profile) then
+		return
+	end
+	if complete then
+		stepAt[player.UserId] = nil
+		GuidedService.ClearCamp(player)
+		return
+	end
+	openStep(player, profile, def)
+end
+
+function GuidedService.OnStepDone(player: Player, profile: any, def: any)
+	if not isGuided(profile) or def == nil then
+		return
+	end
+	local f = FUNNEL_OF_STEP[def.Id]
+	if f then
+		GuidedService.Funnel(player, profile, f)
+	end
+end
+
+function GuidedService.OnResume(player: Player, profile: any, def: any)
+	if not isGuided(profile) then
+		return
+	end
+	if spawnAt[player.UserId] == nil then
+		spawnAt[player.UserId] = GuidedService._clock()
+	end
+	GuidedService.Funnel(player, profile, "Spawned")
+	openStep(player, profile, def)
+end
+
+function GuidedService.OnSkip(player: Player, profile: any, def: any)
+	GuidedService.ClearCamp(player)
+	stepAt[player.UserId] = nil
+	if not isGuided(profile) then
+		return
+	end
+	local A = deps.AnalyticsService
+	if A and A.Log then
+		pcall(A.Log, "GUIDED_SKIPPED", player.UserId, { step = if def then def.Id else "?" })
+	end
+end
+
+function GuidedService._Camp(player: Player): Camp?
+	return camps[player.UserId]
+end
+
+function GuidedService.Init(d: { [string]: any })
+	deps = d
+	if G == nil or G.Enabled ~= true then
+		print("[WAR EMPIRE] GuidedService: off (TutorialConfig.Guided.Enabled = false)")
+		return
+	end
+	local CS = deps.CombatService
+	if CS and CS.OnNPCDeath then
+		CS.OnNPCDeath(GuidedService.OnNPCDeath)
+	end
+	local function hook(player: Player)
+		player.CharacterAdded:Connect(function(char: Model)
+			local hum = char:WaitForChild("Humanoid", 10)
+			if hum and hum:IsA("Humanoid") then
+				(hum :: Humanoid).Died:Connect(function()
+					onDied(player)
+				end)
+			end
+		end)
+	end
+	Players.PlayerAdded:Connect(hook)
+	for _, p in ipairs(Players:GetPlayers()) do
+		hook(p)
+	end
+	Players.PlayerRemoving:Connect(function(player: Player)
+		GuidedService.ClearCamp(player)
+		stepAt[player.UserId] = nil
+		spawnAt[player.UserId] = nil
+	end)
+	print(string.format("[WAR EMPIRE] GuidedService Init (OwnerFirst=%s)", tostring(G.OwnerFirst)))
+end
+
+return GuidedService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="238">
+          <Properties>
             <string name="Name">ManualDropperService</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -88291,7 +89044,7 @@ return ManualDropperService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="238">
+        <Item class="ModuleScript" referent="239">
           <Properties>
             <string name="Name">MapService</string>
             <string name="Source"><![CDATA[--!strict
@@ -88506,7 +89259,7 @@ return MapService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="239">
+        <Item class="ModuleScript" referent="240">
           <Properties>
             <string name="Name">MissileStrikeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -89245,7 +89998,7 @@ return MissileStrikeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="240">
+        <Item class="ModuleScript" referent="241">
           <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -90460,7 +91213,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="241">
+        <Item class="ModuleScript" referent="242">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -90682,6 +91435,19 @@ local function refundSoftOfferSlot(player: Player, slot: any)
 	if lastSoftOfferAt[uid] == slot.At then
 		lastSoftOfferAt[uid] = slot.Prev
 	end
+end
+
+-- claude-bud JOB 41 part B: the same claim with a refund ticket, for an offer the client may report as never shown
+function MonetizationService.ClaimSoftOfferSlotRefundable(player: Player): { Prev: number?, At: number? }?
+	local prev = lastSoftOfferAt[player.UserId]
+	if not MonetizationService.ClaimSoftOfferSlot(player) then
+		return nil
+	end
+	return { Prev = prev, At = lastSoftOfferAt[player.UserId] }
+end
+
+function MonetizationService.RefundSoftOfferSlot(player: Player, slot: any)
+	refundSoftOfferSlot(player, slot)
 end
 
 --[[ v71 money (M1): listener registries. Each returns a function that removes the listener. Listeners run
@@ -91369,6 +92135,11 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 	if typeof(player) ~= "Instance" or not player:IsA("Player") or not player.Parent or not DataService then
 		return nil
 	end
+	-- claude-bud JOB 41 part B: while the Recruit Pack offer is live for him it takes this pop-up slot (one starter
+	-- offer per profile); the StarterBundle row stays in the Shop
+	if (MonetizationConfig :: any).RecruitPackLiveFor(player.UserId) then
+		return nil
+	end
 	local bundle = starterBundleLive()
 	local profile = DataService.GetProfile(player)
 	local first = firstOfferCfg()
@@ -91511,6 +92282,10 @@ end
 function MonetizationService.ScheduleFirstOffer(player: Player, reason: string, delaySec: number?)
 	local first = firstOfferCfg()
 	if not first or typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return
+	end
+	-- claude-bud JOB 41 part B: the Recruit Pack replaces the first offer (and its fallback) for players it is live for
+	if (MonetizationConfig :: any).RecruitPackLiveFor(player.UserId) then
 		return
 	end
 	local uid = player.UserId
@@ -92255,6 +93030,15 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 		end
 		cashGrant = nonNegInt(ShopOverhaulConfig.CashPackAmount(productKey :: string, perMin))
 	end
+	-- claude-bud JOB 41 part B: the Recruit Pack's cash = RecruitPackOffer.IncomeMinutes of his income, clamped
+	-- ($25k..$150k); computed here (the lookup may yield) and re-checked, before any mutation
+	if productKey == "RecruitPack" then
+		local perMin = MonetizationService.PassivePerMin(player, profile)
+		if not player.Parent or DataService.GetProfile(player) ~= profile then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		cashGrant = nonNegInt((MonetizationConfig :: any).RecruitPackCash(perMin))
+	end
 	local fallbackCash = nonNegInt(product.StarterFallbackCash)
 	if fallbackCash > 0 then
 		if MonetizationService.PlayerOwnsEntitlement(player, "AutoCollect") then
@@ -92299,6 +93083,17 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 	-- DevProduct entitlement flags (AutoCollect / DoubleCash / VIP / StarterBundle + AutoCollect / etc.)
 	for _, ent in ipairs(entitlements) do
 		MonetizationService.GrantEntitlement(player, ent)
+	end
+	-- claude-bud JOB 41 part B: the Recruit Pack's 2x cash boost through the ONE boost path (CodesService.GrantCashBoost:
+	-- stacks like codes, capped at CashBoostMaxMinutes; it only mutates the profile, no yield)
+	if productKey == "RecruitPack" then
+		local o: any = (MonetizationConfig :: any).RecruitPackOffer
+		local okC, CS = pcall(function(): any
+			return require(script.Parent.CodesService)
+		end)
+		if okC and CS and CS.GrantCashBoost then
+			pcall(CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult)
+		end
 	end
 	-- v71 money (M1): whitelisted counters (GrantNukes -> profile.Nukes + NukeStats.Bought)
 	for _, c in ipairs(counters) do
@@ -92640,7 +93435,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="242">
+        <Item class="ModuleScript" referent="243">
           <Properties>
             <string name="Name">MoneyCollectorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -94151,7 +94946,7 @@ return MoneyCollectorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="243">
+        <Item class="ModuleScript" referent="244">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -94720,7 +95515,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="244">
+        <Item class="ModuleScript" referent="245">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -94793,7 +95588,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="245">
+        <Item class="ModuleScript" referent="246">
           <Properties>
             <string name="Name">NukeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -95133,7 +95928,7 @@ return NukeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="246">
+        <Item class="ModuleScript" referent="247">
           <Properties>
             <string name="Name">OpsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -96307,7 +97102,7 @@ end
 return OpsService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="247">
+          <Item class="ModuleScript" referent="248">
             <Properties>
               <string name="Name">OpsCargo</string>
               <string name="Source"><![CDATA[--!strict
@@ -96780,7 +97575,7 @@ return OpsCargo
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="248">
+          <Item class="ModuleScript" referent="249">
             <Properties>
               <string name="Name">OpsDirector</string>
               <string name="Source"><![CDATA[--!strict
@@ -96928,7 +97723,7 @@ return OpsDirector
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="249">
+          <Item class="ModuleScript" referent="250">
             <Properties>
               <string name="Name">OpsGarrison</string>
               <string name="Source"><![CDATA[--!strict
@@ -97425,7 +98220,7 @@ return OpsGarrison
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="250">
+          <Item class="ModuleScript" referent="251">
             <Properties>
               <string name="Name">OpsKinds</string>
               <string name="Source"><![CDATA[--!strict
@@ -98254,7 +99049,7 @@ return OpsKinds
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="251">
+          <Item class="ModuleScript" referent="252">
             <Properties>
               <string name="Name">OpsRewards</string>
               <string name="Source"><![CDATA[--!strict
@@ -98552,7 +99347,7 @@ return OpsRewards
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="252">
+          <Item class="ModuleScript" referent="253">
             <Properties>
               <string name="Name">OpsSites</string>
               <string name="Source"><![CDATA[--!strict
@@ -99035,7 +99830,7 @@ return OpsSites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="253">
+          <Item class="ModuleScript" referent="254">
             <Properties>
               <string name="Name">OpsZones</string>
               <string name="Source"><![CDATA[--!strict
@@ -99224,7 +100019,7 @@ return OpsZones
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="254">
+        <Item class="ModuleScript" referent="255">
           <Properties>
             <string name="Name">PlotOilPumpService</string>
             <string name="Source"><![CDATA[--!strict
@@ -99682,7 +100477,7 @@ return PlotOilPumpService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="255">
+        <Item class="ModuleScript" referent="256">
           <Properties>
             <string name="Name">PremiumGunService</string>
             <string name="Source"><![CDATA[--!strict
@@ -100087,7 +100882,7 @@ return PremiumGunService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="256">
+        <Item class="ModuleScript" referent="257">
           <Properties>
             <string name="Name">PremiumPadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -100528,7 +101323,7 @@ return PremiumPadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="257">
+        <Item class="ModuleScript" referent="258">
           <Properties>
             <string name="Name">PremiumWeaponService</string>
             <string name="Source"><![CDATA[--!strict
@@ -101007,7 +101802,7 @@ return PremiumWeaponService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="258">
+        <Item class="ModuleScript" referent="259">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -101787,7 +102582,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="259">
+        <Item class="ModuleScript" referent="260">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -101839,7 +102634,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="260">
+        <Item class="ModuleScript" referent="261">
           <Properties>
             <string name="Name">RatePromptService</string>
             <string name="Source"><![CDATA[--!strict
@@ -102059,6 +102854,12 @@ function RatePromptService.Answer(player: Player, answer: any): boolean
 	return true
 end
 
+-- seconds since this player last took damage (math.huge = not this session); RecruitPackService reads it (JOB 41 B)
+function RatePromptService.SinceHurt(player: Player): number
+	local s = sessions[player.UserId]
+	return if s then RatePromptService._clock() - s.LastHurt else math.huge
+end
+
 function RatePromptService._Session(player: Player): Session
 	return sessionOf(player)
 end
@@ -102127,7 +102928,7 @@ return RatePromptService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="261">
+        <Item class="ModuleScript" referent="262">
           <Properties>
             <string name="Name">RebirthZoneService</string>
             <string name="Source"><![CDATA[--!strict
@@ -102687,7 +103488,308 @@ return RebirthZoneService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="262">
+        <Item class="ModuleScript" referent="263">
+          <Properties>
+            <string name="Name">RecruitPackService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 41 part B (2026-10-01): WHEN the Recruit Pack card is offered (MonetizationConfig.RecruitPackOffer,
+	owner-first). The server decides; the client (Controllers/RecruitPackController) only draws the card, reports
+	"shown" / "dropped", and prompts Roblox when he taps the price (the grant stays MonetizationService.ProcessReceipt).
+
+	Once per profile (profile.RecruitPackOffered, set when the client confirms the card SHOWED), at the FIRST of:
+	  * his first capture (TerritoryService calls OnCapture: the Guided reward capture or any first territory), or
+	  * RecruitPackOffer.OfferAfterPlaySeconds of total play (profile.Stats.PlayTimeSeconds, accrued here).
+	Never: before either, with Id 0, owned, during the Guided / onboarding hold, within CombatQuietSeconds of damage
+	taken, while seated, or while another card is out. It goes through MonetizationService.ClaimSoftOfferSlot (the
+	existing budget); a busy slot or a dropped card retries every RetrySeconds (MaxTriesPerSession). Telemetry:
+	RecruitPackOffered { trigger } + the FirstMinutes funnel steps 10 Offered / 11 Bought.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Constants = require(Shared.Constants)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+
+local RecruitPackService = {}
+
+local MC: any = MonetizationConfig
+local O: any = MC.RecruitPackOffer
+local deps: { [string]: any } = {}
+
+type Session = { Trigger: string?, Tries: number, NextAt: number, Awaiting: boolean, LastAccrue: number, Slot: any? }
+local sessions: { [number]: Session } = {}
+
+RecruitPackService._clock = os.clock -- tests replace these
+RecruitPackService._delay = function(s: number, fn: (...any) -> (), ...: any)
+	task.delay(s, fn, ...)
+end
+
+local function sessionOf(player: Player): Session
+	local s = sessions[player.UserId]
+	if s == nil then
+		s = { Trigger = nil, Tries = 0, NextAt = 0, Awaiting = false, LastAccrue = RecruitPackService._clock() }
+		sessions[player.UserId] = s
+	end
+	return s :: Session
+end
+
+local function productId(): number
+	local def = MC.DevProducts.RecruitPack
+	return if typeof(def) == "table" then tonumber(def.Id) or 0 else 0
+end
+
+local function hasPack(player: Player, profile: any): boolean
+	if typeof(profile.Entitlements) == "table" and profile.Entitlements.RecruitPack == true then
+		return true
+	end
+	return player:GetAttribute("WE_Ent_RecruitPack") == true
+end
+
+--[[ The pure rule (tests call it). s = { Live, ProductId, Offered, Owned, Tries, Trigger?, PlaySeconds, Onboarding,
+	SinceHurt, Seated, Awaiting } -> (offer, why). `why` is the trigger on an offer ("capture" | "playtime"). ]]
+function RecruitPackService.Decide(s: any): (boolean, string)
+	if s.Live ~= true then
+		return false, "not_live"
+	elseif (tonumber(s.ProductId) or 0) == 0 then
+		return false, "id0" -- the owner has not OK'd the price yet: never prompts
+	elseif s.Offered == true or s.Owned == true then
+		return false, "done"
+	elseif s.Awaiting == true then
+		return false, "awaiting"
+	elseif (tonumber(s.Tries) or 0) >= O.MaxTriesPerSession then
+		return false, "tries"
+	end
+	local why: string? = nil
+	if s.Trigger == "capture" then
+		why = "capture"
+	elseif (tonumber(s.PlaySeconds) or 0) >= O.OfferAfterPlaySeconds then
+		why = "playtime"
+	end
+	if why == nil then
+		return false, "too_early"
+	elseif s.Onboarding == true then
+		return false, "hold"
+	elseif (tonumber(s.SinceHurt) or math.huge) < O.CombatQuietSeconds then
+		return false, "combat"
+	elseif s.Seated == true then
+		return false, "seated"
+	end
+	return true, why :: string
+end
+
+-- TerritoryService: a capture (the first one is the trigger)
+function RecruitPackService.OnCapture(player: Player)
+	if not MC.RecruitPackLiveFor(player.UserId) then
+		return
+	end
+	local s = sessionOf(player)
+	if s.Trigger == nil then
+		s.Trigger = "capture"
+	end
+end
+
+local function sinceHurt(player: Player): number
+	local RP = deps.RatePromptService
+	if RP and RP.SinceHurt then
+		local ok, v = pcall(RP.SinceHurt, player)
+		if ok and typeof(v) == "number" then
+			return v
+		end
+	end
+	return math.huge
+end
+
+local function seated(player: Player): boolean
+	local char = player.Character
+	local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+	return hum ~= nil and hum.SeatPart ~= nil
+end
+
+local function guidedFunnel(player: Player, profile: any, name: string)
+	local GS = deps.GuidedService
+	if GS and GS.Funnel then
+		pcall(GS.Funnel, player, profile, name)
+	end
+end
+
+-- one player's check (the shared tick calls it; tests call it with a fake clock)
+function RecruitPackService.Step(player: Player): (boolean, string)
+	local s = sessionOf(player)
+	local now = RecruitPackService._clock()
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil then
+		return false, "no_profile"
+	end
+	-- total play: Stats.PlayTimeSeconds (it was never counted before; analytics read it as minutesPlayed)
+	local dt = math.clamp(now - s.LastAccrue, 0, 60)
+	s.LastAccrue = now
+	if typeof(profile.Stats) == "table" then
+		profile.Stats.PlayTimeSeconds = math.floor((tonumber(profile.Stats.PlayTimeSeconds) or 0) + dt + 0.5)
+	end
+	if now < s.NextAt then
+		return false, "wait"
+	end
+	local RS = deps.RetentionService
+	local offer, why = RecruitPackService.Decide({
+		Live = MC.RecruitPackLiveFor(player.UserId),
+		ProductId = productId(),
+		Offered = profile.RecruitPackOffered == true,
+		Owned = hasPack(player, profile),
+		Tries = s.Tries,
+		Trigger = s.Trigger,
+		PlaySeconds = if typeof(profile.Stats) == "table" then profile.Stats.PlayTimeSeconds else 0,
+		Onboarding = RS ~= nil and RS.IsOnboarding ~= nil and RS.IsOnboarding(player) == true,
+		SinceHurt = sinceHurt(player),
+		Seated = seated(player),
+		Awaiting = s.Awaiting,
+	})
+	if not offer then
+		return false, why
+	end
+	local MS = deps.MonetizationService
+	local slot = if MS and MS.ClaimSoftOfferSlotRefundable then MS.ClaimSoftOfferSlotRefundable(player)
+		elseif MS and MS.ClaimSoftOfferSlot and MS.ClaimSoftOfferSlot(player) then {}
+		else nil
+	if slot == nil then
+		s.NextAt = now + O.RetrySeconds -- the existing budget is busy: try again later this session
+		return false, "slot"
+	end
+	s.Slot = slot
+	s.Tries += 1
+	s.Awaiting = true
+	local perMin = if MS.PassivePerMin then MS.PassivePerMin(player, profile) else 0
+	local price = MC.DevProducts.RecruitPack.RobuxPrice
+	local okLP, LP = pcall(function(): any
+		return require(Shared.Util.LivePrices)
+	end)
+	if okLP and LP and LP.Price then
+		local okP, p = pcall(LP.Price, "DevProduct", "RecruitPack")
+		if okP and typeof(p) == "number" and p > 0 then
+			price = p
+		end
+	end
+	local rs = deps.RemoteSetup
+	local ev = rs and rs.Get(Constants.RemoteNames.FeaturePush)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireClient(player, "RecruitPackOffer", {
+			ProductKey = "RecruitPack",
+			ProductId = productId(),
+			Cash = MC.RecruitPackCash(perMin), -- the real number for him right now (the receipt recomputes it)
+			RobuxPrice = price,
+			Trigger = why,
+		})
+	end
+	local A = deps.AnalyticsService
+	if A and A.Log then
+		pcall(A.Log, "RECRUIT_PACK_OFFERED", player.UserId, { trigger = why })
+	end
+	-- no answer at all (the client never drew it): free it for a retry
+	local myTry = s.Tries
+	RecruitPackService._delay(O.ClientWaitMaxSeconds + O.AutoHideSeconds + 10, function()
+		if sessions[player.UserId] == s and s.Awaiting and s.Tries == myTry then
+			s.Awaiting = false
+			s.NextAt = RecruitPackService._clock() + O.RetrySeconds
+		end
+	end)
+	return true, why
+end
+
+-- the client's report (already through RemoteGate + the rate limit): "shown" = mark it (saved, never again);
+-- "dropped" = he never saw it: retry RetrySeconds later
+function RecruitPackService.Result(player: Player, result: any): boolean
+	local s = sessions[player.UserId]
+	if s == nil or not s.Awaiting or (result ~= "shown" and result ~= "dropped") then
+		return false
+	end
+	s.Awaiting = false
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil then
+		return false
+	end
+	if result == "shown" then
+		profile.RecruitPackOffered = true
+		deps.DataService.MarkDirty(player)
+		guidedFunnel(player, profile, "Offered")
+	else
+		-- he never saw it: give the soft-offer slot back (the Starter Pack's v153 rule) and retry
+		local MS = deps.MonetizationService
+		if MS and MS.RefundSoftOfferSlot and s.Slot then
+			pcall(MS.RefundSoftOfferSlot, player, s.Slot)
+		end
+		s.Slot = nil
+		s.NextAt = RecruitPackService._clock() + O.RetrySeconds
+	end
+	return true
+end
+
+-- the rate card (JOB 41 part D) waits while this card is out
+function RecruitPackService.CardOut(player: Player): boolean
+	local s = sessions[player.UserId]
+	return s ~= nil and s.Awaiting
+end
+
+function RecruitPackService._Session(player: Player): Session
+	return sessionOf(player)
+end
+
+function RecruitPackService.Init(d: { [string]: any })
+	deps = d
+	if O == nil or O.Enabled ~= true then
+		print("[WAR EMPIRE] RecruitPackService: off (RecruitPackOffer.Enabled = false)")
+		return
+	end
+	local MS = deps.MonetizationService
+	if MS and MS.OnGranted then
+		MS.OnGranted(function(player: Player, key: string, _event: any)
+			if key == "RecruitPack" then
+				local profile = deps.DataService and deps.DataService.GetProfile(player)
+				if profile then
+					guidedFunnel(player, profile, "Bought")
+				end
+				local BS = deps.BaseSignService
+				if BS and BS.Refresh then
+					pcall(BS.Refresh)
+				end
+			end
+		end)
+	end
+	local rs = deps.RemoteSetup
+	local ev = rs and rs.Get(Constants.RemoteNames.RequestRecruitPackResult)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent).OnServerEvent:Connect(function(player: Player, result: any)
+			if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestRecruitPackResult", result) then
+				return
+			end
+			if deps.RateLimitService and not deps.RateLimitService.Allow(player, "recruit_pack", 2 / 60, 3) then
+				return
+			end
+			RecruitPackService.Result(player, result)
+		end)
+	end
+	Players.PlayerRemoving:Connect(function(player: Player)
+		sessions[player.UserId] = nil
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(O.TickSeconds)
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p.Parent then
+					pcall(RecruitPackService.Step, p)
+				end
+			end
+		end
+	end)
+	print(string.format("[WAR EMPIRE] RecruitPackService Init (OwnerFirst=%s)", tostring(O.OwnerFirst)))
+end
+
+return RecruitPackService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="264">
           <Properties>
             <string name="Name">ResearchService</string>
             <string name="Source"><![CDATA[--!strict
@@ -103230,7 +104332,7 @@ return ResearchService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="263">
+        <Item class="ModuleScript" referent="265">
           <Properties>
             <string name="Name">RetentionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -103363,10 +104465,24 @@ function RetentionService.WaitOnboarding(player: Player, maxSeconds: number?): b
 	return player.Parent ~= nil
 end
 
+-- claude-bud JOB 41: the step the hold lasts until, and its cap. A Guided profile (OrderVersion 4) is held for the
+-- whole chain up to the Reward (Guided.HoldMaxSeconds); everyone else exactly as JOB 29 (HoldPopupsUntilStep, 60 s).
+local function holdUntil(profile: any): (number, number)
+	local G: any = (TutorialConfig :: any).Guided
+	if G and profile and tonumber(profile.TutorialOrderVersion) == G.OrderVersion then
+		local r = TutorialConfig.IndexOf("Reward", (TutorialConfig :: any).GuidedSteps)
+		if r then
+			return r + 1, math.max(5, tonumber(G.HoldMaxSeconds) or 300)
+		end
+	end
+	return tonumber(TutorialConfig.FastStart.HoldPopupsUntilStep) or 3, math.max(5, tonumber(TutorialConfig.FastStart.HoldMaxSeconds) or 60)
+end
+RetentionService._HoldUntil = holdUntil
+
 -- TutorialService tells us each step change (after it is saved)
 function RetentionService.OnTutorialStep(player: Player, step: number, complete: boolean)
-	if player:GetAttribute(ONBOARD_ATTR) == true
-		and (complete or step >= (tonumber(TutorialConfig.FastStart.HoldPopupsUntilStep) or 3)) then
+	local until_ = holdUntil(DataService and DataService.GetProfile(player))
+	if player:GetAttribute(ONBOARD_ATTR) == true and (complete or step >= until_) then
 		setHold(player, false)
 	end
 	if complete then
@@ -103384,14 +104500,15 @@ local function startHold(player: Player, profile: any)
 	if not TutorialConfig.FastStartLiveFor(player.UserId) or profile.TutorialComplete == true then
 		return
 	end
-	if (tonumber(profile.TutorialStep) or 1) >= (tonumber(TutorialConfig.FastStart.HoldPopupsUntilStep) or 3) then
+	local untilStep, maxSeconds = holdUntil(profile) -- claude-bud JOB 41: the Guided chain holds longer
+	if (tonumber(profile.TutorialStep) or 1) >= untilStep then
 		return
 	end
 	setHold(player, true)
 	local uid = player.UserId
 	local my = (holdToken[uid] or 0) + 1
 	holdToken[uid] = my
-	task.delay(math.max(5, tonumber(TutorialConfig.FastStart.HoldMaxSeconds) or 60), function()
+	task.delay(maxSeconds, function()
 		if holdToken[uid] == my and player.Parent then
 			setHold(player, false)
 		end
@@ -103698,7 +104815,7 @@ return RetentionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="264">
+        <Item class="ModuleScript" referent="266">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -103962,7 +105079,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="265">
+        <Item class="ModuleScript" referent="267">
           <Properties>
             <string name="Name">ShopOverhaulService</string>
             <string name="Source"><![CDATA[--!strict
@@ -104171,7 +105288,7 @@ return ShopOverhaulService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="266">
+        <Item class="ModuleScript" referent="268">
           <Properties>
             <string name="Name">SiteActivityService</string>
             <string name="Source"><![CDATA[--!strict
@@ -104831,7 +105948,7 @@ return SiteActivityService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="267">
+        <Item class="ModuleScript" referent="269">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -105297,7 +106414,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="268">
+        <Item class="ModuleScript" referent="270">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -105459,7 +106576,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="269">
+        <Item class="ModuleScript" referent="271">
           <Properties>
             <string name="Name">SquadOrdersService</string>
             <string name="Source"><![CDATA[--!strict
@@ -109662,7 +110779,7 @@ return SquadOrdersService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="270">
+        <Item class="ModuleScript" referent="272">
           <Properties>
             <string name="Name">StorePropsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -110843,7 +111960,7 @@ return StorePropsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="271">
+        <Item class="ModuleScript" referent="273">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -111335,7 +112452,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="272">
+        <Item class="ModuleScript" referent="274">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -112453,6 +113570,11 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	end)
 	if TutorialService and TutorialService.Notify then
 		TutorialService.Notify(player, "CaptureTerritory", rt.Id)
+		-- claude-bud JOB 41 part B: the first capture is the Recruit Pack moment (its service decides; owner-first)
+		pcall(function()
+			local RPS = require(script.Parent.RecruitPackService) :: any
+			RPS.OnCapture(player)
+		end)
 	end
 
 	if BaseService then
@@ -112464,10 +113586,21 @@ end
 
 local OutpostDefenders = require(script.Parent.Parent.Modules.OutpostDefenders) -- claude-bud JOB 24 §6
 
+-- claude-bud JOB 41: the Guided training camp at a Home Outpost blocks its capture the same way (starter rows only)
+local function guidedBlocking(id: string): boolean
+	if not TerritoryConfig.Starter.Enabled or string.sub(id, 1, #TerritoryConfig.Starter.IdPrefix) ~= TerritoryConfig.Starter.IdPrefix then
+		return false
+	end
+	local ok, GS = pcall(function(): any
+		return require(script.Parent.GuidedService) -- (script = the TerritoryService folder module, so Parent = Services)
+	end)
+	return ok and GS ~= nil and GS.Blocking ~= nil and GS.Blocking(id) == true
+end
+
 local function playersInZone(rt: TerritoryRuntime): { Player }
 	local inside = TerritoryCapture.PlayersInZone(rt)
 	-- claude-bud JOB 24 §6: nobody captures (or contests) an outpost while its defenders stand; they are told why
-	if #inside > 0 and OutpostDefenders.Blocking(rt.Def.Id) then
+	if #inside > 0 and (OutpostDefenders.Blocking(rt.Def.Id) or guidedBlocking(rt.Def.Id)) then
 		for _, p in ipairs(inside) do
 			OutpostDefenders.NoteBlocked(p)
 		end
@@ -112959,7 +114092,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="273">
+          <Item class="ModuleScript" referent="275">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -113089,7 +114222,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="274">
+          <Item class="ModuleScript" referent="276">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -113166,7 +114299,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="275">
+          <Item class="ModuleScript" referent="277">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -113235,7 +114368,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="276">
+        <Item class="ModuleScript" referent="278">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -113275,6 +114408,26 @@ local MonetizationService: any = nil
 local CombatService: any = nil -- F6: EndNoviceShield (batch A lane C API), pcall + nil-check
 local RetentionService: any = nil -- claude-bud JOB 29: the FastStart onboarding hold follows the step
 local AnalyticsService: any = nil -- claude-bud JOB 29: onboarding timing (Step1..7, BaseClaimed)
+local GuidedService: any = nil -- claude-bud JOB 41: the Guided first minutes (camp, reward, funnel); nil = the old tutorial
+
+-- claude-bud JOB 41: the step list THIS profile plays (OrderVersion 4 = the Guided list, else the normal Steps)
+local function stepsOf(profile: any): { TutorialConfig.TutorialStepDef }
+	return TutorialConfig.StepsFor(profile and profile.TutorialOrderVersion)
+end
+local function getStep(profile: any, index: number): TutorialConfig.TutorialStepDef?
+	return stepsOf(profile)[index]
+end
+local function stepCount(profile: any): number
+	return #stepsOf(profile)
+end
+local function guidedHook(name: string, ...: any)
+	if GuidedService and typeof(GuidedService[name]) == "function" then
+		local ok, err = pcall(GuidedService[name], ...)
+		if not ok then
+			warn("[TutorialService] Guided." .. name .. " failed:", err)
+		end
+	end
+end
 
 -- claude-bud JOB 29: seconds-since-join marks (analytics only) and the FastStart hold; never breaks the tutorial
 local function onboard(player: Player, step: string)
@@ -113319,11 +114472,12 @@ local function pushTutorial(player: Player)
 	end
 	local remote = RemoteSetup.Get(Constants.RemoteNames.TutorialStateUpdate) :: RemoteEvent
 	local stepIndex = profile.TutorialStep
-	local stepDef = if not profile.TutorialComplete then TutorialConfig.GetStep(stepIndex) else nil
+	local stepDef = if not profile.TutorialComplete then getStep(profile, stepIndex) else nil
 	remote:FireClient(player, {
 		Step = stepIndex,
 		Complete = profile.TutorialComplete == true,
-		Total = TutorialConfig.StepCount(),
+		Total = stepCount(profile),
+		OrderVersion = tonumber(profile.TutorialOrderVersion) or 1, -- claude-bud JOB 41: 4 = the Guided list
 		Id = if stepDef then stepDef.Id else nil,
 		Title = if stepDef then stepDef.Title else nil,
 		Hint = if stepDef then stepDef.Hint else nil,
@@ -113466,12 +114620,19 @@ local function stepAlreadyDone(profile: any, def: TutorialConfig.TutorialStepDef
 	if def.Id == "Outpost" then
 		return TerritoryConfig.Starter.Enabled == true and profile.StarterOutpostTaken == true
 	end
+	-- claude-bud JOB 41: the Guided fight / reward are done once (profile.Guided)
+	local g = profile.Guided
+	if def.Id == "FirstFight" then
+		return (typeof(g) == "table" and g.CampDone == true) or profile.StarterOutpostTaken == true
+	elseif def.Id == "Reward" then
+		return typeof(g) == "table" and g.RewardDone == true
+	end
 	return false
 end
 
 local function skipOwnedBuySteps(profile: any, step: number): number
-	local total = TutorialConfig.StepCount()
-	while step <= total and stepAlreadyDone(profile, TutorialConfig.GetStep(step)) do
+	local total = stepCount(profile)
+	while step <= total and stepAlreadyDone(profile, getStep(profile, step)) do
 		step += 1
 	end
 	return step
@@ -113537,6 +114698,7 @@ local function setStep(player: Player, step: number, complete: boolean?)
 	end
 	DataService.MarkDirty(player)
 	pushTutorial(player)
+	guidedHook("OnStep", player, profile, getStep(profile, step), complete == true) -- claude-bud JOB 41
 	retentionStep(player, step, complete == true) -- claude-bud JOB 29
 	if complete then
 		onboard(player, "TutorialDone") -- claude-bud JOB 29
@@ -113572,13 +114734,14 @@ local function advanceTo(player: Player, targetStep: number)
 	lastAdvanceAt[player.UserId] = now
 	lastAdvanceStep[player.UserId] = targetStep
 	-- claude-bud JOB 29: the funnel step just finished, at the real moment (ClaimBase = "BaseClaimed", else Tut_<Id>)
-	local doneDef = TutorialConfig.GetStep(targetStep)
+	local doneDef = getStep(profile, targetStep)
 	if doneDef then
 		onboard(player, if doneDef.Id == "ClaimBase" then "BaseClaimed" else "Tut_" .. doneDef.Id)
+		guidedHook("OnStepDone", player, profile, doneDef) -- claude-bud JOB 41: the FirstMinutes funnel
 	end
 	-- One setStep (one push): the client drops a second TutorialStateUpdate that lands within 0.2 s
 	local nextStep = skipOwnedBuySteps(profile, targetStep + 1)
-	if nextStep > TutorialConfig.StepCount() then
+	if nextStep > stepCount(profile) then
 		setStep(player, nextStep, true)
 	else
 		-- Panel update only — no toast spam per step
@@ -113594,10 +114757,12 @@ function TutorialService.Complete(player: Player)
 	if not profile then
 		return
 	end
+	local skippedAt = getStep(profile, profile.TutorialStep) -- claude-bud JOB 41: where he skipped (before the stamp)
 	profile.TutorialComplete = true
-	profile.TutorialStep = TutorialConfig.StepCount() + 1
+	profile.TutorialStep = stepCount(profile) + 1
 	DataService.MarkDirty(player)
 	pushTutorial(player)
+	guidedHook("OnSkip", player, profile, skippedAt) -- claude-bud JOB 41: clears the camp at once, GuidedSkipped
 	if NotificationService then
 		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
@@ -113654,7 +114819,7 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 	end
 	-- F6: only the ACTIVE step can finish, and only on an event its AdvanceOn lists ("Upgrade" = its own console buy;
 	-- any vehicle spawn = the 4x4 step; a collect or a cash drop ("ManualDrop") = the collect step)
-	local def = TutorialConfig.GetStep(step)
+	local def = getStep(profile, step)
 	if def and typeof(def.AdvanceOn) == "table" and table.find(def.AdvanceOn, eventType)
 		and (eventType ~= "Upgrade" or (typeof(detail) == "string" and detail == def.PadStructureId)) then
 		advanceTo(player, step)
@@ -113670,6 +114835,7 @@ function TutorialService.Init(deps: { [string]: any })
 	CombatService = deps.CombatService -- F6: EndNoviceShield (CombatService.Init runs later; called only at run time)
 	RetentionService = deps.RetentionService -- claude-bud JOB 29
 	AnalyticsService = deps.AnalyticsService -- claude-bud JOB 29
+	GuidedService = deps.GuidedService -- claude-bud JOB 41 (nil = the old tutorial)
 
 	local skipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSkipTutorial) :: RemoteEvent
 	skipRemote.OnServerEvent:Connect(function(player: Player)
@@ -113694,6 +114860,19 @@ function TutorialService.Init(deps: { [string]: any })
 		alone (never stamped down, so it is never migrated twice). ]]
 	local function migrateOrder(player: Player, profile: any)
 		local current = orderVersion()
+		-- claude-bud JOB 41: a NEW player enters the Guided order (steps 1-4 have the same index in 3 and 4), and a
+		-- Guided save stays Guided while the switch is live for him; otherwise it migrates back like any other order
+		if GuidedService and typeof(GuidedService.Wants) == "function" then
+			local okW, wants = pcall(GuidedService.Wants, player, profile)
+			if okW and wants == true then
+				current = TutorialConfig.Guided.OrderVersion
+				if tonumber(profile.TutorialOrderVersion) ~= current then
+					profile.TutorialOrderVersion = current
+					DataService.MarkDirty(player)
+				end
+				return
+			end
+		end
 		local saved = tonumber(profile.TutorialOrderVersion) or 1
 		if saved == current or TutorialConfig.SavedOrder(saved) == nil then
 			return
@@ -113740,13 +114919,13 @@ function TutorialService.Init(deps: { [string]: any })
 		local firstOpen = skipOwnedBuySteps(profile, profile.TutorialStep)
 		if firstOpen ~= profile.TutorialStep then
 			profile.TutorialStep = firstOpen
-			if firstOpen > TutorialConfig.StepCount() then
+			if firstOpen > stepCount(profile) then
 				profile.TutorialComplete = true
 			end
 			DataService.MarkDirty(player)
 		end
 		-- F6: a migrated v1 save past the last step (or everything already done) is a finished tutorial
-		if profile.TutorialStep > TutorialConfig.StepCount() and profile.TutorialComplete ~= true then
+		if profile.TutorialStep > stepCount(profile) and profile.TutorialComplete ~= true then
 			profile.TutorialComplete = true
 			DataService.MarkDirty(player)
 		end
@@ -113755,6 +114934,7 @@ function TutorialService.Init(deps: { [string]: any })
 			endNoviceShield(player) -- F6 (no-op unless a shield is already up)
 			return
 		end
+		guidedHook("OnResume", player, profile, getStep(profile, profile.TutorialStep)) -- claude-bud JOB 41: a rejoin mid-chain
 		-- Plot assignment counts as claim-base progress
 		task.defer(function()
 			if profile.BasePlotId then
@@ -113813,7 +114993,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="277">
+        <Item class="ModuleScript" referent="279">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -114536,7 +115716,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="278">
+        <Item class="ModuleScript" referent="280">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -119985,7 +121165,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="279">
+        <Item class="ModuleScript" referent="281">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -122847,7 +124027,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="280">
+        <Item class="ModuleScript" referent="282">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -123261,19 +124441,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="281">
+  <Item class="StarterPlayer" referent="283">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="282">
+    <Item class="StarterPlayerScripts" referent="284">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="283">
+      <Item class="Folder" referent="285">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="284">
+        <Item class="LocalScript" referent="286">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -123424,6 +124604,7 @@ safeInit("Juice", safeRequire("Juice", Modules:WaitForChild("Juice", 5) :: Insta
 safeInit("ArmourController", safeRequire("ArmourController", Controllers:WaitForChild("ArmourController", 5) :: Instance)) -- claude-bud JOB 26
 safeInit("RetentionController", safeRequire("RetentionController", Controllers:WaitForChild("RetentionController", 5) :: Instance)) -- claude-bud JOB 29
 safeInit("RatePromptController", safeRequire("RatePromptController", Controllers:WaitForChild("RatePromptController", 5) :: Instance)) -- claude-bud JOB 40 part D
+safeInit("RecruitPackController", safeRequire("RecruitPackController", Controllers:WaitForChild("RecruitPackController", 5) :: Instance)) -- claude-bud JOB 41 part B
 safeInit("NukeController", safeRequire("NukeController", Controllers:WaitForChild("NukeController", 5) :: Instance)) -- claude-bud JOB 33
 safeInit("AchievementController", safeRequire("AchievementController", Controllers:WaitForChild("AchievementController", 5) :: Instance)) -- claude-bud JOB 34
 safeInit("ArmoryController", safeRequire("ArmoryController", Controllers:WaitForChild("ArmoryController", 5) :: Instance)) -- claude-bud JOB 35
@@ -123444,11 +124625,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="285">
+        <Item class="Folder" referent="287">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="286">
+          <Item class="ModuleScript" referent="288">
             <Properties>
               <string name="Name">AchievementController</string>
               <string name="Source"><![CDATA[--!strict
@@ -123703,7 +124884,7 @@ return AchievementController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="287">
+          <Item class="ModuleScript" referent="289">
             <Properties>
               <string name="Name">ArmoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -123865,7 +125046,7 @@ return ArmoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="288">
+          <Item class="ModuleScript" referent="290">
             <Properties>
               <string name="Name">ArmourController</string>
               <string name="Source"><![CDATA[--!strict
@@ -124021,7 +125202,7 @@ return ArmourController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="289">
+          <Item class="ModuleScript" referent="291">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -124727,7 +125908,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="290">
+          <Item class="ModuleScript" referent="292">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -125000,7 +126181,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="291">
+          <Item class="ModuleScript" referent="293">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -125146,8 +126327,7 @@ local function applyTutorialStep(complete: boolean, id: any, pad: any, pointer: 
 		tutStep = nil
 		return
 	end
-	local i = if typeof(id) == "string" then TutorialConfig.IndexOf(id) else nil
-	local def = if i ~= nil then TutorialConfig.Steps[i] else nil
+	local def = if typeof(id) == "string" then (TutorialConfig :: any).ById(id) else nil -- claude-bud JOB 41: either step list
 	if def ~= nil then
 		tutStep = def
 	else
@@ -125683,7 +126863,7 @@ function BaseController.Init()
 				applyTutorialStep(true, nil, nil, nil)
 				queueRelist()
 			elseif state.TutorialComplete == false and typeof(state.TutorialStep) == "number" then
-				local def = TutorialConfig.GetStep(state.TutorialStep)
+				local def = (TutorialConfig :: any).GetStepFor(state.TutorialOrderVersion, state.TutorialStep) -- claude-bud JOB 41: the Guided list too
 				if def ~= nil then
 					applyTutorialStep(false, def.Id, nil, nil)
 					queueRelist()
@@ -125743,7 +126923,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="292">
+          <Item class="ModuleScript" referent="294">
             <Properties>
               <string name="Name">BaseMarkerController</string>
               <string name="Source"><![CDATA[--!strict
@@ -125790,6 +126970,7 @@ type Marker = {
 	Gui: BillboardGui,
 	Pill: CanvasGroup,
 	Scale: UIScale,
+	Stroke: UIStroke,
 	Flag: ImageLabel,
 	NameL: TextLabel,
 	UserL: TextLabel,
@@ -125908,7 +127089,7 @@ local function build(conf: Instance): Marker
 	local rank = label(pill, "Rank", NAME_FONT, C.Rank, B.UserTextSize)
 	rank.TextXAlignment = Enum.TextXAlignment.Right
 	return {
-		Conf = conf, Anchor = anchor, Gui = g, Pill = pill, Scale = scale, Flag = flag, NameL = nameL, UserL = userL,
+		Conf = conf, Anchor = anchor, Gui = g, Pill = pill, Scale = scale, Stroke = stroke, Flag = flag, NameL = nameL, UserL = userL,
 		Rank = rank, Has = false, Mine = false, W = 100, WDetail = 100, Detail = false, Height = B.HeightStuds,
 	}
 end
@@ -125949,6 +127130,10 @@ local function paint(m: Marker)
 	local text = if mine then B.Text.You elseif typeof(clan) == "string" and clan ~= "" then string.format("[%s] %s", clan, name) else name
 	m.NameL.Text = text
 	m.NameL.TextColor3 = if mine then C.You elseif ally then C.Ally else C.Name
+	-- claude-bud JOB 41 part B: the Recruit Pack's gold trim
+	local recruit = conf:GetAttribute("Recruit") == true
+	m.Stroke.Color = if recruit then C.Rank else C.Stroke
+	m.Stroke.Thickness = if recruit then 2 else 1
 	local user = "@" .. tostring(conf:GetAttribute("User") or "")
 	m.UserL.Text = user
 	local rt = B.RankText(tonumber(conf:GetAttribute("Prestige")) or 0)
@@ -126081,7 +127266,7 @@ return BaseMarkerController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="293">
+          <Item class="ModuleScript" referent="295">
             <Properties>
               <string name="Name">BuildingTipController</string>
               <string name="Source"><![CDATA[--!strict
@@ -126311,7 +127496,7 @@ return BuildingTipController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="294">
+          <Item class="ModuleScript" referent="296">
             <Properties>
               <string name="Name">CheckpointController</string>
               <string name="Source"><![CDATA[--!strict
@@ -126426,7 +127611,7 @@ return CheckpointController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="295">
+          <Item class="ModuleScript" referent="297">
             <Properties>
               <string name="Name">CodesController</string>
               <string name="Source"><![CDATA[--!strict
@@ -126795,7 +127980,7 @@ return CodesController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="296">
+          <Item class="ModuleScript" referent="298">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -129428,7 +130613,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="297">
+          <Item class="ModuleScript" referent="299">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -129805,7 +130990,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="298">
+          <Item class="ModuleScript" referent="300">
             <Properties>
               <string name="Name">EndgameController</string>
               <string name="Source"><![CDATA[--!strict
@@ -131605,7 +132790,7 @@ return EndgameController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="299">
+          <Item class="ModuleScript" referent="301">
             <Properties>
               <string name="Name">FeatureController</string>
               <string name="Source"><![CDATA[--!strict
@@ -131900,7 +133085,7 @@ return FeatureController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="300">
+          <Item class="ModuleScript" referent="302">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -133759,7 +134944,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="301">
+          <Item class="ModuleScript" referent="303">
             <Properties>
               <string name="Name">MapController</string>
               <string name="Source"><![CDATA[--!strict
@@ -135239,7 +136424,7 @@ return MapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="302">
+          <Item class="ModuleScript" referent="304">
             <Properties>
               <string name="Name">MissileController</string>
               <string name="Source"><![CDATA[--!strict
@@ -137121,7 +138306,7 @@ return MissileController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="303">
+          <Item class="ModuleScript" referent="305">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -138398,7 +139583,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="304">
+          <Item class="ModuleScript" referent="306">
             <Properties>
               <string name="Name">NationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -139860,7 +141045,7 @@ return NationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="305">
+          <Item class="ModuleScript" referent="307">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -141007,7 +142192,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="306">
+          <Item class="ModuleScript" referent="308">
             <Properties>
               <string name="Name">NukeController</string>
               <string name="Source"><![CDATA[--!strict
@@ -141329,7 +142514,7 @@ return NukeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="307">
+          <Item class="ModuleScript" referent="309">
             <Properties>
               <string name="Name">OpsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -142222,7 +143407,7 @@ return OpsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="308">
+          <Item class="ModuleScript" referent="310">
             <Properties>
               <string name="Name">OrdersController</string>
               <string name="Source"><![CDATA[--!strict
@@ -142875,7 +144060,7 @@ return OrdersController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="309">
+          <Item class="ModuleScript" referent="311">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -143860,7 +145045,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="310">
+            <Item class="ModuleScript" referent="312">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -144025,7 +145210,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="311">
+            <Item class="ModuleScript" referent="313">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -144065,7 +145250,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="312">
+          <Item class="ModuleScript" referent="314">
             <Properties>
               <string name="Name">PromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -144980,7 +146165,7 @@ return PromptController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="313">
+          <Item class="ModuleScript" referent="315">
             <Properties>
               <string name="Name">RatePromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -145189,7 +146374,225 @@ return RatePromptController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="314">
+          <Item class="ModuleScript" referent="316">
+            <Properties>
+              <string name="Name">RecruitPackController</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 41 part B (2026-10-01): the Recruit Pack card. The server decides WHEN (RecruitPackService,
+	FeaturePush "RecruitPackOffer" { ProductId, Cash, RobuxPrice, Trigger }); this only draws one small card, reports
+	"shown" (drawn) or "dropped" (the screen never got free) on RequestRecruitPackResult, and on the price tap fires the
+	existing purchase-intent remote + MarketplaceService:PromptProductPurchase. Every grant stays ProcessReceipt.
+
+	Phone first (real px, no UIScale on this gui): top-right under the top-bar pills (clear of the thumbstick zone, the
+	fire / jump buttons), <= 300 wide (fits 800x360), buttons 48 tall, text >= 15. Three lines: "$<N> Cash" (his real
+	number now), "2x Cash for 30 min", "Gold base trim"; the price from the server (never typed here), "Maybe later", X.
+	No timer, no "only today". Waits for a free screen (not driving / dead / in combat 20 s / a panel open); hides
+	itself after AutoHideSeconds. Later the pack stays in the Shop.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] RecruitPackController: no ReplicatedStorage.Shared after 60 s; not started")
+	return {}
+end
+local Constants = require(Shared.Constants)
+local Remotes = require(Shared.Remotes)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+
+local RecruitPackController = {}
+
+local O: any = (MonetizationConfig :: any).RecruitPackOffer
+local player = Players.LocalPlayer
+local GOLD = Color3.fromRGB(255, 205, 60)
+local PLATE = Color3.fromRGB(22, 24, 20)
+local BLOCK_FLAGS = { "Driving", "Dead", "RecentCombat", "Modal" }
+
+local showing = false
+local lastCombatSeen = -math.huge
+
+function RecruitPackController.Showing(): boolean
+	return showing
+end
+
+local function blocked(): boolean
+	if HudLayout.GetFlag("RecentCombat") then
+		lastCombatSeen = os.clock()
+	end
+	if os.clock() - lastCombatSeen < O.CombatQuietSeconds then
+		return true
+	end
+	for _, f in ipairs(BLOCK_FLAGS) do
+		if HudLayout.GetFlag(f) then
+			return true
+		end
+	end
+	return false
+end
+
+local function report(r: string)
+	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestRecruitPackResult, r)
+end
+
+local function money(n: number): string
+	local s = tostring(math.floor(n))
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return (out:gsub("^,", ""))
+end
+
+local function corner(p: Instance, r: number)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, r)
+	c.Parent = p
+end
+
+local function text(parent: Instance, t: string, size: number, color: Color3, font: Enum.Font, y: number, h: number): TextLabel
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Position = UDim2.fromOffset(14, y)
+	l.Size = UDim2.new(1, -28, 0, h)
+	l.Font = font
+	l.TextSize = size
+	l.TextColor3 = color
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.Text = t
+	l.Parent = parent
+	return l
+end
+
+local function showCard(data: any)
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if pg == nil then
+		showing = false
+		report("dropped")
+		return
+	end
+	local old = pg:FindFirstChild("WE_RecruitPack")
+	if old then
+		old:Destroy()
+	end
+	local g = Instance.new("ScreenGui")
+	g.Name = "WE_RecruitPack"
+	g.ResetOnSpawn = false
+	g.DisplayOrder = 38
+	g.Parent = pg
+	local card = Instance.new("Frame")
+	card.AnchorPoint = Vector2.new(1, 0)
+	card.Position = UDim2.new(1, 320, 0, 58)
+	card.Size = UDim2.fromOffset(300, 178)
+	card.BackgroundColor3 = PLATE
+	card.BackgroundTransparency = 0.05
+	card.Parent = g
+	corner(card, 12)
+	local st = Instance.new("UIStroke")
+	st.Color = GOLD
+	st.Thickness = 2
+	st.Parent = card
+	text(card, "Recruit Pack", 18, GOLD, Enum.Font.GothamBlack, 8, 26)
+	local cash = math.floor(tonumber(data.Cash) or 0)
+	text(card, "$  " .. string.format(O.Lines.Cash, money(cash)), 15, Color3.new(1, 1, 1), Enum.Font.GothamBold, 38, 20)
+	text(card, "x2  " .. O.Lines.Boost, 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 60, 20)
+	text(card, "★  " .. O.Lines.Trim, 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 82, 20)
+	local x = Instance.new("TextButton")
+	x.Position = UDim2.new(1, -54, 0, 6)
+	x.Size = UDim2.fromOffset(48, 48)
+	x.BackgroundColor3 = Color3.fromRGB(55, 60, 50)
+	x.TextColor3 = Color3.new(1, 1, 1)
+	x.Font = Enum.Font.GothamBold
+	x.TextSize = 16
+	x.Text = "X"
+	corner(x, 8)
+	x.Parent = card
+	local price = math.floor(tonumber(data.RobuxPrice) or 0)
+	local buy = Instance.new("TextButton")
+	buy.AnchorPoint = Vector2.new(0, 1)
+	buy.Position = UDim2.new(0, 10, 1, -10)
+	buy.Size = UDim2.new(0.5, -15, 0, 48)
+	buy.BackgroundColor3 = Color3.fromRGB(120, 100, 40)
+	buy.TextColor3 = Color3.new(1, 1, 1)
+	buy.Font = Enum.Font.GothamBlack
+	buy.TextSize = 18
+	buy.Text = string.format("%d R$", price)
+	corner(buy, 10)
+	buy.Parent = card
+	local later = Instance.new("TextButton")
+	later.AnchorPoint = Vector2.new(1, 1)
+	later.Position = UDim2.new(1, -10, 1, -10)
+	later.Size = UDim2.new(0.5, -15, 0, 48)
+	later.BackgroundColor3 = Color3.fromRGB(55, 60, 50)
+	later.TextColor3 = Color3.new(1, 1, 1)
+	later.Font = Enum.Font.GothamBold
+	later.TextSize = 15
+	later.Text = "Maybe later"
+	corner(later, 10)
+	later.Parent = card
+	TweenService:Create(card, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Position = UDim2.new(1, -16, 0, 58),
+	}):Play()
+	report("shown")
+	local done = false
+	local function close()
+		if done then
+			return
+		end
+		done = true
+		showing = false
+		if g.Parent then
+			g:Destroy()
+		end
+	end
+	buy.Activated:Connect(function()
+		local id = tonumber(data.ProductId) or 0
+		if id ~= 0 then
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, "RecruitPack", "recruit_offer")
+			pcall(function()
+				MarketplaceService:PromptProductPurchase(player, id)
+			end)
+		end
+		close()
+	end)
+	later.Activated:Connect(close)
+	x.Activated:Connect(close)
+	task.delay(O.AutoHideSeconds, close)
+end
+
+function RecruitPackController.Init()
+	if O == nil or O.Enabled ~= true then
+		return
+	end
+	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if kind ~= "RecruitPackOffer" or typeof(data) ~= "table" or showing then
+			return
+		end
+		showing = true
+		task.spawn(function()
+			local left = O.ClientWaitMaxSeconds
+			while blocked() and left > 0 do
+				task.wait(1)
+				left -= 1
+			end
+			if left <= 0 or player.Parent == nil then
+				showing = false
+				report("dropped")
+				return
+			end
+			showCard(data)
+		end)
+	end)
+end
+
+return RecruitPackController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="317">
             <Properties>
               <string name="Name">ResearchController</string>
               <string name="Source"><![CDATA[--!strict
@@ -146285,7 +147688,7 @@ return ResearchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="315">
+          <Item class="ModuleScript" referent="318">
             <Properties>
               <string name="Name">RetentionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -146676,7 +148079,7 @@ return RetentionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="316">
+          <Item class="ModuleScript" referent="319">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -147230,7 +148633,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="317">
+          <Item class="ModuleScript" referent="320">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -149322,7 +150725,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="318">
+          <Item class="ModuleScript" referent="321">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -150589,7 +151992,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="319">
+          <Item class="ModuleScript" referent="322">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -151424,9 +152827,39 @@ local APPLY_DEBOUNCE = 0.2
 local pendingPayload: any = nil
 local pendingScheduled = false
 
+-- claude-bud JOB 41: the Guided FIRST FIGHT puts the one objective marker ("ENEMY CAMP") on HIS Home Outpost
+local campMarkerOn = false
+local function campMarker(on: boolean)
+	if not on then
+		if campMarkerOn then
+			campMarkerOn = false
+			local cur = ObjectiveMarker.Current()
+			if cur and cur.Short == TutorialConfig.Guided.Camp.Label then
+				ObjectiveMarker.Clear()
+			end
+		end
+		return
+	end
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local origin = if hrp and hrp:IsA("BasePart") then hrp.Position else Vector3.zero
+	local part, pos = TutorialController.ResolveTargetPos("Outpost", "Tutorial_Outpost", nil, myPlotId, origin)
+	local p: Vector3? = if part then part.Position else pos
+	if p == nil then
+		return
+	end
+	campMarkerOn = true
+	ObjectiveMarker.ShowWith({ Short = TutorialConfig.Guided.Camp.Label, X = p.X, Y = p.Y, Z = p.Z }, { ArriveStuds = 25, TimeoutSeconds = 600 })
+end
+
 local function applyState(payload: any)
 	if typeof(payload) ~= "table" then
 		return
+	end
+	if payload.Id == "FirstFight" and payload.Complete ~= true then
+		task.defer(campMarker, true)
+	else
+		campMarker(false)
 	end
 	local now = os.clock()
 	if (now - lastApplyAt) < APPLY_DEBOUNCE and payload.Complete ~= true then
@@ -151902,7 +153335,7 @@ end
 -- Recruit and 4x4 steps open a panel instead). Per-player targets need the plot id first.
 local function stepHasWorldTarget(): boolean
 	local id = currentStepId
-	if id == "Outpost" then
+	if id == "Outpost" or id == "FirstFight" then -- claude-bud JOB 41: the camp is at the Home Outpost
 		return true
 	end
 	if myPlotId == nil then
@@ -152225,7 +153658,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="320">
+          <Item class="ModuleScript" referent="323">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -152626,7 +154059,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="321">
+          <Item class="ModuleScript" referent="324">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -154077,7 +155510,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="322">
+          <Item class="ModuleScript" referent="325">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -154282,8 +155715,7 @@ local function applyTutorialStep(complete: boolean, id: any, pad: any, pointer: 
 		tutStep = nil
 		return
 	end
-	local i = if typeof(id) == "string" then TutorialConfig.IndexOf(id) else nil
-	local def = if i ~= nil then TutorialConfig.Steps[i] else nil
+	local def = if typeof(id) == "string" then (TutorialConfig :: any).ById(id) else nil -- claude-bud JOB 41: either step list
 	if def ~= nil then
 		tutStep = def
 	else
@@ -156333,7 +157765,7 @@ function WorldPromptController.Init()
 		if state.TutorialComplete == true then
 			applyTutorialStep(true, nil, nil, nil)
 		elseif state.TutorialComplete == false and typeof(state.TutorialStep) == "number" then
-			local def = TutorialConfig.GetStep(state.TutorialStep)
+			local def = (TutorialConfig :: any).GetStepFor(state.TutorialOrderVersion, state.TutorialStep) -- claude-bud JOB 41: the Guided list too
 			if def ~= nil then
 				applyTutorialStep(false, def.Id, nil, nil)
 			end
@@ -156399,11 +157831,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="323">
+        <Item class="Folder" referent="326">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="324">
+          <Item class="ModuleScript" referent="327">
             <Properties>
               <string name="Name">AimTargets</string>
               <string name="Source"><![CDATA[--!strict
@@ -156946,7 +158378,7 @@ return AimTargets
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="325">
+          <Item class="ModuleScript" referent="328">
             <Properties>
               <string name="Name">AirWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -157598,7 +159030,7 @@ return AirWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="326">
+          <Item class="ModuleScript" referent="329">
             <Properties>
               <string name="Name">AircraftBodyClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -157929,7 +159361,7 @@ return AircraftBodyClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="327">
+          <Item class="ModuleScript" referent="330">
             <Properties>
               <string name="Name">ArmyDebugClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -158273,7 +159705,7 @@ return ArmyDebugClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="328">
+          <Item class="ModuleScript" referent="331">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -159130,7 +160562,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="329">
+          <Item class="ModuleScript" referent="332">
             <Properties>
               <string name="Name">AudioHooks</string>
               <string name="Source"><![CDATA[--!strict
@@ -159662,7 +161094,7 @@ return AudioHooks
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="330">
+          <Item class="ModuleScript" referent="333">
             <Properties>
               <string name="Name">BusinessVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -161097,7 +162529,7 @@ return BusinessVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="331">
+          <Item class="ModuleScript" referent="334">
             <Properties>
               <string name="Name">CameraFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -161648,7 +163080,7 @@ return CameraFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="332">
+          <Item class="ModuleScript" referent="335">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -161716,7 +163148,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="333">
+          <Item class="ModuleScript" referent="336">
             <Properties>
               <string name="Name">ConsoleWaypoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -162030,7 +163462,7 @@ return ConsoleWaypoint
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="334">
+          <Item class="ModuleScript" referent="337">
             <Properties>
               <string name="Name">EngagementClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -162476,7 +163908,7 @@ return EngagementClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="335">
+          <Item class="ModuleScript" referent="338">
             <Properties>
               <string name="Name">GameFeelClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -162779,7 +164211,7 @@ return GameFeelClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="336">
+          <Item class="ModuleScript" referent="339">
             <Properties>
               <string name="Name">HudIcons</string>
               <string name="Source"><![CDATA[--!strict
@@ -163147,7 +164579,7 @@ return HudIcons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="337">
+          <Item class="ModuleScript" referent="340">
             <Properties>
               <string name="Name">HudLayout</string>
               <string name="Source"><![CDATA[--!strict
@@ -164464,7 +165896,7 @@ return HudLayout
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="338">
+          <Item class="ModuleScript" referent="341">
             <Properties>
               <string name="Name">Juice</string>
               <string name="Source"><![CDATA[--!strict
@@ -164540,7 +165972,11 @@ local function celebrate(J: any, data: any)
 	if pg == nil then
 		return
 	end
+	local guided = typeof(data) == "table" and data.Guided == true -- claude-bud JOB 41: "BASE SECURED!"
 	local R = J.Rebirth
+	if guided and typeof(J.Guided) == "table" then
+		R = { BannerSeconds = J.Guided.BannerSeconds, Confetti = J.Guided.Confetti, Colors = J.Rebirth.Colors }
+	end
 	local okH, HudLayout = pcall(require, script.Parent.HudLayout)
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WE_RebirthCelebration"
@@ -164559,7 +165995,8 @@ local function celebrate(J: any, data: any)
 	banner.TextSize = 30
 	banner.TextWrapped = true
 	local p = tonumber(typeof(data) == "table" and data.Prestige) or 0
-	banner.Text = string.format("REBIRTH P%d!\n%s", p, tostring(typeof(data) == "table" and data.Sub or "Cash earnings up"))
+	banner.Text = if guided then string.format("%s\n%s", tostring(data.Title), tostring(data.Sub or ""))
+		else string.format("REBIRTH P%d!\n%s", p, tostring(typeof(data) == "table" and data.Sub or "Cash earnings up"))
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, 12)
 	c.Parent = banner
@@ -164620,6 +166057,8 @@ function Juice.Init()
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if kind == "Rebirth" then
 			celebrate(J, data)
+		elseif kind == "GuidedReward" and typeof(data) == "table" then -- claude-bud JOB 41
+			celebrate(J, { Guided = true, Title = data.Title, Sub = data.Sub })
 		end
 	end)
 end
@@ -164628,7 +166067,7 @@ return Juice
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="339">
+          <Item class="ModuleScript" referent="342">
             <Properties>
               <string name="Name">LabelGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -164870,7 +166309,7 @@ return LabelGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="340">
+          <Item class="ModuleScript" referent="343">
             <Properties>
               <string name="Name">MoveDebugClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -165244,7 +166683,7 @@ return MoveDebugClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="341">
+          <Item class="ModuleScript" referent="344">
             <Properties>
               <string name="Name">NextPadChevrons</string>
               <string name="Source"><![CDATA[--!strict
@@ -165423,8 +166862,7 @@ end
 
 local function stepFromId(id: any, pad: any, pointer: any): Step?
 	if typeof(id) == "string" then
-		local i = TutorialConfig.IndexOf(id)
-		local def = if i ~= nil then TutorialConfig.Steps[i] else nil
+		local def = if typeof(id) == "string" then (TutorialConfig :: any).ById(id) else nil -- claude-bud JOB 41: either step list
 		if def ~= nil then
 			return def
 		end
@@ -165476,7 +166914,7 @@ local function onPlayerState(state: any)
 		tutStep = nil
 		markRetarget()
 	elseif state.TutorialComplete == false and typeof(state.TutorialStep) == "number" then
-		local def = TutorialConfig.GetStep(state.TutorialStep)
+		local def = (TutorialConfig :: any).GetStepFor(state.TutorialOrderVersion, state.TutorialStep) -- claude-bud JOB 41: the Guided list too
 		if def ~= nil then
 			tutKnown = true
 			tutStep = def
@@ -165732,7 +167170,7 @@ return NextPadChevrons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="342">
+          <Item class="ModuleScript" referent="345">
             <Properties>
               <string name="Name">NotifOptIn</string>
               <string name="Source"><![CDATA[--!strict
@@ -165823,7 +167261,7 @@ return NotifOptIn
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="343">
+          <Item class="ModuleScript" referent="346">
             <Properties>
               <string name="Name">ObjectiveMarker</string>
               <string name="Source"><![CDATA[--!strict
@@ -166309,7 +167747,7 @@ return ObjectiveMarker
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="344">
+          <Item class="ModuleScript" referent="347">
             <Properties>
               <string name="Name">OpsJobs</string>
               <string name="Source"><![CDATA[--!strict
@@ -166933,7 +168371,7 @@ return OpsJobs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="345">
+          <Item class="ModuleScript" referent="348">
             <Properties>
               <string name="Name">PanelShell</string>
               <string name="Source"><![CDATA[--!strict
@@ -167179,7 +168617,7 @@ return PanelShell
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="346">
+          <Item class="ModuleScript" referent="349">
             <Properties>
               <string name="Name">PremiumWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -167593,7 +169031,7 @@ return PremiumWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="347">
+          <Item class="ModuleScript" referent="350">
             <Properties>
               <string name="Name">ProducerLabels</string>
               <string name="Source"><![CDATA[--!strict
@@ -168026,7 +169464,7 @@ return ProducerLabels
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="348">
+          <Item class="ModuleScript" referent="351">
             <Properties>
               <string name="Name">ProductionFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -169280,7 +170718,7 @@ return ProductionFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="349">
+          <Item class="ModuleScript" referent="352">
             <Properties>
               <string name="Name">ProgressPill</string>
               <string name="Source"><![CDATA[--!strict
@@ -169459,7 +170897,7 @@ return ProgressPill
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="350">
+          <Item class="ModuleScript" referent="353">
             <Properties>
               <string name="Name">QualityGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -169805,7 +171243,7 @@ return QualityGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="351">
+          <Item class="ModuleScript" referent="354">
             <Properties>
               <string name="Name">RebirthConfirm</string>
               <string name="Source"><![CDATA[--!strict
@@ -170700,7 +172138,7 @@ return RebirthConfirm
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="352">
+          <Item class="ModuleScript" referent="355">
             <Properties>
               <string name="Name">RigAnimator</string>
               <string name="Source"><![CDATA[--!strict
@@ -171728,7 +173166,7 @@ return RigAnimator
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="353">
+          <Item class="ModuleScript" referent="356">
             <Properties>
               <string name="Name">Scope</string>
               <string name="Source"><![CDATA[--!strict
@@ -171933,7 +173371,7 @@ return Scope
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="354">
+          <Item class="ModuleScript" referent="357">
             <Properties>
               <string name="Name">StandFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -172014,7 +173452,7 @@ return StandFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="355">
+          <Item class="ModuleScript" referent="358">
             <Properties>
               <string name="Name">StreakStrip</string>
               <string name="Source"><![CDATA[--!strict
@@ -172113,7 +173551,7 @@ return StreakStrip
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="356">
+          <Item class="ModuleScript" referent="359">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -172178,7 +173616,7 @@ return StudioSmokeClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="357">
+          <Item class="ModuleScript" referent="360">
             <Properties>
               <string name="Name">VehicleCombatClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -172868,7 +174306,7 @@ return VehicleCombatClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="358">
+          <Item class="ModuleScript" referent="361">
             <Properties>
               <string name="Name">VehicleDriveClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -176636,7 +178074,7 @@ return VehicleDriveClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="359">
+          <Item class="ModuleScript" referent="362">
             <Properties>
               <string name="Name">WeaponVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -178864,7 +180302,7 @@ return WeaponVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="360">
+          <Item class="ModuleScript" referent="363">
             <Properties>
               <string name="Name">WorldSpinners</string>
               <string name="Source"><![CDATA[--!strict
@@ -179005,7 +180443,7 @@ return WorldSpinners
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="361">
+  <Item class="Workspace" referent="364">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
