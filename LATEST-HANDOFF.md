@@ -1,4 +1,19 @@
 <!-- Q2-START -->
+## v158 PUBLISHED (Code Bot Roblox, 2026-10-01 08:48 Dublin): Open Cloud place version 156 — JOB 41 A+B owner-first (Guided first minutes + Recruit Pack Id 0)
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **158**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":156}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Cherry-picks:** Claude `a1c927b` JOB 41 A Guided -> `c5dda45`; Claude `22f81e3` JOB 41 B Recruit Pack -> `b11d8c5`; then `094c816` WE_Build 158 + checks + dist.
+- **Flags left OwnerFirst=true (do NOT flip without Shaun):**
+  - `TutorialConfig.Guided` Enabled + OwnerFirst=true (OrderVersion 4 guided chain + GuidedService training camp).
+  - `MonetizationConfig.RecruitPackOffer` Enabled + OwnerFirst=true; `DevProducts.RecruitPack.Id = 0` (no Creator Hub product yet; 49 R$ proposed).
+- **PreferMesh stays OFF.** No WE_Building* touch. No Creator Hub products created.
+- **Checks:** BuyPathStatic PASS=7481 FAIL=0; claude_bud_job41 PASS; codebot_v158 PASS; rojo build deterministic (both dist copies identical).
+- **Still owed by Claude on bud:** JOB 41 part C (rival bases TARGETS list) and part D (rate-prompt big-win triggers linking to JOB 40 D — JOB 40 D already shipped; extend only). Then JOB 43 part 1 (army-vs-army brawl; board already live in v156) then JOB 42 (time-based cash packs).
+
+**Phone tests for Shaun (owner-first — use owner / Studio playtest account; Recruit Pack will not prompt until Id is set):**
+1. Fresh test account: BUILD Command Center in ~20 s + payout; collect; recruit; fight 2 camp Recruits at Home Outpost (they shoot back); capture; "BASE SECURED!" confetti + $2,500; Barracks goal. Skip works. Returning owner account: no guided chain.
+2. Recruit Pack: with Id 0 the card must NOT prompt a purchase. After Creator Hub Id is pasted and OwnerFirst flipped: card once at first capture or ~10 min play; buy grants income-scaled cash + 2x boost + gold RECRUIT trim; no second offer; Shop shows OWNED.
+3. PreferMesh OFF / no building kit change expected.
+
 ## claude-bud JOB 41 PART B (2026-10-01): RECRUIT PACK, 49 R$ PROPOSED, ID 0 (branch `claude/desktop-bud`)
 **Flag:** `MonetizationConfig.RecruitPackOffer` (`Enabled`, `OwnerFirst = true`). **To launch:** Code Bot sets
 `OwnerFirst = false` after the product exists.
