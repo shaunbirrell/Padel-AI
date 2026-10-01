@@ -385,6 +385,50 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 69 parts B + C (2026-10-02): HOW TO PLAY EVERYWHERE (branch `claude/desktop-bud`)
+**Flag:** `RebirthZonesConfig.Rebuild.HowTo` (owner-first via Rebuild). OFF = today's kiosks / rows / instant START
+exactly.
+
+**B: zone runs (mobile-first):**
+- Tapping a kiosk (`START`, `<RUN TITLE> · N s`) shows the **how-to card** instead of starting the run.
+  - The server sends FeaturePush `ZoneRunIntro`: title, one-line goal, 3 steps, reward, time, cooldown, run in progress.
+  - The full card shows until the first clear (`profile.ZoneFirstClear`; no new save key), then the compact card.
+- START / CANCEL go through the new `RequestZoneRun("start"|"cancel", zoneId)` (RemoteGate schema + RateLimit
+  `zone_run` 1 per 2 s). The server decides; CANCEL ends the run with no reward and **no cooldown**.
+- Tracker: `ZoneRuns.showStep` now sends Title / Label / Pos. The new `ZoneRunController` shows the progress pill
+  `DRILL COURSE 2/4 · 0:23`, a CANCEL chip and the ONE `ObjectiveMarker` arrow on the current pad (1 Hz countdown).
+- Wording:
+  - Shuffle steps read `VALVE 2 OF 4`.
+  - "Finish your current run first" becomes `<TITLE> in progress · m:ss left`.
+- Elite Training is back: a second `TRAIN` prompt on the Elite Barracks kiosk.
+- Card layout is phone-safe (`ZoneRunController.CardLayout`):
+  - scaled by screen height; buttons are 44+ px real;
+  - right of the thumbstick zone (x > 40 %), left of the jump / fire column, below the top bar.
+
+**C: explanations everywhere:**
+- All 48 registered rows carry an inline `HowTo = { What, Steps, TimeLimit, Reward }`: zone runs, site activities,
+  daily ops, missions and jobs. `tools/checks/claude_bud_job69.py` fails on any row without one.
+- One shared lookup, `Shared/Util/HowTo.luau` (Find / Line / Card / Live), built once.
+- Missions panel (when live):
+  - mission, activity and job rows show the one-line "what to do";
+  - activity START and job GO open the same how-to card first;
+  - the card's START / GO sends the same request as before, and the server still decides.
+
+**Proof:**
+- `tools/sim/run_zone_run_layout_test.py`: 1024×471, 956×440, 844×390, 800×360, 1180×820, full and compact, 0 failed.
+- `tools/sim/run_howto_test.py`: the real configs; owner-first verified (another player gets the old rows).
+- `run_rebirth_stations_test.py` section 8: intro / start / cancel / busy text / TRAIN / tracker push, 0 failed.
+
+**Owed (Studio / phone):** the card's look on a real phone, the arrow on each pad, and the TRAIN prompt offset beside
+START.
+
+**Test ON HIS PHONE:**
+1. At a rebirth-zone kiosk, tap START: the how-to card appears. START begins the run; the top pill counts down, and an
+   arrow points to each pad.
+2. During a run, tap CANCEL on the pill: the run ends, and you can start it again at once.
+3. Elite Barracks: a TRAIN prompt opens Elite Training.
+4. Open Missions: every row says what to do. ACTIVITIES START and JOBS GO show the how-to card first.
+
 ## claude-bud JOB 69 part A (2026-10-02): EVERY REBIRTH ZONE ON EVERY PLOT (branch `claude/desktop-bud`)
 **Flag:** `RebirthZonesConfig.Rebuild.Slots` (inside Rebuild: owner-first by the PLOT OWNER). OFF = today's placement
 exactly.

@@ -280,7 +280,11 @@ local function showStep(player: Player, run: Run)
 	end
 	local pr = Instance.new("ProximityPrompt")
 	pr.Name = "ZoneRunPrompt"
-	pr.ActionText = tostring(m:GetAttribute("Label"))
+	local label = tostring(m:GetAttribute("Label"))
+	if run.Def.Shuffle and not string.find(label, " OF ", 1, true) then
+		label = string.format("%s %d OF %d", label, run.Step, #run.Order) -- claude-bud JOB 69 B: "VALVE 2 OF 4"
+	end
+	pr.ActionText = label
 	pr.ObjectText = string.format("%s %d/%d", run.Def.Title, run.Step, #run.Order)
 	pr.HoldDuration = tonumber(ZC.RunRules.StepHold) or 0.3
 	pr.MaxActivationDistance = tonumber(ZC.RunRules.StepReach) or 9
@@ -290,7 +294,9 @@ local function showStep(player: Player, run: Run)
 	pr.Triggered:Connect(function(who: Player)
 		ZoneRuns.Step(who, run.Uid, token, idx)
 	end)
-	push(player, "ZoneRun", { Zone = run.Zone, Step = run.Step, Of = #run.Order, Left = math.max(0, math.ceil(run.Deadline - ZoneRuns._clock())) })
+	-- claude-bud JOB 69 B: the tracker gets the step label + where the pad is (the client pill + the arrow)
+	push(player, "ZoneRun", { Zone = run.Zone, Title = run.Def.Title, Step = run.Step, Of = #run.Order, Label = label, Pos = m.Position,
+		Left = math.max(0, math.ceil(run.Deadline - ZoneRuns._clock())) })
 end
 
 --[[ A step prompt fired: every rule is checked here (the owner, his running run, THIS step, inside the annex, in time).
@@ -381,7 +387,13 @@ function ZoneRuns.Start(player: Player, zoneId: string, level: number, frame: CF
 		return false, "off"
 	end
 	if runs[player.UserId] then
-		notify(player, "Finish your current run first", "Info")
+		local cur = runs[player.UserId]
+		if ZC.RebuildLive(player.UserId, "HowTo") then -- claude-bud JOB 69 B: say which run and how long (the CANCEL chip is on screen)
+			notify(player, string.format("%s in progress · %d:%02d left", cur.Def.Title, math.max(0, math.ceil(cur.Deadline - ZoneRuns._clock())) // 60,
+				math.max(0, math.ceil(cur.Deadline - ZoneRuns._clock())) % 60), "Info")
+		else
+			notify(player, "Finish your current run first", "Info")
+		end
 		return false, "busy"
 	end
 	local left = ZoneRuns.CooldownLeft(profile, zoneId)

@@ -23,6 +23,7 @@
 ]]
 
 export type DailyMissionDef = {
+	HowTo: any?, -- claude-bud JOB 69: the how-to-play card (What / Steps / TimeLimit / Reward)
 	Id: string,
 	DisplayName: string,
 	Description: string,
@@ -52,6 +53,7 @@ export type GoDef = {
 export type GoTarget = { X: number, Y: number, Z: number }
 
 export type MissionDef = {
+	HowTo: any?, -- claude-bud JOB 69
 	Id: string,
 	DisplayName: string,
 	Description: string,
@@ -134,6 +136,7 @@ local MissionConfig = {
 	DailyMissions = {
 		DailyKillNPC = {
 			Id = "DailyKillNPC",
+			HowTo = { What = "Eliminate 10 NPC hostiles", Steps = { "Find hostiles", "Defeat them", "10 in total" }, TimeLimit = 0, Reward = "$2,500 + 80 XP" },
 			DisplayName = "Clear Hostiles",
 			Description = "Eliminate 10 NPC hostiles.",
 			ObjectiveType = "KillNPC",
@@ -146,6 +149,7 @@ local MissionConfig = {
 		},
 		DailyCapture = {
 			Id = "DailyCapture",
+			HowTo = { What = "Capture 1 territory", Steps = { "Pick a territory", "Stand in its ring", "Hold until captured" }, TimeLimit = 0, Reward = "$4,000 bonus" },
 			DisplayName = "Seize Ground",
 			Description = "Capture 1 territory.",
 			ObjectiveType = "CaptureTerritory",
@@ -157,6 +161,7 @@ local MissionConfig = {
 		},
 		DailyUpgrade = {
 			Id = "DailyUpgrade",
+			HowTo = { What = "Buy 1 base upgrade", Steps = { "Walk to a console", "Pick an upgrade", "Buy it" }, TimeLimit = 0, Reward = "$3,000 + 100 XP" },
 			DisplayName = "Fortify Base",
 			Description = "Buy 1 base upgrade — reward $3,000 + 100 XP.",
 			ObjectiveType = "PurchaseUpgrade",
@@ -168,6 +173,7 @@ local MissionConfig = {
 		},
 		DailyEarnCash = {
 			Id = "DailyEarnCash",
+			HowTo = { What = "Earn $8,000 cash", Steps = { "Collect your ATM", "Do jobs and raids", "$8,000 in total" }, TimeLimit = 0, Reward = "$2,000 bonus" },
 			DisplayName = "War Chest",
 			Description = "Earn $8,000 Cash from any source.",
 			ObjectiveType = "EarnCash",
@@ -179,6 +185,7 @@ local MissionConfig = {
 		},
 		DailySpawnVehicle = {
 			Id = "DailySpawnVehicle",
+			HowTo = { What = "Spawn 1 vehicle", Steps = { "Open the Garage", "Pick a vehicle", "Spawn it" }, TimeLimit = 0, Reward = "$1,500 + 40 XP" },
 			DisplayName = "Mobilize",
 			Description = "Spawn 1 vehicle from the garage — reward $1,500 + 40 XP.",
 			ObjectiveType = "SpawnVehicle",
@@ -190,6 +197,7 @@ local MissionConfig = {
 		},
 		DailyKillPlayer = {
 			Id = "DailyKillPlayer",
+			HowTo = { What = "Eliminate 3 enemy players", Steps = { "Find an enemy player", "Win the fight", "3 in total" }, TimeLimit = 0, Reward = "$5,000 bonus" },
 			DisplayName = "Combat Ready",
 			Description = "Eliminate 3 enemy players.",
 			ObjectiveType = "KillPlayer",
@@ -201,6 +209,7 @@ local MissionConfig = {
 		},
 		DailyRecruit = {
 			Id = "DailyRecruit",
+			HowTo = { What = "Recruit 1 soldier", Steps = { "Go to the Training Yard", "Recruit a soldier", "Done" }, TimeLimit = 0, Reward = "$2,000 + 50 XP + 1 Gold" },
 			DisplayName = "Muster Troops",
 			Description = "Recruit 1 soldier — reward $2,000 + 50 XP + 1 Gold.",
 			ObjectiveType = "RecruitSoldiers",
@@ -260,6 +269,7 @@ local MissionConfig = {
 	Missions = {
 		PatrolOutskirts = {
 			Id = "PatrolOutskirts",
+			HowTo = { What = "Patrol the outskirts", Steps = { "Leave your base", "Walk the perimeter", "Stay out 60 s" }, TimeLimit = 60, Reward = "$800 + 50 XP" },
 			DisplayName = "Patrol the Outskirts",
 			Description = "Secure the perimeter around your base.",
 			MinLevel = 1,
@@ -270,6 +280,7 @@ local MissionConfig = {
 		},
 		SupplyRun = {
 			Id = "SupplyRun",
+			HowTo = { What = "Escort a convoy to the depot", Steps = { "Meet the convoy", "Guard it on the road", "Reach the depot" }, TimeLimit = 120, Reward = "$2,000 + 120 XP" },
 			DisplayName = "Supply Run",
 			Description = "Escort a convoy to the depot.",
 			MinLevel = 3,
@@ -280,6 +291,7 @@ local MissionConfig = {
 		},
 		RaidOutpost = {
 			Id = "RaidOutpost",
+			HowTo = { What = "Strike a hostile forward base", Steps = { "Go to the forward base", "Defeat its defenders", "Win in time" }, TimeLimit = 180, Reward = "$6,000 bonus" },
 			DisplayName = "Raid Enemy Outpost",
 			Description = "Strike a hostile forward base.",
 			MinLevel = 8,

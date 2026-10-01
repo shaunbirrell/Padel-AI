@@ -691,26 +691,116 @@ function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: nu
 	return false, "unknown"
 end
 
+local function featurePush(player: Player, kind: string, data: any)
+	local rs = deps.RemoteSetup
+	local ev = rs and rs.Get(require(Shared.Constants).RemoteNames.FeaturePush)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireClient(player, kind, data)
+	end
+end
+
+-- claude-bud JOB 69 B: the how-to card before a zone run (Rebuild.HowTo, owner-first)
+local function howToLive(uid: number, zoneId: string): boolean
+	return ZC.RebuildLive(uid, "HowTo") and ZC.Runs[zoneId] ~= nil and ZC.Info[zoneId] ~= nil and ZC.Info[zoneId].HowTo ~= nil
+end
+
+function RebirthZoneService.Intro(player: Player, zoneId: string): boolean
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	local info = ZC.Info[zoneId]
+	local run = ZC.Runs[zoneId]
+	if profile == nil or info == nil or run == nil or info.HowTo == nil then
+		return false
+	end
+	local H = info.HowTo
+	local active: any = if ZoneRuns then ZoneRuns.Active(player.UserId) else nil
+	local inProgress = nil
+	if active then
+		inProgress = { Title = active.Def.Title, Left = math.max(0, math.ceil(active.Deadline - ZoneRuns._clock())) }
+	end
+	local first = typeof(profile.ZoneFirstClear) == "table" and profile.ZoneFirstClear[zoneId] == true
+	featurePush(player, "ZoneRunIntro", {
+		Zone = zoneId,
+		Title = run.Title,
+		Goal = H.What,
+		Steps = H.Steps,
+		Reward = H.Reward,
+		Seconds = H.TimeLimit,
+		CooldownLeft = if ZoneRuns then ZoneRuns.CooldownLeft(profile, zoneId) else 0,
+		Compact = first, -- the full card until the first clear (profile.ZoneFirstClear), then the compact one
+		InProgress = inProgress,
+	})
+	return true
+end
+
+-- the card's buttons: "start" = the run (every server rule in Activity / ZoneRuns.Start); "cancel" = end his run, no
+-- reward and NO cooldown
+function RebirthZoneService.RequestRun(player: Player, action: any, zoneId: any): boolean
+	if typeof(zoneId) ~= "string" or ZC.Info[zoneId] == nil or not ZC.RebuildLive(player.UserId, "HowTo") then
+		return false
+	end
+	if action == "start" then
+		local ok = RebirthZoneService.Activity(player, zoneId)
+		return ok == true
+	elseif action == "cancel" then
+		local active: any = if ZoneRuns then ZoneRuns.Active(player.UserId) else nil
+		if active == nil then
+			return false
+		end
+		ZoneRuns.Cancel(player.UserId)
+		featurePush(player, "ZoneRun", { Zone = active.Zone, Done = true, Won = false, Cancelled = true })
+		notify(player, active.Def.Title .. " cancelled (no cooldown)", "Info")
+		return true
+	end
+	return false
+end
+
 local function addActivityPrompt(player: Player, zoneId: string, panel: BasePart)
 	kioskOf[player.UserId] = kioskOf[player.UserId] or {}
 	kioskOf[player.UserId][zoneId] = panel -- claude-bud JOB A: his kiosk (the Recruitment Office's second interaction point)
 	local info = ZC.Info[zoneId]
 	local z = Z.Zones[zoneId]
+	local uid = player.UserId
+	local intro = howToLive(uid, zoneId)
 	local p = Instance.new("ProximityPrompt")
 	p.Name = "WE_ZoneActivity"
 	p:SetAttribute("ZoneId", zoneId)
-	p.ActionText = info.ActionText
-	p.ObjectText = z.Name
+	p.ActionText = if intro then "START" else info.ActionText
+	if intro then -- claude-bud JOB 69 B: START + "<RUN TITLE> · N s"
+		local run = ZC.Runs[zoneId]
+		p.ObjectText = if (tonumber(run.Seconds) or 0) > 0 then string.format("%s · %d s", run.Title, run.Seconds) else run.Title
+	else
+		p.ObjectText = z.Name
+	end
 	p.HoldDuration = 0.2
 	p.MaxActivationDistance = 10
 	p.RequiresLineOfSight = false
 	p.Parent = panel
-	local uid = player.UserId
 	p.Triggered:Connect(function(who: Player)
 		if who.UserId == uid then
-			RebirthZoneService.Activity(who, zoneId)
+			if intro then
+				RebirthZoneService.Intro(who, zoneId)
+			else
+				RebirthZoneService.Activity(who, zoneId)
+			end
 		end
 	end)
+	-- claude-bud JOB 69 B: Elite Training back on the Elite Barracks kiosk (a second TRAIN prompt)
+	if intro and info.Activity == "drill" then
+		local t = Instance.new("ProximityPrompt")
+		t.Name = "WE_ZoneTrain"
+		t.ActionText = "TRAIN"
+		t.ObjectText = "Elite Training"
+		t.UIOffset = Vector2.new(0, 72)
+		t.HoldDuration = 0.2
+		t.MaxActivationDistance = 10
+		t.RequiresLineOfSight = false
+		t.Parent = panel
+		t.Triggered:Connect(function(who: Player)
+			if who.UserId == uid then
+				featurePush(who, "ZoneOpen", { Panel = "Recruits", Zone = zoneId, Point = panel.Position })
+			end
+		end)
+	end
 end
 
 -- claude-bud JOB 69: the ZONE BOARD (a small console in the base, BoardSpots by zone order) carrying the zone's prompts
@@ -988,6 +1078,21 @@ end
 
 function RebirthZoneService.Init(d: { [string]: any })
 	deps = d
+	-- claude-bud JOB 69 B: the how-to card's START / CANCEL (RemoteGate schema + a rate limit; the server decides)
+	pcall(function()
+		local ev = d.RemoteSetup and d.RemoteSetup.Get(require(Shared.Constants).RemoteNames.RequestZoneRun)
+		if ev and ev:IsA("RemoteEvent") then
+			(ev :: RemoteEvent).OnServerEvent:Connect(function(player: Player, action: any, zoneId: any)
+				if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestZoneRun", action, zoneId) then
+					return
+				end
+				if d.RateLimitService and not d.RateLimitService.Allow(player, "zone_run", 1, 2) then
+					return
+				end
+				RebirthZoneService.RequestRun(player, action, zoneId)
+			end)
+		end
+	end)
 	local okB, B = pcall(function(): any
 		return require(script.Parent.Parent.Modules.RebirthZoneBuilder)
 	end)

@@ -151,6 +151,7 @@ safeInit("RebirthZoneController", safeRequire("RebirthZoneController", Controlle
 safeInit("ArmyNearestController", safeRequire("ArmyNearestController", Controllers:WaitForChild("ArmyNearestController", 5) :: Instance)) -- claude-bud JOB 52: the ATTACK nothing-in-range card (PIN / SEND)
 safeInit("NightExposureController", safeRequire("NightExposureController", Controllers:WaitForChild("NightExposureController", 5) :: Instance)) -- claude-bud JOB 54: the night exposure (owner-first)
 safeInit("AmbienceController", safeRequire("AmbienceController", Controllers:WaitForChild("AmbienceController", 5) :: Instance)) -- claude-bud JOB 59 B: the world ambience (owner-first)
+safeInit("ZoneRunController", safeRequire("ZoneRunController", Controllers:WaitForChild("ZoneRunController", 5) :: Instance)) -- claude-bud JOB 69 B: the zone-run how-to card + tracker
 safeInit("RivalController", safeRequire("RivalController", Controllers:WaitForChild("RivalController", 5) :: Instance)) -- claude-bud JOB 41 part C
 safeInit("NukeController", safeRequire("NukeController", Controllers:WaitForChild("NukeController", 5) :: Instance)) -- claude-bud JOB 33
 safeInit("AchievementController", safeRequire("AchievementController", Controllers:WaitForChild("AchievementController", 5) :: Instance)) -- claude-bud JOB 34

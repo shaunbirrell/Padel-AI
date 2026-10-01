@@ -25,6 +25,7 @@
 ]]
 
 export type ActivityDef = {
+	HowTo: any?, -- claude-bud JOB 69: the how-to-play card (What / Steps / TimeLimit / Reward)
 	Id: string,
 	Kind: string,
 	Title: string, -- <= 24 characters (the row title)
@@ -65,11 +66,11 @@ local SiteActivityConfig = {
 	},
 
 	Activities = {
-		{ Id = "ClearViper", Kind = "ClearCamp", Title = "Clear Camp Viper", Desc = "Defeat the soldiers at Camp Viper.", Site = "CampViper", Short = "CAMP", Seconds = 240, Cooldown = 600, Cash = 6000, XP = 150, Npc = { "Infantry", "Infantry", "Infantry", "HeavyInfantry" } },
-		{ Id = "TakeKestrel", Kind = "Depot", Title = "Capture Kestrel Depot", Desc = "Clear the guards, then hold the depot.", Site = "Kestrel", Short = "DEPOT", Seconds = 300, Cooldown = 600, Cash = 8000, XP = 200, Npc = { "Infantry", "Infantry", "HeavyInfantry" }, HoldSeconds = 30 },
-		{ Id = "HawkConvoy", Kind = "Convoy", Title = "Defend the Convoy", Desc = "Hold Hawk Checkpoint until it passes.", Site = "Hawk", Short = "CONVOY", Seconds = 150, Cooldown = 600, Cash = 7000, XP = 180, Npc = { "Infantry", "Infantry", "Infantry" }, Waves = 3, WaveGap = 30 },
-		{ Id = "FindCache", Kind = "Cache", Title = "Find the Supply Cache", Desc = "Search the site for the hidden crate.", Site = "DryWell", Sites = { "DryWell", "PumpSeven", "Anvil" }, Short = "CACHE", Seconds = 300, Cooldown = 420, Cash = 4000, XP = 100, Gold = 5 },
-		{ Id = "RidgeSniper", Kind = "Sniper", Title = "Rooftop Sniper", Desc = "From the ridge tower, drop 5 far targets.", Site = "Overwatch", Short = "PERCH", Seconds = 150, Cooldown = 600, Cash = 7500, XP = 200, Npc = { "Infantry" }, Targets = 5 },
+		{ Id = "ClearViper", Kind = "ClearCamp", Title = "Clear Camp Viper", Desc = "Defeat the soldiers at Camp Viper.", Site = "CampViper", Short = "CAMP", Seconds = 240, Cooldown = 600, Cash = 6000, XP = 150, Npc = { "Infantry", "Infantry", "Infantry", "HeavyInfantry" }, HowTo = { What = "Clear Camp Viper", Steps = { "Go to Camp Viper", "Defeat every soldier", "Stay in the camp" }, TimeLimit = 240, Reward = "$6,000 + 150 XP" } },
+		{ Id = "TakeKestrel", Kind = "Depot", Title = "Capture Kestrel Depot", Desc = "Clear the guards, then hold the depot.", Site = "Kestrel", Short = "DEPOT", Seconds = 300, Cooldown = 600, Cash = 8000, XP = 200, Npc = { "Infantry", "Infantry", "HeavyInfantry" }, HoldSeconds = 30, HowTo = { What = "Capture Kestrel Depot", Steps = { "Clear the guards", "Stand in the depot", "Hold it for 30 s" }, TimeLimit = 300, Reward = "$8,000 + 200 XP" } },
+		{ Id = "HawkConvoy", Kind = "Convoy", Title = "Defend the Convoy", Desc = "Hold Hawk Checkpoint until it passes.", Site = "Hawk", Short = "CONVOY", Seconds = 150, Cooldown = 600, Cash = 7000, XP = 180, Npc = { "Infantry", "Infantry", "Infantry" }, Waves = 3, WaveGap = 30, HowTo = { What = "Defend the convoy at Hawk Checkpoint", Steps = { "Go to the checkpoint", "Beat 3 waves", "Keep it held" }, TimeLimit = 150, Reward = "$7,000 + 180 XP" } },
+		{ Id = "FindCache", Kind = "Cache", Title = "Find the Supply Cache", Desc = "Search the site for the hidden crate.", Site = "DryWell", Sites = { "DryWell", "PumpSeven", "Anvil" }, Short = "CACHE", Seconds = 300, Cooldown = 420, Cash = 4000, XP = 100, Gold = 5, HowTo = { What = "Find the hidden supply crate", Steps = { "Go to the marked site", "Search for the crate", "Hold the prompt to grab it" }, TimeLimit = 300, Reward = "$4,000 + 100 XP + 5 Gold" } },
+		{ Id = "RidgeSniper", Kind = "Sniper", Title = "Rooftop Sniper", Desc = "From the ridge tower, drop 5 far targets.", Site = "Overwatch", Short = "PERCH", Seconds = 150, Cooldown = 600, Cash = 7500, XP = 200, Npc = { "Infantry" }, Targets = 5, HowTo = { What = "Rooftop sniper at the ridge tower", Steps = { "Climb the ridge tower", "Stay on the deck", "Drop 5 far targets" }, TimeLimit = 150, Reward = "$7,500 + 200 XP" } },
 	} :: { ActivityDef },
 
 	Sniper = { MinStuds = 90, MaxStuds = 150, PerchStuds = 6 }, -- targets 90-150 studs from the perch; "on the deck" = within 6 studs of it

@@ -39,6 +39,7 @@ local StreakStrip = require(script.Parent.Parent.Modules.StreakStrip) -- claude-
 local SiteActivityConfig = require(Shared.Configs.SiteActivityConfig) -- claude-bud JOB 31
 local RetentionConfig = require(Shared.Configs.RetentionConfig) -- claude-bud JOB 31
 local AchievementConfig = require(Shared.Configs.AchievementConfig) -- claude-bud JOB 34
+local HowTo = require(Shared.Util.HowTo) -- claude-bud JOB 69 C: the "what to do" lines + the how-to card (owner-first)
 
 local MissionController = {}
 
@@ -230,6 +231,35 @@ local titleH = 0 -- the list's top with the claim rows inside it
 local CLAIM_READY_ORDER = -300
 local CLAIM_REST_ORDER = -50
 local jobsSubs: { [string]: TextLabel } = {} -- row id -> its sub-line (1 Hz countdown text)
+
+-- claude-bud JOB 69 C: HowTo live (RebirthZonesConfig.Rebuild "HowTo", owner-first) -> every menu row says what to do and
+-- START / GO opens the how-to card first (OFF = the old rows and the instant START / GO)
+local function howToLive(): boolean
+	local ok, live = pcall(HowTo.Live, player.UserId)
+	return ok and live == true
+end
+local function jobSub(r: any): string
+	if howToLive() and HowTo.Find(r.Id) then
+		return HowTo.Line(r.Id, "") .. " · " .. tostring(r.Sub)
+	end
+	return tostring(r.Sub)
+end
+-- the card (ZoneRunController.ShowIntro) with this caller's start path; false = no card (the caller starts at once)
+local function howToCard(id: string, title: string, startText: string, onStart: () -> ()): boolean
+	if not howToLive() then
+		return false
+	end
+	local card = HowTo.Card(id, title)
+	local okZ, Z = pcall(function(): any
+		return require(script.Parent.ZoneRunController)
+	end)
+	if card == nil or not okZ or type(Z) ~= "table" or type(Z.ShowIntro) ~= "function" then
+		return false
+	end
+	card.StartText = startText
+	card.OnStart = onStart
+	return (pcall(Z.ShowIntro, card))
+end
 local jobsKey = "" -- what the built rows show (ids, GO / STOP): rebuilt only when it changes
 local JOBS_UI = OpsConfig.Ui.Jobs
 local JOBS_TEXT = OpsConfig.Text.Row
@@ -257,6 +287,7 @@ local EASY_COLOR = Color3.fromRGB(110, 230, 120)
 
 local onJobGo: (id: string) -> () -- set after setOpen (GO closes the panel)
 local onJobStop: () -> ()
+local closeForCard: () -> () = function() end -- claude-bud JOB 69 C: set after setOpen (the job card closes the panel)
 
 local function jobsRows(): { JobsRow }
 	local src = jobsSource
@@ -351,7 +382,7 @@ local function jobRow(parent: Frame, r: JobsRow, i: number, y: number, rowH: num
 	sub.TextXAlignment = Enum.TextXAlignment.Left
 	sub.TextColor3 = if r.Tracked then Constants.Colors.GoldBright else Constants.Colors.Muted
 	sub.TextTruncate = Enum.TextTruncate.AtEnd
-	sub.Text = r.Sub
+	sub.Text = jobSub(r)
 	sub.Parent = row
 	jobsSubs[r.Id] = sub
 
@@ -362,8 +393,15 @@ local function jobRow(parent: Frame, r: JobsRow, i: number, y: number, rowH: num
 		end)
 	elseif r.Go ~= nil then
 		local id = r.Id
+		local jobTitle = r.Title
 		local btn = rowButton(row, "GoButton", JOBS_TEXT.Go, Constants.Colors.XP, Constants.Colors.TextDark, btnW, btnH)
 		btn.Activated:Connect(function()
+			if howToCard(id, jobTitle, "GO", function()
+				onJobGo(id)
+			end) then
+				closeForCard() -- the card's GO tracks the job (OpsController); the panel closes so the card is clear
+				return
+			end
 			onJobGo(id)
 		end)
 	end
@@ -431,8 +469,9 @@ local function refreshJobs(force: boolean)
 	if not force and jf and jf.Parent == list and key == jobsKey then
 		for _, r in ipairs(rows) do
 			local lab = jobsSubs[r.Id]
-			if lab and lab.Text ~= r.Sub then
-				lab.Text = r.Sub
+			local txt = jobSub(r)
+			if lab and lab.Text ~= txt then
+				lab.Text = txt
 			end
 		end
 		placeClaims()
@@ -826,7 +865,9 @@ local function refresh()
 			dsc.TextXAlignment = Enum.TextXAlignment.Left
 			dsc.TextColor3 = Constants.Colors.Muted
 			dsc.TextTruncate = Enum.TextTruncate.AtEnd
-			dsc.Text = if r.State == "Active" then string.format("%s · %s left", tostring(r.Progress or ""), fmtLeft(tonumber(r.Left) or 0)) else tostring(r.Desc)
+			dsc.Text = if r.State == "Active" then string.format("%s · %s left", tostring(r.Progress or ""), fmtLeft(tonumber(r.Left) or 0))
+				elseif howToLive() then HowTo.Line(r.Id, tostring(r.Desc)) -- claude-bud JOB 69 C
+				else tostring(r.Desc)
 			dsc.Parent = row
 			local rw = Instance.new("TextLabel")
 			rw.BackgroundTransparency = 1
@@ -841,9 +882,15 @@ local function refresh()
 			local id = tostring(r.Id)
 			if r.State == "Ready" then
 				local b = rowButton(row, "StartButton", "START", Constants.Colors.Accent, Constants.Colors.Text, bW, bH)
+				local actTitle = tostring(r.Title)
 				b.Activated:Connect(function()
 					pcall(AudioController.PlayClick)
-					fire(Constants.RemoteNames.RequestSiteActivity, "start", id)
+					-- claude-bud JOB 69 C: the how-to card first; its START sends the same request (the server decides)
+					if not howToCard(id, actTitle, "START", function()
+						fire(Constants.RemoteNames.RequestSiteActivity, "start", id)
+					end) then
+						fire(Constants.RemoteNames.RequestSiteActivity, "start", id)
+					end
 					closePanel()
 				end)
 			elseif r.State == "Active" then
@@ -913,7 +960,7 @@ local function refresh()
 		desc.TextSize = descSize
 		desc.TextXAlignment = Enum.TextXAlignment.Left
 		desc.TextColor3 = Constants.Colors.Muted
-		desc.Text = mission.Description
+		desc.Text = if howToLive() then HowTo.Line(mission.Id, mission.Description) else mission.Description -- claude-bud JOB 69 C
 		desc.TextTruncate = Enum.TextTruncate.AtEnd
 		desc.Parent = row
 
@@ -1147,6 +1194,10 @@ onJobGo = function(id: string)
 	else
 		refreshJobs(true) -- the row went stale (the job closed): show what is open now
 	end
+end
+
+closeForCard = function()
+	setOpen(false)
 end
 
 onJobStop = function()

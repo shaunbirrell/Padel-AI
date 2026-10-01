@@ -169,13 +169,13 @@ local RebirthZonesConfig = {
 	  * Gains(zoneId, level): the exact gains of one level, read from Zones (never typed twice). ]]
 local cfg: any = RebirthZonesConfig
 cfg.Info = {
-	WestYard = { Do = "Builds tanks for cash. Ship a batch here every 20 min.", Activity = "ship", ActionText = "SHIP TANKS", Theme = "factory" },
-	StrategicYard = { Do = "Charges nukes. Launch from the silo console.", Activity = "nuke", ActionText = "NUKE", Theme = "silo" },
-	WestStrip = { Do = "Cuts your missile reload. Call a strike from here.", Activity = "strike", ActionText = "CALL STRIKE", Theme = "artillery" },
-	DroneBay = { Do = "Drones empty your ATM. Launch a sweep any time.", Activity = "sweep", ActionText = "LAUNCH SWEEP", Theme = "drones" },
-	EastYard = { Do = "More soldiers. Drill your army at the yard.", Activity = "drill", ActionText = "DRILL", Theme = "barracks" },
-	EastStrip = { Do = "Big cash every tick. Fill a tanker every 20 min.", Activity = "ship", ActionText = "FILL TANKER", Theme = "refinery" },
-	WestFlank = { Do = "Longer raid shield. Run a supply drop every 20 min.", Activity = "ship", ActionText = "SUPPLY RUN", Theme = "bunker" },
+	WestYard = { Do = "Builds tanks for cash. Ship a batch here every 20 min.", Activity = "ship", ActionText = "SHIP TANKS", Theme = "factory", HowTo = { What = "PRODUCTION RUN: load the truck", Steps = { "Pick up a crate", "Carry it to the truck", "Load all 3 crates" }, TimeLimit = 60, Reward = "Cash (more if fast) + a first-clear bonus" } },
+	StrategicYard = { Do = "Charges nukes. Launch from the silo console.", Activity = "nuke", ActionText = "NUKE", Theme = "silo", HowTo = { What = "LAUNCH PREP: arm the silo", Steps = { "Go to console 1", "Arm all 3 consoles", "Do it in order" }, TimeLimit = 30, Reward = "Your nuke charges 5 min sooner" } },
+	WestStrip = { Do = "Cuts your missile reload. Call a strike from here.", Activity = "strike", ActionText = "CALL STRIKE", Theme = "artillery", HowTo = { What = "RANGE PRACTICE: hit the targets", Steps = { "Go to the lit target", "Hit all 6 targets", "Follow the order" }, TimeLimit = 45, Reward = "Missile reload 120 s shorter" } },
+	DroneBay = { Do = "Drones empty your ATM. Launch a sweep any time.", Activity = "sweep", ActionText = "LAUNCH SWEEP", Theme = "drones", HowTo = { What = "RECON FLIGHT: scout a rival", Steps = { "Tap START", "Drones mark a rival base", "Your ATM is swept too" }, TimeLimit = 0, Reward = "A rival marked to raid + your ATM cash" } },
+	EastYard = { Do = "More soldiers. Drill your army at the yard.", Activity = "drill", ActionText = "DRILL", Theme = "barracks", HowTo = { What = "DRILL COURSE: run the obstacle course", Steps = { "Start at the gate", "Climb the wall, cross the rope", "Reach the finish" }, TimeLimit = 45, Reward = "Beat 30 s: army boost for 10 min" } },
+	EastStrip = { Do = "Big cash every tick. Fill a tanker every 20 min.", Activity = "ship", ActionText = "FILL TANKER", Theme = "refinery", HowTo = { What = "PRESSURE VALVES: open the valves", Steps = { "Read the valve order", "Turn VALVE 1 OF 4", "Open all 4 in order" }, TimeLimit = 30, Reward = "Cash (more if fast) + a first-clear bonus" } },
+	WestFlank = { Do = "Longer raid shield. Run a supply drop every 20 min.", Activity = "ship", ActionText = "SUPPLY RUN", Theme = "bunker", HowTo = { What = "HOLD THE LINE: defend the bunker", Steps = { "Stand on the apron", "Defeat 3 attackers", "Stay alive" }, TimeLimit = 60, Reward = "Cash + a bunker banner stage" } },
 }
 cfg.Shipment = { Minutes = 10, CooldownMinutes = 20 } -- "ship": Minutes of the zone's own flat income (before multipliers)
 cfg.Sweep = { CooldownSeconds = 45 }

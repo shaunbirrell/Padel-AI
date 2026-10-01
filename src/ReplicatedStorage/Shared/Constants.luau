@@ -97,6 +97,7 @@ Constants.RemoteNames = {
 	RequestEndgameBuy = "RequestEndgameBuy", -- claude-bud JOB 39: (kind, id?) EndgameService.Purchase (the price is config's)
 	RequestRivalAction = "RequestRivalAction", -- claude-bud JOB 41 C: "open" | "send" (+ plot id): telemetry only
 	RequestMissionReroll = "RequestMissionReroll", -- claude-bud JOB 49 C: (missionId) reroll a core mission (server-checked)
+	RequestZoneRun = "RequestZoneRun", -- claude-bud JOB 69 B: "start" | "cancel", zoneId (the how-to card's buttons; the server decides)
 	RequestRecruitPackResult = "RequestRecruitPackResult", -- claude-bud JOB 41 B: shown | dropped (the card; grants stay ProcessReceipt)
 	RequestRatePromptAnswer = "RequestRatePromptAnswer", -- claude-bud JOB 40 D: later | never | favorite | timeout (no reward)
 	RequestEndgameState = "RequestEndgameState", -- claude-bud JOB 39: () -> FeaturePush "EndgameState"

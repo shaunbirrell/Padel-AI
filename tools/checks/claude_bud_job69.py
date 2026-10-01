@@ -188,3 +188,22 @@ if _j69a_e.get("LUAU"):
 _j69a_svc = _j69_read("src/ServerScriptService/Server/Services/RebirthZoneService.luau")
 (ok if ('folder:SetAttribute("WE_AnnexCFrame", frame)' in _j69a_svc and "RebirthZoneService._ZoneBoard" in _j69a_svc and "ZC.RebuildLive(owner, \"Slots\")" in _j69a_svc) else bad)(
     "JOB69 zones: the zone folder carries WE_AnnexCFrame, a ZONE BOARD stands in for a zone with no slot, fallbacks are owner-first (Rebuild.Slots)")
+
+# ── claude-bud (parts B + C): the zone-run how-to card / tracker / cancel / TRAIN, the activity / job / mission
+# "what to do" lines and the how-to card before they start (owner-first: RebirthZonesConfig.Rebuild.HowTo)
+if _j69a_e.get("LUAU"):
+    for _j69b_t, _j69b_m in (("run_zone_run_layout_test.py", "ZONE RUN LAYOUT TEST: 0 failed"), ("run_howto_test.py", "HOWTO TEST: 0 failed")):
+        _j69b_r = _j69a_sp.run([_j69a_sys.executable, "tools/sim/" + _j69b_t], capture_output=True, text=True, env=_j69a_e, timeout=150)
+        (ok if (_j69b_r.returncode == 0 and _j69b_m in _j69b_r.stdout) else bad)("JOB69 B/C: " + _j69b_t + " (phone layout 1024x471 .. 800x360 / the HowTo lookup)")
+_j69b_zr = _j69_read("src/ServerScriptService/Server/Modules/ZoneRuns.luau")
+_j69b_cl = _j69_read("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ZoneRunController.luau")
+_j69b_mc = _j69_read("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MissionController.luau")
+(ok if ('featurePush(player, "ZoneRunIntro"' in _j69a_svc and "function RebirthZoneService.RequestRun" in _j69a_svc and '"zone_run", 1, 2' in _j69a_svc
+        and 't.ActionText = "TRAIN"' in _j69a_svc and 'ZC.RebuildLive(uid, "HowTo")' in _j69a_svc) else bad)(
+    "JOB69 B: kiosk -> ZoneRunIntro card, RequestZoneRun start / cancel (rate-limited), TRAIN prompt back, owner-first (Rebuild.HowTo)")
+(ok if ("Title = run.Def.Title, Step = run.Step" in _j69b_zr and "Pos = m.Position" in _j69b_zr and "in progress · %d:%02d left" in _j69b_zr and '"%s %d OF %d"' in _j69b_zr) else bad)(
+    "JOB69 B: the tracker push carries the title / step label / pad position; 'VALVE 2 OF 4'; '<TITLE> in progress · m:ss left'")
+(ok if ('"ZoneRunIntro"' in _j69b_cl and '"ZoneRun"' in _j69b_cl and "ObjectiveMarker" in _j69b_cl and "CancelChip" in _j69b_cl and "function ZoneRunController.CardLayout" in _j69b_cl) else bad)(
+    "JOB69 B: the client listens (card + progress pill + CANCEL chip + the objective arrow), phone-safe CardLayout")
+(ok if ("HowTo.Line(mission.Id" in _j69b_mc and "HowTo.Line(r.Id" in _j69b_mc and "jobSub(r)" in _j69b_mc and "howToCard(id, actTitle" in _j69b_mc and "howToCard(id, jobTitle" in _j69b_mc) else bad)(
+    "JOB69 C: mission / activity / job rows say what to do; activity START + job GO open the how-to card first")

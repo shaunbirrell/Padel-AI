@@ -84,6 +84,7 @@ local SecurityConfig = {
 		RequestEndgameState = {}, -- claude-bud JOB 39
 		RequestRivalAction = { "string:8", "number?" }, -- claude-bud JOB 41 C: "open" | "send", plot id (telemetry only)
 		RequestMissionReroll = { "string:48" }, -- claude-bud JOB 49 C: the mission id only
+		RequestZoneRun = { "string:8", "string:24" }, -- claude-bud JOB 69 B: "start" | "cancel", zoneId (checked in the service)
 		RequestRecruitPackResult = { "string:8" }, -- claude-bud JOB 41 B: "shown" | "dropped" (checked in the service)
 		RequestRatePromptAnswer = { "string:8" }, -- claude-bud JOB 40 D: one answer word (the service checks the enum)
 		RequestNotifOptInResult = { "string:12", "string?" }, -- claude-bud JOB 29: accepted / declined / unavailable, "settings"?

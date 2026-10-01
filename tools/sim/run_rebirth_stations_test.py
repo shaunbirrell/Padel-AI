@@ -320,6 +320,32 @@ check(string.find(lbl.Text, "RUN", 1, true) == string.find(lbl.Text, "RUN BEST",
 check(S.MapRows(OWN7) == nil, "Signs OFF: no zones on the map")
 ZC.Rebuild.Signs = true
 check(ZC.RunRules.StatusRefreshSeconds >= 10, "the status refresh is slow (>= 10 s; minutes on the sign, no per-second text churn)")
+
+-- ── 8. claude-bud JOB 69 B: the how-to card, the tracker, the wording, cancel without a cooldown ──
+local PROMPTS8 = {}
+local rn8 = Instance.new
+Instance.new = function(cls) local o = rn8(cls); if cls == "ProximityPrompt" then local sig = signal(); o.Triggered = sig; table.insert(PROMPTS8, o) end; return o end
+UNIX += 100000 -- every cooldown over
+S.Intro(OWN, "EastYard")
+local intro = LOG.push[#LOG.push]
+check(intro.k == "ZoneRunIntro" and intro.d.Title == "DRILL COURSE" and intro.d.Goal == ZC.Info.EastYard.HowTo.What and #intro.d.Steps == 3 and intro.d.Seconds == 45 and string.find(intro.d.Reward, "army boost", 1, true) ~= nil,
+  "the kiosk shows the how-to card first: " .. tostring(intro.d.Title) .. " / " .. tostring(intro.d.Goal) .. " / " .. tostring(intro.d.Seconds) .. " s / " .. tostring(intro.d.Reward))
+stand(0, D / 2 + 8)
+ZR.Start(OWN, "WestYard", 2, FRAME, W, D, Instance.new("Folder"))
+local tr = RLOG.push[#RLOG.push]
+check(tr.k == "ZoneRun" and tr.d.Label == "PICK UP CRATE" and typeof(tr.d.Pos) == "Vector3" and tr.d.Step == 1 and tr.d.Of == 6 and tr.d.Title == "PRODUCTION RUN", "the tracker gets the title, step 1/6, the label and the pad position (pill + arrow)")
+ZR.Start(OWN, "WestFlank", 1, FRAME, W, D, Instance.new("Folder"))
+check(string.find(tostring(RLOG.notes[#RLOG.notes]), "PRODUCTION RUN in progress", 1, true) ~= nil, "a second kiosk while running: " .. tostring(RLOG.notes[#RLOG.notes]))
+local cdBefore = RP.ZoneRunAt and RP.ZoneRunAt.WestYard
+S.RequestRun(OWN, "cancel", "WestYard")
+local cx = LOG.push[#LOG.push]
+check(ZR.Active(OWN.UserId) == nil and cx.k == "ZoneRun" and cx.d.Cancelled == true and (RP.ZoneRunAt and RP.ZoneRunAt.WestYard) == cdBefore, "CANCEL ends the run with no reward and NO cooldown")
+ZR.Start(OWN, "EastStrip", 1, FRAME, W, D, Instance.new("Folder"))
+local vp = PROMPTS8[#PROMPTS8]
+check(vp and vp.ActionText == "VALVE 1 OF 4", "the valve wording: " .. tostring(vp and vp.ActionText))
+ZR.Cancel(OWN.UserId)
+check(S.RequestRun(OWN, "fly", "WestYard") == false and S.RequestRun(OWN, "start", "Nowhere") == false, "an unknown action / zone is refused")
+Instance.new = rn8
 print(string.format("REBIRTH STATIONS LUA: %d failed", fails))
 if fails > 0 then error("failed") end
 '''

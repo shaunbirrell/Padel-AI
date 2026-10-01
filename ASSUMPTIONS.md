@@ -10189,3 +10189,10 @@ ds_territories.luau T3):
 - WE_Build is not bumped here (the brief asks for it, but the house rule says lanes never bump it; Code Bot does).
 - The config geometry sim approximates the world (no WorldFill spurs / decor); the live overlap test in the service
   stays the real arbiter, and /zonereport shows its result.
+
+## claude-bud JOB 69 parts B + C (2026-10-02): how to play
+- The brief names PanelShell / HudLayout for the card; it is a self-contained ScreenGui placed by a pure, tested
+  CardLayout (real screen px, IgnoreGuiInset) so the thumbstick / jump rules are checked headlessly.
+- The jump / fire keep-out is the bottom-right 130 x 130 px (the Roblox jump button ~70 px + 16 px clear + margin).
+- Jobs start at their sites (OpsService prompts), so the job card sits on the menu GO (GO = track the job).
+- Rows generated in loops (e.g. extra checkpoints) without a HowTo keep their old text (HowTo.Line falls back).

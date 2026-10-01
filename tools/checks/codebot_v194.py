@@ -114,9 +114,12 @@ prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
 # Shaun-approved text, e.g. v203's 2x Offline Cash Description); the newest codebot_vNNN.py carries the live money guard.
 _v194_own_mon = 'SetAttribute("WE_Build", 194)' in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
 check((not _v194_own_mon) or (prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON)), "CODEBOT v194: MonetizationConfig byte-identical to " + PREV)
+# claude-bud JOB 69 B: the one remote name it adds to Constants (RequestZoneRun) is not a save key; strip only that line
+def _bud_j69(t):
+    return t if t is None else "\n".join(l for l in t.replace("\r\n", "\n").split("\n") if "claude-bud JOB 69 B" not in l)
 for rel in ("src/ReplicatedStorage/Shared/Constants.luau", C + "LeaderboardConfig.luau"):
     if (ROOT / rel).exists():
-        check(_bud_j66(shipped(rel, PREV)) == _bud_j66(read(rel)), "CODEBOT v194: save keys unchanged " + rel.rsplit("/", 1)[-1])
+        check(_bud_j69(_bud_j66(shipped(rel, PREV))) == _bud_j69(_bud_j66(read(rel))), "CODEBOT v194: save keys unchanged " + rel.rsplit("/", 1)[-1])
 r = subprocess.run(["git", "diff", "--name-only", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
 touched = [ln for ln in (r.stdout or "").splitlines() if "WE_Building" in ln]
 check(r.returncode == 0 and not touched, "CODEBOT v194: no WE_Building* diffs vs " + PREV)

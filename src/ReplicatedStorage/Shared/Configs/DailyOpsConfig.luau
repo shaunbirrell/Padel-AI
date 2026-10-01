@@ -17,6 +17,7 @@
 ]]
 
 export type DailyOpDef = {
+	HowTo: any?, -- claude-bud JOB 69: the how-to-play card (What / Steps / TimeLimit / Reward)
 	Id: string,
 	DisplayName: string,
 	Description: string,
@@ -37,6 +38,7 @@ local DailyOpsConfig = {
 	Ops = {
 		{
 			Id = "DailyOpCapture",
+			HowTo = { What = "Capture 2 territories or oil platforms", Steps = { "Pick a territory", "Stand in its ring", "Capture 2 today" }, TimeLimit = 0, Reward = "$5,000 + 100 XP" },
 			DisplayName = "Daily Op: Seize",
 			Description = "Capture 2 territories or oil platforms.",
 			ObjectiveType = "CaptureTerritory",
@@ -48,6 +50,7 @@ local DailyOpsConfig = {
 		},
 		{
 			Id = "DailyOpKillNPC",
+			HowTo = { What = "Eliminate 15 NPC hostiles", Steps = { "Find hostiles (red dots)", "Defeat them", "15 in total today" }, TimeLimit = 0, Reward = "$3,500 + 90 XP" },
 			DisplayName = "Daily Op: Clear Hostiles",
 			Description = "Eliminate 15 NPC hostiles.",
 			ObjectiveType = "KillNPC",
@@ -60,6 +63,7 @@ local DailyOpsConfig = {
 		},
 		{
 			Id = "DailyOpRecruit",
+			HowTo = { What = "Recruit 10 soldiers", Steps = { "Go to the Training Yard", "Recruit soldiers", "10 in total today" }, TimeLimit = 0, Reward = "$2,500 + 70 XP" },
 			DisplayName = "Daily Op: Muster",
 			Description = "Recruit 10 soldiers at the Training Yard.",
 			ObjectiveType = "RecruitSoldiers",
@@ -72,6 +76,7 @@ local DailyOpsConfig = {
 		-- W3 step 2 job ops
 		{
 			Id = "DailyOpBank",
+			HowTo = { What = "Loot the Empire Bank vault", Steps = { "Go to the Empire Bank", "Crack the vault", "Escape with the cash" }, TimeLimit = 0, Reward = "$6,000 + 150 XP" },
 			DisplayName = "Daily Op: Rob the Bank",
 			Description = "Loot the Empire Bank vault",
 			ObjectiveType = "Heist",
@@ -84,6 +89,7 @@ local DailyOpsConfig = {
 		},
 		{
 			Id = "DailyOpCheckpoint",
+			HowTo = { What = "Take 2 enemy checkpoints", Steps = { "Find a road checkpoint", "Defeat its guards", "Take 2 today" }, TimeLimit = 0, Reward = "$4,000 + 100 XP" },
 			DisplayName = "Daily Op: Take 2 Checkpoints",
 			Description = "Take 2 enemy checkpoints",
 			ObjectiveType = "Checkpoint", -- live only through OpsService (MissionConfig.OpsObjectives)
@@ -96,6 +102,7 @@ local DailyOpsConfig = {
 		},
 		{
 			Id = "DailyOpJobs",
+			HowTo = { What = "Finish 3 jobs anywhere", Steps = { "Open the map", "Pick a job (yellow)", "Finish 3 today" }, TimeLimit = 0, Reward = "$5,000 + 120 XP" },
 			DisplayName = "Daily Op: Finish 3 Jobs",
 			Description = "Finish 3 jobs anywhere",
 			ObjectiveType = "Job", -- live only through OpsService (MissionConfig.OpsObjectives)
@@ -109,6 +116,7 @@ local DailyOpsConfig = {
 		-- W3 step 2 Phase B (lane M1): more job ops, live only through OpsService
 		{
 			Id = "DailyOpCamp",
+			HowTo = { What = "Raid 1 enemy camp", Steps = { "Find an enemy camp", "Defeat the camp guards", "Clear it" }, TimeLimit = 0, Reward = "$4,000 + 100 XP" },
 			DisplayName = "Daily Op: Raid a Camp",
 			Description = "Raid 1 enemy camp",
 			ObjectiveType = "Camp",
@@ -121,6 +129,7 @@ local DailyOpsConfig = {
 		},
 		{
 			Id = "DailyOpUplink",
+			HowTo = { What = "Hack and hold 1 uplink", Steps = { "Go to an uplink", "Hack it", "Hold it until done" }, TimeLimit = 0, Reward = "$5,000 + 120 XP" },
 			DisplayName = "Daily Op: Hack an Uplink",
 			Description = "Hack and hold 1 uplink",
 			ObjectiveType = "Uplink",
@@ -133,6 +142,7 @@ local DailyOpsConfig = {
 		},
 		{
 			Id = "DailyOpCargo",
+			HowTo = { What = "Bring 1 haul to your base", Steps = { "Grab a cargo haul", "Carry it home", "Drop it at your base" }, TimeLimit = 0, Reward = "$5,000 + 120 XP" },
 			DisplayName = "Daily Op: Haul Cargo",
 			Description = "Bring 1 haul to your base",
 			ObjectiveType = "Delivery",

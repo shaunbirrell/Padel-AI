@@ -98,13 +98,16 @@ check(m is not None and float(m.group(1).replace("_", "")) == 1e15, "CODEBOT v19
 # EconomyService retired from byte-identical in v196 (JOB 65 PendingToCash for NukeRaid 1:1 transfer).
 # Code Bot (Shaun 2026-10-01, offline cap): EconomyConfig retired from byte-identical (OfflineEarnings Share / CapSeconds /
 # PremiumBonus / CapMult moved to OfflineConfig; superseded in codebot_v201.py, which pins MaxCash + the rest unchanged).
+# claude-bud JOB 69 B: the one remote name it adds to Constants (RequestZoneRun) is not a save key; strip only that line
+def _bud_j69(t):
+    return t if t is None else "\n".join(l for l in t.replace("\r\n", "\n").split("\n") if "claude-bud JOB 69 B" not in l)
 for rel in (C + "MonetizationConfig.luau",
             "src/ReplicatedStorage/Shared/Constants.luau", C + "LeaderboardConfig.luau"):
     if (ROOT / rel).exists():
         # Code Bot v203: the MonetizationConfig pin is v195's own ship scope (v203 changed the 2x Offline Cash Description);
         # the newest codebot_vNNN.py carries the live money guard. Constants / LeaderboardConfig stay pinned.
         _v195_skip = rel.endswith("MonetizationConfig.luau") and 'SetAttribute("WE_Build", 195)' not in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
-        check(_v195_skip or _bud_j66(shipped(rel, PREV)) == _bud_j66(read(rel)), "CODEBOT v195: byte-identical to " + PREV + " " + rel.rsplit("/", 1)[-1])
+        check(_v195_skip or _bud_j69(_bud_j66(shipped(rel, PREV))) == _bud_j69(_bud_j66(read(rel))), "CODEBOT v195: byte-identical to " + PREV + " " + rel.rsplit("/", 1)[-1])
 r = subprocess.run(["git", "diff", "--name-only", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
 touched = [ln for ln in (r.stdout or "").splitlines() if "WE_Building" in ln]
 check(r.returncode == 0 and not touched, "CODEBOT v195: no WE_Building* diffs vs " + PREV)

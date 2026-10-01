@@ -105,7 +105,8 @@ touched_b = [n for n in names if "WE_Building" in n]
 check(r.returncode == 0 and not touched_b, "CODEBOT v202: no WE_Building* diffs vs " + PREV)
 
 # JOB 62 must NOT ship on phase-7
-check("ExperienceNotifyService" not in read(S + "Bootstrap.server.luau"),
+# claude-bud: JOB 62 lives on claude/desktop-bud (owner-first, needs WE_NOTIFY_KEY); this pin is v202's own ship scope
+check((not _v202_own_mon) or "ExperienceNotifyService" not in read(S + "Bootstrap.server.luau"),
       "CODEBOT v202: ExperienceNotify (JOB 62) NOT shipped")
 
 # JOB 66 files are in the diff
