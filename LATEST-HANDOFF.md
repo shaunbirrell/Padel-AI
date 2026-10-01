@@ -1,4 +1,12 @@
 <!-- Q2-START -->
+## v174 PUBLISHED (Code Bot Roblox, 2026-10-01 16:16 Dublin): Open Cloud place version 172. claude-bud JOB 48 first 2 minutes hook (owner-first)
+- **Cherry-pick:** `62e1d1e` → phase-7 `99fa30a` (JOB 48 TutorialConfig.Guided.Hook). Code+dist+checks: `33972a1`. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; no price / Id change.
+- **Hook (OwnerFirst = true, NEW-OWNER-FIRST):** OrderVersion 5 = v4 + RAID A RIVAL BASE (JOB 38 verdicts / TARGETS outline / real FastRaidBonus $2k) or Clear-hostiles fallback + Open Missions; +2 free soldiers via SoldierService.GrantFree at Reward; FirstMinutes funnel steps 12-16 + SessionMilestone / FtueTimeToFight. Do NOT flip OwnerFirst until phone OK.
+- **Checks:** BuyPathStatic **PASS=7877 FAIL=0**; `tools/checks/codebot_v174.py` + `claude_bud_job48.py`; `run_first_minutes_test.py` 0 failed (67 checks). codebot_v166 skips NEW-OWNER-FIRST lines.
+- **Publish:** HTTP 200, versionNumber **172**, universe 10767159222 / place 97112936860418. Servers not restarted (Migrate to Latest Update as needed).
+- **Phone tests (owed — Shaun):** (1) fresh test account ~2 min: first fight won, army grows +2 at BASE SECURED!, gold line on every step. (2) raid goal "Raid a rival base" with TARGETS outlined + SEND ARMY, or "Clear hostiles" on empty server. (3) owner returning account never sees the chain (REPLAY GUIDED in Settings > ADMIN for test mode). After phone OK: flip `TutorialConfig.Guided.Hook.OwnerFirst = true -> false`.
+- **Still owed / not this ship:** JOB 44 Studio 2-player siege/march still owed (skipped per Shaun for queue progress). JOB 49 (reasons to come back) not started.
+
 ## claude-bud JOB 48 (2026-10-01): THE FIRST 2 MINUTES HOOK (branch `claude/desktop-bud`)
 JOB 44's Studio run was skipped on Shaun's word ("start all the jobs forget studio run").
 
