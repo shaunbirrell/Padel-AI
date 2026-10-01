@@ -57,12 +57,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
-    (S + "Services/DataService.luau", "WE_Build=203"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 204)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 204)'),
+    (S + "Services/DataService.luau", "WE_Build=204"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 204)'),
 ):
-    check(needle in read(rel), "CODEBOT v199: WE_Build=203 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v199: WE_Build=204 " + rel.rsplit("/", 1)[-1])
 
 VA = read(C + "VisualAssetConfig.luau")
 j67 = VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in VA else ""

@@ -51,19 +51,20 @@ def check(cond, label):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
-    (S + "Services/DataService.luau", "WE_Build=203"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 204)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 204)'),
+    (S + "Services/DataService.luau", "WE_Build=204"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 204)'),
 ):
-    check(needle in read(rel), "CODEBOT v202: WE_Build=203 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v202: WE_Build=204 " + rel.rsplit("/", 1)[-1])
 
 MON = read(C + "MonetizationConfig.luau")
-check('StarterRecruit5 = { Id = 0, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' in MON, "CODEBOT v202: StarterRecruit5 is 5 R$ Id 0")
-check('Boost2x10m = { Id = 0, DisplayName = "2x Income 10 min", RobuxPrice = 5,' in MON, "CODEBOT v202: Boost2x10m is 5 R$ Id 0")
+# v204: Id 0 pins superseded in codebot_v204.py (Creator Hub Ids filled)
+check('StarterRecruit5 = { Id = 3715888533, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' in MON, "CODEBOT v202: StarterRecruit5 is 5 R$ (Id filled v204)")
+check('Boost2x10m = { Id = 3715888566, DisplayName = "2x Income 10 min", RobuxPrice = 5,' in MON, "CODEBOT v202: Boost2x10m is 5 R$ (Id filled v204)")
 s5 = MON.split("Starter5 = {")[1].split("\n}\n")[0] if "Starter5 = {" in MON else ""
-check("Enabled = true," in s5 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in s5 and "OfferAfterPlaySeconds = 300," in s5,
-      "CODEBOT v202: Starter5 owner-first; offer at 5 min")
+check("Enabled = true," in s5 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in s5 and "OfferAfterPlaySeconds = 60," in s5,
+      "CODEBOT v202: Starter5 owner-first; offer at 60 s test value (live 300; v204)")
 check("if row and typeof(row.LiveBlock) == \"string\" then" in MON, "CODEBOT v202: SkuLiveFor LiveBlock for Starter5")
 
 MS = read(S + "Services/MonetizationService.luau")

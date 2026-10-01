@@ -41,12 +41,12 @@ def pass_block(t):
 BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
-    (S + "Services/DataService.luau", "WE_Build=203"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 204)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 204)'),
+    (S + "Services/DataService.luau", "WE_Build=204"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 204)'),
 ):
-    check(BUD or needle in read(rel), "CODEBOT v203: WE_Build=203 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
+    check(BUD or needle in read(rel), "CODEBOT v203: WE_Build=204 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
 
 MON = read(C + "MonetizationConfig.luau")
 blk = pass_block(MON)
@@ -66,7 +66,10 @@ check(re.search(r"PassCapMult\s*=\s*2\b", OFC) is not None, "CODEBOT v203: Offli
 
 # Money guard: vs v202 the ONLY MonetizationConfig changes are that Description line and its comment line.
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-if not BUD:
+# Code Bot v204: the diff / scope pins below are v203's own ship scope (v204 fills the Starter5 Ids + the 60 s test
+# delay); the newest codebot_vNNN.py carries the live money guard. The pass text / price pins above stay live.
+_v203_own = 'SetAttribute("WE_Build", 203)' in read(S + "Services/DataService.luau")
+if not BUD and _v203_own:
     pb = pass_block(prev_mon)
     check("\t\t\tRobuxPrice = 149," in pb and '\t\t\tDisplayName = "2x Offline Cash",' in pb and "\t\t\tId = 2002664894," in pb,
           "CODEBOT v203: v202 had the same Id / name / 149 R$")

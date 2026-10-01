@@ -478,8 +478,8 @@ local MonetizationConfig = {
 		RecruitPack = { Id = 3715776659, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, CashFromTimePack = "Cash30m", Description = "Cash, 2x cash for 30 min and a gold base trim" }, -- claude-bud JOB 42 C: cash = the 30-min pack while TimePacks is live
 	-- claude-bud JOB 66 (price approved by Shaun 2026-10-01 22:13 Dublin: 5 R$ each). Id 0 until Code Bot creates the
 	-- products (turn OFF managed / dynamic pricing on both so they stay 5 R$). LiveBlock = owner-first switch (cfg.Starter5).
-	StarterRecruit5 = { Id = 0, DisplayName = "Recruit Starter Pack", RobuxPrice = 5, Cash = 0, Gold = 0, GrantEntitlement = "StarterRecruit5", OneTime = true, GrantSoldiers = 3, StarterCash = true, LiveBlock = "Starter5", Description = "3 soldiers join your army + starter cash (one time)" },
-	Boost2x10m = { Id = 0, DisplayName = "2x Income 10 min", RobuxPrice = 5, Cash = 0, Gold = 0, GrantsCashBoostMinutes = 10, LiveBlock = "Starter5", Description = "2x earned income for 10 minutes (buy again to extend)" },
+	StarterRecruit5 = { Id = 3715888533, DisplayName = "Recruit Starter Pack", RobuxPrice = 5, Cash = 0, Gold = 0, GrantEntitlement = "StarterRecruit5", OneTime = true, GrantSoldiers = 3, StarterCash = true, LiveBlock = "Starter5", Description = "3 soldiers join your army + starter cash (one time)" },
+	Boost2x10m = { Id = 3715888566, DisplayName = "2x Income 10 min", RobuxPrice = 5, Cash = 0, Gold = 0, GrantsCashBoostMinutes = 10, LiveBlock = "Starter5", Description = "2x earned income for 10 minutes (buy again to extend)" },
 		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
 		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
 		Nuke = {
@@ -915,7 +915,7 @@ end
 (MonetizationConfig :: any).Starter5 = {
 	Enabled = true,
 	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 66): only Shaun until his phone test
-	OfferAfterPlaySeconds = 300, -- the "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
+	OfferAfterPlaySeconds = 60, -- THE Starter5 pop-up delay (one value): 60 s for Shaun's phone test; LIVE VALUE IS 300 (set back to 300 after the test). The "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
 	CashIncomeMinutes = 2.5, -- the Recruit Starter Pack's cash = about 2-3 minutes of his early income ...
 	CashMin = 750, -- ... at least this (a brand-new base earns about $300 / min)
 	CashMax = 20000, -- ... and never more (a starter pack, not a cash pack)

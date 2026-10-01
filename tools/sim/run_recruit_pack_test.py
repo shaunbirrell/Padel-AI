@@ -41,6 +41,10 @@ local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if no
 local MC = require(node("Shared/Configs/MonetizationConfig"))
 local O = MC.RecruitPackOffer
 local OWNER = 470626172
+-- Code Bot (Starter5 Ids filled): the Recruit Pack flow below is the "no 5 R$ product" path (for the owner, a live
+-- StarterRecruit5 replaces this offer: run_starter5_test.py covers that); the JOB 66 receipt block sets its own Ids
+MC.DevProducts.StarterRecruit5.Id = 0
+MC.DevProducts.Boost2x10m.Id = 0
 
 -- 5. not pay-to-win
 local row = MC.DevProducts.RecruitPack

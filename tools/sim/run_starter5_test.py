@@ -1,7 +1,7 @@
 """claude-bud JOB 66: the 5 R$ starter products, on the REAL MonetizationConfig + RecruitPackService (stand-ins:
 run_kit_detail_test.PRELUDE; the services around RecruitPackService are recording fakes).
 
-1. ROWS: StarterRecruit5 + Boost2x10m are 5 R$, Id 0 until created; the pack is one-time with 3 soldiers + starter cash;
+1. ROWS: StarterRecruit5 (3715888533) + Boost2x10m (3715888566) are 5 R$ (Code Bot: created on the Creator Hub); the pack is one-time with 3 soldiers + starter cash;
    the boost is 10 minutes, repeatable; no damage / health / armour / raid / protection key.
 2. CASH: about 2.5 min of his early income, at least 750 and at most 20,000.
 3. OWNER-FIRST: SkuLiveFor follows the Starter5 switch (owner yes, others no).
@@ -44,7 +44,9 @@ local OWNER, OTHER = 470626172, 9
 
 -- 1. rows
 local P, B = MC.DevProducts.StarterRecruit5, MC.DevProducts.Boost2x10m
-check(P.RobuxPrice == 5 and B.RobuxPrice == 5 and P.Id == 0 and B.Id == 0, "both 5 R$, Id 0 until Code Bot creates them")
+check(P.RobuxPrice == 5 and B.RobuxPrice == 5 and P.Id == 3715888533 and B.Id == 3715888566, "both 5 R$, the Creator Hub Ids 3715888533 / 3715888566")
+local D = MC.Starter5.OfferAfterPlaySeconds
+check(D == 60, "the Starter5 pop-up delay is ONE value, 60 s for the phone test (live 300)")
 check(P.OneTime == true and P.GrantSoldiers == 3 and P.StarterCash == true and B.OneTime ~= true and B.GrantsCashBoostMinutes == 10, "pack: one-time, 3 soldiers + starter cash; boost: 10 min, repeatable")
 local p2w = false
 for _, row in ipairs({ P, B }) do for k in pairs(row) do local l = string.lower(k); if string.find(l, "damage") or string.find(l, "health") or string.find(l, "armor") or string.find(l, "armour") or string.find(l, "raid") or string.find(l, "protect") then p2w = true end end end
@@ -74,14 +76,14 @@ RP.Init({
 })
 local function mkP(uid) local p = { UserId = uid, Name = "P" .. uid, attrs = {} }; p.GetAttribute = function(s, k) return s.attrs[k] end; return p end
 local O, X = mkP(OWNER), mkP(OTHER)
-PROF[OWNER].Stats.PlayTimeSeconds = 290
+PROF[OWNER].Stats.PlayTimeSeconds = D - 10
 local ok0 = RP.Step(O)
-check(not ok0 and #PUSH == 0, "the owner at 4:50 of play: no card yet")
-PROF[OWNER].Stats.PlayTimeSeconds = 301
+check(not ok0 and #PUSH == 0, "the owner 10 s before the delay: no card yet")
+PROF[OWNER].Stats.PlayTimeSeconds = D + 1
 local ok1 = RP.Step(O)
 local c = PUSH[#PUSH]
 check(ok1 and c and c.d.ProductKey == "StarterRecruit5" and c.d.Title == MC.Starter5.Title and c.d.RobuxPrice == 5 and #c.d.Lines == 3 and string.find(c.d.Lines[2], "1000", 1, true),
-  "5:01 of play: the owner's card is the 5 R$ ONE-TIME OFFER (" .. tostring(c and c.d.Lines[2]) .. ")")
+  "1 s past the delay: the owner's card is the 5 R$ ONE-TIME OFFER (" .. tostring(c and c.d.Lines[2]) .. ")")
 RP.Result(O, "shown")
 check(PROF[OWNER].Starter5Offered == true and PROF[OWNER].RecruitPackOffered == nil, "shown: its own saved flag (the Recruit Pack flag untouched)")
 T += 100000
@@ -89,9 +91,9 @@ PROF[OWNER].Stats.PlayTimeSeconds = 5000
 local n = #PUSH
 RP.Step(O)
 check(#PUSH == n, "once shown, never again")
-PROF[OTHER].Stats.PlayTimeSeconds = 301
+PROF[OTHER].Stats.PlayTimeSeconds = D + 1
 RP.Step(X)
-check(#PUSH == n, "another player at 5:01: no 5 R$ card (owner-first)")
+check(#PUSH == n, "another player past the Starter5 delay: no 5 R$ card (owner-first)")
 PROF[OTHER].Stats.PlayTimeSeconds = 601
 RP.Step(X)
 local c2 = PUSH[#PUSH]

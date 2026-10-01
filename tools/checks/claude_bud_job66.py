@@ -19,10 +19,11 @@ def _j66_src(p):
 
 
 _MC = _j66_src("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau")
-(ok if ('StarterRecruit5 = { Id = 0, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' in _MC and 'Boost2x10m = { Id = 0, DisplayName = "2x Income 10 min", RobuxPrice = 5,' in _MC) else bad)(
-    "CLAUDE-BUD J66: both products are 5 R$ (Shaun approved) and Id 0 until created")
+# Code Bot 204: Id 0 pin superseded (products created on the Creator Hub: 3715888533 / 3715888566, codebot_v204.py)
+(ok if ('StarterRecruit5 = { Id = 3715888533, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' in _MC and 'Boost2x10m = { Id = 3715888566, DisplayName = "2x Income 10 min", RobuxPrice = 5,' in _MC) else bad)(
+    "CLAUDE-BUD J66: both products are 5 R$ (Shaun approved), Ids filled (Code Bot v204)")
 _s5 = _MC.split("Starter5 = {")[1].split("\n}\n")[0] if "Starter5 = {" in _MC else ""
-(ok if ("Enabled = true," in _s5 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _s5 and "OfferAfterPlaySeconds = 300," in _s5) else bad)("CLAUDE-BUD J66: MonetizationConfig.Starter5 is owner-first; the offer at 5 min")
+(ok if ("Enabled = true," in _s5 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _s5 and "OfferAfterPlaySeconds = 60," in _s5) else bad)("CLAUDE-BUD J66: MonetizationConfig.Starter5 is owner-first; the offer at 60 s for the phone test (live 300; Code Bot v204)")
 (ok if "if row and typeof(row.LiveBlock) == \"string\" then" in _MC else bad)("CLAUDE-BUD J66: SkuLiveFor follows a row's owner-first switch (Shop + purchase intent)")
 _MS = _j66_src("src/ServerScriptService/Server/Services/MonetizationService.luau")
 _pr = _MS.split("local function processReceipt")[1] if "local function processReceipt" in _MS else ""
