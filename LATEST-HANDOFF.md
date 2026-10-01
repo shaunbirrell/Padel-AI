@@ -1,3 +1,16 @@
+## v191 PUBLISHED (Code Bot Roblox, 2026-10-01 ~21:52 Dublin): Open Cloud place version 189. claude-bud JOB 58 HangarDock + JOB 59 Pass59 sounds OwnerFirst (+ JOB 60 audit docs/checks)
+- **Commits:** cherry-pick `01de0c6` → `88d0925` (JOB 58 HangarDock), `0c92212` → `974a4d1` (JOB 59 Pass59 sounds), `43284a9` → `0b48e42` (JOB 60 error-report audit docs/checks); code+dist+checks `a6fa8eb` on phase-7-polish (from v190 `530e2ff`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v190 `8397dc7`.
+- **JOB 58 (NEW-OWNER-FIRST):** `HangarDockConfig` — VisualAssetService.CloneDisplayBody + HangarDockDisplayService: FighterJet / ReconPlane in hangar slots, first allowed boat (LandingCraft) at dock; Part pieces hidden only under a placed body; Part build kept as fallback.
+- **JOB 59 B (NEW-OWNER-FIRST):** `SoundConfig.Pass59` — new SoundConfig keys (night crickets/ambience/harbor, flag flap, radio chatter, distant artillery, gate, boat, march cut, click) + owner-only id swaps (heli, boat, raid siren, UI click) via AmbienceController (1 Hz, 3D, through AudioController). A/C/D still blocked on asset pipeline (not shipped).
+- **JOB 60:** docs + `tools/checks/claude_bud_job60.py` only (AnchorPoint / LoadAnimation pins). No gameplay. Remainder blocked on Creator Hub CSV text.
+- **Checks:** BuyPathStatic **PASS=8306 FAIL=0**; `tools/checks/codebot_v191.py`; `claude_bud_job58.py`; `claude_bud_job59.py`; `claude_bud_job60.py`. PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP 200, versionNumber **189**, universe 10767159222 / place 97112936860418. Servers NOT restarted.
+- **Phone tests (Shaun — rejoin / new server for WE_Build 191; owner only while OwnerFirst):**
+  1. JOB 58: hangar shows real jet(s) not blocks; dock shows landing craft; Airfield L4 → two aircraft.
+  2. JOB 59: night crickets/harbor by dock; radio by Command Center; plaza flag flap; desert distant boom; gate sound; new heli/boat engines.
+  3. Only plot owner while OwnerFirst.
+- **Still owed:** After phone OK flip HangarDock + Pass59 OwnerFirst. Still owed flips: DefenceFix, SpawnTerminal, AirRotorDisc, BaseLife, DefenceVisuals, Night2, SharedHostility, AttackRange, Rebuild (JOB 50/51/52/53/54/55/56/57). Do NOT reopen JOB 44. JOB 60 ask: export Creator Hub error CSV into `docs/proof/errors/` and re-queue. Remaining queue: JOB 59 A/C/D (asset pipeline), 62–64.
+
 ## v190 PUBLISHED (Code Bot Roblox, 2026-10-01 ~21:17 Dublin): Open Cloud place version 188. claude-bud JOB 55 DefenceFix + JOB 56 SpawnTerminals/Rotor + JOB 57 BaseLife OwnerFirst
 - **Commits:** cherry-pick `3362e25` → `73cfc59` (JOB 55 DefenceFix), `5e46977` → `29f7d53` (JOB 56 SpawnTerminals + AirRotorDisc), `8a90340` → `db90add` (JOB 57 BaseLife); code+dist+checks `8397dc7` on phase-7-polish (from v189 `2c6212f`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v189.
 - **JOB 55 (NEW-OWNER-FIRST):** `EndgameConfig.DefenceFix` — Plating needs Walls L4 (row + refusal), Vault shows both cuts, Turret Guns arms gate/tower guards, Gate & Walls → Gate Armour (no wall HP), BaseGuards 0.12 → Defence.GatePct, mid-raid Defence buy refreshes in place (KeepDamage, no full repair) with [DefenseUpgrade] logs.
