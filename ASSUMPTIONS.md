@@ -10133,3 +10133,10 @@ ds_territories.luau T3):
   small.
 - The server cap reuses CombatConfig.MaxActiveNPCs (18) as the job says, but it is a separate count: ambient
   soldiers never take a hostile NPC slot.
+
+## claude-bud JOB 58 (2026-10-01): hangar + dock showpieces
+- The showpieces reuse vehicle bodies that are already approved and wired (no new store models). The asset rule
+  (WE_CHECK2) still governs anything new.
+- The boat body follows BodyAllowed (the owner-only rollout) like a driven boat. Other players see it only on the
+  owner's dock, which is exactly how a driven owner-only body already shows.
+- The Part builds stay as the fallback and are only hidden under a placed body.

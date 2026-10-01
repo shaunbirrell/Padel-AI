@@ -100,6 +100,43 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 58 (2026-10-01): HANGAR + DOCK WITH REAL AIRCRAFT / BOATS (branch `claude/desktop-bud`)
+**Flag:** `HangarDockConfig` (owner-first by the PLOT OWNER, NEW-OWNER-FIRST).
+
+**Before:** the hangar's parked jets were 12-part block mock-ups (Installations/Airfield, 1 jet; 2 at L4) and the
+dock's boat was a 29-part Part build. The VAS parked-presence path never runs (`PreferMeshWhenAssetIdSet = false`),
+and its PatrolBoat id is 0.
+
+**Built:**
+- **`VisualAssetService.CloneDisplayBody(vehicleId, owner, fitLength)`:** the vehicle's approved body as a static
+  display. It uses the house template (scripts / seats / sounds / movers stripped), with every part anchored and no
+  collide / query / touch. `BodyAllowed` applies exactly as for a driven body. It is fitted to a length and stays
+  within the 40-part cap.
+- **`Services/HangarDockDisplayService`:** each Part jet slot gets the store body (slot 1 FighterJet, slot 2 ReconPlane;
+  both live refs, so every player sees them), facing the doors on the floor. The dock gets the first allowed boat body
+  (LandingCraft, an owner-only body today, so only the owner's dock shows it), bow to the sea gate, keel in the water.
+- **Fallback:** only when a body is placed do the Part pieces under it hide (Transparency 1, no collide / query,
+  re-hidden if a level look re-shows them). No body (not loaded / not allowed / Studio without dressing) = the Part
+  build stays exactly.
+- **Lifecycle:** rebuilt on plot-ready and on an Airfield / Dock upgrade (after the Part build). Display models are
+  in `Workspace.WE_HangarDock.Plot<N>`. Logs `[HangarDock] plot=.. placed=[..]`.
+- **Asset rules:** no new asset ids (reuses vehicle bodies already wired and live), no franchise models. Fewer parts
+  than before (an 8-mesh jet replaces 12 parts).
+
+**Not done here:** a live boat body for everyone. Every boat ref is id 0 or owner-only, so non-owner docks keep the
+Part boat until Code Bot approves a boat body (`BodyRollout` / a WE_CHECK2-passed boat).
+
+**Tests:**
+- `tools/sim/run_hangar_dock_test.py`: frames (the nose to the doors, floor / waterline, body Yaw); 2 jets + the boat
+  placed and 9 Part pieces hidden; a far piece kept; resync puts them back; no body = nothing hidden; owner-first.
+- `tools/checks/claude_bud_job58.py`.
+- **Owed:** the Studio look (scale / position of the jet body inside the hangar).
+
+**Test ON HIS PHONE:**
+1. Walk into your hangar: real jet(s) instead of block jets.
+2. At the dock: a real landing craft at the quay.
+3. Upgrade the Airfield to L4: two aircraft.
+
 ## claude-bud JOB 57 (2026-10-01): BASE LIFE (branch `claude/desktop-bud`)
 **Flag:** `BaseLifeConfig` (owner-first by the PLOT OWNER, NEW-OWNER-FIRST). OFF = today's base.
 

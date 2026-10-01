@@ -892,6 +892,57 @@ function VisualAssetService.BodyAllowed(ref: any, ownerUserId: number?): boolean
 	return false
 end
 
+--[[ claude-bud JOB 58: a vehicle's approved store body as a STATIC display (the hangar / dock showpieces). Only a ref
+	BodyAllowed for ownerUserId (the same rule as a driven vehicle: live refs for everyone, Rollout = "Body" refs only on
+	the playtest owner's things). The house template (scripts / seats / sounds / movers stripped), every part Anchored,
+	CanCollide / CanQuery / CanTouch off, scaled so its longest flat side is fitLength (clamped 0.05 .. 4). Returns the
+	unparented model and the ref's Yaw (the body's turn against a kit front), or nil (no body: the caller keeps its Part
+	build). May yield (the template load). ]]
+function VisualAssetService.CloneDisplayBody(vehicleId: string, ownerUserId: number?, fitLength: number?): (Model?, number)
+	if shouldSkipInserts() then
+		return nil, 0
+	end
+	local ref = resolveVehicleRef(vehicleId, nil)
+	if ref == nil or not VisualAssetService.BodyAllowed(ref, ownerUserId) then
+		return nil, 0
+	end
+	local template = templateForRef(ref)
+	if template == nil then
+		return nil, 0
+	end
+	local clone = cloneAsModel(template)
+	if clone == nil then
+		return nil, 0
+	end
+	stripScripts(clone)
+	stripDress(clone)
+	local nParts = 0
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			nParts += 1
+		end
+	end
+	if nParts == 0 or nParts > maxParts() then
+		clone:Destroy()
+		return nil, 0
+	end
+	if typeof(fitLength) == "number" and fitLength > 0 then
+		local _, size = clone:GetBoundingBox()
+		local long = math.max(size.X, size.Z)
+		if long > 0 then
+			pcall(function()
+				clone:ScaleTo(math.clamp(clone:GetScale() * fitLength / long, 0.05, 4))
+			end)
+		end
+	end
+	clone.Name = "WE_Display_" .. vehicleId
+	return clone, tonumber((ref :: any).Yaw) or 0
+end
+
 function VisualAssetService.ResolveVehicleAssetId(vehicleId: string, kitFamily: string?): number?
 	local ref = resolveVehicleRef(vehicleId, kitFamily)
 	return if ref then refId(ref) else nil

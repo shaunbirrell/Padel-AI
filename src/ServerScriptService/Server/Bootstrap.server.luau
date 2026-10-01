@@ -96,6 +96,7 @@ local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAsse
 local GateDefenseService = safeRequire("GateDefenseService", Services.GateDefenseService)
 local SpawnTerminalService = safeRequire("SpawnTerminalService", Services.SpawnTerminalService) -- claude-bud JOB 56
 local BaseLifeService = safeRequire("BaseLifeService", Services.BaseLifeService) -- claude-bud JOB 57
+local HangarDockDisplayService = safeRequire("HangarDockDisplayService", Services.HangarDockDisplayService) -- claude-bud JOB 58
 local ResearchService = safeRequire("ResearchService", Services.ResearchService) -- v69 Research Lab upgrades
 local MissileStrikeService = safeRequire("MissileStrikeService", Services.MissileStrikeService) -- v69 CC strikes
 local PlotOilPumpService = safeRequire("PlotOilPumpService", Services.PlotOilPumpService)
@@ -628,6 +629,7 @@ safeInit("BankRaidService", BankRaidService, deps)
 safeInit("GateDefenseService", GateDefenseService, deps)
 safeInit("SpawnTerminalService", SpawnTerminalService, deps) -- claude-bud JOB 56: helipad + dock spawn terminals (owner-first)
 safeInit("BaseLifeService", BaseLifeService, deps) -- claude-bud JOB 57: base props + ambient soldiers (owner-first)
+safeInit("HangarDockDisplayService", HangarDockDisplayService, deps) -- claude-bud JOB 58: real aircraft / boat bodies in the hangar + dock (owner-first)
 safeInit("PlotOilPumpService", PlotOilPumpService, deps)
 safeInit("SpinnerService", SpinnerService, deps)
 safeInit("ResearchService", ResearchService, deps)
