@@ -1,5 +1,18 @@
 <!-- Q2-START -->
 
+## v170 PUBLISHED (Code Bot Roblox, 2026-10-01 11:36 Dublin): Open Cloud place version 168. Wire 5 free achievement badges (batch 2)
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **170**), HTTP 200 `{"versionNumber":168}`. Servers NOT restarted. Code commit `798416a` + dist `e4bcfca` on phase-7-polish.
+- **Badges (Creator Hub, universe 10767159222, free daily quota, already created/enabled):** wired into `AchievementConfig` only (no new badges paid for):
+  - Cash100k / Six Figures → `3066564903295841`
+  - FirstOutpost / Outpost Taken → `3933837527405364`
+  - Level10 / Sergeant → `2735659013414286`
+  - Cash1M / Millionaire → `3464730701383868`
+  - CommandCenterMax / High Command → `2700577206257761`
+- **11 BadgeId=0 remain** for the daily free routine: PlazaCaptured, PlayerKills100, Rebirth1, Army50, FirstNuke, Cash100M, Rebirth5, Rebirth10, Rebirth20, Streak7, WeeklyCrown.
+- Award / join backfill unchanged (`AchievementService.BackfillBadges`). Players who already unlocked these get the badge on next join.
+- **Checks:** BuyPathStatic PASS=7702 FAIL=0; `tools/checks/codebot_v170.py` (WE_Build=170 + 5 new BadgeIds + 11 zeros + PreferMesh OFF + FastTravelEnabled=false); `codebot_v134` zero-count updated 16→11 (original 5 ids still pinned). PreferMesh / StreamingEnabled OFF; 10 players; no WE_Building*; OwnerFirst flags untouched; no price changes.
+- **Phone tests:** join on a v170 server; if you already have Six Figures / Outpost Taken / Sergeant / Millionaire / High Command unlocked, the Roblox badge should appear (inventory / badge page). New unlocks award immediately.
+
 ## v169 PUBLISHED (Code Bot Roblox, 2026-10-01 11:15 Dublin): Open Cloud place version 167. One-time owner rebirth grant (R10)
 - **Shaun:** doesn't want to type /setrebirth. **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **169**), HTTP 200 `{"versionNumber":167}`. Servers NOT restarted. Code commit `a6f160a` on phase-7-polish; claude/desktop-bud merge `e396dde`.
 - `AdminConfig.OwnerRebirthGrant = { UserId = 470626172, Rebirths = 10, Key = "rebirth10-2026-10-01" }`. On his next profile load (PrestigeService OnProfileLoaded, deferred) `PrestigeService.ApplyOwnerRebirthGrant` -> `AdminSetRebirth(player, 10)`: the exact /setrebirth path (cash / items kept, unlocks + zones + endgame + pushes refreshed, saved). It writes `profile.AdminGrants["rebirth10-2026-10-01"] = { At, From, Applied }` first, so it never re-applies (after a further rebirth or a lowered count). Already >= 10: nothing changes (marker only). Needs the UserId in AdminConfig.UserIds; nil = off; a new Key = a new one-time grant. Owner stays board-excluded (isBoardExcluded). Log line: `[AdminRebirth] shaunie6 grant rebirth10-2026-10-01: R<n> -> R10 (one time)`.
