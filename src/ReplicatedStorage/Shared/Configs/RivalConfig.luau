@@ -45,7 +45,7 @@ local RivalConfig = {
 	-- the list under the card (real px): one 64 px row per target (name + level / army + verdict chip / loot +
 	-- distance, SEND ARMY + VIEW), a 36 px header; on a short screen it slides up over the card (it must end above
 	-- the content bottom: asserted by the v168 test)
-	List = { Width = 400, Gap = 6, Header = 36, RowHeight = 64, RowGap = 4, SendWidth = 112, ViewWidth = 60, ButtonHeight = 48 },
+	List = { Width = 400, Gap = 6, Header = 36, RowHeight = 64, RowGap = 4, SendWidth = 112, ViewWidth = 60, ButtonHeight = 48, NukeWidth = 72 },
 	-- the card's short empty-state reasons (<= 16 chars at 14 px in the card's 126 px text column); the list keeps the full WhyText
 	ShortWhy = {
 		Held = "Finish the guide",

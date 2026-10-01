@@ -76,6 +76,7 @@ local AnalyticsConfig = {
 			VEHICLE_SPAWNED = { Name = "VehicleSpawned", Field = "vehicle" },
 			MISSILE_STRIKE = { Name = "MissileLaunched" },
 			NUKE_LAUNCH = { Name = "NukeLaunched" },
+			NUKE_RAID = { Name = "NukeRaid", Value = "Stolen" }, -- claude-bud JOB 65
 			CODE_REDEEM = { Name = "CodeRedeemed", Field = "code" },
 			TUTORIAL_SHOWN = { Name = "TipShown", Field = "tip" },
 			TUTORIAL_CLOSED = { Name = "TipClosed", Field = "tip" },
@@ -181,6 +182,7 @@ local AnalyticsConfig = {
 		-- Nuke (nuke §13)
 		NUKE_GRANTED = "NUKE_GRANTED", -- kind, count, source (receipt/silo/gift/battlepass/admin/refund), inventoryAfter
 		NUKE_LAUNCH = "NUKE_LAUNCH",
+		NUKE_RAID = "NUKE_RAID", -- claude-bud JOB 65: VictimUserId, Stolen, Balance
 		NUKE_REJECT = "NUKE_REJECT",
 		NUKE_DETONATE = "NUKE_DETONATE",
 		NUKE_ABORT = "NUKE_ABORT",

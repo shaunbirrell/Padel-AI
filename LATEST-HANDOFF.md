@@ -152,6 +152,52 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 65 (2026-10-01): NUKE INSTANT RAID (branch `claude/desktop-bud`)
+**Flag:** `RebirthZonesConfig.NukeRaid` (owner-first by the ATTACKER, NEW-OWNER-FIRST): only Shaun until his phone test.
+
+**Built on the live nuke + raid systems (nothing rewritten):**
+- **Unlock:** the existing rebirth silo (NukeService `siloLevel` ≥ 1: StrategicYard, Rebirth 2, built).
+- **Targeting:**
+  - TARGETS rows get a **NUKE** button when the server says he can nuke (row field `Nuke`).
+  - It opens a server preview (`RequestNuke "rpreview" <plotId>`): FeaturePush `NukeRaidPreview` with the name, base
+    level and the EXACT cash, i.e. the victim's full raidable ATM from `MoneyCollectorService.GetRaidableBalance`, the
+    same number the launch moves.
+  - The card is 420 x 268, with CANCEL 170 x 64 and LAUNCH 190 x 64. A blocked target shows why; a cooldown shows m:ss
+    on the button.
+- **Launch:** `RequestNuke "rlaunch"` → `NukeService.RaidLaunch`.
+  - It re-runs every check on the server, takes one warhead (`NukeSilo`) and the cooldown (`NukeLastLaunch`, saved:
+    existing keys only) BEFORE the money moves, then calls `MoneyCollectorService.NukeRaid`.
+  - `NukeRaid` uses the raid checks plus the raid money path: `_MoveLoot` moves the victim's ATM to the attacker's
+    ATM 1:1, then the new `EconomyService.PendingToCash` moves exactly that amount into his Cash. No multiplier
+    anywhere, so **no Double Weekend on a transfer**.
+  - The victim gets the raid shield, the raid report, `NUKE_RAID` analytics and the BaseRaided notification (JOB 62).
+  - If nothing moved (a last-moment race), the warhead and cooldown come back.
+- **VFX:** the existing MissileStrikeFx packet (procedural missile + small explosion, culled / capped on phones) flies
+  from his base to the target's gate in 6 s, plus the light NukeBlast flash. `NukeRaid.Vfx` turns it off.
+- **Fairness:** the raid rules (shield, new player, low balance, allies via CanArmyRaid), the ONE protection rule
+  (`CombatService.ProtectedReason`: spawn / novice), never an admin (AdminService.IsAdmin), the JOB 63 same-base
+  cooldown, never his own base. Each one is a switch in `NukeRaid.Targets`.
+- **Cooldown:** 30 min (`NukeRaid.CooldownSeconds`), sharing the silo's saved `NukeLastLaunch`.
+- **Logs:** `[NukeRaid] uid=.. -> victim=.. plot=.. preview=.. moved=..`
+
+**Tests:**
+- `tools/sim/run_nuke_raid_test.py` (the real NukeService):
+  - the preview shows name / level / the full ATM; launch stolen == preview; the target's ATM = 0; no x2;
+  - 1 warhead spent + cooldown saved; the VFX packet;
+  - cooldown refused + the time on the card;
+  - shield / new / protected / ally / admin / JOB 63 cooldown / own base refused with nothing moved;
+  - no warhead / no silo; race refund; allowed after the cooldown; owner-first.
+- `tools/checks/claude_bud_job65.py` pins that the real money path never multiplies (TransferPendingCash +
+  PendingToCash) and that NukeRaid uses the raid path.
+- **Owed: the 2-real-player Studio test the brief asks for** (preview = stolen, target ATM 0, shield blocks, cooldown).
+  Studio cannot be run from this session.
+
+**Test ON HIS PHONE (with an alt that has cash in its ATM, Shaun with the silo built + a warhead):**
+1. Open TARGETS and tap NUKE on the alt: the card shows its name, level and $X. LAUNCH.
+2. A missile hits its base. You get +$X, and its ATM shows 0.
+3. Tap NUKE again: the button shows the 30:00 countdown.
+4. On a shielded alt: "Shielded after a raid", LOCKED.
+
 ## claude-bud JOB 63 (2026-10-01): ANTI-SPAWN-CAMPING (branch `claude/desktop-bud`)
 **Flag:** `RaidConfig.AntiCamp` (owner-first by the BASE OWNER, NEW-OWNER-FIRST). OFF = today.
 

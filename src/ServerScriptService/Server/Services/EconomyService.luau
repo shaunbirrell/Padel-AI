@@ -733,6 +733,31 @@ end
 	Move PendingCash from victim → thief without cash multipliers (already accrued).
 	Returns amount transferred (0 if none).
 ]]
+-- claude-bud JOB 65: move exactly `amount` of his own ATM (PendingCash) into Cash, never multiplied (a transfer that
+-- already sits in his ATM, e.g. a nuke raid's loot). His other pending cash stays in the ATM. Returns what moved.
+function EconomyService.PendingToCash(player: Player, amount: number): number
+	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
+		return 0
+	end
+	local profile = getDataService().GetProfile(player)
+	if not profile then
+		return 0
+	end
+	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
+	local take = math.min(math.floor(amount), pending)
+	if take <= 0 then
+		return 0
+	end
+	;(profile :: any).PendingCash = pending - take
+	profile.Cash = math.clamp(profile.Cash + take, EconomyConfig.MinCash, EconomyConfig.MaxCash)
+	getDataService().MarkDirty(player)
+	pushEconomy(player, profile)
+	if MoneyCollectorService and MoneyCollectorService.RefreshForPlayer then
+		MoneyCollectorService.RefreshForPlayer(player)
+	end
+	return take
+end
+
 function EconomyService.TransferPendingCash(fromPlayer: Player, toPlayer: Player, amount: number): number
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
 		return 0

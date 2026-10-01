@@ -115,6 +115,13 @@ function RivalService.Candidates(viewer: Player): ({ any }, { [string]: number }
 					Verdict = RivalConfig.VerdictWord(v.Bully == true, tonumber(v.Ratio) or 1, ArmyOrdersConfig.Fairness.RiskyRatio),
 					Loot = loot,
 					Dist = dist,
+					-- claude-bud JOB 65: he can nuke bases (the silo built, the nuke raid live for him): the card shows NUKE
+					Nuke = (function(): boolean
+						local okN, NS = pcall(function(): any
+							return require(script.Parent.NukeService)
+						end)
+						return okN and NS and NS.RaidLive and NS.RaidLive(viewer.UserId) and NS.HasSilo and NS.HasSilo(viewer) or false
+					end)(),
 					-- claude-bud JOB 63: his same-base cooldown on this base (seconds; 0 = none)
 					Wait = (function(): number
 						local okA, left = pcall(function()

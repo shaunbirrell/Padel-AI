@@ -298,6 +298,100 @@ local function blast(d: any)
 	end
 end
 
+-- ── claude-bud JOB 65: the nuke-raid preview card (FeaturePush "NukeRaidPreview", all numbers from the server) ───
+local WHY: { [string]: string } = {
+	NoSilo = "Build the Nuclear Silo first",
+	NoBase = "That base is empty now",
+	Self = "That's your own base",
+	Admin = "This base can't be nuked",
+	Ally = "That's an ally",
+	Protected = "Protected right now",
+	CampCooldown = "Base cooldown: wait",
+	Shielded = "Shielded after a raid",
+	NewPlayer = "New player: protected",
+	LowBalance = "Their ATM is almost empty",
+	Cooldown = "Silo cooling down",
+	NotReady = "No warhead ready",
+}
+
+local function clockText(sec: number): string
+	sec = math.max(0, math.floor(sec))
+	return string.format("%d:%02d", math.floor(sec / 60), sec % 60)
+end
+
+local function raidPreview(d: any)
+	local g = gui("WE_NukeRaidPreview", 37)
+	if g == nil then
+		return
+	end
+	local card = Instance.new("Frame")
+	card.Name = "Card"
+	card.AnchorPoint = Vector2.new(0.5, 0.5)
+	card.Position = UDim2.fromScale(0.5, 0.5)
+	card.Size = UDim2.fromOffset(420, 268)
+	card.BackgroundColor3 = PLATE
+	card.BackgroundTransparency = 0.03
+	card.Parent = g
+	corner(card, 14)
+	local st = Instance.new("UIStroke")
+	st.Color = RED
+	st.Thickness = 3
+	st.Parent = card
+	local fit = Instance.new("UISizeConstraint")
+	fit.MaxSize = Vector2.new(440, 300)
+	fit.Parent = card
+	local function line(y: number, h: number, size: number, color: Color3, text: string, font: Enum.Font?)
+		local l = Instance.new("TextLabel")
+		l.BackgroundTransparency = 1
+		l.Position = UDim2.fromOffset(18, y)
+		l.Size = UDim2.new(1, -36, 0, h)
+		l.Font = font or Enum.Font.GothamBold
+		l.TextSize = size
+		l.TextColor3 = color
+		l.TextXAlignment = Enum.TextXAlignment.Left
+		l.TextTruncate = Enum.TextTruncate.AtEnd
+		l.Text = text
+		l.Parent = card
+		return l
+	end
+	line(12, 30, 24, RED, "NUKE " .. string.upper(tostring(d.Name or "?")) .. "?", Enum.Font.GothamBlack)
+	line(46, 24, 20, Color3.fromRGB(220, 220, 210), string.format("Base level %d", tonumber(d.Level) or 0))
+	line(74, 34, 28, Color3.fromRGB(120, 255, 140), "+" .. money(tonumber(d.Amount) or 0), Enum.Font.GothamBlack)
+	line(110, 22, 18, Color3.fromRGB(200, 196, 180), "Their whole ATM, straight to your cash")
+	local ok = d.Ok == true
+	local why = if ok then "" else (WHY[tostring(d.Why)] or tostring(d.Why))
+	if tostring(d.Why) == "Cooldown" then
+		why = "Silo cooling down: " .. clockText(tonumber(d.CooldownLeft) or 0)
+	end
+	line(136, 24, 18, Color3.fromRGB(255, 200, 80), why)
+	local cancel = btn(card, "CANCEL", Color3.fromRGB(70, 72, 66))
+	cancel.Name = "Cancel"
+	cancel.Size = UDim2.fromOffset(170, 64)
+	cancel.Position = UDim2.new(0, 18, 1, -82)
+	cancel.TextSize = 20
+	cancel.Activated:Connect(function()
+		g:Destroy()
+	end)
+	local launch = btn(card, if ok then "LAUNCH" elseif tostring(d.Why) == "Cooldown" then clockText(tonumber(d.CooldownLeft) or 0) else "LOCKED", if ok then RED else Color3.fromRGB(90, 50, 46))
+	launch.Name = "Launch"
+	launch.Size = UDim2.fromOffset(190, 64)
+	launch.Position = UDim2.new(1, -208, 1, -82)
+	launch.TextSize = 22
+	launch.AutoButtonColor = ok
+	launch.Activated:Connect(function()
+		if not ok then
+			return
+		end
+		g:Destroy()
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestNuke, "rlaunch", tostring(d.PlotId))
+	end)
+end
+
+-- the TARGETS card / map ask for the preview of one base (the server answers with NukeRaidPreview)
+function NukeController.PreviewRaid(plotId: number)
+	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestNuke, "rpreview", tostring(plotId))
+end
+
 function NukeController.Init()
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if typeof(data) ~= "table" then
@@ -309,6 +403,8 @@ function NukeController.Init()
 			incoming(data)
 		elseif kind == "NukeBlast" then
 			blast(data)
+		elseif kind == "NukeRaidPreview" then
+			raidPreview(data) -- claude-bud JOB 65
 		end
 	end)
 end

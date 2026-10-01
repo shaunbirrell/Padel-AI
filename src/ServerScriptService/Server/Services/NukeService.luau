@@ -22,6 +22,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
@@ -303,6 +304,191 @@ function NukeService.Launch(player: Player, targetId: any): (boolean, string?)
 	return true, nil
 end
 
+-- ── claude-bud JOB 65: the NUKE INSTANT RAID (RebirthZonesConfig.NukeRaid) ─────────────────────────────────────────
+local NR: any = (RebirthZonesConfig :: any).NukeRaid
+
+function NukeService.RaidLive(uid: number): boolean
+	return live(uid) and typeof(NR) == "table" and (require(Shared.Configs.RetentionConfig) :: any).Live(NR, uid)
+end
+
+local function raidCooldownLeft(profile: any): number
+	local last = tonumber(profile and profile.NukeLastLaunch) or 0
+	return if last > 0 then math.max(0, math.ceil(NR.CooldownSeconds - (os.time() - last))) else 0
+end
+
+local function isAdmin(p: Player): boolean
+	local a = deps.AdminService
+	if a and a.IsAdmin then
+		local ok, v = pcall(a.IsAdmin, p)
+		return ok and v == true
+	end
+	return false
+end
+
+--[[ May `player` nuke the base `plotId` now? Returns (ok, why, info). Every rule is server-side; info carries what the
+	preview card shows: Name, Level, Amount (the FULL raidable ATM, the exact number a launch moves), CooldownLeft. ]]
+function NukeService.RaidVerdict(player: Player, plotId: any): (boolean, string, any)
+	local info: any = { PlotId = tonumber(plotId) or 0, Name = "?", Level = 0, Amount = 0, CooldownLeft = 0 }
+	local uid = player.UserId
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil or not NukeService.RaidLive(uid) then
+		return false, "Off", info
+	end
+	if siloLevel(player) < 1 then
+		return false, "NoSilo", info
+	end
+	local pid = tonumber(plotId)
+	local bs = deps.BaseService
+	local ownerId = if pid and bs and bs.GetOwnerUserId then bs.GetOwnerUserId(pid) else nil
+	local victim = if typeof(ownerId) == "number" then Players:GetPlayerByUserId(ownerId) else nil
+	if victim == nil or pid == nil then
+		return false, "NoBase", info
+	end
+	local vProfile = deps.DataService.GetProfile(victim)
+	info.Name = victim.DisplayName
+	info.Level = math.floor(tonumber(vProfile and vProfile.Level) or 0)
+	local mc = deps.MoneyCollectorService
+	info.Amount = if mc and mc.GetRaidableBalance then math.max(0, math.floor(tonumber(mc.GetRaidableBalance(victim)) or 0)) else 0
+	info.CooldownLeft = raidCooldownLeft(profile)
+	local T = NR.Targets
+	if victim == player then
+		return false, "Self", info
+	end
+	if not T.Admins and isAdmin(victim) then
+		return false, "Admin", info
+	end
+	local gd = deps.GateDefenseService
+	if not T.Allies and gd and gd.IsAlly and gd.IsAlly(victim.UserId, player) == true then
+		return false, "Ally", info
+	end
+	local cs = deps.CombatService
+	if not T.Shielded and cs and cs.ProtectedReason then
+		local okP, why = pcall(cs.ProtectedReason, victim) -- the ONE protection rule: spawn / novice shield
+		if okP and why ~= nil then
+			return false, "Protected", info
+		end
+	end
+	if not T.CampCooldown then
+		local okA, left = pcall(function()
+			return (require(script.Parent.AntiCampService) :: any).CooldownLeft(uid, pid)
+		end)
+		if okA and typeof(left) == "number" and left > 0 then
+			return false, "CampCooldown", info
+		end
+	end
+	if mc and mc.CanArmyRaid then
+		local okR, why = mc.CanArmyRaid(player, victim) -- ally / new player / raid shield / low balance (the raid rules)
+		if not okR then
+			return false, tostring(why or "Blocked"), info
+		end
+	end
+	if info.CooldownLeft > 0 then
+		return false, "Cooldown", info
+	end
+	if NR.UsesWarhead and silo(player, profile) < 1 then
+		return false, "NotReady", info
+	end
+	return true, "Ok", info
+end
+
+function NukeService.RaidPreview(player: Player, plotId: any)
+	local ok, why, info = NukeService.RaidVerdict(player, plotId)
+	if why == "Off" then
+		return
+	end
+	info.Ok = ok
+	info.Why = why
+	push(player, "NukeRaidPreview", info)
+end
+
+local function strikeFx(player: Player, victim: Player, plotId: number)
+	if not NR.Vfx then
+		return
+	end
+	local okS, sv = pcall(function()
+		return Workspace:GetServerTimeNow()
+	end)
+	local gd = deps.GateDefenseService
+	local to: Vector3? = nil
+	if gd and gd.GetGateCFrame then
+		local okG, cf = pcall(gd.GetGateCFrame, plotId)
+		if okG and typeof(cf) == "CFrame" then
+			to = (cf :: CFrame).Position
+		end
+	end
+	to = to or PlotFrame.PlotPosition(plotId)
+	local myPlot = if deps.BaseService and deps.BaseService.GetOwnedPlotId then deps.BaseService.GetOwnedPlotId(player) else nil
+	local fromBase = if typeof(myPlot) == "number" then PlotFrame.PlotPosition(myPlot) else nil
+	if to == nil then
+		return
+	end
+	local from = (fromBase or to + Vector3.new(0, 0, 400)) + Vector3.new(0, 20, 0)
+	local dist = (to - from).Magnitude
+	local ev = deps.RemoteSetup and deps.RemoteSetup.Get(Constants.RemoteNames.MissileStrikeFx)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireAllClients({
+			StrikeId = "nuke_" .. player.UserId .. "_" .. os.time(),
+			AttackerUserId = player.UserId,
+			AttackerName = player.DisplayName,
+			VictimUserId = victim.UserId,
+			VictimName = victim.DisplayName,
+			PlotId = plotId,
+			From = from,
+			To = to,
+			ArcHeight = math.clamp(dist * 0.25, 60, 400),
+			LaunchTime = if okS then sv else os.time(),
+			FlightSeconds = NR.FlightSeconds,
+			Outcome = "Hit",
+		})
+	end
+	task.delay(NR.FlightSeconds, function()
+		pushAll("NukeBlast", { X = to.X, Z = to.Z, Radius = 30 }) -- the light flash at the base (NukeController.blast)
+	end)
+end
+
+function NukeService.RaidLaunch(player: Player, plotId: any): (boolean, string)
+	local ok, why, info = NukeService.RaidVerdict(player, plotId)
+	if not ok then
+		return false, why
+	end
+	local profile = deps.DataService.GetProfile(player)
+	local victim = Players:GetPlayerByUserId(deps.BaseService.GetOwnerUserId(info.PlotId))
+	if victim == nil then
+		return false, "NoBase"
+	end
+	-- the warhead + the cooldown before the money moves (a double tap can never launch twice)
+	local s = profile.NukeSilo
+	local readyBefore = silo(player, profile)
+	local oldLast = profile.NukeLastLaunch
+	if NR.UsesWarhead then
+		profile.NukeSilo = { Ready = readyBefore - 1, ChargeFrom = if (tonumber(s and s.ChargeFrom) or 0) > 0 then s.ChargeFrom else os.time() }
+	end
+	profile.NukeLastLaunch = os.time()
+	deps.DataService.MarkDirty(player)
+	local moved = deps.MoneyCollectorService.NukeRaid(player, victim, NR.Text.Hit)
+	if moved <= 0 then -- nothing moved (a race: shield / balance changed): give the warhead and the cooldown back
+		profile.NukeSilo = s
+		profile.NukeLastLaunch = oldLast
+		deps.DataService.MarkDirty(player)
+		return false, "Blocked"
+	end
+	print(string.format("[NukeRaid] uid=%d -> victim=%d plot=%d preview=%d moved=%d", player.UserId, victim.UserId, info.PlotId, info.Amount, moved))
+	if deps.NotificationService then
+		pcall(deps.NotificationService.Notify, player, string.format(NR.Text.Launched, NukeService.FormatCash(moved), victim.DisplayName), "Success", 6)
+	end
+	pcall(strikeFx, player, victim, info.PlotId)
+	return true, "Ok"
+end
+
+function NukeService.HasSilo(player: Player): boolean
+	return siloLevel(player) >= 1
+end
+
+function NukeService.FormatCash(n: number): string
+	local s = tostring(math.floor(n))
+	return (s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
+end
+
 function NukeService.Init(d: { [string]: any })
 	deps = d
 	local remote = d.RemoteSetup.Get(Constants.RemoteNames.RequestNuke) :: RemoteEvent
@@ -317,6 +503,17 @@ function NukeService.Init(d: { [string]: any })
 			NukeService.OpenPanel(player)
 		elseif action == "rush" then
 			NukeService.Rush(player)
+		elseif action == "rpreview" then -- claude-bud JOB 65: targetId = the plot id (the server decides everything)
+			NukeService.RaidPreview(player, targetId)
+		elseif action == "rlaunch" then
+			local ok, why = NukeService.RaidLaunch(player, targetId)
+			if not ok and d.NotificationService and NR then
+				local copy = if why == "Cooldown" then string.format(NR.Text.Cooldown, "wait")
+					elseif why == "NotReady" then NR.Text.NotReady
+					elseif why == "NoSilo" then NR.Text.NoSilo
+					else string.format(NR.Text.Blocked, why)
+				pcall(d.NotificationService.Notify, player, copy, "Warn", 4)
+			end
 		elseif action == "launch" then
 			local ok, why = NukeService.Launch(player, targetId)
 			if not ok and d.NotificationService then

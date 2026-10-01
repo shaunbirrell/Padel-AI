@@ -935,6 +935,72 @@ function MoneyCollectorService.VaultMult(victim: Player, army: boolean): number
 	return 1
 end
 
+--[[ claude-bud JOB 65: the NUKE raid. The SAME checks as an army raid (CanArmyRaid: ally, new player, shield, low
+	balance), the FULL raidable balance (the number the preview showed), the same money path (_MoveLoot: the victim's
+	ATM -> the attacker's ATM, 1:1, never multiplied) and then exactly that amount from his ATM into his Cash
+	(EconomyService.PendingToCash, a transfer: no Double Weekend / boosts). The victim shield, notifications, raid
+	report, analytics NUKE_RAID and the BaseRaided notification, like any raid. Returns what moved. ]]
+function MoneyCollectorService.NukeRaid(attacker: Player, victim: Player, textHit: string?): number
+	local R = RaidConfig.Raid
+	local ok = MoneyCollectorService.CanArmyRaid(attacker, victim)
+	if not ok or EconomyService == nil then
+		return 0
+	end
+	local vProfile = profileOf(victim)
+	if not vProfile then
+		return 0
+	end
+	local balance = MoneyCollectorService.GetRaidableBalance(victim)
+	if balance <= 0 then
+		return 0
+	end
+	local vRaid = raidOf(vProfile)
+	local oldShield = vRaid.ShieldUntil
+	local nowUnix = os.time()
+	local shieldBonus = 0
+	local okRZ, RZ = pcall(function(): any
+		return require(script.Parent.RebirthZoneService)
+	end)
+	if okRZ and RZ and RZ.RaidShieldBonus then
+		local okB, b = pcall(RZ.RaidShieldBonus, vProfile)
+		shieldBonus = if okB and typeof(b) == "number" then math.max(0, b) else 0
+	end
+	vRaid.ShieldUntil = nowUnix + R.ShieldSeconds + shieldBonus
+	local moved = MoneyCollectorService._MoveLoot(attacker, victim, balance)
+	if moved <= 0 then
+		vRaid.ShieldUntil = oldShield
+		return 0
+	end
+	EconomyService.PendingToCash(attacker, moved)
+	;(vProfile :: any).LastRaidedAt = nowUnix
+	pcall(function()
+		local eg = require(script.Parent.EndgameService) :: any
+		if eg.NoteRaidedBy then
+			eg.NoteRaidedBy(victim, attacker)
+		end
+	end)
+	markDirty(attacker)
+	markDirty(victim)
+	pcall(function()
+		victim:SetAttribute("WE_ShieldUntil", vRaid.ShieldUntil)
+	end)
+	if NotificationService then
+		NotificationService.Notify(victim, string.format(textHit or "%s nuked your base: -$%s", attacker.DisplayName, formatCash(moved)), "Error", 6)
+		NotificationService.Notify(victim, string.format("-$%s", formatCash(moved)), "Collect", nil, -moved)
+	end
+	pcall(function()
+		require(script.Parent.GameFeelService).NoteRaid(victim.UserId, "Robbed", attacker, moved)
+	end)
+	MoneyCollectorService.RefreshForPlayer(victim)
+	if AnalyticsService and AnalyticsService.Log then
+		task.spawn(function()
+			pcall(AnalyticsService.Log, "NUKE_RAID", attacker.UserId, { VictimUserId = victim.UserId, Stolen = moved, Balance = balance })
+		end)
+	end
+	notifyRaided(victim)
+	return moved
+end
+
 --[[ claude-bud JOB 38: the ARMY raid (ArmyPlan, after the breach and the ATM hold). fraction = StealFraction x ArmyLootMult
 	(x BullyLootMult). Same checks (CanArmyRaid), the same money path (_MoveLoot: the victim's ATM -> the sender's ATM),
 	the same victim shield; the sender gets no in-person cooldown (the SEND has its own). Returns what moved. ]]

@@ -240,7 +240,9 @@ local function rebuildList()
 	local cs = contentSize()
 	local lw = RivalConfig.Layout(cs.X, cs.Y, #rows).List.W
 	local rowW = lw - 16
-	local textW = rowW - 10 - L.SendWidth - L.ViewWidth - 3 * 8
+	-- claude-bud JOB 65: a NUKE button when the server says he can nuke bases (rows carry Nuke = true)
+	local nukeW = if rows[1] and rows[1].Nuke == true then (tonumber((L :: any).NukeWidth) or 72) else 0
+	local textW = rowW - 10 - L.SendWidth - L.ViewWidth - 3 * 8 - (if nukeW > 0 then nukeW + 8 else 0)
 	for i, r in ipairs(rows) do
 		local t = RivalConfig.RowLines(r)
 		local row = Instance.new("Frame")
@@ -272,6 +274,18 @@ local function rebuildList()
 		local plotId = tonumber(r.PlotId) or 0
 		local by = math.floor((L.RowHeight - L.ButtonHeight) / 2)
 		local send = button(row, "SEND ARMY", Color3.fromRGB(170, 55, 45), rowW - 8 - L.ViewWidth - 8 - L.SendWidth, by, L.SendWidth, L.ButtonHeight)
+		if nukeW > 0 then
+			local nuke = button(row, "NUKE", Color3.fromRGB(120, 20, 20), rowW - 8 - L.ViewWidth - 8 - L.SendWidth - 8 - nukeW, by, nukeW, L.ButtonHeight)
+			nuke.Activated:Connect(function()
+				setOpen(false)
+				local okN, NC = pcall(function(): any
+					return require(script.Parent.NukeController)
+				end)
+				if okN and NC and NC.PreviewRaid then
+					NC.PreviewRaid(plotId) -- the preview card: the server reads the exact amount
+				end
+			end)
+		end
 		send.Activated:Connect(function()
 			-- the SAME JOB 38 send path as the map's SEND ARMY (the server re-checks every fairness rule)
 			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySend, plotId)

@@ -82,6 +82,36 @@ local RebirthZonesConfig = {
 		SirenSoundId = "", -- a Roblox-uploaded siren sound id (owner fills it; "" = the visual siren only)
 		MaxTargets = 10,
 	},
+	--[[ claude-bud JOB 65: the NUKE INSTANT RAID (NukeService.RaidPreview / RaidLaunch). A player with the silo (rebirth
+		unlock, built) nukes a rival's HOME BASE: an instant successful raid that moves the target's FULL raidable ATM
+		(MoneyCollectorService.GetRaidableBalance, the same number the preview shows) into the attacker's Cash through
+		the raid payout path (MoneyCollectorService.NukeRaid: the 1:1 ATM transfer, never multiplied, so no Double
+		Weekend / VIP / boost on a transfer). Fairness: the raid checks (ally, new player, shield, low balance), the
+		shared protection (spawn / novice shield), never an admin, the JOB 63 same-base cooldown. Saved state: the
+		existing NukeSilo warheads + NukeLastLaunch (no new save keys). Owner-first by the ATTACKER. ]]
+	NukeRaid = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 65): only Shaun until his phone test
+		CooldownSeconds = 1800, -- after a nuke raid (saved: profile.NukeLastLaunch, the silo's one cooldown)
+		UsesWarhead = true, -- spends one ready warhead (profile.NukeSilo.Ready)
+		Vfx = true, -- the missile + blast on the target base (the MissileStrikeFx packet; light, phone-safe)
+		FlightSeconds = 6, -- the missile's flight in the VFX (the cash moves at launch: the raid is instant)
+		Targets = { -- who may be nuked (false = never)
+			Shielded = false, -- a raid shield (ShieldUntil) / novice shield / spawn protection
+			NewPlayers = false, -- inside NewPlayerProtectionSeconds
+			Admins = false, -- AdminService.IsAdmin
+			Allies = false, -- clan allies (GateDefenseService.IsAlly)
+			CampCooldown = false, -- a base on his JOB 63 same-base cooldown
+		},
+		Text = {
+			Launched = "NUKE LAUNCHED: +$%s from %s's ATM",
+			Hit = "%s nuked your base: -$%s",
+			Cooldown = "Silo cooling down: %s",
+			NotReady = "No warhead ready",
+			NoSilo = "Build the Nuclear Silo first",
+			Blocked = "Can't nuke this base: %s",
+		},
+	},
 
 	-- the gate rank banners and the title above the head (RebirthConfig.Trims / Titles; RebirthConfig.LiveFor "Trims")
 	Rank = {

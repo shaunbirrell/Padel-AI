@@ -10156,3 +10156,12 @@ ds_territories.luau T3):
 - Home = Player:LoadCharacter (the normal respawn), not BaseService.TeleportToPlot. It also drops a vehicle /
   raid hold cleanly.
 - Re-entering during the cooldown restarts it (a fresh 3 min), so walking back in is never worth it.
+
+## claude-bud JOB 65 (2026-10-01): nuke instant raid
+- One silo, one cooldown: the base nuke shares the saved NukeLastLaunch and the warheads with the plaza nuke. No new
+  save keys.
+- The cash moves at launch (an instant raid); the missile is the show. The amount is the full raidable balance read
+  at launch, the same function as the preview, so they match unless income lands in the seconds between.
+- Vault Plating does not reduce a nuke raid: the brief says the full ATM.
+- The NUKE button lives on TARGETS (one of the three entry points the brief allows). The map card has no room left
+  beside SEND ARMY on a phone.
