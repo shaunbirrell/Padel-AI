@@ -28,6 +28,26 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 50 part D (2026-10-01): HOTBAR WEAPON LABELS OVERLAP (branch `claude/desktop-bud`)
+**Root cause (from the source + HudConfig; docs/proof/job50/hotbar-caption.txt):**
+- Each slot's `WeaponName` box was slot + Gap + 4 = **80 v in a 64 v slot**: 8 v into each 12 v gap, so neighbouring
+  boxes overlapped by 4 v.
+- `TextScaled` stretched an 8-letter name ("LONGSHOT") across the whole box.
+- Duplicate captions:
+  - LongshotDMR (rebirth gun) / LongshotSniper (pass gun) were both "LONGSHOT";
+  - HavocLauncher / HavocRotary were both "HAVOC";
+  - SovereignRifle / SovereignPistol were both "SOVEREIGN".
+- The captions in the screenshot sit in our numbered slots, so this is our hotbar, not the CoreGui Backpack.
+
+**Fix:**
+- The caption box stays inside its slot (slot - 4, 16 v clear of the neighbour's).
+- `fitCaption` picks the biggest TextSize that fits (NameSize down to CaptionMinTextPx 12 real px), then "…".
+- Distinct ShortNames for the rebirth guns: "DMR", "HAVOC RL", "SOV RIFLE". The pass guns keep theirs; no Id / pass /
+  price change.
+
+**Test ON HIS PHONE:** with 4 weapons the captions sit inside their own slots and never touch; DMR vs LONGSHOT read
+distinct.
+
 ## claude-bud JOB 52 (2026-10-01): ARMY ATTACK AT RANGE ("No enemies near" with enemies in sight) (branch `claude/desktop-bud`)
 **Flag to flip:** `ArmyOrdersConfig.AttackRange.OwnerFirst = true -> false` (NEW-OWNER-FIRST). Enabled = false is the
 old 250 / 300 / 150 exactly.

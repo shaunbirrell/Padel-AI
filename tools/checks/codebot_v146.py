@@ -64,7 +64,14 @@ try:
 	_cb146(not any("WE_Building" in l for l in _wb.splitlines()), "CODEBOT v146: no WE_Building* file touched since v145 tip")
 	# claude-bud JOB 40 part B: retired the whole-file MonetizationConfig guard (it now carries the speed helper);
 	# replacement: WeaponConfig / RebirthConfig untouched, and no Robux price / Id line changed in MonetizationConfig
-	_cb146(not any(l in (_C146 + "WeaponConfig.luau", _C146 + "RebirthConfig.luau") for l in _wb.splitlines()),
+	# claude-bud JOB 50 D: WeaponConfig may now differ ONLY in hotbar ShortName labels (distinct captions: DMR /
+	# HAVOC RL / SOV RIFLE); RebirthConfig stays untouched. Replacement for the whole-file guard:
+	import re as _re50146
+	_wd146 = _sp146.run(["git", "diff", "-U0", "af3a858", "--", _C146 + "WeaponConfig.luau"], capture_output=True, text=True).stdout
+	_ch146 = [l for l in _wd146.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
+	_nm146 = lambda l: _re50146.sub(r'"[A-Z][A-Z ]*", (\d+), \{', 'SHORT, \\1, {', l[1:].split(" -- ")[0].rstrip())
+	_cb146(not any(l == _C146 + "RebirthConfig.luau" for l in _wb.splitlines())
+		and sorted(_nm146(l) for l in _ch146 if l[0] == "-") == sorted(_nm146(l) for l in _ch146 if l[0] == "+"),
 		"CODEBOT v146: RPG hold / WeaponsLive configs untouched since v145 tip (claude-bud JOB 40 replacement)")
 	import re as _re146
 	_md146 = _sp146.run(["git", "diff", "-U0", "af3a858", "--", _C146 + "MonetizationConfig.luau"], capture_output=True, text=True).stdout

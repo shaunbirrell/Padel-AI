@@ -72,7 +72,14 @@ try:
 	# RPG hold = WeaponConfig, WeaponsLive = RebirthConfig) are still untouched since the v144 tip.
 	# claude-bud JOB 40 part B: MonetizationConfig now carries the speed helper (no price / Id change): the guard is the
 	# Robux lines themselves. WeaponConfig / RebirthConfig stay untouched.
-	_cb145(not any(l in (_C145 + "WeaponConfig.luau", _C145 + "RebirthConfig.luau") for l in _wb.splitlines()),
+	# claude-bud JOB 50 D: WeaponConfig may now differ ONLY in hotbar ShortName labels (distinct captions: DMR /
+	# HAVOC RL / SOV RIFLE); RebirthConfig stays untouched. Replacement for the whole-file guard:
+	import re as _re50145
+	_wd145 = _sp145.run(["git", "diff", "-U0", "aa7f88e", "--", _C145 + "WeaponConfig.luau"], capture_output=True, text=True).stdout
+	_ch145 = [l for l in _wd145.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
+	_nm145 = lambda l: _re50145.sub(r'"[A-Z][A-Z ]*", (\d+), \{', 'SHORT, \\1, {', l[1:].split(" -- ")[0].rstrip())
+	_cb145(not any(l == _C145 + "RebirthConfig.luau" for l in _wb.splitlines())
+		and sorted(_nm145(l) for l in _ch145 if l[0] == "-") == sorted(_nm145(l) for l in _ch145 if l[0] == "+"),
 		"CODEBOT v145: RPG hold / WeaponsLive configs untouched since v144 tip (claude-bud JOB 39 replacement)")
 	_md = _sp145.run(["git", "diff", "-U0", "aa7f88e", "--", _C145 + "MonetizationConfig.luau"], capture_output=True, text=True).stdout
 	# v156 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v156.py (the config RobuxPrice is now only the display

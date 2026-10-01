@@ -436,7 +436,7 @@ HudConfig.Hotbar = {
 	MaxSlots = 4,
 	Slot = 64, -- v touch (44.8 real)
 	SlotDesktop = 50, -- v (45 real at 720p)
-	Gap = 12, -- also widens each slot's caption box (slot + Gap + 4 = 80 v) so SHOTGUN keeps ≥ 12 px (CaptionMinTextPx)
+	Gap = 12, -- claude-bud JOB 50 D: the caption no longer reaches into the gap (it stays inside its slot; fitCaption)
 	Bottom = 12,
 	Corner = 8,
 	Bg = Color3.fromRGB(20, 22, 26),

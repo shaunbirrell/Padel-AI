@@ -884,6 +884,35 @@ local function slotSize(): number
 	return if isTouch then HB.Slot else HB.SlotDesktop
 end
 
+-- claude-bud JOB 50 D: the hotbar caption fits INSIDE its slot: the biggest TextSize from NameSize down to
+-- CaptionMinTextPx (real px, through the HUD scale) whose width fits; below that the name is cut with "…"
+local TextServiceC = game:GetService("TextService")
+local function fitCaption(label: TextLabel, text: string)
+	local nameSize = if isTouch then HB.NameSize else HB.NameSizeDesktop
+	local width = slotSize() - 4
+	local scale = math.max(HudLayout.Scale(), 0.05)
+	local minV = math.min(nameSize, math.ceil((tonumber((HudConfig :: any).Scale.CaptionMinTextPx) or 12) / scale))
+	local function fits(t: string, size: number): boolean
+		local ok, b = pcall(function()
+			return TextServiceC:GetTextSize(t, size, FONT_BODY, Vector2.new(1000, 200))
+		end)
+		return ok and b.X <= width
+	end
+	for size = nameSize, minV, -1 do
+		if fits(text, size) then
+			label.TextSize = size
+			label.Text = text
+			return
+		end
+	end
+	local t = text
+	while #t > 1 and not fits(t .. "…", minV) do
+		t = string.sub(t, 1, #t - 1)
+	end
+	label.TextSize = minV
+	label.Text = if t == text then t else t .. "…"
+end
+
 -- v from the content bottom to the health bar's bottom edge: Hotbar.Bottom + slot + Health.GapAboveHotbar,
 -- raised when needed so the DRAWN slot (UIScale SelectedScale about its bottom edge + its outer stroke) keeps
 -- a 2 v gap below the bar (touch 85 v, desktop 70 v; the action lane still starts at ActionLaneBottomV()).
@@ -989,15 +1018,20 @@ local function makeSlot(parent: Frame, i: number): Slot
 	num.Parent = btn
 	UIUtil.TextOutline(num, 1, nil, 0.3)
 
-	-- a little wider than the slot (into the gap) so "SHOTGUN" keeps its full size on phones
+	-- claude-bud JOB 50 D (Shaun's phone: "HAVOC" "LONGSHOT" "LONGSHOT" "QUAKE" running into each other): ROOT CAUSE:
+	-- this caption box was slot + Gap + 4 = 80 v in a 64 v slot (8 v into each 12 v gap: neighbours overlapped by 4 v)
+	-- and TextScaled stretched an 8-letter name across the whole box. Now the caption stays INSIDE its slot and
+	-- fitCaption picks the biggest size that fits (down to CaptionMinTextPx real), truncating only below that.
 	local name = Instance.new("TextLabel")
 	name.Name = "WeaponName"
 	name.BackgroundTransparency = 1
 	name.AnchorPoint = Vector2.new(0.5, 1)
 	name.Position = UDim2.new(0.5, 0, 1, -4)
-	name.Size = UDim2.new(1, HB.Gap + 4, 0, nameSize + 4)
+	name.Size = UDim2.new(1, -4, 0, nameSize + 4)
 	name.Font = FONT_BODY
-	name.TextScaled = true
+	name.TextScaled = false
+	name.TextSize = nameSize
+	name.TextTruncate = Enum.TextTruncate.AtEnd
 	name.TextColor3 = WHITE
 	name.Text = ""
 	name.Active = false
@@ -1104,7 +1138,7 @@ refreshHotbar = function()
 		table.clear(slots)
 		for i, id in ipairs(ids) do
 			local sl = makeSlot(bar, i)
-			sl.Name.Text = shortName(id)
+			fitCaption(sl.Name, shortName(id)) -- claude-bud JOB 50 D: fits inside its own slot
 			slots[i] = sl
 		end
 		local s = slotSize()

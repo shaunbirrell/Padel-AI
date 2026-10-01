@@ -254,10 +254,10 @@ end
 rebirthGun("AssaultRifle", "VanguardCarbine", "Vanguard Carbine", "VANGUARD", 1, { Damage = 24, FireRate = 9.5 }) -- 198 -> 228 DPS
 rebirthGun("SMG", "TempestSMG", "Tempest SMG", "TEMPEST", 3, { Damage = 15, FireRate = 14.5, MagazineSize = 36 }) -- 196 -> 218
 rebirthGun("Shotgun", "WardenShotgun", "Warden Shotgun", "WARDEN", 5, { Damage = 13, FireRate = 1.3, Range = 44 }) -- 86 -> 101
-rebirthGun("Sniper", "LongshotDMR", "Longshot DMR", "LONGSHOT", 7, { Damage = 58, FireRate = 1.4, MagazineSize = 8, Range = 300 }) -- a semi-auto marksman: 81 DPS
+rebirthGun("Sniper", "LongshotDMR", "Longshot DMR", "DMR", 7, { Damage = 58, FireRate = 1.4, MagazineSize = 8, Range = 300 }) -- a semi-auto marksman: 81 DPS; claude-bud JOB 50 D: "DMR" (the PG Longshot Sniper keeps "LONGSHOT")
 rebirthGun("Sniper", "TalonSniper", "Talon Sniper", "TALON", 9, { Damage = 95, FireRate = 0.8, Range = 440 }) -- 68 -> 76
-rebirthGun("RocketLauncher", "HavocLauncher", "Havoc Launcher", "HAVOC", 12, { Damage = 165, MagazineSize = 2 }) -- +10 % per rocket, 2 in the tube
-rebirthGun("StarterRifle", "SovereignRifle", "Sovereign Rifle", "SOVEREIGN", 15, { Damage = 26, FireRate = 9, Range = 140 }) -- 144 -> 234: the late-rebirth all-rounder
+rebirthGun("RocketLauncher", "HavocLauncher", "Havoc Launcher", "HAVOC RL", 12, { Damage = 165, MagazineSize = 2 }) -- +10 % per rocket, 2 in the tube; claude-bud JOB 50 D: distinct from the PG Havoc Rotary
+rebirthGun("StarterRifle", "SovereignRifle", "Sovereign Rifle", "SOV RIFLE", 15, { Damage = 26, FireRate = 9, Range = 140 }) -- 144 -> 234: the late-rebirth all-rounder; claude-bud JOB 50 D: distinct from the PG Sovereign Pistol
 
 --[[ v69: one weapon order for Shop › WEAPONS rows and the Q/E / mobile ◀ ▶ cycle:
 	UnlockLevel, then CostCash, then id. ]]
