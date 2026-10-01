@@ -1,3 +1,16 @@
+## v199 PUBLISHED (Code Bot Roblox, 2026-10-01 ~23:15 Dublin): Open Cloud place version 197. claude-bud JOB 67(1) turret tiers OwnerFirst (assets PENDING)
+- **Commits:** cherry-pick `6d359be` → `65b84ea` (JOB 67 turret tiers); code+dist+checks `87f88b9` on phase-7-polish (from v198 `42c143a`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v198 `22befca`; no price changes; save keys unchanged.
+- **JOB 67(1) NEW-OWNER-FIRST (`VisualAssetConfig.Job67`):** GateDefense.AutoGunT1..T5 for Shaun's paid Minigun Turret Pack `109072907337393` (all `ModelAssetId = 0`, `PendingAssetId = 109072907337393` until WE_CHECK2 + promote). `TurretTierFor` maps Turret Guns 0..10 → T1..T5 (thresholds 1/4/7/10). `GateDefenseService` pack-piece loader + same 40-part / no-Humanoid refusal — **today's gun stays** until a tier's ModelAssetId is promoted. wire-asset-ids registry row `MinigunTurretPack` PENDING-GET.
+- **Held / not this ship:** JOB 62 ExperienceNotify (`00a76af`) stays on bud only (needs Creator Hub `WE_NOTIFY_KEY`). JOB 67 walls / rebirth-zone buildings / props / Synty vehicles still owed. JOB 66 (5 R$ products) next on Claude queue.
+- **Checks:** BuyPathStatic **PASS=8519 FAIL=0**; `tools/checks/codebot_v199.py` PASS; `claude_bud_job67.py` PASS; `tools/sim/run_turret_tier_test.py` **0 failed**.
+- **Publish:** HTTP 200, versionNumber **197**, universe 10767159222 / place 97112936860418. Servers NOT restarted (players get it on next join; old servers keep pre-v199 turrets).
+- **Phone tests (Shaun — rejoin / new server for WE_Build 199; owner-only while OwnerFirst):**
+  1. Turrets still look like **today's gun** (expected — Pending until WE_CHECK2 promote)
+  2. Job67 flag is owner-only (other players unchanged)
+  3. Upgrade Turret Guns levels still buy / save as before (save keys unchanged)
+- **Code Bot NEXT (Studio — not phone):** (1) Run WE_CHECK2 on `109072907337393`. (2) Fill each AutoGunT1..T5 `ChildName` with pack model names for Lvl 1/3/5/8/10 (≤40 parts, ≤20k tris). (3) `python3 tools/wire-asset-ids.py promote MinigunTurretPack --we-check <file>`. Then turrets change look by tier for the owner.
+- **Still owed flips:** AntiCamp, HangarDock, Pass59, DefenceFix, SpawnTerminal, AirRotorDisc, BaseLife, DefenceVisuals, Night2, SharedHostility, AttackRange, Rebuild, NukeRaid (JOB 50–59/63/65). Do NOT reopen JOB 44.
+
 ## v198 PUBLISHED (Code Bot Roblox, 2026-10-01 ~23:09 Dublin): Open Cloud place version 196. DOUBLE WEEKEND reward toasts show the cash actually credited (display only)
 - **Commits:** code+dist+checks `22befca` on phase-7-polish (from v197 `a2543ba`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v197; no price changes; save keys unchanged; grants unchanged (same AddCash / AccruePendingCash call, same base, same reason; cashMultFor / DoubleEvent untouched).
 - **Bug:** in the window the wallet got 2x (EventConfig.ExtraCashReasons via DoubleEvent.ExtraCashMult, and DoubleEvent.CashMult on the non-exempt stack) but the toasts printed the base amount.
