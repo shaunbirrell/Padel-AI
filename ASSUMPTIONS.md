@@ -10101,3 +10101,10 @@ ds_territories.luau T3):
 - The vault has no model on the base, so "Vault Plating" dresses the plot's money collector (the thing raiders
   rob).
 - The gate damage stages run with the visuals flag only (OFF = no smoke, no scorch: the old gate exactly).
+
+## claude-bud JOB 54 (2026-10-01): night lighting
+- The per-base extras are built per OWNED plot (owner-first by the plot owner) instead of at map start. Empty plots
+  stay dark, which keeps the light count down and lets Code Bot flip it per owner.
+- The exposure is client-side. Lighting is server-global, and a client write lets it ship owner-first; the server
+  never writes ExposureCompensation, so nothing fights it.
+- The beacon is steady (no blink). A blink would need a loop per base; Neon + one small light reads from the air.

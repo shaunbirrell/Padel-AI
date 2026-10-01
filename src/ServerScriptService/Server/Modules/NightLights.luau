@@ -117,6 +117,143 @@ local function post(parent: Instance, name: string, x: number, z: number, height
 	m.Parent = parent
 end
 
+-- ── claude-bud JOB 54: the per-plot night extras (owner-first by the plot owner) ─────────────────────────────────
+local night2: { [number]: { Owner: number, Gate: CFrame?, Lights: number } } = {}
+local night2Root: Instance? = nil
+
+local function n2Live(ownerUserId: number): boolean
+	local N2: any = L.Night2
+	return typeof(N2) == "table" and (require(Shared.Configs.RetentionConfig) :: any).Live(N2, ownerUserId)
+end
+
+local function buildPlot2(plotId: number, gateCf: CFrame?, parent: Instance): number
+	local N2: any = L.Night2
+	local before = lightCount
+	local f = Instance.new("Folder")
+	f.Name = "Plot" .. plotId .. "_Night2"
+	local function at(lx: number, lz: number): Vector3
+		return PlotFrame.LocalToWorld(plotId, lx, lz)
+	end
+	local B = L.Base
+	-- the helipad flood + its four green corner markers (glow only)
+	local H = N2.Helipad
+	local hp, ht = at(H.At[1], H.At[2]), at(H.Toward[1], H.Toward[2])
+	post(f, "HelipadFlood", hp.X, hp.Z, 13, H.Range, H.Brightness, B.Color, ht)
+	for _, c in ipairs({ { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } }) do
+		local p = at(H.Toward[1] + c[1] * H.PadHalf, H.Toward[2] + c[2] * H.PadHalf)
+		local y = groundY(p.X, p.Z)
+		if y then
+			glow(part("PadCorner", Vector3.new(0.9, 0.3, 0.9), CFrame.new(p.X, y + 0.15, p.Z), Color3.fromRGB(70, 90, 70), f), Color3.fromRGB(70, 90, 70), H.PadColor)
+		end
+	end
+	-- the dock flood + bollard lamps along the basin edge (glow only)
+	local D = N2.Dock
+	local dp, dt = at(D.At[1], D.At[2]), at(D.Toward[1], D.Toward[2])
+	post(f, "DockFlood", dp.X, dp.Z, 13, D.Range, D.Brightness, B.Color, dt)
+	for _, z in ipairs(D.BollardZ) do
+		local p = at(D.BollardX, z)
+		local y = groundY(p.X, p.Z)
+		if y then
+			part("Bollard", Vector3.new(0.7, 1.2, 0.7), CFrame.new(p.X, y + 0.6, p.Z), Color3.fromRGB(40, 42, 46), f)
+			glow(part("BollardLamp", Vector3.new(0.6, 0.3, 0.6), CFrame.new(p.X, y + 1.35, p.Z), Color3.fromRGB(110, 100, 80), f), Color3.fromRGB(110, 100, 80), D.BollardColor)
+		end
+	end
+	-- the lit gate sign: a lamp bar outside the gate arch, a spotlight back onto the sign
+	local S = N2.Sign
+	if gateCf and lightCount < L.MaxLights then
+		local lampAt = gateCf * CFrame.new(0, S.Up, S.Out)
+		local signAt = gateCf * CFrame.new(0, S.Up - 1.5, 0)
+		local bar = part("SignLamp", Vector3.new(4, 0.35, 0.5), CFrame.lookAt(lampAt.Position, signAt.Position), Color3.fromRGB(70, 70, 70), f)
+		glow(bar, Color3.fromRGB(70, 70, 70), S.Color)
+		addLight(bar, "Spot", S.Range, S.Brightness, S.Color, Enum.NormalId.Front, S.Angle)
+	end
+	-- the beacon: a mast at the plot's rear corner, a red glowing head + one small light (seen from the air at night)
+	local BC = N2.Beacon
+	local half = BaseConfig.PlotSize.X / 2
+	local bx, bz = BC.At[1], BC.At[2]
+	if bx == 0 and bz == 0 then
+		bx, bz = half - 8, -half + 8
+	end
+	local bp = at(bx, bz)
+	local by = groundY(bp.X, bp.Z)
+	if by then
+		local m = Instance.new("Model")
+		m.Name = "Beacon"
+		part("Mast", Vector3.new(0.6, BC.MastHeight, 0.6), CFrame.new(bp.X, by + BC.MastHeight / 2, bp.Z), Color3.fromRGB(150, 150, 150), m)
+		part("MastBand", Vector3.new(0.7, 2, 0.7), CFrame.new(bp.X, by + BC.MastHeight * 0.6, bp.Z), Color3.fromRGB(200, 60, 50), m)
+		local head = part("BeaconHead", Vector3.new(1.2, 1.2, 1.2), CFrame.new(bp.X, by + BC.MastHeight + 0.6, bp.Z), Color3.fromRGB(120, 50, 45), m)
+		glow(head, Color3.fromRGB(120, 50, 45), BC.Color)
+		addLight(head, "Point", BC.Range, BC.Brightness, BC.Color)
+		m.Parent = f
+	end
+	-- runway thresholds: a green row at the start, a red row at the end (glow only)
+	local T = N2.Threshold
+	for _, r in ipairs(BaseLayoutConfig.Roads) do
+		if r.Name == "Runway" then
+			local ends: { { X: number, C: Color3 } } = { { X = r.X - r.SizeX / 2 + 1.5, C = T.Start }, { X = r.X + r.SizeX / 2 - 1.5, C = T.End } }
+			for _, e in ipairs(ends) do
+				for k = 1, T.Count do
+					local lz = r.Z + (k - (T.Count + 1) / 2) * T.Spacing
+					local p = at(e.X, lz)
+					local y = groundY(p.X, p.Z)
+					if y then
+						glow(part("Threshold", Vector3.new(0.8, 0.3, 0.8), CFrame.new(p.X, y + 0.15, p.Z), Color3.fromRGB(80, 80, 72), f), Color3.fromRGB(80, 80, 72), e.C)
+					end
+				end
+			end
+		end
+	end
+	f.Parent = parent
+	return lightCount - before
+end
+
+--[[ claude-bud JOB 54: (re)build one OWNED plot's night extras (GateDefenseService.syncPlotNow: claim / rejoin /
+	restart / walls change). Owner-first by ownerUserId; nil owner or OFF = cleared. Returns the lights it added. ]]
+function NightLights.SyncPlot(plotId: number, ownerUserId: number?, gateCf: CFrame?): number
+	-- the same owner + gate and the folder is there: nothing to do (a walls / Defence purchase resyncs the plot)
+	local cur = night2[plotId]
+	local have = if night2Root then night2Root:FindFirstChild("Plot" .. plotId .. "_Night2") else nil
+	if cur and have and cur.Owner == ownerUserId and cur.Gate == gateCf then
+		return 0
+	end
+	NightLights.ClearPlot(plotId)
+	if ownerUserId == nil or not LightingConfig.Enabled or not n2Live(ownerUserId) then
+		return 0
+	end
+	local root = night2Root
+	if root == nil or root.Parent == nil then
+		night2[plotId] = { Owner = ownerUserId, Gate = gateCf, Lights = 0 } -- built when NightLights.Build runs
+		return 0
+	end
+	rayParams.FilterDescendantsInstances = { root }
+	local n = buildPlot2(plotId, gateCf, root)
+	night2[plotId] = { Owner = ownerUserId, Gate = gateCf, Lights = n }
+	local ok, WA = pcall(require, script.Parent.WorldAtmosphere)
+	if ok and type(WA) == "table" and (WA :: any).IsNight then
+		pcall((WA :: any).SetNightLights, (WA :: any).IsNight())
+	end
+	print(string.format("[NightLights] plot=%d owner=%d +%d lights (total %d / %d)", plotId, ownerUserId, n, lightCount, L.MaxLights))
+	return n
+end
+
+function NightLights.ClearPlot(plotId: number)
+	local rec = night2[plotId]
+	night2[plotId] = nil
+	if rec then
+		lightCount = math.max(0, lightCount - rec.Lights)
+		NightLights.Stats.Lights = lightCount
+	end
+	local root = night2Root
+	local old = root and root:FindFirstChild("Plot" .. plotId .. "_Night2")
+	if old then
+		old:Destroy()
+	end
+end
+
+function NightLights.Count(): number
+	return lightCount
+end
+
 local function townStreets(parent: Instance)
 	local S = L.Street
 	local i = 0
@@ -319,6 +456,12 @@ function NightLights.Build()
 		warn("[NightLights] partial build:", e1, e2, e3)
 	end
 	f.Parent = Workspace
+	-- claude-bud JOB 54: the owned plots' extras (registered before this build ran) go back in
+	night2Root = f
+	for plotId, rec in pairs(table.clone(night2)) do
+		night2[plotId] = nil
+		pcall(NightLights.SyncPlot, plotId, rec.Owner, rec.Gate)
+	end
 	plazaFlag(f)
 	local ok, WA = pcall(require, script.Parent.WorldAtmosphere)
 	if ok and type(WA) == "table" and (WA :: any).IsNight then

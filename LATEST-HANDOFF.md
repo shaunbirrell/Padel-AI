@@ -72,6 +72,41 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 54 (2026-10-01): NIGHT LIGHTING ON THE BASES (branch `claude/desktop-bud`)
+**Flag:** `LightingConfig.Night2` (owner-first by the PLOT OWNER, NEW-OWNER-FIRST).
+
+**Before:** at night a base had 2 gate floods, 1 hangar flood and runway edge glow. The helipad, dock, sign and the
+base from the air were dark, and nothing set the exposure.
+
+**Built (it extends the JOB 17 `NightLights` module, not a second system):** `NightLights.SyncPlot(plotId, owner,
+gateCf)`, called from `GateDefenseService.syncPlotNow` (claim / rejoin / restart) and cleared in `clearDefense` (owner
+leaves). Each owned plot gets:
+- **Lights:** a helipad flood + 4 green pad-corner glows, a dock flood + 4 bollard lamps on the basin edge, a lamp
+  bar + SpotLight on the gate sign, and a red beacon mast (glow head + one small light) at the rear corner.
+- **Runway thresholds:** green at the start, red at the end (glow only).
+- **Budget:** 4 more lights per base (7 in total, cap 40). 10 owned plots + the town = 101 of `MaxLights` 120. The
+  shared counter refuses past it.
+- **Light rules:** every light goes through `addLight` (Shadows off, off until the night flip, tagged, every second
+  one `WE_LowOff`).
+- **Low-quality halving kept:** `QualityGovernor` now also catches night lights added after low mode turned on (a late
+  claim).
+- **No churn:** the same owner + gate is never rebuilt (walls / Defence purchases resync the plot).
+- **Exposure:** the client `NightExposureController` (owner-first) eases `Lighting.ExposureCompensation` from 0 by
+  day (today's look) to 0.35 at night, through dusk / dawn, every 2 s, writing only on change. The server never
+  writes it.
+
+**Tests:**
+- `tools/sim/run_night_lights_test.py`: per base 7, total 101 / 120, 50 / 101 halved, owner-first, no churn, clear,
+  rebuild, the glow counts, exposure at noon / night / dusk.
+- `tools/checks/claude_bud_job54.py`.
+- **Owed:** a Studio night look, and exact flood placements against the real helipad / dock kits. The positions are
+  config (`LightingConfig.Night2.Helipad / Dock.At`), so tune them there.
+
+**Test ON HIS PHONE at night (wait for dusk, or `/time` if there is an admin clock):**
+1. The helipad, dock and gate sign are lit; a red beacon shows from the air; green / red runway ends.
+2. With Graphics Quality low, about half the lamps stay off.
+3. The night is a touch brighter than before.
+
 ## claude-bud JOB 53 (2026-10-01): DEFENCE UPGRADES YOU CAN SEE (branch `claude/desktop-bud`)
 **Flag:** `EndgameConfig.DefenceVisuals` (owner-first, NEW-OWNER-FIRST).
 

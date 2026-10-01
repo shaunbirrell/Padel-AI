@@ -186,6 +186,23 @@ local function setLow(on: boolean, Q: any)
 	pcall(function()
 		local LC = require((ReplicatedStorage :: any).Shared.Configs.LightingConfig) :: any
 		local nl = Workspace:FindFirstChild("WE_NightLights")
+		-- claude-bud JOB 54: the per-plot night extras arrive later (a claim / rejoin): low mode catches them too
+		if nl and on and not nl:GetAttribute("WE_LowAddHook") then
+			nl:SetAttribute("WE_LowAddHook", true)
+			nl.DescendantAdded:Connect(function(d: Instance)
+				if low and d:IsA("Light") and d:GetAttribute(LC.LowOffAttribute) == true then
+					d.Enabled = false
+					if not d:GetAttribute("WE_LowHooked") then
+						d:SetAttribute("WE_LowHooked", true)
+						d:GetPropertyChangedSignal("Enabled"):Connect(function()
+							if low and d.Enabled then
+								d.Enabled = false
+							end
+						end)
+					end
+				end
+			end)
+		end
 		if nl then
 			for _, d in ipairs(nl:GetDescendants()) do
 				if d:IsA("Light") and d:GetAttribute(LC.LowOffAttribute) == true then

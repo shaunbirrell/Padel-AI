@@ -67,6 +67,22 @@ local LightingConfig = {
 		RunwayMarkerSpacing = 19, -- plot-local runway (BaseLayoutConfig.Roads "Runway"), both long edges
 		RunwayMarkerColor = Color3.fromRGB(255, 200, 90),
 	},
+	-- claude-bud JOB 54: a base that reads at night. Built per OWNED plot (NightLights.SyncPlot from GateDefenseService's
+	-- plot sync: claim / rejoin / restart), owner-first by the plot owner. 4 more night lights per base (helipad flood,
+	-- dock flood, the gate-sign lamp, the beacon) -> 7 per base; with 10 plots + the town that is <= MaxLights (the
+	-- shared counter refuses past it). Glow-only (no light): helipad corner markers, dock bollards, runway thresholds.
+	-- Exposure: the client lifts ExposureCompensation at night (owner-first; 0 by day = today's look).
+	Night2 = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 54): Code Bot flips it after Shaun's phone test
+		PerBaseLights = 4, -- the extra night lights per base (the per-base test: 3 + 4 = 7 <= 40)
+		Helipad = { At = { 64, -104 }, Toward = { 40, -125 }, Range = 50, Brightness = 1.5, PadHalf = 12, PadColor = Color3.fromRGB(110, 255, 140) },
+		Dock = { At = { 98, -72 }, Toward = { 128, -112 }, Range = 56, Brightness = 1.5, BollardX = 101, BollardZ = { -140, -122, -104, -86 }, BollardColor = Color3.fromRGB(255, 210, 120) },
+		Sign = { Up = 11, Out = 3.2, Range = 26, Brightness = 2, Angle = 60, Color = Color3.fromRGB(255, 236, 200) },
+		Beacon = { At = { 0, 0 }, MastHeight = 34, Range = 22, Brightness = 1.2, Color = Color3.fromRGB(255, 70, 60) }, -- At: plot-local, 0,0 = filled from the plot's rear corner
+		Threshold = { Count = 5, Spacing = 5, Start = Color3.fromRGB(90, 255, 120), End = Color3.fromRGB(255, 80, 70) },
+		Exposure = { Day = 0, Night = 0.35, RefreshSeconds = 2 },
+	},
 	Windows = {
 		Enabled = true,
 		MaxPerBuilding = 6, -- 2 floors x 3 at most

@@ -436,6 +436,9 @@ local function findCollectorModel(plotId: number): Instance?
 end
 
 local function clearDefense(plotId: number)
+	pcall(function() -- claude-bud JOB 54: the owner left: his plot's night extras go too
+		(require(script.Parent.Parent.Modules.NightLights) :: any).ClearPlot(plotId)
+	end)
 	local def = defenses[plotId]
 	if not def then
 		return
@@ -2349,6 +2352,15 @@ local function syncPlotNow(plotId: number)
 	end
 
 	local barriers, maxHp = spawnGateBarriers(gateCf, wallsLevel, folder, plotId, ownerUserId)
+	-- claude-bud JOB 54: the plot's night extras (helipad / dock floods, the lit gate sign, the beacon), owner-first
+	do
+		local okN, NL = pcall(function(): any
+			return require(script.Parent.Parent.Modules.NightLights)
+		end)
+		if okN and NL and NL.SyncPlot then
+			pcall(NL.SyncPlot, plotId, ownerUserId, gateCf)
+		end
+	end
 	-- claude-bud JOB 53: the Defence levels you can see, from the SAVED levels (rejoin / restart / rebuild all land here)
 	if DefenceVisualsMod and EndgameConfigMod.DefenceVisualsLive(ownerUserId) then
 		local eg = GateDefenseService._Endgame
