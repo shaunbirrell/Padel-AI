@@ -1,8 +1,9 @@
 <!-- Q2-START -->
-## v182 PUBLISHED (Code Bot Roblox, 2026-10-01 Dublin): Open Cloud place version PLACE_PENDING. Core daily missions + return sequence live for everyone (Shaun approved)
+## v182 PUBLISHED (Code Bot Roblox, 2026-10-01 ~18:55 Dublin): Open Cloud place version 180. Core daily missions + return sequence live for everyone (Shaun approved)
+- **Commits:** code+dist+checks `00e9a6b` + check scope `432c34c` on phase-7-polish (from `9529c70`); bud merge `ff7c0c8` into `claude/desktop-bud`.
 - **Flips:** `MissionConfig.Core.OwnerFirst` true → false; `RetentionConfig.ReturnSequence.OwnerFirst` true → false. The Mission Reroll dev product (3715836569, 19 R$) already had `Core.Reroll.Robux.OwnerFirst = false` (v180), so the paid reroll opens with Core. Nothing else changed: MonetizationConfig byte-identical to v181 `9529c70`, no Id / price line, no other OwnerFirst. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched.
 - **Checks:** BuyPathStatic **PASS=8076 FAIL=0**; new `tools/checks/codebot_v182.py` (both flags false, reroll wired 3715836569 / 19 R$, all 54 SKUs unchanged vs `9529c70`, only MissionConfig + RetentionConfig changed in Configs). `claude_bud_job49.py` now pins the live state; `codebot_v179.py` / `codebot_v180.py` check the owner-first flags against their own ship commits (`75bd8b4` / `719f957`). `run_daily_return_test.py`: a non-owner gets the 3 core missions + free / 19 R$ reroll and a ReturnDay; the owner-first rule is still proved with OwnerFirst = true (restored). WE_Build 182 in every pin.
-- **Publish:** HTTP PLACE_HTTP, versionNumber **PLACE_PENDING**, universe 10767159222 / place 97112936860418. Servers NOT restarted (~25+ players): Migrate to Latest Update when convenient.
+- **Publish:** HTTP 200, versionNumber **180**, universe 10767159222 / place 97112936860418. Servers NOT restarted (~25+ players): Migrate to Latest Update when convenient.
 - **Phone tests (Shaun, any account that is not the owner is best):** rejoin (new server, WE_Build 182) → MISSIONS shows 3 core missions on top + 1 free reroll, then the 19 R$ reroll; a returning join shows Welcome back → streak → "3 new missions today" one at a time.
 - **Still owed:** JOB 44 Studio 2-player siege/march; JOB 51 (Claude pushed `b8c2af5` on bud, not shipped) / 50 / 52; JOB 59/60 docs-only on bud.
 
