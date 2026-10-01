@@ -22,7 +22,10 @@
 12. Double XP.
 13. Armory guns.
 14. Premium vehicles and Extra Garage Slot.
-15. Cash packs (Mega first, **BEST OFFER**).
+15. Cash packs (Mega first, **BEST OFFER**). claude-bud JOB 42: while the time packs are SHOWN (TimePacks live for the
+    player AND all five Ids set), this place holds the five time rows instead: **4 HOURS OF CASH** (**BEST VALUE**),
+    2 HOURS, 1 HOUR, 30 MIN, 15 MIN OF CASH, each with the live "$N" (the floor + "(minimum)" for a new player). The old
+    four packs are hidden from the Shop and the offers then (their receipts are still granted).
 16. Consumables and the rest (Instant Army Refill, Plaza Airstrike, Golden Pumpjacks, the locked Supply Crate).
 
 Every pass row reads **PERMANENT**.
@@ -63,10 +66,16 @@ Every pass row reads **PERMANENT**.
 
 | Key | Name | R$ | Id | Grants | Sold where |
 |---|---|---|---|---|---|
-| `CashSmall` | Cash Pack S | 49 | 3713838744 | $10,000. Overhaul: max($10k, 5 min of your passive income) | Shop, garage "short on cash" offer |
-| `CashMedium` | Cash Pack M | 149 | 3713838815 | $50,000. Overhaul: max($50k, 20 min) | Shop, garage offer |
-| `CashLarge` | Cash Pack L | 399 | 3713838888 | $200,000. Overhaul: max($200k, 60 min) | Shop, rebirth offer, garage offer |
-| `CashMega` | Cash Pack Mega | 799 | 3713838952 | $2,000,000. Overhaul: max($2M, 180 min) | Shop (BEST OFFER), Mega toast |
+| `Cash15m` | 15 Minutes of Cash | 25 | **0** until created | 15 minutes of your income, min $10,000 (JOB 42, at receipt time; timed boosts left out) | Shop (once all five Ids are in), garage offer |
+| `Cash30m` | 30 Minutes of Cash | 49 | **0** until created | 30 minutes of your income, min $25,000 | Shop, garage offer |
+| `Cash1h` | 1 Hour of Cash | 89 | **0** until created | 60 minutes of your income, min $50,000 | Shop, rebirth "Fresh start boost", garage offer |
+| `Cash2h` | 2 Hours of Cash | 159 | **0** until created | 120 minutes of your income, min $100,000 | Shop, garage offer |
+| `Cash4h` | 4 Hours of Cash | 279 | **0** until created | 240 minutes of your income, min $200,000 | Shop (**BEST VALUE**), Mega toast, the cash pill +, garage offer |
+| `CashSmall` | Cash Pack S | 49 | 3713838744 | $10,000. Overhaul: max($10k, 5 min of your passive income). Hidden from the Shop while the time packs are live (receipts still granted) | Shop, garage "short on cash" offer |
+| `CashMedium` | Cash Pack M | 149 | 3713838815 | $50,000. Overhaul: max($50k, 20 min). Hidden while the time packs are live (receipts still granted) | Shop, garage offer |
+| `CashLarge` | Cash Pack L | 399 | 3713838888 | $200,000. Overhaul: max($200k, 60 min). Hidden while the time packs are live (receipts still granted) | Shop, rebirth offer, garage offer |
+| `CashMega` | Cash Pack Mega | 799 | 3713838952 | $2,000,000. Overhaul: max($2M, 180 min). Hidden while the time packs are live (receipts still granted) | Shop (BEST OFFER), Mega toast |
+| `RecruitPack` | Recruit Pack | 49 | **0** until the owner OKs the price | JOB 41: cash + 2x cash for 30 min + the gold RECRUIT base trim. JOB 42: the cash = the 30-min pack amount while the time packs are live (else 30 min of income, $25k..$150k) | Offered once after the first capture or 10 min; Shop top row |
 | `StarterBundle` | Commander Starter Pack | 149 | 3713839505 | $50,000 + Auto Collect (or +$25,000 if already owned) | Shop, Army panel, starter offer (48 h) |
 | `PremiumPass` | Battle Pass Premium | 499 | 3713839151 | Battle Pass premium track | Shop, Battle Pass panel |
 | `SpeedBoost` | Speed Boost | 99 | 3713839342 | x2 walk speed, one time | Shop. Overhaul: also the base Speed stand and the death offer |

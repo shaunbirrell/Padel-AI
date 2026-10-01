@@ -89,7 +89,9 @@ _j41('s.Trigger == "capture"' in _dec and "O.OfferAfterPlaySeconds" in _dec and 
      "B: the offer is gated on the first capture OR 600 s of play, and never with Id 0")
 _j41("ClaimSoftOfferSlotRefundable" in _RPS and "profile.RecruitPackOffered = true" in _RPS, "B: through the existing soft-offer budget; once per profile (marked on 'shown')")
 _MSV = _j41_code(_SV + "Services/MonetizationService.luau")
-_j41('if productKey == "RecruitPack" then' in _MSV and "RecruitPackCash(perMin)" in _MSV and "CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult" in _MSV,
+# claude-bud JOB 42 part C changed this line (the cash now comes from RecruitPackCashFor: the 30-min time pack while TimePacks is
+# live, else this JOB 41 clamp); the pin follows it:
+_j41('if productKey == "RecruitPack" then' in _MSV and "RecruitPackCashFor(player.UserId, perMin)" in _MSV and "CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult" in _MSV,
      "B: the grant in ProcessReceipt (income-scaled cash, the ONE boost path)")
 _j41(_MSV.count("RecruitPackLiveFor(player.UserId)") >= 2, "B: the old Starter Pack pop-up (TrySoftOfferStarterBundle + ScheduleFirstOffer) is suppressed while the offer is live")
 import subprocess as _sp41b

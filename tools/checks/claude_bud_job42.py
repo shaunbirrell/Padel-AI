@@ -93,6 +93,17 @@ _VC = _j42_code(_CL + "Controllers/VehicleController.luau")
 _j42('keys = { "Cash15m", "Cash30m", "Cash1h", "Cash2h", "Cash4h" }' in _VC and "SOC.TimePacksShown(lp.UserId)" in _VC,
      "B: the garage 'Short on cash' picks the smallest time pack that covers the gap (else 4h, real amount)")
 
+# ── part C: the JOB 41 Recruit Pack follows the 30-min pack ──
+_MC3 = _j42_src(_CF + "MonetizationConfig.luau")
+_rp3 = [l for l in _MC3.splitlines() if "RecruitPack = {" in l]
+_j42(len(_rp3) == 1 and 'CashFromTimePack = "Cash30m"' in _rp3[0] and "Id = 0," in _rp3[0] and "RobuxPrice = 49," in _rp3[0],
+     "C: RecruitPack.CashFromTimePack = Cash30m; still Id 0 / 49 R$")
+_MSV3 = _j42_code(_SV + "Services/MonetizationService.luau")
+_rb = _MSV3.split('if productKey == "RecruitPack" then')[1][:900] if 'if productKey == "RecruitPack" then' in _MSV3 else ""
+_j42("MCx.RecruitPackCashFor(player.UserId, perMin)" in _rb and "if not player.Parent or DataService.GetProfile(player) ~= profile then" in _rb,
+     "C: the Recruit Pack cash = the time pack via RecruitPackCashFor, with the same lookup + re-check (no second formula)")
+_j42("return cfg.RecruitPackCash(perMin)" in _MC3 and "SO.TimePackAmount(key, perMin)" in _MC3, "C: OFF == the JOB 41 clamp exactly")
+
 _luau = _j42_os.environ.get("LUAU")
 if _luau is None and _j42_os.environ.get("LUAU_COMPILE"):
     _cand = _j42_os.environ["LUAU_COMPILE"].replace("luau-compile", "luau")

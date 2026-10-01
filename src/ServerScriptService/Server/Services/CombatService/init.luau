@@ -1753,6 +1753,68 @@ local function logUnitHit(attacker: Player, owner: Player?, model: Model, dmg: n
 	print(string.format("[ArmyUnitHit] %s -> %s's %s dmg=%.1f dealt=%.1f %s", attacker.Name, if owner then owner.Name else "?", model.Name, dmg, dealt, why))
 end
 
+--[[ claude-bud JOB 43: one army soldier's hit on an ENEMY army soldier (SquadOrdersService checked the LOS, rolled the hit
+	chance and spent the fire cooldown). THE shared army rule is re-checked here on every shot (ArmyHostility + the
+	attacker's own shield), then the owning squad confirms the model is a LIVE unit (unitHitHandler) and CombatService
+	applies the damage (the squad never deals raw damage: squadfair). A kill credits the owner: ARMY KILLS
+	(EngagementService.NoteArmyKill) + ArmyBrawl.KillXP, at most PairCreditPer10Min per owner pair. The victim's army
+	remembers the attacker (NoteArmyAggressor) and fights back. Returns (dealt, killed, reason). ]]
+local brawlCredit: { [string]: { At: number, N: number } } = {}
+function CombatService.ApplyUnitUnitHit(owner: Player, victimOwner: Player, unitModel: Instance, damage: number): (number, boolean, string)
+	if typeof(owner) ~= "Instance" or not owner:IsA("Player") or typeof(victimOwner) ~= "Instance" or not victimOwner:IsA("Player")
+		or typeof(unitModel) ~= "Instance" or not unitModel:IsA("Model") then
+		return 0, false, "bad_args"
+	end
+	if typeof(damage) ~= "number" or not (damage > 0) or damage == math.huge then
+		return 0, false, "bad_damage"
+	end
+	local may, why = CombatService.ArmyHostility(owner, victimOwner)
+	if may and not NS.allowsAttack(owner) then
+		may, why = false, "attacker_shielded"
+	end
+	if not may then
+		logUnitHit(owner, victimOwner, unitModel :: Model, damage, 0, "brawl " .. why)
+		return 0, false, why
+	end
+	if unitHitHandler == nil then
+		return 0, false, "no_handler"
+	end
+	local okH, uh = pcall(unitHitHandler :: any, owner, unitModel)
+	if not (okH and typeof(uh) == "Instance" and uh:IsA("Humanoid") and uh.Health > 0) then
+		return 0, false, "not_live"
+	end
+	local before = uh.Health
+	uh:TakeDamage(damage)
+	local dealt = math.max(0, before - uh.Health)
+	local killed = uh.Health <= 0
+	logUnitHit(owner, victimOwner, unitModel :: Model, damage, dealt, if killed then "brawl kill" else "brawl ok")
+	if dealt > 0 then
+		CombatService.NoteArmyAggressor(victimOwner, owner)
+	end
+	if killed then
+		local B: any = (ArmyConfig :: any).ArmyBrawl
+		local key = tostring(owner.UserId) .. ":" .. tostring(victimOwner.UserId)
+		local now = clock()
+		local c = brawlCredit[key]
+		if c == nil or now - c.At >= 600 then
+			c = { At = now, N = 0 }
+			brawlCredit[key] = c
+		end
+		if c.N < (tonumber(B and B.PairCreditPer10Min) or 30) then
+			c.N += 1
+			pcall(function()
+				(require(script.Parent.EngagementService) :: any).NoteArmyKill(owner)
+			end)
+			local xp = math.max(0, math.floor(tonumber(B and B.KillXP) or 0))
+			if xp > 0 and XPService and XPService.AddXP then
+				pcall(XPService.AddXP, owner, xp, "army_unit_kill")
+			end
+		end
+	end
+	return dealt, killed, if dealt > 0 then "ok" else "no_damage"
+end
+
+
 -- v133 tests / live probes: what a hit on this part resolves to ("Player" | "Unit" | "NPC" | "Vehicle" | "Gate" | "None")
 function CombatService._ResolveKind(inst: Instance): string
 	local kind = resolveTarget(inst)

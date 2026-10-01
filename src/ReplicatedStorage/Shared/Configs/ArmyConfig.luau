@@ -572,6 +572,17 @@ local ArmyConfig = {
 		NpcHitMarkersPerSecond = 4, -- the owner sees a hit marker / damage number for his army's NPC hits, this often at most
 		TracerMinGap = 0.15, -- ArmyConfig.ShotFx.PerArmyMinGap while on (more visible tracers; the per-recipient cap stays)
 	},
+	-- claude-bud JOB 43: ARMY VS ARMY BRAWL (Modules/ArmyBrawl). Enemy soldiers are targets too (players first), under
+	-- CombatService.ArmyHostility, re-checked per shot (CombatService.ApplyUnitUnitHit). Owner-first by the SHOOTING
+	-- army's owner; OFF = today (soldiers ignore enemy soldiers).
+	ArmyBrawl = {
+		Enabled = true,
+		OwnerFirst = true,
+		UnitDamageMult = 1, -- x OrdersConfig.AttackDamage (research-scaled) per soldier hit on an enemy soldier
+		MaxCandidates = 8, -- the nearest enemy soldiers considered per think pass
+		KillXP = 10, -- XP to the owner per enemy soldier killed by his army
+		PairCreditPer10Min = 30, -- at most this many credited soldier kills (XP + ARMY KILLS) per owner pair per 10 min
+	},
 	ArmyCombat = {
 		Enabled = true,
 		TargetPlayers = true,

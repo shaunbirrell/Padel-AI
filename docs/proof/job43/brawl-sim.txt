@@ -1,0 +1,14 @@
+# run_army_brawl_test.py (2026-10-01T08:28Z; static trace + headless luau: NOT Roblox. The 2-player Studio test is owed.)
+BEFORE (origin/phase-7-polish): nearestHostile skips OwnerUserId models=True; ATTACK candidate kinds=['Guard', 'NPC', 'Player']; FOLLOW/HOLD defend kinds=['Player']
+AFTER  (working tree):          ATTACK candidate kinds=['Guard', 'NPC', 'Player', 'Unit']; FOLLOW/HOLD defend kinds=['Player', 'Unit']; Unit shot path=True
+ok    ROOT CAUSE: before the fix an enemy soldier is never a candidate (NPCs skip OwnerUserId; ATTACK = NPC/Player/Guard; FOLLOW = Player)
+ok    FIX: enemy soldiers are candidates in both picks and the shot routes to ApplyUnitUnitHit
+candidates: owners 2,4,2 dists 10,12,30
+ok    enemy soldiers in reach, nearest first (B 10, D 12, B 30); own squad, clan mate, dead, far and departed owners never
+ok    capped at MaxCandidates
+ok    a protected (novice / new-player) owner's soldiers are never targeted
+ok    PvP off: no soldier is ever a target
+ok    after the enemy player dies his soldiers are still targets: the brawl goes on
+ok    ArmyBrawl Enabled, owner-first (Studio: live for every test player)
+ARMY BRAWL LUA: 0 failed
+ARMY BRAWL TEST: 0 failed

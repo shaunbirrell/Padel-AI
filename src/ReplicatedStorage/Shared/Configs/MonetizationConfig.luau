@@ -460,7 +460,7 @@ local MonetizationConfig = {
 		Cash1h = { Id = 0, DisplayName = "1 Hour of Cash", RobuxPrice = 89, Cash = 50000, Gold = 0 },
 		Cash2h = { Id = 0, DisplayName = "2 Hours of Cash", RobuxPrice = 159, Cash = 100000, Gold = 0 },
 		Cash4h = { Id = 0, DisplayName = "4 Hours of Cash", RobuxPrice = 279, Cash = 200000, Gold = 0 },
-		RecruitPack = { Id = 0, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, Description = "Cash, 2x cash for 30 min and a gold base trim" },
+		RecruitPack = { Id = 0, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, CashFromTimePack = "Cash30m", Description = "Cash, 2x cash for 30 min and a gold base trim" }, -- claude-bud JOB 42 C: cash = the 30-min pack while TimePacks is live
 		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
 		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
 		Nuke = {
@@ -963,6 +963,28 @@ cfg.RecruitPackOffer = {
 
 function cfg.RecruitPackLiveFor(userId: any): boolean
 	return (require(script.Parent.RetentionConfig) :: any).Live(cfg.RecruitPackOffer, userId)
+end
+
+-- claude-bud JOB 42 part C: the Recruit Pack's cash for a player: the CashFromTimePack time pack's amount (no cap, the
+-- Cash30m floor = MinCash) while TimePacks is live for him, else the JOB 41 clamp below (OFF == OLD). One formula each.
+function cfg.RecruitPackCashFor(userId: any, perMin: number): number
+	local key = cfg.DevProducts.RecruitPack.CashFromTimePack
+	local okS, SO = pcall(function(): any
+		return (require :: any)(script.Parent.ShopOverhaulConfig) -- (any: breaks the static cycle with ShopOverhaulConfig for the type checker)
+	end)
+	if okS and SO and typeof(key) == "string" and SO.TimePacks.Packs[key] ~= nil and SO.TimePacksLiveFor(userId) then
+		return SO.TimePackAmount(key, perMin) or cfg.RecruitPackCash(perMin)
+	end
+	return cfg.RecruitPackCash(perMin)
+end
+
+-- true when the Recruit Pack's cash follows a time pack for this player (the income then leaves out timed boosts)
+function cfg.RecruitPackUsesTimePack(userId: any): boolean
+	local key = cfg.DevProducts.RecruitPack.CashFromTimePack
+	local okS, SO = pcall(function(): any
+		return (require :: any)(script.Parent.ShopOverhaulConfig) -- (any: breaks the static cycle with ShopOverhaulConfig for the type checker)
+	end)
+	return okS and SO ~= nil and typeof(key) == "string" and SO.TimePacks.Packs[key] ~= nil and SO.TimePacksLiveFor(userId) == true
 end
 
 -- the pack's cash for an income of `perMin` $/min (clamped; never below MinCash)

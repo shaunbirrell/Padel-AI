@@ -1857,11 +1857,15 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 	-- claude-bud JOB 41 part B: the Recruit Pack's cash = RecruitPackOffer.IncomeMinutes of his income, clamped
 	-- ($25k..$150k); computed here (the lookup may yield) and re-checked, before any mutation
 	if productKey == "RecruitPack" then
-		local perMin = MonetizationService.PassivePerMin(player, profile)
+		-- claude-bud JOB 42 part C: while TimePacks is live for him, the cash = the 30-min pack (CashFromTimePack, the same
+		-- income lookup with timed boosts left out); else the JOB 41 clamp exactly
+		local MCx: any = MonetizationConfig
+		local useTime = MCx.RecruitPackUsesTimePack(player.UserId)
+		local perMin = MonetizationService.PassivePerMin(player, profile, useTime and ShopOverhaulConfig.TimePacks.ExcludeTimedBoosts == true)
 		if not player.Parent or DataService.GetProfile(player) ~= profile then
 			return Enum.ProductPurchaseDecision.NotProcessedYet
 		end
-		cashGrant = nonNegInt((MonetizationConfig :: any).RecruitPackCash(perMin))
+		cashGrant = nonNegInt(MCx.RecruitPackCashFor(player.UserId, perMin))
 	end
 	local fallbackCash = nonNegInt(product.StarterFallbackCash)
 	if fallbackCash > 0 then

@@ -60,6 +60,7 @@ local FormationController = require(Shared.Util.FormationController) -- claude-b
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local ArmyState = require(script.Parent.Parent.Modules.ArmyState) -- Code Bot army command bug: THE army state (one writer)
 local ArmyCommand = require(script.Parent.Parent.Modules.ArmyCommand) -- Code Bot: the live owner's one command path
+local ArmyBrawl = require(script.Parent.Parent.Modules.ArmyBrawl) -- claude-bud JOB 43: enemy soldiers are targets too
 
 local SquadOrdersService = {}
 -- v90 (Code Bot): the army despawn fix (Follow / Recover / Gate blocks) is live only for owners with
@@ -2883,12 +2884,30 @@ local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart?,
 			table.clear(guardBuf)
 		end
 	end
+	-- claude-bud JOB 43: ARMY VS ARMY. Enemy soldiers are candidates of their own ("Unit") under THE shared army rule
+	-- (CombatService.ArmyHostility); the old pick never had them (nearestHostile skips OwnerUserId models), so the fight
+	-- stopped when the enemy player died. Players keep their tier (PreferPlayers); soldiers sit with the NPCs.
+	local nUnit = 0
+	if ArmyBrawl.LiveFor(player.UserId) and CombatService and CombatService.ArmyHostility then
+		local B = ArmyBrawl.Config()
+		for _, c in ipairs(ArmyBrawl.Candidates(player, squadByUser :: any, centre, reach, CombatService.ArmyHostility, B and B.MaxCandidates)) do
+			if consider(c.Hum, c.Root, "Unit", c.Owner, 0) then
+				nUnit += 1
+			end
+		end
+		if dlines then
+			table.insert(dlines, string.format("enemy soldiers: %d", nUnit))
+		end
+	end
 	local cur = (st :: any)._acTarget
 	if cur and flatDist(cur.Root.Position, centre) <= reach then
 		local stillOk = true
 		if cur.Kind == "Player" and cur.Player and CombatService and CombatService.UnitMayHitPlayer then
 			local okM, may = pcall(CombatService.UnitMayHitPlayer, player, cur.Player)
 			stillOk = okM and may == true
+		elseif cur.Kind == "Unit" and cur.Player and CombatService and CombatService.ArmyHostility then
+			local okM, may = pcall(CombatService.ArmyHostility, player, cur.Player) -- claude-bud JOB 43
+			stillOk = okM and may == true and ArmyBrawl.LiveFor(player.UserId)
 		end
 		if stillOk then
 			-- (the current one counts even when more than candCap() others are nearer; a player keeps his tier)
@@ -2977,7 +2996,7 @@ local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: Base
 	end
 	unit.LastFireAt = now
 	local kind = if part ~= tgt.Root and part:GetAttribute("GateGuardPart") ~= true then "Gate" else tgt.Kind
-	local name = if tgt.Player then tgt.Player.Name elseif kind == "Gate" then "gate" else "guard"
+	local name = if tgt.Player then tgt.Player.Name .. (if kind == "Unit" then "'s soldier" else "") elseif kind == "Gate" then "gate" else "guard"
 	local base = armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player) -- claude-bud JOB 29 boost; JOB 39 elite
 	if rng:NextNumber() >= unitHitChance((part.Position - unit.Root.Position).Magnitude) then
 		hitLog(player, unit, kind, name, 0, 0, "miss")
@@ -3004,6 +3023,19 @@ local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: Base
 		hitLog(player, unit, kind, name, dmg, d, if ok then tostring(why) else "error")
 		return d > 0
 	end
+	if kind == "Unit" then
+		-- claude-bud JOB 43: an enemy soldier: CombatService re-checks THE shared army rule and deals the damage
+		local B = ArmyBrawl.Config()
+		local dmg = base * (tonumber(B and B.UnitDamageMult) or 1)
+		local model = tgt.Hum.Parent
+		if model == nil or CombatService == nil or CombatService.ApplyUnitUnitHit == nil then
+			return false
+		end
+		local ok, dealt, killed, why = pcall(CombatService.ApplyUnitUnitHit, player, tgt.Player, model, dmg)
+		local d = if ok then tonumber(dealt) or 0 else 0
+		hitLog(player, unit, kind, name, dmg, d, if ok then (if killed then "kill" else tostring(why)) else "error")
+		return d > 0
+	end
 	local gd = gateSvc()
 	if gd == nil or gd.ApplyUnitDamage == nil then
 		return false
@@ -3024,8 +3056,9 @@ local function attackAimOnly(player: Player, st: SquadState, unit: SquadUnit, no
 		return
 	end
 	local band = (OrdersConfig.AttackRange or 55) * 0.85 -- the fire band, as attackUnit
-	if tgt.Kind == "Player" or tgt.Kind == "Guard" or tgt.Kind == "Structure" then
+	if tgt.Kind == "Player" or tgt.Kind == "Guard" or tgt.Kind == "Structure" or tgt.Kind == "Unit" then
 		-- JOB 24 §2: an enemy player / base defender: shoot it in sight, else the gate in the way (ShootGates)
+		-- claude-bud JOB 43: "Unit" = an enemy army soldier (same LOS rule, hit chance and fire rate)
 		-- claude-bud JOB 38: "Structure" = a SEND siege's turret / gate part (ArmyPlan), shot through the same path
 		if losCheckDue(unit, now) then
 			local d = (tgt.Root.Position - unit.Root.Position).Magnitude
@@ -3157,11 +3190,32 @@ local function pickDefendTarget(player: Player, st: SquadState, proot: BasePart)
 			end
 		end
 	end
+	-- claude-bud JOB 43: no enemy player to engage -> the nearest enemy SOLDIER in reach (the brawl goes on after the
+	-- enemy player dies, until one army is wiped or out of reach)
+	if best == nil and ArmyBrawl.LiveFor(player.UserId) and CombatService.ArmyHostility then
+		local B = ArmyBrawl.Config()
+		local list = ArmyBrawl.Candidates(player, squadByUser :: any, centre, r0, CombatService.ArmyHostility, B and B.MaxCandidates)
+		local pick = list[1]
+		if cur and cur.Kind == "Unit" then
+			for _, c in ipairs(list) do
+				if c.Hum == cur.Hum then
+					pick = c -- sticky: keep shooting the same soldier while it is in reach
+				end
+			end
+		end
+		if pick then
+			best = { Hum = pick.Hum, Root = pick.Root, Kind = "Unit", Player = pick.Owner, Aggressor = false }
+			if logDue and acm ~= nil and acm.DebugFor ~= nil and acm.DebugFor(player) then
+				dlines = dlines or {}
+				table.insert(dlines :: { string }, string.format("enemy soldier of %s d=%.0f (%d in reach)", pick.Owner.Name, pick.Dist, #list))
+			end
+		end
+	end
 	(st :: any)._defTarget = best
 	if dlines then
 		defendLogAt[player.UserId] = now
 		print(string.format("[ArmyDefend] %s order=%s units=%d pick=%s | %s", player.Name, tostring(st.Order), cnt,
-			if best then best.Player.Name .. (if best.Aggressor then " (aggressor)" else "") else "none", table.concat(dlines :: { string }, " ; ")))
+			if best then best.Player.Name .. (if best.Kind == "Unit" then "'s soldier" elseif best.Aggressor then " (aggressor)" else "") else "none", table.concat(dlines :: { string }, " ; ")))
 	end
 end
 

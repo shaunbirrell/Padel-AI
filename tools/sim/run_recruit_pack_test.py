@@ -187,6 +187,9 @@ do
 end
 
 -- 3. the grant
+-- JOB 41: TimePacks OFF -> the JOB 41 clamp (claude-bud JOB 42 part C keeps it exactly when off)
+local SOx = require(node("Shared/Configs/ShopOverhaulConfig"))
+SOx.TimePacks.Enabled = false
 for _, lvl in ipairs({ { 0, 25000 }, { 2000, 60000 }, { 9000, 150000 } }) do
   PERMIN = lvl[1]
   local MS, RPS, cash = fresh(999)
@@ -203,6 +206,35 @@ for _, lvl in ipairs({ { 0, 25000 }, { 2000, 60000 }, { 9000, 150000 } }) do
     for _, c in ipairs(cash) do if c.Why == "devproduct" then again += c.N end end
     check(again == paid and #BOOSTS == 1, "idempotent per PurchaseId (a re-delivered receipt grants nothing)")
   end
+end
+PERMIN = 500
+
+-- claude-bud JOB 42 part C: TimePacks live for him -> the cash = TimePackAmount("Cash30m") (no 150k cap, the 25k floor)
+SOx.TimePacks.Enabled = true
+for _, inc in ipairs({ 0, 500, 2000, 9000 }) do
+  PERMIN = inc
+  local MS, RPS, cash = fresh(999)
+  local p, pr = join(OWNER)
+  local perMin = MS.PassivePerMin(p, pr, true)
+  MS.ProcessReceipt({ PlayerId = OWNER, ProductId = 999, PurchaseId = "rt-" .. inc, CurrencySpent = 49 })
+  local paid = 0
+  for _, c in ipairs(cash) do if c.Why == "devproduct" then paid += c.N end end
+  local want = SOx.TimePackAmount("Cash30m", perMin)
+  check(paid == want and (inc ~= 9000 or paid > 150000), string.format("TimePacks live, $%d/min: Recruit Pack cash $%d == the 30 MIN OF CASH amount $%d", inc, paid, want))
+  if inc == 2000 then
+    check(#BOOSTS == 1 and BOOSTS[1].Min == 30 and pr.Entitlements.RecruitPack == true, "live: the boost and the trim still grant")
+  end
+end
+check(row.Id == 999 or row.Id == 0, "the row keeps its Id (0 in config) and 49 R$: " .. tostring(MC.DevProducts.RecruitPack.RobuxPrice))
+-- the card shows the same live number as the 30 MIN OF CASH row
+do
+  PERMIN = 2000
+  local MS, RPS = fresh(999)
+  local p, pr = join(OWNER)
+  hookClient("shown")
+  NOW += 130
+  RPS.OnCapture(p); RPS.Step(p); NOW += 5; RPS.Step(p)
+  check(LASTOFFER ~= nil and LASTOFFER.Cash == SOx.TimePackAmount("Cash30m", MS.PassivePerMin(p, pr, true)), "the card's $ = the 30 MIN OF CASH amount ($" .. tostring(LASTOFFER and LASTOFFER.Cash) .. ")")
 end
 PERMIN = 500
 

@@ -167,7 +167,9 @@ function RecruitPackService.Step(player: Player): (boolean, string)
 	s.Slot = slot
 	s.Tries += 1
 	s.Awaiting = true
-	local perMin = if MS.PassivePerMin then MS.PassivePerMin(player, profile) else 0
+	-- claude-bud JOB 42 part C: the card shows the same number as the 30 MIN OF CASH row while TimePacks is live
+	local useTime = MC.RecruitPackUsesTimePack(player.UserId)
+	local perMin = if MS.PassivePerMin then MS.PassivePerMin(player, profile, useTime) else 0
 	local price = MC.DevProducts.RecruitPack.RobuxPrice
 	local okLP, LP = pcall(function(): any
 		return require(Shared.Util.LivePrices)
@@ -184,7 +186,7 @@ function RecruitPackService.Step(player: Player): (boolean, string)
 		(ev :: RemoteEvent):FireClient(player, "RecruitPackOffer", {
 			ProductKey = "RecruitPack",
 			ProductId = productId(),
-			Cash = MC.RecruitPackCash(perMin), -- the real number for him right now (the receipt recomputes it)
+			Cash = MC.RecruitPackCashFor(player.UserId, perMin), -- the real number for him right now (the receipt recomputes it)
 			RobuxPrice = price,
 			Trigger = why,
 		})

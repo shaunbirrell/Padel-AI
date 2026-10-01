@@ -9983,3 +9983,19 @@ ds_territories.luau T3):
 - **Ready rule:** the Shop swaps only when all five Ids are set (TimePacksReady), so a live player never sees an empty
   cash section.
 - **Paid receipts:** any receipt of a time-pack Id is granted the real amount, live flag or not.
+
+## 2026-10-01 — claude-bud JOB 42 parts B-D: time packs in the Shop, the Recruit Pack, docs
+- **Recruit Pack vs Cash30m:** the Recruit Pack stays clearly better than buying Cash30m alone. It costs the same 49 R$
+  for the same cash, plus the 2x 30-min boost and the gold trim.
+- **Garage offer:** when no time pack covers the gap, it offers Cash4h with its REAL amount (never an inflated number).
+- **Studio preview:** in Studio a live player sees the time rows with "SOON" while the Ids are 0, so the layout can be
+  tested. Live servers never show an Id-0 row.
+- **The 4h amount:** uncapped (up to 2^53). Capping it is an open question for the owner.
+
+## 2026-10-01 — claude-bud JOB 43: army vs army brawl
+- **Owner-first:** owner-first by the SHOOTING army's owner, so OFF equals today. In Studio every test player is live,
+  so both armies brawl in the 2-player test.
+- **Hostility:** "safe zones / post-raid protection" use THE shared army rule as it is (ArmyHostility + the attacker's
+  shield). The JOB 38 post-raid ArmyProtectUntil protects a BASE from SENDs; it does not make field armies immune.
+- **Credit cap:** the per-pair credit cap (30 per 10 min) stops two friends farming XP / ARMY KILLS by brawling
+  respawning soldiers.
