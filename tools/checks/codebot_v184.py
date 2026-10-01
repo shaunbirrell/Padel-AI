@@ -66,12 +66,12 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 201)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 201)'),
-    (S + "Services/DataService.luau", "WE_Build=201"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 201)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/DataService.luau", "WE_Build=202"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
 ):
-    check(needle in read(rel), "CODEBOT v184: WE_Build=201 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v184: WE_Build=202 " + rel.rsplit("/", 1)[-1])
 
 AOC = read(C + "ArmyOrdersConfig.luau")
 ar = AOC.split("AttackRange = {")[1].split("\n\t},\n")[0] if "AttackRange = {" in AOC else ""

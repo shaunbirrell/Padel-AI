@@ -9,6 +9,25 @@ import re
 import subprocess
 from pathlib import Path
 
+# claude-bud JOB 66 (2026-10-01): the ONLY MonetizationConfig change allowed past this ship guard is the Shaun-approved
+# JOB 66 block (the two 5 R$ starter rows, the Starter5 switch, the SkuLiveFor LiveBlock lines), removed exactly here
+# before the byte-identical compare. Everything else in the file must still match.
+def _bud_j66(t):
+    t = (t or "").replace("\r\n", "\n")
+    a = t.find("\t-- claude-bud JOB 66 (price approved by Shaun")
+    if a >= 0:
+        b = t.find("\n", t.find("\tBoost2x10m = {", a)) + 1
+        t = t[:a] + t[b:]
+    a = t.find("-- claude-bud JOB 66: the two 5 R$ starter products")
+    if a >= 0:
+        t = t[:a] + t[t.find("function MonetizationConfig.SkuLiveFor", a):]
+    a = t.find("\t-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock)")
+    if a >= 0:
+        b = t.find("\tend\n", a) + len("\tend\n")
+        t = t[:a] + t[b:]
+    return t
+
+
 ROOT = Path.cwd()
 PREV = os.environ.get("CODEBOT_V200_PREV", "8a77631")  # v199 tip (place 197)
 C = "src/ReplicatedStorage/Shared/Configs/"
@@ -36,12 +55,12 @@ def _v200(cond, label):
 
 
 for _rel, _needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 201)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 201)'),
-    (S + "Services/DataService.luau", "WE_Build=201"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 201)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/DataService.luau", "WE_Build=202"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
 ):
-    _v200(_needle in _v200_read(_rel), "WE_Build=201 " + _rel.rsplit("/", 1)[-1])
+    _v200(_needle in _v200_read(_rel), "WE_Build=202 " + _rel.rsplit("/", 1)[-1])
 
 _VA = _v200_read(C + "VisualAssetConfig.luau")
 _j = _VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in _VA else ""
@@ -78,7 +97,7 @@ _v200("if template and not prepareAimTemplate(template, assetId, yawDeg) then" i
 _v200_bud = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()
 _mon = _v200_read(C + "MonetizationConfig.luau")
 _pm = _v200_shipped(C + "MonetizationConfig.luau", PREV)
-_v200(_v200_bud or (_pm is not None and _pm == _mon), "MonetizationConfig byte-identical to " + PREV + " (no price changes)" + (" [bud branch: ship-only, skipped]" if _v200_bud else ""))
+_v200(_v200_bud or (_pm is not None and _bud_j66(_pm) == _bud_j66(_mon)), "MonetizationConfig byte-identical to " + PREV + " (no price changes; JOB 66 block allowed)" + (" [bud branch: ship-only, skipped]" if _v200_bud else ""))
 _v200("PreferMesh = true" not in _VA, "PreferMesh stays OFF (VisualAssetConfig)")
 _v200("PreferMeshWhenAssetIdSet = false" in _v200_read(C + "StructureVisualConfig.luau"), "PreferMeshWhenAssetIdSet false")
 _v200('"StreamingEnabled": true' not in _v200_read("default.project.json"), "StreamingEnabled stays OFF")

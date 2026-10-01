@@ -8,6 +8,25 @@ import re
 import subprocess
 from pathlib import Path
 
+# claude-bud JOB 66 (2026-10-01): the ONLY MonetizationConfig change allowed past this ship guard is the Shaun-approved
+# JOB 66 block (the two 5 R$ starter rows, the Starter5 switch, the SkuLiveFor LiveBlock lines), removed exactly here
+# before the byte-identical compare. Everything else in the file must still match.
+def _bud_j66(t):
+    t = (t or "").replace("\r\n", "\n")
+    a = t.find("\t-- claude-bud JOB 66 (price approved by Shaun")
+    if a >= 0:
+        b = t.find("\n", t.find("\tBoost2x10m = {", a)) + 1
+        t = t[:a] + t[b:]
+    a = t.find("-- claude-bud JOB 66: the two 5 R$ starter products")
+    if a >= 0:
+        t = t[:a] + t[t.find("function MonetizationConfig.SkuLiveFor", a):]
+    a = t.find("\t-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock)")
+    if a >= 0:
+        b = t.find("\tend\n", a) + len("\tend\n")
+        t = t[:a] + t[b:]
+    return t
+
+
 ROOT = Path.cwd()
 PREV = os.environ.get("CODEBOT_V199_PREV", "22befca")  # v198 code tip (place 196)
 C = "src/ReplicatedStorage/Shared/Configs/"
@@ -38,12 +57,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 201)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 201)'),
-    (S + "Services/DataService.luau", "WE_Build=201"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 201)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/DataService.luau", "WE_Build=202"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
 ):
-    check(needle in read(rel), "CODEBOT v199: WE_Build=201 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v199: WE_Build=202 " + rel.rsplit("/", 1)[-1])
 
 VA = read(C + "VisualAssetConfig.luau")
 j67 = VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in VA else ""
@@ -87,7 +106,7 @@ check(not any("ExperienceNotify" in n for n in names), "CODEBOT v199: no Experie
 
 MON = read(C + "MonetizationConfig.luau")
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev_mon is not None and prev_mon == MON, "CODEBOT v199: MonetizationConfig byte-identical to " + PREV)
+check(prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON), "CODEBOT v199: MonetizationConfig byte-identical to " + PREV)
 
 check("PreferMesh = true" not in VA, "CODEBOT v199: PreferMesh stays OFF (VisualAssetConfig)")
 check("PreferMeshWhenAssetIdSet = false" in read(C + "StructureVisualConfig.luau"),

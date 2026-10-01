@@ -8735,6 +8735,10 @@ local MonetizationConfig = {
 		Cash2h = { Id = 3715776582, DisplayName = "2 Hours of Cash", RobuxPrice = 159, Cash = 100000, Gold = 0 },
 		Cash4h = { Id = 3715776616, DisplayName = "4 Hours of Cash", RobuxPrice = 279, Cash = 200000, Gold = 0 },
 		RecruitPack = { Id = 3715776659, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, CashFromTimePack = "Cash30m", Description = "Cash, 2x cash for 30 min and a gold base trim" }, -- claude-bud JOB 42 C: cash = the 30-min pack while TimePacks is live
+	-- claude-bud JOB 66 (price approved by Shaun 2026-10-01 22:13 Dublin: 5 R$ each). Id 0 until Code Bot creates the
+	-- products (turn OFF managed / dynamic pricing on both so they stay 5 R$). LiveBlock = owner-first switch (cfg.Starter5).
+	StarterRecruit5 = { Id = 0, DisplayName = "Recruit Starter Pack", RobuxPrice = 5, Cash = 0, Gold = 0, GrantEntitlement = "StarterRecruit5", OneTime = true, GrantSoldiers = 3, StarterCash = true, LiveBlock = "Starter5", Description = "3 soldiers join your army + starter cash (one time)" },
+	Boost2x10m = { Id = 0, DisplayName = "2x Income 10 min", RobuxPrice = 5, Cash = 0, Gold = 0, GrantsCashBoostMinutes = 10, LiveBlock = "Starter5", Description = "2x earned income for 10 minutes (buy again to extend)" },
 		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
 		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
 		Nuke = {
@@ -9166,7 +9170,36 @@ function MonetizationConfig.VIPPerksLiveFor(userId: any): boolean
 end
 
 -- claude-bud: is this SKU key on sale / effective for this player under Rollout. Keys outside RolloutKeys are always live.
+-- claude-bud JOB 66: the two 5 R$ starter products (owner-first; the one-time offer after ~5 min of play)
+(MonetizationConfig :: any).Starter5 = {
+	Enabled = true,
+	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 66): only Shaun until his phone test
+	OfferAfterPlaySeconds = 300, -- the "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
+	CashIncomeMinutes = 2.5, -- the Recruit Starter Pack's cash = about 2-3 minutes of his early income ...
+	CashMin = 750, -- ... at least this (a brand-new base earns about $300 / min)
+	CashMax = 20000, -- ... and never more (a starter pack, not a cash pack)
+	BoostMult = 2, -- the 10-minute boost (CodesService.GrantCashBoost: extends a running one)
+	Title = "5 R$ ONE-TIME OFFER",
+	Lines = { Soldiers = "3 soldiers join your army", Cash = "$%s starter cash", Boost = "2x income 10 min: in the Shop" },
+}
+
+function MonetizationConfig.Starter5LiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live((MonetizationConfig :: any).Starter5, userId)
+end
+
+-- the Recruit Starter Pack cash for an income of perMin (pure)
+function MonetizationConfig.Starter5Cash(perMin: number): number
+	local S = (MonetizationConfig :: any).Starter5
+	return math.clamp(math.floor(S.CashIncomeMinutes * math.max(0, tonumber(perMin) or 0) + 0.5), S.CashMin, S.CashMax)
+end
+
 function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean
+	-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock) follows that switch
+	local row: any = (MonetizationConfig.DevProducts :: any)[key]
+	if row and typeof(row.LiveBlock) == "string" then
+		local block = (MonetizationConfig :: any)[row.LiveBlock]
+		return (require(script.Parent.RetentionConfig) :: any).Live(block, userId)
+	end
 	if not (MonetizationConfig.RolloutKeys :: any)[key] then
 		return true
 	end
@@ -31631,7 +31664,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 201)
+		player:SetAttribute("WE_Build", 202)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -50986,6 +51019,7 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	end
 	-- claude-bud JOB 41 part B: the Recruit Pack card was shown (once per profile)
 	profile.RecruitPackOffered = if profile.RecruitPackOffered == true then true else nil
+	profile.Starter5Offered = if profile.Starter5Offered == true then true else nil -- claude-bud JOB 66: the 5 R$ card was shown
 	-- claude-bud JOB 50 A: the zone runs (cooldowns / bests / first clears per zone id), the bunker banner, the title
 	for _, key in ipairs({ "ZoneRunAt", "ZoneBest", "ZoneFirstClear" }) do
 		local t = profile[key]
@@ -77634,7 +77668,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 201)
+			player:SetAttribute("WE_Build", 202)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -86341,7 +86375,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 201)
+		player:SetAttribute("WE_Build", 202)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -86483,7 +86517,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=201",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=202",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -100950,6 +100984,33 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 	for _, ent in ipairs(entitlements) do
 		MonetizationService.GrantEntitlement(player, ent)
 	end
+	-- claude-bud JOB 66: the 5 R$ products. Soldiers through SoldierService.GrantFree (within the army cap, no yield),
+	-- the starter cash (worked out from his income, "devproduct": never multiplied), the 10-minute 2x boost through the
+	-- ONE boost path (CodesService.GrantCashBoost: extends a running boost). All before markProcessed, like every grant.
+	if product.GrantSoldiers then
+		local okS, SS = pcall(function(): any
+			return require(script.Parent.SoldierService)
+		end)
+		if okS and SS and SS.GrantFree then
+			local okG, n = pcall(SS.GrantFree, player, math.floor(tonumber(product.GrantSoldiers) or 0), "starter_pack")
+			print(string.format("[STARTER5] %s soldiers +%s", player.Name, tostring(if okG then n else "FAILED")))
+		end
+	end
+	if product.StarterCash then
+		local perMin = if MonetizationService.PassivePerMin then MonetizationService.PassivePerMin(player, profile, true) else 0
+		local cash = (MonetizationConfig :: any).Starter5Cash(perMin)
+		EconomyService.AddCash(player, cash, "devproduct")
+		print(string.format("[STARTER5] %s cash +%d (perMin %d)", player.Name, cash, math.floor(perMin)))
+	end
+	if typeof(product.GrantsCashBoostMinutes) == "number" and product.GrantsCashBoostMinutes > 0 then
+		local okC, CS = pcall(function(): any
+			return require(script.Parent.CodesService)
+		end)
+		if okC and CS and CS.GrantCashBoost then
+			local okB, untilUnix = pcall(CS.GrantCashBoost, player, product.GrantsCashBoostMinutes, (MonetizationConfig :: any).Starter5.BoostMult)
+			print(string.format("[STARTER5] %s boost %s (until %s)", player.Name, if okB then "granted" else "FAILED", tostring(untilUnix)))
+		end
+	end
 	-- claude-bud JOB 41 part B: the Recruit Pack's 2x cash boost through the ONE boost path (CodesService.GrantCashBoost:
 	-- stacks like codes, capped at CashBoostMaxMinutes; it only mutates the profile, no yield)
 	if productKey == "RecruitPack" then
@@ -112288,7 +112349,7 @@ local MC: any = MonetizationConfig
 local O: any = MC.RecruitPackOffer
 local deps: { [string]: any } = {}
 
-type Session = { Trigger: string?, Tries: number, NextAt: number, Awaiting: boolean, LastAccrue: number, Slot: any?, ShownAt: number? }
+type Session = { Trigger: string?, Tries: number, NextAt: number, Awaiting: boolean, LastAccrue: number, Slot: any?, ShownAt: number?, Key: string? }
 local sessions: { [number]: Session } = {}
 
 RecruitPackService._clock = os.clock -- tests replace these
@@ -112334,7 +112395,7 @@ function RecruitPackService.Decide(s: any): (boolean, string)
 	local why: string? = nil
 	if s.Trigger == "capture" then
 		why = "capture"
-	elseif (tonumber(s.PlaySeconds) or 0) >= O.OfferAfterPlaySeconds then
+	elseif (tonumber(s.PlaySeconds) or 0) >= (tonumber(s.AfterSeconds) or O.OfferAfterPlaySeconds) then
 		why = "playtime"
 	end
 	if why == nil then
@@ -112402,11 +112463,18 @@ function RecruitPackService.Step(player: Player): (boolean, string)
 		return false, "wait"
 	end
 	local RS = deps.RetentionService
+	-- claude-bud JOB 66: where the 5 R$ starter offer is live for him, THAT is his one-time offer (at ~5 min of play);
+	-- everyone else keeps the Recruit Pack offer exactly as before
+	-- (only once the 5 R$ product exists: with Id 0 he keeps the Recruit Pack offer, never no offer at all)
+	local row5: any = MC.DevProducts.StarterRecruit5
+	local s5 = (tonumber(row5 and row5.Id) or 0) ~= 0 and MC.Starter5LiveFor(player.UserId)
+	s.Key = if s5 then "StarterRecruit5" else "RecruitPack"
 	local offer, why = RecruitPackService.Decide({
-		Live = MC.RecruitPackLiveFor(player.UserId),
-		ProductId = productId(),
-		Offered = profile.RecruitPackOffered == true,
-		Owned = hasPack(player, profile),
+		Live = if s5 then true else MC.RecruitPackLiveFor(player.UserId),
+		ProductId = if s5 then (tonumber(row5.Id) or 0) else productId(),
+		Offered = if s5 then profile.Starter5Offered == true else profile.RecruitPackOffered == true,
+		Owned = if s5 then player:GetAttribute("WE_Ent_StarterRecruit5") == true else hasPack(player, profile),
+		AfterSeconds = if s5 then MC.Starter5.OfferAfterPlaySeconds else nil,
 		Tries = s.Tries,
 		Trigger = s.Trigger,
 		PlaySeconds = if typeof(profile.Stats) == "table" then profile.Stats.PlayTimeSeconds else 0,
@@ -112444,7 +112512,18 @@ function RecruitPackService.Step(player: Player): (boolean, string)
 	end
 	local rs = deps.RemoteSetup
 	local ev = rs and rs.Get(Constants.RemoteNames.FeaturePush)
-	if ev and ev:IsA("RemoteEvent") then
+	if s5 and ev and ev:IsA("RemoteEvent") then -- claude-bud JOB 66: the 5 R$ card (same card, its own lines)
+		local L = MC.Starter5.Lines
+		local perMin5 = if MS.PassivePerMin then MS.PassivePerMin(player, profile, true) else 0
+		(ev :: RemoteEvent):FireClient(player, "RecruitPackOffer", {
+			ProductKey = "StarterRecruit5",
+			ProductId = tonumber(row5.Id) or 0,
+			RobuxPrice = row5.RobuxPrice,
+			Title = MC.Starter5.Title,
+			Lines = { L.Soldiers, string.format(L.Cash, tostring(MC.Starter5Cash(perMin5))), L.Boost },
+			Trigger = why,
+		})
+	elseif ev and ev:IsA("RemoteEvent") then
 		(ev :: RemoteEvent):FireClient(player, "RecruitPackOffer", {
 			ProductKey = "RecruitPack",
 			ProductId = productId(),
@@ -112482,7 +112561,11 @@ function RecruitPackService.Result(player: Player, result: any): boolean
 	end
 	if result == "shown" then
 		s.ShownAt = RecruitPackService._clock()
-		profile.RecruitPackOffered = true
+		if s.Key == "StarterRecruit5" then
+			profile.Starter5Offered = true -- claude-bud JOB 66: its own once-ever flag
+		else
+			profile.RecruitPackOffered = true
+		end
 		deps.DataService.MarkDirty(player)
 		guidedFunnel(player, profile, "Offered")
 	else
@@ -144218,6 +144301,7 @@ local HudConfig = require(Shared.Configs.HudConfig)
 local LevelConfig = require(Shared.Configs.LevelConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
+local MonetizationConfig: any = require(Shared.Configs.MonetizationConfig) -- claude-bud JOB 66 (the boost chip switch)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local TycoonMath = require(Shared.Util.TycoonMath)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
@@ -144251,6 +144335,9 @@ local goalLabel: TextLabel? = nil
 local rebirthLabel: TextLabel? = nil
 local tipToken = 0
 local shieldChip: Frame? = nil
+local boostChip: Frame? = nil -- claude-bud JOB 66
+local boostText: TextLabel? = nil
+local boostLoop = false
 local shieldText: TextLabel? = nil
 local shieldLoop = false
 
@@ -144831,6 +144918,30 @@ local function buildTopStrip()
 		refreshEmpireTax()
 	end)
 
+	-- claude-bud JOB 66: the 2x income boost chip ("2x 9:59") while WE_CashBoostUntil runs (owner-first: Starter5)
+	local bc = Instance.new("Frame")
+	bc.Name = "BoostChip"
+	bc.LayoutOrder = 6
+	bc.Size = UDim2.fromOffset(0, TS.Height)
+	bc.AutomaticSize = Enum.AutomaticSize.X
+	bc.Active = false
+	bc.Visible = false
+	chipBase(bc)
+	padding(bc, 12, 12)
+	hList(bc, 6)
+	local bt = label(bc, "BoostText", Fonts.Display, SH.TextSize, Color3.fromRGB(120, 255, 140), "")
+	bt.Size = UDim2.new(0, 0, 1, 0)
+	bt.AutomaticSize = Enum.AutomaticSize.X
+	bt.LayoutOrder = 1
+	UIUtil.TextOutline(bt, TS.TextStroke)
+	bc.Parent = group
+	boostChip = bc
+	boostText = bt
+	table.insert(leftRows, { Chip = bc :: GuiObject, PadL = 12, PadR = 12, Gap = 6, Parts = { bt } })
+	bc:GetPropertyChangedSignal("Visible"):Connect(function()
+		refreshEmpireTax()
+	end)
+
 	tip.Parent = area
 	group.Parent = area
 	HudLayout.SetRect("LevelChip", chip)
@@ -144950,6 +145061,49 @@ end
 local function shieldLeft(): number
 	local v = tonumber(player:GetAttribute(TS.Shield.Attribute)) or 0
 	return math.max(0, v - serverNow())
+end
+
+-- claude-bud JOB 66: the boost chip (1 Hz only while a boost runs; hidden otherwise)
+local function boostLeft(): number
+	local u = tonumber(player:GetAttribute("WE_CashBoostUntil")) or 0
+	return u - os.time()
+end
+
+function HUDController.BoostText(left: number): string
+	local s = math.max(0, math.ceil(left))
+	return string.format("2x %d:%02d", s // 60, s % 60)
+end
+
+local function refreshBoost()
+	local chip, txt = boostChip, boostText
+	if not chip or not txt then
+		return
+	end
+	local live = (MonetizationConfig :: any).Starter5LiveFor and (MonetizationConfig :: any).Starter5LiveFor(player.UserId)
+	if not live or boostLeft() <= 0 then
+		chip.Visible = false
+		return
+	end
+	txt.Text = HUDController.BoostText(boostLeft())
+	chip.Visible = true
+	if boostLoop then
+		return
+	end
+	boostLoop = true
+	task.spawn(function()
+		while boostLeft() > 0 do
+			task.wait(1)
+			local t = boostText
+			if t then
+				t.Text = HUDController.BoostText(boostLeft())
+			end
+		end
+		boostLoop = false
+		local c = boostChip
+		if c then
+			c.Visible = false
+		end
+	end)
 end
 
 local function refreshShield()
@@ -145598,6 +145752,8 @@ function HUDController.Init()
 	-- F3: the Empire Tax chip follows the server's WE_EmpireTaxPct (display only) and re-fits on a layout change
 	player:GetAttributeChangedSignal(TAX_ATTR):Connect(refreshEmpireTax)
 	refreshEmpireTax()
+	player:GetAttributeChangedSignal("WE_CashBoostUntil"):Connect(refreshBoost) -- claude-bud JOB 66
+	refreshBoost()
 
 	HudLayout.LayoutChanged:Connect(layoutRail)
 	HudLayout.LayoutChanged:Connect(function()
@@ -158191,11 +158347,21 @@ local function showCard(data: any)
 	st.Color = GOLD
 	st.Thickness = 2
 	st.Parent = card
-	text(card, "Recruit Pack", 18, GOLD, Enum.Font.GothamBlack, 8, 26)
-	local cash = math.floor(tonumber(data.Cash) or 0)
-	text(card, "$  " .. string.format(O.Lines.Cash, money(cash)), 15, Color3.new(1, 1, 1), Enum.Font.GothamBold, 38, 20)
-	text(card, "x2  " .. O.Lines.Boost, 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 60, 20)
-	text(card, "★  " .. O.Lines.Trim, 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 82, 20)
+	-- claude-bud JOB 66: the server may send its own title / lines (the 5 R$ ONE-TIME OFFER); else the Recruit Pack card
+	if typeof(data.Title) == "string" and typeof(data.Lines) == "table" then
+		text(card, data.Title, 18, GOLD, Enum.Font.GothamBlack, 8, 26)
+		for i, line in ipairs(data.Lines) do
+			if i <= 3 then
+				text(card, tostring(line), 15, if i == 1 then Color3.new(1, 1, 1) else Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 38 + (i - 1) * 22, 20)
+			end
+		end
+	else
+		text(card, "Recruit Pack", 18, GOLD, Enum.Font.GothamBlack, 8, 26)
+		local cash = math.floor(tonumber(data.Cash) or 0)
+		text(card, "$  " .. string.format(O.Lines.Cash, money(cash)), 15, Color3.new(1, 1, 1), Enum.Font.GothamBold, 38, 20)
+		text(card, "x2  " .. O.Lines.Boost, 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 60, 20)
+		text(card, "★  " .. O.Lines.Trim, 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 82, 20)
+	end
 	local x = Instance.new("TextButton")
 	x.Position = UDim2.new(1, -54, 0, 6)
 	x.Size = UDim2.fromOffset(48, 48)
@@ -158247,7 +158413,8 @@ local function showCard(data: any)
 	buy.Activated:Connect(function()
 		local id = tonumber(data.ProductId) or 0
 		if id ~= 0 then
-			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, "RecruitPack", "recruit_offer")
+			local key = if typeof(data.ProductKey) == "string" then data.ProductKey else "RecruitPack" -- claude-bud JOB 66
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, key, "recruit_offer")
 			pcall(function()
 				MarketplaceService:PromptProductPurchase(player, id)
 			end)

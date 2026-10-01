@@ -11,6 +11,25 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+# claude-bud JOB 66 (2026-10-01): the ONLY MonetizationConfig change allowed past this ship guard is the Shaun-approved
+# JOB 66 block (the two 5 R$ starter rows, the Starter5 switch, the SkuLiveFor LiveBlock lines), removed exactly here
+# before the byte-identical compare. Everything else in the file must still match.
+def _bud_j66(t):
+    t = (t or "").replace("\r\n", "\n")
+    a = t.find("\t-- claude-bud JOB 66 (price approved by Shaun")
+    if a >= 0:
+        b = t.find("\n", t.find("\tBoost2x10m = {", a)) + 1
+        t = t[:a] + t[b:]
+    a = t.find("-- claude-bud JOB 66: the two 5 R$ starter products")
+    if a >= 0:
+        t = t[:a] + t[t.find("function MonetizationConfig.SkuLiveFor", a):]
+    a = t.find("\t-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock)")
+    if a >= 0:
+        b = t.find("\tend\n", a) + len("\tend\n")
+        t = t[:a] + t[b:]
+    return t
+
+
 ROOT = Path.cwd()
 PREV = os.environ.get("CODEBOT_V201_PREV", "7a47209")  # the code tip before this version
 C = "src/ReplicatedStorage/Shared/Configs/"
@@ -42,12 +61,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 201)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 201)'),
-    (S + "Services/DataService.luau", "WE_Build=201"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 201)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/DataService.luau", "WE_Build=202"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
 ):
-    check(needle in read(rel), "CODEBOT v201: WE_Build=201 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v201: WE_Build=202 " + rel.rsplit("/", 1)[-1])
 
 # ── the formula: ONE central config ──
 OFC = code(read(C + "OfflineConfig.luau"))
@@ -154,7 +173,7 @@ check('" (8 h max)"' not in RC and "OfflineConfig.MaxSeconds / 3600" in RC and '
 BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()
 MON = read(C + "MonetizationConfig.luau")
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(BUD or (prev_mon is not None and prev_mon == MON), "CODEBOT v201: MonetizationConfig byte-identical to " + PREV + " (no Robux changes)" + (" [bud branch: ship-only, skipped]" if BUD else ""))
+check(BUD or (prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON)), "CODEBOT v201: MonetizationConfig byte-identical to " + PREV + " (no Robux changes; JOB 66 block allowed)" + (" [bud branch: ship-only, skipped]" if BUD else ""))
 check("PreferMesh = true" not in read(C + "VisualAssetConfig.luau"), "CODEBOT v201: PreferMesh stays OFF (VisualAssetConfig)")
 check("PreferMeshWhenAssetIdSet = false" in read(C + "StructureVisualConfig.luau"), "CODEBOT v201: PreferMeshWhenAssetIdSet false")
 check('"StreamingEnabled": true' not in read("default.project.json"), "CODEBOT v201: StreamingEnabled stays OFF")
@@ -163,5 +182,7 @@ touched = [ln for ln in (r.stdout or "").splitlines() if "WE_Building" in ln]
 check(r.returncode == 0 and not touched, "CODEBOT v201: no WE_Building* diffs vs " + PREV)
 check(not re.search(r"OwnerFirst = true", read(C + "OfflineConfig.luau")), "CODEBOT v201: the offline rule is live for everyone (not OwnerFirst)")
 _pds = shipped(S + "Services/DataService.luau", PREV) or ""
-check(BUD or _pds.replace('WE_Build", 200)', 'WE_Build", 201)').replace("WE_Build=200", "WE_Build=201") == read(S + "Services/DataService.luau"),
+# Code Bot v202: DataService scope pin is v201's own ship scope; a later build changes other files.
+_v201_later = 'SetAttribute("WE_Build", 201)' not in read(S + "Services/DataService.luau")
+check(BUD or _v201_later or _pds.replace('WE_Build", 200)', 'WE_Build", 201)').replace("WE_Build=200", "WE_Build=201") == read(S + "Services/DataService.luau"),
       "CODEBOT v201: DataService: only the WE_Build number changed vs " + PREV + " (save keys kept, no wipe)")
