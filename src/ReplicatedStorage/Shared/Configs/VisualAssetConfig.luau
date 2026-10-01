@@ -839,6 +839,15 @@ local VisualAssetConfig = {
 	-- on the blades' centre makes them orbit ("detached rotor"). With this on (owner-first by the vehicle owner) the
 	-- spin axis is the blades' thinnest box axis (within MaxCorrectionDeg of the configured axis, only when clearly
 	-- thin: ThinRatio) and the centre is the blades' own centre. Every rotor logs [RotorRig] tilt / offset.
+	-- claude-bud JOB 67: the asset upgrade switch (owner-first by the BASE OWNER; OFF = today's models)
+	Job67 = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 67): Code Bot flips it with the public flip
+		-- the turret tier by the owner's Turret Guns level (EndgameConfig.Defence, 0..10): 0 = T1, 1-3 = T2, 4-6 = T3,
+		-- 7-9 = T4, 10 = T5
+		TurretTierAt = { 1, 4, 7, 10 }, -- the first level of T2 / T3 / T4 / T5
+		TurretTierKeys = { "AutoGunT1", "AutoGunT2", "AutoGunT3", "AutoGunT4", "AutoGunT5" },
+	},
 	AirRotorDisc = {
 		Enabled = true,
 		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 56): Code Bot flips it after Shaun's phone test
@@ -1466,6 +1475,15 @@ local VisualAssetConfig = {
 		-- tripod leg reaching forward, the rear grips behind, the ammo box on the left); GateDefenseService turns the template
 		-- once so it aims -Z, stands it on the ground and welds it to its aim part (only that part is anchored)
 		AutoGun = { ModelAssetId = 114570602, Yaw = 90, Note = "owner pick: Tripod Mounted Machine Gun by GuestCapone (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
+		-- claude-bud JOB 67 (1): the turret TIERS from Shaun's paid Minigun Turret Pack (Lvl 1-10, 109072907337393; its
+		-- one script is stripped by the loader). Pack levels 1 / 3 / 5 / 8 / 10 = T1..T5 (ChildName = the pack's model
+		-- name for that level, read from the WE_CHECK2 probe). PendingAssetId until tools/wire-asset-ids.py promotes it
+		-- (WE_CHECK2: <= 40 parts per piece, <= 20k tris); a tier with ModelAssetId 0 = the AutoGun above (today).
+		AutoGunT1 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 1 (paid, shaunie6) - JOB 67 T1" } :: AssetRef,
+		AutoGunT2 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 3 - JOB 67 T2" } :: AssetRef,
+		AutoGunT3 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 5 - JOB 67 T3" } :: AssetRef,
+		AutoGunT4 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 8 - JOB 67 T4" } :: AssetRef,
+		AutoGunT5 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 10 - JOB 67 T5" } :: AssetRef,
 		-- L2 elevated ONLY (not door flanks):
 		AutoGunElevated = { ModelAssetId = 0, Note = "W1 CFG drop (uploader not the author) — unused key" } :: AssetRef,
 		AutoGunElevatedAlt = { ModelAssetId = 10354803684, Note = "Military turret — L2/corner only" } :: AssetRef,
@@ -1744,5 +1762,17 @@ local VisualAssetConfig = {
 		NavalSub = "_FallbackNaval",
 	} :: { [string]: string },
 }
+
+-- claude-bud JOB 67: the turret tier (1..5) for a Turret Guns level 0..10 (pure; Job67.TurretTierAt)
+function VisualAssetConfig.TurretTierFor(level: number): number
+	local J: any = (VisualAssetConfig :: any).Job67
+	local t = 1
+	for i, l in ipairs(if J then J.TurretTierAt else {}) do
+		if (tonumber(level) or 0) >= l then
+			t = i + 1
+		end
+	end
+	return t
+end
 
 return VisualAssetConfig

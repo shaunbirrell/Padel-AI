@@ -183,6 +183,35 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 67 sub-part 1 (2026-10-01): TURRET TIERS WIRED, PENDING THE ASSET CHECK (branch `claude/desktop-bud`)
+**Flag:** `VisualAssetConfig.Job67` (owner-first by the base owner, NEW-OWNER-FIRST).
+
+**Built:**
+- **Tier refs:** `VisualAssetConfig.GateDefense.AutoGunT1..T5` for Shaun's paid Minigun Turret Pack `109072907337393`
+  (pack levels 1 / 3 / 5 / 8 / 10). All are `ModelAssetId = 0, PendingAssetId = 109072907337393` until promoted.
+- **Tier rule:** from the owner's saved Turret Guns level (`VisualAssetConfig.TurretTierFor`): 0 = T1, 1-3 = T2,
+  4-6 = T3, 7-9 = T4, 10 = T5.
+- **Code:** `GateDefenseService.spawnAutoGun` takes the tier.
+  - A new `loadCatalogPiece` inserts the pack once, strips its script, clones the named level out and applies the same
+    40-part / no-Humanoid refusal.
+  - A tier with no promoted model keeps today's gun exactly.
+- **Wire tool:** a registry row in `tools/wire-asset-ids.py` (`MinigunTurretPack`, PENDING-GET, Studio check, batch
+  P1). The `docs/ASSET_WIRING.md` table is regenerated.
+
+**Code Bot must do (Studio):**
+1. Run WE_CHECK2 on `109072907337393`.
+2. Fill in each tier ref's `ChildName` with the pack's model name for Lvl 1 / 3 / 5 / 8 / 10 (each piece <= 40 parts,
+   <= 20k tris).
+3. `python3 tools/wire-asset-ids.py promote MinigunTurretPack --we-check <file>`.
+
+The turrets then change look by tier for the owner.
+
+**Tests:** `tools/sim/run_turret_tier_test.py` (level -> tier 0..10; all 5 refs PENDING) and
+`tools/checks/claude_bud_job67.py`.
+
+**Next:** walls, rebirth-zone buildings, props and the Synty vehicles (same PENDING path). On hold: Shaun asked to do
+JOB 66 (the 5 R$ products) first.
+
 ## claude-bud JOB 65 (2026-10-01): NUKE INSTANT RAID (branch `claude/desktop-bud`)
 **Flag:** `RebirthZonesConfig.NukeRaid` (owner-first by the ATTACKER, NEW-OWNER-FIRST): only Shaun until his phone test.
 

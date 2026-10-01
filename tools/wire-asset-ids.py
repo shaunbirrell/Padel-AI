@@ -109,6 +109,7 @@ LIC_REPLACED_END = "<!-- wire-asset-ids:replaced:end -->"
 # fmt: off
 # key, group, decision, owner id, used id, flags, load phase, batch, config targets, extra edits, where, reason
 REGISTRY_ROWS = [
+    ('MinigunTurretPack', 'GATE DEFENSE', 'PENDING-GET', 109072907337393, 109072907337393, 'STUDIO', 'PLOT', 'P1', ['GateDefense.AutoGunT1', 'GateDefense.AutoGunT2', 'GateDefense.AutoGunT3', 'GateDefense.AutoGunT4', 'GateDefense.AutoGunT5'], [], '', 'claude-bud JOB 67: Shaun\'s paid Minigun Turret Pack (Lvl 1-10, 1 script: stripped); pack pieces Lvl 1/3/5/8/10 = turret tiers T1-T5 (set each ref\'s ChildName from the WE_CHECK2 probe; <= 40 parts per piece)'),
     ('AmmoWorks', 'DROPPERS / PRODUCERS', 'LIVE-NOW', 41324890, 41324890, '', 'PLOT', '', ['Businesses.AmmoWorks'], [], '', 'Roblox Conveyor Belt as the Ammo Works belt (takes the kit belt\'s place)'),
     ('ArmsCrateLine', 'DROPPERS / PRODUCERS', 'LIVE-NOW', 41324890, 41324890, '', 'PLOT', '', ['Businesses.ArmsCrateLine'], [], '', 'Roblox Conveyor Belt as the Arms Crate Line belt (same load as Ammo Works)'),
     ('ArmorPlatePress', 'DROPPERS / PRODUCERS', 'PENDING-GET', 4362642898, 4362642898, 'STUDIO OMIT', 'PLOT', 'P4', ['Businesses.ArmorPlatePress'], [], '', '4,810 tris; big semi-transparent bounds box (OmitParts after the WE_CHECK); Smoke stripped (StripEffectsAssetIds); its parts must fit the kit roles it replaces (PartsPerBusinessL5)'),

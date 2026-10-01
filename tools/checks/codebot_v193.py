@@ -59,8 +59,10 @@ check("pa:LoadCharacter()" in ACS and "Heartbeat" not in ACS and "RenderStepped"
       "CODEBOT v193: AntiCampService LoadCharacter home, no Heartbeat/RenderStepped")
 check('safeInit("AntiCampService", AntiCampService, deps)' in read(S + "Bootstrap.server.luau"),
       "CODEBOT v193: AntiCampService started in Bootstrap")
-check("ExperienceNotifyService" not in read(S + "Bootstrap.server.luau"),
-      "CODEBOT v193: ExperienceNotify (JOB 62) NOT shipped")
+# claude-bud (2026-10-01): on claude/desktop-bud JOB 62 is present; it must then stay owner-first (the v193 ship excludes it)
+check("ExperienceNotifyService" not in read(S + "Bootstrap.server.luau")
+      or "OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 62)" in read("src/ReplicatedStorage/Shared/Configs/NotificationConfig.luau"),
+      "CODEBOT v193: ExperienceNotify (JOB 62) NOT shipped (or, on the bud branch, still owner-first)")
 
 CS = read(S + "Services/CombatService/init.luau")
 pb = CS.split("local function pvpBlock(")[1].split("\nend\n")[0] if "local function pvpBlock(" in CS else ""

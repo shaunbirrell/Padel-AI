@@ -10165,3 +10165,8 @@ ds_territories.luau T3):
 - Vault Plating does not reduce a nuke raid: the brief says the full ATM.
 - The NUKE button lives on TARGETS (one of the three entry points the brief allows). The map card has no room left
   beside SEND ARMY on a phone.
+
+## claude-bud JOB 67 sub-part 1 (2026-10-01): turret tiers
+- "Turret level" = the owner's Turret Guns Defence level (0..10): the gun is the turret's weapon.
+- The pack is wired PENDING (Id 0): the asset rules forbid using a model before WE_CHECK2, and the pack's per-level
+  model names are only known from that probe.

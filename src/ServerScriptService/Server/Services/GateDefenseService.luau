@@ -835,7 +835,56 @@ local function prepareAimTemplate(template: Model, assetId: number, yawDeg: numb
 	return true
 end
 
-local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUnit?
+-- claude-bud JOB 67: the turret tier (1..5) for a Turret Guns level (pure; VisualAssetConfig.Job67.TurretTierAt)
+function GateDefenseService.TurretTier(level: number): number
+	return (VisualAssetConfig :: any).TurretTierFor(level)
+end
+
+-- claude-bud JOB 67: a pack PIECE (one model inside a multi-model store asset, e.g. one level of the Minigun pack):
+-- the asset is inserted once (scripts stripped), the named piece cloned out, then the same 40-part / no-Humanoid
+-- refusal as a whole model. Cached per "<id>:<name>"; a missing piece or a refusal = nil (the caller keeps today's gun).
+local packRaw: { [number]: Instance } = {}
+local pieceCache: { [string]: Model | false } = {}
+local function loadCatalogPiece(assetId: number, childName: string): Model?
+	local key = assetId .. ":" .. childName
+	local have: any = pieceCache[key]
+	if have ~= nil then
+		return if have == false then nil else have :: Model
+	end
+	local raw: Instance? = packRaw[assetId]
+	if raw == nil then
+		local ok, result = pcall(function()
+			return InsertService:LoadAsset(assetId)
+		end)
+		if not ok or typeof(result) ~= "Instance" then
+			pieceCache[key] = false
+			return nil
+		end
+		stripScripts(result)
+		packRaw[assetId] = result
+		raw = result
+	end
+	local piece: Instance? = (raw :: Instance):FindFirstChild(childName, true)
+	if piece == nil or not piece:IsA("Model") then
+		pieceCache[key] = false
+		return nil
+	end
+	local model = (piece :: Model):Clone()
+	stripScripts(model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d.Parent ~= nil and (d:IsA("ValueBase") or d:IsA("Configuration")) then
+			d:Destroy()
+		end
+	end
+	if catalogRefusal(model) then
+		pieceCache[key] = false
+		return nil
+	end
+	pieceCache[key] = model
+	return model
+end
+
+local function spawnAutoGun(slot: number, at: CFrame, parent: Folder, tier: number?): TurretUnit?
 	local gd = (VisualAssetConfig :: any).GateDefense
 	local assetId = 0 -- the config decides (a missing key = the Part-built gun)
 	local yawDeg = 0
@@ -843,10 +892,24 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 		assetId = gd.AutoGun.ModelAssetId
 		yawDeg = tonumber(gd.AutoGun.Yaw) or 0
 	end
+	-- claude-bud JOB 67: the owner's turret tier, when that tier's model is promoted (else today's AutoGun)
+	local tierTemplate: Model? = nil
+	local J: any = (VisualAssetConfig :: any).Job67
+	if tier and J and gd then
+		local ref = gd[J.TurretTierKeys[tier] or ""]
+		local id = if ref then tonumber(ref.ModelAssetId) or 0 else 0
+		if id > 0 then
+			tierTemplate = if typeof(ref.ChildName) == "string" then loadCatalogPiece(id, ref.ChildName) else loadCatalogModel(id)
+			if tierTemplate then
+				assetId = id
+				yawDeg = tonumber(ref.Yaw) or 0
+			end
+		end
+	end
 	-- every piece of the nest stands on the ground under the post (the gate CFrame is GATE_POST_LIFT above it)
 	local groundY = groundYAt(at, parent)
 	local base = at - Vector3.new(0, at.Position.Y - groundY, 0)
-	local template = loadCatalogModel(assetId)
+	local template = tierTemplate or loadCatalogModel(assetId)
 	if template and not prepareAimTemplate(template, assetId, yawDeg) then
 		template = nil
 	end
@@ -2316,7 +2379,14 @@ local function syncPlotNow(plotId: number)
 			if slot > 2 then
 				table.insert(nests, at) -- claude-bud JOB 39: a Base Tier nest (BaseTierBuilder adds its sandbags)
 			end
-			local t = spawnAutoGun(slot, at, folder)
+			-- claude-bud JOB 67: the turret tier from the owner's saved Turret Guns level (owner-first; nil = today)
+			local tier: number? = nil
+			if EndgameConfigMod.LiveFor and require(ReplicatedStorage.Shared.Configs.RetentionConfig).Live((VisualAssetConfig :: any).Job67, ownerUserId) then
+				local eg = GateDefenseService._Endgame
+				local lvl = if eg and eg.DefenceLevelFor then tonumber(eg.DefenceLevelFor(ownerUserId, "Guns")) or 0 else 0
+				tier = GateDefenseService.TurretTier(lvl)
+			end
+			local t = spawnAutoGun(slot, at, folder, tier)
 			if t then
 				t.Model:SetAttribute("WE_NestBase", at) -- claude-bud JOB 53: where DefenceVisuals plates / arms this nest
 				t.Outside = outside
