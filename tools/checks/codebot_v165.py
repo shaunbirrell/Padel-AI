@@ -30,12 +30,12 @@ def check(cond, label):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 188)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 188)'),
-    (S + "Services/DataService.luau", "WE_Build=188"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 188)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 189)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 189)'),
+    (S + "Services/DataService.luau", "WE_Build=189"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 189)'),
 ):
-    check(needle in read(rel), "CODEBOT v165: WE_Build=188 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v165: WE_Build=189 " + rel.rsplit("/", 1)[-1])
 
 SQ = read(S + "Services/SquadOrdersService.luau")
 AP = read(S + "Modules/ArmyPlan.luau")

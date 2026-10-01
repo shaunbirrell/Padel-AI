@@ -37,12 +37,12 @@ S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 188)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 188)'),
-    (S + "Services/DataService.luau", "WE_Build=188"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 188)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 189)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 189)'),
+    (S + "Services/DataService.luau", "WE_Build=189"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 189)'),
 ):
-    check(needle in read(rel), "CODEBOT v173: WE_Build=188 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v173: WE_Build=189 " + rel.rsplit("/", 1)[-1])
 
 # JOB 46 — rebirth stations
 ZC = read(C + "RebirthZonesConfig.luau")
