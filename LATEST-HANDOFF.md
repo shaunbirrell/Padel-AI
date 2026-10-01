@@ -1,4 +1,22 @@
 <!-- Q2-START -->
+## claude-bud JOB B (2026-10-01, P0): TARGETS RIVAL LIST BLACKED OUT (branch `claude/desktop-bud`)
+**Root cause (from the source; docs/proof/targets-list/sim.txt):**
+- RivalController's ScreenGui `WE_RivalTargets` never set `ZIndexBehavior`, so it rendered with **Global** ordering.
+  Every other HUD gui here sets Sibling (HudLayout.ApplyScreen too).
+- The list Frame is ZIndex 3 with a 97 %-opaque near-black background, and every row / label / EVEN chip / SEND ARMY
+  / VIEW inside it is the default ZIndex 1.
+- Under Global the panel's background was painted OVER its own rows, so they showed at ~3 %, and the top object
+  under a finger was the panel.
+
+**Fix:** `g.ZIndexBehavior = Enum.ZIndexBehavior.Sibling`, one line at the cause. The children draw above the panel,
+and the open list still covers the card (3 > 1). No colours / sizes changed.
+
+**Checks:** run_targets_list_test 0 failed (model + static + Code Bot's rival_controller_harness);
+claude_bud_jobB; BuyPathStatic FAIL=0. **The 2-player check is owed** (needs a second player online).
+
+**Test ON HIS PHONE (with a 2nd player):** open TARGETS. The rival's name, Lv / Army, EVEN, SEND ARMY and VIEW are
+bright, and both buttons respond to a tap.
+
 ## v180 PUBLISHED (Code Bot Roblox, 2026-10-01 18:10 Dublin): Open Cloud place version 178. Two monetization items wired (Shaun approved + created): 2x Offline Cash game pass + Mission Reroll dev product
 - **Commits:** code+dist+checks `719f957` on `codebot/v180-monetization` (FF into phase-7-polish from `5e9649b`); bud merge `d6347d9` into `claude/desktop-bud`. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; no other price / Id changed (codebot_v180 compares all 56 SKUs vs `5e9649b`).
 - **2x Offline Cash (Game Pass 2002664894, 149 R$):** the code expected `OfflineCap2x` as a **Developer Product** (DevProducts stub, `GrantEntitlement`). Moved to `MonetizationConfig.GamePasses.OfflineCap2x` (stub removed), so the generic pass path owns it: UserOwnsGamePassAsync on join + PromptGamePassPurchaseFinished → UserOwnsGamePassAsync confirm, `WE_Ent_OfflineCap2x` display flag. `EconomyConfig.OfflineEarnings.CapBoost` Enabled=true, OwnerFirst=false (everyone): cap time 8 h → 16 h, Share unchanged. RetentionService reads the server pass cache (new `MonetizationService.OwnsCached` / `OwnsGamePassNow`; the join payout asks Roblox once if the join check is still running). Sold in the Shop SUPPLY pass rows ("Pass: 2x Offline Cash", OWNED once bought); Welcome back card shows "(capped at 16 h)" for owners.
@@ -7,7 +25,7 @@
 - **Checks:** BuyPathStatic **PASS=8046 FAIL=0**; new `tools/checks/codebot_v180.py` (36 checks); updated `claude_bud_job49.py`, `run_daily_return_test.py` (pass owner / non-owner 16 h, reroll buy button, tokens), `launch_audit.py` (Missions panel / reroll token), codebot_v156/v167 diffs + v176–v179 snapshot checks pinned to their own ship commits; docs/LIVE_PLACE.md rows.
 - **Publish:** HTTP 200, versionNumber **178**, universe 10767159222 / place 97112936860418. Servers NOT restarted: receipts for 3715836569 reaching an old server are not acked (Roblox retries) until Migrate to Latest Update.
 - **Phone tests (owed — Shaun):** (1) Shop SUPPLY: "Pass: 2x Offline Cash" 149 R$ → buy → OWNED. (2) Leave >8 h, rejoin: Welcome back says capped at 16 h and pays 16 h. (3) Missions: use the free reroll, then the "↻ R$19" button → buy → that mission rerolls once; a second buy = one more reroll.
-- **Still owed:** flip MissionConfig.Core.OwnerFirst + RetentionConfig.ReturnSequence.OwnerFirst after phone OK; JOB 44 Studio 2-player siege/march; JOB 51 / 50 / 52 queued. Note: claude-bud JOB B (`c628c8b`, TARGETS ZIndex) is on claude/desktop-bud and not yet on phase-7.
+- **Still owed:** flip MissionConfig.Core.OwnerFirst + RetentionConfig.ReturnSequence.OwnerFirst after phone OK; JOB 44 Studio 2-player siege/march; JOB 51 / 50 / 52 queued. Note: claude-bud JOB B (`c628c8b`, TARGETS ZIndex) cherry-picked in v181.
 ## v179 PUBLISHED (Code Bot Roblox, 2026-10-01 17:45 Dublin): Open Cloud place version 177. claude-bud JOB 49 D return sequence + JOB A recruitment office P0 (owner-first)
 - **Cherry-pick:** `d5737ca` (JOB 49 D) → `27c8083`; `8681c07` (JOB A) → `2499ae8` onto phase-7 `c8db098` (v178 tip). Code+dist+checks: `75bd8b4` on `codebot/v179-job49d-jobA` (FF into phase-7-polish). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; no price / Id change.
 - **JOB 49 D (NEW-OWNER-FIRST):** `RetentionConfig.ReturnSequence.OwnerFirst = true` — one client card queue: Welcome back → streak → "3 new missions" toast + Missions pulse; Comeback cash folded into Welcome back; ReturnDay analytics on join; AnalyticsConfig rows for every JOB 49 event. Never during onboarding hold / combat.
@@ -29,6 +47,7 @@
 - **Publish:** HTTP 200, versionNumber **176**, universe 10767159222 / place 97112936860418. Servers NOT restarted: Migrate to Latest Update when convenient.
 - **Phone tests (owed — Shaun):** (1) Missions shows "TODAY'S 3 MISSIONS · new in Xh Ym" with 3 different types; each GO goes to the right place. (2) Reroll once; second reroll refused. (3) Finish all 3; chest pays once. (4) After shown reset time, 3 new missions. Also: CapBoost/OfflineCap2x/MissionReroll Id 0 still off. After phone OK: flip MissionConfig.Core.OwnerFirst true→false. **Question for Shaun:** should Daily Ops below the 3 core missions be hidden?
 - **Still owed:** JOB 44 Studio 2-player siege/march still owed.
+
 ## claude-bud JOB A (2026-10-01, P0): RECRUITMENT OFFICE CLOSED ITSELF ~0.5 s AFTER OPENING (branch `claude/desktop-bud`)
 **Root cause (proved; docs/proof/recruitment-office/REPORT.md + sim.txt):**
 - The DRILL kiosk on his Elite Barracks zone (JOB 46) opens the Recruitment Office panel.

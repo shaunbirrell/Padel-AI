@@ -364,6 +364,12 @@ local function build()
 	g.Name = "WE_RivalTargets"
 	g.ResetOnSpawn = false
 	g.DisplayOrder = 30
+	-- claude-bud JOB B (2026-10-01, P0 "the TARGETS list is almost black, text barely visible, unclickable"): ROOT CAUSE:
+	-- this ScreenGui never set ZIndexBehavior, so it ran Global ordering (Instance.new's default; every other HUD gui
+	-- here sets Sibling, HudLayout.ApplyScreen too). The list Frame is ZIndex 3 with a 97 %-opaque dark background, and
+	-- every row / label / SEND ARMY / VIEW inside it is the default ZIndex 1, so under Global the panel's own background
+	-- was drawn OVER its rows. Sibling: children always draw above their parent; the list (3) still covers the card (1).
+	g.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	-- v168: explicit: the safe content rect (below the 58 px topbar row with the compass / BASE pill, inside notches)
 	g.IgnoreGuiInset = false
 	pcall(function()

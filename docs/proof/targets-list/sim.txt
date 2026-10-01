@@ -1,0 +1,10 @@
+ok    the row objects keep the default ZIndex 1 (rebuildList sets none)
+MODEL list ZIndex 3, background 97% opaque; row ZIndex 1
+ok    BEFORE (Global ordering): the rows show through at 3% -> 'almost black, barely visible'
+ok    AFTER (Sibling ordering): the rows, SEND ARMY and VIEW draw at 100% above the panel
+ok    the TARGETS gui sets ZIndexBehavior = Sibling (the root-cause fix)
+ok    the open list still covers the TARGETS card (list ZIndex 3 > card 1)
+ok    every row (name, stats, chip, SEND ARMY, VIEW) is a child of the list panel
+ok    SEND ARMY / VIEW are TextButtons (they take the tap once nothing paints over them)
+ok    run_codebot_v171_test (rival_controller_harness: the card builds, the list fills) still passes
+TARGETS LIST TEST: 0 failed

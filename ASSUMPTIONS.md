@@ -10067,3 +10067,6 @@ ds_territories.luau T3):
 ## 2026-10-01 — claude-bud JOB A: Recruitment Office
 - **What "the office" is:** "beside my office" is taken to be the DRILL kiosk on his own Elite Barracks zone. That is the only Recruitment Office path that closes at 0.5 s; the plaza path was in range.
 - **Damage:** a damage scratch no longer closes this panel. Buying while hurt is still blocked server-side (HurtLock).
+
+## 2026-10-01 — claude-bud JOB B: TARGETS list
+- **Default ordering:** taken as Global for an Instance.new ScreenGui; every other gui here sets Sibling explicitly, which supports this. The fix is the same explicit setting.
