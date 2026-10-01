@@ -135,6 +135,11 @@ local function custom(player: Player, eventName: string, props: { [string]: any 
 	if map.Field and props and props[map.Field] ~= nil then
 		fields = { [Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = string.sub(tostring(props[map.Field]), 1, 50) }
 	end
+	-- claude-bud JOB 42: an optional second field (CustomField02), e.g. the time-pack income bucket on RobuxPurchase
+	if map.Field2 and props and props[map.Field2] ~= nil then
+		fields = fields or {}
+		fields[Enum.AnalyticsCustomFieldKeys.CustomField02.Name] = string.sub(tostring(props[map.Field2]), 1, 50)
+	end
 	local ok = pcall(function()
 		svc:LogCustomEvent(player, map.Name, value, fields)
 	end)

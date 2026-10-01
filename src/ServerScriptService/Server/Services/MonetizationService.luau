@@ -75,6 +75,7 @@ type GrantEvent = {
 	Entitlements: { string },
 	Counters: { [string]: number }, -- profile field -> amount added (e.g. Nukes = 3)
 	CurrencySpent: number,
+	PerMinBucket: string?, -- claude-bud JOB 42: the buyer's income bucket on a time pack (analytics)
 	Source: string,
 	FirstPurchase: boolean,
 	At: number, -- os.clock() of the grant (prunes stale pending events)
@@ -786,7 +787,9 @@ end
 --[[ claude-bud JOB 36: the player's passive income in $ per minute, cash multipliers included (the base's passive tick
 	x EconomyService.GetCashMult "passive" / TickSeconds x 60). May yield once (a cold pass cache), like any ownership
 	lookup; 0 when unknown. Cash packs, the VIP crate and the Shop's live amounts use it. ]]
-function MonetizationService.PassivePerMin(player: Player, profile: any): number
+-- claude-bud JOB 42: excludeTimed = leave out the TIMED multipliers (profile.CashBoost and the Double Cash event): the
+-- time packs' income ("4 hours of your cash" must not double while a code / Recruit Pack boost runs). Same function.
+function MonetizationService.PassivePerMin(player: Player, profile: any, excludeTimed: boolean?): number
 	if BaseService == nil or EconomyService == nil or profile == nil then
 		return 0
 	end
@@ -795,6 +798,18 @@ function MonetizationService.PassivePerMin(player: Player, profile: any): number
 	local tick = math.max(1, tonumber((require(Shared.Configs.EconomyConfig) :: any).PassiveIncome.TickSeconds) or 5)
 	local t = if okT then tonumber(perTick) or 0 else 0
 	local m = if okM then tonumber(mult) or 1 else 1
+	if excludeTimed == true then
+		local okB, boost = pcall(function()
+			return EconomyService.CashBoostMult and EconomyService.CashBoostMult(profile) or 1
+		end)
+		local okE, ev = pcall(function()
+			local ES: any = require(script.Parent.EngagementService)
+			return ES.CashMult and ES.CashMult(player) or 1
+		end)
+		local b = if okB then tonumber(boost) or 1 else 1
+		local e = if okE then tonumber(ev) or 1 else 1
+		m = m / math.max(1, b) / math.max(1, e)
+	end
 	local v = t * m / tick * 60
 	return if v == v and v > 0 and v < 1e12 then v else 0
 end
@@ -1684,7 +1699,15 @@ end
 	change the receipt decision (listeners and economy events are deferred + pcall'd). ]]
 local function afterGrantSaved(player: Player, profile: any, event: GrantEvent)
 	if NotificationService then
-		NotificationService.Notify(player, "Purchase granted: " .. event.DisplayName, "Reward")
+		local tp = ShopOverhaulConfig.TimePacks.Packs[event.ProductKey]
+		if tp then
+			-- claude-bud JOB 42: the real granted number ("+$1,234,567 (4 hours of cash)")
+			local s = tostring(math.floor(event.Cash))
+			local commas = (s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
+			NotificationService.Notify(player, string.format("+$%s (%s)", commas, tp.Label), "Reward")
+		else
+			NotificationService.Notify(player, "Purchase granted: " .. event.DisplayName, "Reward")
+		end
 	end
 	if AnalyticsService then
 		local firstJoin = if typeof(profile) == "table" then nonNegInt(profile.FirstJoinUnix) else 0
@@ -1693,6 +1716,7 @@ local function afterGrantSaved(player: Player, profile: any, event: GrantEvent)
 			productKey = event.ProductKey,
 			receiptId = event.ReceiptId,
 			currencySpent = event.CurrencySpent,
+			perMinBucket = event.PerMinBucket, -- claude-bud JOB 42 (time packs only)
 			source = event.Source,
 			firstPurchase = event.FirstPurchase,
 			daysSinceFirstJoin = if firstJoin > 0 then math.max(0, math.floor((os.time() - firstJoin) / 86400)) else nil,
@@ -1812,6 +1836,18 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 		end
 		cashGrant = nonNegInt(ShopOverhaulConfig.CashPackAmount(productKey :: string, perMin))
 	end
+	-- claude-bud JOB 42: a TIME pack = max(Floor, Minutes x his income at RECEIPT time), timed boosts left out. For ANY
+	-- receipt of a time-pack Id (a paid receipt always gets the real amount); the lookup may yield, so it is here,
+	-- before any mutation, and re-checked after (the same rule as the JOB 36 block above)
+	local timePerMin: number? = nil
+	if ShopOverhaulConfig.TimePacks.Packs[productKey :: string] ~= nil then
+		local perMin = MonetizationService.PassivePerMin(player, profile, ShopOverhaulConfig.TimePacks.ExcludeTimedBoosts == true)
+		if not player.Parent or DataService.GetProfile(player) ~= profile then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		timePerMin = perMin
+		cashGrant = nonNegInt(ShopOverhaulConfig.TimePackAmount(productKey :: string, perMin))
+	end
 	-- claude-bud JOB 41 part B: the Recruit Pack's cash = RecruitPackOffer.IncomeMinutes of his income, clamped
 	-- ($25k..$150k); computed here (the lookup may yield) and re-checked, before any mutation
 	if productKey == "RecruitPack" then
@@ -1844,6 +1880,7 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 		Entitlements = entitlements,
 		Counters = {},
 		CurrencySpent = nonNegInt(receiptInfo.CurrencySpent),
+		PerMinBucket = if timePerMin then ShopOverhaulConfig.PerMinBucket(timePerMin) else nil, -- claude-bud JOB 42
 		Source = intentSource(player.UserId, "DP:" .. (productKey :: string)),
 		FirstPurchase = false,
 		At = os.clock(),

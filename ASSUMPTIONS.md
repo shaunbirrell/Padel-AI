@@ -9974,3 +9974,12 @@ ds_territories.luau T3):
   blocked by the 3-day gap stays unspent, so "the next big win" can still bring it forward.
 - **Pack first:** "the Recruit Pack goes first" is enforced with a 180 s ceiling, so a pack that can never get a
   soft-offer slot cannot block the rate card for the whole session.
+
+## 2026-10-01 — claude-bud JOB 42 part A: time cash packs
+- **Floors:** 10k / 25k / 50k / 100k / 200k are the brief's proposed minimums (owner to confirm). The sim proves both
+  minutes per R$ and floor $ per R$ rise with the price.
+- **ExcludeTimedBoosts:** an option on MonetizationService.PassivePerMin (it divides out EconomyService.CashBoostMult and
+  EngagementService.CashMult) instead of a second income function. Permanent multipliers stay in.
+- **Ready rule:** the Shop swaps only when all five Ids are set (TimePacksReady), so a live player never sees an empty
+  cash section.
+- **Paid receipts:** any receipt of a time-pack Id is granted the real amount, live flag or not.

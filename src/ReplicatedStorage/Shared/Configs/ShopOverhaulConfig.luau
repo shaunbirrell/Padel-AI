@@ -66,6 +66,33 @@ local ShopOverhaulConfig = {
 	PerMinAttribute = "WE_PassivePerMin", -- server -> the buyer's client (display only; ProcessReceipt recomputes)
 	PerMinPublishSeconds = 10,
 
+	--[[ claude-bud JOB 42: TIME-based cash packs ("buy X minutes of your cash"), owner-first. Grant = max(Floor, Minutes x
+		his income) at RECEIPT time (ProcessReceipt). Live in the Shop = TimePacksLiveFor AND TimePacksReady (all five Ids
+		set); until then the old JOB 36 rows stay. The Floors are a proposed minimum for new players, chosen so both the
+		minutes per R$ and the floor $ per R$ rise with the price (15m 0.60 / 400 -> 4h 0.86 / 717): a bigger pack is always
+		the better deal, so BEST VALUE on 4h is honest. ExcludeTimedBoosts: the income leaves out the TIMED multipliers
+		(profile.CashBoost, the Double Cash event) so the pack does not double while a boost runs. NO 1-day / 7-day pack. ]]
+	TimePacks = {
+		Enabled = true,
+		OwnerFirst = true,
+		Order = { "Cash4h", "Cash2h", "Cash1h", "Cash30m", "Cash15m" }, -- Shop order, biggest first
+		Packs = {
+			Cash4h = { Minutes = 240, Floor = 200000, Title = "4 HOURS OF CASH", Label = "4 hours of cash" },
+			Cash2h = { Minutes = 120, Floor = 100000, Title = "2 HOURS OF CASH", Label = "2 hours of cash" },
+			Cash1h = { Minutes = 60, Floor = 50000, Title = "1 HOUR OF CASH", Label = "1 hour of cash" },
+			Cash30m = { Minutes = 30, Floor = 25000, Title = "30 MIN OF CASH", Label = "30 minutes of cash" },
+			Cash15m = { Minutes = 15, Floor = 10000, Title = "15 MIN OF CASH", Label = "15 minutes of cash" },
+		},
+		BestValueKey = "Cash4h",
+		BestValueLabel = "BEST VALUE",
+		ExcludeTimedBoosts = true,
+		HideOldKeys = { CashSmall = true, CashMedium = true, CashLarge = true, CashMega = true },
+		PerMinAttribute = "WE_TimePackPerMin", -- display only, from the same publish tick as WE_PassivePerMin
+		MinimumText = "(minimum)", -- the amount line while the floor is what he gets
+		-- the income bucket on RobuxPurchase (never the exact income)
+		PerMinBuckets = { { Min = 100000, Text = "100k+" }, { Min = 10000, Text = "10k+" }, { Min = 1000, Text = "1k+" }, { Min = 100, Text = "100+" }, { Min = 0, Text = "0-99" } },
+	},
+
 	-- duplicates
 	HideWhenLive = { ImpulseSpeed = true, ExtraSoldierSlot = true } :: { [string]: boolean },
 	SpeedStandProduct = "SpeedBoost", -- the base Speed stand sells this dev product (was the first live: the Speed Pass)
@@ -97,6 +124,48 @@ function ShopOverhaulConfig.CashPackAmount(key: string, perMin: number): number?
 	end
 	local rate = if typeof(perMin) == "number" and perMin == perMin and perMin > 0 and perMin < 1e12 then perMin else 0
 	return math.max(p.Floor, math.floor(p.Minutes * rate))
+end
+
+-- claude-bud JOB 42: the time packs
+function ShopOverhaulConfig.TimePacksLiveFor(userId: any): boolean
+	return RetentionConfig.Live(ShopOverhaulConfig.TimePacks, userId)
+end
+
+-- a time pack's grant for an income of perMin $/min (nil = not a time pack); an integer, at most 2^53
+function ShopOverhaulConfig.TimePackAmount(key: string, perMin: number): number?
+	local p = ShopOverhaulConfig.TimePacks.Packs[key]
+	if p == nil then
+		return nil
+	end
+	local rate = if typeof(perMin) == "number" and perMin == perMin and perMin > 0 and perMin < 1e12 then perMin else 0
+	return math.min(math.max(p.Floor, math.floor(p.Minutes * rate)), 2 ^ 53)
+end
+
+-- all five time-pack Ids are set in MonetizationConfig (the Shop swap waits for every one)
+function ShopOverhaulConfig.TimePacksReady(): boolean
+	local MC: any = require(script.Parent.MonetizationConfig)
+	for _, key in ipairs(ShopOverhaulConfig.TimePacks.Order) do
+		local def = MC.DevProducts[key]
+		if typeof(def) ~= "table" or (tonumber(def.Id) or 0) == 0 then
+			return false
+		end
+	end
+	return true
+end
+
+-- LIVE for the Shop / the offers: the flag AND all five Ids
+function ShopOverhaulConfig.TimePacksShown(userId: any): boolean
+	return ShopOverhaulConfig.TimePacksLiveFor(userId) and ShopOverhaulConfig.TimePacksReady()
+end
+
+function ShopOverhaulConfig.PerMinBucket(perMin: number): string
+	local n = tonumber(perMin) or 0
+	for _, b in ipairs(ShopOverhaulConfig.TimePacks.PerMinBuckets) do
+		if n >= b.Min then
+			return b.Text
+		end
+	end
+	return "0-99"
 end
 
 -- the VIP supply crate for a passive income of perMin $/min

@@ -124,7 +124,8 @@ try:
     # claude-bud JOB 41 part B: retired the unfiltered form (the brief adds ONE new SKU row, RecruitPack = { Id = 0, 49 R$ });
     # replacement: the same two checks with that one new row left out (its Id 0 / 49 are pinned in claude_bud_job41.py)
     #check(not any(re.search(r"(^|[\s{,])Id\s*=\s*\d", l) for l in lines), "CODEBOT v156: no product Id changed since v155")
-    lines = [l for l in lines if not (l.startswith("+") and "RecruitPack = { Id = 0," in l)]
+    # claude-bud JOB 42: + the five new time-pack rows (Cash15m .. Cash4h, all Id 0; pinned in claude_bud_job42.py)
+    lines = [l for l in lines if not (l.startswith("+") and ("RecruitPack = { Id = 0," in l or re.search(r"Cash(15m|30m|1h|2h|4h) = \{ Id = 0,", l)))]
     check(not any(re.search(r"(^|[\s{,])Id\s*=\s*\d", l) for l in lines), "CODEBOT v156: no product Id changed since v155 (claude-bud JOB 41: the new RecruitPack row aside)")
     pr = sorted(re.sub(r"\s+", " ", l.split("--")[0]).strip() for l in lines if re.search(r"(?<!Overhaul)RobuxPrice\s*=", l))
     check(pr in ([], sorted(["- RobuxPrice = 149,", "- RobuxPrice = 99,", "+ RobuxPrice = 249,", "+ RobuxPrice = 79,"])),

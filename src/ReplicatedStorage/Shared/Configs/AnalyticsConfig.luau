@@ -39,7 +39,7 @@ local AnalyticsConfig = {
 			SHOP_OPEN = { Name = "ShopOpened" },
 			SHOP_PROMPT = { Name = "ProductPrompted", Field = "productKey" },
 			PROMPT_CLOSED = { Name = "PromptCancelled", Field = "kind" },
-			PURCHASE_RECEIPT = { Name = "RobuxPurchase", Value = "currencySpent", Field = "productKey" },
+			PURCHASE_RECEIPT = { Name = "RobuxPurchase", Value = "currencySpent", Field = "productKey", Field2 = "perMinBucket" }, -- claude-bud JOB 42: + the time-pack income bucket
 			VEHICLE_SPAWNED = { Name = "VehicleSpawned", Field = "vehicle" },
 			MISSILE_STRIKE = { Name = "MissileLaunched" },
 			NUKE_LAUNCH = { Name = "NukeLaunched" },

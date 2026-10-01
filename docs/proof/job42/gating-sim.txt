@@ -1,0 +1,9 @@
+# GATING (run_time_packs_test.py, 2026-10-01T08:01Z, headless luau stand-in with the real MonetizationService: NOT Roblox)
+== GATING ==
+ok    live but not Ready (Ids 0) -> not shown (the old rows stay)
+ok    four of five Ids -> still not Ready
+ok    live + Ready -> shown for him; not live for another player -> not shown
+ok    OFF (Enabled = false) -> not shown (today's Shop)
+ok    an old CashMega receipt keeps the JOB 36 formula while the time packs are live ($2,000,000)
+ok    the old four stay in config with their Ids / prices (only hidden from the Shop once live)
+TIME PACKS TEST: 0 failed

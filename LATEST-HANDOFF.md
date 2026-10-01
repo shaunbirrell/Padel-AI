@@ -29,6 +29,27 @@
 3. Shielded / new / protected / ally players never appear in the list.
 4. A+B still owner-first as v158 (Guided chain + Recruit Pack Id 0 does not prompt). PreferMesh OFF.
 
+## claude-bud JOB 42 PART A (2026-10-01): TIME CASH PACKS, CONFIG + SERVER GRANT (branch `claude/desktop-bud`)
+- **Products:** MonetizationConfig.DevProducts Cash15m / Cash30m / Cash1h / Cash2h / Cash4h at 25 / 49 / 89 / 159 /
+  279 R$. All Id 0, repeatable, Cash = the floor. No 1-day / 7-day pack.
+- **Config:** ShopOverhaulConfig.TimePacks (Enabled, OwnerFirst = true): Minutes 15 / 30 / 60 / 120 / 240, Floors 10k /
+  25k / 50k / 100k / 200k (PROPOSED minimums for new players), BEST VALUE on Cash4h, ExcludeTimedBoosts, HideOldKeys
+  (the old four), WE_TimePackPerMin.
+- **Helpers:** TimePacksLiveFor, TimePackAmount (guarded, integer, <= 2^53), TimePacksReady (all five Ids), TimePacksShown
+  (live AND ready), PerMinBucket.
+- **Grant (ProcessReceipt, inside the JOB 36 path):** for ANY time-pack receipt:
+  - perMin = PassivePerMin(player, profile, excludeTimed = true). This is the ONE income function with a new option that
+    divides out profile.CashBoost and the Double Cash event.
+  - Then the player + profile re-check (else NotProcessedYet), then max(Floor, Minutes x perMin) via AddCash
+    "devproduct" (exempt).
+  - The toast reads "+$N (4 hours of cash)". RobuxPurchase gets perMinBucket (CustomField02; AnalyticsService custom()
+    gained an optional Field2).
+- **Display:** WE_TimePackPerMin comes from the same ShopOverhaulService tick, only for players it is live for.
+- **Pins:** codebot_v156's "no product Id changed since v155" replacement now also leaves out the five new Id-0 rows;
+  docs/LIVE_PLACE.md lists them.
+- **Checks:** run_time_packs_test 0 failed (docs/proof/job42/amounts-sim.txt, receipt-order.txt, gating-sim.txt);
+  claude_bud_job42 part A pins; BuyPathStatic PASS=7499 FAIL=0; all sims 0 failed; rojo ok; no new LSP errors.
+
 ## claude-bud JOB 41 (2026-10-01): SUMMARY (parts A-D pushed; the details are in the part sections below)
 **Flags to launch (each owner-first, OFF = today):** `TutorialConfig.Guided`, `MonetizationConfig.RecruitPackOffer`
 (after the product exists), `RivalConfig`, `RatePromptConfig` (JOB 40 D + the JOB 41 D triggers).

@@ -187,6 +187,20 @@ function ShopOverhaulService.Init(d: { [string]: any })
 					if p:GetAttribute(ShopOverhaulConfig.PerMinAttribute) ~= v then
 						p:SetAttribute(ShopOverhaulConfig.PerMinAttribute, v)
 					end
+				end
+				-- claude-bud JOB 42: the time packs' income (timed boosts left out), same tick, only where they are live
+				if ShopOverhaulConfig.TimePacksLiveFor(p.UserId) then
+					local ms = deps.MonetizationService
+					local profile = deps.DataService and deps.DataService.GetProfile(p)
+					local okT, tv = pcall(function()
+						return ms and profile and ms.PassivePerMin(p, profile, ShopOverhaulConfig.TimePacks.ExcludeTimedBoosts == true) or 0
+					end)
+					local t = math.floor(if okT and typeof(tv) == "number" then tv else 0)
+					if p:GetAttribute(ShopOverhaulConfig.TimePacks.PerMinAttribute) ~= t then
+						p:SetAttribute(ShopOverhaulConfig.TimePacks.PerMinAttribute, t)
+					end
+				end
+				if live(p.UserId) then
 					if sinceCrate >= 600 then
 						pcall(ShopOverhaulService.TryVipSupply, p)
 					end
