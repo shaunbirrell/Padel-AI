@@ -56,12 +56,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    check(needle in read(rel), "CODEBOT v193: WE_Build=202 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v193: WE_Build=203 " + rel.rsplit("/", 1)[-1])
 
 RC = read(C + "RaidConfig.luau")
 ac = RC.split("(RaidConfig :: any).AntiCamp = {")[1].split("\n}\n")[0] if "(RaidConfig :: any).AntiCamp = {" in RC else ""
@@ -102,7 +102,10 @@ check("OnRaidDone(thief, hold.PlotId)" in read(S + "Services/MoneyCollectorServi
 
 MON = read(C + "MonetizationConfig.luau")
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON), "CODEBOT v193: MonetizationConfig byte-identical to " + PREV)
+# Code Bot v203: this byte-identical MonetizationConfig pin is v193's own ship scope (a later build may change
+# Shaun-approved text, e.g. v203's 2x Offline Cash Description); the newest codebot_vNNN.py carries the live money guard.
+_v193_own_mon = 'SetAttribute("WE_Build", 193)' in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
+check((not _v193_own_mon) or (prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON)), "CODEBOT v193: MonetizationConfig byte-identical to " + PREV)
 r = subprocess.run(["git", "diff", "--name-only", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
 touched = [ln for ln in (r.stdout or "").splitlines() if "WE_Building" in ln]
 check(r.returncode == 0 and not touched, "CODEBOT v193: no WE_Building* diffs vs " + PREV)

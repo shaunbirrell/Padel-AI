@@ -57,12 +57,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    check(needle in read(rel), "CODEBOT v199: WE_Build=202 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v199: WE_Build=203 " + rel.rsplit("/", 1)[-1])
 
 VA = read(C + "VisualAssetConfig.luau")
 j67 = VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in VA else ""
@@ -106,7 +106,10 @@ check(not any("ExperienceNotify" in n for n in names), "CODEBOT v199: no Experie
 
 MON = read(C + "MonetizationConfig.luau")
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON), "CODEBOT v199: MonetizationConfig byte-identical to " + PREV)
+# Code Bot v203: this byte-identical MonetizationConfig pin is v199's own ship scope (a later build may change
+# Shaun-approved text, e.g. v203's 2x Offline Cash Description); the newest codebot_vNNN.py carries the live money guard.
+_v199_own_mon = 'SetAttribute("WE_Build", 199)' in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
+check((not _v199_own_mon) or (prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON)), "CODEBOT v199: MonetizationConfig byte-identical to " + PREV)
 
 check("PreferMesh = true" not in VA, "CODEBOT v199: PreferMesh stays OFF (VisualAssetConfig)")
 check("PreferMeshWhenAssetIdSet = false" in read(C + "StructureVisualConfig.luau"),

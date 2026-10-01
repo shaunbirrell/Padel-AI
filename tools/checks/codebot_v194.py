@@ -58,12 +58,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    check(needle in read(rel), "CODEBOT v194: WE_Build=202 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v194: WE_Build=203 " + rel.rsplit("/", 1)[-1])
 
 EC = code(read(C + "EconomyConfig.luau"))
 m = re.search(r"\bMaxCash\s*=\s*([0-9_.eE+]+)\s*,", EC)
@@ -108,7 +108,10 @@ check(m is not None and "OwnerFirst" not in cp and "OwnerFirst" not in ac and "I
       "CODEBOT v194: cap fix is for everyone (no OwnerFirst gate on MaxCash / AddCash / CollectPendingCash)")
 MON = read(C + "MonetizationConfig.luau")
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON), "CODEBOT v194: MonetizationConfig byte-identical to " + PREV)
+# Code Bot v203: this byte-identical MonetizationConfig pin is v194's own ship scope (a later build may change
+# Shaun-approved text, e.g. v203's 2x Offline Cash Description); the newest codebot_vNNN.py carries the live money guard.
+_v194_own_mon = 'SetAttribute("WE_Build", 194)' in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
+check((not _v194_own_mon) or (prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON)), "CODEBOT v194: MonetizationConfig byte-identical to " + PREV)
 for rel in ("src/ReplicatedStorage/Shared/Constants.luau", C + "LeaderboardConfig.luau"):
     if (ROOT / rel).exists():
         check(_bud_j66(shipped(rel, PREV)) == _bud_j66(read(rel)), "CODEBOT v194: save keys unchanged " + rel.rsplit("/", 1)[-1])

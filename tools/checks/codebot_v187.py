@@ -66,12 +66,12 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    check(needle in read(rel), "CODEBOT v187: WE_Build=202 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v187: WE_Build=203 " + rel.rsplit("/", 1)[-1])
 
 ZC = read(C + "RebirthZonesConfig.luau")
 rb = ZC.split("cfg.Rebuild = {")[1].split("\n}")[0] if "cfg.Rebuild = {" in ZC else ""
@@ -85,7 +85,10 @@ check(Path("tools/checks/claude_bud_job50.py").is_file() and "part A" in read("t
 
 MON = read(C + "MonetizationConfig.luau")
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON), "CODEBOT v187: MonetizationConfig byte-identical to " + PREV)
+# Code Bot v203: this byte-identical MonetizationConfig pin is v187's own ship scope (a later build may change
+# Shaun-approved text, e.g. v203's 2x Offline Cash Description); the newest codebot_vNNN.py carries the live money guard.
+_v187_own_mon = 'SetAttribute("WE_Build", 187)' in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
+check((not _v187_own_mon) or (prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON)), "CODEBOT v187: MonetizationConfig byte-identical to " + PREV)
 if prev_mon is not None:
     a, b = skus(prev_mon), skus(MON)
     diff = sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))

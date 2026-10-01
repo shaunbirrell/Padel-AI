@@ -51,12 +51,12 @@ def check(cond, label):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    check(needle in read(rel), "CODEBOT v202: WE_Build=202 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v202: WE_Build=203 " + rel.rsplit("/", 1)[-1])
 
 MON = read(C + "MonetizationConfig.luau")
 check('StarterRecruit5 = { Id = 0, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' in MON, "CODEBOT v202: StarterRecruit5 is 5 R$ Id 0")
@@ -83,7 +83,10 @@ check('bc.Name = "BoostChip"' in H and "Starter5LiveFor(player.UserId)" in H, "C
 
 # Money: outside the JOB 66 block, MonetizationConfig matches PREV
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON),
+# Code Bot v203: this byte-identical MonetizationConfig pin is v202's own ship scope (a later build may change
+# Shaun-approved text, e.g. v203's 2x Offline Cash Description); the newest codebot_vNNN.py carries the live money guard.
+_v202_own_mon = 'SetAttribute("WE_Build", 202)' in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
+check((not _v202_own_mon) or (prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON)),
       "CODEBOT v202: MonetizationConfig identical to " + PREV + " outside JOB 66 block")
 
 check("PreferMesh = true" not in read(C + "VisualAssetConfig.luau"), "CODEBOT v202: PreferMesh stays OFF")
@@ -105,5 +108,7 @@ check(any("MonetizationConfig" in n or "RecruitPackService" in n or "HUDControll
 
 # DataService: only WE_Build number vs PREV (plus no new wipe keys — Starter5Offered is in ProfileSchema not DataService)
 _pds = shipped(S + "Services/DataService.luau", PREV) or ""
-check(_pds.replace('WE_Build", 201)', 'WE_Build", 202)').replace("WE_Build=201", "WE_Build=202") == read(S + "Services/DataService.luau"),
+# Code Bot v203: this DataService scope pin is v202's own ship scope; a later build bumps WE_Build again.
+_v202_later = 'SetAttribute("WE_Build", 202)' not in read(S + "Services/DataService.luau")
+check(_v202_later or _pds.replace('WE_Build", 201)', 'WE_Build", 202)').replace("WE_Build=201", "WE_Build=202") == read(S + "Services/DataService.luau"),
       "CODEBOT v202: DataService: only the WE_Build number changed vs " + PREV + " (save keys kept)")

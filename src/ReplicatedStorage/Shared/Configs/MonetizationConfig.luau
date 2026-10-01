@@ -314,12 +314,12 @@ local MonetizationConfig = {
 		-- claude-bud JOB 49 B / Code Bot v180 (Shaun approved + created 2026-10-01, universe 10767159222): 2x Offline Cash,
 		-- a permanent Game Pass (was a Developer Product stub at Id 0). Owned = UserOwnsGamePassAsync on join / after
 		-- PromptGamePassPurchaseFinished (WE_Ent_OfflineCap2x display flag); EconomyConfig.OfflineEarnings.CapBoost doubles
-		-- the offline cap TIME (8 h -> 16 h). Never raises Share, no combat stat. Sold in the Shop (SUPPLY pass rows).
+		-- the offline cap TIME (OfflineConfig: 2 h -> 4 h since v201). Never raises Share, no combat stat. Sold in the Shop (SUPPLY pass rows).
 		OfflineCap2x = {
 			Id = 2002664894,
 			DisplayName = "2x Offline Cash",
 			RobuxPrice = 149,
-			Description = "Offline cash builds for 16 h instead of 8 h",
+			Description = "Offline cash for 4 hours instead of 2 hours", -- Code Bot v203 (Shaun approved): OfflineConfig 2 h x PassCapMult 2; <= 44 chars (phone shop row)
 		},
 		-- v71 money (M1): Rebirth Boost (J13: +15% Cash per Rebirth instead of +10%, 1.5x starting Cash; no Gold x2).
 		-- RebirthConfig.Boost.GamePassKey. Id = 0 until created (OFF sale until the M7b/M7d publish).

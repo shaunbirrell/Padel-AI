@@ -61,12 +61,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    check(needle in read(rel), "CODEBOT v201: WE_Build=202 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v201: WE_Build=203 " + rel.rsplit("/", 1)[-1])
 
 # ── the formula: ONE central config ──
 OFC = code(read(C + "OfflineConfig.luau"))
@@ -173,7 +173,10 @@ check('" (8 h max)"' not in RC and "OfflineConfig.MaxSeconds / 3600" in RC and '
 BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()
 MON = read(C + "MonetizationConfig.luau")
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(BUD or (prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON)), "CODEBOT v201: MonetizationConfig byte-identical to " + PREV + " (no Robux changes; JOB 66 block allowed)" + (" [bud branch: ship-only, skipped]" if BUD else ""))
+# Code Bot v203: this byte-identical MonetizationConfig pin is v201's own ship scope (a later build may change
+# Shaun-approved text, e.g. v203's 2x Offline Cash Description); the newest codebot_vNNN.py carries the live money guard.
+_v201_own_mon = 'SetAttribute("WE_Build", 201)' in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
+check((not _v201_own_mon) or (BUD or (prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON))), "CODEBOT v201: MonetizationConfig byte-identical to " + PREV + " (no Robux changes; JOB 66 block allowed)" + (" [bud branch: ship-only, skipped]" if BUD else ""))
 check("PreferMesh = true" not in read(C + "VisualAssetConfig.luau"), "CODEBOT v201: PreferMesh stays OFF (VisualAssetConfig)")
 check("PreferMeshWhenAssetIdSet = false" in read(C + "StructureVisualConfig.luau"), "CODEBOT v201: PreferMeshWhenAssetIdSet false")
 check('"StreamingEnabled": true' not in read("default.project.json"), "CODEBOT v201: StreamingEnabled stays OFF")

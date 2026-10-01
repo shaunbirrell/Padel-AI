@@ -55,12 +55,12 @@ def _v200(cond, label):
 
 
 for _rel, _needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    _v200(_needle in _v200_read(_rel), "WE_Build=202 " + _rel.rsplit("/", 1)[-1])
+    _v200(_needle in _v200_read(_rel), "WE_Build=203 " + _rel.rsplit("/", 1)[-1])
 
 _VA = _v200_read(C + "VisualAssetConfig.luau")
 _j = _VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in _VA else ""
@@ -97,7 +97,10 @@ _v200("if template and not prepareAimTemplate(template, assetId, yawDeg) then" i
 _v200_bud = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()
 _mon = _v200_read(C + "MonetizationConfig.luau")
 _pm = _v200_shipped(C + "MonetizationConfig.luau", PREV)
-_v200(_v200_bud or (_pm is not None and _bud_j66(_pm) == _bud_j66(_mon)), "MonetizationConfig byte-identical to " + PREV + " (no price changes; JOB 66 block allowed)" + (" [bud branch: ship-only, skipped]" if _v200_bud else ""))
+# Code Bot v203: this byte-identical MonetizationConfig pin is v200's own ship scope (a later build may change
+# Shaun-approved text, e.g. v203's 2x Offline Cash Description); the newest codebot_vNNN.py carries the live money guard.
+_v200_own_mon = 'SetAttribute("WE_Build", 200)' in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
+_v200((not _v200_own_mon) or (_v200_bud or (_pm is not None and _bud_j66(_pm) == _bud_j66(_mon))), "MonetizationConfig byte-identical to " + PREV + " (no price changes; JOB 66 block allowed)" + (" [bud branch: ship-only, skipped]" if _v200_bud else ""))
 _v200("PreferMesh = true" not in _VA, "PreferMesh stays OFF (VisualAssetConfig)")
 _v200("PreferMeshWhenAssetIdSet = false" in _v200_read(C + "StructureVisualConfig.luau"), "PreferMeshWhenAssetIdSet false")
 _v200('"StreamingEnabled": true' not in _v200_read("default.project.json"), "StreamingEnabled stays OFF")

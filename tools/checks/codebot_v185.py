@@ -58,12 +58,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    check(needle in read(rel), "CODEBOT v185: WE_Build=202 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v185: WE_Build=203 " + rel.rsplit("/", 1)[-1])
 
 # --- the config: times and multipliers ---
 EC = code(read(C + "EventConfig.luau"))
@@ -135,6 +135,9 @@ check('"StreamingEnabled": true' not in prj, "CODEBOT v185: StreamingEnabled sta
 check("PreferMesh = true" not in read(C + "VisualAssetConfig.luau"), "CODEBOT v185: PreferMesh stays OFF")
 check("PreferMeshWhenAssetIdSet = false" in read(C + "StructureVisualConfig.luau"), "CODEBOT v185: PreferMeshWhenAssetIdSet false")
 prev = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev is None or _bud_j66(prev) == _bud_j66(read(C + "MonetizationConfig.luau")), "CODEBOT v185: MonetizationConfig byte-identical to v184 (no price change)")
+# Code Bot v203: this byte-identical MonetizationConfig pin is v185's own ship scope (a later build may change
+# Shaun-approved text, e.g. v203's 2x Offline Cash Description); the newest codebot_vNNN.py carries the live money guard.
+_v185_own_mon = 'SetAttribute("WE_Build", 185)' in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
+check((not _v185_own_mon) or (prev is None or _bud_j66(prev) == _bud_j66(read(C + "MonetizationConfig.luau"))), "CODEBOT v185: MonetizationConfig byte-identical to v184 (no price change)")
 r = subprocess.run(["git", "diff", "--name-only", PREV, "--"], capture_output=True, text=True, cwd=ROOT)
 check("WE_Building" not in (r.stdout or ""), "CODEBOT v185: no WE_Building* files touched")

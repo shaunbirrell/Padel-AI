@@ -44,12 +44,12 @@ def block(src, name):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    check(needle in read(rel), "CODEBOT v178: WE_Build=202 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v178: WE_Build=203 " + rel.rsplit("/", 1)[-1])
 
 # JOB 49 C: Core missions owner-first; free reroll; Robux reroll disabled
 MCF = shipped_v180(C + "MissionConfig.luau", "c978f41")  # Code Bot v180: as shipped (Robux reroll live since v180)

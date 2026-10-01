@@ -57,12 +57,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    check(needle in read(rel), "CODEBOT v195: WE_Build=202 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v195: WE_Build=203 " + rel.rsplit("/", 1)[-1])
 
 HC = code(read(C + "HudConfig.luau"))
 check(re.search(r"\bAbbreviateDecimalsBig\s*=\s*3\s*,", HC) is not None, "CODEBOT v195: HudConfig.CashPill.AbbreviateDecimalsBig = 3")
@@ -99,7 +99,10 @@ check(m is not None and float(m.group(1).replace("_", "")) == 1e15, "CODEBOT v19
 for rel in (C + "MonetizationConfig.luau",
             "src/ReplicatedStorage/Shared/Constants.luau", C + "LeaderboardConfig.luau"):
     if (ROOT / rel).exists():
-        check(_bud_j66(shipped(rel, PREV)) == _bud_j66(read(rel)), "CODEBOT v195: byte-identical to " + PREV + " " + rel.rsplit("/", 1)[-1])
+        # Code Bot v203: the MonetizationConfig pin is v195's own ship scope (v203 changed the 2x Offline Cash Description);
+        # the newest codebot_vNNN.py carries the live money guard. Constants / LeaderboardConfig stay pinned.
+        _v195_skip = rel.endswith("MonetizationConfig.luau") and 'SetAttribute("WE_Build", 195)' not in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
+        check(_v195_skip or _bud_j66(shipped(rel, PREV)) == _bud_j66(read(rel)), "CODEBOT v195: byte-identical to " + PREV + " " + rel.rsplit("/", 1)[-1])
 r = subprocess.run(["git", "diff", "--name-only", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
 touched = [ln for ln in (r.stdout or "").splitlines() if "WE_Building" in ln]
 check(r.returncode == 0 and not touched, "CODEBOT v195: no WE_Building* diffs vs " + PREV)

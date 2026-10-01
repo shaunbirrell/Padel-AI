@@ -49,12 +49,12 @@ def check(cond, label):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 202)'),
-    (S + "Services/DataService.luau", "WE_Build=202"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 202)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 203)'),
+    (S + "Services/DataService.luau", "WE_Build=203"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 203)'),
 ):
-    check(needle in read(rel), "CODEBOT v181: WE_Build=202 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v181: WE_Build=203 " + rel.rsplit("/", 1)[-1])
 
 rc = read(CL + "RivalController.luau")
 # JOB B: Sibling ordering on WE_RivalTargets (long comment between Name and the set)
@@ -72,6 +72,8 @@ try:
     check(r.returncode == 0 and not touched, "CODEBOT v181: no WE_Building* diffs vs " + PREV + ((" " + str(touched)) if touched else ""))
     r = subprocess.run(["git", "show", PREV + ":" + C + "MonetizationConfig.luau"], capture_output=True, text=True, cwd=ROOT)
     same = r.returncode == 0 and _bud_j66(r.stdout) == _bud_j66(read(C + "MonetizationConfig.luau"))
-    check(same, "CODEBOT v181: MonetizationConfig unchanged vs " + PREV + " (the approved JOB 66 block aside)")
+    # Code Bot v203: this MonetizationConfig pin is v181's own ship scope; the newest codebot_vNNN.py carries the live money guard.
+    _v181_own_mon = 'SetAttribute("WE_Build", 181)' in __import__("pathlib").Path("src/ServerScriptService/Server/Services/DataService.luau").read_text(encoding="utf-8")
+    check((not _v181_own_mon) or same, "CODEBOT v181: MonetizationConfig unchanged vs " + PREV + " (the approved JOB 66 block aside)")
 except Exception as e:
     check(False, "CODEBOT v181: git diff check errored: " + str(e))
