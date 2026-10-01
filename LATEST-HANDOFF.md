@@ -1,3 +1,17 @@
+## v188 PUBLISHED (Code Bot Roblox, 2026-10-01 ~20:15 Dublin): Open Cloud place version 186. claude-bud JOB 50 B+C Visuals+Signs OwnerFirst
+- **Commits:** cherry-pick `a360cec` → `51bd222` (JOB 50 B Visuals props), `302807e` → `078c624` (JOB 50 C Signs plaque/card/map/toast); code+dist+checks `8756ab5` on phase-7-polish (from v187 `3c2719e`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v187.
+- **JOB 50 B (NEW-OWNER-FIRST):** `RebirthZonesConfig.Rebuild.Visuals` — themed run props (truck/conveyor, consoles, targets, gates, valves, sandbag nests) + berm/apron edge via `RebirthZoneDressing.BuildRunProps` (parts only, no Light/Neon/WE_Building).
+- **JOB 50 C (NEW-OWNER-FIRST):** `RebirthZonesConfig.Rebuild.Signs` — gateway plaque RUN READY / IN PROGRESS / NEXT RUN n MIN (30 s refresh); preview `RunLine` (<= 42 chars); map zone dots (tap = card + pin, no fast travel); one ready toast.
+- **Checks:** BuyPathStatic **PASS=8169 FAIL=0**; `tools/checks/codebot_v188.py`; `claude_bud_job50.py` parts A+B+C+D. PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP 200, versionNumber **186**, universe 10767159222 / place 97112936860418. Servers NOT restarted.
+- **Phone tests (Shaun — rejoin / new server for WE_Build 188; owner only while OwnerFirst):**
+  1. Built rebirth zone: themed run props + berm/apron visible (Visuals).
+  2. Gateway plaque shows RUN READY / IN PROGRESS / NEXT RUN n MIN; refreshes without per-second churn.
+  3. Upgrade prompt card has gold Run: … line, not cut off at phone widths.
+  4. Map: HIS zone dots; tap = card + pin only (no fast travel).
+  5. After cooldown: one ready toast.
+- **Still owed:** flip Rebuild.OwnerFirst (and Visuals/Signs with it) after phone OK; flip AttackRange + SharedHostility after phone; JOB 51/52 still OwnerFirst; queued 53–58, 59, 60, 62, 63, 64. JOB 44 DONE — do not reopen.
+
 ## v187 PUBLISHED (Code Bot Roblox, 2026-10-01 ~19:52 Dublin): Open Cloud place version 185. claude-bud JOB 50 A ZoneRuns OwnerFirst
 - **Commits:** cherry-pick `2566954` → `65b53c8` (JOB 50 A ZoneRuns); code+dist+checks `3a0ab44` on phase-7-polish (from v186 `12bcd18`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v186.
 - **JOB 50 A (NEW-OWNER-FIRST):** `RebirthZonesConfig.Rebuild.OwnerFirst = true` — zone runs behind existing kiosks (Modules/ZoneRuns): production / launch prep / range practice / recon flight / drill course / pressure valves / hold the line. Server-validated steps; RunBase = max(ShipmentCash, 2 min income) × speed; first clear + cooldown + best; gateway plaques; ZONE COMMANDER; ZoneActivity analytics. Enabled=false = JOB 46 one-tap activities.
