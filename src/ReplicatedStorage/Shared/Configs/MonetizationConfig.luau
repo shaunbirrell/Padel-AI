@@ -323,6 +323,9 @@ local MonetizationConfig = {
 		},
 	},
 	DevProducts = {
+		-- claude-bud JOB 49 (Robux sidegrades, DISABLED): Id 0 and no RobuxPrice until Shaun approves a price (never prompted / never in the Shop)
+		OfflineCap2x = { Id = 0, DisplayName = "Offline Cap x2", Cash = 0, Gold = 0, GrantEntitlement = "OfflineCap2x", HideFromShop = true },
+		MissionReroll = { Id = 0, DisplayName = "Mission Reroll", Cash = 0, Gold = 0, GrantsMissionReroll = true, HideFromShop = true },
 		CashSmall = { Id = 3713838744, DisplayName = "Cash Pack S", RobuxPrice = 49, Cash = 10000, Gold = 0 },
 		CashMedium = { Id = 3713838815, DisplayName = "Cash Pack M", RobuxPrice = 149, Cash = 50000, Gold = 0 },
 		CashLarge = { Id = 3713838888, DisplayName = "Cash Pack L", RobuxPrice = 399, Cash = 200000, Gold = 0 },

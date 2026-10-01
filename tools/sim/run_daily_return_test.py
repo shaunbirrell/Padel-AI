@@ -248,6 +248,78 @@ local tOn, tOff = firstCardAt(true), firstCardAt(false)
 check(tOn >= DR.Calendar.FirstCardSeconds - 1 and tOn <= DR.Calendar.FirstCardSeconds + 1, string.format("Calendar ON: a held new player's first streak claim + card at %d s (FirstCardSeconds %d; the client still waits out combat)", tOn, DR.Calendar.FirstCardSeconds))
 check(tOff >= 97 and tOff <= 99, string.format("Calendar OFF: the JOB 29 timing (8 s + 90 s hold cap = %d s)", tOff))
 
+-- ── B. OFFLINE ──
+local EC = require(node("Configs/EconomyConfig"))
+local O = EC.OfflineEarnings
+check(O.Card.OwnerFirst == true and O.CapBoost.Enabled == false and O.CapBoost.OwnerFirst == true and O.CapBoost.CapMult == 2,
+  "B flags: the Welcome back card is owner-first; the CapBoost sidegrade hook is DISABLED (Enabled = false, OwnerFirst = true)")
+local MC = require(node("Configs/MonetizationConfig"))
+local row = MC.DevProducts.OfflineCap2x
+check(row ~= nil and row.Id == 0 and row.RobuxPrice == nil and row.HideFromShop == true and row.GrantEntitlement == "OfflineCap2x",
+  "B: DevProducts.OfflineCap2x has Id 0, NO price, hidden (never prompted / never in the Shop)")
+local function offlineLoad(p, gap, extra)
+  local op = newProfile(p, extra)
+  op.PrevSeenUnix = if gap == nil then nil else CLOCK - gap
+  MS, RS = boot(); clearLog()
+  for _, cb in ipairs(loaded) do cb(p, op) end
+  runTo(CLOCK + 200)
+  local paid = 0
+  for _, e in ipairs(LOG.pending) do if e.why == "offline" then paid += e.n end end
+  local card = nil
+  for _, e in ipairs(LOG.push) do if e.kind == "WelcomeBack" then card = e.data end end
+  return paid, card, op
+end
+PER_MIN = 600 -- $10/s
+local perSec = PER_MIN / 60
+local capS = O.CapSeconds
+local function want(sec) return math.floor(perSec * math.min(sec, capS) * O.Share) end
+local p1 = offlineLoad(OWNER, 4 * 60)
+check(p1 == 0, "4 min away (< MinSeconds " .. O.MinSeconds .. " s): nothing")
+local p2, c2 = offlineLoad(OWNER, 3600)
+check(p2 == want(3600) and c2 ~= nil and c2.Cash == p2 and c2.Capped == false and c2.Collect == true and c2.CapHours == capS // 3600,
+  "1 h away: $" .. p2 .. " into the ATM, card: Collect $" .. tostring(c2 and c2.Cash) .. ", not capped, cap " .. tostring(c2 and c2.CapHours) .. " h")
+local p3, c3 = offlineLoad(OWNER, capS)
+check(p3 == want(capS) and c3 and c3.Capped == true, "exactly the cap (" .. capS // 3600 .. " h): $" .. p3 .. ", capped")
+local p4, c4 = offlineLoad(OWNER, 30 * 3600)
+check(p4 == want(capS) and c4 and c4.Capped == true and c4.Seconds == capS, "30 h away: capped at " .. capS // 3600 .. " h ($" .. p4 .. ")")
+check(offlineLoad(OWNER, -500) == 0, "a negative gap (future LastSeen): nothing")
+check(offlineLoad(OWNER, nil) == 0, "first join (no LastSeen): nothing")
+-- rejoin spam: one payout per load (PrevSeenUnix cleared), and a rejoin inside MinSeconds pays nothing
+local paidA, _, opA = offlineLoad(OWNER, 3600)
+for _, cb in ipairs(loaded) do cb(OWNER, opA) end
+runTo(CLOCK + 200)
+local paidB = 0
+for _, e in ipairs(LOG.pending) do if e.why == "offline" then paidB += e.n end end
+check(paidA > 0 and paidB == paidA and opA.PrevSeenUnix == nil, "the same load hook firing twice pays once (PrevSeenUnix is cleared after the first)")
+check(offlineLoad(OWNER, 120) == 0, "a rejoin after 2 min (server hop / spam) pays nothing (MinSeconds)")
+-- Premium applied once
+OWNER.MembershipType = "Premium"
+local pp = offlineLoad(OWNER, 3600)
+OWNER.MembershipType = "None"
+check(pp == math.floor(perSec * 3600 * O.Share * (1 + O.PremiumBonus)), "Premium: +" .. math.floor(O.PremiumBonus * 100) .. "% once ($" .. pp .. ")")
+-- CapBoost: off = today's cap even with the entitlement; on (test only) = 2x
+local pOff = offlineLoad(OWNER, 30 * 3600, { Entitlements = { OfflineCap2x = true } })
+check(pOff == want(capS), "CapBoost OFF: the entitlement changes nothing (cap " .. capS // 3600 .. " h)")
+O.CapBoost.Enabled = true
+local pOn, cOn = offlineLoad(OWNER, 30 * 3600, { Entitlements = { OfflineCap2x = true } })
+local pOnNo = offlineLoad(OWNER, 30 * 3600)
+O.CapBoost.Enabled = false
+check(pOn == math.floor(perSec * capS * 2 * O.Share) and cOn and cOn.CapHours == 2 * capS // 3600 and pOnNo == want(capS),
+  "CapBoost ON (test only): 2x the cap TIME with the entitlement ($" .. pOn .. "), Share unchanged; without it the normal cap")
+-- the card OFF == the JOB 29 card
+O.Card.Enabled = false
+local _, cOld = offlineLoad(OWNER, 3600)
+O.Card.Enabled = true
+check(cOld ~= nil and cOld.Collect == nil and cOld.CapHours == nil, "Card OFF: the JOB 29 payload exactly (no Collect / CapHours)")
+check(evCount("OFFLINE_EARNED") == 1, "OfflineEarned logged once per payout")
+-- the maths at 3 income levels (8 h cap x Share)
+local lines = {}
+for _, pm in ipairs({ 60, 1000, 20000 }) do
+  table.insert(lines, string.format("$%d/min -> 1 h $%d, cap (%d h) $%d", pm, math.floor(pm / 60 * 3600 * O.Share), capS // 3600, math.floor(pm / 60 * capS * O.Share)))
+end
+print("MATHS offline: " .. table.concat(lines, " | "))
+PER_MIN = 0
+
 --@@B@@
 
 --@@C@@

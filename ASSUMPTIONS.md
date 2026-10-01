@@ -10043,3 +10043,10 @@ ds_territories.luau T3):
 - **Cycles:** a "cycle" starts each time the streak lands on Day 1, and grace is once per cycle.
 - **What SAVED marks:** it marks the day claimed after the miss (the missed date is not a strip slot).
 - **Day7Scale.IncomeMinutes = 60:** a first guess, in config. The table stays the floor.
+
+## 2026-10-01 — claude-bud JOB 49 part B: offline
+- **Cap:** kept at 8 h; the brief allows 8-12 h, and no live numbers say longer is better.
+- **COLLECT:** it draws the ATM waypoint rather than adding a second server claim; the money is already in the
+  ATM.
+- **OfflineCap2x:** a permanent entitlement through the existing GrantEntitlement receipt path. It stays disabled
+  with Id 0 until Shaun approves a price.

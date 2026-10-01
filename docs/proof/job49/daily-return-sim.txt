@@ -17,4 +17,20 @@ ok    the grace bookkeeping survives a save + ProfileSchema.Migrate
 ok    Calendar OFF: no countdown and no SAVED mark (the JOB 29 strip)
 ok    Calendar ON: a held new player's first streak claim + card at 150 s (FirstCardSeconds 150; the client still waits out combat)
 ok    Calendar OFF: the JOB 29 timing (8 s + 90 s hold cap = 98 s)
+ok    B flags: the Welcome back card is owner-first; the CapBoost sidegrade hook is DISABLED (Enabled = false, OwnerFirst = true)
+ok    B: DevProducts.OfflineCap2x has Id 0, NO price, hidden (never prompted / never in the Shop)
+ok    4 min away (< MinSeconds 300 s): nothing
+ok    1 h away: $9000 into the ATM, card: Collect $9000, not capped, cap 8 h
+ok    exactly the cap (8 h): $72000, capped
+ok    30 h away: capped at 8 h ($72000)
+ok    a negative gap (future LastSeen): nothing
+ok    first join (no LastSeen): nothing
+ok    the same load hook firing twice pays once (PrevSeenUnix is cleared after the first)
+ok    a rejoin after 2 min (server hop / spam) pays nothing (MinSeconds)
+ok    Premium: +10% once ($9900)
+ok    CapBoost OFF: the entitlement changes nothing (cap 8 h)
+ok    CapBoost ON (test only): 2x the cap TIME with the entitlement ($144000), Share unchanged; without it the normal cap
+ok    Card OFF: the JOB 29 payload exactly (no Collect / CapHours)
+ok    OfflineEarned logged once per payout
+MATHS offline: $60/min -> 1 h $900, cap (8 h) $7200 | $1000/min -> 1 h $15000, cap (8 h) $120000 | $20000/min -> 1 h $300000, cap (8 h) $2400000
 DAILY RETURN TEST: 0 failed

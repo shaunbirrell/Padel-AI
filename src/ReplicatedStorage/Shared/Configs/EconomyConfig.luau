@@ -129,6 +129,22 @@ local EconomyConfig = {
 		MinSeconds = 300,
 		PremiumBonus = 0.10,
 		ShowDelaySeconds = 6, -- the card: after the save loads (and after the onboarding hold)
+		--[[ claude-bud JOB 49 part B (2026-10-01): "Welcome back! Collect $X". Owner-first; OFF = the JOB 29 card. The
+			card shows the real server amount, the time away and "(capped at N h)"; COLLECT draws the gold line to his
+			own ATM (ConsoleWaypoint.ShowAtm: the money is already in the ATM; no travel, no second claim). ]]
+		Card = {
+			Enabled = true,
+			OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+		},
+		--[[ claude-bud JOB 49 B: the Robux SIDEGRADE hook, DISABLED. With the MonetizationConfig.DevProducts.OfflineCap2x
+			entitlement (Id 0 + no price until Shaun approves one: never prompted, never in the Shop) the cap TIME is
+			CapMult x CapSeconds. It never raises Share and gives no combat stat. ]]
+		CapBoost = {
+			Enabled = false,
+			OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): stays off until Shaun approves a price
+			ProductKey = "OfflineCap2x",
+			CapMult = 2,
+		},
 	},
 }
 

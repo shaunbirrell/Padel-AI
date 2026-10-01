@@ -182,17 +182,19 @@ local function welcomeBackCard(data: any)
 	st.Color = GOLD
 	st.Thickness = 2
 	st.Parent = card
-	local title = label(card, "WELCOME BACK", 17, GOLD, Enum.Font.GothamBlack)
+	local newCard = data.Collect == true -- claude-bud JOB 49 B: "Welcome back! Collect $X" (owner-first; nil = the JOB 29 card)
+	local title = label(card, if newCard then "WELCOME BACK!" else "WELCOME BACK", 17, GOLD, Enum.Font.GothamBlack)
 	title.Position = UDim2.fromOffset(14, 10)
 	title.Size = UDim2.new(1, -76, 0, 26)
 	title.TextXAlignment = Enum.TextXAlignment.Left
-	local body = label(card, "While you were away you earned", 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
+	local body = label(card, if newCard then "Your base earned while you were away" else "While you were away you earned", 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
 	body.Position = UDim2.fromOffset(14, 44)
 	body.Size = UDim2.new(1, -28, 0, 20)
 	local amt = label(card, "+" .. money(cash), 32, GOLD, Enum.Font.GothamBlack)
 	amt.Position = UDim2.fromOffset(14, 66)
 	amt.Size = UDim2.new(1, -28, 0, 38)
-	local sub = awayText(tonumber(data.Seconds) or 0) .. (if data.Capped == true then " (8 h max)" else "") .. " · in your ATM"
+	local capH = math.floor(tonumber(data.CapHours) or 8)
+	local sub = awayText(tonumber(data.Seconds) or 0) .. (if data.Capped == true then (if newCard then string.format(" (capped at %d h)", capH) else " (8 h max)") else "") .. " · in your ATM"
 	if data.Premium == true then
 		sub ..= " · Premium +10%"
 	end
@@ -217,7 +219,7 @@ local function welcomeBackCard(data: any)
 	collect.TextColor3 = Color3.new(1, 1, 1)
 	collect.Font = Enum.Font.GothamBlack
 	collect.TextSize = 18
-	collect.Text = "OK"
+	collect.Text = if newCard then "COLLECT " .. money(cash) else "OK"
 	corner(collect, 10)
 	collect.Parent = card
 	-- the money is already in his ATM (server, PendingCash): both buttons only close the card
@@ -226,7 +228,16 @@ local function welcomeBackCard(data: any)
 			g:Destroy()
 		end
 	end
-	collect.Activated:Connect(close)
+	collect.Activated:Connect(function()
+		if newCard then
+			-- claude-bud JOB 49 B: the gold line to HIS ATM (walk up to collect; no travel, no second claim)
+			pcall(function()
+				local CW: any = require(script.Parent.Parent.Modules.ConsoleWaypoint)
+				CW.ShowAtm(tonumber(player:GetAttribute("WE_PlotId")))
+			end)
+		end
+		close()
+	end)
 	x.Activated:Connect(close)
 	task.delay(12, close)
 end

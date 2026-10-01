@@ -59,6 +59,9 @@ try:
     # Code Bot v175: the stand-sign rows (SignW / SignH / SignPixelsPerStud / SignBack, Depot.SignLift) are later, separate edits
     ch = [l for l in ch if "Code Bot v175" not in l and "Depot = { X0 = " not in l
           and not re.match(r"\s*Sign(W|H|PixelsPerStud|Back) = ", l[1:])]
+    # claude-bud JOB 49: the two DISABLED sidegrade rows (Id 0, no price) + their comment are added lines only;
+    # claude_bud_job49.py pins them (Id 0, no RobuxPrice, no stat keys). Every other line is still held to v167's rule.
+    ch = [l for l in ch if not re.match(r"^\+		(OfflineCap2x|MissionReroll) = \{ Id = 0, ", l) and not re.match(r"^\+		-- claude-bud JOB 49 \(Robux sidegrades, DISABLED\)", l)]
     norm = lambda l: re.sub(r"\bId = \d+,", "Id = X,", l[1:])
     minus = sorted(norm(l) for l in ch if l.startswith("-"))
     plus = sorted(norm(l) for l in ch if l.startswith("+"))

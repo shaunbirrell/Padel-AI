@@ -127,6 +127,8 @@ try:
     # claude-bud JOB 42: + the five new time-pack rows (Cash15m .. Cash4h, all Id 0; pinned in claude_bud_job42.py)
     # codebot_v167: + their Creator Hub Ids (were 0; pinned in codebot_v167.py)
     lines = [l for l in lines if not (l.startswith("+") and (re.search(r"RecruitPack = \{ Id = (0|3715776659),", l) or re.search(r"Cash(15m|30m|1h|2h|4h) = \{ Id = (0|\d{10}),", l)))]
+    # claude-bud JOB 49: + the two DISABLED sidegrade rows (OfflineCap2x / MissionReroll: Id 0, no price; pinned in claude_bud_job49.py)
+    lines = [l for l in lines if not (l.startswith("+") and re.search(r"(OfflineCap2x|MissionReroll) = \{ Id = 0,", l))]
     check(not any(re.search(r"(^|[\s{,])Id\s*=\s*\d", l) for l in lines), "CODEBOT v156: no product Id changed since v155 (claude-bud JOB 41: the new RecruitPack row aside)")
     pr = sorted(re.sub(r"\s+", " ", l.split("--")[0]).strip() for l in lines if re.search(r"(?<!Overhaul)RobuxPrice\s*=", l))
     check(pr in ([], sorted(["- RobuxPrice = 149,", "- RobuxPrice = 99,", "+ RobuxPrice = 249,", "+ RobuxPrice = 79,"])),

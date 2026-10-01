@@ -14,6 +14,51 @@
 - **Publish:** HTTP 200, versionNumber **172**, universe 10767159222 / place 97112936860418. Servers not restarted (Migrate to Latest Update as needed).
 - **Phone tests (owed — Shaun):** (1) fresh test account ~2 min: first fight won, army grows +2 at BASE SECURED!, gold line on every step. (2) raid goal "Raid a rival base" with TARGETS outlined + SEND ARMY, or "Clear hostiles" on empty server. (3) owner returning account never sees the chain (REPLAY GUIDED in Settings > ADMIN for test mode). After phone OK: flip `TutorialConfig.Guided.Hook.OwnerFirst = true -> false`.
 - **Still owed / not this ship:** JOB 44 Studio 2-player siege/march still owed (skipped per Shaun for queue progress). JOB 49 (reasons to come back) not started.
+## claude-bud JOB 49 part B (2026-10-01): OFFLINE EARNINGS + "WELCOME BACK! COLLECT $X" (branch `claude/desktop-bud`)
+**Flags to flip:**
+- `EconomyConfig.OfflineEarnings.Card.OwnerFirst = true -> false` (NEW-OWNER-FIRST).
+- `OfflineEarnings.CapBoost` stays **Enabled = false** until Shaun approves a price.
+
+**Root cause:** the offline payout itself is sound (sim: 4 min = 0, rejoin spam pays once, negative gap = 0, Premium
+once). The weak points:
+- the card said "OK" and gave the player nothing to do;
+- the Missions panel hard-coded "Away 8 h";
+- **offline cash lands in PendingCash, which `MoneyCollectorService.GetRaidableBalance` counts.** A rival can raid it
+  between his join and his walk to the ATM (raids need the victim online, which he is after a join).
+
+**Built (extends RetentionService / the JOB 29 card):**
+- **The card:** "WELCOME BACK! Your base earned while you were away" with the real server amount, the time away and
+  "(capped at 8 h)". COLLECT draws the gold ConsoleWaypoint line to HIS ATM (walk up to collect).
+  - **Why the waypoint, not a server claim:** the money is already in the ATM, so it adds no new claim path and no
+    double pay.
+- **The cap:** `CapSeconds` is **kept at 8 h** (inside Shaun's 8-12 h range). Share 0.25 is kept. Maths at 8 h x 0.25:
+
+  | Income | 1 h away | Full 8 h |
+  |---|---|---|
+  | $60/min | $900 | $7,200 |
+  | $1,000/min | $15,000 | $120,000 |
+  | $20,000/min | $300,000 | $2.4M |
+
+- **Sidegrade hook (DISABLED):**
+  - `OfflineCap2x`: `DevProducts.OfflineCap2x` = Id 0, no RobuxPrice, HideFromShop, GrantEntitlement "OfflineCap2x".
+  - With `CapBoost` live + that entitlement the cap TIME is x2. It never touches Share or any stat.
+- **Also added:** `DevProducts.MissionReroll` (Id 0, no price) for part C. `RetentionService.OfflineCapSeconds` feeds
+  the Missions panel's real "Away N h".
+- **Pins:** codebot_v167's "MonetizationConfig diff = only the six Ids" now skips those two Id-0 rows (a claude-bud
+  comment explains why); claude_bud_job49 pins the rows.
+- **Analytics:** OfflineCollected {cash, capped}.
+
+**Question for Shaun:** offline cash sitting in the ATM can be raided before he collects it. Should it stay raidable
+(today's rule), or be safe until his first collect? Not changed.
+
+**Checks:**
+- run_daily_return_test part B (cases + exploits + CapBoost off/on + card OFF == OLD) 0 failed.
+- run_offline_test +3 cases.
+- BuyPathStatic FAIL=0.
+
+**Test ON HIS PHONE:** leave for 1 h+, rejoin. The card shows "Collect $X" with the time away, and COLLECT draws the
+gold line to the ATM.
+
 ## claude-bud JOB 49 part A (2026-10-01): DAILY STREAK: GRACE, INCOME-SCALED DAY 7, REAL COUNTDOWN (branch `claude/desktop-bud`)
 **Flags to flip:** `DailyRewardConfig.Grace` / `.Day7Scale` / `.Calendar` OwnerFirst = true -> false (each tagged
 NEW-OWNER-FIRST). Enabled = false == today's streak (pinned).

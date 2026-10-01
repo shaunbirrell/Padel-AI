@@ -242,10 +242,28 @@ function RetentionService.ComputeOffline(prevSeen: number, now: number, perSec: 
 	return math.floor(perSec * counted * share * mult), math.floor(counted)
 end
 
+-- claude-bud JOB 49 B: this player's cap in seconds: CapSeconds, x CapBoost.CapMult only with the OfflineCap2x
+-- entitlement while CapBoost is live (it is DISABLED until Shaun approves a price). Never touches Share.
+local function capSecondsFor(player: Player, profile: any): number
+	local o = offlineCfg()
+	local cap = math.max(0, tonumber(o.CapSeconds) or 0)
+	local b = o.CapBoost
+	if typeof(b) == "table" and RetentionConfig.Live(b, player.UserId) and typeof(profile) == "table"
+		and typeof(profile.Entitlements) == "table" and profile.Entitlements[b.ProductKey] == true then
+		cap *= math.max(1, tonumber(b.CapMult) or 1)
+	end
+	return cap
+end
+
+function RetentionService.OfflineCapSeconds(player: Player): number
+	local profile = DataService and DataService.GetProfile(player)
+	return if profile then capSecondsFor(player, profile) else math.max(0, tonumber(offlineCfg().CapSeconds) or 0)
+end
+
 -- what a full cap pays at this player's income now (the Missions "tomorrow" line and the sender state)
 local function offlineCapCash(player: Player, profile: any): number
 	local o = offlineCfg()
-	return math.floor(incomePerSecond(player, profile) * (tonumber(o.CapSeconds) or 0) * math.clamp(tonumber(o.Share) or 0, 0, 1) * premiumMult(player))
+	return math.floor(incomePerSecond(player, profile) * capSecondsFor(player, profile) * math.clamp(tonumber(o.Share) or 0, 0, 1) * premiumMult(player))
 end
 
 function RetentionService.OfflineCapCash(player: Player): number
@@ -261,25 +279,32 @@ local function onLoadOffline(player: Player, profile: any)
 		return
 	end
 	local o = offlineCfg()
+	local capSec = capSecondsFor(player, profile) -- claude-bud JOB 49 B: CapSeconds (x CapMult with the disabled hook)
+	local oc = table.clone(o)
+	oc.CapSeconds = capSec
 	local cash, seconds = RetentionService.ComputeOffline(
 		tonumber(profile.PrevSeenUnix) or 0,
 		os.time(),
 		incomePerSecond(player, profile),
 		premiumMult(player),
-		o
+		oc
 	)
 	profile.PrevSeenUnix = nil -- paid once per load: a later call in this session finds nothing
 	if cash <= 0 or not EconomyService or not EconomyService.AccruePendingCash(player, cash, "offline") then
 		return
 	end
 	log(player, "OFFLINE_EARNED", { cash = cash, hours = string.format("%.1f", seconds / 3600) })
+	log(player, "OFFLINE_COLLECTED", { cash = cash, capped = if seconds >= capSec then "yes" else "no" }) -- claude-bud JOB 49
 	task.delay(math.max(1, tonumber(o.ShowDelaySeconds) or 6), function()
 		if player.Parent and RetentionService.WaitOnboarding(player, 90) then
+			local card = typeof(o.Card) == "table" and RetentionConfig.Live(o.Card, player.UserId)
 			push(player, "WelcomeBack", {
 				Cash = cash,
 				Seconds = seconds,
-				Capped = seconds >= (tonumber(o.CapSeconds) or 0),
+				Capped = seconds >= capSec,
 				Premium = premiumMult(player) > 1,
+				CapHours = if card then math.floor(capSec / 3600 + 0.5) else nil, -- claude-bud JOB 49 B: "(capped at N h)"
+				Collect = if card then true else nil, -- claude-bud JOB 49 B: COLLECT draws the gold line to his ATM
 			})
 		end
 	end)

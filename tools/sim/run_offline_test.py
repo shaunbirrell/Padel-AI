@@ -37,6 +37,10 @@ cases = [
     ("+20 h (capped at 8 h)", now - 72000, now, per, 1, int(per * cfg["CapSeconds"] * cfg["Share"])),
     ("+2 h Premium", now - 7200, now, per, 1 + cfg["PremiumBonus"], int(per * 7200 * cfg["Share"] * (1 + cfg["PremiumBonus"]))),
     ("no income", now - 7200, now, 0, 1, 0),
+    # claude-bud JOB 49 B: the brief's edges
+    ("4 min (under MinSeconds)", now - 240, now, per, 1, 0),
+    ("exactly the cap", now - int(cfg["CapSeconds"]), now, per, 1, int(per * cfg["CapSeconds"] * cfg["Share"])),
+    ("30 h (capped)", now - 30 * 3600, now, per, 1, int(per * cfg["CapSeconds"] * cfg["Share"])),
 ]
 lua = [fn, "local o = { Share = %s, CapSeconds = %s, MinSeconds = %s }" % (cfg["Share"], cfg["CapSeconds"], cfg["MinSeconds"]), "local fails = 0"]
 for name, prev, t, p, mult, want in cases:
