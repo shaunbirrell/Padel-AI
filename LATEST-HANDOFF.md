@@ -1,3 +1,17 @@
+## v189 PUBLISHED (Code Bot Roblox, 2026-10-01 ~20:45 Dublin): Open Cloud place version 187. claude-bud JOB 53 Defence visuals + JOB 54 night lighting OwnerFirst
+- **Commits:** cherry-pick `cce3479` → `aa8adc4` (JOB 53 DefenceVisuals), `9894eb8` → `275f0e3` (JOB 54 Night2); code+dist+checks `6740398` on phase-7-polish (from v188 `c0d7123`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v188.
+- **JOB 53 (NEW-OWNER-FIRST):** `EndgameConfig.DefenceVisuals` — turret plating/ammo, gate bands-plates-braces-beam + tier leaf look, vault plating by tier L1/4/7/10 from SAVED levels in syncPlotNow; gate damage states 60%/30%/breached; new-look purchase toast via `DefenceVisuals` module.
+- **JOB 54 (NEW-OWNER-FIRST):** `LightingConfig.Night2` — NightLights.SyncPlot per owned plot (helipad + dock floods, lit gate sign, red beacon mast, pad/bollard/runway glow), 7 lights/base, 101/120 budget, low-quality halving; client night exposure 0 → 0.35.
+- **Checks:** BuyPathStatic **PASS=8258 FAIL=0**; `tools/checks/codebot_v189.py`; `claude_bud_job53.py`; `claude_bud_job54.py`. PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP 200, versionNumber **187**, universe 10767159222 / place 97112936860418. Servers NOT restarted.
+- **Phone tests (Shaun — rejoin / new server for WE_Build 189; owner only while OwnerFirst):**
+  1. Defence tiers visible on turrets/gates/vault from saved levels (JOB 53).
+  2. Gate damage states at 60%/30%/breached.
+  3. Purchase toast when buying into a new visual tier.
+  4. Night: base lights (helipad/dock/gate sign/beacon etc.), exposure bump; light budget respected (JOB 54).
+  5. Only plot owner sees while OwnerFirst.
+- **Still owed:** flip DefenceVisuals.OwnerFirst + Night2.OwnerFirst after phone OK; JOB 51/52 still OwnerFirst; queued 55–58, 59, 60, 62–64. JOB 44 DONE — do not reopen.
+
 ## v188 PUBLISHED (Code Bot Roblox, 2026-10-01 ~20:15 Dublin): Open Cloud place version 186. claude-bud JOB 50 B+C Visuals+Signs OwnerFirst
 - **Commits:** cherry-pick `a360cec` → `51bd222` (JOB 50 B Visuals props), `302807e` → `078c624` (JOB 50 C Signs plaque/card/map/toast); code+dist+checks `8756ab5` on phase-7-polish (from v187 `3c2719e`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v187.
 - **JOB 50 B (NEW-OWNER-FIRST):** `RebirthZonesConfig.Rebuild.Visuals` — themed run props (truck/conveyor, consoles, targets, gates, valves, sandbag nests) + berm/apron edge via `RebirthZoneDressing.BuildRunProps` (parts only, no Light/Neon/WE_Building).
