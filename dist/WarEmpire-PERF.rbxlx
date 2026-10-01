@@ -764,7 +764,7 @@ local AnalyticsConfig = {
 			SHOP_OPEN = { Name = "ShopOpened" },
 			SHOP_PROMPT = { Name = "ProductPrompted", Field = "productKey" },
 			PROMPT_CLOSED = { Name = "PromptCancelled", Field = "kind" },
-			PURCHASE_RECEIPT = { Name = "RobuxPurchase", Value = "currencySpent", Field = "productKey" },
+			PURCHASE_RECEIPT = { Name = "RobuxPurchase", Value = "currencySpent", Field = "productKey", Field2 = "perMinBucket" }, -- claude-bud JOB 42: + the time-pack income bucket
 			VEHICLE_SPAWNED = { Name = "VehicleSpawned", Field = "vehicle" },
 			MISSILE_STRIKE = { Name = "MissileLaunched" },
 			NUKE_LAUNCH = { Name = "NukeLaunched" },
@@ -8009,6 +8009,14 @@ local MonetizationConfig = {
 		-- product. Cash is computed in ProcessReceipt from his income (RecruitPackOffer: 30 min of income, $25k..$150k), plus a
 		-- 2x cash boost for 30 min (CodesService.GrantCashBoost) and the gold "RECRUIT" base trim (entitlement, no stat).
 		-- NOT pay-to-win: no damage / health / armour / army / raid / protection key in this row (pinned).
+		-- claude-bud JOB 42: TIME-based cash packs (repeatable). Id 0 until Code Bot creates them in the Creator Hub (an Id 0
+		-- product never prompts and the Shop skips it). Cash = the floor; ProcessReceipt grants max(Floor, Minutes x his
+		-- income) at receipt time (ShopOverhaulConfig.TimePacks). Cash only: no stat key.
+		Cash15m = { Id = 0, DisplayName = "15 Minutes of Cash", RobuxPrice = 25, Cash = 10000, Gold = 0 },
+		Cash30m = { Id = 0, DisplayName = "30 Minutes of Cash", RobuxPrice = 49, Cash = 25000, Gold = 0 },
+		Cash1h = { Id = 0, DisplayName = "1 Hour of Cash", RobuxPrice = 89, Cash = 50000, Gold = 0 },
+		Cash2h = { Id = 0, DisplayName = "2 Hours of Cash", RobuxPrice = 159, Cash = 100000, Gold = 0 },
+		Cash4h = { Id = 0, DisplayName = "4 Hours of Cash", RobuxPrice = 279, Cash = 200000, Gold = 0 },
 		RecruitPack = { Id = 0, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, Description = "Cash, 2x cash for 30 min and a gold base trim" },
 		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
 		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
@@ -14015,6 +14023,12 @@ local ShopOverhaulConfig = {
 		"^ShopRow_Pass_PV_",
 		"^ShopRow_Pass_ExtraGarageSlot$",
 		"^ShopRow_Pass_",
+		-- claude-bud JOB 42: the time packs take the cash place (only built while shown); the old four stay for OFF
+		"^ShopRow_Cash4h$",
+		"^ShopRow_Cash2h$",
+		"^ShopRow_Cash1h$",
+		"^ShopRow_Cash30m$",
+		"^ShopRow_Cash15m$",
 		"^ShopRow_CashMega$",
 		"^ShopRow_CashLarge$",
 		"^ShopRow_CashMedium$",
@@ -14034,6 +14048,33 @@ local ShopOverhaulConfig = {
 	} :: { [string]: Pack },
 	PerMinAttribute = "WE_PassivePerMin", -- server -> the buyer's client (display only; ProcessReceipt recomputes)
 	PerMinPublishSeconds = 10,
+
+	--[[ claude-bud JOB 42: TIME-based cash packs ("buy X minutes of your cash"), owner-first. Grant = max(Floor, Minutes x
+		his income) at RECEIPT time (ProcessReceipt). Live in the Shop = TimePacksLiveFor AND TimePacksReady (all five Ids
+		set); until then the old JOB 36 rows stay. The Floors are a proposed minimum for new players, chosen so both the
+		minutes per R$ and the floor $ per R$ rise with the price (15m 0.60 / 400 -> 4h 0.86 / 717): a bigger pack is always
+		the better deal, so BEST VALUE on 4h is honest. ExcludeTimedBoosts: the income leaves out the TIMED multipliers
+		(profile.CashBoost, the Double Cash event) so the pack does not double while a boost runs. NO 1-day / 7-day pack. ]]
+	TimePacks = {
+		Enabled = true,
+		OwnerFirst = true,
+		Order = { "Cash4h", "Cash2h", "Cash1h", "Cash30m", "Cash15m" }, -- Shop order, biggest first
+		Packs = {
+			Cash4h = { Minutes = 240, Floor = 200000, Title = "4 HOURS OF CASH", Label = "4 hours of cash" },
+			Cash2h = { Minutes = 120, Floor = 100000, Title = "2 HOURS OF CASH", Label = "2 hours of cash" },
+			Cash1h = { Minutes = 60, Floor = 50000, Title = "1 HOUR OF CASH", Label = "1 hour of cash" },
+			Cash30m = { Minutes = 30, Floor = 25000, Title = "30 MIN OF CASH", Label = "30 minutes of cash" },
+			Cash15m = { Minutes = 15, Floor = 10000, Title = "15 MIN OF CASH", Label = "15 minutes of cash" },
+		},
+		BestValueKey = "Cash4h",
+		BestValueLabel = "BEST VALUE",
+		ExcludeTimedBoosts = true,
+		HideOldKeys = { CashSmall = true, CashMedium = true, CashLarge = true, CashMega = true },
+		PerMinAttribute = "WE_TimePackPerMin", -- display only, from the same publish tick as WE_PassivePerMin
+		MinimumText = "(minimum)", -- the amount line while the floor is what he gets
+		-- the income bucket on RobuxPurchase (never the exact income)
+		PerMinBuckets = { { Min = 100000, Text = "100k+" }, { Min = 10000, Text = "10k+" }, { Min = 1000, Text = "1k+" }, { Min = 100, Text = "100+" }, { Min = 0, Text = "0-99" } },
+	},
 
 	-- duplicates
 	HideWhenLive = { ImpulseSpeed = true, ExtraSoldierSlot = true } :: { [string]: boolean },
@@ -14066,6 +14107,48 @@ function ShopOverhaulConfig.CashPackAmount(key: string, perMin: number): number?
 	end
 	local rate = if typeof(perMin) == "number" and perMin == perMin and perMin > 0 and perMin < 1e12 then perMin else 0
 	return math.max(p.Floor, math.floor(p.Minutes * rate))
+end
+
+-- claude-bud JOB 42: the time packs
+function ShopOverhaulConfig.TimePacksLiveFor(userId: any): boolean
+	return RetentionConfig.Live(ShopOverhaulConfig.TimePacks, userId)
+end
+
+-- a time pack's grant for an income of perMin $/min (nil = not a time pack); an integer, at most 2^53
+function ShopOverhaulConfig.TimePackAmount(key: string, perMin: number): number?
+	local p = ShopOverhaulConfig.TimePacks.Packs[key]
+	if p == nil then
+		return nil
+	end
+	local rate = if typeof(perMin) == "number" and perMin == perMin and perMin > 0 and perMin < 1e12 then perMin else 0
+	return math.min(math.max(p.Floor, math.floor(p.Minutes * rate)), 2 ^ 53)
+end
+
+-- all five time-pack Ids are set in MonetizationConfig (the Shop swap waits for every one)
+function ShopOverhaulConfig.TimePacksReady(): boolean
+	local MC: any = require(script.Parent.MonetizationConfig)
+	for _, key in ipairs(ShopOverhaulConfig.TimePacks.Order) do
+		local def = MC.DevProducts[key]
+		if typeof(def) ~= "table" or (tonumber(def.Id) or 0) == 0 then
+			return false
+		end
+	end
+	return true
+end
+
+-- LIVE for the Shop / the offers: the flag AND all five Ids
+function ShopOverhaulConfig.TimePacksShown(userId: any): boolean
+	return ShopOverhaulConfig.TimePacksLiveFor(userId) and ShopOverhaulConfig.TimePacksReady()
+end
+
+function ShopOverhaulConfig.PerMinBucket(perMin: number): string
+	local n = tonumber(perMin) or 0
+	for _, b in ipairs(ShopOverhaulConfig.TimePacks.PerMinBuckets) do
+		if n >= b.Min then
+			return b.Text
+		end
+	end
+	return "0-99"
 end
 
 -- the VIP supply crate for a passive income of perMin $/min
@@ -30008,7 +30091,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 160)
+		player:SetAttribute("WE_Build", 161)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -68194,6 +68277,11 @@ local function custom(player: Player, eventName: string, props: { [string]: any 
 	if map.Field and props and props[map.Field] ~= nil then
 		fields = { [Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = string.sub(tostring(props[map.Field]), 1, 50) }
 	end
+	-- claude-bud JOB 42: an optional second field (CustomField02), e.g. the time-pack income bucket on RobuxPurchase
+	if map.Field2 and props and props[map.Field2] ~= nil then
+		fields = fields or {}
+		fields[Enum.AnalyticsCustomFieldKeys.CustomField02.Name] = string.sub(tostring(props[map.Field2]), 1, 50)
+	end
 	local ok = pcall(function()
 		svc:LogCustomEvent(player, map.Name, value, fields)
 	end)
@@ -72073,7 +72161,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 160)
+			player:SetAttribute("WE_Build", 161)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -80530,7 +80618,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 160)
+		player:SetAttribute("WE_Build", 161)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -80672,7 +80760,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=160",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=161",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -91424,6 +91512,7 @@ type GrantEvent = {
 	Entitlements: { string },
 	Counters: { [string]: number }, -- profile field -> amount added (e.g. Nukes = 3)
 	CurrencySpent: number,
+	PerMinBucket: string?, -- claude-bud JOB 42: the buyer's income bucket on a time pack (analytics)
 	Source: string,
 	FirstPurchase: boolean,
 	At: number, -- os.clock() of the grant (prunes stale pending events)
@@ -92135,7 +92224,9 @@ end
 --[[ claude-bud JOB 36: the player's passive income in $ per minute, cash multipliers included (the base's passive tick
 	x EconomyService.GetCashMult "passive" / TickSeconds x 60). May yield once (a cold pass cache), like any ownership
 	lookup; 0 when unknown. Cash packs, the VIP crate and the Shop's live amounts use it. ]]
-function MonetizationService.PassivePerMin(player: Player, profile: any): number
+-- claude-bud JOB 42: excludeTimed = leave out the TIMED multipliers (profile.CashBoost and the Double Cash event): the
+-- time packs' income ("4 hours of your cash" must not double while a code / Recruit Pack boost runs). Same function.
+function MonetizationService.PassivePerMin(player: Player, profile: any, excludeTimed: boolean?): number
 	if BaseService == nil or EconomyService == nil or profile == nil then
 		return 0
 	end
@@ -92144,6 +92235,18 @@ function MonetizationService.PassivePerMin(player: Player, profile: any): number
 	local tick = math.max(1, tonumber((require(Shared.Configs.EconomyConfig) :: any).PassiveIncome.TickSeconds) or 5)
 	local t = if okT then tonumber(perTick) or 0 else 0
 	local m = if okM then tonumber(mult) or 1 else 1
+	if excludeTimed == true then
+		local okB, boost = pcall(function()
+			return EconomyService.CashBoostMult and EconomyService.CashBoostMult(profile) or 1
+		end)
+		local okE, ev = pcall(function()
+			local ES: any = require(script.Parent.EngagementService)
+			return ES.CashMult and ES.CashMult(player) or 1
+		end)
+		local b = if okB then tonumber(boost) or 1 else 1
+		local e = if okE then tonumber(ev) or 1 else 1
+		m = m / math.max(1, b) / math.max(1, e)
+	end
 	local v = t * m / tick * 60
 	return if v == v and v > 0 and v < 1e12 then v else 0
 end
@@ -92534,6 +92637,12 @@ function MonetizationService.OfferMoment(player: Player, moment: string)
 		local dc: any = MonetizationConfig.GamePasses.DoubleCash
 		if dc and (tonumber(dc.Id) or 0) ~= 0 and not ownsCached(player, "DoubleCash") then
 			kind, key, title, cta = "GamePass", "DoubleCash", "Rebuild faster: 2x Cash", LivePrices.Cta("GamePass", "DoubleCash")
+		elseif ShopOverhaulConfig.TimePacksShown(player.UserId) then
+			-- claude-bud JOB 42: "Fresh start boost" sells the 1 HOUR OF CASH pack (its live amount, timed boosts left out)
+			local prof = DataService and DataService.GetProfile(player)
+			local boost = ShopOverhaulConfig.TimePackAmount("Cash1h", MonetizationService.PassivePerMin(player, prof, ShopOverhaulConfig.TimePacks.ExcludeTimedBoosts == true)) or 0
+			local s = tostring(math.floor(boost)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+			kind, key, title, cta = "DevProduct", "Cash1h", "Fresh start boost: $" .. s, LivePrices.Cta("DevProduct", "Cash1h")
 		else
 			local cl: any = MonetizationConfig.DevProducts.CashLarge
 			if cl and (tonumber(cl.Id) or 0) ~= 0 then
@@ -93033,7 +93142,15 @@ end
 	change the receipt decision (listeners and economy events are deferred + pcall'd). ]]
 local function afterGrantSaved(player: Player, profile: any, event: GrantEvent)
 	if NotificationService then
-		NotificationService.Notify(player, "Purchase granted: " .. event.DisplayName, "Reward")
+		local tp = ShopOverhaulConfig.TimePacks.Packs[event.ProductKey]
+		if tp then
+			-- claude-bud JOB 42: the real granted number ("+$1,234,567 (4 hours of cash)")
+			local s = tostring(math.floor(event.Cash))
+			local commas = (s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
+			NotificationService.Notify(player, string.format("+$%s (%s)", commas, tp.Label), "Reward")
+		else
+			NotificationService.Notify(player, "Purchase granted: " .. event.DisplayName, "Reward")
+		end
 	end
 	if AnalyticsService then
 		local firstJoin = if typeof(profile) == "table" then nonNegInt(profile.FirstJoinUnix) else 0
@@ -93042,6 +93159,7 @@ local function afterGrantSaved(player: Player, profile: any, event: GrantEvent)
 			productKey = event.ProductKey,
 			receiptId = event.ReceiptId,
 			currencySpent = event.CurrencySpent,
+			perMinBucket = event.PerMinBucket, -- claude-bud JOB 42 (time packs only)
 			source = event.Source,
 			firstPurchase = event.FirstPurchase,
 			daysSinceFirstJoin = if firstJoin > 0 then math.max(0, math.floor((os.time() - firstJoin) / 86400)) else nil,
@@ -93161,6 +93279,18 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 		end
 		cashGrant = nonNegInt(ShopOverhaulConfig.CashPackAmount(productKey :: string, perMin))
 	end
+	-- claude-bud JOB 42: a TIME pack = max(Floor, Minutes x his income at RECEIPT time), timed boosts left out. For ANY
+	-- receipt of a time-pack Id (a paid receipt always gets the real amount); the lookup may yield, so it is here,
+	-- before any mutation, and re-checked after (the same rule as the JOB 36 block above)
+	local timePerMin: number? = nil
+	if ShopOverhaulConfig.TimePacks.Packs[productKey :: string] ~= nil then
+		local perMin = MonetizationService.PassivePerMin(player, profile, ShopOverhaulConfig.TimePacks.ExcludeTimedBoosts == true)
+		if not player.Parent or DataService.GetProfile(player) ~= profile then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		timePerMin = perMin
+		cashGrant = nonNegInt(ShopOverhaulConfig.TimePackAmount(productKey :: string, perMin))
+	end
 	-- claude-bud JOB 41 part B: the Recruit Pack's cash = RecruitPackOffer.IncomeMinutes of his income, clamped
 	-- ($25k..$150k); computed here (the lookup may yield) and re-checked, before any mutation
 	if productKey == "RecruitPack" then
@@ -93193,6 +93323,7 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 		Entitlements = entitlements,
 		Counters = {},
 		CurrencySpent = nonNegInt(receiptInfo.CurrencySpent),
+		PerMinBucket = if timePerMin then ShopOverhaulConfig.PerMinBucket(timePerMin) else nil, -- claude-bud JOB 42
 		Source = intentSource(player.UserId, "DP:" .. (productKey :: string)),
 		FirstPurchase = false,
 		At = os.clock(),
@@ -93419,7 +93550,9 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 			return
 		end
 	end
-	local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.CashMega
+	-- claude-bud JOB 42: the same slot sells the 4h time pack while the time packs are shown for him
+	local megaKey = if ShopOverhaulConfig.TimePacksShown(player.UserId) then ShopOverhaulConfig.TimePacks.BestValueKey else "CashMega"
+	local dp = MonetizationConfig.DevProducts and (MonetizationConfig.DevProducts :: any)[megaKey]
 	if not dp or typeof(dp.Id) ~= "number" or dp.Id == 0 then
 		return
 	end
@@ -93447,10 +93580,10 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 			local remote = RemoteSetup.Get(Constants.RemoteNames.CashMegaOffer)
 			if remote and remote:IsA("RemoteEvent") then
 				(remote :: RemoteEvent):FireClient(player, {
-					ProductKey = "CashMega",
+					ProductKey = megaKey,
 					ProductId = dp.Id,
-					DisplayName = LivePrices.Name("DevProduct", "CashMega"), -- Code Bot v156
-					RobuxPrice = LivePrices.Price("DevProduct", "CashMega"),
+					DisplayName = LivePrices.Name("DevProduct", megaKey), -- Code Bot v156
+					RobuxPrice = LivePrices.Price("DevProduct", megaKey),
 					Reason = reason or "pending_collect",
 				})
 			end
@@ -105687,6 +105820,20 @@ function ShopOverhaulService.Init(d: { [string]: any })
 					if p:GetAttribute(ShopOverhaulConfig.PerMinAttribute) ~= v then
 						p:SetAttribute(ShopOverhaulConfig.PerMinAttribute, v)
 					end
+				end
+				-- claude-bud JOB 42: the time packs' income (timed boosts left out), same tick, only where they are live
+				if ShopOverhaulConfig.TimePacksLiveFor(p.UserId) then
+					local ms = deps.MonetizationService
+					local profile = deps.DataService and deps.DataService.GetProfile(p)
+					local okT, tv = pcall(function()
+						return ms and profile and ms.PassivePerMin(p, profile, ShopOverhaulConfig.TimePacks.ExcludeTimedBoosts == true) or 0
+					end)
+					local t = math.floor(if okT and typeof(tv) == "number" then tv else 0)
+					if p:GetAttribute(ShopOverhaulConfig.TimePacks.PerMinAttribute) ~= t then
+						p:SetAttribute(ShopOverhaulConfig.TimePacks.PerMinAttribute, t)
+					end
+				end
+				if live(p.UserId) then
 					if sinceCrate >= 600 then
 						pcall(ShopOverhaulService.TryVipSupply, p)
 					end
@@ -149401,6 +149548,29 @@ local function packCash(key: string, def: any): number
 	end
 	return tonumber(typeof(def) == "table" and def.Cash) or 0
 end
+-- claude-bud JOB 42: the time packs. SHOWN = TimePacksLiveFor AND all five Ids set (TimePacksReady); in Studio a
+-- live player also sees them with the Ids still 0 (price button "SOON") so the layout can be tested.
+local function timePacksShown(): boolean
+	return ShopOverhaulConfig.TimePacksShown(player.UserId)
+end
+local function timePacksPreview(): boolean
+	return game:GetService("RunService"):IsStudio() and ShopOverhaulConfig.TimePacksLiveFor(player.UserId) and not ShopOverhaulConfig.TimePacksReady()
+end
+-- the live amount (WE_TimePackPerMin; the floor until the first publish, never $0) and its row line
+local function timePackCash(key: string): number
+	local per = tonumber(player:GetAttribute(ShopOverhaulConfig.TimePacks.PerMinAttribute)) or 0
+	return ShopOverhaulConfig.TimePackAmount(key, per) or 0
+end
+local function timePackText(key: string): string
+	local n = math.floor(timePackCash(key))
+	local s = tostring(n):reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if s:sub(1, 1) == "," then
+		s = s:sub(2)
+	end
+	local p = ShopOverhaulConfig.TimePacks.Packs[key]
+	return "$" .. s .. (if p and n <= p.Floor then " " .. ShopOverhaulConfig.TimePacks.MinimumText else "")
+end
+
 -- Code Bot v156: a cash pack row in plain words ("Get $50,000 cash right away"; the live amount while JOB 36 is on)
 local function cashPackText(key: string, def: any): string
 	local n = math.floor(packCash(key, def))
@@ -149773,7 +149943,8 @@ local function highlightCashMegaRow()
 	if not list then
 		return
 	end
-	local row = list:FindFirstChild("ShopRow_CashMega")
+	-- claude-bud JOB 42: the cash "+" lands on the 4 HOURS OF CASH row while the time packs are shown
+	local row = list:FindFirstChild(if timePacksShown() or timePacksPreview() then "ShopRow_" .. ShopOverhaulConfig.TimePacks.BestValueKey else "ShopRow_CashMega")
 	if not row or not row:IsA("GuiObject") then
 		return
 	end
@@ -150372,7 +150543,33 @@ function ShopController.Init()
 	-- Hero CashMega first, then remaining cash packs, then other DevProducts
 	local cashOrder = { "CashMega", "CashLarge", "CashMedium", "CashSmall" }
 	local listed: { [string]: boolean } = {}
-	do
+	local TP = ShopOverhaulConfig.TimePacks
+	local timeRows = timePacksShown() or timePacksPreview()
+	if timeRows then
+		-- claude-bud JOB 42: five TIME rows (4h .. 15m) replace the four old packs (hidden only while shown; their Ids
+		-- stay in config and their receipts are still granted)
+		for _, key in ipairs(TP.Order) do
+			local def: any = (MonetizationConfig.DevProducts :: any)[key]
+			local p = TP.Packs[key]
+			if typeof(def) == "table" and p then
+				local id = tonumber(def.Id) or 0
+				local robux = LivePrices.Price("DevProduct", key)
+				local best = key == TP.BestValueKey
+				addRow((if best then TP.BestValueLabel .. " · " else "") .. p.Title, timePackText(key), if id ~= 0 then function()
+					promptDevProduct(key, openSource)
+				end else nil, if id ~= 0 then (tostring(robux) .. " R$") else "SOON", key, best)
+			end
+			listed[key] = true
+		end
+		for key in pairs(TP.HideOldKeys) do
+			listed[key] = true
+		end
+	else
+		for _, key in ipairs(TP.Order) do
+			listed[key] = true -- claude-bud JOB 42: never a time row while they are not shown (OFF == OLD)
+		end
+	end
+	if not timeRows then
 		local mega = MonetizationConfig.DevProducts.CashMega
 		if mega then
 			addDevRow("CashMega", mega, "★ BEST OFFER")
@@ -150493,9 +150690,12 @@ function ShopController.Init()
 				local def: any = (MonetizationConfig.DevProducts :: any)[r.Key]
 				if ShopOverhaulConfig.CashPacks[r.Key] ~= nil and typeof(def) == "table" then
 					r.Sub.Text = cashPackText(r.Key, def) -- Code Bot v156: plain text
+				elseif ShopOverhaulConfig.TimePacks.Packs[r.Key] ~= nil then
+					r.Sub.Text = timePackText(r.Key) -- claude-bud JOB 42: the live amount (the floor until the first publish)
 				end
 			end
 		end
+		Players.LocalPlayer:GetAttributeChangedSignal(ShopOverhaulConfig.TimePacks.PerMinAttribute):Connect(refreshPacks) -- claude-bud JOB 42
 		Players.LocalPlayer:GetAttributeChangedSignal(ShopOverhaulConfig.PerMinAttribute):Connect(refreshPacks)
 		refreshPacks()
 	end
@@ -151052,6 +151252,27 @@ function ShopController.Init()
 			local now = os.clock()
 			if now - lastMegaToastAt < MEGA_TOAST_DEBOUNCE then
 				return false
+			end
+			local tkey = if typeof(payload) == "table" and typeof(payload.ProductKey) == "string" then payload.ProductKey else nil
+			local tp = if tkey then ShopOverhaulConfig.TimePacks.Packs[tkey :: string] else nil
+			if tp then
+				-- claude-bud JOB 42: the same slot sells "4 HOURS OF CASH: $<N>" while the time packs are shown
+				local tdef = (MonetizationConfig.DevProducts :: any)[tkey :: string]
+				if typeof(tdef) ~= "table" or (tonumber(tdef.Id) or 0) == 0 then
+					return false
+				end
+				lastMegaToastAt = now
+				local n = timePackCash(tkey :: string)
+				return showOffer({
+					Key = "CashMegaToast",
+					Title = string.format("%s: $%s", tp.Title, formatCash(n)),
+					Sub = tp.Label,
+					Cta = ctaFor(LivePrices.ForOffer("DevProduct", tkey :: string, payload.RobuxPrice)),
+					OnGet = function()
+						pendingCashMegaHighlight = true
+						promptDevProduct(tkey :: string, "offer")
+					end,
+				})
 			end
 			local def = (MonetizationConfig.DevProducts :: any).CashMega
 			if typeof(def) ~= "table" or typeof(def.Id) ~= "number" or def.Id == 0 then
@@ -155350,9 +155571,31 @@ local function onRowTap(id: string)
 			local function packCash(k: string, pk: any): number
 				return (if SOC.LiveFor(lp.UserId) then SOC.CashPackAmount(k, rate) else nil) or tonumber(pk.Cash) or 0
 			end
-			for _, k in ipairs({ "CashSmall", "CashMedium", "CashLarge", "CashMega" }) do
+			-- claude-bud JOB 42: while the time packs are shown, the SMALLEST time pack that covers the gap (else 4h)
+			local keys = { "CashSmall", "CashMedium", "CashLarge", "CashMega" }
+			local forceKey: string? = nil
+			if SOC.TimePacksShown(lp.UserId) then
+				local trate = tonumber(lp:GetAttribute(SOC.TimePacks.PerMinAttribute)) or 0
+				packCash = function(k: string, pk: any): number
+					return SOC.TimePackAmount(k, trate) or tonumber(pk.Cash) or 0
+				end
+				keys = { "Cash15m", "Cash30m", "Cash1h", "Cash2h", "Cash4h" }
+				local best = SOC.TimePacks.BestValueKey
+				local covered = false
+				for _, k in ipairs(keys) do
+					local pk: any = (MonetizationConfig.DevProducts :: any)[k]
+					if typeof(pk) == "table" and packCash(k, pk) >= need then
+						covered = true
+					end
+				end
+				if not covered then
+					keys = { best }
+					forceKey = best -- none covers the gap: the biggest pack, with its REAL amount shown
+				end
+			end
+			for _, k in ipairs(keys) do
 				local pk: any = (MonetizationConfig.DevProducts :: any)[k]
-				if typeof(pk) == "table" and (tonumber(pk.Id) or 0) ~= 0 and packCash(k, pk) >= need then
+				if typeof(pk) == "table" and (tonumber(pk.Id) or 0) ~= 0 and (packCash(k, pk) >= need or k == forceKey) then
 					local okN, NC = pcall(require, script.Parent.NotificationController)
 					local okS, SC = pcall(require, script.Parent.ShopController)
 					if okN and okS then

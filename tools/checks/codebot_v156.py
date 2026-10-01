@@ -52,12 +52,12 @@ CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 # build pins
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 160)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 160)'),
-    (S + "Services/DataService.luau", "WE_Build=160"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 160)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 161)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 161)'),
+    (S + "Services/DataService.luau", "WE_Build=161"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 161)'),
 ):
-    check(needle in read(rel), "CODEBOT v156: WE_Build=160 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v156: WE_Build=161 " + rel.rsplit("/", 1)[-1])
 
 # 1. the live price cache
 LP = read("src/ReplicatedStorage/Shared/Util/LivePrices.luau")
