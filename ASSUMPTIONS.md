@@ -10070,3 +10070,7 @@ ds_territories.luau T3):
 
 ## 2026-10-01 — claude-bud JOB B: TARGETS list
 - **Default ordering:** taken as Global for an Instance.new ScreenGui; every other gui here sets Sibling explicitly, which supports this. The fix is the same explicit setting.
+
+## 2026-10-01 — claude-bud JOB 51: plaza guards
+- **Owner-first gate:** SharedHostility is gated by the CANDIDATE player (owner + Studio testers first); NPCs keep the old pick for everyone else until the flip.
+- **Spawn not moved:** the emergency / plot-less spawn and the defender ring are not moved without a Studio check of clear ground.

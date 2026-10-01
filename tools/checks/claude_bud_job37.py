@@ -57,7 +57,9 @@ _j37(_j37_re.search(r"\.Health\s*=[^=]", _CGS) is None and "TakeDamage" not in _
 _j37("pcall(cs.SpawnNPC, G.NpcType, cf, {" in _CGS and "TargetFilter = function(p: Player): boolean" in _CGS and "Leash = G.SiteRadius + G.LeashExtra," in _CGS,
      "guards spawn through CombatService.SpawnNPC (group, leash, live-only target filter)")
 _j37("(filter == nil or filter(player))" in _j37_code(_SV + "Services/CombatService/CombatNPC.luau")
-     and "target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange, rec.TargetFilter)" in _j37_code(_SV + "Services/CombatService/CombatNPC.luau"),
+     # claude-bud JOB 51: retired the exact call text (NearestPlayer now also takes the record for the [GuardTarget]
+     # debug line); replacement: the same TargetFilter re-pick with the record appended
+     and "target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange, rec.TargetFilter, rec)" in _j37_code(_SV + "Services/CombatService/CombatNPC.luau"),
      "CombatNPC target pick honours the spawn TargetFilter (nil = every player, unchanged)")
 _j37("CheckpointGuard = {" in _j37_src("src/ReplicatedStorage/Shared/Configs/CombatConfig.luau") and '"CheckpointGuard"' not in _j37_src("src/ReplicatedStorage/Shared/Configs/CombatConfig.luau").split("SpecialNPCTypes", 1)[1].split("\n", 1)[0],
      "CheckpointGuard NPC type, not a SpecialNPCType (the regular 18-slot pool)")

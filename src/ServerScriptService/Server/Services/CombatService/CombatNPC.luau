@@ -68,6 +68,8 @@ export type Bindings = {
 	getTagged: (string) -> { Instance },
 	-- W2 (optional): one WeaponFx bullet event per NPC shot (origin = eye, landed, kind "P" / "V" / "M")
 	fx: ((rec: any, origin: Vector3, landed: Vector3, kind: string) -> ())?,
+	-- claude-bud JOB 51 (optional): THE shared rule: may an NPC target this player (false + the reason)
+	mayTarget: ((Player) -> (boolean, string?))?,
 }
 
 local B: Bindings
@@ -94,19 +96,51 @@ function CombatNPC.Destroy(rec: any)
 	end
 end
 
-function CombatNPC.NearestPlayer(position: Vector3, maxRange: number, filter: ((Player) -> boolean)?): (Player?, number)
+-- claude-bud JOB 51: the debug switch (CombatService sets it while any player has WE_GuardDebug) and the per-NPC
+-- rate limit of the [GuardTarget] line
+local debugOn = false
+local debugAt: { [string]: number } = {}
+function CombatNPC.SetDebug(on: boolean)
+	debugOn = on == true
+	if not debugOn then
+		table.clear(debugAt)
+	end
+end
+
+-- `rec` (optional) only names the NPC in the debug line
+function CombatNPC.NearestPlayer(position: Vector3, maxRange: number, filter: ((Player) -> boolean)?, rec: any?): (Player?, number)
 	local best: Player? = nil
 	local bestDistSq = maxRange * maxRange
+	local mayTarget = B.mayTarget
+	local notes: { string }? = if debugOn then {} else nil
 	for _, player in ipairs(Players:GetPlayers()) do
 		local _, hum, root = B.characterParts(player)
 		-- claude-bud JOB 37: a filtered NPC (checkpoint guards, owner-first) never picks a player its filter refuses
-		if hum and root and hum.Health > 0 and (filter == nil or filter(player)) then
+		if hum and root and hum.Health > 0 then
 			local delta = root.Position - position
 			local dSq = delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z
-			if dSq < bestDistSq then
+			-- claude-bud JOB 51: THE shared rule first (a protected player is never picked: no misses forever)
+			local okRule, why = true, nil
+			if mayTarget then
+				okRule, why = mayTarget(player)
+			end
+			local okFilter = (filter == nil or filter(player))
+			if notes then
+				table.insert(notes, string.format("%s d=%.0f %s", player.Name, math.sqrt(dSq),
+					if dSq > maxRange * maxRange then "out_of_range" elseif not okRule then "shielded:" .. tostring(why) elseif not okFilter then "filtered" else "ok"))
+			end
+			if okRule and okFilter and dSq < bestDistSq then
 				bestDistSq = dSq
 				best = player
 			end
+		end
+	end
+	if notes and rec then
+		local now = B.clock()
+		if now - (debugAt[rec.Id] or -math.huge) >= 1 then
+			debugAt[rec.Id] = now
+			print(string.format("[GuardTarget] npc=%s type=%s group=%s cands={%s} -> %s", tostring(rec.Id), tostring(rec.TypeId),
+				tostring(rec.GroupId), table.concat(notes, "; "), if best then best.Name else "none"))
 		end
 	end
 	return best, math.sqrt(bestDistSq)
@@ -335,7 +369,13 @@ local function engage(rec: any, target: Player, dist: number, now: number, canMo
 				local tState = B.combatStates[target.UserId]
 				local chance = CombatNPC.HitChance(dist, rec.Def.Range, speedOf[target.UserId] or 0, rec.Def)
 				local eye = rec.Root.Position + Vector3.new(0, C.NpcEyeHeight, 0)
+				if debugOn and tState and now < tState.InvulnerableUntil then
+					print(string.format("[GuardShot] npc=%s -> %s d=%.0f miss:invulnerable", tostring(rec.Id), target.Name, dist)) -- claude-bud JOB 51
+				end
 				if not (tState and now < tState.InvulnerableUntil) and rng:NextNumber() < chance then
+					if debugOn then
+						print(string.format("[GuardShot] npc=%s -> %s d=%.0f hit (chance %.2f)", tostring(rec.Id), target.Name, dist, chance))
+					end
 					if redirectToVehicle(target, rec.Def.Damage) then
 						sendFx(rec, eye, troot.Position, "V") -- W2: the enclosed seat's vehicle took it
 					else
@@ -350,6 +390,9 @@ local function engage(rec: any, target: Player, dist: number, now: number, canMo
 						sendFx(rec, eye, troot.Position, "P")
 					end
 				else
+					if debugOn and not (tState and now < tState.InvulnerableUntil) then
+						print(string.format("[GuardShot] npc=%s -> %s d=%.0f miss:roll (chance %.2f)", tostring(rec.Id), target.Name, dist, chance))
+					end
 					sendFx(rec, eye, missPoint(troot.Position), "M")
 				end
 			end
@@ -558,13 +601,13 @@ local function thinkStance(rec: any, now: number)
 	local provoked = g ~= nil and g.Provoked
 	local stance = rec.Stance
 	local canMove = stance ~= "Post"
-	local target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)
+	local target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange, nil, rec)
 	if target and g and provoked then
 		g.LastContact = now -- contact keeps a provoked group fighting
 	end
 	if target and rec.TargetFilter ~= nil and not rec.TargetFilter(target) then
 		-- claude-bud JOB 37: a filtered NPC (checkpoint guards, owner-first) picks the nearest player its filter accepts
-		target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange, rec.TargetFilter)
+		target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange, rec.TargetFilter, rec)
 	end
 	local held = holdsFire(rec, g)
 	if held then
@@ -713,7 +756,7 @@ function CombatNPC.Think()
 		if rec.Alive and rec.Humanoid.Health > 0 and rec.Root.Parent then
 			if rec.Leash == nil and not usesGroup(rec) then
 				-- today's NPC (no opts, or Aggressive with no leash and no group): unchanged
-				local target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)
+				local target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange, nil, rec)
 				aim(rec, target, now)
 				if target then
 					engage(rec, target, dist, now, true)

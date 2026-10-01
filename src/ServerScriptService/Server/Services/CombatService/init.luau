@@ -1645,6 +1645,35 @@ function CombatService.IsNoviceShielded(player: Player): boolean
 	return typeof(player) == "Instance" and player:IsA("Player") and NS.Active[player.UserId] ~= nil
 end
 
+-- ── claude-bud JOB 51: THE shared hostility / protection rule (Server/Modules/Hostility; bound in Init) ─────────
+local Hostility = require(script.Parent.Parent.Modules.Hostility)
+
+local function sharedHostilityLive(player: Player): boolean
+	local cfg = (CombatConfig :: any).SharedHostility
+	if typeof(cfg) ~= "table" then
+		return false
+	end
+	local ok, RC = pcall(function(): any
+		return require(ReplicatedStorage.Shared.Configs.RetentionConfig)
+	end)
+	return ok and RC and RC.Live(cfg, player.UserId) == true
+end
+
+-- why nobody may hurt this player right now ("novice" | "spawn"), or nil
+function CombatService.ProtectedReason(player: Player): string?
+	return Hostility.ProtectedReason(player)
+end
+
+-- may a CombatService NPC (any group) TARGET this player? (false + the reason)
+function CombatService.NpcMayTarget(player: Player): (boolean, string?)
+	return Hostility.NpcMayTarget(player)
+end
+
+-- may `attacker` hurt the player `victim`? kind: "Player" | "Vehicle" | "Unit" | "Turret" | "BaseGuard" | "NPC"
+function CombatService.MayHurt(attacker: any, victim: Player, kind: string): (boolean, string?)
+	return Hostility.MayHurt(attacker, victim, kind)
+end
+
 --[[ F6 (spec §2 cross-lane API): end the novice shield for good. reason: "draw" | "fire" | "order" | "strike" |
 	"contest" | "tutorial" | "timeout" (any other string always ends it). A reason whose NoviceShield switch
 	(NS.ReasonFlag) is false is ignored. Returns true when the shield ended now: InvulnerableUntil back to 0, the
@@ -3006,6 +3035,11 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 		end
 	end
 
+	if player:GetAttribute("WE_GuardDebug") == true and (typeof(payload.TargetNpcId) == "string" or fxKind == "N") then
+		-- claude-bud JOB 51: the player -> NPC side (a claim refusal also prints its own [CombatService] line)
+		print(string.format("[NpcHit] %s how=%s claimNpc=%s dealt=%s", player.Name, tostring(how),
+			if typeof(payload.TargetNpcId) == "string" then string.sub(payload.TargetNpcId, 1, 64) else "-", tostring(hitSomething)))
+	end
 	noteAim(cls, how)
 	sendBulletFx(player, state.WeaponId, origin, fxAt, fxKind)
 	return true
@@ -3205,7 +3239,36 @@ function CombatService.Init(deps: { [string]: any })
 		fx = function(rec: any, origin: Vector3, landed: Vector3, kind: string) -- W2: NPC WeaponFx (S = 0)
 			CombatFx.Bullet(rec.Id, 0, "NPC", origin, landed, kind)
 		end,
+		mayTarget = CombatService.NpcMayTarget, -- claude-bud JOB 51: the shared rule in every NPC target pick
 	})
+	Hostility.Bind({ -- claude-bud JOB 51: the existing reasons, bound once (no copy in Hostility)
+		IsNoviceShielded = CombatService.IsNoviceShielded,
+		IsSpawnInvulnerable = CombatService.IsSpawnInvulnerable,
+		PvPBlock = pvpBlock,
+		UnitMayHitPlayer = CombatService.UnitMayHitPlayer,
+		Live = sharedHostilityLive,
+	})
+	-- claude-bud JOB 51: the [GuardTarget] / [GuardShot] / [NpcHit] logs run only while someone has WE_GuardDebug
+	-- (/guarddebug, admin allowlist); the flag is pushed into CombatNPC on change (nothing per frame)
+	local function syncGuardDebug()
+		local on = false
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p:GetAttribute("WE_GuardDebug") == true then
+				on = true
+			end
+		end
+		CombatNPC.SetDebug(on)
+	end
+	local function watchGuardDebug(p: Player)
+		p:GetAttributeChangedSignal("WE_GuardDebug"):Connect(syncGuardDebug)
+	end
+	Players.PlayerAdded:Connect(watchGuardDebug)
+	for _, p in ipairs(Players:GetPlayers()) do
+		watchGuardDebug(p)
+	end
+	Players.PlayerRemoving:Connect(function()
+		task.defer(syncGuardDebug)
+	end)
 	-- W2: WeaponFx fan-out (UnreliableRemoteEvent; every send pcall'd)
 	CombatFx.Bind({
 		getRemote = function(): Instance?

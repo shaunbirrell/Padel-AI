@@ -558,7 +558,8 @@ function AdminService.Init(deps: { [string]: any })
 		local isMoveDebugCmd = cmd == "movedebug" -- v123: the player-movement investigation (Modules/MoveDebug + MoveDebugClient)
 		local isReplayCmd = cmd == "replaytutorial" or cmd == "replayguided" -- Code Bot v163: test-mode Guided replay
 		local isSetRebirthCmd = cmd == "setrebirth" -- Code Bot v168: the owner's own rebirth count (no reset)
-		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd and not isSetRebirthCmd then
+		local isGuardDebugCmd = cmd == "guarddebug" -- claude-bud JOB 51: [GuardTarget] / [GuardShot] / [NpcHit] logs
+		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd and not isSetRebirthCmd and not isGuardDebugCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -570,6 +571,17 @@ function AdminService.Init(deps: { [string]: any })
 		lastAdminChat[player.UserId] = { Text = text, At = nowClock }
 		-- v115: /armydebug [on|off] toggles the caller's WE_ArmyDebug attribute: slot markers + labels on his own client
 		-- (ArmyDebugClient), per-soldier server logs (ArmyController). Allowlist only (IsAdmin above).
+		-- claude-bud JOB 51: /guarddebug [on|off] toggles WE_GuardDebug: the NPC target-pick / shot / player->NPC hit logs
+		-- (CombatNPC + CombatService) run only while someone has it on. Allowlist only (IsAdmin above).
+		if isGuardDebugCmd then
+			local want = if rest == "on" or rest == "1" then true elseif rest == "off" or rest == "0" then false else player:GetAttribute("WE_GuardDebug") ~= true
+			player:SetAttribute("WE_GuardDebug", want)
+			print(string.format("[GuardDebug] %s /guarddebug -> %s", player.Name, tostring(want)))
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, "Guard debug " .. (if want then "ON" else "OFF"), "Success")
+			end
+			return
+		end
 		if isArmyDebugCmd then
 			local want: boolean
 			if rest == "on" or rest == "1" then

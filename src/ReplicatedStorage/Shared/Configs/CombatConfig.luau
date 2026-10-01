@@ -240,4 +240,15 @@ CombatConfig.LineOfSight = {
 	MaxSkips = 6, -- a shot steps over at most this many see-through parts
 }
 
+--[[ claude-bud JOB 51 (2026-10-01, P0 "the Central Plaza guards don't shoot my girlfriend / she can't damage them"):
+	ONE shared hostility / protection rule (CombatService.ProtectedReason / NpcMayTarget / MayHurt). With it live, EVERY
+	CombatService NPC (outpost defenders, bank, checkpoint, ops garrisons) picks the nearest player it MAY hurt and skips
+	a spawn- or novice-shielded one (before: the nearest player, shielded or not, then a guaranteed miss forever).
+	OwnerFirst by the CANDIDATE player (RetentionConfig.Live); OFF == the old pick exactly. ]]
+;(CombatConfig :: any).SharedHostility = {
+	Enabled = true,
+	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 51): Code Bot flips it after Shaun's 2-player phone test
+	DebugLogSeconds = 1, -- [GuardTarget] at most once per NPC per this many seconds (only while someone has WE_GuardDebug)
+}
+
 return CombatConfig

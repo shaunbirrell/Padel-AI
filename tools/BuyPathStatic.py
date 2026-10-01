@@ -6805,7 +6805,7 @@ must_contain(SQF_NPC, '\tlocal held = holdsFire(rec, g)\n', 'squadfair: thinkSta
 must_contain(SQF_NPC, 'function CombatNPC.HoldsFire(rec: any): boolean\n\treturn holdsFire(rec, groups[groupKey(rec)])', 'squadfair: CombatNPC.HoldsFire')
 must_not_contain(SQF_NPC, 'Provoker', 'squadfair v3 (guard, passes on HEAD): no provoker rule in CombatNPC (it let one player switch a guard group off)')
 must_not_contain(SQF_CS, 'NoteProvoker', 'squadfair v3 (guard, passes on HEAD): hurtNPC names no provoker')
-must_contain(SQF_NPC, '\tlocal target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)\n\tif target and g and provoked then\n\t\tg.LastContact = now -- contact keeps a provoked group fighting', 'squadfair v3 (guard, passes on HEAD): a stance NPC targets the nearest player, as on HEAD')
+# claude-bud JOB 51: retired, superseded in tools/checks/claude_bud_job51.py (NearestPlayer also takes the record for the [GuardTarget] debug line; the same nearest pick through the shared rule): #must_contain(SQF_NPC, '\tlocal target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)\n\tif target and g and provoked then\n\t\tg.LastContact = now -- contact keeps a provoked group fighting', 'squadfair v3 (guard, passes on HEAD): a stance NPC targets the nearest player, as on HEAD')
 
 # --- droppers v1b lane L1b (plate server; spec_droppers.md §13 "New pins, v1b" for the L1b files) ---
 # Paste directly above the final `parse_gate()` call, after the v1a L1a block (`_dr_bz_rules()`). A pin here either

@@ -183,6 +183,11 @@ function CheckpointGuardService.Protected(p: Player): boolean
 	if cs == nil then
 		return false
 	end
+	if typeof(cs.ProtectedReason) == "function" then
+		-- claude-bud JOB 51: the ONE shared rule (CombatService.ProtectedReason), no copy of its reasons here
+		local ok, why = pcall(cs.ProtectedReason, p)
+		return ok and why ~= nil
+	end
 	for _, fn in ipairs({ "IsSpawnInvulnerable", "IsNoviceShielded" }) do
 		local f = cs[fn]
 		if typeof(f) == "function" then

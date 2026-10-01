@@ -1,4 +1,39 @@
 <!-- Q2-START -->
+## claude-bud JOB 51 (2026-10-01, P0): CENTRAL PLAZA GUARDS: ONE SHARED HOSTILITY RULE (branch `claude/desktop-bud`)
+**Flag to flip:** `CombatConfig.SharedHostility.OwnerFirst = true -> false` (NEW-OWNER-FIRST). Enabled = false is the
+old brain exactly.
+
+**Root cause (docs/proof/job51/rootcause.md, plaza-guards-sim.txt):**
+- **Reproduced in the real CombatNPC brain:** every NPC picked the nearest player with no protection rule, then fired
+  guaranteed misses at a spawn- or novice-shielded target for ever.
+  - The plaza circle is also the emergency / plot-less spawn, so a shielded new player often stands at the centre.
+  - Measured: 60 s, **Laumartinez26 hits 0, 340 misses at the shielded player**.
+  - Counter-case: nearer to any guard, she was shot in the old brain too, so this explains "never shot" only in that
+    geometry.
+- **"She can't damage them":** no code-level blocker found. hurtNPC has no gate, every WE_NPC has an NPCId, NPCs have
+  no ForceField. The live `[NpcHit]` / claim-refusal lines are needed.
+- **The live 2-player proof is OWED:** `/guarddebug on` prints `[GuardTarget]` / `[GuardShot]` / `[NpcHit]`.
+
+**Fix:**
+- `Server/Modules/Hostility` (ProtectedReason / NpcMayTarget / MayHurt), bound by CombatService with the existing
+  reasons (no copy). Every NPC target pick uses it, and `CheckpointGuardService.Protected` calls it.
+- The same rule answers for guns / vehicle / unit / turret / base guard / NPC (cases table in the sim).
+
+**Safe zone:** NO. The code treats the plaza as a capturable outpost with hostile defenders; the only protection is
+the normal 3 s spawn shield.
+
+**Spawn finding (not changed):** a fresh spawn at the centre dies in ~5.9 s (~2.9 s after the shield) with 4 guards
+awake. **Question for Shaun / Code Bot:** move the emergency / plot-less spawn out of the defenders' aggro
+(> 125 studs from the centre) after a Studio check of clear ground?
+
+**Files:** Modules/Hostility.luau (new), CombatService/init.luau, CombatService/CombatNPC.luau,
+CheckpointGuardService.luau, AdminService.luau (/guarddebug), CombatConfig.luau, tools/sim/run_plaza_guards_test.py,
+tools/checks/claude_bud_job51.py, docs/proof/job51/.
+
+**Test ON HIS PHONE (with Laumartinez26 in the same server; owner types /guarddebug on):**
+1. Both in the plaza circle: the guards shoot both of you, and nobody shielded soaks the shots.
+2. Both can damage and kill a guard.
+3. Respawn at the plaza: the shield ends normally. Note how fast the guards kill you.
 ## v182 PUBLISHED (Code Bot Roblox, 2026-10-01 ~18:40 Dublin): Open Cloud place version 180. Core daily missions + return sequence live for everyone (Shaun approved)
 - **Commits:** code+dist+checks `00e9a6b` + check scope `432c34c` on phase-7-polish (from `9529c70`); bud merge `ff7c0c8` into `claude/desktop-bud`.
 - **Flips:** `MissionConfig.Core.OwnerFirst` true → false; `RetentionConfig.ReturnSequence.OwnerFirst` true → false. The Mission Reroll dev product (3715836569, 19 R$) already had `Core.Reroll.Robux.OwnerFirst = false` (v180), so the paid reroll opens with Core. Nothing else changed: MonetizationConfig byte-identical to v181 `9529c70`, no Id / price line, no other OwnerFirst. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched.
