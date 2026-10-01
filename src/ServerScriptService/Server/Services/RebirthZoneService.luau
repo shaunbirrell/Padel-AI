@@ -157,12 +157,15 @@ local function plotFolder(plotId: number): Folder
 	return f :: Folder
 end
 
-local function annexFrame(plotId: number, zoneId: string): (CFrame?, any)
-	local a = Z.Annex[zoneId]
+-- claude-bud JOB 69: the frame of a zone's annex at `slot` (nil = its own slot in Z.Annex). `a` = { X, Z, Yaw, W, D }.
+local function annexFrameAt(plotId: number, zoneId: string, slot: any?): (CFrame?, any)
+	local base = Z.Annex[zoneId]
 	local ok, pos = pcall(PlotFrame.PlotPosition :: any, plotId)
-	if a == nil or not ok or typeof(pos) ~= "Vector3" then
+	if base == nil or not ok or typeof(pos) ~= "Vector3" then
 		return nil, nil
 	end
+	local sl = slot or base
+	local a = { X = sl.X, Z = sl.Z, Yaw = sl.Yaw, W = base.W, D = base.D }
 	return PlotFrame.PlotCFrame(pos) * CFrame.new(a.X, 0, a.Z) * rotY(a.Yaw), a
 end
 
@@ -187,25 +190,25 @@ local function clusterOf(p: Instance): Model?
 	return nil
 end
 
-local function checkSlot(plotId: number, zoneId: string): boolean
+local function checkSlotAt(plotId: number, zoneId: string, frame: CFrame?, a: any): boolean
 	local cache = slotOk[plotId]
 	if cache == nil then
 		cache = {}
 		slotOk[plotId] = cache
 	end
-	if cache[zoneId] ~= nil then
-		return cache[zoneId]
+	local key = if a then string.format("%s@%d,%d,%d", zoneId, a.X, a.Z, a.Yaw) else zoneId
+	if cache[key] ~= nil then
+		return cache[key]
 	end
-	local frame, a = annexFrame(plotId, zoneId)
 	if frame == nil or a == nil then
-		cache[zoneId] = false
+		cache[key] = false
 		return false
 	end
 	for _, dx in ipairs({ -1, 1 }) do
 		for _, dz in ipairs({ -1, 1 }) do
 			local c = (frame * CFrame.new(dx * a.W * 0.5, 0, dz * a.D * 0.5)).Position
 			if not RebirthZoneService.OnLand(c.X, c.Z) then
-				cache[zoneId] = false
+				cache[key] = false
 				print(string.format("[RebirthZones] plot %d %s: off the land", plotId, zoneId))
 				return false
 			end
@@ -227,7 +230,7 @@ local function checkSlot(plotId: number, zoneId: string): boolean
 		if cl and src and Z.ClearableSources[src] == true then
 			clear[cl] = true
 		else
-			cache[zoneId] = false
+			cache[key] = false
 			print(string.format("[RebirthZones] plot %d %s: blocked by %s", plotId, zoneId, p:GetFullName()))
 			return false
 		end
@@ -240,7 +243,7 @@ local function checkSlot(plotId: number, zoneId: string): boolean
 	if n > 0 then
 		print(string.format("[RebirthZones] plot %d %s: cleared %d decor clusters", plotId, zoneId, n))
 	end
-	cache[zoneId] = true
+	cache[key] = true
 	return true
 end
 
@@ -306,18 +309,18 @@ end
 
 -- claude-bud JOB 46: the annex's front apron (where the dressing goes) is checked once like the annex itself: decor is
 -- cleared, anything else (a road, a building) means no apron dressing on that plot (logged)
-local function checkApron(plotId: number, zoneId: string): boolean
+local function checkApronAt(plotId: number, zoneId: string, frame: CFrame?, a: any): boolean
 	local cache = apronOk[plotId]
 	if cache == nil then
 		cache = {}
 		apronOk[plotId] = cache
 	end
-	if cache[zoneId] ~= nil then
-		return cache[zoneId]
+	local key = if a then string.format("%s@%d,%d,%d", zoneId, a.X, a.Z, a.Yaw) else zoneId
+	if cache[key] ~= nil then
+		return cache[key]
 	end
-	local frame, a = annexFrame(plotId, zoneId)
 	if frame == nil or a == nil then
-		cache[zoneId] = false
+		cache[key] = false
 		return false
 	end
 	overlap.FilterDescendantsInstances = { zonesFolder() }
@@ -337,7 +340,7 @@ local function checkApron(plotId: number, zoneId: string): boolean
 		if cl and src and Z.ClearableSources[src] == true then
 			clear[cl] = true
 		else
-			cache[zoneId] = false
+			cache[key] = false
 			print(string.format("[RebirthZones] plot %d %s: apron blocked by %s (no apron dressing)", plotId, zoneId, p:GetFullName()))
 			return false
 		end
@@ -345,9 +348,75 @@ local function checkApron(plotId: number, zoneId: string): boolean
 	for cl in pairs(clear) do
 		cl:Destroy()
 	end
-	cache[zoneId] = true
+	cache[key] = true
 	return true
 end
+
+-- ── claude-bud JOB 69: every zone gets a slot (RebirthZonesConfig.ResolveSlots; owner-first by the plot owner) ────
+local resolved: { [string]: { [string]: any } } = {} -- "<plotId>:<alts>" -> zoneId -> slot | false
+local warnedBlocked: { [string]: boolean } = {}
+
+local function altsFor(plotId: number): boolean
+	local bs = deps.BaseService
+	local owner = if bs and bs.GetOwnerUserId then bs.GetOwnerUserId(plotId) else nil
+	return typeof(owner) == "number" and ZC.RebuildLive(owner, "Slots")
+end
+
+local function slotsOf(plotId: number): { [string]: any }
+	local alts = altsFor(plotId)
+	local key = plotId .. ":" .. (if alts then "1" else "0")
+	local res = resolved[key]
+	if res == nil then
+		res = ZC.ResolveSlots(function(zoneId: string, slot: any): boolean
+			local frame, a = annexFrameAt(plotId, zoneId, slot)
+			if not checkSlotAt(plotId, zoneId, frame, a) then
+				return false
+			end
+			-- with the fallbacks on, a slot must also have its front apron (kiosk / plaque / run markers); OFF = today
+			return not alts or checkApronAt(plotId, zoneId, frame, a)
+		end, alts)
+		resolved[key] = res
+		for zoneId, sl in pairs(res) do
+			if sl == false and not warnedBlocked[plotId .. zoneId] then
+				warnedBlocked[plotId .. zoneId] = true
+				warn(string.format("[RebirthZones] plot %d %s: no free annex slot (%s)", plotId, zoneId, if alts then "ZONE BOARD in the base" else "own slot blocked"))
+			end
+		end
+	end
+	return res
+end
+
+-- the zone's annex frame on this plot (its own slot or the first free fallback); nil = no slot fits
+local function slotFrame(plotId: number, zoneId: string): (CFrame?, any)
+	local sl = slotsOf(plotId)[zoneId]
+	if not sl then
+		return nil, nil
+	end
+	return annexFrameAt(plotId, zoneId, sl)
+end
+
+local function checkSlot(plotId: number, zoneId: string): boolean
+	return (slotFrame(plotId, zoneId)) ~= nil
+end
+
+local function checkApron(plotId: number, zoneId: string): boolean
+	local frame, a = slotFrame(plotId, zoneId)
+	return frame ~= nil and checkApronAt(plotId, zoneId, frame, a)
+end
+
+-- admin zonereport: every zone of a plot, its slot or BLOCKED
+function RebirthZoneService.SlotReport(plotId: number): { string }
+	local out = {}
+	local res = slotsOf(plotId)
+	for _, zoneId in ipairs(ZC.SlotOrder) do
+		local sl = res[zoneId]
+		local own = Z.Annex[zoneId]
+		table.insert(out, string.format("P%d %s: %s", plotId, zoneId,
+			if not sl then "BLOCKED (ZONE BOARD)" elseif sl.X == own.X and sl.Z == own.Z then "own slot" else string.format("fallback (%d,%d)", sl.X, sl.Z)))
+	end
+	return out
+end
+
 
 local function tickSeconds(): number
 	local okE, EC = pcall(function(): any
@@ -550,7 +619,7 @@ function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: nu
 		local plotId = if bs and bs.GetOwnedPlotId then bs.GetOwnedPlotId(player) else nil
 		local frame, a = nil, nil
 		if plotId then
-			frame, a = annexFrame(plotId, zoneId)
+			frame, a = slotFrame(plotId, zoneId)
 		end
 		if frame and a then
 			local kp = kioskOf[player.UserId] and kioskOf[player.UserId][zoneId]
@@ -644,6 +713,44 @@ local function addActivityPrompt(player: Player, zoneId: string, panel: BasePart
 	end)
 end
 
+-- claude-bud JOB 69: the ZONE BOARD (a small console in the base, BoardSpots by zone order) carrying the zone's prompts
+function RebirthZoneService._ZoneBoard(player: Player, plotId: number, zoneId: string, lv: number)
+	local idx = table.find(ZC.SlotOrder, zoneId) or 1
+	local spot = ZC.BoardSpots[math.min(idx, #ZC.BoardSpots)]
+	local ok, pos = pcall(PlotFrame.PlotPosition :: any, plotId)
+	if not ok or typeof(pos) ~= "Vector3" then
+		return
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "Zone_" .. zoneId
+	folder:SetAttribute("WE_ZoneBoard", true)
+	folder.Parent = plotFolder(plotId)
+	local cf = PlotFrame.PlotCFrame(pos) * CFrame.new(spot.X, 0, spot.Z)
+	local board = Instance.new("Part")
+	board.Name = "ZoneBoard"
+	board.Anchored = true
+	board.Size = Vector3.new(3, 4, 0.6)
+	board.CFrame = cf * CFrame.new(0, 2.5, 0)
+	board.Color = Color3.fromRGB(46, 50, 44)
+	board.Material = Enum.Material.Metal
+	board.Parent = folder
+	local sg = Instance.new("SurfaceGui")
+	sg.Face = Enum.NormalId.Front
+	sg.MaxDistance = 40
+	sg.PixelsPerStud = 40
+	sg.Parent = board
+	local t = Instance.new("TextLabel")
+	t.BackgroundTransparency = 1
+	t.Size = UDim2.fromScale(1, 1)
+	t.Font = Enum.Font.GothamBold
+	t.TextScaled = true
+	t.TextColor3 = Color3.fromRGB(255, 205, 60)
+	local zc = Z.Zones[zoneId]
+	t.Text = "ZONE BOARD\n" .. string.upper(if zc then zc.Name else zoneId)
+	t.Parent = sg
+	addPrompts(player, plotId, zoneId, board, lv)
+end
+
 local function buildZone(player: Player, profile: any, plotId: number, zoneId: string)
 	local pf = plotFolder(plotId)
 	local old = pf:FindFirstChild("Zone_" .. zoneId)
@@ -655,14 +762,20 @@ local function buildZone(player: Player, profile: any, plotId: number, zoneId: s
 		oldDress:Destroy()
 	end
 	if not checkSlot(plotId, zoneId) then
+		-- claude-bud JOB 69: no slot anywhere (fallbacks on): a ZONE BOARD inside the base so it can still be bought /
+		-- upgraded (the zone's own buy / upgrade prompts on a small board; nothing is ever silently skipped)
+		if altsFor(plotId) and reached(profile, zoneId) then
+			pcall(RebirthZoneService._ZoneBoard, player, plotId, zoneId, levelOf(profile, zoneId))
+		end
 		return
 	end
-	local frame, a = annexFrame(plotId, zoneId)
+	local frame, a = slotFrame(plotId, zoneId)
 	if frame == nil or a == nil or Builder == nil then
 		return
 	end
 	local folder = Instance.new("Folder")
 	folder.Name = "Zone_" .. zoneId
+	folder:SetAttribute("WE_AnnexCFrame", frame) -- claude-bud JOB 69: where this zone stands (the store-prop dresser reads it)
 	folder.Parent = pf
 	if not reached(profile, zoneId) then
 		local z = RebirthConfig.Zones[zoneId]

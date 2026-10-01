@@ -841,6 +841,11 @@ local function dressZone(folder: Instance, forcedLevel: number?)
 		return
 	end
 	local frame = PlotFrame.PlotCFrame(pos) * CFrame.new(a.X, 0, a.Z) * CFrame.Angles(0, math.rad(a.Yaw), 0)
+	-- claude-bud JOB 69: a zone on a fallback slot stamps its real frame on its folder (RebirthZoneService)
+	local stamped = folder:GetAttribute("WE_AnnexCFrame")
+	if typeof(stamped) == "CFrame" then
+		frame = stamped
+	end
 	local keep = Cfg.ZoneKeepParts[zoneId] == true
 	local obstacles: { { number } } = {}
 	if keep then

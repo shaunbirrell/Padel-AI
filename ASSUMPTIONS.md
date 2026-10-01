@@ -10182,3 +10182,10 @@ ds_territories.luau T3):
 - L3 is renamed "Hesco Line" (Hesco on every face; it was "Hesco Gate", gate face only); only the
   WE_WallTierName attribute shows the name.
 - Hesco may stretch up to 2.6x its natural length (was 2.0) so every face fits the 14-block / 241k-tri budget.
+
+## claude-bud JOB 69 part A (2026-10-02): zone slots
+- With fallbacks on, a slot must also have a free front apron (the kiosk / plaque / run markers stand there). OFF
+  keeps the old rule (the zone builds without its dressing when only the apron is blocked).
+- WE_Build is not bumped here (the brief asks for it, but the house rule says lanes never bump it; Code Bot does).
+- The config geometry sim approximates the world (no WorldFill spurs / decor); the live overlap test in the service
+  stays the real arbiter, and /zonereport shows its result.

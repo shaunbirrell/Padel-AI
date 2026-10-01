@@ -385,6 +385,48 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 69 part A (2026-10-02): EVERY REBIRTH ZONE ON EVERY PLOT (branch `claude/desktop-bud`)
+**Flag:** `RebirthZonesConfig.Rebuild.Slots` (inside Rebuild: owner-first by the PLOT OWNER). OFF = today's placement
+exactly.
+
+**Root cause (reproduced):** each zone had one fixed annex slot per plot. Roads, the land edge, dock channels and
+other plots blocked 29 of the 70 plot × zone pairs:
+- P1–P6 lose Artillery + Refinery;
+- P3 / P4 / P9 / P10 lose the Nuclear Silo;
+- P7 loses both east zones;
+- P8 loses all 3 west zones;
+- P9 / P10 keep only 2 zones.
+
+**Built:**
+- **`RebirthZonesConfig.AnnexAlt`:** the brief's 24 fallback slots (±218, then ±290 / ±360 at Z 100 / 10 / -80 /
+  190), plus `SlotGap 6`, `SlotApron 26`, `SlotOrder` (the Silo first) and `BoardSpots`.
+- **One pure resolver, `RebirthZonesConfig.ResolveSlots(isFree, alts)`:** own slot first, then the fallbacks in
+  order, skipping any that overlap a zone already placed on that plot.
+- **RebirthZoneService:** `slotFrame` (cached per plot) replaces `annexFrame` everywhere (build, kiosk / run start,
+  apron). With fallbacks on, a slot also needs its front apron.
+  - `WE_AnnexCFrame` is stamped on each `Zone_<Id>` folder, and the store-prop dresser reads it.
+  - A zone with no slot at all gets a **ZONE BOARD** console in the base carrying its buy / upgrade prompts.
+  - One warning per blocked zone.
+- **Admin `/zonereport`:** every plot × zone (own slot / fallback (x,z) / BLOCKED) in Output, plus the blocked count.
+
+**Proof:** `tools/sim/run_zone_slots_test.py` runs the REAL resolver over all 10 plots × 7 zones against the map
+geometry from config (land edge, 6 roads ±12, every plot pad, every dock channel, public water, sites, outposts).
+- With fallbacks: **70 / 70 placed, 0 blocked, no overlaps.** The Silo is on every plot.
+- Without (OFF): today's 29 gaps.
+- Wired into `tools/checks/claude_bud_job69.py`.
+
+**Owed (Studio):**
+- `/zonereport` on the live map (the real part overlap test also sees decor the config does not).
+- A look at the fallback zones (e.g. P10's at X ±360).
+
+**Not yet (next):** JOB 69 parts B (zone-run how-to card / tracker / cancel / TRAIN) and C (how-to text for all 48
+registered activities, missions and jobs). The `JOB69 HowTo` check fails until C lands; it is the only failing check.
+
+**Test ON HIS PHONE:**
+1. Rejoin on a plot that was missing zones (e.g. P9 / P10): every rebirth zone you have unlocked now stands around
+   your base, the Nuclear Silo included.
+2. Type `/zonereport`: 0 blocked.
+
 ## claude-bud JOB 66 (2026-10-01): THE TWO 5 R$ STARTER PRODUCTS (branch `claude/desktop-bud`)
 **Flag:** `MonetizationConfig.Starter5` (owner-first, NEW-OWNER-FIRST). OFF = today.
 

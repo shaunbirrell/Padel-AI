@@ -174,6 +174,23 @@ local function runMoneyCommand(deps: { [string]: any }, player: Player, cmd: str
 			return notBuilt()
 		end
 		return call(fn, "Zone opened: " .. (arg1 :: string), player, arg1 :: string)
+	elseif cmd == "zonereport" then -- claude-bud JOB 69: every plot x zone slot (own / fallback / BLOCKED) in Output
+		local fn = serviceFn("RebirthZoneService", "SlotReport")
+		if not fn then
+			return notBuilt()
+		end
+		local blocked = 0
+		for plotId = 1, 10 do
+			local okR, lines = pcall(fn, plotId)
+			for _, line in ipairs(if okR and typeof(lines) == "table" then lines else {}) do
+				print("[zonereport] " .. line)
+				if string.find(line, "BLOCKED", 1, true) then
+					blocked += 1
+				end
+			end
+		end
+		adminReply(deps, player, string.format("zonereport: %d blocked (see Output)", blocked), if blocked == 0 then "Success" else "Warn")
+		return "ok"
 	elseif cmd == "resetrebirth" then
 		local fn = serviceFn("RebirthExpansionService", "AdminResetRebirth")
 		if not fn then

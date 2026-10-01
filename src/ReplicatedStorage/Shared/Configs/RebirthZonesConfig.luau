@@ -54,6 +54,41 @@ local RebirthZonesConfig = {
 		StrategicYard = { X = -50, Z = -218, W = 74, D = 60, Yaw = 0 },
 		DroneBay = { X = 60, Z = -218, W = 74, D = 60, Yaw = 0 },
 	} :: { [string]: Annex },
+	-- claude-bud JOB 69: the fallback annex slots (plot-local X / Z / Yaw), tried in this order when a zone's own slot
+	-- above is blocked (off the land, a road, water, another plot, a site): every zone on every plot gets a slot.
+	-- RebirthZonesConfig.ResolveSlots picks them (one pure resolver: the live service and the sim both use it).
+	AnnexAlt = {
+		{ X = 218, Z = -80, Yaw = -90 },
+		{ X = 218, Z = 190, Yaw = -90 },
+		{ X = -218, Z = -80, Yaw = 90 },
+		{ X = -218, Z = 190, Yaw = 90 },
+		{ X = -218, Z = 10, Yaw = 90 },
+		{ X = -218, Z = 100, Yaw = 90 },
+		{ X = 218, Z = 10, Yaw = -90 },
+		{ X = 218, Z = 100, Yaw = -90 },
+		{ X = 290, Z = 100, Yaw = -90 },
+		{ X = -290, Z = 100, Yaw = 90 },
+		{ X = 290, Z = 10, Yaw = -90 },
+		{ X = -290, Z = 10, Yaw = 90 },
+		{ X = 290, Z = -80, Yaw = -90 },
+		{ X = -290, Z = -80, Yaw = 90 },
+		{ X = 290, Z = 190, Yaw = -90 },
+		{ X = -290, Z = 190, Yaw = 90 },
+		{ X = 360, Z = 100, Yaw = -90 },
+		{ X = -360, Z = 100, Yaw = 90 },
+		{ X = 360, Z = 10, Yaw = -90 },
+		{ X = -360, Z = 10, Yaw = 90 },
+		{ X = 360, Z = -80, Yaw = -90 },
+		{ X = -360, Z = -80, Yaw = 90 },
+		{ X = 360, Z = 190, Yaw = -90 },
+		{ X = -360, Z = 190, Yaw = 90 },
+	} :: { { X: number, Z: number, Yaw: number } },
+	SlotGap = 6, -- studs between two zones' annex + apron boxes
+	SlotApron = 26, -- the apron in front of an annex (the kiosk / plaque / run markers stand there)
+	-- the zones in the order they claim slots (the Nuclear Silo first: it must always fit)
+	SlotOrder = { "StrategicYard", "DroneBay", "WestYard", "WestStrip", "WestFlank", "EastYard", "EastStrip" },
+	-- inside-the-base ZONE BOARD spots (plot-local) for a zone with no free slot at all (it can still be bought / upgraded)
+	BoardSpots = { { X = -40, Z = 0 }, { X = -40, Z = 10 }, { X = -40, Z = 20 }, { X = -40, Z = 30 }, { X = -40, Z = 40 }, { X = -40, Z = 50 }, { X = -40, Z = 60 } },
 	-- procedural decor the placement check may clear (WE_Cluster sources); anything else blocks the annex
 	ClearableSources = { rhythm = true, junction = true, shore = true, scatter = true, bay = true, fill = true, fill2 = true } :: { [string]: boolean },
 
@@ -163,6 +198,8 @@ cfg.Rebuild = {
 	Plaques = true,
 	Signs = true,
 	Visuals = true,
+	Slots = true, -- claude-bud JOB 69: the fallback annex slots (every zone on every plot) + the ZONE BOARD
+	HowTo = true, -- claude-bud JOB 69: the how-to-play card before a run + the run tracker / cancel
 }
 cfg.RunRules = {
 	CooldownMinutes = 20, -- per zone, saved (profile.ZoneRunAt)
@@ -331,4 +368,67 @@ function cfg.CardFor(zoneId: string, level: number, tickSeconds: number): any
 	}
 end
 
+
+-- ── claude-bud JOB 69: the annex slot resolver (pure) ──────────────────────────────────────────────────────────────
+export type Slot = { X: number, Z: number, Yaw: number }
+
+-- the plot-local box (X0, X1, Z0, Z1) of an annex + its apron at slot `s` (W across the front, D deep, yaw a multiple
+-- of 90: 0 = front +Z, 90 = +X, -90 = -X, 180 = -Z); pad grows it on every side
+function RebirthZonesConfig.SlotBox(s: Slot, W: number, D: number, pad: number?): { number }
+	local ap = tonumber((RebirthZonesConfig :: any).SlotApron) or 26
+	local g = pad or 0
+	local yaw = ((math.floor((tonumber(s.Yaw) or 0) + 0.5) % 360) + 360) % 360
+	local hw, back, front = W / 2, D / 2, D / 2 + ap
+	if yaw == 0 then -- front +Z
+		return { s.X - hw - g, s.X + hw + g, s.Z - back - g, s.Z + front + g }
+	elseif yaw == 180 then -- front -Z
+		return { s.X - hw - g, s.X + hw + g, s.Z - front - g, s.Z + back + g }
+	elseif yaw == 90 then -- front +X
+		return { s.X - back - g, s.X + front + g, s.Z - hw - g, s.Z + hw + g }
+	end
+	return { s.X - front - g, s.X + back + g, s.Z - hw - g, s.Z + hw + g } -- -90: front -X
+end
+
+local function boxesOverlap(a: { number }, b: { number }): boolean
+	return a[1] < b[2] and b[1] < a[2] and a[3] < b[4] and b[3] < a[4]
+end
+
+--[[ Every zone's slot on one plot. isFree(zoneId, slot) is the world check (the live part overlap test in
+	RebirthZoneService; the config geometry in the sim). Zones claim slots in SlotOrder: the zone's own slot first, then
+	AnnexAlt in order, skipping any slot whose box (+ SlotGap) overlaps a slot already taken on this plot. With
+	altsAllowed = false only the zone's own slot is tried (Rebuild OFF = today's placement exactly).
+	Returns { [zoneId] = Slot | false } (false = no slot fits: the service puts a ZONE BOARD in the base). ]]
+function RebirthZonesConfig.ResolveSlots(isFree: (string, Slot) -> boolean, altsAllowed: boolean?): { [string]: Slot | false }
+	local Zc: any = RebirthZonesConfig
+	local out: { [string]: Slot | false } = {}
+	local taken: { { number } } = {}
+	for _, zoneId in ipairs(Zc.SlotOrder) do
+		local a = Zc.Annex[zoneId]
+		if a then
+			local cands: { Slot } = { { X = a.X, Z = a.Z, Yaw = a.Yaw } }
+			if altsAllowed ~= false then
+				for _, s in ipairs(Zc.AnnexAlt) do
+					table.insert(cands, s)
+				end
+			end
+			out[zoneId] = false
+			for _, c in ipairs(cands) do
+				local box = RebirthZonesConfig.SlotBox(c, a.W, a.D, Zc.SlotGap)
+				local clash = false
+				for _, t in ipairs(taken) do
+					if boxesOverlap(box, t) then
+						clash = true
+						break
+					end
+				end
+				if not clash and isFree(zoneId, c) then
+					out[zoneId] = c
+					table.insert(taken, box)
+					break
+				end
+			end
+		end
+	end
+	return out
+end
 return RebirthZonesConfig
