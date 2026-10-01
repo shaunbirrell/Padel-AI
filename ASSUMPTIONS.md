@@ -10140,3 +10140,9 @@ ds_territories.luau T3):
 - The boat body follows BodyAllowed (the owner-only rollout) like a driven boat. Other players see it only on the
   owner's dock, which is exactly how a driven owner-only body already shows.
 - The Part builds stay as the fallback and are only hidden under a placed body.
+
+## claude-bud JOB 59 (2026-10-01): free assets pass
+- Only the sounds are wired: an audio id plays directly, while models / textures need the WE_CHECK2 pipeline (A, C,
+  D are left to Code Bot).
+- Existing keys change their id only for the owner (Pass59.Overrides), so a sound he dislikes never reaches
+  players.

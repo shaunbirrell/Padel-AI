@@ -100,6 +100,48 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 59 (2026-10-01): FREE ASSETS PASS: (B) SOUNDS BUILT; (A) / (C) / (D) NEED THE ASSET PIPELINE (branch `claude/desktop-bud`)
+**Flag:** `SoundConfig.Pass59` (owner-first, NEW-OWNER-FIRST).
+
+**(B) Sound pass, built:** it extends the existing SoundConfig + AudioController (no second audio system).
+- **New keys:** night crickets 9112764546, night ambience 9112835836, harbor night 9112792684, flag flap
+  9114461215 / 9114576083, radio chatter 9112851398 / 9125793009, distant artillery 9113169264, gate 9116875342,
+  boat 9126201834, the march cut 1845181958, the alternative click 15675032796.
+- **Already wired before:** desert wind 9114057104, heli 9113417759, cash 9113728042, Military March 1844397606 /
+  1841116989.
+- **Owner-only id swaps** (`Pass59.Overrides`, applied in `AudioController.Init`; OFF = today's sounds): heli
+  9125390124, boat 9112750448, raid siren 9119661640, UI click 15675059323.
+- **`Client/Controllers/AmbienceController`** (1 Hz, owner-first, everything through AudioController so the SFX toggle,
+  distance skip and voice caps apply):
+  - the "Night" loop: crickets on land, the harbor bed near his dock basin, nothing by day;
+  - radio chatter by HIS Command Center (3D, 45 studs);
+  - the plaza flag flap (3D, 50 studs);
+  - distant artillery only out in the desert ring (rare, quiet);
+  - his own gate's open / close sound (3D at the gate).
+- **Tests:** `tools/sim/run_sound_pass_test.py` (every listed id wired, world sounds 3D <= 60 studs, loops on the SFX
+  toggle, owner-first, night / desert logic). Check: `tools/checks/claude_bud_job59.py`.
+
+**Blocked: needs Code Bot / Studio (WE_CHECK2 + the asset pipeline: insert, origin check, part / triangle trim, script
+audit):**
+- **(A)** Helipad heli on SKYtech rotorKit 9961947424 / rotorLite 12918869816 (local copy 96681147793573), with the
+  scripts vendored and audited. JOB 56 already fixed the tilt / detached rotor in our own rig (`[RotorRig]` logs).
+- **(C)** Lights 8217816335 / 1725607094 / 404475960; Night Fog sky 1864839162; fireflies 3347717118; dust 615333766;
+  fire / smoke 11365590395; VFX textures 17290956157; props (sandbags 5678434293, crates 2930926216, ammo
+  2190705941, fences 4715423769 / 9083814252, pickup 6418225759). The JOB 57 BaseLife part props + the JOB 54 night
+  lights cover the look until these pass.
+  - Note: pickup 6418225759 is already a live vehicle body (PatrolTruck), so Code Bot can add it to
+    `HangarDockConfig` / BaseLife as a parked display with no new probe.
+- **(D)** Vault Door 14795516338 as the Vault T4 visual. The slot is `DefenceVisuals.Vault` tier 4; swap it in once
+  it passes.
+
+**Test ON HIS PHONE:**
+1. At night: crickets on your base, the harbor sound by your dock.
+2. By your Command Center: radio chatter.
+3. At the plaza flag: flapping.
+4. Out in the desert: a distant boom now and then.
+5. Your gate opening: the gate sound.
+6. A heli / boat: the new engine sounds.
+
 ## claude-bud JOB 58 (2026-10-01): HANGAR + DOCK WITH REAL AIRCRAFT / BOATS (branch `claude/desktop-bud`)
 **Flag:** `HangarDockConfig` (owner-first by the PLOT OWNER, NEW-OWNER-FIRST).
 

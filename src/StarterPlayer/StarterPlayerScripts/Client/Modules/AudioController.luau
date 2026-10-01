@@ -745,6 +745,20 @@ function AudioController.Init()
 	end
 	initDone = true
 	ensureFolder()
+	-- claude-bud JOB 59 B: the sound pass swaps a few existing ids for the owner first (SoundConfig.Pass59; OFF = today)
+	pcall(function()
+		local P: any = (SoundConfig :: any).Pass59
+		local RC: any = (require :: any)((game:GetService("ReplicatedStorage") :: any).Shared.Configs.RetentionConfig)
+		local lp = game:GetService("Players").LocalPlayer
+		if typeof(P) == "table" and lp and RC.Live(P, lp.UserId) then
+			for key, id in pairs(P.Overrides) do
+				local def = SoundConfig.Sounds[key]
+				if def and typeof(id) == "number" and id > 0 then
+					def.Id = id
+				end
+			end
+		end
+	end)
 	-- warm one 2D voice per UI / Stinger key so the first cue does not wait on a cold asset load.
 	-- v147 (live error report: client "HTTP 429" sound loads): this used to make ~20 Sounds in the same frame at join,
 	-- 14 of them asset downloads of only 7 distinct files (9113849492 five times, the siren three times), on top of the
