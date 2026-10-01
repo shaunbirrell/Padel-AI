@@ -38,7 +38,7 @@ must_contain(_cbud_sc, "or not MonetizationConfig.SkuLiveFor(player.UserId, pass
 must_contain(_cbud_mc, 'Description = "Gold oil pumps that earn 50% more, forever",', "CLAUDE-BUD: F9 golden pump Shop copy says the income boost")
 must_contain(_cbud_ps, "KeepBaseLive = keepBaseLive(player),", "CLAUDE-BUD: F7 KeepBaseLive pushed per player (SOON for anyone the rollout skips)")
 must_contain(_cbud_ps, "return PrestigeConfig.KeepBase.Enabled == true\n\t\tand id ~= nil\n\t\tand id ~= 0\n", "CLAUDE-BUD: F7 KeepBaseLive still needs Enabled and a non-zero Id")
-must_contain(_cbud_sc, 'if (tonumber(def.Id) or 0) == 0 or not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then\n\t\ttoast("Coming soon", "Info")\n\t\treturn\n\tend\n\t-- Log intent on server; NEVER treat client confirmation as a grant', "CLAUDE-BUD: promptGamePass stops before any intent or Roblox prompt")
+must_contain(_cbud_sc, 'if (tonumber(def.Id) or 0) == 0 or not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then\n\t\ttoast("Coming soon", "Info")\n\t\treturn\n\tend\n\t-- Log the SKU view on the server; NEVER treat client confirmation as a grant.', "CLAUDE-BUD: promptGamePass stops before any intent or Roblox prompt")
 must_contain(_cbud_sc, 'if (tonumber(def.Id) or 0) == 0 or not MonetizationConfig.SkuLiveFor(player.UserId, productKey) then\n\t\ttoast("Coming soon", "Info")', "CLAUDE-BUD: promptDevProduct stops before any intent or Roblox prompt")
 # Receipts: idempotent (saved PurchaseId + in-flight lock) and never rollout-gated, so a paid receipt is always granted.
 must_contain(_cbud_ms, "if hasProcessed(profile, receiptId) then", "CLAUDE-BUD: a receipt already granted is never granted twice")

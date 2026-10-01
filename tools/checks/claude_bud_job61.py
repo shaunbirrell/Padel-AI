@@ -2,7 +2,8 @@
 from pathlib import Path
 import re
 
-ROOT = Path(__file__).resolve().parents[2]
+# Prefer cwd (BuyPathStatic exec) over __file__ parents — __file__ is unreliable under exec().
+ROOT = Path.cwd()
 def src(rel):
     return (ROOT / rel).read_text(encoding="utf-8")
 def check(cond, msg):

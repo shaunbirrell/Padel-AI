@@ -1095,8 +1095,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 182)', "v137 WE_Build=147 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 182)', "v137 WE_Build=147 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 183)', "v137 WE_Build=147 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 183)', "v137 WE_Build=147 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1161,7 +1161,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 182)', "v110 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 183)', "v110 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1234,9 +1234,9 @@ must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau
 must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 182)', "v137 WE_Build=147 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 182)', "v137 WE_Build=147 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 182)', "v110 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 183)', "v137 WE_Build=147 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 183)', "v137 WE_Build=147 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 183)', "v110 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1263,9 +1263,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 182)', "v137 WE_Build=147 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 182)', "v137 WE_Build=147 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 182)', "v110 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 183)', "v137 WE_Build=147 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 183)', "v137 WE_Build=147 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 183)', "v110 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1318,9 +1318,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService is nil before BaseService.Init", "v66 Bootstrap warns (no assert) on nil deps.DataService")
 must_not_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "assert(deps.DataService", "v66 Bootstrap has no fatal DataService assert")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 182)', "v137 WE_Build=147 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 182)', "v137 WE_Build=147 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 182)', "v110 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 183)', "v137 WE_Build=147 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 183)', "v137 WE_Build=147 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 183)', "v110 EarlyRemotes WE_Build")
 # Keep v64 hardenings
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")
@@ -1830,7 +1830,9 @@ must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau",
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "function MonetizationService.OnPassOwned(fn: PassOwnedListener): () -> ()", "M1 OnPassOwned API")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "firePassOwned(player, passKey, \"purchase\")", "M1 pass purchase event")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "while pending > 0 do", "M1 parallel pass checks (J21)")
-must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "E.AnalyticsEconomyTransactionType.IAP.Name", "M1 economy analytics IAP")
+# v183 / JOB 61: IAP economy goes through AnalyticsService.Economy; type IAP via EconomyTypes.devproduct
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", 'pcall(AnalyticsService.Economy, player, "Source", amount, endingBalance, "devproduct", currency, sku)', "M1 economy analytics IAP")
+must_contain("src/ReplicatedStorage/Shared/Configs/AnalyticsConfig.luau", 'devproduct = "IAP"', "M1 economy analytics IAP type map")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "local source = cleanSource(rawSource)", "M1 purchase source whitelist")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: string?): boolean?", "M1 Starter offer gate")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "if cfg.SoftOfferQuietUntilTutorialComplete == true and DataService then", "M1 no soft offers mid-tutorial")
@@ -5332,7 +5334,7 @@ must_contain(XP_XB, 'function XPBalanceConfig.BuildXP(price: number): number\n\t
 must_contain(XP_XB, 'function XPBalanceConfig.IsBuildReason(reason: string?): boolean\n\tif typeof(reason) ~= "string" then\n\t\treturn false\n\tend\n\tfor _, prefix in ipairs(XPBalanceConfig.Build.ReasonPrefixes) do\n\t\tif string.sub(reason, 1, #prefix) == prefix then\n\t\t\treturn true\n\t\tend\n\tend\n\treturn false\nend\n\nreturn XPBalanceConfig\n', 'XP: IsBuildReason = a plain prefix match on the four reasons (whole body), and nothing follows it but the return')
 # purchase hook: success path only, deferred (the whole SpendCash tail)
 must_contain(XP_ECON, '\tXPService = deps.XPService\n', 'XP: EconomyService takes XPService from deps (no require)')
-must_contain(XP_ECON, '\tif not ok then\n\t\twarn("[Economy] SpendCash threw:", a)\n\t\treturn false, "SpendFailed"\n\tend\n\t-- XP rebalance: purchase XP only after a spend that succeeded, deferred so a level-up can never fail or double a\n\t-- purchase. XPService.OnSpend pays only the whitelisted one-time reasons (upgrade_ / research_ / vehicle_ / weapon_).\n\tif a == true and XPService and XPService.OnSpend then task.defer(XPService.OnSpend, player, amount, _reason) end\n\treturn (a :: any) :: boolean, b :: string?\nend\n', 'XP: SpendCash tail: a throw returns false; purchase XP deferred only after a spend that returned true (whole tail)')
+must_contain(XP_ECON, '\tif not ok then\n\t\twarn("[Economy] SpendCash threw:", a)\n\t\treturn false, "SpendFailed"\n\tend\n\t-- XP rebalance: purchase XP only after a spend that succeeded, deferred so a level-up can never fail or double a\n\t-- purchase. XPService.OnSpend pays only the whitelisted one-time reasons (upgrade_ / research_ / vehicle_ / weapon_).\n\tif a == true and XPService and XPService.OnSpend then\n\t\ttask.defer(XPService.OnSpend, player, amount, _reason)\n\tend\n\treturn (a :: any) :: boolean, b :: string?\nend\n', 'XP: SpendCash tail: a throw returns false; purchase XP deferred only after a spend that returned true (whole tail)')
 # XPService: config source, whitelist, block check, battle pass, XP-L2, backfill guards and order, Push robustness
 must_contain(XP_SVC, 'local XP_OFF: any = {\n\tEnabled = false,\n\tBuild = { Enabled = false, Reason = "build", RebirthRebuildMult = 1, ReasonPrefixes = {} },\n\tBackfill = { Enabled = false, Reason = "build_backfill", Toast = "★ LEVEL %d!" },\n\tNoBattlePassMirror = { build = true, build_backfill = true },\n\tBuildXP = function(_price: number): number\n\t\treturn 0\n\tend,\n\tIsBuildReason = function(_reason: string?): boolean\n\t\treturn false\n\tend,\n}\n', 'XP: the fallback config is everything OFF')
 must_contain(XP_SVC, '\tsharedCfg, cfgProblem = ProfileSchema.XPBalance()\n', 'XP (H2): XPService takes its config from ProfileSchema.XPBalance(), the one validated copy')

@@ -1,3 +1,9 @@
+## v183 PUBLISHING (Code Bot Roblox, 2026-10-01 ~18:55 Dublin): JOB 51 SharedHostility OwnerFirst + JOB 61 Creator Hub analytics
+- Cherry-pick: `b8c2af5` (JOB 51) → `07bb90a`, `1373c74` (JOB 61) → `fb88365` onto phase-7 `4952138` (v182 tip). WE_Build 183. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v182.
+- **JOB 51 (NEW-OWNER-FIRST):** `CombatConfig.SharedHostility.OwnerFirst = true` — one Hostility rule for every NPC target pick; /guarddebug logs; live 2-player proof owed.
+- **JOB 61:** AnalyticsService economy batch + 8-step onboarding funnel + Shop/Rebirth funnel sessions. No Heartbeat work.
+- BuyPathStatic FAIL=0 (pins updated for JOB 61 contracts). Place version TBD after Open Cloud publish.
+
 ## JOB 61 (Code Bot Roblox, 2026-10-01 18:36 Dublin): Creator Hub Economy + Funnels analytics
 - Added the server-only `AnalyticsService` path and one central `Shared/Configs/AnalyticsConfig.luau`: batched Cash/Gold economy events with normalized item SKUs, ending balances, allowed transaction types, admin exclusion, and PII sanitization.
 - Added the eight-step first-session onboarding funnel (once per saved player), server-created Shop/Rebirth funnel session IDs, daily mission / return sequence / notification custom events, and a delayed five-minute step with no Heartbeat work.

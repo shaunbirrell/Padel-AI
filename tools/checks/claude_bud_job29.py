@@ -109,7 +109,8 @@ _ND = read("docs/NOTIFICATIONS.md") or ""
 _j29("{day}" in _ND and "Creator Hub" in _ND and "We will not notify" in _ND, "docs/NOTIFICATIONS.md: Creator Hub steps, templates, what we will / won't notify")
 # ── funnel (the SAME AnalyticsConfig.Roblox.Funnel, extended) ─────────────────────────────────────────────────────────
 _AC = _j29_src("src/ReplicatedStorage/Shared/Configs/AnalyticsConfig.luau")
-_j29(_AC.count("Funnel = {") == 1 and '"STEP:BaseClaimed"' in _AC and '"STEP:Tut_CommandCenter"' in _AC and '"STEP:TutorialDone"' in _AC,
+# v183 / JOB 61: one Roblox.Funnel with the eight first-session steps (legacy STEP:* names retired)
+_j29(_AC.count("Funnel = {") == 1 and 'Step = "joined"' in _AC and 'Step = "base_claimed"' in _AC and 'Step = "reached_5_minutes"' in _AC,
      "one funnel, extended with the onboarding steps")
 _j29('pcall(funnel, player, "STEP:" .. m.Step)' in _AS and 'onboard(player, if doneDef.Id == "ClaimBase" then "BaseClaimed" else "Tut_" .. doneDef.Id)' in _TS
      and 'AnalyticsService.Onboard, player, "CharacterSpawned")' in _RS, "every onboarding step fires the funnel at the real moment")
