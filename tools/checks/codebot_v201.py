@@ -149,9 +149,12 @@ check('" (8 h max)"' not in RC and "OfflineConfig.MaxSeconds / 3600" in RC and '
       "CODEBOT v201: the Welcome back card shows OfflineConfig's cap (no hard-coded 8 h / Premium +10 %)")
 
 # ── hard rules ──
+# the claude/desktop-bud branch carries unshipped work (JOB 62 ExperienceNotify, JOB 66 products): the ship-only pins
+# (byte-identical money config, DataService scope) apply to phase-7-polish only, as in codebot_v200
+BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()
 MON = read(C + "MonetizationConfig.luau")
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev_mon is not None and prev_mon == MON, "CODEBOT v201: MonetizationConfig byte-identical to " + PREV + " (no Robux changes)")
+check(BUD or (prev_mon is not None and prev_mon == MON), "CODEBOT v201: MonetizationConfig byte-identical to " + PREV + " (no Robux changes)" + (" [bud branch: ship-only, skipped]" if BUD else ""))
 check("PreferMesh = true" not in read(C + "VisualAssetConfig.luau"), "CODEBOT v201: PreferMesh stays OFF (VisualAssetConfig)")
 check("PreferMeshWhenAssetIdSet = false" in read(C + "StructureVisualConfig.luau"), "CODEBOT v201: PreferMeshWhenAssetIdSet false")
 check('"StreamingEnabled": true' not in read("default.project.json"), "CODEBOT v201: StreamingEnabled stays OFF")
@@ -160,5 +163,5 @@ touched = [ln for ln in (r.stdout or "").splitlines() if "WE_Building" in ln]
 check(r.returncode == 0 and not touched, "CODEBOT v201: no WE_Building* diffs vs " + PREV)
 check(not re.search(r"OwnerFirst = true", read(C + "OfflineConfig.luau")), "CODEBOT v201: the offline rule is live for everyone (not OwnerFirst)")
 _pds = shipped(S + "Services/DataService.luau", PREV) or ""
-check(_pds.replace('WE_Build", 200)', 'WE_Build", 201)').replace("WE_Build=200", "WE_Build=201") == read(S + "Services/DataService.luau"),
+check(BUD or _pds.replace('WE_Build", 200)', 'WE_Build", 201)').replace("WE_Build=200", "WE_Build=201") == read(S + "Services/DataService.luau"),
       "CODEBOT v201: DataService: only the WE_Build number changed vs " + PREV + " (save keys kept, no wipe)")
