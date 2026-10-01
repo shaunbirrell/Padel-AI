@@ -202,17 +202,21 @@ end
 --[[ Pay one player for one finished job (or one delivered bag): the wallet, XP, today's run count, the lifetime
 	totals, mission progress (Kinds[kind].Track) and the OnJobDone listeners. `bag` = the cash came from a delivered
 	bag (BestBag). Returns false (nothing paid, nothing counted) when AddCash refuses (no profile). ]]
-function OpsRewards.Grant(player: Player, site: OpsConfig.SiteDef, cash: number, xp: number, bag: boolean?): boolean
+-- Code Bot v198: 2nd return = the cash credited (AddCash's own, multipliers in: the DOUBLE WEEKEND doubles "ops"), for the
+-- toast only; the run count, totals, best bag and listeners keep the job's own pay (`cash`).
+function OpsRewards.Grant(player: Player, site: OpsConfig.SiteDef, cash: number, xp: number, bag: boolean?): (boolean, number)
 	if EconomyService == nil or EconomyService.AddCash == nil then
-		return false
+		return false, 0
 	end
 	cash = math.floor(cash + 0.5)
 	if cash <= 0 then
-		return false
+		return false, 0
 	end
-	if EconomyService.AddCash(player, cash, R.CashReason) ~= true then
-		return false
+	local paidOk, paid = EconomyService.AddCash(player, cash, R.CashReason)
+	if paidOk ~= true then
+		return false, 0
 	end
+	local credited = if typeof(paid) == "number" and paid == paid and paid >= 0 then math.floor(paid) else cash
 	if xp > 0 and XPService and XPService.AddXP then
 		local ok, err = pcall(XPService.AddXP, player, xp, R.XPReason)
 		if not ok then
@@ -244,7 +248,15 @@ function OpsRewards.Grant(player: Player, site: OpsConfig.SiteDef, cash: number,
 			warn("[Ops] OnJobDone listener error: " .. tostring(err))
 		end
 	end
-	return true
+	return true, credited
+end
+
+-- Code Bot v198: DISPLAY ONLY. (amount, tag) for a pay toast: Grant's 2nd return (the cash credited; the DOUBLE WEEKEND
+-- doubles "ops") and " · 2x" while the event doubles it (EconomyService.ToastTag); the job's own pay without them.
+function OpsRewards.ToastCash(player: Player, base: number, credited: any): (number, string)
+	local shown = if typeof(credited) == "number" and credited == credited and credited > 0 then math.floor(credited) else math.floor(base)
+	local tag = if EconomyService and EconomyService.ToastTag then EconomyService.ToastTag(player, R.CashReason) else ""
+	return shown, tag
 end
 
 -- the Seen bit flags (OpsConfig.Profile.SeenBits)

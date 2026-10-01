@@ -244,14 +244,23 @@ local function spawnDrop()
 	}
 end
 
+-- Code Bot v198: DISPLAY ONLY. A cash reward toast shows what was credited (AddCash's 2nd return, multipliers in), plus
+-- " · 2x" while the DOUBLE WEEKEND doubled it (EconomyService.ToastAmount / ToastTag); an economy without them = the old text
+local function toastCash(econ: any, player: Player, base: number, reason: string, ok: any, credited: any): (number, string)
+	local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, ok, credited) else math.floor(base)
+	local tag = if econ and econ.ToastTag then econ.ToastTag(player, reason) else ""
+	return shown, tag
+end
+
 local function claim(player: Player, rec: DropRec)
 	destroyDrop(rec.Id)
-	EconomyService.AddCash(player, rec.ClaimCash, "supply_drop")
+	local paidOk, paid = EconomyService.AddCash(player, rec.ClaimCash, "supply_drop")
 	if NotificationService then
+		local shown, tag = toastCash(EconomyService, player, rec.ClaimCash, "supply_drop", paidOk, paid) -- v198
 		if rec.Airdrop then
-			NotificationService.Notify(player, "Airdrop +$" .. formatCash(rec.ClaimCash), "Reward") -- claude-bud JOB 4.1
+			NotificationService.Notify(player, "Airdrop +$" .. formatCash(shown) .. tag, "Reward") -- claude-bud JOB 4.1
 		else
-			NotificationService.Notify(player, "Supply drop +$" .. formatCash(rec.ClaimCash), "Reward")
+			NotificationService.Notify(player, "Supply drop +$" .. formatCash(shown) .. tag, "Reward")
 		end
 	end
 	if AnalyticsService then

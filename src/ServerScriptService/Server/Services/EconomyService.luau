@@ -295,6 +295,48 @@ function EconomyService.GetCashMult(player: Player, reason: string?): number
 	return cashMultFor(player, profile, reason)
 end
 
+-- Code Bot v198: DISPLAY ONLY. The DOUBLE WEEKEND part of cashMultFor for `reason` right now: DoubleEvent.CashMult on
+-- the non-exempt stack, DoubleEvent.ExtraCashMult on a pass-exempt reason, 1 for NEVER_MULTIPLIED (or no module).
+-- Used for the toasts' "2x" tag (Modules/RewardToast); never used to grant.
+function EconomyService.EventCashMult(player: Player, reason: string?): number
+	local DE = doubleEvent()
+	local key = reason or ""
+	if DE == nil or NEVER_MULTIPLIED[key] == true then
+		return 1
+	end
+	local ok, m = pcall(function(): any
+		local exempt = require(Shared.Configs.MonetizationConfig).CashMultExemptReasons
+		if exempt ~= nil and exempt[key] == true then
+			return if DE.ExtraCashMult then DE.ExtraCashMult(player, reason) else 1
+		end
+		return DE.CashMult(player, reason)
+	end)
+	return if ok and typeof(m) == "number" and m == m then m else 1
+end
+
+-- Code Bot v198: DISPLAY ONLY. What a cash reward toast shows for an AddCash call: its 2nd return (credited, the
+-- multipliers in) when the grant went through and said how much, else `base` (the old text).
+function EconomyService.ToastAmount(base: any, ok: any, credited: any): number
+	if ok == true and typeof(credited) == "number" and credited == credited and credited >= 0 and credited ~= math.huge then
+		return math.floor(credited)
+	end
+	return math.floor(tonumber(base) or 0)
+end
+
+-- Code Bot v198: DISPLAY ONLY. The toast suffix " · 2x" (EventConfig.ToastTag) when the DOUBLE WEEKEND doubles `reason`
+-- for this player right now (EventCashMult > 1), else "". Never throws.
+function EconomyService.ToastTag(player: Player, reason: string?): string
+	local ok, tag = pcall(function(): string
+		if EconomyService.EventCashMult(player, reason) <= 1 then
+			return ""
+		end
+		local EC: any = require(Shared.Configs.EventConfig)
+		local t = if typeof(EC.ToastTag) == "string" and EC.ToastTag ~= "" then EC.ToastTag else "2x"
+		return " · " .. t
+	end)
+	return if ok and typeof(tag) == "string" then tag else ""
+end
+
 --[[ v72 WE_IncomePerSec (tycoon guide: cash pill "+$24/s", the pick's "ready in"): the last amount granted per steady
 	reason (TycoonGuideConfig.SteadyIncomeReasons: passive / training / plot_oil), multipliers included, summed and
 	divided by the passive TickSeconds, rounded to 0.1. A reason that missed SteadyIncomeExpireTicks ticks drops out
@@ -411,14 +453,16 @@ local function notePendingOrigin(player: Player, amount: number, reason: string?
 	rows[key] = (rows[key] or 0) + amount
 end
 
-function EconomyService.AddCash(player: Player, amount: number, reason: string?): boolean
+-- Code Bot v198: returns (ok, credited): credited = the grant after the multipliers (what the toast should show,
+-- Modules/RewardToast). Callers that read only the first value are unchanged.
+function EconomyService.AddCash(player: Player, amount: number, reason: string?): (boolean, number)
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
-		return false
+		return false, 0
 	end
 	amount = math.floor(amount)
 	local profile = getDataService().GetProfile(player)
 	if not profile then
-		return false
+		return false, 0
 	end
 
 	local granted = applyCashMult(player, profile, amount, reason)
@@ -436,7 +480,7 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	if reason == "collector" and TutorialService and TutorialService.Notify then
 		TutorialService.Notify(player, "PassiveIncome")
 	end
-	return true
+	return true, granted
 end
 
 --[[ Accrue passive / stipend into PendingCash (not spendable until Money Collector). ]]

@@ -250,13 +250,19 @@ local function payAll(rt: any, payees: { Player }): number
 		local s = ctx.Zones.Get(p)
 		if profile ~= nil and s.Alive and ctx.Rewards.CdLeft(profile, d.Id, nowU) <= 0 then
 			local cash, xp = ctx.Rewards.Quote(profile, d, nowU)
-			if ctx.Rewards.Grant(p, d, cash, xp, false) then
+			local paidOk, credited = ctx.Rewards.Grant(p, d, cash, xp, false)
+			if paidOk then
 				ctx.Rewards.SetCd(p, profile, d, nowU)
 				paid += 1
+				-- Code Bot v198: the cash credited (the DOUBLE WEEKEND doubles "ops") + " · 2x" (display only)
+				local shown, tag = cash, ""
+				if ctx.Rewards.ToastCash then
+					shown, tag = ctx.Rewards.ToastCash(p, cash, credited)
+				end
 				local line = if d.Kind == "Checkpoint"
-					then string.format(TOAST.CheckpointTaken, ctx.Rewards.FormatCash(cash))
-					else string.format(TOAST.Paid, d.Title, ctx.Rewards.FormatCash(cash))
-				ctx.Notify(p, line, "Reward")
+					then string.format(TOAST.CheckpointTaken, ctx.Rewards.FormatCash(shown))
+					else string.format(TOAST.Paid, d.Title, ctx.Rewards.FormatCash(shown))
+				ctx.Notify(p, line .. tag, "Reward")
 				ctx.MarkPlayerSite(p, d.Id)
 			end
 		end

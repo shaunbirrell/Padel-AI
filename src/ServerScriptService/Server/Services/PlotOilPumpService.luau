@@ -407,6 +407,19 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 	local tickSec = PlotOilPumpConfig.TickSeconds or 5
 	local cash = PlotOilPumpConfig.CashPerTick or 18
 	local reason = PlotOilPumpConfig.Reason or "plot_oil"
+	-- Code Bot v198: DISPLAY ONLY. WE_OilMult = the multiplier AccruePendingCash applied to plot_oil (1, or 2 while the
+	-- DOUBLE WEEKEND doubles it) for the owner's "+$N / every 5s" pump label (client ProducerLabels); written on change.
+	local function publishOilMult(owner: Player)
+		if EconomyService.GetCashMult == nil then
+			return
+		end
+		pcall(function()
+			local m = math.clamp(tonumber(EconomyService.GetCashMult(owner, reason)) or 1, 1, 5)
+			if owner:GetAttribute("WE_OilMult") ~= m then
+				owner:SetAttribute("WE_OilMult", m)
+			end
+		end)
+	end
 	RunService.Heartbeat:Connect(function(dt)
 		accum += dt
 		if accum < tickSec then
@@ -439,6 +452,7 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 							local total = cash * (n - golden) + math.floor(cash * goldMult) * golden
 							-- F4: the owner's "+$18 / every 5s" label is client-side (ProducerLabels); no server pop
 							EconomyService.AccruePendingCash(owner, total, reason)
+							publishOilMult(owner)
 						end
 					end
 				end

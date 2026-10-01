@@ -613,22 +613,19 @@ local function markFirstPvp(attacker: Player)
 	end
 end
 
--- Code Bot v185: DOUBLE WEEKEND: the kill-reward multiplier for the "+$N" toast only (the grant itself is multiplied
--- inside EconomyService.AddCash / XPService.AddXP via Modules/DoubleEvent, KillReasons -> KillMult)
-local function eventKillMult(attacker: Player): number
-	local ok, k = pcall(function(): any
-		return require(script.Parent.Parent.Modules.DoubleEvent).KillCount(attacker)
-	end)
-	return if ok and typeof(k) == "number" and k >= 1 then k else 1
-end
-
-local function grantRewards(attacker: Player, cash: number, xp: number, reason: string)
+-- Code Bot v198: returns the cash CREDITED (AddCash's 2nd return: the DOUBLE WEEKEND KillMult, the 2x pass, prestige, ...)
+-- for the "+$N" toast (display only; was base x DoubleEvent.KillCount, which missed the pass / prestige / tax). The
+-- kill toasts carry no "2x" tag: the client turns "(+$N)" into a cash float (HudConfig.Toast.Reroute, anchored at "$").
+local function grantRewards(attacker: Player, cash: number, xp: number, reason: string): number
+	local shown = cash
 	if cash > 0 then
-		EconomyService.AddCash(attacker, cash, reason)
+		local paidOk, paid = EconomyService.AddCash(attacker, cash, reason)
+		shown = if EconomyService.ToastAmount then EconomyService.ToastAmount(cash, paidOk, paid) else cash
 	end
 	if xp > 0 then
 		XPService.AddXP(attacker, xp, reason)
 	end
+	return shown
 end
 
 -- W2: opts.Quiet (a blast death, nuke §15.2) keeps stats, missions and rewards but sends no "Eliminated" toast
@@ -647,7 +644,7 @@ function CombatService.RegisterPlayerKill(attacker: Player, victim: Player, opts
 		DataService.MarkDirty(victim)
 	end
 	markFirstPvp(attacker)
-	grantRewards(attacker, CombatConfig.PlayerKill.Cash, CombatConfig.PlayerKill.XP, "pvp_kill")
+	local shownCash = grantRewards(attacker, CombatConfig.PlayerKill.Cash, CombatConfig.PlayerKill.XP, "pvp_kill")
 	if AnalyticsService then
 		AnalyticsService.Log(AnalyticsConfig.Events.PLAYER_KILL, attacker.UserId, {
 			victim = victim.UserId,
@@ -658,7 +655,7 @@ function CombatService.RegisterPlayerKill(attacker: Player, victim: Player, opts
 	if NotificationService and not (opts and opts.Quiet == true) then
 		NotificationService.Notify(
 			attacker,
-			string.format("Eliminated %s (+$%d)", victim.DisplayName, CombatConfig.PlayerKill.Cash * eventKillMult(attacker)),
+			string.format("Eliminated %s (+$%d)", victim.DisplayName, shownCash),
 			"Reward"
 		)
 	end
@@ -853,7 +850,7 @@ function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boo
 		cash = math.floor(cash * math.clamp(CombatFairnessConfig.UnitKillCashShare, 0, 1) + 0.5)
 		xp = math.floor(xp * math.clamp(CombatFairnessConfig.UnitKillXPShare, 0, 1) + 0.5)
 	end
-	grantRewards(attacker, cash, xp, if byUnit then "npc_kill_squad" else "npc_kill")
+	local shownCash = grantRewards(attacker, cash, xp, if byUnit then "npc_kill_squad" else "npc_kill")
 	if MissionService and MissionService.TrackProgress then
 		MissionService.TrackProgress(attacker, "KillNPC", 1)
 	end
@@ -872,7 +869,7 @@ function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boo
 	end
 	if NotificationService and quiet ~= true then
 		local fmt = if byUnit then "Squad: %s down (+$%d)" else "%s down (+$%d)"
-		NotificationService.Notify(attacker, string.format(fmt, rec.Def.DisplayName, cash * eventKillMult(attacker)), "Reward")
+		NotificationService.Notify(attacker, string.format(fmt, rec.Def.DisplayName, shownCash), "Reward")
 	end
 	if not byUnit and quiet ~= true and noMarker ~= true then -- the kill marker belongs to the player's own shot
 		hitFeedback(attacker, { Kind = "Kill", Damage = 0, TargetName = rec.Def.DisplayName, WeaponId = nil })

@@ -5686,6 +5686,7 @@ local EventConfig = {
 	PopupSeenAttr = "WE_EventPopupSeen", -- player attribute (server-written on profile load): true = already shown
 	PopupTestAttr = "WE_EventPopupTest", -- player attribute: the owner's /eventpopup bumps it -> show the pop-up now
 	ChipText = "2x WEEKEND",
+	ToastTag = "2x", -- Code Bot v198: reward toasts the event doubled end " · 2x" (Server/Modules/RewardToast; display only)
 
 	KillReasons = {
 		pvp_kill = true,
@@ -31516,7 +31517,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 197)
+		player:SetAttribute("WE_Build", 198)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -50549,10 +50550,15 @@ function PlazaBounty.OnCaptured(player: Player, zoneId: string, position: Vector
 				mult *= (require(script.Parent.Parent.Services.EndgameService) :: any).BountyScale(player, PlazaBountyConfig.Cash)
 			end)
 			local econ = deps.EconomyService
+			local base = math.floor(PlazaBountyConfig.Cash * mult)
+			local paidOk, paid = false, 0
 			if econ and econ.AddCash then
-				econ.AddCash(player, math.floor(PlazaBountyConfig.Cash * mult), "plaza_bounty")
+				paidOk, paid = econ.AddCash(player, math.floor(PlazaBountyConfig.Cash * mult), "plaza_bounty")
 			end
-			notify(player, "Bounty claimed! +$" .. fmt(PlazaBountyConfig.Cash * mult), "Reward")
+			-- Code Bot v198: the cash credited (the DOUBLE WEEKEND doubles "plaza_bounty") + " · 2x"; display only
+			local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, paidOk, paid) else PlazaBountyConfig.Cash * mult
+			local tag = if econ and econ.ToastTag then econ.ToastTag(player, "plaza_bounty") else ""
+			notify(player, "Bounty claimed! +$" .. fmt(shown) .. tag, "Reward")
 		end
 		endBounty()
 	elseif b and now >= b.EndsAt then
@@ -57946,8 +57952,13 @@ local function payBounty(e: Entry, killer: Player?)
 	local cash = math.floor(math.min(rec.MaxHP * BOUNTY.CashPerHP, BOUNTY.CashMax))
 	local xp = math.floor(math.min(rec.MaxHP * BOUNTY.XPPerHP, BOUNTY.XPMax))
 	local econ = deps.EconomyService
+	local shownCash = cash
 	if cash > 0 and econ and typeof(econ.AddCash) == "function" then
-		pcall(econ.AddCash, killer, cash, BOUNTY.CashReason)
+		local okCall, paidOk, paid = pcall(econ.AddCash, killer, cash, BOUNTY.CashReason)
+		-- Code Bot v198: the toast shows the cash credited (DOUBLE WEEKEND KillMult, 2x pass, ...); display only
+		if okCall and typeof(econ.ToastAmount) == "function" then
+			shownCash = econ.ToastAmount(cash, paidOk, paid)
+		end
 	end
 	local xps = deps.XPService
 	if xp > 0 and xps and typeof(xps.AddXP) == "function" then
@@ -57956,7 +57967,7 @@ local function payBounty(e: Entry, killer: Player?)
 	local ns = deps.NotificationService
 	if ns and typeof(ns.Notify) == "function" then
 		-- same shape as an NPC kill ("<name> down (+$N)"): the HUD turns it into a cash float, no lane line
-		pcall(ns.Notify, killer, string.format("%s down (+$%d)", e.Def.DisplayName, cash), "Reward")
+		pcall(ns.Notify, killer, string.format("%s down (+$%d)", e.Def.DisplayName, shownCash), "Reward")
 	end
 end
 
@@ -74721,6 +74732,14 @@ local function pushState(player: Player, opts: { InVault: boolean?, UnderFire: b
 	lastPushedProgress[player.UserId] = prog
 end
 
+-- Code Bot v198: DISPLAY ONLY. A cash reward toast shows what was credited (AddCash's 2nd return, multipliers in), plus
+-- " · 2x" while the DOUBLE WEEKEND doubled it (EconomyService.ToastAmount / ToastTag); an economy without them = the old text
+local function toastCash(econ: any, player: Player, base: number, reason: string, ok: any, credited: any): (number, string)
+	local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, ok, credited) else math.floor(base)
+	local tag = if econ and econ.ToastTag then econ.ToastTag(player, reason) else ""
+	return shown, tag
+end
+
 local function completeRaid(player: Player)
 	local cashMin = BankRaidConfig.CashMin or 15000
 	local cashMax = BankRaidConfig.CashMax or 35000
@@ -74740,7 +74759,8 @@ local function completeRaid(player: Player)
 		return EGS.HeistKit and EGS.HeistKit(player) or 0
 	end)
 	local raidReason = if okK and (tonumber(kit) or 0) > 0 then "bank_raid_kit" else "bank_raid"
-	if EconomyService.AddCash(player, cash, raidReason) ~= true then
+	local paidOk, paid = EconomyService.AddCash(player, cash, raidReason)
+	if paidOk ~= true then
 		pushState(player, { InVault = false, UnderFire = false })
 		return -- no profile: nothing paid, so no cooldown either
 	end
@@ -74748,7 +74768,9 @@ local function completeRaid(player: Player)
 	local cd = heistCd -- claude-bud JOB 39: BankRaidConfig.CooldownSeconds (300) unless the Vault Cracker's 30 min
 	setCooldown(player, os.time() + cd)
 	if BankRaidConfig.NotifyOnRaid and NotificationService then
-		NotificationService.Notify(player, string.format(TEXT.Reward, formatCash(cash)), "Reward")
+		-- Code Bot v198: the cash credited ("bank_raid" doubled in the DOUBLE WEEKEND; a kit's "bank_raid_kit" never) + tag
+		local shown, tag = toastCash(EconomyService, player, cash, raidReason, paidOk, paid)
+		NotificationService.Notify(player, string.format(TEXT.Reward, formatCash(shown)) .. tag, "Reward")
 	end
 	if MissionService and MissionService.TrackProgress then
 		local ok, err = pcall(MissionService.TrackProgress, player, "Heist", 1)
@@ -77498,7 +77520,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 197)
+			player:SetAttribute("WE_Build", 198)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -79043,12 +79065,15 @@ local function payoutPlayer(player: Player)
 	if total <= 0 then
 		return
 	end
-	EconomyService.AddCash(player, total, "capture_stipend")
+	local paidOk, paid = EconomyService.AddCash(player, total, "capture_stipend")
 	if TerritoryConfig.CaptureStipend.NotifyOnPayout and NotificationService then
 		local oilHint = if oilCount > 0 then string.format(" (%d oil)", oilCount) else ""
+		-- Code Bot v198: the cash credited (multipliers in) + " · 2x" in the DOUBLE WEEKEND; display only
+		local shown = if EconomyService.ToastAmount then EconomyService.ToastAmount(total, paidOk, paid) else total
+		local tag = if EconomyService.ToastTag then EconomyService.ToastTag(player, "capture_stipend") else ""
 		NotificationService.Notify(
 			player,
-			string.format("Capture stipend +$%d from %d zones%s", total, count, oilHint),
+			string.format("Capture stipend +$%d%s from %d zones%s", shown, tag, count, oilHint),
 			"Reward"
 		)
 	end
@@ -80369,6 +80394,14 @@ local function broadcastAll()
 	end
 end
 
+-- Code Bot v198: DISPLAY ONLY. A cash reward toast shows what was credited (AddCash's 2nd return, multipliers in), plus
+-- " · 2x" while the DOUBLE WEEKEND doubled it (EconomyService.ToastAmount / ToastTag); an economy without them = the old text
+local function toastCash(econ: any, player: Player, base: number, reason: string, ok: any, credited: any): (number, string)
+	local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, ok, credited) else math.floor(base)
+	local tag = if econ and econ.ToastTag then econ.ToastTag(player, reason) else ""
+	return shown, tag
+end
+
 local function settleWar(war: WarRecord)
 	if war.Settled then
 		return
@@ -80415,31 +80448,43 @@ local function settleWar(war: WarRecord)
 				local myScore = if cid == war.AttackerClanId then war.AttackerScore else war.DefenderScore
 				bonus = math.floor(myScore * scoreBonus)
 			end
+			local winOk, winPaid = false, 0
 			if winCash + bonus > 0 then
-				EconomyService.AddCash(player, winCash + bonus, "clan_war_win")
+				winOk, winPaid = EconomyService.AddCash(player, winCash + bonus, "clan_war_win")
 			end
 			if winGold > 0 then
 				EconomyService.AddGold(player, winGold, "clan_war_win")
 			end
 			if NotificationService then
+				-- Code Bot v198: the cash credited (the DOUBLE WEEKEND doubles "clan_war_win") + " · 2x" while it does
+				local shown, tag = toastCash(EconomyService, player, winCash + bonus, "clan_war_win", winOk, winPaid)
 				NotificationService.Notify(
 					player,
-					string.format("Clan war VICTORY! %s  (+$%d%s)", scoreLine, winCash + bonus, if winGold > 0 then string.format(" +%dG", winGold) else ""),
+					string.format(
+						"Clan war VICTORY! %s  (+$%d%s%s)",
+						scoreLine,
+						shown,
+						if winCash + bonus > 0 then tag else "",
+						if winGold > 0 then string.format(" +%dG", winGold) else ""
+					),
 					"Reward"
 				)
 			end
 		elseif cid == war.AttackerClanId or cid == war.DefenderClanId then
+			local partOk, partPaid = false, 0
 			if partCash > 0 then
-				EconomyService.AddCash(player, partCash, "clan_war_participate")
+				partOk, partPaid = EconomyService.AddCash(player, partCash, "clan_war_participate")
 			end
 			if partGold > 0 then
 				EconomyService.AddGold(player, partGold, "clan_war_participate")
 			end
 			local resultWord = if winner then "defeat" else "draw"
 			if NotificationService then
+				-- Code Bot v198: the cash credited ("clan_war_participate" doubled in the DOUBLE WEEKEND) + " · 2x"
+				local shown, tag = toastCash(EconomyService, player, partCash, "clan_war_participate", partOk, partPaid)
 				NotificationService.Notify(
 					player,
-					string.format("Clan war %s — %s  (+$%d participation)", resultWord, scoreLine, partCash),
+					string.format("Clan war %s — %s  (+$%d participation%s)", resultWord, scoreLine, shown, if partCash > 0 then tag else ""),
 					"Info"
 				)
 			end
@@ -81612,22 +81657,19 @@ local function markFirstPvp(attacker: Player)
 	end
 end
 
--- Code Bot v185: DOUBLE WEEKEND: the kill-reward multiplier for the "+$N" toast only (the grant itself is multiplied
--- inside EconomyService.AddCash / XPService.AddXP via Modules/DoubleEvent, KillReasons -> KillMult)
-local function eventKillMult(attacker: Player): number
-	local ok, k = pcall(function(): any
-		return require(script.Parent.Parent.Modules.DoubleEvent).KillCount(attacker)
-	end)
-	return if ok and typeof(k) == "number" and k >= 1 then k else 1
-end
-
-local function grantRewards(attacker: Player, cash: number, xp: number, reason: string)
+-- Code Bot v198: returns the cash CREDITED (AddCash's 2nd return: the DOUBLE WEEKEND KillMult, the 2x pass, prestige, ...)
+-- for the "+$N" toast (display only; was base x DoubleEvent.KillCount, which missed the pass / prestige / tax). The
+-- kill toasts carry no "2x" tag: the client turns "(+$N)" into a cash float (HudConfig.Toast.Reroute, anchored at "$").
+local function grantRewards(attacker: Player, cash: number, xp: number, reason: string): number
+	local shown = cash
 	if cash > 0 then
-		EconomyService.AddCash(attacker, cash, reason)
+		local paidOk, paid = EconomyService.AddCash(attacker, cash, reason)
+		shown = if EconomyService.ToastAmount then EconomyService.ToastAmount(cash, paidOk, paid) else cash
 	end
 	if xp > 0 then
 		XPService.AddXP(attacker, xp, reason)
 	end
+	return shown
 end
 
 -- W2: opts.Quiet (a blast death, nuke §15.2) keeps stats, missions and rewards but sends no "Eliminated" toast
@@ -81646,7 +81688,7 @@ function CombatService.RegisterPlayerKill(attacker: Player, victim: Player, opts
 		DataService.MarkDirty(victim)
 	end
 	markFirstPvp(attacker)
-	grantRewards(attacker, CombatConfig.PlayerKill.Cash, CombatConfig.PlayerKill.XP, "pvp_kill")
+	local shownCash = grantRewards(attacker, CombatConfig.PlayerKill.Cash, CombatConfig.PlayerKill.XP, "pvp_kill")
 	if AnalyticsService then
 		AnalyticsService.Log(AnalyticsConfig.Events.PLAYER_KILL, attacker.UserId, {
 			victim = victim.UserId,
@@ -81657,7 +81699,7 @@ function CombatService.RegisterPlayerKill(attacker: Player, victim: Player, opts
 	if NotificationService and not (opts and opts.Quiet == true) then
 		NotificationService.Notify(
 			attacker,
-			string.format("Eliminated %s (+$%d)", victim.DisplayName, CombatConfig.PlayerKill.Cash * eventKillMult(attacker)),
+			string.format("Eliminated %s (+$%d)", victim.DisplayName, shownCash),
 			"Reward"
 		)
 	end
@@ -81852,7 +81894,7 @@ function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boo
 		cash = math.floor(cash * math.clamp(CombatFairnessConfig.UnitKillCashShare, 0, 1) + 0.5)
 		xp = math.floor(xp * math.clamp(CombatFairnessConfig.UnitKillXPShare, 0, 1) + 0.5)
 	end
-	grantRewards(attacker, cash, xp, if byUnit then "npc_kill_squad" else "npc_kill")
+	local shownCash = grantRewards(attacker, cash, xp, if byUnit then "npc_kill_squad" else "npc_kill")
 	if MissionService and MissionService.TrackProgress then
 		MissionService.TrackProgress(attacker, "KillNPC", 1)
 	end
@@ -81871,7 +81913,7 @@ function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boo
 	end
 	if NotificationService and quiet ~= true then
 		local fmt = if byUnit then "Squad: %s down (+$%d)" else "%s down (+$%d)"
-		NotificationService.Notify(attacker, string.format(fmt, rec.Def.DisplayName, cash * eventKillMult(attacker)), "Reward")
+		NotificationService.Notify(attacker, string.format(fmt, rec.Def.DisplayName, shownCash), "Reward")
 	end
 	if not byUnit and quiet ~= true and noMarker ~= true then -- the kill marker belongs to the player's own shot
 		hitFeedback(attacker, { Kind = "Kill", Damage = 0, TargetName = rec.Def.DisplayName, WeaponId = nil })
@@ -86185,7 +86227,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 197)
+		player:SetAttribute("WE_Build", 198)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -86327,7 +86369,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=197",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=198",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -86817,6 +86859,48 @@ function EconomyService.GetCashMult(player: Player, reason: string?): number
 	return cashMultFor(player, profile, reason)
 end
 
+-- Code Bot v198: DISPLAY ONLY. The DOUBLE WEEKEND part of cashMultFor for `reason` right now: DoubleEvent.CashMult on
+-- the non-exempt stack, DoubleEvent.ExtraCashMult on a pass-exempt reason, 1 for NEVER_MULTIPLIED (or no module).
+-- Used for the toasts' "2x" tag (Modules/RewardToast); never used to grant.
+function EconomyService.EventCashMult(player: Player, reason: string?): number
+	local DE = doubleEvent()
+	local key = reason or ""
+	if DE == nil or NEVER_MULTIPLIED[key] == true then
+		return 1
+	end
+	local ok, m = pcall(function(): any
+		local exempt = require(Shared.Configs.MonetizationConfig).CashMultExemptReasons
+		if exempt ~= nil and exempt[key] == true then
+			return if DE.ExtraCashMult then DE.ExtraCashMult(player, reason) else 1
+		end
+		return DE.CashMult(player, reason)
+	end)
+	return if ok and typeof(m) == "number" and m == m then m else 1
+end
+
+-- Code Bot v198: DISPLAY ONLY. What a cash reward toast shows for an AddCash call: its 2nd return (credited, the
+-- multipliers in) when the grant went through and said how much, else `base` (the old text).
+function EconomyService.ToastAmount(base: any, ok: any, credited: any): number
+	if ok == true and typeof(credited) == "number" and credited == credited and credited >= 0 and credited ~= math.huge then
+		return math.floor(credited)
+	end
+	return math.floor(tonumber(base) or 0)
+end
+
+-- Code Bot v198: DISPLAY ONLY. The toast suffix " · 2x" (EventConfig.ToastTag) when the DOUBLE WEEKEND doubles `reason`
+-- for this player right now (EventCashMult > 1), else "". Never throws.
+function EconomyService.ToastTag(player: Player, reason: string?): string
+	local ok, tag = pcall(function(): string
+		if EconomyService.EventCashMult(player, reason) <= 1 then
+			return ""
+		end
+		local EC: any = require(Shared.Configs.EventConfig)
+		local t = if typeof(EC.ToastTag) == "string" and EC.ToastTag ~= "" then EC.ToastTag else "2x"
+		return " · " .. t
+	end)
+	return if ok and typeof(tag) == "string" then tag else ""
+end
+
 --[[ v72 WE_IncomePerSec (tycoon guide: cash pill "+$24/s", the pick's "ready in"): the last amount granted per steady
 	reason (TycoonGuideConfig.SteadyIncomeReasons: passive / training / plot_oil), multipliers included, summed and
 	divided by the passive TickSeconds, rounded to 0.1. A reason that missed SteadyIncomeExpireTicks ticks drops out
@@ -86933,14 +87017,16 @@ local function notePendingOrigin(player: Player, amount: number, reason: string?
 	rows[key] = (rows[key] or 0) + amount
 end
 
-function EconomyService.AddCash(player: Player, amount: number, reason: string?): boolean
+-- Code Bot v198: returns (ok, credited): credited = the grant after the multipliers (what the toast should show,
+-- Modules/RewardToast). Callers that read only the first value are unchanged.
+function EconomyService.AddCash(player: Player, amount: number, reason: string?): (boolean, number)
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
-		return false
+		return false, 0
 	end
 	amount = math.floor(amount)
 	local profile = getDataService().GetProfile(player)
 	if not profile then
-		return false
+		return false, 0
 	end
 
 	local granted = applyCashMult(player, profile, amount, reason)
@@ -86958,7 +87044,7 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	if reason == "collector" and TutorialService and TutorialService.Notify then
 		TutorialService.Notify(player, "PassiveIncome")
 	end
-	return true
+	return true, granted
 end
 
 --[[ Accrue passive / stipend into PendingCash (not spendable until Money Collector). ]]
@@ -97226,6 +97312,14 @@ local function timedClaimKey(missionId: string): string
 	return "timed:" .. missionId
 end
 
+-- Code Bot v198: DISPLAY ONLY. A cash reward toast shows what was credited (AddCash's 2nd return, multipliers in), plus
+-- " · 2x" while the DOUBLE WEEKEND doubled it (EconomyService.ToastAmount / ToastTag); an economy without them = the old text
+local function toastCash(econ: any, player: Player, base: number, reason: string, ok: any, credited: any): (number, string)
+	local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, ok, credited) else math.floor(base)
+	local tag = if econ and econ.ToastTag then econ.ToastTag(player, reason) else ""
+	return shown, tag
+end
+
 local function commas(n: number): string
 	local v = math.floor(n)
 	local str = tostring(math.abs(v))
@@ -98131,8 +98225,9 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 	if TerritoryService and TerritoryService.GetMissionCashMult then
 		cash = math.floor(cash * TerritoryService.GetMissionCashMult(player))
 	end
+	local paidOk, paid = false, 0
 	if cash > 0 then
-		EconomyService.AddCash(player, cash, "mission")
+		paidOk, paid = EconomyService.AddCash(player, cash, "mission")
 	end
 	if isCore then
 		MissionService.CoreClaimed(player, profile, missionId)
@@ -98146,7 +98241,8 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 
 	DataService.MarkDirty(player)
 	if NotificationService then
-		NotificationService.Notify(player, "Mission reward $" .. commas(cash), "Reward")
+		local shown, tag = toastCash(EconomyService, player, cash, "mission", paidOk, paid) -- Code Bot v198 (display only)
+		NotificationService.Notify(player, "Mission reward $" .. commas(shown) .. (if cash > 0 then tag else ""), "Reward")
 	end
 	if AnalyticsService then
 		AnalyticsService.Log(AnalyticsConfig.Events.MISSION_CLAIMED, player.UserId, {
@@ -98218,14 +98314,16 @@ function MissionService.CoreClaimed(player: Player, profile: any, missionId: str
 	dm.CoreChest = true
 	local chest = CORE.Chest
 	local cash = incomeScaled(player, profile, tonumber(chest.Cash) or 0, tonumber(chest.IncomeMinutes) or 0)
+	local paidOk, paid = false, 0
 	if cash > 0 then
-		EconomyService.AddCash(player, cash, "mission_chest")
+		paidOk, paid = EconomyService.AddCash(player, cash, "mission_chest")
 	end
 	if (tonumber(chest.Gold) or 0) > 0 then
 		EconomyService.AddGold(player, math.floor(chest.Gold), "mission_chest")
 	end
 	if NotificationService then
-		NotificationService.Notify(player, "All 3 missions done! Chest +$" .. commas(cash), "Reward")
+		local shown, tag = toastCash(EconomyService, player, cash, "mission_chest", paidOk, paid) -- Code Bot v198 (display only)
+		NotificationService.Notify(player, "All 3 missions done! Chest +$" .. commas(shown) .. (if cash > 0 then tag else ""), "Reward")
 	end
 	if AnalyticsService then
 		AnalyticsService.Log("MISSIONS_ALL_DONE", player.UserId, { cash = cash })
@@ -98403,8 +98501,9 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 	if reward then
 		-- claude-bud JOB 49 A: Day 7 scales with his income (the table is the floor)
 		local cashPaid = if daily.Streak == DailyRewardConfig.StreakResetsAfterDay then MissionService.Day7Cash(player, profile) else reward.Cash
+		local dailyOk, dailyPaid = false, 0
 		if cashPaid > 0 then
-			EconomyService.AddCash(player, cashPaid, "daily")
+			dailyOk, dailyPaid = EconomyService.AddCash(player, cashPaid, "daily")
 		end
 		if reward.Gold > 0 then
 			EconomyService.AddGold(player, reward.Gold, "daily")
@@ -98415,11 +98514,16 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 		if NotificationService and quiet ~= true then
 			-- claude-bud JOB 29 (DailyRewardConfig.ShowTomorrow): tomorrow's reward wherever the streak is shown
 			local nextReward = DailyRewardConfig.Rewards[(daily.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1]
+			-- Code Bot v198: today's cash as credited (the DOUBLE WEEKEND doubles "daily") + " · 2x"; tomorrow stays the table
+			local shown, tag = toastCash(EconomyService, player, cashPaid, "daily", dailyOk, dailyPaid)
+			if cashPaid <= 0 then
+				tag = ""
+			end
 			NotificationService.Notify(
 				player,
 				if DailyRewardConfig.ShowTomorrow == true and nextReward
-					then string.format("Day %d: +$%s. Tomorrow: $%s", daily.Streak, commas(cashPaid), commas(nextReward.Cash))
-					else string.format("Day %d reward: $%d", daily.Streak, reward.Cash),
+					then string.format("Day %d: +$%s%s. Tomorrow: $%s", daily.Streak, commas(shown), tag, commas(nextReward.Cash))
+					else string.format("Day %d reward: $%s%s", daily.Streak, commas(shown), tag),
 				"Reward"
 			)
 		end
@@ -98520,15 +98624,17 @@ function MissionService.Complete(player: Player, missionId: string)
 	if TerritoryService and TerritoryService.GetMissionCashMult then
 		cash = math.floor(cash * TerritoryService.GetMissionCashMult(player))
 	end
+	local paidOk, paid = false, 0
 	if cash > 0 then
-		EconomyService.AddCash(player, cash, "timed_mission")
+		paidOk, paid = EconomyService.AddCash(player, cash, "timed_mission")
 	end
 	if def.RewardXP > 0 then
 		XPService.AddXP(player, def.RewardXP, "timed_mission")
 	end
 	DataService.MarkDirty(player)
 	if NotificationService then
-		NotificationService.Notify(player, string.format("%s complete! +$%d", def.DisplayName, cash), "Reward")
+		local shown, tag = toastCash(EconomyService, player, cash, "timed_mission", paidOk, paid) -- Code Bot v198 (display only)
+		NotificationService.Notify(player, string.format("%s complete! +$%d%s", def.DisplayName, shown, if cash > 0 then tag else ""), "Reward")
 	end
 	if AnalyticsService then
 		AnalyticsService.Log(AnalyticsConfig.Events.MISSION_CLAIMED, player.UserId, {
@@ -104040,8 +104146,10 @@ function ctx.Deliver(player: Player, bag: any)
 		return
 	end
 	local value = OpsCargo.ValueFor(bag, player)
-	if OpsRewards.Grant(player, def, value, bag.XP, true) then
-		ctx.Notify(player, string.format(TOAST.Paid, def.Title, OpsRewards.FormatCash(value)), "Reward")
+	local paidOk, paid = OpsRewards.Grant(player, def, value, bag.XP, true)
+	if paidOk then
+		local shown, tag = OpsRewards.ToastCash(player, value, paid) -- Code Bot v198: credited cash + " · 2x" (display only)
+		ctx.Notify(player, string.format(TOAST.Paid, def.Title, OpsRewards.FormatCash(shown)) .. tag, "Reward")
 		OpsRewards.Log(Events.BAG_DELIVER, player.UserId, { site = def.Id, value = value, picked = player.UserId ~= bag.Grabber })
 		ctx.MarkPlayerSite(player, def.Id)
 		if def.Kind == "Vault" and os.clock() - lastRobbedLine >= D.RobbedLineGapSeconds then
@@ -106307,13 +106415,19 @@ local function payAll(rt: any, payees: { Player }): number
 		local s = ctx.Zones.Get(p)
 		if profile ~= nil and s.Alive and ctx.Rewards.CdLeft(profile, d.Id, nowU) <= 0 then
 			local cash, xp = ctx.Rewards.Quote(profile, d, nowU)
-			if ctx.Rewards.Grant(p, d, cash, xp, false) then
+			local paidOk, credited = ctx.Rewards.Grant(p, d, cash, xp, false)
+			if paidOk then
 				ctx.Rewards.SetCd(p, profile, d, nowU)
 				paid += 1
+				-- Code Bot v198: the cash credited (the DOUBLE WEEKEND doubles "ops") + " · 2x" (display only)
+				local shown, tag = cash, ""
+				if ctx.Rewards.ToastCash then
+					shown, tag = ctx.Rewards.ToastCash(p, cash, credited)
+				end
 				local line = if d.Kind == "Checkpoint"
-					then string.format(TOAST.CheckpointTaken, ctx.Rewards.FormatCash(cash))
-					else string.format(TOAST.Paid, d.Title, ctx.Rewards.FormatCash(cash))
-				ctx.Notify(p, line, "Reward")
+					then string.format(TOAST.CheckpointTaken, ctx.Rewards.FormatCash(shown))
+					else string.format(TOAST.Paid, d.Title, ctx.Rewards.FormatCash(shown))
+				ctx.Notify(p, line .. tag, "Reward")
 				ctx.MarkPlayerSite(p, d.Id)
 			end
 		end
@@ -107088,17 +107202,21 @@ end
 --[[ Pay one player for one finished job (or one delivered bag): the wallet, XP, today's run count, the lifetime
 	totals, mission progress (Kinds[kind].Track) and the OnJobDone listeners. `bag` = the cash came from a delivered
 	bag (BestBag). Returns false (nothing paid, nothing counted) when AddCash refuses (no profile). ]]
-function OpsRewards.Grant(player: Player, site: OpsConfig.SiteDef, cash: number, xp: number, bag: boolean?): boolean
+-- Code Bot v198: 2nd return = the cash credited (AddCash's own, multipliers in: the DOUBLE WEEKEND doubles "ops"), for the
+-- toast only; the run count, totals, best bag and listeners keep the job's own pay (`cash`).
+function OpsRewards.Grant(player: Player, site: OpsConfig.SiteDef, cash: number, xp: number, bag: boolean?): (boolean, number)
 	if EconomyService == nil or EconomyService.AddCash == nil then
-		return false
+		return false, 0
 	end
 	cash = math.floor(cash + 0.5)
 	if cash <= 0 then
-		return false
+		return false, 0
 	end
-	if EconomyService.AddCash(player, cash, R.CashReason) ~= true then
-		return false
+	local paidOk, paid = EconomyService.AddCash(player, cash, R.CashReason)
+	if paidOk ~= true then
+		return false, 0
 	end
+	local credited = if typeof(paid) == "number" and paid == paid and paid >= 0 then math.floor(paid) else cash
 	if xp > 0 and XPService and XPService.AddXP then
 		local ok, err = pcall(XPService.AddXP, player, xp, R.XPReason)
 		if not ok then
@@ -107130,7 +107248,15 @@ function OpsRewards.Grant(player: Player, site: OpsConfig.SiteDef, cash: number,
 			warn("[Ops] OnJobDone listener error: " .. tostring(err))
 		end
 	end
-	return true
+	return true, credited
+end
+
+-- Code Bot v198: DISPLAY ONLY. (amount, tag) for a pay toast: Grant's 2nd return (the cash credited; the DOUBLE WEEKEND
+-- doubles "ops") and " · 2x" while the event doubles it (EconomyService.ToastTag); the job's own pay without them.
+function OpsRewards.ToastCash(player: Player, base: number, credited: any): (number, string)
+	local shown = if typeof(credited) == "number" and credited == credited and credited > 0 then math.floor(credited) else math.floor(base)
+	local tag = if EconomyService and EconomyService.ToastTag then EconomyService.ToastTag(player, R.CashReason) else ""
+	return shown, tag
 end
 
 -- the Seen bit flags (OpsConfig.Profile.SeenBits)
@@ -108263,6 +108389,19 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 	local tickSec = PlotOilPumpConfig.TickSeconds or 5
 	local cash = PlotOilPumpConfig.CashPerTick or 18
 	local reason = PlotOilPumpConfig.Reason or "plot_oil"
+	-- Code Bot v198: DISPLAY ONLY. WE_OilMult = the multiplier AccruePendingCash applied to plot_oil (1, or 2 while the
+	-- DOUBLE WEEKEND doubles it) for the owner's "+$N / every 5s" pump label (client ProducerLabels); written on change.
+	local function publishOilMult(owner: Player)
+		if EconomyService.GetCashMult == nil then
+			return
+		end
+		pcall(function()
+			local m = math.clamp(tonumber(EconomyService.GetCashMult(owner, reason)) or 1, 1, 5)
+			if owner:GetAttribute("WE_OilMult") ~= m then
+				owner:SetAttribute("WE_OilMult", m)
+			end
+		end)
+	end
 	RunService.Heartbeat:Connect(function(dt)
 		accum += dt
 		if accum < tickSec then
@@ -108295,6 +108434,7 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 							local total = cash * (n - golden) + math.floor(cash * goldMult) * golden
 							-- F4: the owner's "+$18 / every 5s" label is client-side (ProducerLabels); no server pop
 							EconomyService.AccruePendingCash(owner, total, reason)
+							publishOilMult(owner)
 						end
 					end
 				end
@@ -111512,10 +111652,14 @@ function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: nu
 		t[zoneId] = now
 		deps.DataService.MarkDirty(player)
 		local es = deps.EconomyService
+		local paidOk, paid = false, 0
 		if es and es.AddCash then
-			es.AddCash(player, cash, "rebirthzone_ship")
+			paidOk, paid = es.AddCash(player, cash, "rebirthzone_ship")
 		end
-		notify(player, string.format("%s: +$%d", info.ActionText, cash), "Success")
+		-- Code Bot v198: the cash credited (the DOUBLE WEEKEND doubles "rebirthzone_ship") + " · 2x"; display only
+		local shown = if es and es.ToastAmount then es.ToastAmount(cash, paidOk, paid) else cash
+		local tag = if es and es.ToastTag then es.ToastTag(player, "rebirthzone_ship") else ""
+		notify(player, string.format("%s: +$%d%s", info.ActionText, shown, tag), "Success")
 		return true, "shipped"
 	elseif kind == "sweep" then
 		local now = os.clock()
@@ -121731,14 +121875,23 @@ local function spawnDrop()
 	}
 end
 
+-- Code Bot v198: DISPLAY ONLY. A cash reward toast shows what was credited (AddCash's 2nd return, multipliers in), plus
+-- " · 2x" while the DOUBLE WEEKEND doubled it (EconomyService.ToastAmount / ToastTag); an economy without them = the old text
+local function toastCash(econ: any, player: Player, base: number, reason: string, ok: any, credited: any): (number, string)
+	local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, ok, credited) else math.floor(base)
+	local tag = if econ and econ.ToastTag then econ.ToastTag(player, reason) else ""
+	return shown, tag
+end
+
 local function claim(player: Player, rec: DropRec)
 	destroyDrop(rec.Id)
-	EconomyService.AddCash(player, rec.ClaimCash, "supply_drop")
+	local paidOk, paid = EconomyService.AddCash(player, rec.ClaimCash, "supply_drop")
 	if NotificationService then
+		local shown, tag = toastCash(EconomyService, player, rec.ClaimCash, "supply_drop", paidOk, paid) -- v198
 		if rec.Airdrop then
-			NotificationService.Notify(player, "Airdrop +$" .. formatCash(rec.ClaimCash), "Reward") -- claude-bud JOB 4.1
+			NotificationService.Notify(player, "Airdrop +$" .. formatCash(shown) .. tag, "Reward") -- claude-bud JOB 4.1
 		else
-			NotificationService.Notify(player, "Supply drop +$" .. formatCash(rec.ClaimCash), "Reward")
+			NotificationService.Notify(player, "Supply drop +$" .. formatCash(shown) .. tag, "Reward")
 		end
 	end
 	if AnalyticsService then
@@ -181449,7 +181602,7 @@ return PremiumWeaponsClient
 
 	Numbers: the yard shows the server-stamped WE_TickTraining (the last training grant, multipliers in; EconomyService
 	writes it only on change and only while EconomyConfig.ProducerLabels.Enabled); a pump shows
-	PlotOilPumpConfig.CashPerTick (plot oil is paid without multipliers). The sub line reads the tick seconds from
+	PlotOilPumpConfig.CashPerTick x the server-stamped WE_OilMult (v198: 2 in the DOUBLE WEEKEND, else 1). The sub line reads the tick seconds from
 	config (SoldierConfig.TrainingIncome.TickSeconds / PlotOilPumpConfig.TickSeconds). Display only.
 	Anchors: cached from the OWN plot only (Workspace.WarEmpireSetup.Bases.Plot<n>): TrainingYard.YardPad and the
 	PrimaryPart of each WE_PlotOilPumps model. FindFirstChild with nil checks, ChildAdded / ChildRemoved on those
@@ -181744,6 +181897,16 @@ local function trainingAmount(): number
 	return math.max(0, math.floor(v))
 end
 
+-- Code Bot v198: the server's WE_OilMult (PlotOilPumpService: what plot_oil is multiplied by at accrue: 2 in the DOUBLE
+-- WEEKEND, else 1). Display only; a missing / odd value = 1.
+local function oilMult(): number
+	local v = tonumber(player:GetAttribute("WE_OilMult"))
+	if v == nil or v ~= v or v < 1 then
+		return 1
+	end
+	return math.min(v, 5)
+end
+
 local function hiddenByFlags(): boolean
 	for _, name in ipairs(HIDE_FLAGS) do
 		if HudLayout.GetFlag(name) then
@@ -181778,7 +181941,8 @@ local function scan()
 	end
 	local anchor = anchorPart[i]
 	local kind = anchorKind[i]
-	local amount = if kind == KIND_YARD then training else math.max(0, math.floor(PlotOilPumpConfig.CashPerTick))
+	local pumpMult = if kind == KIND_YARD then 1 else oilMult()
+	local amount = if kind == KIND_YARD then training else math.max(0, math.floor(math.floor(PlotOilPumpConfig.CashPerTick) * pumpMult))
 	local g = ensureLabel(anchor)
 	if g.Adornee ~= anchor then
 		g.Adornee = anchor -- only the adornee moves
@@ -181786,6 +181950,9 @@ local function scan()
 	if kind ~= shownKind or amount ~= shownAmount then
 		shownKind, shownAmount = kind, amount
 		local title, sub = ProducerLabels.Text(amount, if kind == KIND_YARD then YARD_SECONDS else PUMP_SECONDS)
+		if pumpMult > 1 then
+			sub ..= " · 2x" -- Code Bot v198: the DOUBLE WEEKEND doubles the pumps (display only)
+		end
 		WorldLabel.SetText(g, title, sub)
 	end
 	if not visible then

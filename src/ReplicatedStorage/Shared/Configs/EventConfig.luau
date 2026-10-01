@@ -58,6 +58,7 @@ local EventConfig = {
 	PopupSeenAttr = "WE_EventPopupSeen", -- player attribute (server-written on profile load): true = already shown
 	PopupTestAttr = "WE_EventPopupTest", -- player attribute: the owner's /eventpopup bumps it -> show the pop-up now
 	ChipText = "2x WEEKEND",
+	ToastTag = "2x", -- Code Bot v198: reward toasts the event doubled end " · 2x" (Server/Modules/RewardToast; display only)
 
 	KillReasons = {
 		pvp_kill = true,

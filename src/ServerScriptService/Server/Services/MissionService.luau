@@ -169,6 +169,14 @@ local function timedClaimKey(missionId: string): string
 	return "timed:" .. missionId
 end
 
+-- Code Bot v198: DISPLAY ONLY. A cash reward toast shows what was credited (AddCash's 2nd return, multipliers in), plus
+-- " · 2x" while the DOUBLE WEEKEND doubled it (EconomyService.ToastAmount / ToastTag); an economy without them = the old text
+local function toastCash(econ: any, player: Player, base: number, reason: string, ok: any, credited: any): (number, string)
+	local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, ok, credited) else math.floor(base)
+	local tag = if econ and econ.ToastTag then econ.ToastTag(player, reason) else ""
+	return shown, tag
+end
+
 local function commas(n: number): string
 	local v = math.floor(n)
 	local str = tostring(math.abs(v))
@@ -1074,8 +1082,9 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 	if TerritoryService and TerritoryService.GetMissionCashMult then
 		cash = math.floor(cash * TerritoryService.GetMissionCashMult(player))
 	end
+	local paidOk, paid = false, 0
 	if cash > 0 then
-		EconomyService.AddCash(player, cash, "mission")
+		paidOk, paid = EconomyService.AddCash(player, cash, "mission")
 	end
 	if isCore then
 		MissionService.CoreClaimed(player, profile, missionId)
@@ -1089,7 +1098,8 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 
 	DataService.MarkDirty(player)
 	if NotificationService then
-		NotificationService.Notify(player, "Mission reward $" .. commas(cash), "Reward")
+		local shown, tag = toastCash(EconomyService, player, cash, "mission", paidOk, paid) -- Code Bot v198 (display only)
+		NotificationService.Notify(player, "Mission reward $" .. commas(shown) .. (if cash > 0 then tag else ""), "Reward")
 	end
 	if AnalyticsService then
 		AnalyticsService.Log(AnalyticsConfig.Events.MISSION_CLAIMED, player.UserId, {
@@ -1161,14 +1171,16 @@ function MissionService.CoreClaimed(player: Player, profile: any, missionId: str
 	dm.CoreChest = true
 	local chest = CORE.Chest
 	local cash = incomeScaled(player, profile, tonumber(chest.Cash) or 0, tonumber(chest.IncomeMinutes) or 0)
+	local paidOk, paid = false, 0
 	if cash > 0 then
-		EconomyService.AddCash(player, cash, "mission_chest")
+		paidOk, paid = EconomyService.AddCash(player, cash, "mission_chest")
 	end
 	if (tonumber(chest.Gold) or 0) > 0 then
 		EconomyService.AddGold(player, math.floor(chest.Gold), "mission_chest")
 	end
 	if NotificationService then
-		NotificationService.Notify(player, "All 3 missions done! Chest +$" .. commas(cash), "Reward")
+		local shown, tag = toastCash(EconomyService, player, cash, "mission_chest", paidOk, paid) -- Code Bot v198 (display only)
+		NotificationService.Notify(player, "All 3 missions done! Chest +$" .. commas(shown) .. (if cash > 0 then tag else ""), "Reward")
 	end
 	if AnalyticsService then
 		AnalyticsService.Log("MISSIONS_ALL_DONE", player.UserId, { cash = cash })
@@ -1346,8 +1358,9 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 	if reward then
 		-- claude-bud JOB 49 A: Day 7 scales with his income (the table is the floor)
 		local cashPaid = if daily.Streak == DailyRewardConfig.StreakResetsAfterDay then MissionService.Day7Cash(player, profile) else reward.Cash
+		local dailyOk, dailyPaid = false, 0
 		if cashPaid > 0 then
-			EconomyService.AddCash(player, cashPaid, "daily")
+			dailyOk, dailyPaid = EconomyService.AddCash(player, cashPaid, "daily")
 		end
 		if reward.Gold > 0 then
 			EconomyService.AddGold(player, reward.Gold, "daily")
@@ -1358,11 +1371,16 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 		if NotificationService and quiet ~= true then
 			-- claude-bud JOB 29 (DailyRewardConfig.ShowTomorrow): tomorrow's reward wherever the streak is shown
 			local nextReward = DailyRewardConfig.Rewards[(daily.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1]
+			-- Code Bot v198: today's cash as credited (the DOUBLE WEEKEND doubles "daily") + " · 2x"; tomorrow stays the table
+			local shown, tag = toastCash(EconomyService, player, cashPaid, "daily", dailyOk, dailyPaid)
+			if cashPaid <= 0 then
+				tag = ""
+			end
 			NotificationService.Notify(
 				player,
 				if DailyRewardConfig.ShowTomorrow == true and nextReward
-					then string.format("Day %d: +$%s. Tomorrow: $%s", daily.Streak, commas(cashPaid), commas(nextReward.Cash))
-					else string.format("Day %d reward: $%d", daily.Streak, reward.Cash),
+					then string.format("Day %d: +$%s%s. Tomorrow: $%s", daily.Streak, commas(shown), tag, commas(nextReward.Cash))
+					else string.format("Day %d reward: $%s%s", daily.Streak, commas(shown), tag),
 				"Reward"
 			)
 		end
@@ -1463,15 +1481,17 @@ function MissionService.Complete(player: Player, missionId: string)
 	if TerritoryService and TerritoryService.GetMissionCashMult then
 		cash = math.floor(cash * TerritoryService.GetMissionCashMult(player))
 	end
+	local paidOk, paid = false, 0
 	if cash > 0 then
-		EconomyService.AddCash(player, cash, "timed_mission")
+		paidOk, paid = EconomyService.AddCash(player, cash, "timed_mission")
 	end
 	if def.RewardXP > 0 then
 		XPService.AddXP(player, def.RewardXP, "timed_mission")
 	end
 	DataService.MarkDirty(player)
 	if NotificationService then
-		NotificationService.Notify(player, string.format("%s complete! +$%d", def.DisplayName, cash), "Reward")
+		local shown, tag = toastCash(EconomyService, player, cash, "timed_mission", paidOk, paid) -- Code Bot v198 (display only)
+		NotificationService.Notify(player, string.format("%s complete! +$%d%s", def.DisplayName, shown, if cash > 0 then tag else ""), "Reward")
 	end
 	if AnalyticsService then
 		AnalyticsService.Log(AnalyticsConfig.Events.MISSION_CLAIMED, player.UserId, {

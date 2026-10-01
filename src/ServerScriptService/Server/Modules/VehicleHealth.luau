@@ -245,8 +245,13 @@ local function payBounty(e: Entry, killer: Player?)
 	local cash = math.floor(math.min(rec.MaxHP * BOUNTY.CashPerHP, BOUNTY.CashMax))
 	local xp = math.floor(math.min(rec.MaxHP * BOUNTY.XPPerHP, BOUNTY.XPMax))
 	local econ = deps.EconomyService
+	local shownCash = cash
 	if cash > 0 and econ and typeof(econ.AddCash) == "function" then
-		pcall(econ.AddCash, killer, cash, BOUNTY.CashReason)
+		local okCall, paidOk, paid = pcall(econ.AddCash, killer, cash, BOUNTY.CashReason)
+		-- Code Bot v198: the toast shows the cash credited (DOUBLE WEEKEND KillMult, 2x pass, ...); display only
+		if okCall and typeof(econ.ToastAmount) == "function" then
+			shownCash = econ.ToastAmount(cash, paidOk, paid)
+		end
 	end
 	local xps = deps.XPService
 	if xp > 0 and xps and typeof(xps.AddXP) == "function" then
@@ -255,7 +260,7 @@ local function payBounty(e: Entry, killer: Player?)
 	local ns = deps.NotificationService
 	if ns and typeof(ns.Notify) == "function" then
 		-- same shape as an NPC kill ("<name> down (+$N)"): the HUD turns it into a cash float, no lane line
-		pcall(ns.Notify, killer, string.format("%s down (+$%d)", e.Def.DisplayName, cash), "Reward")
+		pcall(ns.Notify, killer, string.format("%s down (+$%d)", e.Def.DisplayName, shownCash), "Reward")
 	end
 end
 

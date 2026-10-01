@@ -6,7 +6,7 @@
 
 	Numbers: the yard shows the server-stamped WE_TickTraining (the last training grant, multipliers in; EconomyService
 	writes it only on change and only while EconomyConfig.ProducerLabels.Enabled); a pump shows
-	PlotOilPumpConfig.CashPerTick (plot oil is paid without multipliers). The sub line reads the tick seconds from
+	PlotOilPumpConfig.CashPerTick x the server-stamped WE_OilMult (v198: 2 in the DOUBLE WEEKEND, else 1). The sub line reads the tick seconds from
 	config (SoldierConfig.TrainingIncome.TickSeconds / PlotOilPumpConfig.TickSeconds). Display only.
 	Anchors: cached from the OWN plot only (Workspace.WarEmpireSetup.Bases.Plot<n>): TrainingYard.YardPad and the
 	PrimaryPart of each WE_PlotOilPumps model. FindFirstChild with nil checks, ChildAdded / ChildRemoved on those
@@ -301,6 +301,16 @@ local function trainingAmount(): number
 	return math.max(0, math.floor(v))
 end
 
+-- Code Bot v198: the server's WE_OilMult (PlotOilPumpService: what plot_oil is multiplied by at accrue: 2 in the DOUBLE
+-- WEEKEND, else 1). Display only; a missing / odd value = 1.
+local function oilMult(): number
+	local v = tonumber(player:GetAttribute("WE_OilMult"))
+	if v == nil or v ~= v or v < 1 then
+		return 1
+	end
+	return math.min(v, 5)
+end
+
 local function hiddenByFlags(): boolean
 	for _, name in ipairs(HIDE_FLAGS) do
 		if HudLayout.GetFlag(name) then
@@ -335,7 +345,8 @@ local function scan()
 	end
 	local anchor = anchorPart[i]
 	local kind = anchorKind[i]
-	local amount = if kind == KIND_YARD then training else math.max(0, math.floor(PlotOilPumpConfig.CashPerTick))
+	local pumpMult = if kind == KIND_YARD then 1 else oilMult()
+	local amount = if kind == KIND_YARD then training else math.max(0, math.floor(math.floor(PlotOilPumpConfig.CashPerTick) * pumpMult))
 	local g = ensureLabel(anchor)
 	if g.Adornee ~= anchor then
 		g.Adornee = anchor -- only the adornee moves
@@ -343,6 +354,9 @@ local function scan()
 	if kind ~= shownKind or amount ~= shownAmount then
 		shownKind, shownAmount = kind, amount
 		local title, sub = ProducerLabels.Text(amount, if kind == KIND_YARD then YARD_SECONDS else PUMP_SECONDS)
+		if pumpMult > 1 then
+			sub ..= " · 2x" -- Code Bot v198: the DOUBLE WEEKEND doubles the pumps (display only)
+		end
 		WorldLabel.SetText(g, title, sub)
 	end
 	if not visible then

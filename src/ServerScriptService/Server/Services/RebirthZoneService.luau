@@ -579,10 +579,14 @@ function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: nu
 		t[zoneId] = now
 		deps.DataService.MarkDirty(player)
 		local es = deps.EconomyService
+		local paidOk, paid = false, 0
 		if es and es.AddCash then
-			es.AddCash(player, cash, "rebirthzone_ship")
+			paidOk, paid = es.AddCash(player, cash, "rebirthzone_ship")
 		end
-		notify(player, string.format("%s: +$%d", info.ActionText, cash), "Success")
+		-- Code Bot v198: the cash credited (the DOUBLE WEEKEND doubles "rebirthzone_ship") + " · 2x"; display only
+		local shown = if es and es.ToastAmount then es.ToastAmount(cash, paidOk, paid) else cash
+		local tag = if es and es.ToastTag then es.ToastTag(player, "rebirthzone_ship") else ""
+		notify(player, string.format("%s: +$%d%s", info.ActionText, shown, tag), "Success")
 		return true, "shipped"
 	elseif kind == "sweep" then
 		local now = os.clock()

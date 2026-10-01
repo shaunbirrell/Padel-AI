@@ -690,6 +690,14 @@ local function pushState(player: Player, opts: { InVault: boolean?, UnderFire: b
 	lastPushedProgress[player.UserId] = prog
 end
 
+-- Code Bot v198: DISPLAY ONLY. A cash reward toast shows what was credited (AddCash's 2nd return, multipliers in), plus
+-- " · 2x" while the DOUBLE WEEKEND doubled it (EconomyService.ToastAmount / ToastTag); an economy without them = the old text
+local function toastCash(econ: any, player: Player, base: number, reason: string, ok: any, credited: any): (number, string)
+	local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, ok, credited) else math.floor(base)
+	local tag = if econ and econ.ToastTag then econ.ToastTag(player, reason) else ""
+	return shown, tag
+end
+
 local function completeRaid(player: Player)
 	local cashMin = BankRaidConfig.CashMin or 15000
 	local cashMax = BankRaidConfig.CashMax or 35000
@@ -709,7 +717,8 @@ local function completeRaid(player: Player)
 		return EGS.HeistKit and EGS.HeistKit(player) or 0
 	end)
 	local raidReason = if okK and (tonumber(kit) or 0) > 0 then "bank_raid_kit" else "bank_raid"
-	if EconomyService.AddCash(player, cash, raidReason) ~= true then
+	local paidOk, paid = EconomyService.AddCash(player, cash, raidReason)
+	if paidOk ~= true then
 		pushState(player, { InVault = false, UnderFire = false })
 		return -- no profile: nothing paid, so no cooldown either
 	end
@@ -717,7 +726,9 @@ local function completeRaid(player: Player)
 	local cd = heistCd -- claude-bud JOB 39: BankRaidConfig.CooldownSeconds (300) unless the Vault Cracker's 30 min
 	setCooldown(player, os.time() + cd)
 	if BankRaidConfig.NotifyOnRaid and NotificationService then
-		NotificationService.Notify(player, string.format(TEXT.Reward, formatCash(cash)), "Reward")
+		-- Code Bot v198: the cash credited ("bank_raid" doubled in the DOUBLE WEEKEND; a kit's "bank_raid_kit" never) + tag
+		local shown, tag = toastCash(EconomyService, player, cash, raidReason, paidOk, paid)
+		NotificationService.Notify(player, string.format(TEXT.Reward, formatCash(shown)) .. tag, "Reward")
 	end
 	if MissionService and MissionService.TrackProgress then
 		local ok, err = pcall(MissionService.TrackProgress, player, "Heist", 1)
