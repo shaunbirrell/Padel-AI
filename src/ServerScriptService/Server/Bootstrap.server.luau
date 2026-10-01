@@ -66,6 +66,7 @@ local RatePromptService = safeRequire("RatePromptService", Services.RatePromptSe
 local GuidedService = safeRequire("GuidedService", Services.GuidedService) -- claude-bud JOB 41 part A
 local RecruitPackService = safeRequire("RecruitPackService", Services.RecruitPackService) -- claude-bud JOB 41 part B
 local RivalService = safeRequire("RivalService", Services.RivalService) -- claude-bud JOB 41 part C
+local RecruitTrimService = safeRequire("RecruitTrimService", Services.RecruitTrimService) -- claude-bud JOB 45
 local MapService = safeRequire("MapService", Services.MapService) -- claude-bud JOB 30
 local SiteActivityService = safeRequire("SiteActivityService", Services.SiteActivityService) -- claude-bud JOB 31
 local RebirthZoneService = safeRequire("RebirthZoneService", Services.RebirthZoneService) -- claude-bud JOB 33
@@ -228,6 +229,7 @@ safeInit("RatePromptService", RatePromptService, deps) -- claude-bud JOB 40 part
 safeInit("GuidedService", GuidedService, deps) -- claude-bud JOB 41 part A: the Guided first minutes (camp, reward, funnel)
 safeInit("RecruitPackService", RecruitPackService, deps) -- claude-bud JOB 41 part B: when the Recruit Pack card is offered
 safeInit("RivalService", RivalService, deps) -- claude-bud JOB 41 part C: rival TARGETS (one shared 10 s tick)
+safeInit("RecruitTrimService", RecruitTrimService, deps) -- claude-bud JOB 45: the Recruit Pack's gold gate arch
 safeInit("AntiExploitService", AntiExploitService, deps)
 safeInit("MonetizationService", MonetizationService, deps)
 safeInit("EconomyService", EconomyService, deps)

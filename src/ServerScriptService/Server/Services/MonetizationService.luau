@@ -1866,6 +1866,8 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 			return Enum.ProductPurchaseDecision.NotProcessedYet
 		end
 		cashGrant = nonNegInt(MCx.RecruitPackCashFor(player.UserId, perMin))
+		print(string.format("[RECRUIT] receipt %s %s: cash $%d (perMin %.0f, %s)", tostring(receiptId), player.Name, cashGrant, perMin,
+			if useTime then "the Cash30m time pack" else "the JOB 41 clamp")) -- claude-bud JOB 45 instrumentation
 	end
 	local fallbackCash = nonNegInt(product.StarterFallbackCash)
 	if fallbackCash > 0 then
@@ -1921,7 +1923,11 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 			return require(script.Parent.CodesService)
 		end)
 		if okC and CS and CS.GrantCashBoost then
-			pcall(CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult)
+			local okB, untilUnix = pcall(CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult)
+			-- claude-bud JOB 45: the boost result is logged (it was silent inside the pcall)
+			print(string.format("[RECRUIT] boost %s: %s (until %s)", player.Name, if okB then "granted" else "FAILED " .. tostring(untilUnix), tostring(untilUnix)))
+		else
+			print("[RECRUIT] boost " .. player.Name .. ": CodesService not available, NOT granted")
 		end
 		-- Code Bot v171: the gold base trim goes on at once: the base-tier builder watches the WE_Ent_RecruitPack attribute
 		-- that GrantEntitlement just set (and its 5 s sweep / every join rebuild it from the saved entitlement); the base

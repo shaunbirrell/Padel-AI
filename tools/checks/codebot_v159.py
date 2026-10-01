@@ -41,12 +41,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 171)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 171)'),
-    (S + "Services/DataService.luau", "WE_Build=171"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 171)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 172)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 172)'),
+    (S + "Services/DataService.luau", "WE_Build=172"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 172)'),
 ):
-    check(needle in read(rel), "CODEBOT v159: WE_Build=171 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v159: WE_Build=172 " + rel.rsplit("/", 1)[-1])
 
 RC = read(C + "RivalConfig.luau")
 check("Enabled = true," in RC and "OwnerFirst = false," in RC,
