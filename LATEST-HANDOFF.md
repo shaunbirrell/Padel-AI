@@ -1,4 +1,19 @@
 <!-- Q2-START -->
+
+## v165 (Code Bot Roblox, 2026-10-01 ~10:05 IST): place version 163. Commit 3f27240 on phase-7-polish, bud merge 767e9c0
+Shaun's three phone reports:
+- **Report 2** (SEND to Crossroads: ATTACK lit + "RETURNING", gold PIN line): the servers were still on old code (pre-v162). No code change; needs a **server restart**.
+- **Report 1** (SEND siege "gate 100% guns 0", the army against the wall away from the gate):
+  - Cause: the siege target was the owner standing behind his wall, which no ray can reach, so there were no shots and the block steered into the wall. "guns" counted the victim's turrets.
+  - Also: after a breach the phase stayed Siege (the lead never walked in), and units beside the 14-stud gate pressed into the wall.
+  - Fix: nothing behind the standing walls is a siege target (the gate is). On breach the phase becomes Loot, and a funnel files units through the gate (`ArmyController.Funnel`). The status now reads "gate N% · firing N · enemy guns N", plus `[ARMY SIEGE]` logs.
+- **Report 3** ("MARCHING" but standing still by a base wall or around a player):
+  - Cause: on the march any hostile player within 120 studs became the target, so the block steered at a player in his own yard behind a wall.
+  - Fix: on the march only an aggressor is answered (a player, or his JOB 43 soldiers, who hurt this army in the last 10 s, within 60 studs, not inside a walled plot: `GateDefenseService.WalledPlotAt`). Added a routing watchdog (re-plans when a path request is outstanding 20 s) and `[ARMY MOVE]` wait-reason logs.
+- Proof: `docs/proof/army-siege/REPORT.md` (before/after logs).
+- Tests: `tools/sim/run_army_siege_test.py` and `tools/checks/codebot_v165.py`. BuyPathStatic PASS=7613 FAIL=0.
+- The servers have NOT been restarted.
+
 ## v164 PUBLISHED (Code Bot Roblox, 2026-10-01 09:46 Dublin): Open Cloud place version 162 — JOB 42 part C + JOB 43 owner-first
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **164**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":162}`. Servers NOT restarted (Migrate to Latest Update / rejoin). Code commit `49f1df1`.
 - **Cherry-pick:** Claude `7808f30` JOB 42 C (Recruit Pack cash = Cash30m while TimePacks live) + Claude `77b4172` JOB 43 (army vs army brawl); JOB 42 D docs (SHOP.md + proof README). SquadOrdersService conflict with v162 resolved by keeping **both** ArmyState/ArmyCommand and ArmyBrawl.
