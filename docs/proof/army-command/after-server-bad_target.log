@@ -4,7 +4,7 @@ S_WARM Following
 [SERVER ARMY] received player=shaunie6 command=Send target=A:Nowhere
 WARN	[SERVER ARMY] REJECTED shaunie6 SEND A:Nowhere reason=UnknownTarget  state=Following
 S_AFTER Following
-[SERVER ARMY] received player=shaunie6 command=Send target=table: 0x000001b342356bf0
+[SERVER ARMY] received player=shaunie6 command=Send target=table: 0x00005644e4bcdfe0
 WARN	[RemoteGate] would reject shaunie6 (470626172): RequestArmySend:arg1_table x1
-WARN	[SERVER ARMY] REJECTED shaunie6 SEND table: 0x000001b342356bf0 reason=BadTarget  state=Following
+WARN	[SERVER ARMY] REJECTED shaunie6 SEND table: 0x00005644e4bcdfe0 reason=BadTarget  state=Following
 S_AFTER2 Following

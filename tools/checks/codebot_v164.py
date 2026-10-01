@@ -32,12 +32,12 @@ S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 175)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 175)'),
-    (S + "Services/DataService.luau", "WE_Build=175"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 175)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 176)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 176)'),
+    (S + "Services/DataService.luau", "WE_Build=176"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 176)'),
 ):
-    check(needle in read(rel), "CODEBOT v164: WE_Build=175 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v164: WE_Build=176 " + rel.rsplit("/", 1)[-1])
 
 # PreferMesh OFF
 svc = read(C + "StructureVisualConfig.luau")

@@ -797,6 +797,9 @@ local AnalyticsConfig = {
 			SESSION_MILESTONE = { Name = "SessionMilestone", Value = "sec", Field = "sec" },
 			FTUE_TIME_TO_FIGHT = { Name = "FtueTimeToFight", Value = "seconds" },
 			GOAL_FALLBACK = { Name = "GoalFallback", Field = "reason" }, -- the raid goal fell back (no rival allowed)
+			-- claude-bud JOB 49: reasons to come back (streak / offline / missions / the return day)
+			STREAK_CLAIMED = { Name = "StreakClaimed", Value = "day", Field = "grace" },
+			STREAK_RESET = { Name = "StreakReset", Field = "lastDay" },
 			-- claude-bud JOB 41 C: rival targets (PvP rate = RivalSendTapped per session)
 			RIVAL_LIST_OPENED = { Name = "RivalListOpened" },
 			RIVAL_SEND_TAPPED = { Name = "RivalSendTapped", Field = "verdict" },
@@ -4138,6 +4141,32 @@ local DailyRewardConfig = {
 	BigDays = { [3] = true, [7] = true } :: { [number]: boolean },
 	CardSeconds = 6,
 	Day7Boost = { Enabled = true, Mult = 1.25, Minutes = 30, Label = "ARMY BOOST" },
+	--[[ claude-bud JOB 49 part A (2026-10-01): reasons to come back. Each block is owner-first (RetentionConfig.Live);
+		OFF == the streak exactly as above.
+		Grace: ONE missed UTC day per 7-day cycle keeps the streak (the strip marks that day SAVED); a second miss in
+		the cycle, or a gap longer than MissedDaysAllowed, resets to Day 1 as before. Saved: DailyLogin.Cycle /
+		GraceUsedCycle / GraceDay.
+		Day7Scale: Day 7 pays max(the table's cash, IncomeMinutes x his income per minute), on the server at the claim
+		(MonetizationService.PassivePerMin, the time-pack formula, timed boosts excluded); the table stays the floor.
+		Calendar: the strip carries the REAL time to the next UTC claim day (the server's clock with the payload) and
+		the SAVED mark; a new player's first streak card comes after the Guided chain's reward or at the latest at
+		FirstCardSeconds of play (and the client still waits out combat / driving / panels). ]]
+	Grace = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): Code Bot flips it after Shaun's phone test
+		MissedDaysAllowed = 1,
+		PerCycle = 1,
+	},
+	Day7Scale = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+		IncomeMinutes = 60,
+	},
+	Calendar = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+		FirstCardSeconds = 150, -- the latest a new player's first streak card waits for the onboarding hold
+	},
 }
 
 -- claude-bud: is auto-claim live for this player (fail closed)
@@ -4152,6 +4181,17 @@ function DailyRewardConfig.AutoClaimLiveFor(userId: any): boolean
 		return AdminConfig.IsPlaytestOwner(userId)
 	end
 	return false
+end
+
+-- claude-bud JOB 49: is a JOB 49 streak block ("Grace" | "Day7Scale" | "Calendar") live for this player
+function DailyRewardConfig.Live(block: string, userId: any): boolean
+	local b = (DailyRewardConfig :: any)[block]
+	return typeof(b) == "table" and (require(script.Parent.RetentionConfig) :: any).Live(b, userId)
+end
+
+-- claude-bud JOB 49: the UTC unix time of the next claim day (the next 00:00 UTC after `now`)
+function DailyRewardConfig.NextClaimUnix(now: number): number
+	return (math.floor(now / 86400) + 1) * 86400
 end
 
 -- claude-bud JOB 29: is the streak card / strip / day-7 boost live for this player (fail closed)
@@ -4591,6 +4631,22 @@ local EconomyConfig = {
 		MinSeconds = 300,
 		PremiumBonus = 0.10,
 		ShowDelaySeconds = 6, -- the card: after the save loads (and after the onboarding hold)
+		--[[ claude-bud JOB 49 part B (2026-10-01): "Welcome back! Collect $X". Owner-first; OFF = the JOB 29 card. The
+			card shows the real server amount, the time away and "(capped at N h)"; COLLECT draws the gold line to his
+			own ATM (ConsoleWaypoint.ShowAtm: the money is already in the ATM; no travel, no second claim). ]]
+		Card = {
+			Enabled = true,
+			OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+		},
+		--[[ claude-bud JOB 49 B: the Robux SIDEGRADE hook, DISABLED. With the MonetizationConfig.DevProducts.OfflineCap2x
+			entitlement (Id 0 + no price until Shaun approves one: never prompted, never in the Shop) the cap TIME is
+			CapMult x CapSeconds. It never raises Share and gives no combat stat. ]]
+		CapBoost = {
+			Enabled = false,
+			OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): stays off until Shaun approves a price
+			ProductKey = "OfflineCap2x",
+			CapMult = 2,
+		},
 	},
 }
 
@@ -7947,6 +8003,9 @@ local MonetizationConfig = {
 		},
 	},
 	DevProducts = {
+		-- claude-bud JOB 49 (Robux sidegrades, DISABLED): Id 0 and no RobuxPrice until Shaun approves a price (never prompted / never in the Shop)
+		OfflineCap2x = { Id = 0, DisplayName = "Offline Cap x2", Cash = 0, Gold = 0, GrantEntitlement = "OfflineCap2x", HideFromShop = true },
+		MissionReroll = { Id = 0, DisplayName = "Mission Reroll", Cash = 0, Gold = 0, GrantsMissionReroll = true, HideFromShop = true },
 		CashSmall = { Id = 3713838744, DisplayName = "Cash Pack S", RobuxPrice = 49, Cash = 10000, Gold = 0 },
 		CashMedium = { Id = 3713838815, DisplayName = "Cash Pack M", RobuxPrice = 149, Cash = 50000, Gold = 0 },
 		CashLarge = { Id = 3713838888, DisplayName = "Cash Pack L", RobuxPrice = 399, Cash = 200000, Gold = 0 },
@@ -30610,7 +30669,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 175)
+		player:SetAttribute("WE_Build", 176)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -49039,6 +49098,13 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	end
 	-- claude-bud JOB 41 part B: the Recruit Pack card was shown (once per profile)
 	profile.RecruitPackOffered = if profile.RecruitPackOffered == true then true else nil
+	-- claude-bud JOB 49 A: the streak's grace bookkeeping (missing = no cycle yet / no grace used)
+	if typeof(profile.DailyLogin) == "table" then
+		local dl = profile.DailyLogin
+		dl.Cycle = if dl.Cycle ~= nil then nonNegInt(dl.Cycle) else nil
+		dl.GraceUsedCycle = if dl.GraceUsedCycle ~= nil then nonNegInt(dl.GraceUsedCycle) else nil
+		dl.GraceDay = if dl.GraceDay ~= nil then math.clamp(nonNegInt(dl.GraceDay), 1, 7) else nil
+	end
 	-- claude-bud JOB 41: the Guided first minutes record (missing -> nil; each flag only ever turns on)
 	if typeof(profile.Guided) == "table" then
 		local g = profile.Guided
@@ -74222,7 +74288,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 175)
+			player:SetAttribute("WE_Build", 176)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -82741,7 +82807,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 175)
+		player:SetAttribute("WE_Build", 176)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -82883,7 +82949,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=175",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=176",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -93166,7 +93232,8 @@ local function streakStrip(player: Player, profile: any, claimedToday: boolean):
 	end
 	-- tomorrow's day: the day after today's claim, or the day after the one he could claim today
 	local last = tonumber(profile.DailyLogin and profile.DailyLogin.LastClaimDay) or 0
-	if not claimedToday and DailyRewardConfig.MissedDayResetsStreak and last ~= 0 and last ~= yyyymmdd(os.time() - 86400) then
+	if not claimedToday and DailyRewardConfig.MissedDayResetsStreak and last ~= 0 and last ~= yyyymmdd(os.time() - 86400)
+		and not MissionService.GraceCovers(player, profile.DailyLogin, os.time()) then -- claude-bud JOB 49: grace keeps it
 		streak = 0 -- a missed day: the next claim starts again at day 1
 	end
 	local nextToClaim = (streak % days) + 1
@@ -93180,8 +93247,18 @@ local function streakStrip(player: Player, profile: any, claimedToday: boolean):
 		offlineCap = if okC and typeof(v) == "number" then math.floor(v) else 0
 	end
 	local boost = DailyRewardConfig.Day7Boost
+	-- claude-bud JOB 49 A: the income-scaled Day 7, the SAVED (grace) day and the real countdown
+	if DailyRewardConfig.Live("Day7Scale", player.UserId) then
+		cash[days] = MissionService.Day7Cash(player, profile)
+	end
+	local cal = DailyRewardConfig.Live("Calendar", player.UserId)
+	local dl = profile.DailyLogin or {}
+	local now = os.time()
 	return {
 		Days = days,
+		GraceDay = if cal and tonumber(dl.GraceUsedCycle) ~= nil and tonumber(dl.GraceUsedCycle) == tonumber(dl.Cycle) then tonumber(dl.GraceDay) else nil,
+		ServerNow = if cal then now else nil,
+		NextClaimUnix = if cal then DailyRewardConfig.NextClaimUnix(now) else nil,
 		Today = if claimedToday then (if streak == 0 then 1 else streak) else nextToClaim,
 		Claimed = claimedToday,
 		Cash = cash,
@@ -93189,6 +93266,7 @@ local function streakStrip(player: Player, profile: any, claimedToday: boolean):
 		TomorrowDay = tomorrowDay,
 		TomorrowCash = cash[tomorrowDay] or 0,
 		OfflineCap = offlineCap,
+		OfflineCapHours = if okR and RS and RS.OfflineCapSeconds then math.floor((tonumber(RS.OfflineCapSeconds(player)) or 0) / 3600) else nil, -- claude-bud JOB 49 B
 		Day7Boost = if boost.Enabled == true then boost.Label else nil,
 	}
 end
@@ -94032,6 +94110,47 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 	return true, nil
 end
 
+--[[ claude-bud JOB 49 A: true when the grace rule keeps this streak across the gap to `now`: Grace live, the last claim
+	was 2 .. MissedDaysAllowed + 1 UTC days ago, and no grace used in this 7-day cycle yet (PerCycle 1). Pure reads. ]]
+function MissionService.GraceCovers(player: Player, daily: any, now: number): boolean
+	if typeof(daily) ~= "table" or not DailyRewardConfig.Live("Grace", player.UserId) then
+		return false
+	end
+	local G: any = (DailyRewardConfig :: any).Grace
+	local last = tonumber(daily.LastClaimDay) or 0
+	if last == 0 or (tonumber(daily.Streak) or 0) <= 0 then
+		return false
+	end
+	if (tonumber(G.PerCycle) or 1) <= 0 or tonumber(daily.GraceUsedCycle) == (tonumber(daily.Cycle) or 0) then
+		return false -- already used in this cycle
+	end
+	for k = 2, 1 + math.max(0, math.floor(tonumber(G.MissedDaysAllowed) or 1)) do
+		if last == yyyymmdd(now - k * 86400) then
+			return true
+		end
+	end
+	return false
+end
+
+-- claude-bud JOB 49 A: Day 7's cash: max(the table floor, Day7Scale.IncomeMinutes x income per minute) while live
+function MissionService.Day7Cash(player: Player, profile: any): number
+	local days = DailyRewardConfig.StreakResetsAfterDay
+	local floorCash = (DailyRewardConfig.Rewards[days] or { Cash = 0 }).Cash
+	if not DailyRewardConfig.Live("Day7Scale", player.UserId) then
+		return floorCash
+	end
+	local okM, MS = pcall(function(): any
+		return (require :: any)(script.Parent.MonetizationService) -- dynamic: keeps it out of this module's type graph
+	end)
+	local perMin = 0
+	if okM and MS and MS.PassivePerMin then
+		local okP, v = pcall(MS.PassivePerMin, player, profile, true)
+		perMin = if okP and typeof(v) == "number" and v == v and v > 0 then v else 0
+	end
+	local mins = math.max(0, tonumber((DailyRewardConfig :: any).Day7Scale.IncomeMinutes) or 0)
+	return math.max(floorCash, math.floor(perMin * mins))
+end
+
 -- quiet (claude-bud JOB 29): no "Day N reward" toast (the caller shows the streak card instead)
 function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boolean, string?)
 	local profile = DataService.GetProfile(player)
@@ -94048,18 +94167,36 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 	end
 
 	local yesterday = yyyymmdd(os.time() - 86400)
+	local graced = false
+	local lastDay = daily.Streak
 	if DailyRewardConfig.MissedDayResetsStreak and daily.LastClaimDay ~= 0 and daily.LastClaimDay ~= yesterday then
-		daily.Streak = 0
+		if MissionService.GraceCovers(player, daily, os.time()) then
+			-- claude-bud JOB 49 A: one missed day per cycle keeps the streak; the missed day is marked SAVED
+			graced = true
+			daily.GraceUsedCycle = tonumber(daily.Cycle) or 0
+			daily.GraceDay = (daily.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1
+		else
+			daily.Streak = 0
+			if AnalyticsService and lastDay > 0 then
+				AnalyticsService.Log("STREAK_RESET", player.UserId, { lastDay = lastDay }) -- claude-bud JOB 49
+			end
+		end
 	end
 
 	daily.Streak = (daily.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1
 	daily.LastClaimDay = today
 	daily.LastClaimUnix = os.time()
+	if daily.Streak == 1 then
+		daily.Cycle = (tonumber(daily.Cycle) or 0) + 1 -- claude-bud JOB 49 A: a new 7-day cycle (its own grace)
+		daily.GraceDay = nil
+	end
 
 	local reward = DailyRewardConfig.Rewards[daily.Streak]
 	if reward then
-		if reward.Cash > 0 then
-			EconomyService.AddCash(player, reward.Cash, "daily")
+		-- claude-bud JOB 49 A: Day 7 scales with his income (the table is the floor)
+		local cashPaid = if daily.Streak == DailyRewardConfig.StreakResetsAfterDay then MissionService.Day7Cash(player, profile) else reward.Cash
+		if cashPaid > 0 then
+			EconomyService.AddCash(player, cashPaid, "daily")
 		end
 		if reward.Gold > 0 then
 			EconomyService.AddGold(player, reward.Gold, "daily")
@@ -94073,7 +94210,7 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 			NotificationService.Notify(
 				player,
 				if DailyRewardConfig.ShowTomorrow == true and nextReward
-					then string.format("Day %d: +$%s. Tomorrow: $%s", daily.Streak, commas(reward.Cash), commas(nextReward.Cash))
+					then string.format("Day %d: +$%s. Tomorrow: $%s", daily.Streak, commas(cashPaid), commas(nextReward.Cash))
 					else string.format("Day %d reward: $%d", daily.Streak, reward.Cash),
 				"Reward"
 			)
@@ -94081,6 +94218,7 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 		if AnalyticsService then
 			AnalyticsService.Log(AnalyticsConfig.Events.DAILY_REWARD_CLAIMED, player.UserId, { day = daily.Streak })
 			AnalyticsService.Log("STREAK_DAY", player.UserId, { day = daily.Streak }) -- claude-bud JOB 29
+			AnalyticsService.Log("STREAK_CLAIMED", player.UserId, { day = daily.Streak, grace = if graced then "yes" else "no", cash = cashPaid }) -- claude-bud JOB 49
 		end
 		-- claude-bud JOB 29: day 7 = an army damage boost for a while (no Robux; SquadOrdersService reads it)
 		local boost = DailyRewardConfig.Day7Boost
@@ -94262,7 +94400,13 @@ function MissionService.Init(deps: { [string]: any })
 				local okR, RS = pcall(function(): any
 					return require(script.Parent.RetentionService)
 				end)
-				if okR and RS and RS.WaitOnboarding and not RS.WaitOnboarding(player, 90) then
+				-- claude-bud JOB 49 A (Calendar): wait out the Guided chain (the hold ends at its reward), at the latest
+				-- until FirstCardSeconds of play; OFF = the JOB 29 90 s
+				local holdMax = 90
+				if DailyRewardConfig.Live("Calendar", player.UserId) then
+					holdMax = math.max(0, (tonumber((DailyRewardConfig :: any).Calendar.FirstCardSeconds) or 150) - DailyRewardConfig.AutoClaim.DelaySeconds)
+				end
+				if okR and RS and RS.WaitOnboarding and not RS.WaitOnboarding(player, holdMax) then
 					return
 				end
 				local prof = DataService.GetProfile(player)
@@ -108318,8 +108462,9 @@ end
 -- whole chain up to the Reward (Guided.HoldMaxSeconds); everyone else exactly as JOB 29 (HoldPopupsUntilStep, 60 s).
 local function holdUntil(profile: any): (number, number)
 	local G: any = (TutorialConfig :: any).Guided
-	if G and profile and tonumber(profile.TutorialOrderVersion) == G.OrderVersion then
-		local r = TutorialConfig.IndexOf("Reward", (TutorialConfig :: any).GuidedSteps)
+	-- claude-bud JOB 48: both Guided orders (4, and the Hook's 5) hold up to their own Reward step
+	if G and profile and TutorialConfig.IsGuidedVersion(profile.TutorialOrderVersion) then
+		local r = TutorialConfig.IndexOf("Reward", TutorialConfig.StepsFor(profile.TutorialOrderVersion))
 		if r then
 			return r + 1, math.max(5, tonumber(G.HoldMaxSeconds) or 300)
 		end
@@ -108427,10 +108572,28 @@ function RetentionService.ComputeOffline(prevSeen: number, now: number, perSec: 
 	return math.floor(perSec * counted * share * mult), math.floor(counted)
 end
 
+-- claude-bud JOB 49 B: this player's cap in seconds: CapSeconds, x CapBoost.CapMult only with the OfflineCap2x
+-- entitlement while CapBoost is live (it is DISABLED until Shaun approves a price). Never touches Share.
+local function capSecondsFor(player: Player, profile: any): number
+	local o = offlineCfg()
+	local cap = math.max(0, tonumber(o.CapSeconds) or 0)
+	local b = o.CapBoost
+	if typeof(b) == "table" and RetentionConfig.Live(b, player.UserId) and typeof(profile) == "table"
+		and typeof(profile.Entitlements) == "table" and profile.Entitlements[b.ProductKey] == true then
+		cap *= math.max(1, tonumber(b.CapMult) or 1)
+	end
+	return cap
+end
+
+function RetentionService.OfflineCapSeconds(player: Player): number
+	local profile = DataService and DataService.GetProfile(player)
+	return if profile then capSecondsFor(player, profile) else math.max(0, tonumber(offlineCfg().CapSeconds) or 0)
+end
+
 -- what a full cap pays at this player's income now (the Missions "tomorrow" line and the sender state)
 local function offlineCapCash(player: Player, profile: any): number
 	local o = offlineCfg()
-	return math.floor(incomePerSecond(player, profile) * (tonumber(o.CapSeconds) or 0) * math.clamp(tonumber(o.Share) or 0, 0, 1) * premiumMult(player))
+	return math.floor(incomePerSecond(player, profile) * capSecondsFor(player, profile) * math.clamp(tonumber(o.Share) or 0, 0, 1) * premiumMult(player))
 end
 
 function RetentionService.OfflineCapCash(player: Player): number
@@ -108446,25 +108609,32 @@ local function onLoadOffline(player: Player, profile: any)
 		return
 	end
 	local o = offlineCfg()
+	local capSec = capSecondsFor(player, profile) -- claude-bud JOB 49 B: CapSeconds (x CapMult with the disabled hook)
+	local oc = table.clone(o)
+	oc.CapSeconds = capSec
 	local cash, seconds = RetentionService.ComputeOffline(
 		tonumber(profile.PrevSeenUnix) or 0,
 		os.time(),
 		incomePerSecond(player, profile),
 		premiumMult(player),
-		o
+		oc
 	)
 	profile.PrevSeenUnix = nil -- paid once per load: a later call in this session finds nothing
 	if cash <= 0 or not EconomyService or not EconomyService.AccruePendingCash(player, cash, "offline") then
 		return
 	end
 	log(player, "OFFLINE_EARNED", { cash = cash, hours = string.format("%.1f", seconds / 3600) })
+	log(player, "OFFLINE_COLLECTED", { cash = cash, capped = if seconds >= capSec then "yes" else "no" }) -- claude-bud JOB 49
 	task.delay(math.max(1, tonumber(o.ShowDelaySeconds) or 6), function()
 		if player.Parent and RetentionService.WaitOnboarding(player, 90) then
+			local card = typeof(o.Card) == "table" and RetentionConfig.Live(o.Card, player.UserId)
 			push(player, "WelcomeBack", {
 				Cash = cash,
 				Seconds = seconds,
-				Capped = seconds >= (tonumber(o.CapSeconds) or 0),
+				Capped = seconds >= capSec,
 				Premium = premiumMult(player) > 1,
+				CapHours = if card then math.floor(capSec / 3600 + 0.5) else nil, -- claude-bud JOB 49 B: "(capped at N h)"
+				Collect = if card then true else nil, -- claude-bud JOB 49 B: COLLECT draws the gold line to his ATM
 			})
 		end
 	end)
@@ -142991,6 +143161,7 @@ local dailyInfo: TextLabel? = nil
 local spinBtn: TextButton? = nil
 local spinInfo: TextLabel? = nil
 local state: Types.MissionStatePayload? = nil
+local stateReceivedAt = os.clock() -- claude-bud JOB 49: when the last state arrived (the countdowns)
 
 -- spinner (SpinnerStateUpdate: Ready, CooldownRemaining seconds)
 local spinnerReady = false
@@ -143640,9 +143811,14 @@ local function refresh()
 		if tc > 0 then
 			table.insert(lines, string.format("Tomorrow: Day %d reward $%s", tonumber(s7.TomorrowDay) or 1, commas(tc)))
 		end
+		local nextText = StreakStrip.NextText(s7, stateReceivedAt) -- claude-bud JOB 49 A: the real countdown
+		if nextText then
+			table.insert(lines, nextText)
+		end
 		local cap = tonumber(s7.OfflineCap) or 0
 		if cap > 0 then
-			table.insert(lines, string.format("Away 8 h: earn up to $%s", commas(cap)))
+			-- claude-bud JOB 49 B: the cap's real hours (the server sends them; 8 when an older server does not)
+			table.insert(lines, string.format("Away %d h: earn up to $%s", math.floor(tonumber(s7.OfflineCapHours) or 8), commas(cap)))
 		end
 		local row = Instance.new("Frame")
 		row.Name = "Streak7Row"
@@ -144130,6 +144306,7 @@ function MissionController.Init()
 			return
 		end
 		state = payload
+		stateReceivedAt = os.clock()
 		if menuOpen then
 			refresh()
 		end
@@ -152709,17 +152886,19 @@ local function welcomeBackCard(data: any)
 	st.Color = GOLD
 	st.Thickness = 2
 	st.Parent = card
-	local title = label(card, "WELCOME BACK", 17, GOLD, Enum.Font.GothamBlack)
+	local newCard = data.Collect == true -- claude-bud JOB 49 B: "Welcome back! Collect $X" (owner-first; nil = the JOB 29 card)
+	local title = label(card, if newCard then "WELCOME BACK!" else "WELCOME BACK", 17, GOLD, Enum.Font.GothamBlack)
 	title.Position = UDim2.fromOffset(14, 10)
 	title.Size = UDim2.new(1, -76, 0, 26)
 	title.TextXAlignment = Enum.TextXAlignment.Left
-	local body = label(card, "While you were away you earned", 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
+	local body = label(card, if newCard then "Your base earned while you were away" else "While you were away you earned", 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
 	body.Position = UDim2.fromOffset(14, 44)
 	body.Size = UDim2.new(1, -28, 0, 20)
 	local amt = label(card, "+" .. money(cash), 32, GOLD, Enum.Font.GothamBlack)
 	amt.Position = UDim2.fromOffset(14, 66)
 	amt.Size = UDim2.new(1, -28, 0, 38)
-	local sub = awayText(tonumber(data.Seconds) or 0) .. (if data.Capped == true then " (8 h max)" else "") .. " · in your ATM"
+	local capH = math.floor(tonumber(data.CapHours) or 8)
+	local sub = awayText(tonumber(data.Seconds) or 0) .. (if data.Capped == true then (if newCard then string.format(" (capped at %d h)", capH) else " (8 h max)") else "") .. " · in your ATM"
 	if data.Premium == true then
 		sub ..= " · Premium +10%"
 	end
@@ -152744,7 +152923,7 @@ local function welcomeBackCard(data: any)
 	collect.TextColor3 = Color3.new(1, 1, 1)
 	collect.Font = Enum.Font.GothamBlack
 	collect.TextSize = 18
-	collect.Text = "OK"
+	collect.Text = if newCard then "COLLECT " .. money(cash) else "OK"
 	corner(collect, 10)
 	collect.Parent = card
 	-- the money is already in his ATM (server, PendingCash): both buttons only close the card
@@ -152753,7 +152932,16 @@ local function welcomeBackCard(data: any)
 			g:Destroy()
 		end
 	end
-	collect.Activated:Connect(close)
+	collect.Activated:Connect(function()
+		if newCard then
+			-- claude-bud JOB 49 B: the gold line to HIS ATM (walk up to collect; no travel, no second claim)
+			pcall(function()
+				local CW: any = require(script.Parent.Parent.Modules.ConsoleWaypoint)
+				CW.ShowAtm(tonumber(player:GetAttribute("WE_PlotId")))
+			end)
+		end
+		close()
+	end)
 	x.Activated:Connect(close)
 	task.delay(12, close)
 end
@@ -152803,7 +152991,9 @@ local function streakCard(data: any)
 		y += 24
 	end
 	local tomorrow = tonumber(data.TomorrowCash) or 0
-	local foot = label(card, if tomorrow > 0 then "Come back tomorrow for " .. money(tomorrow) else "Come back tomorrow!", 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
+	local nextText = StreakStrip.NextText(data, data._ReceivedAt) -- claude-bud JOB 49 A: the real countdown (nil = none)
+	local foot = label(card, (if tomorrow > 0 then "Come back tomorrow for " .. money(tomorrow) else "Come back tomorrow!")
+		.. (if nextText then " · " .. nextText else ""), 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
 	foot.Position = UDim2.fromOffset(10, y)
 	foot.Size = UDim2.new(1, -20, 0, 22)
 	card.Activated:Connect(function()
@@ -152895,6 +153085,7 @@ function RetentionController.Init()
 				welcomeBackCard(data)
 			end)
 		elseif kind == "Streak" and typeof(data) == "table" then
+			data._ReceivedAt = os.clock() -- claude-bud JOB 49 A: the countdown keeps counting while the card waits
 			whenFree(function()
 				streakCard(data)
 			end)
@@ -179236,6 +179427,19 @@ local DONE = Color3.fromRGB(70, 150, 90)
 local DIM = Color3.fromRGB(40, 44, 50)
 local TEXT = Color3.fromRGB(235, 235, 235)
 
+--[[ claude-bud JOB 49 A: the REAL time to the next claim day, from the server's clock in the payload (ServerNow /
+	NextClaimUnix) and the local clock since it arrived (receivedAt = os.clock() then). nil when the server sent none
+	(Calendar off) -> no countdown at all (no fake timer). "Next in 5h 12m" / "Next in 12m". ]]
+function StreakStrip.NextText(data: any, receivedAt: number?): string?
+	local nowS, nextS = tonumber(data and data.ServerNow), tonumber(data and data.NextClaimUnix)
+	if nowS == nil or nextS == nil then
+		return nil
+	end
+	local left = math.max(0, math.floor(nextS - nowS - (os.clock() - (receivedAt or os.clock()))))
+	local h, m = left // 3600, (left % 3600) // 60
+	return if h > 0 then string.format("Next in %dh %02dm", h, m) else string.format("Next in %dm", math.max(1, m))
+end
+
 -- "$1k", "$3.5k", "$20k", "$750"
 function StreakStrip.ShortCash(n: number): string
 	local v = math.floor(tonumber(n) or 0)
@@ -179301,6 +179505,9 @@ function StreakStrip.Build(parent: Instance, data: any, tileW: number, tileH: nu
 		bottom.TextColor3 = top.TextColor3
 		local cash = if typeof(data.Cash) == "table" then tonumber(data.Cash[d]) or 0 else 0
 		bottom.Text = StreakStrip.ShortCash(cash)
+		if tonumber(data.GraceDay) == d then
+			bottom.Text = "SAVED" -- claude-bud JOB 49 A: the missed day the grace rule kept
+		end
 		bottom.TextScaled = false
 		bottom.Parent = tile
 		tile.Parent = strip

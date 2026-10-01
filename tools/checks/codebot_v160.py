@@ -42,12 +42,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 175)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 175)'),
-    (S + "Services/DataService.luau", "WE_Build=175"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 175)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 176)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 176)'),
+    (S + "Services/DataService.luau", "WE_Build=176"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 176)'),
 ):
-    check(needle in read(rel), "CODEBOT v160: WE_Build=175 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v160: WE_Build=176 " + rel.rsplit("/", 1)[-1])
 
 RPC = read(C + "RatePromptConfig.luau")
 check("Enabled = true," in RPC and "OwnerFirst = false," in RPC,
