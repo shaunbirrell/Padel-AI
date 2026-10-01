@@ -95,7 +95,6 @@ _j49('RequestMissionReroll = { "string:48" }' in _SC, "C: RequestMissionReroll's
 _MON = _j49_src(_SV + "Services/MonetizationService.luau")
 _j49("GrantsMissionReroll == true" in _MON and "GrantRerollToken(player)" in _MON, "C: the Robux reroll grant exists in ProcessReceipt (product Id 0 = never sold)")
 
-#@@C@@
 
 _luau = _j49_os.environ.get("LUAU")
 if _luau is None and _j49_os.environ.get("LUAU_COMPILE"):

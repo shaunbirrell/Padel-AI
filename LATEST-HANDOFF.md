@@ -1,4 +1,12 @@
 <!-- Q2-START -->
+## v178 PUBLISHED (Code Bot Roblox, 2026-10-01 17:15 Dublin): Open Cloud place version TBD. claude-bud JOB 49 C core daily missions + free reroll (owner-first NEW-OWNER-FIRST)
+- **Cherry-pick:** `4fdf273` → `cada04c` onto phase-7 `de2bc56` (v177 tip). Code+dist+checks: (this commit) on `codebot/v178-job49c`. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; no price / Id change. MissionReroll stays Id 0 + Robux Enabled=false; CapBoost / OfflineCap2x untouched.
+- **JOB 49 C (NEW-OWNER-FIRST):** `MissionConfig.Core.OwnerFirst = true` — 3 core daily missions (Raid / Recruit / Build / WinFights, 3 different types, saved per day, level-tier targets, Raid only when a raid is possible), Raid ObjectiveType from the two raid-win hooks, income-scaled rewards + all-3 chest once, ResetHourUtc + real countdown, client GO (TARGETS / Army / next console), 1 free reroll/day (RequestMissionReroll) + DISABLED Robux reroll grant.
+- **Untouched:** CapBoost Enabled=false; OfflineCap2x / MissionReroll Id 0; Grace/Day7Scale/Calendar/Card stay OwnerFirst=false (v177); TutorialConfig.Guided.Hook.OwnerFirst=false; all prices / product Ids.
+- **Checks:** BuyPathStatic **PASS=7982 FAIL=0**; new `tools/checks/codebot_v178.py`; `claude_bud_job49.py` part C pins; `run_daily_return_test.py` 0 failed (part C). PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP TBD, versionNumber **TBD**, universe 10767159222 / place 97112936860418. Servers NOT restarted: Migrate to Latest Update when convenient.
+- **Phone tests (owed — Shaun):** (1) Missions shows "TODAY'S 3 MISSIONS · new in Xh Ym" with 3 different types; each GO goes to the right place. (2) Reroll once; second reroll refused. (3) Finish all 3; chest pays once. (4) After shown reset time, 3 new missions. Also: CapBoost/OfflineCap2x/MissionReroll Id 0 still off. After phone OK: flip MissionConfig.Core.OwnerFirst true→false. **Question for Shaun:** should Daily Ops below the 3 core missions be hidden?
+- **Still owed:** JOB 44 Studio 2-player siege/march still owed.
 ## claude-bud JOB 49 part C (2026-10-01): 3 CORE DAILY MISSIONS + RAID + REROLL (branch `claude/desktop-bud`)
 **Flags to flip:**
 - `MissionConfig.Core.OwnerFirst = true -> false` (NEW-OWNER-FIRST).
