@@ -64,12 +64,12 @@ BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/d
 OWN = 'SetAttribute("WE_Build", 206)' in read(S + "Services/DataService.luau")  # this build's own scope
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 206)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 206)'),
-    (S + "Services/DataService.luau", "WE_Build=206"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 207)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 207)'),
+    (S + "Services/DataService.luau", "WE_Build=207"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 207)'),
 ):
-    check(BUD or needle in read(rel), "CODEBOT v206: WE_Build=206 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
+    check(BUD or needle in read(rel), "CODEBOT v206: WE_Build=207 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
 
 # ── the 300 s delay (one value) ──
 MON = read(C + "MonetizationConfig.luau")
@@ -77,7 +77,8 @@ s5 = MON.split("(MonetizationConfig :: any).Starter5 = {")[1].split("\n}\n")[0] 
 m = re.findall(r"\n\tOfferAfterPlaySeconds = (\d+),", "\n" + s5)
 check(len(m) == 1 and int(m[0]) == 300, "CODEBOT v206: Starter5.OfferAfterPlaySeconds is ONE value, 300 s (back from the 60 s test)")
 check("OfferAfterPlaySeconds = 60," not in MON, "CODEBOT v206: no 60 s pop-up delay left in MonetizationConfig")
-check("Enabled = true," in s5 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in s5, "CODEBOT v206: Starter5 Enabled + OwnerFirst kept (owner-only)")
+# Code Bot v207: Starter5 OwnerFirst true (owner-only) was v206 scope; v207 made it public (codebot_v207.py)
+check("Enabled = true," in s5 and (("OwnerFirst = true, -- NEW-OWNER-FIRST" in s5) if OWN else True), "CODEBOT v206: Starter5 Enabled" + (" + OwnerFirst kept (owner-only)" if OWN else " [OwnerFirst pin: v206 scope]"))
 check('StarterRecruit5 = { Id = 3715888533, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' in MON and 'LiveBlock = "Starter5"' in MON
       and 'Boost2x10m = { Id = 3715888566, DisplayName = "2x Income 10 min", RobuxPrice = 5,' in MON,
       "CODEBOT v206: the two 5 R$ rows keep their Ids, 5 R$ and LiveBlock Starter5")
@@ -128,9 +129,9 @@ r = subprocess.run([sys.executable, "tools/sim/run_shop_render_test.py"], captur
                    env=dict(os.environ, VERBOSE="1"))
 out = r.stdout or ""
 check(r.returncode == 0 and out.count("SHOP RENDER TEST") == 6 and "FAIL " not in out, "CODEBOT v206: run_shop_render_test 0 failed (6 runs)")
-check(out.count("SUPPLY rows sorted by Robux price ascending, no-price rows last") == 6 and out.count("ok    uid 470626172: the two 5 R$ rows are the top two rows") == 3,
+check((out.count("SUPPLY rows sorted by Robux price ascending, no-price rows last") == 6 and out.count("ok    uid 470626172: the two 5 R$ rows are the top two rows") == 3) if OWN else True,
       "CODEBOT v206: sim: every run sorted ascending; the owner's top two rows are the 5 R$ rows")
-check("ok    uid 9: the 5 R$ rows only where Starter5 is live (owner-only): false" in out, "CODEBOT v206: sim: no 5 R$ row for another player (owner-only kept)")
+check(("ok    uid 9: the 5 R$ rows only where Starter5 is live (owner-only): false" in out) if OWN else True, "CODEBOT v206: sim: no 5 R$ row for another player (owner-only kept)" + ("" if OWN else " [v206 scope; v207: FREE top + public]"))
 r = subprocess.run([sys.executable, "tools/sim/run_starter5_test.py"], capture_output=True, text=True, cwd=ROOT)
 check(r.returncode == 0 and "STARTER5 TEST: 0 failed" in (r.stdout or ""), "CODEBOT v206: run_starter5_test 0 failed (300 s offer)")
 

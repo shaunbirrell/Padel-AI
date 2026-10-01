@@ -914,7 +914,7 @@ end
 -- claude-bud JOB 66: the two 5 R$ starter products (owner-first; the one-time offer after ~5 min of play)
 (MonetizationConfig :: any).Starter5 = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 66): only Shaun until his phone test
+	OwnerFirst = false, -- PUBLIC (Code Bot v207, Shaun approved): both 5 R$ rows + the one-time offer for every player (was NEW-OWNER-FIRST, claude-bud JOB 66)
 	OfferAfterPlaySeconds = 300, -- THE Starter5 pop-up delay (one value): LIVE VALUE 300 (Code Bot v206: back from the 60 s phone test, Shaun's test passed). The "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
 	CashIncomeMinutes = 2.5, -- the Recruit Starter Pack's cash = about 2-3 minutes of his early income ...
 	CashMin = 750, -- ... at least this (a brand-new base earns about $300 / min)

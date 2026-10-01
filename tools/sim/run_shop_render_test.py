@@ -130,8 +130,9 @@ else
   end
   for _, k in ipairs({ "CashMega", "CashLarge", "CashMedium", "CashSmall" }) do check(byName["ShopRow_" .. k] == nil, k .. ": the old pack is hidden while the time packs are shown") end
 end
--- Code Bot v206 (Shaun): the SUPPLY · R$ tab sorted by MonetizationConfig RobuxPrice ascending (the 5 R$ rows on top);
--- rows with no price (FREE rows, Favorite WAR EMPIRE, the locked Supply Crate) at the bottom
+-- Code Bot v206 (Shaun): the SUPPLY · R$ tab sorted by MonetizationConfig RobuxPrice ascending.
+-- Code Bot v207 (Shaun): the FREE rows (fr_* keys except fr_favorite) back on TOP in build order, then the paid rows
+-- cheapest first, then the rows with no price (Favorite WAR EMPIRE, the locked Supply Crate) at the bottom.
 do
   local function cfgPrice(name)
     local key = string.gsub(name, "ShopRow_", "")
@@ -140,23 +141,35 @@ do
     local p = if type(def) == "table" then tonumber(def.RobuxPrice) else nil
     return if p and p > 0 then p else math.huge
   end
-  local prev, sorted, seq = -math.huge, true, {}
+  local function isFree(name)
+    local key = string.gsub(name, "ShopRow_", "")
+    return string.sub(key, 1, 3) == "fr_" and key ~= "fr_favorite"
+  end
+  local function tier(name) if isFree(name) then return 0 elseif cfgPrice(name) < math.huge then return 1 else return 2 end end
+  local prevT, prevP, sorted, seq, nFree = -1, -math.huge, true, {}, 0
   for _, r in ipairs(rows) do
-    local p = cfgPrice(r.Name)
-    if p < prev then sorted = false end
-    prev = p
-    table.insert(seq, (string.gsub(r.Name, "ShopRow_", "")) .. "=" .. (if p == math.huge then "-" else tostring(p)))
+    local tt, p = tier(r.Name), cfgPrice(r.Name)
+    if tt < prevT then sorted = false end
+    if tt ~= prevT then prevP = -math.huge end
+    if tt == 1 and p < prevP then sorted = false end
+    prevT, prevP = tt, (if tt == 1 then p else prevP)
+    if tt == 0 then nFree += 1 end
+    table.insert(seq, (string.gsub(r.Name, "ShopRow_", "")) .. "=" .. (if tt == 0 then "FREE" elseif p == math.huge then "-" else tostring(p)))
   end
   print("        PRICE ORDER uid " .. TEST_UID .. ": " .. table.concat(seq, " > "))
-  check(#rows > 5 and sorted, "uid " .. TEST_UID .. ": SUPPLY rows sorted by Robux price ascending, no-price rows last (Code Bot v206)")
-  local fav = byName["ShopRow_fr_favorite"]
-  if fav then check(cfgPrice(rows[#rows].Name) == math.huge and P(fav, "LayoutOrder") > P(rows[1], "LayoutOrder"), "Favorite WAR EMPIRE in the no-price block at the bottom") end
+  check(#rows > 5 and sorted, "uid " .. TEST_UID .. ": SUPPLY rows FREE first, then by Robux price ascending, no-price rows last (Code Bot v207)")
+  local d, a2, inv = byName["ShopRow_fr_daily"], byName["ShopRow_fr_airdrop"], byName["ShopRow_fr_invite"]
+  check(d ~= nil and a2 ~= nil and inv ~= nil and rows[1] == d and rows[2] == a2 and isFree(rows[3].Name),
+    "uid " .. TEST_UID .. ": FREE Daily Reward, FREE Airdrop, FREE Invite friends are the top rows (Code Bot v207)")
+  local fav, crate = byName["ShopRow_fr_favorite"], byName["ShopRow_SupplyCrate"]
+  if fav then check(tier(rows[#rows].Name) == 2 and P(fav, "LayoutOrder") > P(rows[nFree + 1], "LayoutOrder"), "Favorite WAR EMPIRE in the no-price block at the bottom") end
+  if crate then check(rows[#rows] == crate or tier(rows[#rows].Name) == 2, "Supply Crate (locked) in the no-price block at the bottom") end
   local s5 = MCx.Starter5LiveFor(TEST_UID)
   local a, b = byName["ShopRow_StarterRecruit5"], byName["ShopRow_Boost2x10m"]
-  check((a ~= nil) == s5 and (b ~= nil) == s5, "uid " .. TEST_UID .. ": the 5 R$ rows only where Starter5 is live (owner-only): " .. tostring(s5))
+  check((a ~= nil) == s5 and (b ~= nil) == s5, "uid " .. TEST_UID .. ": the 5 R$ rows only where Starter5 is live: " .. tostring(s5))
   if s5 and a and b then
-    local top = { [string.gsub(rows[1].Name, "ShopRow_", "")] = true, [string.gsub(rows[2].Name, "ShopRow_", "")] = true }
-    check(top.StarterRecruit5 == true and top.Boost2x10m == true, "uid " .. TEST_UID .. ": the two 5 R$ rows are the top two rows")
+    local top = { [string.gsub(rows[nFree + 1].Name, "ShopRow_", "")] = true, [string.gsub(rows[nFree + 2].Name, "ShopRow_", "")] = true }
+    check(top.StarterRecruit5 == true and top.Boost2x10m == true, "uid " .. TEST_UID .. ": the two 5 R$ rows are the first two paid rows (right under the FREE rows)")
   end
 end
 -- codebot_v142: ShopOverhaulConfig.Live.OwnerFirst = false -> the new shop for everyone (owner and uid 9 alike)

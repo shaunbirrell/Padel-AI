@@ -39,12 +39,12 @@ BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/d
 OWN = any('SetAttribute("WE_Build", %d)' % n in read(S + "Services/DataService.luau") for n in (204, 205))  # this build's own scope
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 206)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 206)'),
-    (S + "Services/DataService.luau", "WE_Build=206"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 207)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 207)'),
+    (S + "Services/DataService.luau", "WE_Build=207"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 207)'),
 ):
-    check(BUD or needle in read(rel), "CODEBOT v204: WE_Build=206 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
+    check(BUD or needle in read(rel), "CODEBOT v204: WE_Build=207 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
 
 MON = read(C + "MonetizationConfig.luau")
 check(('StarterRecruit5 = { Id = %d, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' % SR5_ID) in MON,
@@ -52,7 +52,10 @@ check(('StarterRecruit5 = { Id = %d, DisplayName = "Recruit Starter Pack", Robux
 check(('Boost2x10m = { Id = %d, DisplayName = "2x Income 10 min", RobuxPrice = 5,' % B10_ID) in MON,
       "CODEBOT v204: Boost2x10m Id 3715888566, 5 R$")
 s5 = MON.split("(MonetizationConfig :: any).Starter5 = {")[1].split("\n}\n")[0] if "(MonetizationConfig :: any).Starter5 = {" in MON else ""
-check("Enabled = true," in s5 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in s5, "CODEBOT v204: Starter5 Enabled + OwnerFirst = true kept")
+# Code Bot v207: OwnerFirst = true kept is v204-v206 scope; WE_Build 207+ is public (codebot_v207.py)
+_v204_bn = int((re.search(r'WE_Build", (\d+)\)', read(S + "Services/DataService.luau")) or [0, "0"])[1])
+check("Enabled = true," in s5 and (("OwnerFirst = true, -- NEW-OWNER-FIRST" in s5) or (_v204_bn >= 207 and "OwnerFirst = false, -- PUBLIC (Code Bot v207" in s5)),
+      "CODEBOT v204: Starter5 Enabled + OwnerFirst = true kept" + ("" if _v204_bn < 207 else " [v204-v206 scope; public v207+]"))
 m = re.findall(r"\n\tOfferAfterPlaySeconds = (\d+), (--[^\n]*)", "\n" + s5)
 check(len(m) == 1 and ((int(m[0][0]) == DELAY and "LIVE VALUE IS 300" in m[0][1]) if OWN else True),
       "CODEBOT v204: Starter5 pop-up delay is ONE value" + (", 60 s (test; comment says live 300)" if OWN else " [60 s pin: v204/v205 scope]"))

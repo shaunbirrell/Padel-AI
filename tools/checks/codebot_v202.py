@@ -51,12 +51,12 @@ def check(cond, label):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 206)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 206)'),
-    (S + "Services/DataService.luau", "WE_Build=206"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 207)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 207)'),
+    (S + "Services/DataService.luau", "WE_Build=207"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 207)'),
 ):
-    check(needle in read(rel), "CODEBOT v202: WE_Build=206 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v202: WE_Build=207 " + rel.rsplit("/", 1)[-1])
 
 MON = read(C + "MonetizationConfig.luau")
 # v204: Id 0 pins superseded in codebot_v204.py (Creator Hub Ids filled)
@@ -65,8 +65,11 @@ check('Boost2x10m = { Id = 3715888566, DisplayName = "2x Income 10 min", RobuxPr
 s5 = MON.split("Starter5 = {")[1].split("\n}\n")[0] if "Starter5 = {" in MON else ""
 # Code Bot v206: the 60 s test value was v204 / v205 scope; live (v206+) is 300
 _v202_test60 = any('SetAttribute("WE_Build", %d)' % _n in read(S + "Services/DataService.luau") for _n in (204, 205))
-check("Enabled = true," in s5 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in s5 and ("OfferAfterPlaySeconds = %d," % (60 if _v202_test60 else 300)) in s5,
-      "CODEBOT v202: Starter5 owner-first; offer at " + ("60 s test value (v204/v205)" if _v202_test60 else "300 s (live; v206)"))
+# Code Bot v207: OwnerFirst = true is v202-v206 scope; WE_Build 207+ is public (codebot_v207.py)
+_v202_bn = int((re.search(r'WE_Build", (\d+)\)', read(S + "Services/DataService.luau")) or [0, "0"])[1])
+_v202_of = ("OwnerFirst = true, -- NEW-OWNER-FIRST" in s5) or (_v202_bn >= 207 and "OwnerFirst = false, -- PUBLIC (Code Bot v207" in s5)
+check("Enabled = true," in s5 and _v202_of and ("OfferAfterPlaySeconds = %d," % (60 if _v202_test60 else 300)) in s5,
+      "CODEBOT v202: Starter5 owner-first (public v207+); offer at " + ("60 s test value (v204/v205)" if _v202_test60 else "300 s (live; v206)"))
 check("if row and typeof(row.LiveBlock) == \"string\" then" in MON, "CODEBOT v202: SkuLiveFor LiveBlock for Starter5")
 
 MS = read(S + "Services/MonetizationService.luau")

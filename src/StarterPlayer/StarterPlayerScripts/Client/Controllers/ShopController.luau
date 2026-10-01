@@ -1242,12 +1242,21 @@ function ShopController.Init()
 		local p = if typeof(def) == "table" then tonumber(def.RobuxPrice) else nil
 		return if p and p > 0 then p else SORT_NO_PRICE
 	end
+	-- Code Bot v207 (Shaun): the FREE rows (FREE · Daily Reward / Airdrop / Join our group / Invite friends, keys fr_*)
+	-- go back to the TOP in their build order; then the paid rows cheapest first; then the rows with no price (Favorite
+	-- WAR EMPIRE, the locked Supply Crate) at the bottom.
+	local function rowTier(rowKey: string): number
+		if string.sub(rowKey, 1, 3) == "fr_" and rowKey ~= "fr_favorite" then
+			return 0
+		end
+		return if rowRobuxPrice(rowKey) < SORT_NO_PRICE then 1 else 2
+	end
 	local rowBuildOrder: { [Frame]: number } = {}
 	for _, r in ipairs(builtRows) do
 		rowBuildOrder[r.Row] = r.Row.LayoutOrder
 	end
 	local function applyPriceOrder()
-		local items: { { Row: Frame, Price: number, Owned: boolean, Base: number } } = {}
+		local items: { { Row: Frame, Tier: number, Price: number, Owned: boolean, Base: number } } = {}
 		for _, r in ipairs(builtRows) do
 			local owned = false
 			if string.sub(r.Key, 1, 5) == "Pass_" then
@@ -1256,9 +1265,12 @@ function ShopController.Init()
 			elseif oneTimeRows[r.Key] ~= nil then
 				owned = isOneTimeOwned(r.Key)
 			end
-			table.insert(items, { Row = r.Row, Price = rowRobuxPrice(r.Key), Owned = owned, Base = rowBuildOrder[r.Row] or 0 })
+			table.insert(items, { Row = r.Row, Tier = rowTier(r.Key), Price = rowRobuxPrice(r.Key), Owned = owned, Base = rowBuildOrder[r.Row] or 0 })
 		end
 		table.sort(items, function(a, b): boolean
+			if a.Tier ~= b.Tier then
+				return a.Tier < b.Tier -- Code Bot v207: FREE rows first, paid, then no-price rows
+			end
 			if a.Price ~= b.Price then
 				return a.Price < b.Price
 			end

@@ -4,10 +4,10 @@ run_kit_detail_test.PRELUDE; the services around RecruitPackService are recordin
 1. ROWS: StarterRecruit5 (3715888533) + Boost2x10m (3715888566) are 5 R$ (Code Bot: created on the Creator Hub); the pack is one-time with 3 soldiers + starter cash;
    the boost is 10 minutes, repeatable; no damage / health / armour / raid / protection key.
 2. CASH: about 2.5 min of his early income, at least 750 and at most 20,000.
-3. OWNER-FIRST: SkuLiveFor follows the Starter5 switch (owner yes, others no).
+3. PUBLIC (Code Bot v207, Shaun approved): Starter5.OwnerFirst = false, SkuLiveFor follows the switch (owner AND others).
 4. OFFER: for the owner the one-time card is the 5 R$ offer at 5 min of play (its own title / lines / product key and
-   its own saved flag); never before 5 min, never on hold / in combat; once shown never again. Everyone else keeps the
-   Recruit Pack offer at 10 min exactly as before.
+   its own saved flag); never before 5 min, never on hold / in combat; once shown never again. v207: every other player
+   gets the same one-time 5 R$ card at the same 300 s delay, once (its own saved flag), never again after.
 Run: LUAU=path/to/luau(.exe) python tools/sim/run_starter5_test.py   (exit 1 on any failure; VERBOSE=1 prints all)"""
 import os
 import subprocess
@@ -55,8 +55,9 @@ check(not p2w, "no damage / health / armour / raid / protection key (not pay-to-
 -- 2. cash
 check(MC.Starter5Cash(300) == 750 and MC.Starter5Cash(1000) == 2500 and MC.Starter5Cash(1e9) == 20000, "starter cash: 2.5 min of income, floor 750, cap 20,000")
 
--- 3. owner-first
-check(MC.SkuLiveFor(OWNER, "StarterRecruit5") and MC.SkuLiveFor(OWNER, "Boost2x10m") and not MC.SkuLiveFor(OTHER, "StarterRecruit5") and not MC.SkuLiveFor(OTHER, "Boost2x10m"), "owner-first: the owner can see / buy them, nobody else")
+-- 3. public (Code Bot v207)
+check(MC.Starter5.OwnerFirst == false and MC.Starter5.Enabled == true, "Starter5: Enabled, OwnerFirst = false (public, Code Bot v207)")
+check(MC.SkuLiveFor(OWNER, "StarterRecruit5") and MC.SkuLiveFor(OWNER, "Boost2x10m") and MC.SkuLiveFor(OTHER, "StarterRecruit5") and MC.SkuLiveFor(OTHER, "Boost2x10m") and MC.Starter5LiveFor(OTHER), "public: the owner AND every other player can see / buy them")
 
 -- 4. the offer
 P.Id = 111 -- as if created (the offer never prompts an Id 0 product)
@@ -91,13 +92,22 @@ PROF[OWNER].Stats.PlayTimeSeconds = 5000
 local n = #PUSH
 RP.Step(O)
 check(#PUSH == n, "once shown, never again")
+T += 100000
+PROF[OTHER].Stats.PlayTimeSeconds = D - 10
+RP.Step(X)
+check(#PUSH == n, "another player 10 s before the 300 s delay: no card yet")
 PROF[OTHER].Stats.PlayTimeSeconds = D + 1
-RP.Step(X)
-check(#PUSH == n, "another player past the Starter5 delay: no 5 R$ card (owner-first)")
-PROF[OTHER].Stats.PlayTimeSeconds = 601
-RP.Step(X)
+local okX = RP.Step(X)
 local c2 = PUSH[#PUSH]
-check(c2 and c2.uid == OTHER and c2.d.ProductKey == "RecruitPack" and c2.d.Title == nil, "another player at 10:01: the Recruit Pack offer exactly as before")
+check(okX and #PUSH == n + 1 and c2 and c2.uid == OTHER and c2.d.ProductKey == "StarterRecruit5" and c2.d.Title == MC.Starter5.Title and c2.d.RobuxPrice == 5,
+  "another player 1 s past the 300 s delay: the same 5 R$ ONE-TIME OFFER (public, Code Bot v207)")
+RP.Result(X, "shown")
+check(PROF[OTHER].Starter5Offered == true, "another player shown: his own saved once-ever flag")
+T += 100000
+PROF[OTHER].Stats.PlayTimeSeconds = 5000
+local n2 = #PUSH
+RP.Step(X)
+check(#PUSH == n2, "another player: once shown, never again (one time per player)")
 
 print(string.format("STARTER5 LUA: %d failed", fails))
 if fails > 0 then error("failed") end

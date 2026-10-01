@@ -9178,7 +9178,7 @@ end
 -- claude-bud JOB 66: the two 5 R$ starter products (owner-first; the one-time offer after ~5 min of play)
 (MonetizationConfig :: any).Starter5 = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 66): only Shaun until his phone test
+	OwnerFirst = false, -- PUBLIC (Code Bot v207, Shaun approved): both 5 R$ rows + the one-time offer for every player (was NEW-OWNER-FIRST, claude-bud JOB 66)
 	OfferAfterPlaySeconds = 300, -- THE Starter5 pop-up delay (one value): LIVE VALUE 300 (Code Bot v206: back from the 60 s phone test, Shaun's test passed). The "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
 	CashIncomeMinutes = 2.5, -- the Recruit Starter Pack's cash = about 2-3 minutes of his early income ...
 	CashMin = 750, -- ... at least this (a brand-new base earns about $300 / min)
@@ -31669,7 +31669,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 206)
+		player:SetAttribute("WE_Build", 207)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -77673,7 +77673,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 206)
+			player:SetAttribute("WE_Build", 207)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -86380,7 +86380,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 206)
+		player:SetAttribute("WE_Build", 207)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -86522,7 +86522,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=206",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=207",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -162499,12 +162499,21 @@ function ShopController.Init()
 		local p = if typeof(def) == "table" then tonumber(def.RobuxPrice) else nil
 		return if p and p > 0 then p else SORT_NO_PRICE
 	end
+	-- Code Bot v207 (Shaun): the FREE rows (FREE · Daily Reward / Airdrop / Join our group / Invite friends, keys fr_*)
+	-- go back to the TOP in their build order; then the paid rows cheapest first; then the rows with no price (Favorite
+	-- WAR EMPIRE, the locked Supply Crate) at the bottom.
+	local function rowTier(rowKey: string): number
+		if string.sub(rowKey, 1, 3) == "fr_" and rowKey ~= "fr_favorite" then
+			return 0
+		end
+		return if rowRobuxPrice(rowKey) < SORT_NO_PRICE then 1 else 2
+	end
 	local rowBuildOrder: { [Frame]: number } = {}
 	for _, r in ipairs(builtRows) do
 		rowBuildOrder[r.Row] = r.Row.LayoutOrder
 	end
 	local function applyPriceOrder()
-		local items: { { Row: Frame, Price: number, Owned: boolean, Base: number } } = {}
+		local items: { { Row: Frame, Tier: number, Price: number, Owned: boolean, Base: number } } = {}
 		for _, r in ipairs(builtRows) do
 			local owned = false
 			if string.sub(r.Key, 1, 5) == "Pass_" then
@@ -162513,9 +162522,12 @@ function ShopController.Init()
 			elseif oneTimeRows[r.Key] ~= nil then
 				owned = isOneTimeOwned(r.Key)
 			end
-			table.insert(items, { Row = r.Row, Price = rowRobuxPrice(r.Key), Owned = owned, Base = rowBuildOrder[r.Row] or 0 })
+			table.insert(items, { Row = r.Row, Tier = rowTier(r.Key), Price = rowRobuxPrice(r.Key), Owned = owned, Base = rowBuildOrder[r.Row] or 0 })
 		end
 		table.sort(items, function(a, b): boolean
+			if a.Tier ~= b.Tier then
+				return a.Tier < b.Tier -- Code Bot v207: FREE rows first, paid, then no-price rows
+			end
 			if a.Price ~= b.Price then
 				return a.Price < b.Price
 			end
