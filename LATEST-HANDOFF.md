@@ -1,4 +1,34 @@
 <!-- Q2-START -->
+## v160 PUBLISHED (Code Bot Roblox, 2026-10-01 09:02 Dublin): Open Cloud place version 158 — JOB 41 part D owner-first (big-win rate card FirstCapture/RaidWin)
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **160**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":158}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Cherry-pick:** Claude `d383948` JOB 41 D big-win rate card -> `8caa2f3`; then WE_Build 160 + checks + dist (this publish commit `37b94b0`).
+- **Flags left OwnerFirst=true (do NOT flip without Shaun):**
+  - `RatePromptConfig` Enabled + OwnerFirst=true (same JOB 40 D system; FirstCapture / RaidWin one-time triggers; no second rate system; no reward; Recruit Pack card goes first).
+  - Still from v158/v159: `TutorialConfig.Guided` OwnerFirst=true; `MonetizationConfig.RecruitPackOffer` OwnerFirst=true (`DevProducts.RecruitPack.Id = 0`); `RivalConfig` OwnerFirst=true.
+- **PreferMesh stays OFF.** No WE_Building* touch. Servers stay at 10. No fast travel. No Creator Hub products created.
+- **Checks:** BuyPathStatic PASS=7493 FAIL=0; claude_bud_job41 PASS (A+B+C+D); codebot_v160 PASS; run_rate_prompt_test 0 failed; rojo build deterministic (both dist copies identical).
+- **JOB 41 fully shipped owner-first (A+B+C+D).** NEXT queue: JOB 43 part 1 (army-vs-army brawl; Army Kills board already live) then JOB 42 (time-based cash packs). Do NOT flip Guided/RecruitPackOffer/Rival/RatePrompt OwnerFirst; Recruit Pack Id=0 until Shaun OKs 49 R$ + Creator Hub Id.
+
+**Phone tests for Shaun (owner-first — use owner / Studio playtest account):**
+1. After first capture OR a raid win that looted (SEND loot or in-person ATM raid): "Enjoying WAR EMPIRE?" shows once (no reward / no like-for-gift). If Recruit Pack card is due from the same capture, pack goes first; rate card waits.
+2. Never two cards at once; FirstCapture / RaidWin each once per profile; 3-day gap / combat quiet / once-per-session / Never still apply.
+3. A+B+C still owner-first as v158 place 156 / v159 place 157 (Guided chain; Recruit Pack Id 0 does not prompt; TARGETS + SEND ARMY walks). PreferMesh OFF.
+
+## v159 PUBLISHED (Code Bot Roblox, 2026-10-01 08:55 Dublin): Open Cloud place version 157 — JOB 41 part C owner-first (Rival TARGETS + SEND ARMY)
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **159**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":157}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Cherry-pick:** Claude `aeefda1` JOB 41 C Rival TARGETS -> `4ca755e`; then WE_Build 159 + checks + dist.
+- **Flags left OwnerFirst=true (do NOT flip without Shaun):**
+  - `RivalConfig` Enabled + OwnerFirst=true (TARGETS pill + list; SEND ARMY = JOB 38 RequestArmySend, army walks; VIEW = map card, no travel).
+  - Still from v158: `TutorialConfig.Guided` OwnerFirst=true; `MonetizationConfig.RecruitPackOffer` OwnerFirst=true; `DevProducts.RecruitPack.Id = 0`.
+- **PreferMesh stays OFF.** No WE_Building* touch. Servers stay at 10. No fast travel.
+- **Checks:** BuyPathStatic PASS=7487 FAIL=0; claude_bud_job41 PASS (A+B+C); codebot_v159 PASS; run_rival_targets_test 0 failed; rojo build deterministic (both dist copies identical).
+
+**Phone tests for Shaun (owner-first — use owner / Studio playtest account; need another player online, not clan, past new-player protection, with ATM cash):**
+1. TARGETS pill top-right with a count; tap → name, army size, loot bucket ($1k+ / $10k+ / …), verdict chip.
+2. SEND ARMY: army walks to their base and raids (no teleport). VIEW opens the map card on that base (tap-to-pin only).
+3. Shielded / new / protected / ally players never appear in the list.
+4. A+B still owner-first as v158 (Guided chain + Recruit Pack Id 0 does not prompt). PreferMesh OFF.
+
 ## claude-bud JOB 41 (2026-10-01): SUMMARY (parts A-D pushed; the details are in the part sections below)
 **Flags to launch (each owner-first, OFF = today):** `TutorialConfig.Guided`, `MonetizationConfig.RecruitPackOffer`
 (after the product exists), `RivalConfig`, `RatePromptConfig` (JOB 40 D + the JOB 41 D triggers).
