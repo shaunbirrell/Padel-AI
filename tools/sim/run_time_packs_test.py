@@ -36,9 +36,13 @@ print("== AMOUNTS ==")
 local prices = {}
 for _, k in ipairs(ORDER_UP) do prices[k] = MC.DevProducts[k].RobuxPrice end
 check(prices.Cash15m == 25 and prices.Cash30m == 49 and prices.Cash1h == 89 and prices.Cash2h == 159 and prices.Cash4h == 279, "the five packs: 25 / 49 / 89 / 159 / 279 R$")
-local allZero = true
-for _, k in ipairs(ORDER_UP) do if MC.DevProducts[k].Id ~= 0 or MC.DevProducts[k].OneTime == true then allZero = false end end
-check(allZero, "every new Id = 0, repeatable (not OneTime)")
+-- Code Bot v167: the real Creator Hub Ids are in the config (were 0 until v166); still repeatable
+local SHIPPED = { Cash15m = 3715776339, Cash30m = 3715776410, Cash1h = 3715776466, Cash2h = 3715776582, Cash4h = 3715776616 }
+local allShipped = true
+for _, k in ipairs(ORDER_UP) do if MC.DevProducts[k].Id ~= SHIPPED[k] or MC.DevProducts[k].OneTime == true then allShipped = false end end
+check(allShipped, "codebot_v167: every time pack carries its Creator Hub Id, repeatable (not OneTime)")
+check(SO.TimePacksReady() == true and SO.TimePacksShown(1234) == true and SO.TimePacksShown(470626172) == true,
+  "codebot_v167: the shipped config -> TimePacksReady, shown to everyone (the time rows replace the old cash rows)")
 local long = false
 for k, d in pairs(MC.DevProducts) do
   local s = k .. " " .. tostring(d.DisplayName)
@@ -206,7 +210,7 @@ do
   MS.TrySoftOfferCashMega(q, "pending_collect", 50000)
   runUntil(NOW + 5)
   check(sent[1] == "Cash4h" and sent[2] == "CashMega", "the Mega offer slot sells Cash4h while shown, CashMega otherwise (" .. table.concat(sent, ",") .. ")")
-  for k, id in pairs(IDS) do MC.DevProducts[k].Id = 0 end
+  for k, id in pairs(IDS) do MC.DevProducts[k].Id = SHIPPED[k] end -- Code Bot v167: back to the shipped Ids
   TP.OwnerFirst = TP_LAUNCHED
 end
 -- codebot_v166: launched for everyone; still hidden for everyone until all five Ids are set (TimePacksReady)

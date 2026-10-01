@@ -84,12 +84,12 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | SpeedBoost | Speed Boost | 3713839342 | 99 | Shop; the cyan ATM pad sells it while ImpulseSpeed is 0 |
 | GoldenPumpjack | Golden Pumpjacks | 3714663783 | 49 | Shop row + one gold pad by the pumps (+50% pump income); owner-only while Rollout = "owner" |
 | StarterBundle | Commander Starter Pack | 3713839505 | 149 | Shop + one offer after the tutorial |
-| RecruitPack | Recruit Pack | 0 | 49 | claude-bud JOB 41 B: offered once after the first capture or 10 min (owner-first); Id 0 until the owner OKs the price |
-| Cash15m | 15 Minutes of Cash | 0 | 25 | claude-bud JOB 42: 15 min of income (floor in ShopOverhaulConfig.TimePacks); Shop once all five Ids are set (owner-first) |
-| Cash30m | 30 Minutes of Cash | 0 | 49 | claude-bud JOB 42: 30 min of income (floor in ShopOverhaulConfig.TimePacks); Shop once all five Ids are set (owner-first) |
-| Cash1h | 1 Hour of Cash | 0 | 89 | claude-bud JOB 42: 60 min of income (floor in ShopOverhaulConfig.TimePacks); Shop once all five Ids are set (owner-first) |
-| Cash2h | 2 Hours of Cash | 0 | 159 | claude-bud JOB 42: 120 min of income (floor in ShopOverhaulConfig.TimePacks); Shop once all five Ids are set (owner-first) |
-| Cash4h | 4 Hours of Cash | 0 | 279 | claude-bud JOB 42: 240 min of income (floor in ShopOverhaulConfig.TimePacks); Shop once all five Ids are set (owner-first) |
+| RecruitPack | Recruit Pack | 3715776659 | 49 | claude-bud JOB 41 B: offered once after the first capture or 10 min (live for all since v166); Creator Hub Id set v167 (takes the Starter Pack slot) |
+| Cash15m | 15 Minutes of Cash | 3715776339 | 25 | claude-bud JOB 42: 15 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
+| Cash30m | 30 Minutes of Cash | 3715776410 | 49 | claude-bud JOB 42: 30 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
+| Cash1h | 1 Hour of Cash | 3715776466 | 89 | claude-bud JOB 42: 60 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
+| Cash2h | 2 Hours of Cash | 3715776582 | 159 | claude-bud JOB 42: 120 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
+| Cash4h | 4 Hours of Cash | 3715776616 | 279 | claude-bud JOB 42: 240 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
 | Nuke | Nuke | 0 | 19 | hidden |
 | NukeBundle3 | Nuke x3 | 0 | 49 | hidden |
 | SoldierRefill | Instant Army Refill | 3715442523 | 49 | Shop / army prompt (owner-only first; Id wired v99) |

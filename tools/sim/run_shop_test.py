@@ -201,7 +201,7 @@ if r.returncode != 0:
 # renders, the JOB 36 passes are owner-first, and the cash "+" scrolls to the Mega row (tools/sim/run_shop_render_test.py)
 import run_shop_render_test  # noqa: E402
 
-if not (run_shop_render_test.run(470626172) & run_shop_render_test.run(9)):
+if not (run_shop_render_test.run(470626172) & run_shop_render_test.run(9) & run_shop_render_test.run(9, "real")):  # Code Bot v167: + shipped Ids
     fails.append("shop render")
 if fails:
     sys.exit(1)

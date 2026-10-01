@@ -455,12 +455,12 @@ local MonetizationConfig = {
 		-- claude-bud JOB 42: TIME-based cash packs (repeatable). Id 0 until Code Bot creates them in the Creator Hub (an Id 0
 		-- product never prompts and the Shop skips it). Cash = the floor; ProcessReceipt grants max(Floor, Minutes x his
 		-- income) at receipt time (ShopOverhaulConfig.TimePacks). Cash only: no stat key.
-		Cash15m = { Id = 0, DisplayName = "15 Minutes of Cash", RobuxPrice = 25, Cash = 10000, Gold = 0 },
-		Cash30m = { Id = 0, DisplayName = "30 Minutes of Cash", RobuxPrice = 49, Cash = 25000, Gold = 0 },
-		Cash1h = { Id = 0, DisplayName = "1 Hour of Cash", RobuxPrice = 89, Cash = 50000, Gold = 0 },
-		Cash2h = { Id = 0, DisplayName = "2 Hours of Cash", RobuxPrice = 159, Cash = 100000, Gold = 0 },
-		Cash4h = { Id = 0, DisplayName = "4 Hours of Cash", RobuxPrice = 279, Cash = 200000, Gold = 0 },
-		RecruitPack = { Id = 0, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, CashFromTimePack = "Cash30m", Description = "Cash, 2x cash for 30 min and a gold base trim" }, -- claude-bud JOB 42 C: cash = the 30-min pack while TimePacks is live
+		Cash15m = { Id = 3715776339, DisplayName = "15 Minutes of Cash", RobuxPrice = 25, Cash = 10000, Gold = 0 },
+		Cash30m = { Id = 3715776410, DisplayName = "30 Minutes of Cash", RobuxPrice = 49, Cash = 25000, Gold = 0 },
+		Cash1h = { Id = 3715776466, DisplayName = "1 Hour of Cash", RobuxPrice = 89, Cash = 50000, Gold = 0 },
+		Cash2h = { Id = 3715776582, DisplayName = "2 Hours of Cash", RobuxPrice = 159, Cash = 100000, Gold = 0 },
+		Cash4h = { Id = 3715776616, DisplayName = "4 Hours of Cash", RobuxPrice = 279, Cash = 200000, Gold = 0 },
+		RecruitPack = { Id = 3715776659, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, CashFromTimePack = "Cash30m", Description = "Cash, 2x cash for 30 min and a gold base trim" }, -- claude-bud JOB 42 C: cash = the 30-min pack while TimePacks is live
 		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
 		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
 		Nuke = {

@@ -78,9 +78,10 @@ _j41("holdUntil(profile)" in _j41_code(_SV + "Services/RetentionService.luau") a
 # ── part B: the Recruit Pack ──
 _MC = _j41_src(_CF + "MonetizationConfig.luau")
 _rp = [l for l in _MC.splitlines() if "RecruitPack = {" in l]
-_j41(len(_rp) == 1 and "Id = 0," in _rp[0] and "RobuxPrice = 49," in _rp[0] and "OneTime = true" in _rp[0]
+_j41(len(_rp) == 1 and "Id = 3715776659," in _rp[0]  # codebot_v167: Creator Hub Id (was Id 0)
+     and "RobuxPrice = 49," in _rp[0] and "OneTime = true" in _rp[0]
      and not _j41_re.search(r"(?i)damage|health|\bhp\b|armou?r|army|soldier|raid|shield|protect", _rp[0].split("Description")[0]),
-     "B: RecruitPack Id 0 + 49 R$, one time, no stat key in the product row (not pay-to-win)")
+     "B: RecruitPack Id 3715776659 (codebot_v167) + 49 R$, one time, no stat key in the product row (not pay-to-win)")
 _j41("cfg.RecruitPackOffer = {\n\tEnabled = true,\n\tOwnerFirst = false," in _MC and "OfferAfterPlaySeconds = 600," in _MC and "MinCash = 25000," in _MC
      and "MaxCash = 150000," in _MC and "IncomeMinutes = 30," in _MC, "B: RecruitPackOffer (v166 everyone); 600 s / capture; 30 min of income, $25k..$150k")
 _RPS = _j41_code(_SV + "Services/RecruitPackService.luau")

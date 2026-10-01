@@ -46,8 +46,9 @@ _rows = {}
 for _k in _WANT:
     _m = _j42_re.search(r"\b" + _k + r" = \{ (.*?) \},", _MC)
     _rows[_k] = _m.group(1) if _m else ""
-_j42(all(("Id = 0," in _rows[k] and ("RobuxPrice = %d," % p) in _rows[k] and "OneTime" not in _rows[k]) for k, p in _WANT.items()),
-     "A: the five rows: Id 0, 25 / 49 / 89 / 159 / 279 R$, repeatable")
+_TP_IDS = {"Cash15m": 3715776339, "Cash30m": 3715776410, "Cash1h": 3715776466, "Cash2h": 3715776582, "Cash4h": 3715776616}  # codebot_v167: Creator Hub
+_j42(all((("Id = %d," % _TP_IDS[k]) in _rows[k] and ("RobuxPrice = %d," % p) in _rows[k] and "OneTime" not in _rows[k]) for k, p in _WANT.items()),
+     "A: the five rows: Creator Hub Ids (codebot_v167), 25 / 49 / 89 / 159 / 279 R$, repeatable")
 _j42(not any(_j42_re.search(r"(?i)damage|health|armou?r|army|raid|protect|shield", r) for r in _rows.values()), "A: cash only: no stat key in the new rows")
 _SOC = _j42_src(_CF + "ShopOverhaulConfig.luau")
 _tp = _SOC.split("TimePacks = {")[1].split("\n\t},")[0] if "TimePacks = {" in _SOC else ""
@@ -73,8 +74,8 @@ _SOS = _j42_code(_SV + "Services/ShopOverhaulService.luau")
 _j42("ShopOverhaulConfig.TimePacks.PerMinAttribute" in _SOS and _SOS.count("task.spawn(") <= 2 and "ShopOverhaulConfig.TimePacksLiveFor(p.UserId)" in _SOS,
      "A: WE_TimePackPerMin from the SAME publish tick, only where the time packs are live")
 _old = {"CashSmall": ("3713838744", "49"), "CashMedium": ("3713838815", "149"), "CashLarge": ("3713838888", "399"), "CashMega": ("3713838952", "799")}
-_j42(all(_j42_re.search(k + r" = \{ Id = " + i + r", .*RobuxPrice = " + p + r",", _MC) for k, (i, p) in _old.items()) and "RecruitPack = { Id = 0," in _MC and "RobuxPrice = 49," in _MC.split("RecruitPack = {")[1][:200],
-     "A: the old four unchanged (Ids / prices), RecruitPack still Id 0 / 49")
+_j42(all(_j42_re.search(k + r" = \{ Id = " + i + r", .*RobuxPrice = " + p + r",", _MC) for k, (i, p) in _old.items()) and "RecruitPack = { Id = 3715776659," in _MC and "RobuxPrice = 49," in _MC.split("RecruitPack = {")[1][:200],
+     "A: the old four unchanged (Ids / prices), RecruitPack Id 3715776659 (codebot_v167) / 49")
 
 # ── part B: the Shop + offers ──
 _SC = _j42_code(_CL + "Controllers/ShopController.luau")
@@ -96,8 +97,8 @@ _j42('keys = { "Cash15m", "Cash30m", "Cash1h", "Cash2h", "Cash4h" }' in _VC and 
 # ── part C: the JOB 41 Recruit Pack follows the 30-min pack ──
 _MC3 = _j42_src(_CF + "MonetizationConfig.luau")
 _rp3 = [l for l in _MC3.splitlines() if "RecruitPack = {" in l]
-_j42(len(_rp3) == 1 and 'CashFromTimePack = "Cash30m"' in _rp3[0] and "Id = 0," in _rp3[0] and "RobuxPrice = 49," in _rp3[0],
-     "C: RecruitPack.CashFromTimePack = Cash30m; still Id 0 / 49 R$")
+_j42(len(_rp3) == 1 and 'CashFromTimePack = "Cash30m"' in _rp3[0] and "Id = 3715776659," in _rp3[0] and "RobuxPrice = 49," in _rp3[0],
+     "C: RecruitPack.CashFromTimePack = Cash30m; Id 3715776659 (codebot_v167) / 49 R$")
 _MSV3 = _j42_code(_SV + "Services/MonetizationService.luau")
 _rb = _MSV3.split('if productKey == "RecruitPack" then')[1][:900] if 'if productKey == "RecruitPack" then' in _MSV3 else ""
 _j42("MCx.RecruitPackCashFor(player.UserId, perMin)" in _rb and "if not player.Parent or DataService.GetProfile(player) ~= profile then" in _rb,

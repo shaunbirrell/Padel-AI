@@ -41,12 +41,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
-    (S + "Services/DataService.luau", "WE_Build=166"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 167)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 167)'),
+    (S + "Services/DataService.luau", "WE_Build=167"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 167)'),
 ):
-    check(needle in read(rel), "CODEBOT v158: WE_Build=166 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v158: WE_Build=167 " + rel.rsplit("/", 1)[-1])
 
 TC = read(C + "TutorialConfig.luau")
 guided = block(TC, "TutorialConfig.Guided") or block(TC, "Guided")
@@ -61,7 +61,8 @@ check("Enabled = true," in offer and "OwnerFirst = false," in offer,
 rp = block(MC, "DevProducts")
 # RecruitPack row Id must stay 0 until Creator Hub product exists
 m = re.search(r"RecruitPack\s*=\s*\{[^}]*Id\s*=\s*(\d+)", rp, re.S)
-check(m is not None and m.group(1) == "0", "CODEBOT v158: DevProducts.RecruitPack.Id stays 0")
+# codebot_v167: retired "stays 0" (the Creator Hub product exists now); superseded by codebot_v167.py
+check(m is not None and m.group(1) == "3715776659", "CODEBOT v158: DevProducts.RecruitPack.Id = 3715776659 (codebot_v167 Creator Hub)")
 check(Path(S + "Services/RecruitPackService.luau").is_file(), "CODEBOT v158: RecruitPackService.luau present")
 check(Path(CL + "RecruitPackController.luau").is_file(), "CODEBOT v158: RecruitPackController.luau present")
 

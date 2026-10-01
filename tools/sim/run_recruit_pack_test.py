@@ -47,8 +47,10 @@ for k in pairs(row) do
     if string.find(k, w) then table.insert(bad, k) end
   end
 end
-check(#bad == 0 and row.Id == 0 and row.RobuxPrice == 49 and row.OneTime == true and row.GrantEntitlement == "RecruitPack",
-  "the row: Id 0, 49 R$, one time, entitlement RecruitPack, no stat key (" .. table.concat(bad, ",") .. ")")
+-- Code Bot v167: the Creator Hub Id is in the config now (was 0 through v166)
+local SHIPPED_ID = 3715776659
+check(#bad == 0 and row.Id == SHIPPED_ID and row.RobuxPrice == 49 and row.OneTime == true and row.GrantEntitlement == "RecruitPack",
+  "the row: Id " .. tostring(row.Id) .. " (Creator Hub), 49 R$, one time, entitlement RecruitPack, no stat key (" .. table.concat(bad, ",") .. ")")
 
 -- the cash formula
 check(MC.RecruitPackCash(0) == 25000 and MC.RecruitPackCash(1000) == 30000 and MC.RecruitPackCash(10000) == 150000 and MC.RecruitPackCash(0 / 0) == 25000,
@@ -225,7 +227,7 @@ for _, inc in ipairs({ 0, 500, 2000, 9000 }) do
     check(#BOOSTS == 1 and BOOSTS[1].Min == 30 and pr.Entitlements.RecruitPack == true, "live: the boost and the trim still grant")
   end
 end
-check(row.Id == 999 or row.Id == 0, "the row keeps its Id (0 in config) and 49 R$: " .. tostring(MC.DevProducts.RecruitPack.RobuxPrice))
+check(row.Id == 999 or row.Id == 0 or row.Id == SHIPPED_ID, "the row keeps its Id and 49 R$: " .. tostring(MC.DevProducts.RecruitPack.RobuxPrice))
 -- the card shows the same live number as the 30 MIN OF CASH row
 do
   PERMIN = 2000
@@ -269,6 +271,20 @@ do
   local r = MS.TrySoftOfferStarterBundle(q, "tutorial_complete")
   check(r == true and sent, "codebot_v166: Id 0 -> the Starter Pack pop-up fires for a non-owner as before")
 end
+-- Code Bot v167: the shipped Id -> the Recruit Pack takes the Starter Pack slot for everyone and is offered at a capture
+do
+  MC.FirstOffer.Enabled = true
+  local MS, RPS = fresh(SHIPPED_ID)
+  local q, qr = join(4321)
+  check(MC.RecruitPackLiveFor(4321) and MC.RecruitPackTakesStarterSlot(4321), "codebot_v167: shipped Id -> takes the Starter Pack slot for a non-owner")
+  check(MS.TrySoftOfferStarterBundle(q, "tutorial_complete") == nil, "codebot_v167: shipped Id -> the old Starter Pack pop-up does NOT fire")
+  hookClient("shown")
+  play(RPS, q, 175)
+  RPS.OnCapture(q); play(RPS, q, 5)
+  check(OFFERS == 1 and LASTOFFER ~= nil and LASTOFFER.Trigger == "capture", "codebot_v167: shipped Id -> the Recruit Pack is offered to a non-owner at the first capture")
+  check(qr.RecruitPackOffered == true, "codebot_v167: ... and marked once shown")
+end
+row.Id = SHIPPED_ID
 
 -- codebot_v166: SpeedV2 live for everyone, but the speed only reaches players who OWN a speed SKU (the real
 -- MonetizationService.SpeedMultFor: the highest owned Speed Pass / Speed Boost multiplier, 1 when none is owned)

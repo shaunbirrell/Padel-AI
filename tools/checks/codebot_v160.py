@@ -42,12 +42,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
-    (S + "Services/DataService.luau", "WE_Build=166"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 167)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 167)'),
+    (S + "Services/DataService.luau", "WE_Build=167"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 167)'),
 ):
-    check(needle in read(rel), "CODEBOT v160: WE_Build=166 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v160: WE_Build=167 " + rel.rsplit("/", 1)[-1])
 
 RPC = read(C + "RatePromptConfig.luau")
 check("Enabled = true," in RPC and "OwnerFirst = false," in RPC,
@@ -69,8 +69,8 @@ MC = read(C + "MonetizationConfig.luau")
 offer = block(MC, "cfg.RecruitPackOffer") or block(MC, "RecruitPackOffer")
 check("Enabled = true," in offer and "OwnerFirst = false," in offer,
       "CODEBOT v160: RecruitPackOffer OwnerFirst=false (v166 flip-all-live)")
-check("RecruitPack" in MC and "Id = 0" in MC,
-      "CODEBOT v160: RecruitPack Id still 0")
+check("RecruitPack = { Id = 3715776659," in MC,
+      "CODEBOT v160: RecruitPack Id = 3715776659 (codebot_v167 Creator Hub; was 0)")
 RC = read(C + "RivalConfig.luau")
 check("Enabled = true," in RC and "OwnerFirst = false," in RC,
       "CODEBOT v160: RivalConfig OwnerFirst=false (v166 flip-all-live)")

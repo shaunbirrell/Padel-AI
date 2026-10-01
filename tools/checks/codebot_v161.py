@@ -43,12 +43,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
-    (S + "Services/DataService.luau", "WE_Build=166"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 167)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 167)'),
+    (S + "Services/DataService.luau", "WE_Build=167"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 167)'),
 ):
-    check(needle in read(rel), "CODEBOT v161: WE_Build=166 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v161: WE_Build=167 " + rel.rsplit("/", 1)[-1])
 
 SOC = read(C + "ShopOverhaulConfig.luau")
 tp = block(SOC, "TimePacks") or block(SOC, "ShopOverhaulConfig.TimePacks")
@@ -68,8 +68,9 @@ want = {
 for key, price in want.items():
     m = re.search(r"\b" + key + r" = \{ (.*?) \},", MC)
     row = m.group(1) if m else ""
-    check("Id = 0," in row and ("RobuxPrice = %d," % price) in row,
-          f"CODEBOT v161: {key} Id=0 RobuxPrice={price}")
+    # codebot_v167: Id=0 retired (Creator Hub Ids set; exact Ids pinned in codebot_v167.py)
+    check(re.search(r"\bId = [1-9]\d*,", row) is not None and ("RobuxPrice = %d," % price) in row,
+          f"CODEBOT v161: {key} Id set (codebot_v167) RobuxPrice={price}")
 
 # PreferMesh OFF
 svc = read(C + "StructureVisualConfig.luau")
@@ -83,8 +84,8 @@ check("Enabled = true," in guided and "OwnerFirst = false," in guided,
 offer = block(MC, "cfg.RecruitPackOffer") or block(MC, "RecruitPackOffer")
 check("Enabled = true," in offer and "OwnerFirst = false," in offer,
       "CODEBOT v161: RecruitPackOffer OwnerFirst=false (v166 flip-all-live)")
-check(re.search(r"RecruitPack = \{ Id = 0,", MC) is not None,
-      "CODEBOT v161: RecruitPack Id still 0")
+check(re.search(r"RecruitPack = \{ Id = 3715776659,", MC) is not None,
+      "CODEBOT v161: RecruitPack Id = 3715776659 (codebot_v167 Creator Hub; was 0)")
 RC = read(C + "RivalConfig.luau")
 check("Enabled = true," in RC and "OwnerFirst = false," in RC,
       "CODEBOT v161: RivalConfig OwnerFirst=false (v166 flip-all-live)")

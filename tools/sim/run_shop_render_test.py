@@ -79,12 +79,19 @@ local fails = 0
 local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if not ok then fails += 1 end end
 -- claude-bud JOB 42: TIME_IDS = the five time-pack Ids pasted (TimePacksReady); shown only where TimePacks is live
 local TIMEKEYS = { "Cash4h", "Cash2h", "Cash1h", "Cash30m", "Cash15m" }
-if TIME_IDS then
-  local MCx = require(node("Configs/MonetizationConfig"))
+-- Code Bot v167: the real Creator Hub Ids are in the config now. TIME_IDS = "real" keeps them (the shipped Shop: the
+-- time rows replace the old cash rows); false zeroes them (Ids not pasted = OFF == OLD); true = stand-in Ids 801..805.
+local MCx = require(node("Configs/MonetizationConfig"))
+if TIME_IDS == "real" then
+  for _, k in ipairs(TIMEKEYS) do check((tonumber(MCx.DevProducts[k].Id) or 0) > 0, k .. ": real Creator Hub Id in the config (" .. tostring(MCx.DevProducts[k].Id) .. ")") end
+elseif TIME_IDS then
   for i, k in ipairs(TIMEKEYS) do MCx.DevProducts[k].Id = 800 + i end
+else
+  for _, k in ipairs(TIMEKEYS) do MCx.DevProducts[k].Id = 0 end
 end
 local SOx = require(node("Configs/ShopOverhaulConfig"))
-local timeShown = TIME_IDS and SOx.TimePacksShown(TEST_UID)
+local timeShown = (TIME_IDS ~= false) and SOx.TimePacksShown(TEST_UID)
+if TIME_IDS == "real" then check(SOx.TimePacksReady() == true and timeShown == true, "uid " .. TEST_UID .. ": TimePacksReady + TimePacksShown with the shipped Ids") end
 local SC = SOURCES["Client/Controllers/ShopController"](node("Client/Controllers/ShopController"))
 local ok, err = xpcall(SC.Init, debug.traceback)
 check(ok, "uid " .. TEST_UID .. ": ShopController.Init finishes " .. tostring(err or ""))
@@ -174,16 +181,16 @@ end
 local cp = P(list, "CanvasPosition")
 check(cp ~= nil and cp.Y == want, "OpenCashPacks scrolls to " .. (if timeShown then "4 HOURS OF CASH" else "Cash Pack Mega") .. ": CanvasPosition.Y=" .. tostring(cp and cp.Y) .. " want " .. want)
 if live then check(want > 1000, "uid " .. TEST_UID .. ": Mega sits " .. want .. " px down (after the passes): reachable through the cash + scroll") end
-print(string.format("SHOP RENDER TEST uid %d%s: %d failed", TEST_UID, if TIME_IDS then " (time Ids)" else "", fails))
+print(string.format("SHOP RENDER TEST uid %d%s: %d failed", TEST_UID, if TIME_IDS == "real" then " (shipped Ids)" elseif TIME_IDS then " (time Ids)" else "", fails))
 if fails > 0 then error("failed") end
 '''
 
 
-def run(uid: int, time_ids: bool = False) -> bool:
+def run(uid: int, time_ids=False) -> bool:
     pre = PRELUDE.replace('game = { GetService = function(_, n) if n == "ReplicatedStorage" then return RS end return any end }',
                           'RS_ = RS\ngame = { GetService = function(_, n) if n == "ReplicatedStorage" then return RS end return any end }')
     pre = pre.replace("  return realRequire(n)\nend", "  return any\nend")
-    chunks = ["TEST_UID = %d\nTIME_IDS = %s" % (uid, "true" if time_ids else "false"), pre, EXTRA]
+    chunks = ["TEST_UID = %d\nTIME_IDS = %s" % (uid, ('"real"' if time_ids == "real" else ("true" if time_ids else "false"))), pre, EXTRA]
     for key, path in MODS.items():
         chunks.append("SOURCES[%r] = function(script)\n%s\nend" % (key, path.read_text(encoding="utf-8")))
     chunks.append(TEST)
@@ -200,5 +207,6 @@ def run(uid: int, time_ids: bool = False) -> bool:
 
 if __name__ == "__main__":
     # claude-bud JOB 42: + the five time-pack Ids pasted: the owner (TimePacks live) sees the time rows, uid 9 the old ones
-    ok = run(470626172) & run(9) & run(470626172, True) & run(9, True)
+    # Code Bot v167: + the shipped config (real Creator Hub Ids): everyone sees the time rows
+    ok = run(470626172) & run(9) & run(470626172, True) & run(9, True) & run(470626172, "real") & run(9, "real")
     sys.exit(0 if ok else 1)

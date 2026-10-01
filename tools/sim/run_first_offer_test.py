@@ -203,6 +203,13 @@ local MC = require(node("Shared/Configs/MonetizationConfig"))
 local AC = require(node("Shared/Configs/AnalyticsConfig"))
 local SC = require(node("Shared/Configs/SecurityConfig"))
 local FIRST = MC.FirstOffer
+-- Code Bot v167: the Recruit Pack now has its Creator Hub Id, so it takes this Starter Pack slot for everyone
+-- (RecruitPackTakesStarterSlot; proved in run_recruit_pack_test). This test is the Starter Pack pop-up itself: it runs
+-- in the world where the Recruit Pack cannot be offered (Id 0), the path every player had through v166.
+local RP_SHIPPED_ID = MC.DevProducts.RecruitPack.Id
+check(RP_SHIPPED_ID == 3715776659 and MC.RecruitPackTakesStarterSlot(4321) == true, "codebot_v167: shipped config: the Recruit Pack (Id " .. tostring(RP_SHIPPED_ID) .. ") takes the Starter Pack slot")
+MC.DevProducts.RecruitPack.Id = 0
+check(MC.RecruitPackTakesStarterSlot(4321) == false, "codebot_v167: Recruit Pack Id 0 -> the Starter Pack pop-up path below (as through v166)")
 
 -- one fresh MonetizationService per scenario (module state is per require)
 local LOGS = {}
