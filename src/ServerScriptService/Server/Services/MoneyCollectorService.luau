@@ -914,6 +914,9 @@ function MoneyCollectorService._RaidDone(thief: Player, victim: Player, vProfile
 			pcall(AnalyticsService.Log, "ATM_RAID", thief.UserId, props)
 		end)
 	end
+	pcall(function() -- claude-bud JOB 63: the loot is taken: the thief goes home shortly
+		(require(script.Parent.AntiCampService) :: any).OnRaidDone(thief, hold.PlotId)
+	end)
 	return true
 end
 

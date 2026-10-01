@@ -115,6 +115,13 @@ function RivalService.Candidates(viewer: Player): ({ any }, { [string]: number }
 					Verdict = RivalConfig.VerdictWord(v.Bully == true, tonumber(v.Ratio) or 1, ArmyOrdersConfig.Fairness.RiskyRatio),
 					Loot = loot,
 					Dist = dist,
+					-- claude-bud JOB 63: his same-base cooldown on this base (seconds; 0 = none)
+					Wait = (function(): number
+						local okA, left = pcall(function()
+							return (require(script.Parent.AntiCampService) :: any).CooldownLeft(viewer.UserId, plotId)
+						end)
+						return if okA and typeof(left) == "number" then left else 0
+					end)(),
 				})
 			end
 		end

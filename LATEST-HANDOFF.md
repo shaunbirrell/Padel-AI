@@ -123,6 +123,36 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 63 (2026-10-01): ANTI-SPAWN-CAMPING (branch `claude/desktop-bud`)
+**Flag:** `RaidConfig.AntiCamp` (owner-first by the BASE OWNER, NEW-OWNER-FIRST). OFF = today.
+
+**Built (`Services/AntiCampService` + hooks), all through the ONE protection rule:** CombatService `pvpBlock` /
+`state.InvulnerableUntil`, which every player gun, army unit, turret, base guard and vehicle hit already passes.
+- **Defender shield:** a respawn at his own base gets 5 s of the normal spawn protection (was 3 s), shown by the
+  existing spawn bubble (`WE_ShieldUntil`). His first shot (RequestFire) ends it.
+- **Raider limit:** 90 s inside another player's base sends him back to his own base through the normal respawn
+  (`Player:LoadCharacter`, so CombatService spawns him at home; no teleport), with a short notice. The same happens
+  3 s after his raid takes the loot, and after 3 kills of the same defender inside 60 s.
+- **Same-base cooldown, 3 min:**
+  - stepping back in sends him home again;
+  - he can't hurt the owner (pvpBlock reason `camp_cooldown`) or the base (`GateDefenseService.applyDamageFrom`);
+  - the TARGETS card row shows `WAIT m:ss`;
+  - near the base edge he gets one throttled toast "Base cooldown m:ss".
+- **Logs:** `[AntiCamp] uid=.. plot=.. back to base (time|loot|kills|cooldown), cooldown 180 s`.
+
+**Tests:**
+- `tools/sim/run_anti_camp_test.py`: shield 5 s owner-only; 89 s nothing / 90 s home; cooldown re-entry, no hurt /
+  no base damage, edge toast once; after the cooldown allowed; 3rd kill in 60 s home; a non-live owner's base
+  untouched.
+- `tools/checks/claude_bud_job63.py`.
+- **Owed (the brief asks for it before calling it fixed): the 2-player Studio test.** Studio cannot be run from
+  this session.
+
+**Test ON HIS PHONE (with an alt raiding Shaun's base):**
+1. The alt stands in your base for 90 s: it respawns at its own base, with a notice.
+2. It walks back: sent home again; its TARGETS card shows WAIT.
+3. You die and respawn: about 5 s of shield bubble that drops when you fire.
+
 ## claude-bud JOB 60 (2026-10-01): ERROR REPORT: AUDITED; MOSTLY BLOCKED ON THE CSV TEXT (branch `claude/desktop-bud`)
 **What I could prove from the code (pinned in `tools/checks/claude_bud_job60.py`):**
 - **AnchorPoint nil (67):** the root cause was the TARGETS crosshair reading `spec[5]` (nil), already fixed in v171

@@ -1634,6 +1634,13 @@ local function applyDamageFrom(attacker: Player, hitPart: BasePart, amount: numb
 	if not hitPart or hitPart:GetAttribute("GateBarrier") ~= true then
 		return false
 	end
+	-- claude-bud JOB 63: a raider on this base's same-base cooldown deals it no damage
+	local okC, cool = pcall(function()
+		return (require(script.Parent.AntiCampService) :: any).BlocksBaseDamage(attacker, hitPart:GetAttribute("PlotId"))
+	end)
+	if okC and cool == true then
+		return false
+	end
 	local isGuardPart = hitPart:GetAttribute("GateGuardPart") == true
 	local char = attacker.Character
 	local root: any = char and char:FindFirstChild("HumanoidRootPart")

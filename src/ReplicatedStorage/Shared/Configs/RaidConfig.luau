@@ -185,4 +185,26 @@ function RaidConfig.ArcHeight(distance: number): number
 	return math.clamp(distance * s.ArcHeightFactor, s.ArcHeightMin, s.ArcHeightMax)
 end
 
+-- claude-bud JOB 63: anti-spawn-camping (Server/Services/AntiCampService), keyed by the BASE OWNER. OFF = today.
+(RaidConfig :: any).AntiCamp = {
+	Enabled = true,
+	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 63): Code Bot flips it after Shaun's phone test
+	DefenderShieldSeconds = 5, -- a respawn at his own base: the spawn shield this long (his first shot ends it)
+	RaiderLimitSeconds = 90, -- inside an enemy base this long -> back to his own base (the normal respawn)
+	AfterLootSeconds = 3, -- his raid took the loot -> home this long after
+	SameBaseCooldownSeconds = 180, -- then no re-entry and no damage to that base / its owner for this long
+	RepeatKills = 3, -- the same defender killed this many times ...
+	RepeatWindowSeconds = 60, -- ... in this window -> home early
+	EdgeStuds = 24, -- the base-edge cooldown toast within this of a cooled base
+	EdgeToastEverySeconds = 12,
+	TickSeconds = 1,
+	Text = {
+		time = "Raid time up: back to your base",
+		loot = "Loot taken: back to your base",
+		kills = "Stop spawn camping: back to your base",
+		cooldown = "That base is on cooldown: back to your base",
+		edge = "Base cooldown %s",
+	},
+}
+
 return RaidConfig

@@ -687,6 +687,13 @@ local function pvpBlock(attacker: Player, victim: Player): string?
 	if (vState and clock() < vState.InvulnerableUntil) or NS.Active[victim.UserId] ~= nil then
 		return "protected"
 	end
+	-- claude-bud JOB 63: a raider sent home from this victim's base cannot hurt him during the same-base cooldown
+	local okA, blocked = pcall(function()
+		return (require(script.Parent.AntiCampService) :: any).BlocksHurt(attacker, victim)
+	end)
+	if okA and blocked == true then
+		return "camp_cooldown"
+	end
 	local _, hum = characterParts(victim)
 	if hum == nil or hum.Health <= 0 then
 		return "dead"
@@ -2796,7 +2803,25 @@ local function pierceOn(player: Player, def: any, weaponId: string, damage: numb
 	return any
 end
 
+-- claude-bud JOB 63: the defender's spawn shield ends with his first shot
+local function endCampShield(player: Player)
+	local st = combatStates[player.UserId]
+	if st and (st :: any).CampShield and clock() < st.InvulnerableUntil then
+		local sa: any = st
+		sa.CampShield = nil
+		st.InvulnerableUntil = clock()
+		local char = player.Character
+		if char then
+			local okNow, serverNow = pcall(function()
+				return Workspace:GetServerTimeNow()
+			end)
+			char:SetAttribute(CombatFeelConfig.ShieldAttribute, if okNow then serverNow else os.time())
+		end
+	end
+end
+
 function CombatService.RequestFire(player: Player, payload: any): boolean
+	endCampShield(player)
 	if typeof(payload) ~= "table" then
 		AntiExploitService.Strike(player, "fire_bad_payload")
 		return false
@@ -3158,6 +3183,9 @@ local function onPlayerDeath(victim: Player, killer: Player?, humanoid: Humanoid
 	local info = deathInfoOf(humanoid)
 	if killer and killer ~= victim then
 		CombatService.RegisterPlayerKill(killer, victim, if info.Quiet then { Quiet = true } else nil)
+		pcall(function() -- claude-bud JOB 63: repeated kills of the same defender at his base send the raider home
+			(require(script.Parent.AntiCampService) :: any).NoteKill(killer, victim)
+		end)
 	else
 		local vProfile = DataService.GetProfile(victim)
 		if vProfile then
@@ -3192,6 +3220,16 @@ local function onCharacterAdded(player: Player, character: Model)
 	if state then
 		state.Alive = true
 		local invuln = GameConfig.SpawnInvulnerabilitySeconds or CombatConfig.SpawnInvulnerabilitySeconds
+		-- claude-bud JOB 63: a respawn at his own base gets the longer defender shield (owner-first; his shot ends it)
+		local okD, campSec = pcall(function()
+			return (require(script.Parent.AntiCampService) :: any).DefenderShieldSeconds(player)
+		end)
+		local stAny: any = state
+		stAny.CampShield = nil
+		if okD and typeof(campSec) == "number" and campSec > invuln then
+			invuln = campSec
+			stAny.CampShield = true
+		end
 		state.InvulnerableUntil = clock() + invuln
 		-- W2 (contracts §3.6): replicated spawn shield end (client bubble, AimTargets); server time, not os.clock
 		local okNow, serverNow = pcall(function()

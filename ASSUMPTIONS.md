@@ -10150,3 +10150,9 @@ ds_territories.luau T3):
 ## claude-bud JOB 60 (2026-10-01): error report
 - No code change without the report text: the house rule is to prove the root cause first. The verified invariants
   are pinned so the fixed causes (AnchorPoint, track stacking) cannot come back.
+
+## claude-bud JOB 63 (2026-10-01): anti-spawn-camping
+- Keyed by the base owner (protects bases whose owner it is live for), so Shaun can test both roles with an alt.
+- Home = Player:LoadCharacter (the normal respawn), not BaseService.TeleportToPlot. It also drops a vehicle /
+  raid hold cleanly.
+- Re-entering during the cooldown restarts it (a fresh 3 min), so walking back in is never worth it.

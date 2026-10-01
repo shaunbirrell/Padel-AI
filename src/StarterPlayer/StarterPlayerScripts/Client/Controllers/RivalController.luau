@@ -266,7 +266,9 @@ local function rebuildList()
 		chip.Text = t.Chip
 		chip.Parent = row
 		corner(chip, 6)
+		local wait = tonumber(r.Wait) or 0 -- claude-bud JOB 63: the same-base cooldown left
 		label(row, "LootDist", 10, 42, textW, 18, 14, Enum.Font.GothamBold, LOOT).Text = t.Loot .. " · " .. t.Dist
+			.. (if wait > 0 then string.format(" · WAIT %d:%02d", math.floor(wait / 60), wait % 60) else "")
 		local plotId = tonumber(r.PlotId) or 0
 		local by = math.floor((L.RowHeight - L.ButtonHeight) / 2)
 		local send = button(row, "SEND ARMY", Color3.fromRGB(170, 55, 45), rowW - 8 - L.ViewWidth - 8 - L.SendWidth, by, L.SendWidth, L.ButtonHeight)
