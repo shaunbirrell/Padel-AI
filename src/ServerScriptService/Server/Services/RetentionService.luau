@@ -216,6 +216,14 @@ local function incomePerSecond(player: Player, profile: any): number
 			mult = m
 		end
 	end
+	-- Code Bot v185: DOUBLE WEEKEND is NOT part of the offline rate: onLoadOffline doubles only the span that lay
+	-- inside the event window (EventConfig.OverlapSeconds); a join during the window does not double older offline time
+	local okD, em = pcall(function(): any
+		return require(script.Parent.Parent.Modules.DoubleEvent).CashMult(player, "passive")
+	end)
+	if okD and typeof(em) == "number" and em > 1 then
+		mult /= em
+	end
 	return perTick * mult / math.max(1, tonumber(EconomyConfig.PassiveIncome.TickSeconds) or 5)
 end
 
@@ -322,6 +330,16 @@ local function onLoadOffline(player: Player, profile: any)
 		premiumMult(player),
 		oc
 	)
+	-- Code Bot v185: DOUBLE WEEKEND: the counted offline span [PrevSeenUnix, + seconds) pays CashMult only where it
+	-- lies inside the real event window (never the owner preview)
+	if cash > 0 and typeof(seconds) == "number" and seconds > 0 then
+		local okF, f = pcall(function(): any
+			return require(script.Parent.Parent.Modules.DoubleEvent).OfflineFactor(tonumber(profile.PrevSeenUnix) or 0, seconds)
+		end)
+		if okF and typeof(f) == "number" and f > 1 then
+			cash = math.floor(cash * f)
+		end
+	end
 	profile.PrevSeenUnix = nil -- paid once per load: a later call in this session finds nothing
 	-- claude-bud JOB 49 D: the return sequence: the Comeback cash (EngagementService, already paid) rides on this card
 	local seq = typeof(RetentionConfig.ReturnSequence) == "table" and RetentionConfig.Live(RetentionConfig.ReturnSequence, player.UserId)

@@ -613,6 +613,15 @@ local function markFirstPvp(attacker: Player)
 	end
 end
 
+-- Code Bot v185: DOUBLE WEEKEND: the kill-reward multiplier for the "+$N" toast only (the grant itself is multiplied
+-- inside EconomyService.AddCash / XPService.AddXP via Modules/DoubleEvent, KillReasons -> KillMult)
+local function eventKillMult(attacker: Player): number
+	local ok, k = pcall(function(): any
+		return require(script.Parent.Parent.Modules.DoubleEvent).KillCount(attacker)
+	end)
+	return if ok and typeof(k) == "number" and k >= 1 then k else 1
+end
+
 local function grantRewards(attacker: Player, cash: number, xp: number, reason: string)
 	if cash > 0 then
 		EconomyService.AddCash(attacker, cash, reason)
@@ -649,7 +658,7 @@ function CombatService.RegisterPlayerKill(attacker: Player, victim: Player, opts
 	if NotificationService and not (opts and opts.Quiet == true) then
 		NotificationService.Notify(
 			attacker,
-			string.format("Eliminated %s (+$%d)", victim.DisplayName, CombatConfig.PlayerKill.Cash),
+			string.format("Eliminated %s (+$%d)", victim.DisplayName, CombatConfig.PlayerKill.Cash * eventKillMult(attacker)),
 			"Reward"
 		)
 	end
@@ -856,7 +865,7 @@ function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boo
 	end
 	if NotificationService and quiet ~= true then
 		local fmt = if byUnit then "Squad: %s down (+$%d)" else "%s down (+$%d)"
-		NotificationService.Notify(attacker, string.format(fmt, rec.Def.DisplayName, cash), "Reward")
+		NotificationService.Notify(attacker, string.format(fmt, rec.Def.DisplayName, cash * eventKillMult(attacker)), "Reward")
 	end
 	if not byUnit and quiet ~= true and noMarker ~= true then -- the kill marker belongs to the player's own shot
 		hitFeedback(attacker, { Kind = "Kill", Damage = 0, TargetName = rec.Def.DisplayName, WeaponId = nil })

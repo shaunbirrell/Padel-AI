@@ -366,6 +366,19 @@ function XPService.AddXP(player: Player, amount: number, reason: string?, opts: 
 	if MonetizationService and MonetizationService.GetXPMultiplier and not (xpExempt and xpExempt[reasonKey]) then
 		amount = math.max(1, math.floor(amount * MonetizationService.GetXPMultiplier(player)))
 	end
+	-- Code Bot v185: DOUBLE WEEKEND (Shared/Configs/EventConfig): x XPMult (kill reasons x KillMult) where the 2x XP
+	-- pass applies (same exempt list), on top of it
+	if not (xpExempt and xpExempt[reasonKey]) then
+		local okD, DE = pcall(function(): any
+			return require(script.Parent.Parent.Modules.DoubleEvent)
+		end)
+		if okD and type(DE) == "table" then
+			local okM, m = pcall(DE.XPMult, player, reason)
+			if okM and typeof(m) == "number" and m > 1 then
+				amount = math.max(1, math.floor(amount * m))
+			end
+		end
+	end
 
 	profile.XP += amount
 	-- G3: one merged toast per grant (rewards + analytics still per level)

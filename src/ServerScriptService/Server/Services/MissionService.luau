@@ -989,6 +989,18 @@ function MissionService.TrackProgress(player: Player, objectiveType: string, amo
 		return
 	end
 	ensureDaily(profile)
+	-- Code Bot v185: DOUBLE WEEKEND: a kill counts KillMult toward the kill missions (EventConfig.KillObjectives)
+	if objectiveType == "KillPlayer" or objectiveType == "KillNPC" then
+		local okD, DE = pcall(function(): any
+			return require(script.Parent.Parent.Modules.DoubleEvent)
+		end)
+		if okD and type(DE) == "table" then
+			local okK, k = pcall(DE.KillCount, player)
+			if okK and typeof(k) == "number" and k > 1 then
+				amount *= k
+			end
+		end
+	end
 
 	local changed = false
 	for _, id in ipairs(activeDailyIds(player, profile)) do

@@ -81,6 +81,14 @@ local function notify(p: Player, msg: string, kind: string)
 	end
 end
 
+-- Code Bot v185: DOUBLE WEEKEND: one kill counts KillMult on MOST KILLS / ARMY KILLS while the event is live for him
+local function killCount(p: Player): number
+	local ok, k = pcall(function(): any
+		return require(script.Parent.Parent.Modules.DoubleEvent).KillCount(p)
+	end)
+	return if ok and typeof(k) == "number" and k >= 1 then math.floor(k) else 1
+end
+
 local function pay(p: Player, amount: number, reason: string)
 	local econ = deps.EconomyService
 	if econ and econ.AddCash and amount > 0 then
@@ -712,8 +720,9 @@ local function onKill(victim: Player, killer: Player?)
 	end
 	rollWeek(profile, os.time())
 	local lb = lbOf(profile)
-	lb.Kills = (tonumber(lb.Kills) or 0) + 1
-	lb.KillsW = (tonumber(lb.KillsW) or 0) + 1
+	local kc = killCount(killer) -- Code Bot v185 DOUBLE WEEKEND
+	lb.Kills = (tonumber(lb.Kills) or 0) + kc
+	lb.KillsW = (tonumber(lb.KillsW) or 0) + kc
 	deps.DataService.MarkDirty(killer)
 	killCounted = true
 end
@@ -736,8 +745,9 @@ function EngagementService.NoteArmyKill(killer: Player)
 	end
 	rollWeek(profile, os.time())
 	local lb = lbOf(profile)
-	lb.ArmyKills = (tonumber(lb.ArmyKills) or 0) + 1
-	lb.ArmyKillsW = (tonumber(lb.ArmyKillsW) or 0) + 1
+	local kc = killCount(killer) -- Code Bot v185 DOUBLE WEEKEND
+	lb.ArmyKills = (tonumber(lb.ArmyKills) or 0) + kc
+	lb.ArmyKillsW = (tonumber(lb.ArmyKillsW) or 0) + kc
 	deps.DataService.MarkDirty(killer)
 end
 
@@ -754,8 +764,9 @@ function EngagementService.NoteDefenderKill(killer: Player)
 	end
 	rollWeek(profile, os.time())
 	local lb = lbOf(profile)
-	lb.Kills = (tonumber(lb.Kills) or 0) + 1
-	lb.KillsW = (tonumber(lb.KillsW) or 0) + 1
+	local kc = killCount(killer) -- Code Bot v185 DOUBLE WEEKEND
+	lb.Kills = (tonumber(lb.Kills) or 0) + kc
+	lb.KillsW = (tonumber(lb.KillsW) or 0) + kc
 	deps.DataService.MarkDirty(killer)
 end
 

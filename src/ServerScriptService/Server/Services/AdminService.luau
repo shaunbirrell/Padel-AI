@@ -559,7 +559,8 @@ function AdminService.Init(deps: { [string]: any })
 		local isReplayCmd = cmd == "replaytutorial" or cmd == "replayguided" -- Code Bot v163: test-mode Guided replay
 		local isSetRebirthCmd = cmd == "setrebirth" -- Code Bot v168: the owner's own rebirth count (no reset)
 		local isGuardDebugCmd = cmd == "guarddebug" -- claude-bud JOB 51: [GuardTarget] / [GuardShot] / [NpcHit] logs
-		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd and not isSetRebirthCmd and not isGuardDebugCmd then
+		local isEventPreviewCmd = cmd == "eventpreview" -- Code Bot v185: DOUBLE WEEKEND owner preview (before StartUnix only)
+		if cmd ~= "cash" and not isEventPreviewCmd and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd and not isSetRebirthCmd and not isGuardDebugCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -573,6 +574,31 @@ function AdminService.Init(deps: { [string]: any })
 		-- (ArmyDebugClient), per-soldier server logs (ArmyController). Allowlist only (IsAdmin above).
 		-- claude-bud JOB 51: /guarddebug [on|off] toggles WE_GuardDebug: the NPC target-pick / shot / player->NPC hit logs
 		-- (CombatNPC + CombatService) run only while someone has it on. Allowlist only (IsAdmin above).
+		-- Code Bot v185: /eventpreview [on|off] (OWNER ONLY: EventConfig.OwnerUserId) switches the DOUBLE WEEKEND preview
+		-- for this server (ReplicatedStorage WE_EventPreview). It only matters BEFORE StartUnix: inside the window the
+		-- event is live for everyone whatever this says; after EndUnix it is off for everyone. Not saved (a new server
+		-- starts from EventConfig.OwnerFirst).
+		if isEventPreviewCmd then
+			local okC, EC = pcall(function(): any
+				return require(ReplicatedStorage.Shared.Configs.EventConfig)
+			end)
+			if not okC or player.UserId ~= EC.OwnerUserId then
+				return
+			end
+			local okD, DE = pcall(function(): any
+				return require(script.Parent.Parent.Modules.DoubleEvent)
+			end)
+			if not okD then
+				return
+			end
+			local want = if rest == "on" or rest == "1" then true elseif rest == "off" or rest == "0" then false else not DE.PreviewOn()
+			DE.SetPreview(want)
+			print(string.format("[DoubleEvent] %s /eventpreview -> %s", player.Name, tostring(want)))
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, "Event preview " .. (if want then "ON" else "OFF") .. " (window itself is live for all regardless)", "Success")
+			end
+			return
+		end
 		if isGuardDebugCmd then
 			local want = if rest == "on" or rest == "1" then true elseif rest == "off" or rest == "0" then false else player:GetAttribute("WE_GuardDebug") ~= true
 			player:SetAttribute("WE_GuardDebug", want)
@@ -742,9 +768,9 @@ function AdminService.Init(deps: { [string]: any })
 				end
 			end)
 			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
-			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" }, { "WE_ReplayTutorial", "/replaytutorial", "/replayguided" }, { "WE_SetRebirth", "/setrebirth" } }) do
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" }, { "WE_ReplayTutorial", "/replaytutorial", "/replayguided" }, { "WE_SetRebirth", "/setrebirth" }, { "WE_EventPreview", "/eventpreview" } }) do
 				local c = ensureCommand(spec[1], spec[2], spec[3])
-				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" or spec[1] == "WE_ReplayTutorial" or spec[1] == "WE_SetRebirth" then
+				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" or spec[1] == "WE_ReplayTutorial" or spec[1] == "WE_SetRebirth" or spec[1] == "WE_EventPreview" then
 					-- nations: never offered in chat autocomplete (lead decision 6: nothing of the feature shows for
 					-- non-admins before the flag art is live); the admin still types it
 					local cmdAny: any = c
@@ -784,6 +810,7 @@ function AdminService.Init(deps: { [string]: any })
 					or string.sub(lower, 1, 15) == "/replaytutorial"
 					or string.sub(lower, 1, 13) == "/replayguided"
 					or string.sub(lower, 1, 11) == "/setrebirth"
+					or string.sub(lower, 1, 13) == "/eventpreview" -- Code Bot v185 (owner only, checked in onAdminChat)
 				if not isAdminLine then
 					return
 				end

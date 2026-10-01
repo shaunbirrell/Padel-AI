@@ -202,6 +202,19 @@ local function publishEmpireTax(player: Player, pct: number)
 	end)
 end
 
+-- Code Bot v185: DOUBLE WEEKEND server module (Modules/DoubleEvent), required lazily, never throws
+local doubleEventMod: any = nil
+local function doubleEvent(): any
+	if doubleEventMod == nil then
+		local ok, m = pcall(function(): any
+			return require(script.Parent.Parent.Modules.DoubleEvent)
+		end)
+		doubleEventMod = if ok and type(m) == "table" then m else false
+	end
+	return if doubleEventMod then doubleEventMod else nil
+end
+EconomyService._DoubleEvent = doubleEvent
+
 local function cashMultFor(player: Player, profile: any, reason: string?): number
 	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 	local reasonKey = reason or ""
@@ -234,6 +247,11 @@ local function cashMultFor(player: Player, profile: any, reason: string?): numbe
 		local okE, ES = pcall(require, script.Parent.EngagementService)
 		if okE and type(ES) == "table" and (ES :: any).CashMult then
 			mult *= (ES :: any).CashMult(player)
+		end
+		-- Code Bot v185: DOUBLE WEEKEND (Shared/Configs/EventConfig): x CashMult, kill reasons x KillMult, on top of the stack
+		local DE = doubleEvent()
+		if DE then
+			mult *= DE.CashMult(player, reason)
 		end
 	end
 	return mult
@@ -336,6 +354,10 @@ function EconomyService.Init(deps: { [string]: any })
 	MoneyCollectorService = deps.MoneyCollectorService
 	XPService = deps.XPService
 	EconomyService._Endgame = deps.EndgameService -- claude-bud JOB 39: the Empire Level factor
+	local DE = doubleEvent() -- Code Bot v185: publish the owner-preview switch (EventConfig.OwnerFirst) once
+	if DE and DE.Init then
+		pcall(DE.Init)
+	end
 	if TycoonGuideConfig.Enabled then
 		game:GetService("Players").PlayerRemoving:Connect(function(player: Player)
 			steadyIncome[player.UserId] = nil
