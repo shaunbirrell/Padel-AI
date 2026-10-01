@@ -1,4 +1,41 @@
 <!-- Q2-START -->
+## claude-bud JOB 44 (2026-10-01 ~15:20): ONE-CLICK STUDIO TEST READY, STILL BLOCKED ON THE RUN (branch `claude/desktop-bud`)
+- **Tried from this session:** Roblox Studio is installed. Launching a local server from the command line
+  (`RobloxStudioBeta.exe -task StartServer -localPlaceFile ...`) gives "Cannot open place file for reading", and
+  "Test > Clients and Servers" needs a click in the Studio window, which this session cannot make. So the 2-player
+  run itself is still owed. **JOB 48 / 49 are NOT started** (the queue rule: blocked = write it here and stop).
+- **New: a test-only driver**, so the run is one click and needs no manual steps:
+  - **What it is:** tools/studio/J44Driver.server.luau, a Script that exists only in the test place.
+    tools/studio/build_j44_place.py builds `build/j44/J44Test.rbxl` = the normal game + that Script. It is gitignored
+    and never in default.project.json or live.
+  - **What it drives:** the real code (the army units are server-owned, so the march / siege is decided on the
+    server).
+    - **Fixture:** Player2 gets DefensiveWalls (a gate, guards and turrets); Player1's army is filled to its cap;
+      WE_ArmyDebug is on.
+    - **A:** `ArmyCommand.Send(Player1, Player2's plot)`. Every second it logs the phase, gate HP, block centre and
+      distance; a STALL line appears when the block moves < 3 studs in 20 s while marching. Checks: reached the gate,
+      gate HP fell, breach, Loot, walked out, no stall.
+    - **B1:** SEND to Crossroads: reached, no stall.
+    - **B3:** the TEST PLAYER is moved to his rear runway / airfield (the army is never moved); the army follows;
+      SEND far away: no stall leaving the base.
+  - **Output:** a final `[J44] REPORT` block in the server output, PASS / FAIL from the live state only.
+- **To run (Shaun):**
+  1. `python tools/studio/build_j44_place.py` (rojo on PATH, or set ROJO=...).
+  2. Open `build/j44/J44Test.rbxl` in Studio.
+  3. Test > Clients and Servers: Local Server, 2 players, Start.
+  4. Wait about 8-10 min.
+  5. Paste the server output's `[J44]` lines back to claude-bud. Any FAIL / STALL line is the root-cause lead to fix.
+
+## claude-bud QUEUE STOP (2026-10-01 ~13:50): JOB 48 + JOB 49 held behind JOB 44 (branch `claude/desktop-bud`)
+- The queue (Code Bot 914c1aa) says: JOB 44 first, then JOB 48, then JOB 49. "If one is blocked, write it in
+  LATEST-HANDOFF and stop."
+- **JOB 44 is blocked.** It needs a real 2-player Roblox Studio session (SEND reaches the gate, fires, breaches, files
+  in, loots, walks out; marches with no stalls), and this desktop session cannot run Studio or a second client. The
+  test script is in docs/proof/army-siege/JOB44-STUDIO-TEST.md; the section below has the details.
+- **So I have stopped:** JOB 48 (first 2 minutes) and JOB 49 (reasons to come back) are NOT started.
+- **To unblock (Shaun / Code Bot), either:**
+  - run the JOB 44 Studio test and post the result (log + what stalled);
+  - or say "skip JOB 44 for now, start JOB 48", and I start JOB 48 at once.
 
 ## v173 PUBLISHED (Code Bot Roblox, 2026-10-01 13:25 Dublin): Open Cloud place version 171. claude-bud JOB 46 + JOB 47
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **173**), HTTP 200 `{"versionNumber":171}`. Servers NOT restarted (new servers get it; Migrate to Latest Update / rejoin a fresh server). Code + dist commit `83f3b0d` on phase-7-polish; cherry-picked JOB 46 `5af86a1` + JOB 47 `dd8415d` from `origin/claude/desktop-bud`.

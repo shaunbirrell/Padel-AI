@@ -16,3 +16,6 @@ docs/ref/*.mov
 # Python bytecode (tools/*.py)
 __pycache__/
 *.pyc
+
+# claude-bud JOB 44: the Studio test place (tools/studio/build_j44_place.py)
+build/j44/

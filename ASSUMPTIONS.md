@@ -10016,3 +10016,12 @@ ds_territories.luau T3):
 - **Not covered yet:** tags behind other HUD cards (TARGETS, top stack) are not filtered yet. If one is seen, the
   next step is to add those cards' rects to the same rule.
 - **No re-implementation:** the TARGETS card and scout fixes are Code Bot v171's; I did not re-implement them.
+
+## 2026-10-01 — claude-bud JOB 44: the Studio test driver
+- **What it is:** the JOB 44 driver is a test-only Script in a separately built place (build/j44, gitignored).
+- **Fixture writes:** it sets fixture values in the two Studio test profiles (Player2 DefensiveWalls >= 1,
+  Player1 Soldiers = cap).
+- **Why fixture writes are safe:** Studio test players get fresh, unsaved-to-live profiles, so this never touches
+  live data.
+- **No teleport in game code:** B3 moves the test player's character (not the army) to the runway; the
+  no-teleport rule applies to the game code, which is unchanged.
