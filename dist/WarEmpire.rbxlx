@@ -6549,7 +6549,7 @@ HudConfig.Hotbar = {
 	MaxSlots = 4,
 	Slot = 64, -- v touch (44.8 real)
 	SlotDesktop = 50, -- v (45 real at 720p)
-	Gap = 12, -- also widens each slot's caption box (slot + Gap + 4 = 80 v) so SHOTGUN keeps ≥ 12 px (CaptionMinTextPx)
+	Gap = 12, -- claude-bud JOB 50 D: the caption no longer reaches into the gap (it stays inside its slot; fitCaption)
 	Bottom = 12,
 	Corner = 8,
 	Bg = Color3.fromRGB(20, 22, 26),
@@ -21397,10 +21397,10 @@ end
 rebirthGun("AssaultRifle", "VanguardCarbine", "Vanguard Carbine", "VANGUARD", 1, { Damage = 24, FireRate = 9.5 }) -- 198 -> 228 DPS
 rebirthGun("SMG", "TempestSMG", "Tempest SMG", "TEMPEST", 3, { Damage = 15, FireRate = 14.5, MagazineSize = 36 }) -- 196 -> 218
 rebirthGun("Shotgun", "WardenShotgun", "Warden Shotgun", "WARDEN", 5, { Damage = 13, FireRate = 1.3, Range = 44 }) -- 86 -> 101
-rebirthGun("Sniper", "LongshotDMR", "Longshot DMR", "LONGSHOT", 7, { Damage = 58, FireRate = 1.4, MagazineSize = 8, Range = 300 }) -- a semi-auto marksman: 81 DPS
+rebirthGun("Sniper", "LongshotDMR", "Longshot DMR", "DMR", 7, { Damage = 58, FireRate = 1.4, MagazineSize = 8, Range = 300 }) -- a semi-auto marksman: 81 DPS; claude-bud JOB 50 D: "DMR" (the PG Longshot Sniper keeps "LONGSHOT")
 rebirthGun("Sniper", "TalonSniper", "Talon Sniper", "TALON", 9, { Damage = 95, FireRate = 0.8, Range = 440 }) -- 68 -> 76
-rebirthGun("RocketLauncher", "HavocLauncher", "Havoc Launcher", "HAVOC", 12, { Damage = 165, MagazineSize = 2 }) -- +10 % per rocket, 2 in the tube
-rebirthGun("StarterRifle", "SovereignRifle", "Sovereign Rifle", "SOVEREIGN", 15, { Damage = 26, FireRate = 9, Range = 140 }) -- 144 -> 234: the late-rebirth all-rounder
+rebirthGun("RocketLauncher", "HavocLauncher", "Havoc Launcher", "HAVOC RL", 12, { Damage = 165, MagazineSize = 2 }) -- +10 % per rocket, 2 in the tube; claude-bud JOB 50 D: distinct from the PG Havoc Rotary
+rebirthGun("StarterRifle", "SovereignRifle", "Sovereign Rifle", "SOV RIFLE", 15, { Damage = 26, FireRate = 9, Range = 140 }) -- 144 -> 234: the late-rebirth all-rounder; claude-bud JOB 50 D: distinct from the PG Sovereign Pistol
 
 --[[ v69: one weapon order for Shop › WEAPONS rows and the Q/E / mobile ◀ ▶ cycle:
 	UnlockLevel, then CostCash, then id. ]]
@@ -31024,7 +31024,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 185)
+		player:SetAttribute("WE_Build", 186)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -75185,7 +75185,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 185)
+			player:SetAttribute("WE_Build", 186)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -83834,7 +83834,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 185)
+		player:SetAttribute("WE_Build", 186)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -83976,7 +83976,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=185",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=186",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -135190,6 +135190,35 @@ local function slotSize(): number
 	return if isTouch then HB.Slot else HB.SlotDesktop
 end
 
+-- claude-bud JOB 50 D: the hotbar caption fits INSIDE its slot: the biggest TextSize from NameSize down to
+-- CaptionMinTextPx (real px, through the HUD scale) whose width fits; below that the name is cut with "…"
+local TextServiceC = game:GetService("TextService")
+local function fitCaption(label: TextLabel, text: string)
+	local nameSize = if isTouch then HB.NameSize else HB.NameSizeDesktop
+	local width = slotSize() - 4
+	local scale = math.max(HudLayout.Scale(), 0.05)
+	local minV = math.min(nameSize, math.ceil((tonumber((HudConfig :: any).Scale.CaptionMinTextPx) or 12) / scale))
+	local function fits(t: string, size: number): boolean
+		local ok, b = pcall(function()
+			return TextServiceC:GetTextSize(t, size, FONT_BODY, Vector2.new(1000, 200))
+		end)
+		return ok and b.X <= width
+	end
+	for size = nameSize, minV, -1 do
+		if fits(text, size) then
+			label.TextSize = size
+			label.Text = text
+			return
+		end
+	end
+	local t = text
+	while #t > 1 and not fits(t .. "…", minV) do
+		t = string.sub(t, 1, #t - 1)
+	end
+	label.TextSize = minV
+	label.Text = if t == text then t else t .. "…"
+end
+
 -- v from the content bottom to the health bar's bottom edge: Hotbar.Bottom + slot + Health.GapAboveHotbar,
 -- raised when needed so the DRAWN slot (UIScale SelectedScale about its bottom edge + its outer stroke) keeps
 -- a 2 v gap below the bar (touch 85 v, desktop 70 v; the action lane still starts at ActionLaneBottomV()).
@@ -135295,15 +135324,20 @@ local function makeSlot(parent: Frame, i: number): Slot
 	num.Parent = btn
 	UIUtil.TextOutline(num, 1, nil, 0.3)
 
-	-- a little wider than the slot (into the gap) so "SHOTGUN" keeps its full size on phones
+	-- claude-bud JOB 50 D (Shaun's phone: "HAVOC" "LONGSHOT" "LONGSHOT" "QUAKE" running into each other): ROOT CAUSE:
+	-- this caption box was slot + Gap + 4 = 80 v in a 64 v slot (8 v into each 12 v gap: neighbours overlapped by 4 v)
+	-- and TextScaled stretched an 8-letter name across the whole box. Now the caption stays INSIDE its slot and
+	-- fitCaption picks the biggest size that fits (down to CaptionMinTextPx real), truncating only below that.
 	local name = Instance.new("TextLabel")
 	name.Name = "WeaponName"
 	name.BackgroundTransparency = 1
 	name.AnchorPoint = Vector2.new(0.5, 1)
 	name.Position = UDim2.new(0.5, 0, 1, -4)
-	name.Size = UDim2.new(1, HB.Gap + 4, 0, nameSize + 4)
+	name.Size = UDim2.new(1, -4, 0, nameSize + 4)
 	name.Font = FONT_BODY
-	name.TextScaled = true
+	name.TextScaled = false
+	name.TextSize = nameSize
+	name.TextTruncate = Enum.TextTruncate.AtEnd
 	name.TextColor3 = WHITE
 	name.Text = ""
 	name.Active = false
@@ -135410,7 +135444,7 @@ refreshHotbar = function()
 		table.clear(slots)
 		for i, id in ipairs(ids) do
 			local sl = makeSlot(bar, i)
-			sl.Name.Text = shortName(id)
+			fitCaption(sl.Name, shortName(id)) -- claude-bud JOB 50 D: fits inside its own slot
 			slots[i] = sl
 		end
 		local s = slotSize()

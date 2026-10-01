@@ -2,7 +2,7 @@
 [WAR EMPIRE] ArmyPlan Init
 S_WARM Following
 [SERVER ARMY] shaunie6 command=Attack state=Following plan=none source=test Attack
-[ARMY MOVE] shaunie6 ATTACK probe from=(-500,3,0) radius=250 -> NPC at (-400,3,60)
+[ARMY MOVE] shaunie6 ATTACK probe from=(-500,3,0) radius=400 -> NPC at (-400,3,60)
 [ARMY DESTINATION] shaunie6 old=nil new=(-400,3,60) source=ArmyPlan.Clear/March
 [ARMY PATH] shaunie6 start=(-518,3,-0) dest=(-400,3,60) distance=132 status=Success waypoints=17
 [ARMY STATE] shaunie6 Following -> Attacking SOURCE=ATTACK mode=Attack target=RidgeCamp

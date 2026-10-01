@@ -13,8 +13,8 @@ S_WARM Following
 [ARMY MOVE] shaunie6 Travel/March block=(-419,3,-0) lead=(-394,0,-0) to dest 319 studs, lead 14 studs/s, lost 0
 S_BEFORE TravellingToBase
 [SERVER ARMY] shaunie6 command=Attack state=TravellingToBase plan=Travel/March source=test Attack
-[ARMY MOVE] shaunie6 ATTACK probe from=(-412,3,-0) radius=250 -> none
-WARN	[SERVER ARMY] REJECTED shaunie6 ATTACK reason=NoEnemiesNear from=(-412,3,-0) radius=250 state=TravellingToBase
+[ARMY MOVE] shaunie6 ATTACK probe from=(-412,3,-0) radius=400 -> none
+WARN	[SERVER ARMY] REJECTED shaunie6 ATTACK reason=NoEnemiesNear from=(-412,3,-0) radius=400 nearest=none state=TravellingToBase
 S_OK false
 S_WHY NoEnemiesNear
 S_AFTER TravellingToBase
