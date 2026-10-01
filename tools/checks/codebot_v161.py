@@ -43,12 +43,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 195)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 195)'),
-    (S + "Services/DataService.luau", "WE_Build=195"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 195)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 196)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 196)'),
+    (S + "Services/DataService.luau", "WE_Build=196"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 196)'),
 ):
-    check(needle in read(rel), "CODEBOT v161: WE_Build=195 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v161: WE_Build=196 " + rel.rsplit("/", 1)[-1])
 
 SOC = read(C + "ShopOverhaulConfig.luau")
 tp = block(SOC, "TimePacks") or block(SOC, "ShopOverhaulConfig.TimePacks")

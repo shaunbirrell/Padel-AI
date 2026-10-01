@@ -37,12 +37,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 195)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 195)'),
-    (S + "Services/DataService.luau", "WE_Build=195"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 195)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 196)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 196)'),
+    (S + "Services/DataService.luau", "WE_Build=196"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 196)'),
 ):
-    check(needle in read(rel), "CODEBOT v195: WE_Build=195 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v195: WE_Build=196 " + rel.rsplit("/", 1)[-1])
 
 HC = code(read(C + "HudConfig.luau"))
 check(re.search(r"\bAbbreviateDecimalsBig\s*=\s*3\s*,", HC) is not None, "CODEBOT v195: HudConfig.CashPill.AbbreviateDecimalsBig = 3")
@@ -73,7 +73,8 @@ check(fmt(999_999_999) == "999,999,999", "CODEBOT v195: model: below 1B keeps co
 EC = code(read(C + "EconomyConfig.luau"))
 m = re.search(r"\bMaxCash\s*=\s*([0-9_.eE+]+)\s*,", EC)
 check(m is not None and float(m.group(1).replace("_", "")) == 1e15, "CODEBOT v195: EconomyConfig.MaxCash still 1e15")
-for rel in (C + "MonetizationConfig.luau", C + "EconomyConfig.luau", S + "Services/EconomyService.luau",
+# EconomyService retired from byte-identical in v196 (JOB 65 PendingToCash for NukeRaid 1:1 transfer).
+for rel in (C + "MonetizationConfig.luau", C + "EconomyConfig.luau",
             "src/ReplicatedStorage/Shared/Constants.luau", C + "LeaderboardConfig.luau"):
     if (ROOT / rel).exists():
         check(shipped(rel, PREV) == read(rel), "CODEBOT v195: byte-identical to " + PREV + " " + rel.rsplit("/", 1)[-1])

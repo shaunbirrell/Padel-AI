@@ -809,6 +809,7 @@ local AnalyticsConfig = {
 			VEHICLE_SPAWNED = { Name = "VehicleSpawned", Field = "vehicle" },
 			MISSILE_STRIKE = { Name = "MissileLaunched" },
 			NUKE_LAUNCH = { Name = "NukeLaunched" },
+			NUKE_RAID = { Name = "NukeRaid", Value = "Stolen" }, -- claude-bud JOB 65
 			CODE_REDEEM = { Name = "CodeRedeemed", Field = "code" },
 			TUTORIAL_SHOWN = { Name = "TipShown", Field = "tip" },
 			TUTORIAL_CLOSED = { Name = "TipClosed", Field = "tip" },
@@ -914,6 +915,7 @@ local AnalyticsConfig = {
 		-- Nuke (nuke §13)
 		NUKE_GRANTED = "NUKE_GRANTED", -- kind, count, source (receipt/silo/gift/battlepass/admin/refund), inventoryAfter
 		NUKE_LAUNCH = "NUKE_LAUNCH",
+		NUKE_RAID = "NUKE_RAID", -- claude-bud JOB 65: VictimUserId, Stolen, Balance
 		NUKE_REJECT = "NUKE_REJECT",
 		NUKE_DETONATE = "NUKE_DETONATE",
 		NUKE_ABORT = "NUKE_ABORT",
@@ -13654,6 +13656,36 @@ local RebirthZonesConfig = {
 		SirenSoundId = "", -- a Roblox-uploaded siren sound id (owner fills it; "" = the visual siren only)
 		MaxTargets = 10,
 	},
+	--[[ claude-bud JOB 65: the NUKE INSTANT RAID (NukeService.RaidPreview / RaidLaunch). A player with the silo (rebirth
+		unlock, built) nukes a rival's HOME BASE: an instant successful raid that moves the target's FULL raidable ATM
+		(MoneyCollectorService.GetRaidableBalance, the same number the preview shows) into the attacker's Cash through
+		the raid payout path (MoneyCollectorService.NukeRaid: the 1:1 ATM transfer, never multiplied, so no Double
+		Weekend / VIP / boost on a transfer). Fairness: the raid checks (ally, new player, shield, low balance), the
+		shared protection (spawn / novice shield), never an admin, the JOB 63 same-base cooldown. Saved state: the
+		existing NukeSilo warheads + NukeLastLaunch (no new save keys). Owner-first by the ATTACKER. ]]
+	NukeRaid = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 65): only Shaun until his phone test
+		CooldownSeconds = 1800, -- after a nuke raid (saved: profile.NukeLastLaunch, the silo's one cooldown)
+		UsesWarhead = true, -- spends one ready warhead (profile.NukeSilo.Ready)
+		Vfx = true, -- the missile + blast on the target base (the MissileStrikeFx packet; light, phone-safe)
+		FlightSeconds = 6, -- the missile's flight in the VFX (the cash moves at launch: the raid is instant)
+		Targets = { -- who may be nuked (false = never)
+			Shielded = false, -- a raid shield (ShieldUntil) / novice shield / spawn protection
+			NewPlayers = false, -- inside NewPlayerProtectionSeconds
+			Admins = false, -- AdminService.IsAdmin
+			Allies = false, -- clan allies (GateDefenseService.IsAlly)
+			CampCooldown = false, -- a base on his JOB 63 same-base cooldown
+		},
+		Text = {
+			Launched = "NUKE LAUNCHED: +$%s from %s's ATM",
+			Hit = "%s nuked your base: -$%s",
+			Cooldown = "Silo cooling down: %s",
+			NotReady = "No warhead ready",
+			NoSilo = "Build the Nuclear Silo first",
+			Blocked = "Can't nuke this base: %s",
+		},
+	},
 
 	-- the gate rank banners and the title above the head (RebirthConfig.Trims / Titles; RebirthConfig.LiveFor "Trims")
 	Rank = {
@@ -14793,7 +14825,7 @@ local RivalConfig = {
 	-- the list under the card (real px): one 64 px row per target (name + level / army + verdict chip / loot +
 	-- distance, SEND ARMY + VIEW), a 36 px header; on a short screen it slides up over the card (it must end above
 	-- the content bottom: asserted by the v168 test)
-	List = { Width = 400, Gap = 6, Header = 36, RowHeight = 64, RowGap = 4, SendWidth = 112, ViewWidth = 60, ButtonHeight = 48 },
+	List = { Width = 400, Gap = 6, Header = 36, RowHeight = 64, RowGap = 4, SendWidth = 112, ViewWidth = 60, ButtonHeight = 48, NukeWidth = 72 },
 	-- the card's short empty-state reasons (<= 16 chars at 14 px in the card's 126 px text column); the list keeps the full WhyText
 	ShortWhy = {
 		Held = "Finish the guide",
@@ -31468,7 +31500,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 195)
+		player:SetAttribute("WE_Build", 196)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -77429,7 +77461,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 195)
+			player:SetAttribute("WE_Build", 196)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -86116,7 +86148,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 195)
+		player:SetAttribute("WE_Build", 196)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -86258,7 +86290,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=195",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=196",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -87186,6 +87218,31 @@ end
 	Move PendingCash from victim → thief without cash multipliers (already accrued).
 	Returns amount transferred (0 if none).
 ]]
+-- claude-bud JOB 65: move exactly `amount` of his own ATM (PendingCash) into Cash, never multiplied (a transfer that
+-- already sits in his ATM, e.g. a nuke raid's loot). His other pending cash stays in the ATM. Returns what moved.
+function EconomyService.PendingToCash(player: Player, amount: number): number
+	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
+		return 0
+	end
+	local profile = getDataService().GetProfile(player)
+	if not profile then
+		return 0
+	end
+	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
+	local take = math.min(math.floor(amount), pending)
+	if take <= 0 then
+		return 0
+	end
+	;(profile :: any).PendingCash = pending - take
+	profile.Cash = math.clamp(profile.Cash + take, EconomyConfig.MinCash, EconomyConfig.MaxCash)
+	getDataService().MarkDirty(player)
+	pushEconomy(player, profile)
+	if MoneyCollectorService and MoneyCollectorService.RefreshForPlayer then
+		MoneyCollectorService.RefreshForPlayer(player)
+	end
+	return take
+end
+
 function EconomyService.TransferPendingCash(fromPlayer: Player, toPlayer: Player, amount: number): number
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
 		return 0
@@ -101820,6 +101877,72 @@ function MoneyCollectorService.VaultMult(victim: Player, army: boolean): number
 	return 1
 end
 
+--[[ claude-bud JOB 65: the NUKE raid. The SAME checks as an army raid (CanArmyRaid: ally, new player, shield, low
+	balance), the FULL raidable balance (the number the preview showed), the same money path (_MoveLoot: the victim's
+	ATM -> the attacker's ATM, 1:1, never multiplied) and then exactly that amount from his ATM into his Cash
+	(EconomyService.PendingToCash, a transfer: no Double Weekend / boosts). The victim shield, notifications, raid
+	report, analytics NUKE_RAID and the BaseRaided notification, like any raid. Returns what moved. ]]
+function MoneyCollectorService.NukeRaid(attacker: Player, victim: Player, textHit: string?): number
+	local R = RaidConfig.Raid
+	local ok = MoneyCollectorService.CanArmyRaid(attacker, victim)
+	if not ok or EconomyService == nil then
+		return 0
+	end
+	local vProfile = profileOf(victim)
+	if not vProfile then
+		return 0
+	end
+	local balance = MoneyCollectorService.GetRaidableBalance(victim)
+	if balance <= 0 then
+		return 0
+	end
+	local vRaid = raidOf(vProfile)
+	local oldShield = vRaid.ShieldUntil
+	local nowUnix = os.time()
+	local shieldBonus = 0
+	local okRZ, RZ = pcall(function(): any
+		return require(script.Parent.RebirthZoneService)
+	end)
+	if okRZ and RZ and RZ.RaidShieldBonus then
+		local okB, b = pcall(RZ.RaidShieldBonus, vProfile)
+		shieldBonus = if okB and typeof(b) == "number" then math.max(0, b) else 0
+	end
+	vRaid.ShieldUntil = nowUnix + R.ShieldSeconds + shieldBonus
+	local moved = MoneyCollectorService._MoveLoot(attacker, victim, balance)
+	if moved <= 0 then
+		vRaid.ShieldUntil = oldShield
+		return 0
+	end
+	EconomyService.PendingToCash(attacker, moved)
+	;(vProfile :: any).LastRaidedAt = nowUnix
+	pcall(function()
+		local eg = require(script.Parent.EndgameService) :: any
+		if eg.NoteRaidedBy then
+			eg.NoteRaidedBy(victim, attacker)
+		end
+	end)
+	markDirty(attacker)
+	markDirty(victim)
+	pcall(function()
+		victim:SetAttribute("WE_ShieldUntil", vRaid.ShieldUntil)
+	end)
+	if NotificationService then
+		NotificationService.Notify(victim, string.format(textHit or "%s nuked your base: -$%s", attacker.DisplayName, formatCash(moved)), "Error", 6)
+		NotificationService.Notify(victim, string.format("-$%s", formatCash(moved)), "Collect", nil, -moved)
+	end
+	pcall(function()
+		require(script.Parent.GameFeelService).NoteRaid(victim.UserId, "Robbed", attacker, moved)
+	end)
+	MoneyCollectorService.RefreshForPlayer(victim)
+	if AnalyticsService and AnalyticsService.Log then
+		task.spawn(function()
+			pcall(AnalyticsService.Log, "NUKE_RAID", attacker.UserId, { VictimUserId = victim.UserId, Stolen = moved, Balance = balance })
+		end)
+	end
+	notifyRaided(victim)
+	return moved
+end
+
 --[[ claude-bud JOB 38: the ARMY raid (ArmyPlan, after the breach and the ATM hold). fraction = StealFraction x ArmyLootMult
 	(x BullyLootMult). Same checks (CanArmyRaid), the same money path (_MoveLoot: the victim's ATM -> the sender's ATM),
 	the same victim shield; the sender gets no in-person cooldown (the SEND has its own). Returns what moved. ]]
@@ -103074,6 +103197,7 @@ return NotificationService
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
@@ -103355,6 +103479,191 @@ function NukeService.Launch(player: Player, targetId: any): (boolean, string?)
 	return true, nil
 end
 
+-- ── claude-bud JOB 65: the NUKE INSTANT RAID (RebirthZonesConfig.NukeRaid) ─────────────────────────────────────────
+local NR: any = (RebirthZonesConfig :: any).NukeRaid
+
+function NukeService.RaidLive(uid: number): boolean
+	return live(uid) and typeof(NR) == "table" and (require(Shared.Configs.RetentionConfig) :: any).Live(NR, uid)
+end
+
+local function raidCooldownLeft(profile: any): number
+	local last = tonumber(profile and profile.NukeLastLaunch) or 0
+	return if last > 0 then math.max(0, math.ceil(NR.CooldownSeconds - (os.time() - last))) else 0
+end
+
+local function isAdmin(p: Player): boolean
+	local a = deps.AdminService
+	if a and a.IsAdmin then
+		local ok, v = pcall(a.IsAdmin, p)
+		return ok and v == true
+	end
+	return false
+end
+
+--[[ May `player` nuke the base `plotId` now? Returns (ok, why, info). Every rule is server-side; info carries what the
+	preview card shows: Name, Level, Amount (the FULL raidable ATM, the exact number a launch moves), CooldownLeft. ]]
+function NukeService.RaidVerdict(player: Player, plotId: any): (boolean, string, any)
+	local info: any = { PlotId = tonumber(plotId) or 0, Name = "?", Level = 0, Amount = 0, CooldownLeft = 0 }
+	local uid = player.UserId
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil or not NukeService.RaidLive(uid) then
+		return false, "Off", info
+	end
+	if siloLevel(player) < 1 then
+		return false, "NoSilo", info
+	end
+	local pid = tonumber(plotId)
+	local bs = deps.BaseService
+	local ownerId = if pid and bs and bs.GetOwnerUserId then bs.GetOwnerUserId(pid) else nil
+	local victim = if typeof(ownerId) == "number" then Players:GetPlayerByUserId(ownerId) else nil
+	if victim == nil or pid == nil then
+		return false, "NoBase", info
+	end
+	local vProfile = deps.DataService.GetProfile(victim)
+	info.Name = victim.DisplayName
+	info.Level = math.floor(tonumber(vProfile and vProfile.Level) or 0)
+	local mc = deps.MoneyCollectorService
+	info.Amount = if mc and mc.GetRaidableBalance then math.max(0, math.floor(tonumber(mc.GetRaidableBalance(victim)) or 0)) else 0
+	info.CooldownLeft = raidCooldownLeft(profile)
+	local T = NR.Targets
+	if victim == player then
+		return false, "Self", info
+	end
+	if not T.Admins and isAdmin(victim) then
+		return false, "Admin", info
+	end
+	local gd = deps.GateDefenseService
+	if not T.Allies and gd and gd.IsAlly and gd.IsAlly(victim.UserId, player) == true then
+		return false, "Ally", info
+	end
+	local cs = deps.CombatService
+	if not T.Shielded and cs and cs.ProtectedReason then
+		local okP, why = pcall(cs.ProtectedReason, victim) -- the ONE protection rule: spawn / novice shield
+		if okP and why ~= nil then
+			return false, "Protected", info
+		end
+	end
+	if not T.CampCooldown then
+		local okA, left = pcall(function()
+			return (require(script.Parent.AntiCampService) :: any).CooldownLeft(uid, pid)
+		end)
+		if okA and typeof(left) == "number" and left > 0 then
+			return false, "CampCooldown", info
+		end
+	end
+	if mc and mc.CanArmyRaid then
+		local okR, why = mc.CanArmyRaid(player, victim) -- ally / new player / raid shield / low balance (the raid rules)
+		if not okR then
+			return false, tostring(why or "Blocked"), info
+		end
+	end
+	if info.CooldownLeft > 0 then
+		return false, "Cooldown", info
+	end
+	if NR.UsesWarhead and silo(player, profile) < 1 then
+		return false, "NotReady", info
+	end
+	return true, "Ok", info
+end
+
+function NukeService.RaidPreview(player: Player, plotId: any)
+	local ok, why, info = NukeService.RaidVerdict(player, plotId)
+	if why == "Off" then
+		return
+	end
+	info.Ok = ok
+	info.Why = why
+	push(player, "NukeRaidPreview", info)
+end
+
+local function strikeFx(player: Player, victim: Player, plotId: number)
+	if not NR.Vfx then
+		return
+	end
+	local okS, sv = pcall(function()
+		return Workspace:GetServerTimeNow()
+	end)
+	local gd = deps.GateDefenseService
+	local to: Vector3? = nil
+	if gd and gd.GetGateCFrame then
+		local okG, cf = pcall(gd.GetGateCFrame, plotId)
+		if okG and typeof(cf) == "CFrame" then
+			to = (cf :: CFrame).Position
+		end
+	end
+	to = to or PlotFrame.PlotPosition(plotId)
+	local myPlot = if deps.BaseService and deps.BaseService.GetOwnedPlotId then deps.BaseService.GetOwnedPlotId(player) else nil
+	local fromBase = if typeof(myPlot) == "number" then PlotFrame.PlotPosition(myPlot) else nil
+	if to == nil then
+		return
+	end
+	local from = (fromBase or to + Vector3.new(0, 0, 400)) + Vector3.new(0, 20, 0)
+	local dist = (to - from).Magnitude
+	local ev = deps.RemoteSetup and deps.RemoteSetup.Get(Constants.RemoteNames.MissileStrikeFx)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireAllClients({
+			StrikeId = "nuke_" .. player.UserId .. "_" .. os.time(),
+			AttackerUserId = player.UserId,
+			AttackerName = player.DisplayName,
+			VictimUserId = victim.UserId,
+			VictimName = victim.DisplayName,
+			PlotId = plotId,
+			From = from,
+			To = to,
+			ArcHeight = math.clamp(dist * 0.25, 60, 400),
+			LaunchTime = if okS then sv else os.time(),
+			FlightSeconds = NR.FlightSeconds,
+			Outcome = "Hit",
+		})
+	end
+	task.delay(NR.FlightSeconds, function()
+		pushAll("NukeBlast", { X = to.X, Z = to.Z, Radius = 30 }) -- the light flash at the base (NukeController.blast)
+	end)
+end
+
+function NukeService.RaidLaunch(player: Player, plotId: any): (boolean, string)
+	local ok, why, info = NukeService.RaidVerdict(player, plotId)
+	if not ok then
+		return false, why
+	end
+	local profile = deps.DataService.GetProfile(player)
+	local victim = Players:GetPlayerByUserId(deps.BaseService.GetOwnerUserId(info.PlotId))
+	if victim == nil then
+		return false, "NoBase"
+	end
+	-- the warhead + the cooldown before the money moves (a double tap can never launch twice)
+	local s = profile.NukeSilo
+	local readyBefore = silo(player, profile)
+	local oldLast = profile.NukeLastLaunch
+	if NR.UsesWarhead then
+		profile.NukeSilo = { Ready = readyBefore - 1, ChargeFrom = if (tonumber(s and s.ChargeFrom) or 0) > 0 then s.ChargeFrom else os.time() }
+	end
+	profile.NukeLastLaunch = os.time()
+	deps.DataService.MarkDirty(player)
+	local moved = deps.MoneyCollectorService.NukeRaid(player, victim, NR.Text.Hit)
+	if moved <= 0 then -- nothing moved (a race: shield / balance changed): give the warhead and the cooldown back
+		profile.NukeSilo = s
+		profile.NukeLastLaunch = oldLast
+		deps.DataService.MarkDirty(player)
+		return false, "Blocked"
+	end
+	print(string.format("[NukeRaid] uid=%d -> victim=%d plot=%d preview=%d moved=%d", player.UserId, victim.UserId, info.PlotId, info.Amount, moved))
+	if deps.NotificationService then
+		pcall(deps.NotificationService.Notify, player, string.format(NR.Text.Launched, NukeService.FormatCash(moved), victim.DisplayName), "Success", 6)
+	end
+	pcall(strikeFx, player, victim, info.PlotId)
+	return true, "Ok"
+end
+
+function NukeService.HasSilo(player: Player): boolean
+	return siloLevel(player) >= 1
+end
+
+function NukeService.FormatCash(n: number): string
+	local s = tostring(math.floor(n))
+	return (s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
+end
+
 function NukeService.Init(d: { [string]: any })
 	deps = d
 	local remote = d.RemoteSetup.Get(Constants.RemoteNames.RequestNuke) :: RemoteEvent
@@ -103369,6 +103678,17 @@ function NukeService.Init(d: { [string]: any })
 			NukeService.OpenPanel(player)
 		elseif action == "rush" then
 			NukeService.Rush(player)
+		elseif action == "rpreview" then -- claude-bud JOB 65: targetId = the plot id (the server decides everything)
+			NukeService.RaidPreview(player, targetId)
+		elseif action == "rlaunch" then
+			local ok, why = NukeService.RaidLaunch(player, targetId)
+			if not ok and d.NotificationService and NR then
+				local copy = if why == "Cooldown" then string.format(NR.Text.Cooldown, "wait")
+					elseif why == "NotReady" then NR.Text.NotReady
+					elseif why == "NoSilo" then NR.Text.NoSilo
+					else string.format(NR.Text.Blocked, why)
+				pcall(d.NotificationService.Notify, player, copy, "Warn", 4)
+			end
 		elseif action == "launch" then
 			local ok, why = NukeService.Launch(player, targetId)
 			if not ok and d.NotificationService then
@@ -113423,6 +113743,13 @@ function RivalService.Candidates(viewer: Player): ({ any }, { [string]: number }
 					Verdict = RivalConfig.VerdictWord(v.Bully == true, tonumber(v.Ratio) or 1, ArmyOrdersConfig.Fairness.RiskyRatio),
 					Loot = loot,
 					Dist = dist,
+					-- claude-bud JOB 65: he can nuke bases (the silo built, the nuke raid live for him): the card shows NUKE
+					Nuke = (function(): boolean
+						local okN, NS = pcall(function(): any
+							return require(script.Parent.NukeService)
+						end)
+						return okN and NS and NS.RaidLive and NS.RaidLive(viewer.UserId) and NS.HasSilo and NS.HasSilo(viewer) or false
+					end)(),
 					-- claude-bud JOB 63: his same-base cooldown on this base (seconds; 0 = none)
 					Wait = (function(): number
 						local okA, left = pcall(function()
@@ -153111,6 +153438,100 @@ local function blast(d: any)
 	end
 end
 
+-- ── claude-bud JOB 65: the nuke-raid preview card (FeaturePush "NukeRaidPreview", all numbers from the server) ───
+local WHY: { [string]: string } = {
+	NoSilo = "Build the Nuclear Silo first",
+	NoBase = "That base is empty now",
+	Self = "That's your own base",
+	Admin = "This base can't be nuked",
+	Ally = "That's an ally",
+	Protected = "Protected right now",
+	CampCooldown = "Base cooldown: wait",
+	Shielded = "Shielded after a raid",
+	NewPlayer = "New player: protected",
+	LowBalance = "Their ATM is almost empty",
+	Cooldown = "Silo cooling down",
+	NotReady = "No warhead ready",
+}
+
+local function clockText(sec: number): string
+	sec = math.max(0, math.floor(sec))
+	return string.format("%d:%02d", math.floor(sec / 60), sec % 60)
+end
+
+local function raidPreview(d: any)
+	local g = gui("WE_NukeRaidPreview", 37)
+	if g == nil then
+		return
+	end
+	local card = Instance.new("Frame")
+	card.Name = "Card"
+	card.AnchorPoint = Vector2.new(0.5, 0.5)
+	card.Position = UDim2.fromScale(0.5, 0.5)
+	card.Size = UDim2.fromOffset(420, 268)
+	card.BackgroundColor3 = PLATE
+	card.BackgroundTransparency = 0.03
+	card.Parent = g
+	corner(card, 14)
+	local st = Instance.new("UIStroke")
+	st.Color = RED
+	st.Thickness = 3
+	st.Parent = card
+	local fit = Instance.new("UISizeConstraint")
+	fit.MaxSize = Vector2.new(440, 300)
+	fit.Parent = card
+	local function line(y: number, h: number, size: number, color: Color3, text: string, font: Enum.Font?)
+		local l = Instance.new("TextLabel")
+		l.BackgroundTransparency = 1
+		l.Position = UDim2.fromOffset(18, y)
+		l.Size = UDim2.new(1, -36, 0, h)
+		l.Font = font or Enum.Font.GothamBold
+		l.TextSize = size
+		l.TextColor3 = color
+		l.TextXAlignment = Enum.TextXAlignment.Left
+		l.TextTruncate = Enum.TextTruncate.AtEnd
+		l.Text = text
+		l.Parent = card
+		return l
+	end
+	line(12, 30, 24, RED, "NUKE " .. string.upper(tostring(d.Name or "?")) .. "?", Enum.Font.GothamBlack)
+	line(46, 24, 20, Color3.fromRGB(220, 220, 210), string.format("Base level %d", tonumber(d.Level) or 0))
+	line(74, 34, 28, Color3.fromRGB(120, 255, 140), "+" .. money(tonumber(d.Amount) or 0), Enum.Font.GothamBlack)
+	line(110, 22, 18, Color3.fromRGB(200, 196, 180), "Their whole ATM, straight to your cash")
+	local ok = d.Ok == true
+	local why = if ok then "" else (WHY[tostring(d.Why)] or tostring(d.Why))
+	if tostring(d.Why) == "Cooldown" then
+		why = "Silo cooling down: " .. clockText(tonumber(d.CooldownLeft) or 0)
+	end
+	line(136, 24, 18, Color3.fromRGB(255, 200, 80), why)
+	local cancel = btn(card, "CANCEL", Color3.fromRGB(70, 72, 66))
+	cancel.Name = "Cancel"
+	cancel.Size = UDim2.fromOffset(170, 64)
+	cancel.Position = UDim2.new(0, 18, 1, -82)
+	cancel.TextSize = 20
+	cancel.Activated:Connect(function()
+		g:Destroy()
+	end)
+	local launch = btn(card, if ok then "LAUNCH" elseif tostring(d.Why) == "Cooldown" then clockText(tonumber(d.CooldownLeft) or 0) else "LOCKED", if ok then RED else Color3.fromRGB(90, 50, 46))
+	launch.Name = "Launch"
+	launch.Size = UDim2.fromOffset(190, 64)
+	launch.Position = UDim2.new(1, -208, 1, -82)
+	launch.TextSize = 22
+	launch.AutoButtonColor = ok
+	launch.Activated:Connect(function()
+		if not ok then
+			return
+		end
+		g:Destroy()
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestNuke, "rlaunch", tostring(d.PlotId))
+	end)
+end
+
+-- the TARGETS card / map ask for the preview of one base (the server answers with NukeRaidPreview)
+function NukeController.PreviewRaid(plotId: number)
+	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestNuke, "rpreview", tostring(plotId))
+end
+
 function NukeController.Init()
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if typeof(data) ~= "table" then
@@ -153122,6 +153543,8 @@ function NukeController.Init()
 			incoming(data)
 		elseif kind == "NukeBlast" then
 			blast(data)
+		elseif kind == "NukeRaidPreview" then
+			raidPreview(data) -- claude-bud JOB 65
 		end
 	end)
 end
@@ -159286,7 +159709,9 @@ local function rebuildList()
 	local cs = contentSize()
 	local lw = RivalConfig.Layout(cs.X, cs.Y, #rows).List.W
 	local rowW = lw - 16
-	local textW = rowW - 10 - L.SendWidth - L.ViewWidth - 3 * 8
+	-- claude-bud JOB 65: a NUKE button when the server says he can nuke bases (rows carry Nuke = true)
+	local nukeW = if rows[1] and rows[1].Nuke == true then (tonumber((L :: any).NukeWidth) or 72) else 0
+	local textW = rowW - 10 - L.SendWidth - L.ViewWidth - 3 * 8 - (if nukeW > 0 then nukeW + 8 else 0)
 	for i, r in ipairs(rows) do
 		local t = RivalConfig.RowLines(r)
 		local row = Instance.new("Frame")
@@ -159318,6 +159743,18 @@ local function rebuildList()
 		local plotId = tonumber(r.PlotId) or 0
 		local by = math.floor((L.RowHeight - L.ButtonHeight) / 2)
 		local send = button(row, "SEND ARMY", Color3.fromRGB(170, 55, 45), rowW - 8 - L.ViewWidth - 8 - L.SendWidth, by, L.SendWidth, L.ButtonHeight)
+		if nukeW > 0 then
+			local nuke = button(row, "NUKE", Color3.fromRGB(120, 20, 20), rowW - 8 - L.ViewWidth - 8 - L.SendWidth - 8 - nukeW, by, nukeW, L.ButtonHeight)
+			nuke.Activated:Connect(function()
+				setOpen(false)
+				local okN, NC = pcall(function(): any
+					return require(script.Parent.NukeController)
+				end)
+				if okN and NC and NC.PreviewRaid then
+					NC.PreviewRaid(plotId) -- the preview card: the server reads the exact amount
+				end
+			end)
+		end
 		send.Activated:Connect(function()
 			-- the SAME JOB 38 send path as the map's SEND ARMY (the server re-checks every fairness rule)
 			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySend, plotId)

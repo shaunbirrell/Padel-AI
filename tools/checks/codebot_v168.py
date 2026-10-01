@@ -29,12 +29,12 @@ S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 195)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 195)'),
-    (S + "Services/DataService.luau", "WE_Build=195"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 195)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 196)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 196)'),
+    (S + "Services/DataService.luau", "WE_Build=196"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 196)'),
 ):
-    check(needle in read(rel), "CODEBOT v168: WE_Build=195 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v168: WE_Build=196 " + rel.rsplit("/", 1)[-1])
 
 ADM = read(S + "Services/AdminService.luau")
 PS = read(S + "Services/PrestigeService.luau")
