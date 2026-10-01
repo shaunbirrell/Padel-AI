@@ -86,8 +86,9 @@ _j49("os.time()" in _j49_fn(_RS, "local function onLoadOffline") and "profile.Pr
 # ── C ──
 _MCF = _j49_src(_CF + "MissionConfig.luau")
 _core = _MCF.split("\tCore = {")[1].split("\n\t},\n\n")[0] if "\tCore = {" in _MCF else ""
-_j49("Enabled = true," in _core and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _core and "Count = 3," in _core and "ResetHourUtc = 0," in _core,
-     "C: MissionConfig.Core is owner-first, 3 a day, reset at 00:00 UTC by default")
+# Code Bot v182 (Shaun approved 2026-10-01): launched for everyone (was OwnerFirst = true, -- NEW-OWNER-FIRST)
+_j49("Enabled = true," in _core and "OwnerFirst = false, -- Code Bot v182" in _core and "Count = 3," in _core and "ResetHourUtc = 0," in _core,
+     "C: MissionConfig.Core is live for everyone (Code Bot v182), 3 a day, reset at 00:00 UTC by default")
 _j49("Robux = { Enabled = true, OwnerFirst = false, ProductKey = \"MissionReroll\" }" in _core and "FreePerDay = 1," in _core,
      "C: 1 free reroll a day; then the 19 R$ Robux reroll (Code Bot v180: live)")
 _j49("Raid = true," in _MCF.split("LiveObjectives = {")[1].split("}")[0], "C: Raid is a live ObjectiveType")
@@ -106,7 +107,8 @@ _j49("GrantsMissionReroll == true" in _MON and "GrantRerollToken(player)" in _MO
 # ── D ──
 _RCF = _j49_src(_CF + "RetentionConfig.luau")
 _rsq = _j49_block(_RCF, "ReturnSequence")
-_j49("Enabled = true," in _rsq and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _rsq, "D: RetentionConfig.ReturnSequence is owner-first")
+# Code Bot v182 (Shaun approved 2026-10-01): launched for everyone (was OwnerFirst = true, -- NEW-OWNER-FIRST)
+_j49("Enabled = true," in _rsq and "OwnerFirst = false, -- Code Bot v182" in _rsq, "D: RetentionConfig.ReturnSequence is live for everyone (Code Bot v182)")
 _RCC = _j49_src("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/RetentionController.luau")
 _j49("enqueueCard(1," in _RCC and "enqueueCard(2," in _RCC and "enqueueCard(3," in _RCC and 'player:GetAttribute("WE_Onboarding") == true' in _RCC,
      "D: one card queue (Welcome back, streak, missions toast), never during the onboarding hold")

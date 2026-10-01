@@ -20,6 +20,12 @@ def _cb180_read(rel):
     return (_cb180_ROOT / rel).read_text(encoding="utf-8").replace("\r\n", "\n")
 
 
+def _cb180_shipped(rel, rev="719f957"):
+    # Code Bot v182: the file as v180 shipped it (719f957); the current OwnerFirst state is pinned in codebot_v182.py
+    _r = _cb180_sp.run(["git", "show", rev + ":" + rel], capture_output=True, text=True, cwd=_cb180_ROOT)
+    return (_r.stdout or "").replace("\r\n", "\n") if _r.returncode == 0 else ""
+
+
 def _cb180_check(cond, label):
     if "ok" in globals() and "bad" in globals():
         (ok if cond else bad)(label)
@@ -72,12 +78,12 @@ def _cb180_skus(src):
 
 # ── build pins ──
 for _rel, _needle in (
-    (_cb180_S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 181)'),
-    (_cb180_S + "Services/DataService.luau", 'SetAttribute("WE_Build", 181)'),
-    (_cb180_S + "Services/DataService.luau", "WE_Build=181"),
-    (_cb180_S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 181)'),
+    (_cb180_S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 182)'),
+    (_cb180_S + "Services/DataService.luau", 'SetAttribute("WE_Build", 182)'),
+    (_cb180_S + "Services/DataService.luau", "WE_Build=182"),
+    (_cb180_S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 182)'),
 ):
-    _cb180_check(_needle in _cb180_read(_rel), "CODEBOT v180: WE_Build=181 " + _rel.rsplit("/", 1)[-1])
+    _cb180_check(_needle in _cb180_read(_rel), "CODEBOT v180: WE_Build=182 " + _rel.rsplit("/", 1)[-1])
 
 # ── the two new SKUs: Ids + display prices ──
 _cb180_MON = _cb180_read(_cb180_C + "MonetizationConfig.luau")
@@ -141,14 +147,14 @@ _cb180_oe = _cb180_re.search(r"\n\tOfflineEarnings = \{(.*?)\n\t\tCard = \{", _c
 _cb180_check(bool(_cb180_oe) and "Enabled = true," in _cb180_oe.group(1) and "OwnerFirst = false," in _cb180_oe.group(1)
              and "CapSeconds = 8 * 3600," in _cb180_oe.group(1) and "Share = 0.25," in _cb180_oe.group(1),
              "CODEBOT v180: OfflineEarnings live for everyone; CapSeconds 8 h and Share 0.25 unchanged")
-_cb180_MCF = _cb180_read(_cb180_C + "MissionConfig.luau")
+_cb180_MCF = _cb180_shipped(_cb180_C + "MissionConfig.luau")  # Code Bot v182: as v180 shipped it (Core live since v182)
 _cb180_core = _cb180_MCF.split("\tCore = {")[1].split("\n\t},\n\n")[0] if "\tCore = {" in _cb180_MCF else ""
 _cb180_check("Enabled = true," in _cb180_core and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _cb180_core,
              "CODEBOT v180: MissionConfig.Core.OwnerFirst left true (NEW-OWNER-FIRST, not flipped)")
 _cb180_check('Robux = { Enabled = true, OwnerFirst = false, ProductKey = "MissionReroll" },' in _cb180_core
              and "FreePerDay = 1," in _cb180_core,
              "CODEBOT v180: Core.Reroll FreePerDay 1 + Robux reroll Enabled (only gate left = Core.OwnerFirst)")
-_cb180_RCF = _cb180_read(_cb180_C + "RetentionConfig.luau")
+_cb180_RCF = _cb180_shipped(_cb180_C + "RetentionConfig.luau")  # Code Bot v182: as v180 shipped it (ReturnSequence live since v182)
 _cb180_rs = _cb180_re.search(r"\bReturnSequence = \{(.*?)\n\t\},", _cb180_RCF, _cb180_re.S)
 _cb180_check(bool(_cb180_rs) and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _cb180_rs.group(1),
              "CODEBOT v180: RetentionConfig.ReturnSequence.OwnerFirst left true (not flipped)")

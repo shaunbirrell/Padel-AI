@@ -49,7 +49,7 @@ local RetentionConfig = {
 		before (each on its own timer). ]]
 	ReturnSequence = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): Code Bot flips it after Shaun's phone test
+		OwnerFirst = false, -- Code Bot v182 (Shaun approved 2026-10-01): return sequence live for everyone
 		GapSeconds = 1.5, -- between two cards
 		MissionsText = "3 new missions today: open MISSIONS", -- device-neutral, no key names
 		MissionsToastSeconds = 5,

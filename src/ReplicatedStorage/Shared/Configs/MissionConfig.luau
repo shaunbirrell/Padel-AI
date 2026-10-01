@@ -221,7 +221,7 @@ local MissionConfig = {
 		Chest once a day. Reroll: FreePerDay free (server-checked, saved per day); the Robux reroll (19 R$, Code Bot v180) after it. ]]
 	Core = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): Code Bot flips it after Shaun's phone test
+		OwnerFirst = false, -- Code Bot v182 (Shaun approved 2026-10-01): core daily missions live for everyone
 		Count = 3,
 		ResetHourUtc = 0, -- the daily reset (0 = 00:00 UTC, today's behaviour)
 		Pool = { "Raid", "Recruit", "Build", "WinFights" },
@@ -231,7 +231,7 @@ local MissionConfig = {
 		Reroll = {
 			FreePerDay = 1,
 			-- Code Bot v180 (Shaun approved 2026-10-01): the paid reroll (DevProducts.MissionReroll 3715836569, 19 R$) is live.
-			-- OwnerFirst false here, so the only gate left is Core.OwnerFirst (the core missions themselves).
+			-- OwnerFirst false here; Core.OwnerFirst false since v182, so the reroll is open to everyone with Core.
 			Robux = { Enabled = true, OwnerFirst = false, ProductKey = "MissionReroll" },
 		},
 		-- per loop type: the ObjectiveType, GO key, the floor reward and the target per tier (1 / 2 / 3)

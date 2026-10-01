@@ -44,15 +44,15 @@ def block(src, name):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 181)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 181)'),
-    (S + "Services/DataService.luau", "WE_Build=181"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 181)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 182)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 182)'),
+    (S + "Services/DataService.luau", "WE_Build=182"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 182)'),
 ):
-    check(needle in read(rel), "CODEBOT v179: WE_Build=181 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v179: WE_Build=182 " + rel.rsplit("/", 1)[-1])
 
 # JOB 49 D: ReturnSequence owner-first
-RCF = read(C + "RetentionConfig.luau")
+RCF = shipped_v180(C + "RetentionConfig.luau", "75bd8b4")  # Code Bot v182: as shipped (ReturnSequence live since v182)
 rsq = block(RCF, "ReturnSequence")
 check("Enabled = true," in rsq and "OwnerFirst = true, -- NEW-OWNER-FIRST" in rsq,
       "CODEBOT v179: RetentionConfig.ReturnSequence Enabled + OwnerFirst=true (NEW-OWNER-FIRST)")
@@ -69,7 +69,7 @@ EGC = read(C + "EndgameConfig.luau")
 check("RecruitCloseRange = 17," in EGC, "CODEBOT v179: EndgameConfig.Station.RecruitCloseRange=17")
 
 # MissionConfig.Core still owner-first from JOB 49 C
-MCF = read(C + "MissionConfig.luau")
+MCF = shipped_v180(C + "MissionConfig.luau", "75bd8b4")  # Code Bot v182: as shipped (Core live since v182)
 core = MCF.split("\tCore = {")[1].split("\n\t},\n\n")[0] if "\tCore = {" in MCF else ""
 check("Enabled = true," in core and "OwnerFirst = true, -- NEW-OWNER-FIRST" in core,
       "CODEBOT v179: MissionConfig.Core still OwnerFirst=true (NEW-OWNER-FIRST)")

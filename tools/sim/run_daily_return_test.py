@@ -355,8 +355,8 @@ PER_MIN = 0
 -- ── C. MISSIONS ──
 local MCfg = require(node("Configs/MissionConfig"))
 local Core = MCfg.Core
-check(Core.Enabled == true and Core.OwnerFirst == true and Core.Reroll.Robux.Enabled == true and Core.Reroll.Robux.OwnerFirst == false,
-  "C flags: Core is owner-first; the Robux reroll is live (Code Bot v180; its only gate = Core.OwnerFirst)")
+check(Core.Enabled == true and Core.OwnerFirst == false and Core.Reroll.Robux.Enabled == true and Core.Reroll.Robux.OwnerFirst == false,
+  "C flags: Core live for everyone (Code Bot v182: OwnerFirst = false); the Robux reroll is live (Code Bot v180)")
 check(MC.DevProducts.MissionReroll.Id == 3715836569 and MC.DevProducts.MissionReroll.RobuxPrice == 19, "C: DevProducts.MissionReroll 3715836569, 19 R$")
 local function state(p)
   clearLog(); MS.Push(p)
@@ -484,22 +484,33 @@ local anyCore = false
 for _, e in ipairs(off.Daily) do if e.Core or string.match(e.Id, "^Core") then anyCore = true end end
 check(not anyCore and off.Core == nil, "Core OFF: today's rotation exactly (no core rows, no Core payload)")
 Core.Enabled = true
--- owner-first
+-- Code Bot v182: launched for everyone (Core.OwnerFirst = false): another player gets the core missions + the reroll
+do
+  newProfile(OTHER, { Level = 5 })
+  local ol = state(OTHER)
+  local olc = 0
+  for _, e in ipairs(ol.Daily) do if e.Core then olc += 1 end end
+  check(olc == Core.Count and MS.RerollsLeft(OTHER, PROFILES[OTHER.UserId]) >= 1 and MS.RerollBuyLive(OTHER) == true,
+    "Code Bot v182: a non-owner gets " .. olc .. " core missions, the free reroll and the 19 R$ reroll (Core.OwnerFirst = false)")
+end
+-- owner-first (the rule is still proved with Core.OwnerFirst = true; restored below)
+Core.OwnerFirst = true
 newProfile(OTHER, { Level = 5 })
 local o = state(OTHER)
 local oc = false
 for _, e in ipairs(o.Daily) do if e.Core then oc = true end end
-check(not oc, "owner-first: another player still gets today's rotation")
+check(not oc, "owner-first (OwnerFirst = true): another player still gets today's rotation")
 do -- Code Bot v180: while Core.OwnerFirst is true the paid reroll is NOT reachable by a non-owner
   local ob, oreroll = 0, MS.RerollsLeft(OTHER, PROFILES[OTHER.UserId])
   for _, e in ipairs(o.Daily) do if e.CanBuyReroll == true or e.CanReroll == true then ob += 1 end end
   check(ob == 0 and oreroll == 0 and MS.RerollBuyLive(OTHER) == false and MS.RerollBuyLive(OWNER) == true,
-    "owner-first: a non-owner has no reroll / 19 R$ reroll button yet (Core.OwnerFirst); the owner does")
+    "owner-first (OwnerFirst = true): a non-owner has no reroll / 19 R$ reroll button; the owner does")
 end
+Core.OwnerFirst = false
 
 -- ── D. ONE RETURN SEQUENCE (server side; the client queue is a phone test) ──
 local RCf = require(node("Configs/RetentionConfig"))
-check(RCf.ReturnSequence.Enabled == true and RCf.ReturnSequence.OwnerFirst == true, "D flags: ReturnSequence is owner-first")
+check(RCf.ReturnSequence.Enabled == true and RCf.ReturnSequence.OwnerFirst == false, "D flags: ReturnSequence live for everyone (Code Bot v182: OwnerFirst = false)")
 PER_MIN = 600
 OWNER:SetAttribute("WE_ComebackCash", 25000)
 local pd, cd = offlineLoad(OWNER, 3600)
@@ -522,11 +533,18 @@ for _, cb in ipairs(loaded) do cb(OWNER, rd) end
 runTo(CLOCK + 5)
 local r = lastEv("RETURN_DAY")
 check(evCount("RETURN_DAY") == 1 and r and r.days >= 1 and r.guidedDone == "yes", "ReturnDay on join: days " .. tostring(r and r.days) .. ", guidedDone " .. tostring(r and r.guidedDone))
+RCf.ReturnSequence.OwnerFirst = true -- the owner-first rule is still proved with OwnerFirst = true (restored below)
 local rd2 = newProfile(OTHER, { FirstJoinUnix = CLOCK - 86400 })
 clearLog()
 for _, cb in ipairs(loaded) do cb(OTHER, rd2) end
 runTo(CLOCK + 5)
-check(evCount("RETURN_DAY") == 0, "owner-first: no ReturnDay for another player yet")
+check(evCount("RETURN_DAY") == 0, "owner-first (OwnerFirst = true): no ReturnDay for another player")
+RCf.ReturnSequence.OwnerFirst = false
+local rd3 = newProfile(OTHER, { FirstJoinUnix = CLOCK - 86400 })
+MS, RS = boot(); clearLog()
+for _, cb in ipairs(loaded) do cb(OTHER, rd3) end
+runTo(CLOCK + 5)
+check(evCount("RETURN_DAY") == 1, "Code Bot v182: ReturnDay logged for another player too (ReturnSequence.OwnerFirst = false)")
 
 --@@C@@
 
