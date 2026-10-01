@@ -1,3 +1,21 @@
+## v186 PUBLISHED (Code Bot Roblox, 2026-10-01 ~19:49 Dublin): Open Cloud place version 184. claude-bud JOB 50 D hotbar weapon labels overlap
+- **Commits:** cherry-pick `a502699` → `901696b` (JOB 50 D); code+dist+checks `1e2ac24` on phase-7-polish (from v185 `5508896`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v185 `5508896`.
+- **JOB 50 D:** hotbar captions stay inside their own slot (`fitCaption`, CaptionMinTextPx floor); distinct rebirth ShortNames DMR / HAVOC RL / SOV RIFLE (pass guns keep LONGSHOT / HAVOC / SOVEREIGN). No Id / pass / price change. Always-on UI fix (no new OwnerFirst gate).
+- **Checks:** BuyPathStatic **PASS=8120 FAIL=0**; `tools/checks/codebot_v186.py`; `claude_bud_job50.py`; `run_hotbar_caption_test.py` 0 failed.
+- **Publish:** HTTP 200, versionNumber **184**, universe 10767159222 / place 97112936860418. Servers NOT restarted: Migrate to Latest Update when convenient.
+- **Phone tests (Shaun — rejoin / new server for WE_Build 186):**
+  1. Equip 4 weapons on the phone hotbar: each caption sits inside its own slot and never overlaps the neighbour.
+  2. Rebirth DMR vs pass LONGSHOT, HAVOC RL vs HAVOC, SOV RIFLE vs SOVEREIGN read as distinct labels.
+- **Still owed:** JOB 50 A/B/C rebirth zones rebuild still on bud; flip AttackRange.OwnerFirst (JOB 52) + SharedHostility.OwnerFirst (JOB 51) after phone OK; queued 53–58, 59, 60, 62, 63, 64. JOB 44 DONE — do not reopen.
+
+## v185 PUBLISHED (Code Bot Roblox, 2026-10-01 ~19:43 Dublin): Open Cloud place version 183. DOUBLE WEEKEND event (time-gated)
+- **Commit:** `5508896` on phase-7-polish (from v184 `36b0f31`). WE_Build 185. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical (no price change).
+- **Config:** `Shared/Configs/EventConfig.luau` `Id="DoubleWeekend1"`, `StartUnix=1790971200` (Fri 2 Oct 2026 20:00 UTC = 21:00 Dublin), `EndUnix=1791144000` (Sun 4 Oct 2026 20:00 UTC = 21:00 Dublin), `XPMult=2`, `CashMult=2`, `KillMult=2`, `OwnerFirst=true` (NEW-OWNER-FIRST), `EventId="5990901055452480269"` (Creator Hub event for NOTIFY ME).
+- **OwnerFirst gates ONLY the preview before StartUnix** (Shaun 470626172 sees it live early). Inside the window it is live for EVERYONE regardless of OwnerFirst; after EndUnix off for everyone. Owner chat `/eventpreview on|off` toggles the preview per server (not saved).
+- **Checks:** BuyPathStatic **PASS=8146 FAIL=0**; `tools/checks/codebot_v185.py` 39 PASS.
+- **Servers NOT restarted.** Old (v184) servers have NO event code: a Migrate to Latest Update before Fri 21:00 Dublin is advised if old servers are still up.
+- **Next:** when Shaun says so, flip `EventConfig.OwnerFirst` true -> false (ends the preview only). After Sun 21:00 the event is inert; remove or reuse the config for the next event.
+
 ## v184 PUBLISHED (Code Bot Roblox, 2026-10-01 ~19:27 Dublin): Open Cloud place version 182. claude-bud JOB 52 ARMY ATTACK at range OwnerFirst
 - **Commits:** cherry-pick `98a9bc2` → `bdd3c32` (JOB 52 AttackRange), `df004e9` → `5726ce1` (pin credit check); code+dist+checks `cc922b8` on phase-7-polish (from `744c18f`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v183 `744c18f`.
 - **JOB 52 (NEW-OWNER-FIRST):** `ArmyOrdersConfig.AttackRange.OwnerFirst = true` — one set of radii for the whole ATTACK order (seek 400 / leash 450 / chain 200), flat distances, existing march; nothing in range → distance + direction card with PIN / SEND ARMY (`N:<npcId>` server-resolved); ARMY KILLS for ordered target group, capped 60/h. Enabled=false is the old 250/300/150.
