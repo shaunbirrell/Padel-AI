@@ -263,6 +263,28 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	end
 	-- claude-bud JOB 41 part B: the Recruit Pack card was shown (once per profile)
 	profile.RecruitPackOffered = if profile.RecruitPackOffered == true then true else nil
+	-- claude-bud JOB 50 A: the zone runs (cooldowns / bests / first clears per zone id), the bunker banner, the title
+	for _, key in ipairs({ "ZoneRunAt", "ZoneBest", "ZoneFirstClear" }) do
+		local t = profile[key]
+		if typeof(t) == "table" then
+			local clean: { [string]: any } = {}
+			for k, v in pairs(t) do
+				if typeof(k) == "string" and #k <= 24 then
+					if key == "ZoneFirstClear" then
+						clean[k] = if v == true then true else nil
+					else
+						local n = tonumber(v)
+						clean[k] = if n and n == n and n >= 0 and n < 1e12 then n else nil
+					end
+				end
+			end
+			profile[key] = if next(clean) ~= nil then clean else nil
+		else
+			profile[key] = nil
+		end
+	end
+	profile.BunkerBanner = if profile.BunkerBanner ~= nil then math.clamp(nonNegInt(profile.BunkerBanner), 0, 10) else nil
+	profile.ZoneCommander = profile.ZoneCommander == true or nil
 	-- claude-bud JOB 49 A: the streak's grace bookkeeping (missing = no cycle yet / no grace used)
 	if typeof(profile.DailyLogin) == "table" then
 		local dl = profile.DailyLogin

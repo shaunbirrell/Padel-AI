@@ -116,6 +116,83 @@ cfg.Shipment = { Minutes = 10, CooldownMinutes = 20 } -- "ship": Minutes of the 
 cfg.Sweep = { CooldownSeconds = 45 }
 cfg.Card = { MaxDistance = 18 } -- the preview card shows while the zone's prompt is shown (the console)
 
+--[[ claude-bud JOB 50 (2026-10-01, Shaun: "the rebirth zones still lack detail, quality and any purpose or fun").
+	ROOT CAUSE (docs/proof/job50/before.md): every zone's activity was ONE tap at the kiosk for a payout of 10 min of
+	that zone's flat income (often a sliver of the player's real income by rebirth 10), with no skill, no goal, no best,
+	no status, and nothing logged. Rebuild (owner-first; OFF == the JOB 46 one-tap activities exactly):
+	  * Runs: each zone's kiosk starts a short, server-timed run on the apron (steps shown one at a time as prompts the
+	    server validates, or an NPC wave); a cooldown per zone (saved), a first-clear bonus, a personal best, an effect
+	    tied to the zone (the silo charge, the missile reload, an army buff, a recon pin, a banner stage).
+	  * Reward: the ONE formula (cfg.ShipmentCash) x a speed factor (1.0 .. SpeedBonusMax); never below ShipmentCash.
+	  * Plaques at each gateway: "UNLOCKED BY <name> · REBIRTH N" + the best time; all 7 zones at L3 = ZONE COMMANDER.
+	  * Free for everyone; no Robux anywhere in it. ]]
+cfg.Rebuild = {
+	Enabled = true,
+	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 50): Code Bot flips it after Shaun's phone test
+	Activities = true,
+	Plaques = true,
+	Signs = true,
+	Visuals = true,
+}
+cfg.RunRules = {
+	CooldownMinutes = 20, -- per zone, saved (profile.ZoneRunAt)
+	SpeedBonusMax = 1.5, -- the fastest run pays this x ShipmentCash (a run at the time limit pays 1.0 x)
+	FirstClearMult = 1, -- the first clear of a zone also pays this x ShipmentCash once (profile.ZoneFirstClear)
+	AnnexSlackStuds = 24, -- a step only counts with him inside the annex + this (no remote triggering)
+	StepHold = 0.3, -- seconds to hold a step prompt (fingers)
+	StepReach = 9, -- the step prompt's MaxActivationDistance
+	-- the base pay is max(ShipmentCash, IncomeMinutes x his passive income per minute): the silo / artillery / drone / bunker
+	-- zones have no flat income of their own, and late in the game 10 min of a zone's income is a sliver of his real income
+	IncomeMinutes = 2, -- 2 min of his income (x up to 1.5 by speed): 7 zones every 20 min stays well under his passive rate
+}
+-- step x / dz: annex-local x, and z = D / 2 + dz (the apron in front of the yard, where the JOB 46 dressing stands)
+local function step(label: string, x: number, dz: number): any -- claude-bud JOB 50 A: one run step (label, x, dz)
+	local t: { any } = {}
+	t[1], t[2], t[3] = label, x, dz
+	return t
+end
+cfg.Runs = ({
+	WestYard = { Title = "PRODUCTION RUN", Seconds = 60, Effect = "cash",
+		Steps = { step("PICK UP CRATE", -22, 4), step("LOAD TRUCK", 22, 10), step("PICK UP CRATE", -22, 4), step("LOAD TRUCK", 22, 10),
+			step("PICK UP CRATE", -22, 4), step("LOAD TRUCK", 22, 10) } },
+	StrategicYard = { Title = "LAUNCH PREP", Seconds = 30, Effect = "nukecharge", ChargeCutMinutes = 5,
+		Steps = { step("ARM 1 OF 3", -22, 5), step("ARM 2 OF 3", 0, 14), step("ARM 3 OF 3", 22, 5) } },
+	WestStrip = { Title = "RANGE PRACTICE", Seconds = 45, Effect = "reloadcut", ReloadCutSeconds = 120,
+		Steps = { step("HIT TARGET", -30, 6), step("HIT TARGET", -20, 14), step("HIT TARGET", -8, 6), step("HIT TARGET", 8, 14),
+			step("HIT TARGET", 20, 6), step("HIT TARGET", 30, 14) } },
+	DroneBay = { Title = "RECON FLIGHT", Seconds = 0, Effect = "recon" }, -- instant: the drones mark the nearest raidable rival + sweep
+	EastYard = { Title = "DRILL COURSE", Seconds = 45, Par = 30, Effect = "armyboost", BoostMinutes = 10,
+		Steps = { step("START", -30, 8), step("CLIMB WALL", -26, 14), step("ROPE FRAME", 27, 11), step("FINISH", 0, 6) } },
+	EastStrip = { Title = "PRESSURE VALVES", Seconds = 30, Effect = "cash", Shuffle = true,
+		Steps = { step("VALVE", -24, 6), step("VALVE", -12, 12), step("VALVE", 12, 12), step("VALVE", 24, 6) } },
+	WestFlank = { Title = "HOLD THE LINE", Seconds = 60, Effect = "banner", Wave = { "Infantry", "Infantry", "Infantry" },
+		WaveAt = { { -20, 14 }, { 0, 18 }, { 20, 14 } }, BannerStages = 3 },
+} :: any)
+
+function cfg.RebuildLive(userId: any, part: string?): boolean
+	local R: any = cfg.Rebuild
+	if typeof(R) ~= "table" or (part ~= nil and R[part] ~= true) then
+		return false
+	end
+	return (require(script.Parent.RetentionConfig) :: any).Live(R, userId)
+end
+
+-- the run's base pay: max(the ONE ShipmentCash formula, IncomeMinutes x his passive income per minute)
+function cfg.RunBase(zoneId: string, level: number, tickSeconds: number, perMin: number?): number
+	local inc = math.max(0, tonumber(perMin) or 0) * math.max(0, tonumber(cfg.RunRules.IncomeMinutes) or 0)
+	return math.max(cfg.ShipmentCash(zoneId, level, tickSeconds), math.floor(inc))
+end
+
+-- the run's cash: RunBase x (1 .. SpeedBonusMax) by the time left (pure; tickSeconds = EconomyConfig PassiveIncome)
+function cfg.RunCash(zoneId: string, level: number, tickSeconds: number, secondsUsed: number, limit: number, perMin: number?): number
+	local base = cfg.RunBase(zoneId, level, tickSeconds, perMin)
+	if limit <= 0 then
+		return base
+	end
+	local left = math.clamp((limit - secondsUsed) / limit, 0, 1)
+	return math.floor(base * (1 + (math.max(1, tonumber(cfg.RunRules.SpeedBonusMax) or 1.5) - 1) * left))
+end
+
 local function at(list: { number }?, level: number): number
 	if list == nil or level < 1 then
 		return 0

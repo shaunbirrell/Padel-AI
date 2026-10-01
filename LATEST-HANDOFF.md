@@ -46,6 +46,48 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 50 part A (2026-10-01): REBIRTH ZONES: A REAL REASON TO GO (THE ZONE RUNS) (branch `claude/desktop-bud`)
+**Flag to flip:** `RebirthZonesConfig.Rebuild.OwnerFirst = true -> false` (NEW-OWNER-FIRST). OFF = the JOB 46 one-tap
+activities exactly.
+
+**Root cause (docs/proof/job50/before.md):** every zone activity was one tap for 10 min of that zone's flat income
+(or just opened a panel), with no skill, goal, best, status or analytics.
+
+**Built (Modules/ZoneRuns.luau, driven by the existing WE_ZoneActivity kiosk; loop-design.md):**
+- **The runs:**
+
+  | Zone | Run | Effect on a win |
+  |---|---|---|
+  | Tank Factory | PRODUCTION RUN (crates -> truck, 60 s) | cash |
+  | Silo | LAUNCH PREP (3 consoles, 30 s) | warhead charge -5 min |
+  | Artillery | RANGE PRACTICE (6 targets, 45 s) | missile reload -120 s |
+  | Drone Hangar | RECON FLIGHT (instant) | nearest raidable rival marked with PIN / SEND + ATM swept |
+  | Elite Barracks | DRILL COURSE (45 s) | beat par 30 s = ARMY BOOST 10 min |
+  | Refinery | PRESSURE VALVES (shuffled order, 30 s) | cash |
+  | Bunker | HOLD THE LINE (3 CombatService NPCs, him only, 60 s) | cash + banner stage |
+
+- **Validation:** every step is server-checked (owner, in order, inside the annex, before the limit).
+- **Pay:** `RunBase = max(ShipmentCash, 2 min of his income)` x 1.0-1.5 by speed; the first clear pays once more.
+- **Cooldown:** 20 min per zone (saved), started by any end.
+- **Status:**
+  - A personal best on a new gateway plaque ("UNLOCKED BY <name> · REBIRTH N / <RUN> BEST").
+  - ZONE COMMANDER when all 7 zones are at L3.
+- **Analytics:** `ZoneActivity` (zone, result, seconds, payout).
+- **Saves:** new profile fields ZoneRunAt / ZoneBest / ZoneFirstClear / BunkerBanner / ZoneCommander, sanitised in
+  ProfileSchema.
+- Free for everyone; no Robux; no teleport.
+
+**Number for Shaun:** `RunRules.IncomeMinutes = 2`. At his rebirth-10 income a run is about $17M (fastest about $25M).
+All 7 zones every 20 min adds at most about 21 min of income per 20 min of active play.
+
+**Checks:** run_rebirth_stations_test (+ section 5: every run) 0 failed; claude_bud_job50 A pins.
+
+**Owed:** Studio shots of the step markers next to the JOB 46 props. Parts B (visual detail) and C (signs / pins)
+follow.
+
+**Test ON HIS PHONE:** at each zone's kiosk start the run, follow the gold step markers / prompts, and finish inside the
+time. The pay toast shows the time + NEW BEST, and the plaque shows the best.
+
 ## claude-bud JOB 50 part D (2026-10-01): HOTBAR WEAPON LABELS OVERLAP (branch `claude/desktop-bud`)
 **Root cause (from the source + HudConfig; docs/proof/job50/hotbar-caption.txt):**
 - Each slot's `WeaponName` box was slot + Gap + 4 = **80 v in a 64 v slot**: 8 v into each 12 v gap, so neighbouring

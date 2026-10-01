@@ -40,6 +40,8 @@ local RebirthZoneService = {}
 local deps: { [string]: any } = {}
 local Builder: any = nil
 local Dressing: any = nil -- claude-bud JOB 46: Modules/RebirthZoneDressing (the apron gateway, themed props, activity kiosk)
+local ZoneRuns: any = nil -- claude-bud JOB 50: Modules/ZoneRuns (the runs behind the kiosk, owner-first via ZC.Rebuild)
+local plaqueOf: { [number]: { [string]: TextLabel } } = {} -- claude-bud JOB 50: uid -> zoneId -> the plaque text
 local ZC: any = RebirthZonesConfig
 local apronOk: { [number]: { [string]: boolean } } = {} -- plotId -> zoneId -> the front apron is free (checked once)
 local sweepAt: { [number]: number } = {} -- userId -> clock of the last drone sweep
@@ -385,6 +387,81 @@ function RebirthZoneService.KioskPoint(player: Player, activity: string): Vector
 	return nil
 end
 
+-- claude-bud JOB 50 A: the gateway plaque (a small board left of the gate): who unlocked it, the rebirth, the run's
+-- best, ZONE COMMANDER. SurfaceGui MaxDistance 60 (<= 80), no lights, no Neon.
+function RebirthZoneService._BuildPlaque(player: Player, profile: any, zoneId: string, frame: CFrame, D: number, parent: Instance)
+	local post = Instance.new("Part")
+	post.Name = "ZonePlaquePost"
+	post.Anchored = true
+	post.CanQuery = false
+	post.CanTouch = false
+	post.Size = Vector3.new(0.6, 4, 0.6)
+	post.Material = Enum.Material.Metal
+	post.Color = Color3.fromRGB(60, 62, 58)
+	post.CFrame = frame * CFrame.new(-19, 2, D / 2 + 3)
+	post.Parent = parent
+	local board = Instance.new("Part")
+	board.Name = "ZonePlaque"
+	board.Anchored = true
+	board.CanCollide = false
+	board.CanQuery = false
+	board.CanTouch = false
+	board.Size = Vector3.new(6, 2.4, 0.3)
+	board.Material = Enum.Material.Metal
+	board.Color = Color3.fromRGB(150, 120, 60)
+	board.CFrame = frame * CFrame.new(-19, 4.6, D / 2 + 3.3)
+	board.Parent = parent
+	local sg = Instance.new("SurfaceGui")
+	sg.Face = Enum.NormalId.Back
+	sg.MaxDistance = 60
+	sg.PixelsPerStud = 40
+	sg.Parent = board
+	local t = Instance.new("TextLabel")
+	t.BackgroundTransparency = 1
+	t.Size = UDim2.fromScale(1, 1)
+	t.Font = Enum.Font.GothamBold
+	t.TextScaled = true
+	t.TextColor3 = Color3.fromRGB(40, 32, 16)
+	t.Parent = sg
+	plaqueOf[player.UserId] = plaqueOf[player.UserId] or {}
+	plaqueOf[player.UserId][zoneId] = t
+	RebirthZoneService._RefreshPlaque(player, profile, zoneId)
+end
+
+function RebirthZoneService._RefreshPlaque(player: Player, profile: any, zoneId: string)
+	local byZone = plaqueOf[player.UserId]
+	local t: TextLabel? = if byZone then byZone[zoneId] else nil
+	if t == nil or t.Parent == nil or ZoneRuns == nil then
+		return
+	end
+	local z = RebirthConfig.Zones[zoneId]
+	local best = if typeof(profile.ZoneBest) == "table" then tonumber(profile.ZoneBest[zoneId]) else nil
+	local run = ZC.Runs[zoneId]
+	t.Text = ZoneRuns.PlaqueText(player.DisplayName, if z then z.Tier else 1, best, profile.ZoneCommander == true,
+		if run and run.Seconds > 0 then run.Title else nil)
+end
+
+-- claude-bud JOB 50 A: every zone at MaxLevel -> ZONE COMMANDER (free; a status title, saved once)
+function RebirthZoneService._CheckCommander(player: Player, profile: any)
+	if profile.ZoneCommander == true or not ZC.RebuildLive(player.UserId, "Plaques") then
+		return
+	end
+	for zoneId in pairs(Z.Zones) do
+		if levelOf(profile, zoneId) < Z.MaxLevel then
+			return
+		end
+	end
+	profile.ZoneCommander = true
+	deps.DataService.MarkDirty(player)
+	pcall(function()
+		player:SetAttribute("WE_ZoneCommander", true)
+	end)
+	notify(player, "ZONE COMMANDER! Every rebirth zone at max level", "Success")
+	for zoneId in pairs(Z.Zones) do
+		RebirthZoneService._RefreshPlaque(player, profile, zoneId)
+	end
+end
+
 function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: number?): (boolean, string)
 	local profile = deps.DataService and deps.DataService.GetProfile(player)
 	local info = ZC.Info[zoneId]
@@ -392,6 +469,20 @@ function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: nu
 		return false, "off"
 	end
 	local lv = activeLevel(profile, player.UserId, zoneId)
+	if lv >= 1 and ZoneRuns and ZC.RebuildLive(player.UserId, "Activities") and ZC.Runs[zoneId] then
+		-- claude-bud JOB 50 A: the kiosk starts this zone's run (server-timed, server-validated) instead of the one tap
+		local bs = deps.BaseService
+		local plotId = if bs and bs.GetOwnedPlotId then bs.GetOwnedPlotId(player) else nil
+		local frame, a = nil, nil
+		if plotId then
+			frame, a = annexFrame(plotId, zoneId)
+		end
+		if frame and a then
+			local kp = kioskOf[player.UserId] and kioskOf[player.UserId][zoneId]
+			local parent = if kp and kp.Parent then kp:FindFirstAncestorOfClass("Folder") else nil
+			return ZoneRuns.Start(player, zoneId, lv, frame, a.W, a.D, parent or plotFolder(plotId :: number))
+		end
+	end
 	if lv < 1 then
 		return false, "not_built"
 	end
@@ -510,6 +601,9 @@ local function buildZone(player: Player, profile: any, plotId: number, zoneId: s
 		dress.Name = "Dress_" .. zoneId
 		dress.Parent = pf
 		local okD, panel = pcall(Dressing.Build, zoneId, lv, frame, a.D, trimOf(player, profile), dress)
+		if ZC.RebuildLive(player.UserId, "Plaques") then
+			pcall(RebirthZoneService._BuildPlaque, player, profile, zoneId, frame, a.D, dress) -- claude-bud JOB 50 A
+		end
 		if okD and panel then
 			addActivityPrompt(player, zoneId, panel)
 		elseif not okD then
@@ -670,6 +764,7 @@ function RebirthZoneService.Upgrade(player: Player, zoneId: string): (boolean, s
 		pcall(deps.AnalyticsService.Log, "REBIRTH_ZONE_BUILT", uid, { zone = zoneId, level = lv + 1 })
 	end
 	pcall(buildZone, player, profile, plotId, zoneId)
+	pcall(RebirthZoneService._CheckCommander, player, profile) -- claude-bud JOB 50 A
 	publishArmy(player, profile)
 	if deps.BaseService and deps.BaseService.PushState then
 		pcall(deps.BaseService.PushState, player) -- the income per tick changed
@@ -709,6 +804,25 @@ function RebirthZoneService.Init(d: { [string]: any })
 		return require(script.Parent.Parent.Modules.RebirthZoneDressing)
 	end)
 	Dressing = if okDr then Dr else nil -- claude-bud JOB 46
+	local okZR, ZR = pcall(function(): any
+		return require(script.Parent.Parent.Modules.ZoneRuns)
+	end)
+	ZoneRuns = if okZR then ZR else nil -- claude-bud JOB 50 A
+	if ZoneRuns then
+		ZoneRuns.Bind({
+			DataService = d.DataService, EconomyService = d.EconomyService, CombatService = d.CombatService,
+			NotificationService = d.NotificationService, RemoteSetup = d.RemoteSetup, AnalyticsService = d.AnalyticsService,
+			OnRunEnded = function(p: Player, zoneId: string)
+				local prof = d.DataService.GetProfile(p)
+				if prof then
+					RebirthZoneService._RefreshPlaque(p, prof, zoneId)
+				end
+			end,
+		})
+		if d.CombatService and d.CombatService.OnNPCDeath then
+			d.CombatService.OnNPCDeath(ZoneRuns.OnNPCDeath)
+		end
+	end
 	d.DataService.OnProfileLoaded(function(player: Player, profile: any)
 		profileOwner[profile] = player.UserId
 		publishArmy(player, profile)
@@ -735,6 +849,10 @@ function RebirthZoneService.Init(d: { [string]: any })
 		lastCollect[p.UserId] = nil
 		sweepAt[p.UserId] = nil
 		kioskOf[p.UserId] = nil -- claude-bud JOB A
+		plaqueOf[p.UserId] = nil -- claude-bud JOB 50 A
+		if ZoneRuns then
+			ZoneRuns.Cancel(p.UserId)
+		end
 		if plotId then
 			local pf = zonesFolder():FindFirstChild("Plot" .. plotId)
 			if pf then

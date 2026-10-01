@@ -38,6 +38,8 @@ MODS = {
     "Util/PlotFrame": SH / "Util/PlotFrame.luau",
     "Modules/RebirthZoneDressing": SV / "Modules/RebirthZoneDressing.luau",
     "Services/RebirthZoneService": SV / "Services/RebirthZoneService.luau",
+    "Modules/ZoneRuns": SV / "Modules/ZoneRuns.luau",  # claude-bud JOB 50 A
+    "Configs/RetentionConfig": SH / "Configs/RetentionConfig.luau",
 }
 
 EXTRA = r'''
@@ -45,7 +47,8 @@ task = { spawn = function() end, delay = function() end, defer = function() end,
 OverlapParams = { new = function() return {} end }
 Enum.RaycastFilterType = { Exclude = "Exclude" }
 local function signal() local s = { fns = {} }; s.Connect = function(self, fn) table.insert(self.fns, fn); return { Disconnect = function() end } end; return s end
-local Players = { PlayerAdded = signal(), PlayerRemoving = signal(), GetPlayers = function() return {} end }
+BYUID = {}
+local Players = { PlayerAdded = signal(), PlayerRemoving = signal(), GetPlayers = function() return {} end, GetPlayerByUserId = function(_, uid) return BYUID[uid] end }
 local RunService = { IsStudio = function() return true end }
 local prevGame = game
 game = { GetService = function(_, n)
@@ -139,6 +142,132 @@ check(#LOG.push == 2 and LOG.push[1].k == "ZoneOpen" and LOG.push[1].d.Panel == 
 S.Activity(P, "StrategicYard")
 check(LOG.nuke == 1, "the silo's activity opens the NUKE panel")
 check(S.Activity(P, "WestFlank", 5000) and S.Activity(P, "EastStrip", 5000), "SUPPLY RUN / FILL TANKER ship too")
+
+-- ── 5. claude-bud JOB 50 A: the zone runs (the real ZoneRuns; a fake clock; prompts as recording stubs) ──
+local ZR = require(node("Modules/ZoneRuns"))
+check(ZC.Rebuild.Enabled == true and ZC.Rebuild.OwnerFirst == true, "Rebuild is owner-first (Enabled, OwnerFirst = true)")
+local CLK, UNIX, DELAYS = 0, 100000, {}
+ZR._clock = function() return CLK end
+ZR._unix = function() return UNIX end
+ZR._delay = function(sec, fn) table.insert(DELAYS, { at = CLK + sec, fn = fn }) end
+local function runDelays() for _, d in ipairs(DELAYS) do if not d.done and d.at <= CLK then d.done = true; d.fn() end end end
+Random = Random or { new = function(seed) local x = seed or 1; return { NextInteger = function(_, a, b) x = (x * 1103515245 + 12345) % 2147483648; return a + x % (b - a + 1) end } end }
+local PROMPTS = {}
+local realNew = Instance.new
+Instance.new = function(cls)
+  local o = realNew(cls)
+  if cls == "ProximityPrompt" then local sig = signal(); o.Triggered = sig; table.insert(PROMPTS, o) end
+  return o
+end
+local RP = { Prestige = 10, RebirthZones = { WestYard = 2, StrategicYard = 1, WestStrip = 1, DroneBay = 1, EastYard = 3, EastStrip = 1, WestFlank = 1 },
+  NukeSilo = { Ready = 0, ChargeFrom = UNIX - 60 }, Raid = { StrikeCooldownUntil = UNIX + 600 } }
+local RLOG = { cash = {}, notes = {}, push = {}, ev = {}, spawned = {}, despawned = {} }
+local rremote = { IsA = function(_, c) return c == "RemoteEvent" end, FireClient = function(_, pl, k, d) table.insert(RLOG.push, { k = k, d = d }) end }
+local npcN = 0
+ZR.Bind({
+  DataService = { GetProfile = function() return RP end, MarkDirty = function() end },
+  EconomyService = { AddCash = function(pl, n, why) table.insert(RLOG.cash, { n = n, why = why }) end, GetPendingCash = function() return 0 end, CollectPendingCash = function() end },
+  NotificationService = { Notify = function(pl, t) table.insert(RLOG.notes, t) end },
+  RemoteSetup = { Get = function() return rremote end },
+  AnalyticsService = { Log = function(ev, uid, props) table.insert(RLOG.ev, { ev = ev, props = props }) end },
+  CombatService = { SpawnNPC = function(t, cf, o) npcN += 1; local r = { Id = "z" .. npcN, Opts = o }; table.insert(RLOG.spawned, r); return r end,
+    DespawnNPC = function(id) table.insert(RLOG.despawned, id) end },
+})
+local FRAME = CFrame.new(0, 0, 0)
+local W, D = 74, 60
+local ROOT = Instance.new("Part")
+local OWN = { UserId = 470626172, Name = "shaunie6", DisplayName = "Shaun", Character = { FindFirstChild = function() return ROOT end } }
+local OTHER = { UserId = 9, Name = "rival", DisplayName = "Rival", Character = { FindFirstChild = function() return ROOT end } }
+OWN.SetAttribute = function() end
+BYUID[OWN.UserId] = OWN
+SOURCES["Services/MonetizationService"] = function() return { PassivePerMin = function() return PERMIN or 0 end } end
+local function stand(x, z) ROOT.CFrame = CFrame.new(x, 3, z) end
+local function current() return PROMPTS[#PROMPTS] end
+local TICK2 = TICK
+local function fire(pl) local pr = current(); for _, fn in ipairs(pr.Triggered.fns) do fn(pl) end end
+-- a clean PRODUCTION RUN (6 steps) in 18 s
+stand(0, D / 2 + 8)
+local okS = ZR.Start(OWN, "WestYard", 2, FRAME, W, D, Instance.new("Folder"))
+check(okS and ZR.Active(OWN.UserId) ~= nil and current().ActionText == "PICK UP CRATE", "PRODUCTION RUN starts at the kiosk; only step 1 has a prompt (" .. tostring(current() and current().ActionText) .. ")")
+fire(OTHER)
+check(ZR.Active(OWN.UserId).Step == 1, "another player's trigger never counts")
+stand(500, 500)
+fire(OWN)
+check(ZR.Active(OWN.UserId).Step == 1, "a trigger with him outside the annex never counts (no remote triggering)")
+stand(0, D / 2 + 8)
+local base = ZC.ShipmentCash("WestYard", 2, TICK2)
+for i = 1, 6 do CLK += 3; fire(OWN) end
+local paid = RLOG.cash[#RLOG.cash].n
+local wantPay = ZC.RunCash("WestYard", 2, TICK2, 18, 60) + base
+check(ZR.Active(OWN.UserId) == nil and paid == wantPay and RLOG.cash[#RLOG.cash].why == "rebirthzone_run",
+  string.format("6 steps in 18 s: WIN, +$%d = RunCash (%d, speed x%.2f of ShipmentCash %d) + the first-clear bonus %d", paid, ZC.RunCash("WestYard", 2, TICK2, 18, 60), ZC.RunCash("WestYard", 2, TICK2, 18, 60) / base, base, base))
+check(RP.ZoneBest.WestYard == 18 and RP.ZoneFirstClear.WestYard == true and RP.ZoneRunAt.WestYard == UNIX, "best 18 s, first clear, cooldown saved in the profile")
+check(RLOG.ev[#RLOG.ev].ev == "ZONE_ACTIVITY" and RLOG.ev[#RLOG.ev].props.result == "win" and RLOG.ev[#RLOG.ev].props.payout == paid, "ZoneActivity logged (zone, result, seconds, payout)")
+local okC = ZR.Start(OWN, "WestYard", 2, FRAME, W, D, Instance.new("Folder"))
+check(okC == false, "inside the cooldown: refused (" .. tostring(RLOG.notes[#RLOG.notes]) .. ")")
+UNIX += ZC.RunRules.CooldownMinutes * 60
+-- the second run: no first-clear bonus, slower = less
+ZR.Start(OWN, "WestYard", 2, FRAME, W, D, Instance.new("Folder"))
+for i = 1, 6 do CLK += 8; fire(OWN) end
+check(RLOG.cash[#RLOG.cash].n == ZC.RunCash("WestYard", 2, TICK2, 48, 60) and RLOG.cash[#RLOG.cash].n >= base and RP.ZoneBest.WestYard == 18,
+  "a slower second run pays less (never below ShipmentCash), no second first-clear bonus, the best stays 18 s")
+-- out of time
+UNIX += ZC.RunRules.CooldownMinutes * 60
+local nCash = #RLOG.cash
+ZR.Start(OWN, "WestYard", 2, FRAME, W, D, Instance.new("Folder"))
+CLK += 61; runDelays()
+check(ZR.Active(OWN.UserId) == nil and #RLOG.cash == nCash and RLOG.ev[#RLOG.ev].props.result == "out of time", "the time limit passes: FAIL, nothing paid, the cooldown starts (no retry spam)")
+-- the silo: LAUNCH PREP shortens the charge (the silo has no flat income: its pay is IncomeMinutes of his own income)
+PERMIN = 3000
+UNIX += ZC.RunRules.CooldownMinutes * 60
+local from0 = RP.NukeSilo.ChargeFrom
+ZR.Start(OWN, "StrategicYard", 1, FRAME, W, D, Instance.new("Folder"))
+for i = 1, 3 do CLK += 2; fire(OWN) end
+check(RP.NukeSilo.ChargeFrom == from0 - ZC.Runs.StrategicYard.ChargeCutMinutes * 60 and RLOG.cash[#RLOG.cash].n >= 3000 * ZC.RunRules.IncomeMinutes,
+  "LAUNCH PREP: the warhead charge moves on by " .. ZC.Runs.StrategicYard.ChargeCutMinutes .. " min, and it pays $" .. tostring(RLOG.cash[#RLOG.cash].n) .. " (>= " .. ZC.RunRules.IncomeMinutes .. " min of his income)")
+-- the artillery: RANGE PRACTICE cuts the missile reload
+RP.Raid.StrikeCooldownUntil = UNIX + 600
+local cd0 = RP.Raid.StrikeCooldownUntil
+ZR.Start(OWN, "WestStrip", 1, FRAME, W, D, Instance.new("Folder"))
+for i = 1, 6 do CLK += 2; fire(OWN) end
+check(RP.Raid.StrikeCooldownUntil == cd0 - ZC.Runs.WestStrip.ReloadCutSeconds, "RANGE PRACTICE: the missile reload is cut by " .. ZC.Runs.WestStrip.ReloadCutSeconds .. " s")
+-- the barracks: beat par -> the army boost
+ZR.Start(OWN, "EastYard", 3, FRAME, W, D, Instance.new("Folder"))
+for i = 1, 4 do CLK += 5; fire(OWN) end
+check((RP.ArmyBoostUntil or 0) == UNIX + ZC.Runs.EastYard.BoostMinutes * 60, "DRILL COURSE in 20 s (par " .. ZC.Runs.EastYard.Par .. "): ARMY BOOST " .. ZC.Runs.EastYard.BoostMinutes .. " min")
+-- the refinery: the valves in a shuffled order (the prompt names the next one)
+ZR.Start(OWN, "EastStrip", 1, FRAME, W, D, Instance.new("Folder"))
+local r = ZR.Active(OWN.UserId)
+local order = table.concat(r.Order, ",")
+for i = 1, 4 do CLK += 2; fire(OWN) end
+check(ZR.Active(OWN.UserId) == nil and RLOG.ev[#RLOG.ev].props.result == "win", "PRESSURE VALVES in the shown order (" .. order .. "): win")
+-- the bunker: an NPC wave (CombatService, him only)
+ZR.Start(OWN, "WestFlank", 1, FRAME, W, D, Instance.new("Folder"))
+local w = ZR.Active(OWN.UserId)
+check(#w.NpcIds == 3 and RLOG.spawned[#RLOG.spawned].Opts.TargetFilter(OWN) == true and RLOG.spawned[#RLOG.spawned].Opts.TargetFilter(OTHER) == false,
+  "HOLD THE LINE: 3 CombatService NPCs that target only him")
+for _, id in ipairs(table.clone(w.NpcIds)) do CLK += 5; ZR.OnNPCDeath({ Id = id, GroupId = "ZoneRun." .. OWN.UserId }) end
+check(ZR.Active(OWN.UserId) == nil and RP.BunkerBanner == 1, "all three down in time: WIN, bunker banner stage 1")
+-- the drone hangar: RECON FLIGHT (instant): the nearest raidable rival marked (a pin + SEND card), the ATM swept
+SOURCES["Services/RivalService"] = function() return { Candidates = function() return { { PlotId = 4, Name = "Rival", Loot = "$12k", Dist = 300 }, { PlotId = 2, Name = "Far", Dist = 900 } }, {} end } end
+local nPush = #RLOG.push
+local okR = ZR.Start(OWN, "DroneBay", 1, FRAME, W, D, Instance.new("Folder"))
+local pushed = RLOG.push[#RLOG.push]
+check(okR and #RLOG.push > nPush and pushed.k == "ArmyNearest" and pushed.d.Target == "B:4" and RP.ZoneRunAt.DroneBay == UNIX,
+  "RECON FLIGHT: the nearest raidable rival (plot 4) is marked with PIN / SEND (\"B:4\", the JOB 38 path), cooldown saved")
+-- the plaque text
+local txt = ZR.PlaqueText("Shaun", 1, 18, true, "PRODUCTION RUN")
+check(string.find(txt, "UNLOCKED BY SHAUN · REBIRTH 1", 1, true) ~= nil and string.find(txt, "BEST 0:18.0", 1, true) ~= nil and string.find(txt, "ZONE COMMANDER", 1, true) ~= nil,
+  "the plaque: UNLOCKED BY SHAUN · REBIRTH 1 / PRODUCTION RUN BEST 0:18.0 / ZONE COMMANDER")
+-- the reward formula at 3 incomes (rebirth 1 / 5 / 10 levels)
+local lines = {}
+for _, lv in ipairs({ 1, 2, 3 }) do table.insert(lines, string.format("L%d $%d..$%d", lv, ZC.ShipmentCash("WestYard", lv, TICK2), ZC.RunCash("WestYard", lv, TICK2, 0, 60))) end
+print("MATHS production run (slowest..fastest): " .. table.concat(lines, ", "))
+-- OFF == OLD: the kiosk's one tap when Rebuild is off (the service path is section 4 above, with no plot / frame)
+ZC.Rebuild.Enabled = false
+check(not ZC.RebuildLive(OWN.UserId, "Activities"), "Rebuild OFF: the runs are not live (the JOB 46 one-tap activities exactly)")
+ZC.Rebuild.Enabled = true
+Instance.new = realNew
 print(string.format("REBIRTH STATIONS LUA: %d failed", fails))
 if fails > 0 then error("failed") end
 '''

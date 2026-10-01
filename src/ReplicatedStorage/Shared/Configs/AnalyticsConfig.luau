@@ -108,6 +108,7 @@ local AnalyticsConfig = {
 			MISSIONS_ALL_DONE = { Name = "MissionsAllDone", Value = "cash" },
 			MISSION_REROLL = { Name = "MissionReroll", Field = "kind" },
 			RETURN_DAY = { Name = "ReturnDay", Value = "days", Field = "guidedDone" },
+			ZONE_ACTIVITY = { Name = "ZoneActivity", Value = "payout", Field = "zone", Field2 = "result" }, -- claude-bud JOB 50 A
 			-- claude-bud JOB 41 C: rival targets (PvP rate = RivalSendTapped per session)
 			RIVAL_LIST_OPENED = { Name = "RivalListOpened" },
 			RIVAL_SEND_TAPPED = { Name = "RivalSendTapped", Field = "verdict" },
