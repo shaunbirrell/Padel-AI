@@ -27,12 +27,12 @@ def check(cond, label):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 192)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 192)'),
-    (S + "Services/DataService.luau", "WE_Build=192"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 192)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 193)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 193)'),
+    (S + "Services/DataService.luau", "WE_Build=193"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 193)'),
 ):
-    check(needle in read(rel), "CODEBOT v181: WE_Build=192 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v181: WE_Build=193 " + rel.rsplit("/", 1)[-1])
 
 rc = read(CL + "RivalController.luau")
 # JOB B: Sibling ordering on WE_RivalTargets (long comment between Name and the set)
