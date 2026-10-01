@@ -1,3 +1,15 @@
+## v187 PUBLISHED (Code Bot Roblox, 2026-10-01 ~19:52 Dublin): Open Cloud place version 185. claude-bud JOB 50 A ZoneRuns OwnerFirst
+- **Commits:** cherry-pick `2566954` → `65b53c8` (JOB 50 A ZoneRuns); code+dist+checks `3a0ab44` on phase-7-polish (from v186 `12bcd18`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v186.
+- **JOB 50 A (NEW-OWNER-FIRST):** `RebirthZonesConfig.Rebuild.OwnerFirst = true` — zone runs behind existing kiosks (Modules/ZoneRuns): production / launch prep / range practice / recon flight / drill course / pressure valves / hold the line. Server-validated steps; RunBase = max(ShipmentCash, 2 min income) × speed; first clear + cooldown + best; gateway plaques; ZONE COMMANDER; ZoneActivity analytics. Enabled=false = JOB 46 one-tap activities.
+- **Checks:** BuyPathStatic **PASS=8138 FAIL=0**; `tools/checks/codebot_v187.py`; `claude_bud_job50.py` parts A+D. PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP 200, versionNumber **185**, universe 10767159222 / place 97112936860418. Servers NOT restarted.
+- **Phone tests (Shaun — rejoin / new server for WE_Build 187; owner only while OwnerFirst):**
+  1. At a rebuilt rebirth zone kiosk: start the zone run; complete steps in order inside the annex; get cash / effect.
+  2. Fail / timeout / leave annex: no pay; cooldown still starts.
+  3. Recon flight marks a raidable rival with PIN/SEND; drill course under par grants ARMY BOOST.
+  4. Hotbar captions (JOB 50 D, already in v186) still non-overlapping.
+- **Still owed:** flip Rebuild.OwnerFirst after phone OK; JOB 50 B/C still on bud if not done; flip AttackRange + SharedHostility after phone; queued 53–58, 59, 60, 62, 63, 64. JOB 44 DONE — do not reopen.
+
 ## v186 PUBLISHED (Code Bot Roblox, 2026-10-01 ~19:49 Dublin): Open Cloud place version 184. claude-bud JOB 50 D hotbar weapon labels overlap
 - **Commits:** cherry-pick `a502699` → `901696b` (JOB 50 D); code+dist+checks `1e2ac24` on phase-7-polish (from v185 `5508896`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v185 `5508896`.
 - **JOB 50 D:** hotbar captions stay inside their own slot (`fitCaption`, CaptionMinTextPx floor); distinct rebirth ShortNames DMR / HAVOC RL / SOV RIFLE (pass guns keep LONGSHOT / HAVOC / SOVEREIGN). No Id / pass / price change. Always-on UI fix (no new OwnerFirst gate).
