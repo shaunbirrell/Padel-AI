@@ -281,6 +281,16 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 			RewardDone = g.RewardDone == true or nil,
 			RecruitTopUp = if g.RecruitTopUp ~= nil then nonNegInt(g.RecruitTopUp) else nil,
 			Funnel = funnel,
+			-- claude-bud JOB 48: the Hook (raid goal, fallback, fast-raid bonus, reward soldiers, time to the first fight)
+			SoldiersAtCamp = if g.SoldiersAtCamp ~= nil then nonNegInt(g.SoldiersAtCamp) else nil,
+			TimeToFight = if g.TimeToFight ~= nil then nonNegInt(g.TimeToFight) else nil,
+			RewardAt = if g.RewardAt ~= nil then nonNegInt(g.RewardAt) else nil,
+			FastRaidPaid = g.FastRaidPaid == true or nil,
+			GoalMode = if g.GoalMode == "Raid" or g.GoalMode == "Fallback" then g.GoalMode else nil,
+			FallbackKills = if g.FallbackKills ~= nil then nonNegInt(g.FallbackKills) else nil,
+			RewardSoldiers = if typeof(g.RewardSoldiers) == "table"
+				then { Before = nonNegInt(g.RewardSoldiers.Before), After = nonNegInt(g.RewardSoldiers.After) }
+				else nil,
 		}
 	else
 		profile.Guided = nil

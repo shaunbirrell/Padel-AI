@@ -153,6 +153,29 @@ function Juice.Init()
 			burst(J)
 		end
 	end)
+	-- claude-bud JOB 48: "see his army grow": every +1 soldier pulses the Army tile and rings the burst at his feet
+	-- (only while the Guided Hook is live for him; owner-first)
+	local TC = require((Shared :: any).Configs.TutorialConfig) :: any
+	if TC.HookLiveFor and TC.HookLiveFor(Players.LocalPlayer.UserId) then
+		local lastCount: number? = nil
+		Remotes.BindEvent(Constants.RemoteNames.SoldierStateUpdate, function(payload: any)
+			local n = if typeof(payload) == "table" then tonumber(payload.Soldiers) else nil
+			if n == nil then
+				return
+			end
+			local before = lastCount
+			lastCount = n
+			if before ~= nil and n > before then
+				burst(J)
+				local okH, HUD = pcall(function(): any
+					return require(script.Parent.Parent.Controllers.HUDController)
+				end)
+				if okH and HUD and HUD.PulseRail then
+					pcall(HUD.PulseRail, "Army")
+				end
+			end
+		end)
+	end
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if kind == "Rebirth" then
 			celebrate(J, data)

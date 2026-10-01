@@ -908,6 +908,11 @@ local function pulseTile(id: string, scale: number)
 	end
 end
 
+-- claude-bud JOB 48: a rail tile's press pulse for other modules (Juice: the Army tile on every +1 soldier)
+function HUDController.PulseRail(id: string)
+	pulseTile(id, 1.25)
+end
+
 --[[ Rail badge: "!" (gold ready style), a count ("3"), or nil to clear. Anyone else calls HudLayout.SetBadge. ]]
 function HUDController.SetRailBadge(id: string, text: string?)
 	HudLayout.SetBadge(id, text)

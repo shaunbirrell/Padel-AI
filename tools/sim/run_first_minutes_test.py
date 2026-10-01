@@ -19,6 +19,14 @@ task.delay / task.defer).
 8. A RETURNING profile (first join 2 days ago / a building / tutorial done) never enters Guided.
 9. OFF == OLD: Guided.Enabled = false or not live for the player -> OrderVersion 3, 7 steps, no camp, no Guided event.
 10. FUNNEL: every FirstMinutes step logged once, in order, with a time.
+(1-10 run with the JOB 48 Hook OFF: they prove OFF == today's v4 chain exactly.)
+11. claude-bud JOB 48 THE HOOK (TutorialConfig.Guided.Hook): OrderVersion 5 (11 steps); the reward adds RewardSoldiers
+   within the army cap (ArmyGrew); RAID A RIVAL BASE when a rival is allowed (GoalRaidShown -> RaidSent -> RaidWon ->
+   the Barracks, NextGoal) with the fast-raid bonus paid once and only inside FastRaidSeconds (no countdown when the
+   bonus is 0); the FALLBACK when no rival is allowed (the chip says "Clear hostiles", 2 hostile kills ->
+   GoalFallbackWon, or the timeout -> the chain moves on: never a soft-lock); Barracks -> 4x4 -> Open Missions; a v4 save
+   migrating to 5 (and back when the Hook goes off); funnel steps 12-16 once each after the unchanged 1-9;
+   SessionMilestone at 60/120/180/300/600 s; FtueTimeToFight once; owner-first (another player stays on v4).
 Run: LUAU=path/to/luau(.exe) python tools/sim/run_first_minutes_test.py   (exit 1 on any failure; VERBOSE=1 prints all)"""
 import os
 import subprocess
@@ -111,10 +119,28 @@ DEPS = {
     Onboard = function() end,
   },
   BaseService = { GetUpgradeChangedEvent = function() return upgradeEvent end },
+  -- claude-bud JOB 48 stubs: the army (the recruit state + listeners), the rival verdicts, the plan status
+  SoldierService = {
+    listeners = {},
+    OnArmyChanged = function(cb) table.insert(DEPS.SoldierService.listeners, cb) end,
+    GrantFree = function(p, n, why)
+      local pr = PROFILES[p.UserId]; local cap = SOLDIER_CAP or 5
+      local add = math.clamp(n, 0, math.max(0, cap - (pr.Soldiers or 0)))
+      pr.Soldiers = (pr.Soldiers or 0) + add
+      table.insert(LOG.ev, { ev = "SOLDIER_GRANT", props = { amount = add, reason = why }, t = NOW })
+      for _, cb in ipairs(DEPS.SoldierService.listeners) do cb(p) end
+      return add
+    end,
+  },
+  RivalService = { Candidates = function(p) local r = {}; for i = 1, (RIVALS or 0) do r[i] = { PlotId = 4 + i } end; return r, {} end },
+  ArmyPlan = { Status = function() return PLAN_STATUS end },
 }
 function boot()
   for k in pairs(CACHE) do if k:match("^Services/") then CACHE[k] = nil end end
   loaded = {}
+  -- claude-bud JOB 48: a boot is a fresh server: the old instance's timers and death listeners go with it
+  table.clear(queue)
+  table.clear(DEATH)
   local GS = require(node("Services/GuidedService"))
   GS._clock = function() return NOW end
   GS._unix = function() return UNIX end
@@ -156,6 +182,10 @@ local EC = require(node("Configs/EconomyConfig"))
 local BC = require(node("Configs/BaseConfig"))
 local PS = require(node("Modules/ProfileSchema"))
 local G = TC.Guided
+
+-- claude-bud JOB 48: sections 1-10 run with the Hook OFF (they are today's v4 chain: OFF == OLD)
+local HOOK_ENABLED = G.Hook.Enabled
+G.Hook.Enabled = false
 
 -- ── 2. recruit maths ──
 local ccCost = BC.Structures.CommandCenter.Costs[1]
@@ -341,6 +371,151 @@ upgrade(OWNER, "CommandCenter"); TS.Notify(OWNER, "PassiveIncome"); runTo(NOW + 
 check(p10.TutorialOrderVersion == TC.OrderVersion and lastTut(OWNER).Id == "Barracks" and #LOG.spawned == 0 and #LOG.funnel == 0, "Guided.Enabled = false: today's order (Recruit -> Barracks), no camp, no funnel")
 G.Enabled = true
 
+-- ── 11. claude-bud JOB 48: THE HOOK ──
+G.Hook.Enabled = HOOK_ENABLED
+local Hk = G.Hook
+check(Hk.Enabled == true and Hk.OwnerFirst == true, "Hook flags: Enabled = true, OwnerFirst = true (Code Bot flips it after the phone test)")
+local function soldierRecruit(p, n) PROFILES[p.UserId].Soldiers = (PROFILES[p.UserId].Soldiers or 0) + n; for _, cb in ipairs(DEPS.SoldierService.listeners) do cb(p) end end
+local function playToReward(p, extra)
+  local q = newProfile(p, extra)
+  q.Soldiers = 0 -- a fresh army: 3 recruited at the recruit step
+  q.FirstJoinUnix = UNIX + NOW
+  DEPS.SoldierService.listeners = {}
+  TS, GS = boot(); clearLog()
+  GS._unix = function() return UNIX + NOW end -- the Hook section: a unix clock that moves (the fast-raid window)
+  load(p)
+  local t0 = NOW
+  NOW += PACE.build; upgrade(p, "CommandCenter")
+  NOW += PACE.collect; TS.Notify(p, "PassiveIncome"); runTo(NOW)
+  NOW += PACE.recruit; soldierRecruit(p, 3); TS.Notify(p, "RecruitSoldiers"); runTo(NOW)
+  NOW += PACE.walkFight; killCamp(p.UserId)
+  NOW += PACE.capture; q.StarterOutpostTaken = true; TS.Notify(p, "CaptureTerritory", "Starter_P3"); runTo(NOW)
+  runTo(NOW + 3)
+  return q, NOW - t0
+end
+SOLDIER_CAP, RIVALS, PLAN_STATUS = 5, 1, nil
+local h, tReward = playToReward(OWNER)
+check(h.TutorialOrderVersion == Hk.OrderVersion and #TC.HookSteps == 11, "a new owner profile plays the Hook order (OrderVersion 5, 11 steps)")
+check(h.Guided.RewardSoldiers ~= nil and h.Guided.RewardSoldiers.Before == 3 and h.Guided.RewardSoldiers.After == 5,
+  string.format("REWARD adds RewardSoldiers within the cap: soldiers %s -> %s (asked %d, cap %d)", tostring(h.Guided.RewardSoldiers and h.Guided.RewardSoldiers.Before), tostring(h.Guided.RewardSoldiers and h.Guided.RewardSoldiers.After), Hk.RewardSoldiers, SOLDIER_CAP))
+check(lastTut(OWNER).Id == "RaidRival" and lastTut(OWNER).Title == "Raid a rival base", "after the reward the goal is RAID A RIVAL BASE (a rival is allowed)")
+local goalPush = nil
+for _, e in ipairs(LOG.push) do if e.kind == "GuidedGoal" then goalPush = e.data end end
+check(goalPush ~= nil and goalPush.Goal == "Raid" and goalPush.FastRaidLeft == Hk.FastRaidSeconds - 3 and goalPush.Bonus == Hk.FastRaidBonus,
+  "the TARGETS card is outlined (GuidedGoal Raid) with the REAL fast-raid window, counted from the reward 3 s earlier (" .. tostring(goalPush and goalPush.FastRaidLeft) .. " s, bonus $" .. tostring(goalPush and goalPush.Bonus) .. ")")
+NOW += 20; GS.OnRaidSent(OWNER); runTo(NOW)
+NOW += 90; local cashBefore = #LOG.cash; GS.OnRaidWon(OWNER); runTo(NOW)
+local bonusPaid = 0
+for i = cashBefore + 1, #LOG.cash do if LOG.cash[i].why == "onboarding" then bonusPaid += LOG.cash[i].n end end
+check(bonusPaid == Hk.FastRaidBonus and h.Guided.FastRaidPaid == true, "a raid won 110 s after the reward pays the fast-raid bonus once ($" .. bonusPaid .. ")")
+check(lastTut(OWNER).Id == "Barracks", "RaidWon -> the next goal (Barracks)")
+GS.OnRaidWon(OWNER); runTo(NOW)
+local again = 0
+for _, c in ipairs(LOG.cash) do if c.why == "onboarding" and c.n == Hk.FastRaidBonus then again += 1 end end
+check(again == 1, "a second raid win pays nothing again (the goal is closed)")
+NOW += 30; upgrade(OWNER, "Barracks"); TS.Notify(OWNER, "SpawnVehicle"); runTo(NOW)
+check(lastTut(OWNER).Id == "Missions" and lastTut(OWNER).CtaAction == "OpenMissions", "Barracks -> 4x4 -> Open Missions (the MISSIONS button)")
+TS.Notify(OWNER, "MissionsOpened"); runTo(NOW)
+check(h.TutorialComplete == true, "opening Missions finishes the chain")
+local forder = {}
+for _, f in ipairs(LOG.funnel) do table.insert(forder, f.idx .. ":" .. f.name) end
+local wantH = { "1:Spawned", "2:FirstBuild", "3:Collected", "4:Recruited", "5:FightStarted", "6:FirstKill", "7:Captured", "12:ArmyGrew", "8:Reward",
+  "13:GoalRaidShown", "14:RaidSent", "15:RaidWon", "16:NextGoal", "9:NextBuilding" }
+check(table.concat(forder, ",") == table.concat(wantH, ","), "funnel: 1-9 unchanged + the Hook's 12-16 once each (ArmyGrew lands as the reward opens, before step 8 closes): " .. table.concat(forder, ","))
+local seen = {}
+local dup = false
+for _, f in ipairs(LOG.funnel) do if seen[f.idx] then dup = true end; seen[f.idx] = true end
+check(not dup, "every funnel step logged once")
+check(evCount("FTUE_TIME_TO_FIGHT") == 1 and h.Guided.TimeToFight ~= nil, "FtueTimeToFight once (" .. tostring(h.Guided.TimeToFight) .. " s from spawn to the first kill)")
+print(string.format("HOOK TIMES (s): FirstKill %d, Reward %.0f (army %d -> %d), raid sent +20 s, raid won +110 s after the reward",
+  h.Guided.TimeToFight or -1, tReward, h.Guided.RewardSoldiers.Before, h.Guided.RewardSoldiers.After))
+check((h.Guided.TimeToFight or 999) <= 120 and tReward <= 120, "first fight win AND army growth inside 2:00 at the derived pace (fight " .. tostring(h.Guided.TimeToFight) .. " s, reward + soldiers " .. string.format("%.0f", tReward) .. " s)")
+
+-- the army cap: RewardSoldiers never goes above it
+SOLDIER_CAP = 4
+local hc = playToReward(OWNER)
+check(hc.Soldiers == 4 and hc.Guided.RewardSoldiers.After == 4, "RewardSoldiers is clamped to the army cap (cap 4: 3 -> 4)")
+SOLDIER_CAP = 3
+local hc2 = playToReward(OWNER)
+check(hc2.Soldiers == 3 and evCount("SOLDIER_GRANT") == 1, "at the cap no soldier is added (3 -> 3)")
+SOLDIER_CAP = 5
+
+-- fast raid outside the window: no bonus; bonus 0: no countdown
+local hl = playToReward(OWNER)
+NOW += Hk.FastRaidSeconds + 5; local c0 = #LOG.cash; GS.OnRaidWon(OWNER); runTo(NOW)
+local late = 0
+for i = c0 + 1, #LOG.cash do late += LOG.cash[i].n end
+check(late == 0 and hl.Guided.FastRaidPaid ~= true and lastTut(OWNER).Id == "Barracks", "a raid won after FastRaidSeconds wins the goal but pays no bonus")
+local bonusWas = Hk.FastRaidBonus
+Hk.FastRaidBonus = 0
+playToReward(OWNER)
+local gp0 = nil
+for _, e in ipairs(LOG.push) do if e.kind == "GuidedGoal" then gp0 = e.data end end
+check(gp0 ~= nil and gp0.Goal == "Raid" and gp0.FastRaidLeft == nil, "FastRaidBonus = 0: the raid goal shows NO countdown (no fake timer)")
+Hk.FastRaidBonus = bonusWas
+
+-- the fallback: no rival allowed
+RIVALS = 0
+local hf = playToReward(OWNER)
+check(hf.Guided.GoalMode == "Fallback" and lastTut(OWNER).Id == "RaidRival" and lastTut(OWNER).Title == Hk.FallbackTitle and lastTut(OWNER).Hint == Hk.FallbackHint,
+  "no rival allowed -> FALLBACK goal: the chip says \"" .. tostring(lastTut(OWNER).Title) .. "\"")
+check(evCount("GOAL_FALLBACK") == 1, "GoalFallback logged once")
+local function hostileKill(p) for _, fn in ipairs(DEATH) do fn({ Id = "ops1", TypeId = "Militia", GroupId = "Town.Bank", Killer = p, ByUnit = false }) end; runTo(NOW) end
+hostileKill(OTHER) -- someone else's kill does not count
+hostileKill(OWNER)
+check(lastTut(OWNER).Id == "RaidRival", "1 of 2 hostile kills: still on the goal")
+hostileKill(OWNER)
+check(lastTut(OWNER).Id == "Barracks", "2 hostile kills -> GoalFallbackWon -> the Barracks")
+local fb = nil
+for _, f in ipairs(LOG.funnel) do if f.idx == 15 then fb = f.name end end
+check(fb == "GoalFallbackWon", "the fallback win is funnel step 15 named GoalFallbackWon")
+-- the fallback timeout (never a soft-lock)
+playToReward(OWNER)
+runTo(NOW + Hk.FallbackMaxSeconds + 1)
+check(lastTut(OWNER).Id == "Barracks", "nothing killed: after FallbackMaxSeconds the chain moves on to the Barracks (never a soft-lock)")
+-- a rival appears while the fallback is up: the re-check switches the goal to the raid
+playToReward(OWNER)
+RIVALS = 2
+runTo(NOW + Hk.RecheckSeconds + 1)
+check(PROFILES[OWNER.UserId].Guided.GoalMode == "Raid" and lastTut(OWNER).Title == "Raid a rival base", "a rival becomes allowed: the re-check turns the fallback into the raid goal")
+RIVALS = 1
+
+-- v4 save -> 5 (Hook on) and 5 -> 4 (Hook off)
+local v4 = newProfile(OWNER, { TutorialOrderVersion = 4, TutorialStep = 8 })
+v4.Guided = { CampDone = true, RewardDone = true, Funnel = {} }
+TS, GS = boot(); clearLog(); load(OWNER)
+check(v4.TutorialOrderVersion == 5 and lastTut(OWNER).Id == "RaidRival", "a v4 save past the reward (on the Barracks) resumes on the new raid goal in order 5")
+local v4b = newProfile(OWNER, { TutorialOrderVersion = 4, TutorialStep = 5 })
+TS, GS = boot(); clearLog(); load(OWNER)
+check(v4b.TutorialOrderVersion == 5 and lastTut(OWNER).Id == "FirstFight", "a v4 save mid-fight resumes at the FIRST FIGHT in order 5")
+Hk.Enabled = false
+local v5 = newProfile(OWNER, { TutorialOrderVersion = 5, TutorialStep = 9 })
+TS, GS = boot(); clearLog(); load(OWNER)
+check(v5.TutorialOrderVersion == 4 and lastTut(OWNER).Id == "Barracks", "Hook OFF: a v5 save on the Barracks goes back to order 4 on the Barracks")
+local p0 = newProfile(OWNER)
+TS, GS = boot(); clearLog(); load(OWNER)
+check(p0.TutorialOrderVersion == 4 and lastTut(OWNER).Total == 9, "Hook OFF: a new profile plays today's v4 chain (9 steps)")
+Hk.Enabled = true
+-- owner-first: another player stays on 4
+local po = newProfile(OTHER)
+TS, GS = boot(); clearLog(); load(OTHER)
+check(po.TutorialOrderVersion == 4, "owner-first: a new non-owner profile stays on order 4 (Hook not live for him)")
+
+-- the owner's test-mode replay (Code Bot v163) plays the Hook order while the Hook is live for him
+local vr = newProfile(OWNER, { TutorialComplete = true, TutorialStep = 10, FirstJoinUnix = UNIX - 30 * 86400 })
+TS, GS = boot(); clearLog(); load(OWNER)
+local okR = TS.ReplayGuided(OWNER); runTo(NOW + 1)
+check(okR == true and vr.TutorialOrderVersion == Hk.OrderVersion and vr.GuidedReplay ~= nil, "the owner's REPLAY GUIDED (test mode) plays the Hook order 5")
+TS.Complete(OWNER); runTo(NOW)
+
+-- SessionMilestone once each per session
+clearLog()
+TS, GS = boot() -- Init schedules the milestones for every player in the server (OWNER live, OTHER not)
+runTo(NOW + 601)
+local secs = {}
+for _, e in ipairs(LOG.ev) do if e.ev == "SESSION_MILESTONE" then table.insert(secs, e.props.sec) end end
+check(table.concat(secs, ",") == "60,120,180,300,600", "SessionMilestone once each at 60/120/180/300/600 s, only for the player the Hook is live for (" .. table.concat(secs, ",") .. ")")
+
 print(string.format("FIRST MINUTES TEST: %d failed", fails))
 if fails > 0 then error("failed") end
 '''
@@ -354,7 +529,7 @@ with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="ut
     path = f.name
 r = subprocess.run([os.environ.get("LUAU", "luau"), path], capture_output=True, text=True)
 out = r.stdout.strip()
-keep = ("FAIL", "FIRST MINUTES TEST", "STEP TIMES", "PACE", "NOTE")
+keep = ("FAIL", "FIRST MINUTES TEST", "STEP TIMES", "PACE", "NOTE", "HOOK TIMES")
 print(out if os.environ.get("VERBOSE") else ("\n".join(l for l in out.splitlines() if l.startswith(keep)) or out))
 if r.returncode != 0:
     print(r.stderr.strip()[-2500:])

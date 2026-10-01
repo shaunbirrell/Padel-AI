@@ -1,0 +1,85 @@
+ok    recruit maths: $10000 start + $1500 payout - $1500 HQ = $10000 >= 3 x $500 -> top-up 0
+ok    the top-up covers exactly the gap (1200 -> 300), capped at GuidedRecruitCashMax
+ok    200 seeded fights (player + 3 soldiers vs 2 Recruits): the player never dies (camp cleared in <= 4.9 s)
+ok    even with every Recruit shot at its near cap he lives 29.8 s (>= 20 s)
+PACE (s): build 8, collect 23 (walk 14), recruit 14, walk+fight 19 (walk 14, fight median 1.7), capture 12
+ok    a new owner profile enters Guided (OrderVersion 4, 9 steps) and lands on the Command Center
+ok    BUILD -> Collect cash
+ok    Collect -> Recruit (no top-up needed: 0 paid)
+ok    Recruit -> FIRST FIGHT: 2 camp NPCs spawned
+ok    the camp: Recruit type, NoRespawn, leashed, hostile only to HIM (TargetFilter)
+ok    the first ATTACK hint shows at the fight (not after the tutorial)
+ok    capture of HIS Home Outpost is blocked while the camp stands (only his)
+ok    both Recruits dead -> CampDone, capture free, step = Capture outpost
+ok    Capture -> REWARD: $2500 once, BASE SECURED! banner + coin burst
+ok    after the reward the next goal is up (the Barracks): never a blank screen
+STEP TIMES (s): FirstBuild 8, Collected 31, Recruited 45, FirstKill(camp cleared) 64, Captured 76, Reward 79, NextBuilding 112
+ok    first BUILD <= 20 s after spawn (8 s)
+ok    Spawned -> Reward inside 4 min at the derived pace (79 s)
+NOTE  the derived pace reaches the Reward in 79 s: FASTER than the brief's 180-240 s estimate (reported, not padded)
+ok    FirstMinutes funnel once each, in order: 1:Spawned,2:FirstBuild,3:Collected,4:Recruited,5:FightStarted,6:FirstKill,7:Captured,8:Reward,9:NextBuilding
+ok    GuidedStepSeconds for every step; one funnel session per profile
+ok    Guided flags survive a save + ProfileSchema.Migrate
+ok    at the fight: camp spawn 1
+ok    rejoin 1: resumes at FIRST FIGHT with a fresh camp (spawn 2)
+ok    rejoin 2: resumes at FIRST FIGHT with a fresh camp (spawn 3)
+ok    after MaxCampSpawns the fight auto-completes with a friendly line (never a soft-lock)
+ok    skip at CommandCenter: done, camp cleared, GuidedSkipped{CommandCenter}
+ok    skip at Income: done, camp cleared, GuidedSkipped{Income}
+ok    skip at RecruitSoldiers: done, camp cleared, GuidedSkipped{RecruitSoldiers}
+ok    skip at FirstFight: done, camp cleared (2 despawned), GuidedSkipped{FirstFight}
+ok    skip at Outpost: done, camp cleared, GuidedSkipped{Outpost}
+ok    skip at Reward: done, camp cleared, GuidedSkipped{Reward}
+ok    returning (first join 2 days ago): never enters Guided
+ok    returning (a building): never enters Guided
+ok    returning (tutorial done): never enters Guided
+ok    owner-first rule: not live for another player: OrderVersion 3, 7 steps, no Guided event
+ok    codebot_v166: TutorialConfig.Guided live for everyone (OwnerFirst=false)
+ok    codebot_v166: a new non-owner profile enters Guided (OrderVersion 4, got 4)
+ok    Guided.Enabled = false: today's order (Recruit -> Barracks), no camp, no funnel
+ok    Hook flags: Enabled = true, OwnerFirst = true (Code Bot flips it after the phone test)
+[GUIDED] shaunie6 reward soldiers 3 -> 5 (asked 2, within the cap)
+ok    a new owner profile plays the Hook order (OrderVersion 5, 11 steps)
+ok    REWARD adds RewardSoldiers within the cap: soldiers 3 -> 5 (asked 2, cap 5)
+ok    after the reward the goal is RAID A RIVAL BASE (a rival is allowed)
+ok    the TARGETS card is outlined (GuidedGoal Raid) with the REAL fast-raid window, counted from the reward 3 s earlier (297 s, bonus $2000)
+ok    a raid won 110 s after the reward pays the fast-raid bonus once ($2000)
+ok    RaidWon -> the next goal (Barracks)
+ok    a second raid win pays nothing again (the goal is closed)
+ok    Barracks -> 4x4 -> Open Missions (the MISSIONS button)
+ok    opening Missions finishes the chain
+ok    funnel: 1-9 unchanged + the Hook's 12-16 once each (ArmyGrew lands as the reward opens, before step 8 closes): 1:Spawned,2:FirstBuild,3:Collected,4:Recruited,5:FightStarted,6:FirstKill,7:Captured,12:ArmyGrew,8:Reward,13:GoalRaidShown,14:RaidSent,15:RaidWon,16:NextGoal,9:NextBuilding
+ok    every funnel step logged once
+ok    FtueTimeToFight once (64 s from spawn to the first kill)
+HOOK TIMES (s): FirstKill 64, Reward 79 (army 3 -> 5), raid sent +20 s, raid won +110 s after the reward
+ok    first fight win AND army growth inside 2:00 at the derived pace (fight 64 s, reward + soldiers 79 s)
+[GUIDED] shaunie6 reward soldiers 3 -> 4 (asked 2, within the cap)
+ok    RewardSoldiers is clamped to the army cap (cap 4: 3 -> 4)
+[GUIDED] shaunie6 reward soldiers 3 -> 3 (asked 2, within the cap)
+ok    at the cap no soldier is added (3 -> 3)
+[GUIDED] shaunie6 reward soldiers 3 -> 5 (asked 2, within the cap)
+ok    a raid won after FastRaidSeconds wins the goal but pays no bonus
+[GUIDED] shaunie6 reward soldiers 3 -> 5 (asked 2, within the cap)
+ok    FastRaidBonus = 0: the raid goal shows NO countdown (no fake timer)
+[GUIDED] shaunie6 reward soldiers 3 -> 5 (asked 2, within the cap)
+[GUIDED] shaunie6 raid goal -> FALLBACK (no rival may be raided now)
+ok    no rival allowed -> FALLBACK goal: the chip says "Clear hostiles"
+ok    GoalFallback logged once
+ok    1 of 2 hostile kills: still on the goal
+ok    2 hostile kills -> GoalFallbackWon -> the Barracks
+ok    the fallback win is funnel step 15 named GoalFallbackWon
+[GUIDED] shaunie6 reward soldiers 3 -> 5 (asked 2, within the cap)
+[GUIDED] shaunie6 raid goal -> FALLBACK (no rival may be raided now)
+[GUIDED] shaunie6 fallback goal timed out -> next goal (never a soft-lock)
+ok    nothing killed: after FallbackMaxSeconds the chain moves on to the Barracks (never a soft-lock)
+[GUIDED] shaunie6 reward soldiers 3 -> 5 (asked 2, within the cap)
+[GUIDED] shaunie6 raid goal -> FALLBACK (no rival may be raided now)
+ok    a rival becomes allowed: the re-check turns the fallback into the raid goal
+ok    a v4 save past the reward (on the Barracks) resumes on the new raid goal in order 5
+ok    a v4 save mid-fight resumes at the FIRST FIGHT in order 5
+ok    Hook OFF: a v5 save on the Barracks goes back to order 4 on the Barracks
+ok    Hook OFF: a new profile plays today's v4 chain (9 steps)
+ok    owner-first: a new non-owner profile stays on order 4 (Hook not live for him)
+ok    the owner's REPLAY GUIDED (test mode) plays the Hook order 5
+ok    SessionMilestone once each at 60/120/180/300/600 s, only for the player the Hook is live for (60,120,180,300,600)
+FIRST MINUTES TEST: 0 failed

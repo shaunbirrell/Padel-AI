@@ -155,14 +155,22 @@ local function pushTutorial(player: Player)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.TutorialStateUpdate) :: RemoteEvent
 	local stepIndex = profile.TutorialStep
 	local stepDef = if not profile.TutorialComplete then getStep(profile, stepIndex) else nil
+	-- claude-bud JOB 48: the raid goal's fallback copy ("Clear hostiles") while no rival may be raided
+	local goalTitle, goalHint = nil, nil
+	if stepDef and stepDef.Id == "RaidRival" and GuidedService and GuidedService.GoalText then
+		local okG, t, h = pcall(GuidedService.GoalText, profile)
+		if okG then
+			goalTitle, goalHint = t, h
+		end
+	end
 	remote:FireClient(player, {
 		Step = stepIndex,
 		Complete = profile.TutorialComplete == true,
 		Total = stepCount(profile),
 		OrderVersion = tonumber(profile.TutorialOrderVersion) or 1, -- claude-bud JOB 41: 4 = the Guided list
 		Id = if stepDef then stepDef.Id else nil,
-		Title = if stepDef then stepDef.Title else nil,
-		Hint = if stepDef then stepDef.Hint else nil,
+		Title = goalTitle or (if stepDef then stepDef.Title else nil),
+		Hint = goalHint or (if stepDef then stepDef.Hint else nil),
 		MarkerName = if stepDef then stepDef.MarkerName else nil,
 		HighlightHint = if stepDef then stepDef.HighlightHint else nil,
 		PadStructureId = if stepDef then stepDef.PadStructureId else nil,
@@ -498,7 +506,7 @@ function TutorialService.ReplayGuided(player: Player): (boolean, string)
 	end
 	profile.GuidedReplay = { Fields = fields, At = os.time() }
 	profile.Guided = { Replay = true, Funnel = {} }
-	profile.TutorialOrderVersion = G.OrderVersion
+	profile.TutorialOrderVersion = if GuidedService.OrderFor then GuidedService.OrderFor(player) else G.OrderVersion -- JOB 48: 5 with the Hook
 	profile.TutorialDoneAhead = nil
 	profile.TutorialComplete = false
 	profile.TutorialStep = skipOwnedBuySteps(profile, STEP_CLAIM)
@@ -608,7 +616,17 @@ function TutorialService.Init(deps: { [string]: any })
 			local okW, wants = pcall(GuidedService.Wants, player, profile)
 			if okW and wants == true then
 				current = TutorialConfig.Guided.OrderVersion
-				if tonumber(profile.TutorialOrderVersion) ~= current then
+				if typeof(GuidedService.OrderFor) == "function" then
+					local okO, v = pcall(GuidedService.OrderFor, player)
+					current = if okO and typeof(v) == "number" then v else current -- claude-bud JOB 48: 5 with the Hook
+				end
+				local saved = tonumber(profile.TutorialOrderVersion)
+				if saved ~= current then
+					-- claude-bud JOB 48: a Guided save moving between 4 and 5 (the Hook switched on / off) keeps its place:
+					-- the first step of the new order it has not done (steps 1-7 share an index in both orders)
+					if TutorialConfig.IsGuidedVersion(saved) and profile.TutorialComplete ~= true then
+						profile.TutorialStep = TutorialConfig.MigrateLegacyStep(profile.TutorialStep, TutorialConfig.StepsFor(current), saved)
+					end
 					profile.TutorialOrderVersion = current
 					DataService.MarkDirty(player)
 				end

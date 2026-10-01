@@ -10025,3 +10025,16 @@ ds_territories.luau T3):
   live data.
 - **No teleport in game code:** B3 moves the test player's character (not the army) to the runway; the
   no-teleport rule applies to the game code, which is unchanged.
+
+## 2026-10-01 — claude-bud JOB 48: the first 2 minutes hook
+- **Order:** I chose a saved order (SavedOrders[5]) over post-chain goals, because the chip, tracker, skip, resume
+  and migration all exist per step already.
+- **A v4 save past the Reward:** it resumes on the new raid goal. It is a goal it has not done yet.
+- **The fallback goal:** "clear 2 hostiles" counts ANY CombatService NPC he kills (except his Guided camp).
+  CombatService has no per-site API for "the nearest Open camp". After 180 s the chain moves on, so it never
+  soft-locks.
+- **Tuning:** FastRaidBonus $2,000 and RewardSoldiers 2 are first guesses, both in config. The bonus is an onboarding
+  cash grant, not a price.
+- **Funnel:** GoalFallbackWon is logged at the RaidWon index (15), so the funnel keeps one step per index.
+- **The Missions step:** it finishes on the panel open. That rides on the RequestAchievements remote the panel already
+  sends on every open, so no new remote was added. A mission claim also finishes it.

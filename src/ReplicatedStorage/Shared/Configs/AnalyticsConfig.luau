@@ -60,6 +60,10 @@ local AnalyticsConfig = {
 			GUIDED_SKIPPED = { Name = "GuidedSkipped", Field = "step" },
 			GUIDED_STUCK = { Name = "GuidedStuck", Field = "step" },
 			RECRUIT_PACK_OFFERED = { Name = "RecruitPackOffered", Field = "trigger" }, -- claude-bud JOB 41 B
+			-- claude-bud JOB 48: the Hook (TutorialConfig.Guided.Hook): the 3-minute wall + time to the first fight win
+			SESSION_MILESTONE = { Name = "SessionMilestone", Value = "sec", Field = "sec" },
+			FTUE_TIME_TO_FIGHT = { Name = "FtueTimeToFight", Value = "seconds" },
+			GOAL_FALLBACK = { Name = "GoalFallback", Field = "reason" }, -- the raid goal fell back (no rival allowed)
 			-- claude-bud JOB 41 C: rival targets (PvP rate = RivalSendTapped per session)
 			RIVAL_LIST_OPENED = { Name = "RivalListOpened" },
 			RIVAL_SEND_TAPPED = { Name = "RivalSendTapped", Field = "verdict" },

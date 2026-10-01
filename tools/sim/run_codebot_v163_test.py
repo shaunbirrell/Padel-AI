@@ -111,6 +111,9 @@ B_TEST = r'''
 local fails = 0
 local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if not ok then fails += 1 end end
 local TC = require(node("Configs/TutorialConfig"))
+-- claude-bud JOB 48: this proves the v4 replay, so the (owner-first) Hook is off here; the owner's replay with the
+-- Hook on (OrderVersion 5) is pinned in run_first_minutes_test (section 11)
+if TC.Guided.Hook then TC.Guided.Hook.Enabled = false end
 local function enc(v, d) d = d or 0; if type(v) ~= "table" then return tostring(v) end; local ks = {}; for k in pairs(v) do table.insert(ks, tostring(k)) end; table.sort(ks)
   local o = {}; for _, k in ipairs(ks) do local x = v[k]; if x == nil then x = v[tonumber(k)] end; table.insert(o, k .. "=" .. enc(x, d + 1)) end; return "{" .. table.concat(o, ",") .. "}" end
 local FIELDS = { "TutorialComplete", "TutorialStep", "TutorialOrderVersion", "TutorialDoneAhead", "Guided" }

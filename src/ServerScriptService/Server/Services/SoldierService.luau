@@ -222,6 +222,31 @@ function SoldierService.Recruit(player: Player, amount: any): (boolean, string?)
 	return true, nil
 end
 
+--[[ claude-bud JOB 48: free soldiers (the Guided Hook's reward: TutorialConfig.Guided.Hook.RewardSoldiers). The same
+	state Recruit writes (profile.Soldiers, within maxSoldiers, the state push + army listeners), no cash taken. Server
+	only (no remote calls this); returns how many were added (0 at the cap). ]]
+function SoldierService.GrantFree(player: Player, amount: number, reason: string?): number
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 0
+	end
+	local current = tonumber(profile.Soldiers) or 0
+	local n = math.clamp(math.floor(tonumber(amount) or 0), 0, math.max(0, maxSoldiers(profile) - current))
+	if n <= 0 then
+		return 0
+	end
+	profile.Soldiers = current + n
+	DataService.MarkDirty(player)
+	pushState(player)
+	if NotificationService then
+		NotificationService.Notify(player, string.format("+%d soldiers joined · Army %d/%d", n, profile.Soldiers, maxSoldiers(profile)), "Success")
+	end
+	if AnalyticsService and AnalyticsService.Log then
+		AnalyticsService.Log("SOLDIER_GRANT", player.UserId, { amount = n, reason = reason or "grant", total = profile.Soldiers })
+	end
+	return n
+end
+
 function SoldierService.Dismiss(player: Player, amount: any): (boolean, string?)
 	local n, serr = sanitizeAmount(amount)
 	if not n then

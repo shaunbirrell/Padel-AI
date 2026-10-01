@@ -184,6 +184,9 @@ function ArmyCommand.Send(player: Player, raw: any): (boolean, string?)
 			return false, text
 		end
 		push(player)
+		pcall(function() -- claude-bud JOB 48: the Guided raid goal's RaidSent funnel step (only while that goal is open)
+			(require(script.Parent.Parent.Services.GuidedService) :: any).OnRaidSent(player)
+		end)
 		return true, nil
 	end
 	local ok, text = deps.Plan.StartTravel(player, target, st)

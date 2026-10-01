@@ -479,6 +479,11 @@ function AchievementService.Init(d: { [string]: any })
 			if d.RateLimitService and not d.RateLimitService.Allow(player, "achievements", 1, 3) then
 				return
 			end
+			-- claude-bud JOB 48: the Missions panel sends this on every open; the Guided Hook's last step ("Open
+			-- Missions") finishes on it (TutorialService only advances the ACTIVE step, so it is a no-op otherwise)
+			if d.TutorialService and d.TutorialService.Notify then
+				pcall(d.TutorialService.Notify, player, "MissionsOpened")
+			end
 			if live(player.UserId) then
 				AchievementService.Check(player)
 				pushState(player)

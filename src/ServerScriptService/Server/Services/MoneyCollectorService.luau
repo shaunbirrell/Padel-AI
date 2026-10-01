@@ -857,6 +857,9 @@ function MoneyCollectorService._RaidDone(thief: Player, victim: Player, vProfile
 		pcall(function() -- claude-bud JOB 41 part D: an in-person raid win may bring the (no-reward) rate card forward once
 			(require(script.Parent.RatePromptService) :: any).Trigger(thief, "RaidWin")
 		end)
+		pcall(function() -- claude-bud JOB 48: an in-person ATM raid also wins the Guided raid goal
+			(require(script.Parent.GuidedService) :: any).OnRaidWon(thief)
+		end)
 	end
 	markDirty(victim)
 	markDirty(thief)

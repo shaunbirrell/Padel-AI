@@ -1207,6 +1207,9 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 				local RP = require(script.Parent.Parent.Services.RatePromptService) :: any
 				RP.Trigger(player, "RaidWin")
 			end)
+			pcall(function() -- claude-bud JOB 48: the Guided "RAID A RIVAL BASE" goal is won (only while it is open)
+				(require(script.Parent.Parent.Services.GuidedService) :: any).OnRaidWon(player)
+			end)
 			pcall(function() -- claude-bud JOB 39: the Intel Office's "win a SEND ARMY raid" contract
 				(require(script.Parent.Parent.Services.EndgameService) :: any).NoteContract(player, "WinSend", 1)
 			end)

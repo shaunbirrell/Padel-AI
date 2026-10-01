@@ -1,0 +1,4 @@
+PACE (s): build 8, collect 23 (walk 14), recruit 14, walk+fight 19 (walk 14, fight median 1.7), capture 12
+STEP TIMES (s): FirstBuild 8, Collected 31, Recruited 45, FirstKill(camp cleared) 64, Captured 76, Reward 79, NextBuilding 112
+NOTE  the derived pace reaches the Reward in 79 s: FASTER than the brief's 180-240 s estimate (reported, not padded)
+FIRST MINUTES TEST: 0 failed

@@ -74,7 +74,9 @@ left = []
 for p in sorted((ROOT / C).glob("*.luau")):
     for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
         code = line.split("--", 1)[0]
-        if re.search(r"\bOwnerFirst\s*=\s*true\s*(,|\}|$)", code):  # a table field, not docblock prose
+        # claude-bud JOB 48: a NEW owner-first block (CLAUDE.md "Flags": new gameplay ships owner-first) is tagged
+        # NEW-OWNER-FIRST on its line; v166's flip of every block that existed then is still pinned above
+        if re.search(r"\bOwnerFirst\s*=\s*true\s*(,|\}|$)", code) and "NEW-OWNER-FIRST" not in line:  # a table field, not docblock prose
             left.append(f"{p.name}:{i}")
 check(not left, f"CODEBOT v166: no OwnerFirst = true assignment left in Shared/Configs {left}")
 

@@ -1145,6 +1145,9 @@ function MissionService.Init(deps: { [string]: any })
 			return
 		end
 		MissionService.ClaimDailyMission(player, missionId)
+		pcall(function() -- claude-bud JOB 48: the Hook's "Open Missions" step also finishes on a claim
+			(require(script.Parent.TutorialService) :: any).Notify(player, "ClaimMission")
+		end)
 	end)
 
 	local dailyRemote = RemoteSetup.Get(Constants.RemoteNames.RequestClaimDailyReward) :: RemoteEvent

@@ -69,6 +69,10 @@ local rows: { any } = {}
 local why: string? = nil -- v163: the server's one-line reason when the list is empty
 local open = false
 local emptyLabel: TextLabel? = nil
+-- claude-bud JOB 48: the Guided "RAID A RIVAL BASE" goal outlines the card (FeaturePush "GuidedGoal" {Goal = "Raid"});
+-- a REAL fast-raid bonus window (server: Hook.FastRaidSeconds, only while Hook.FastRaidBonus > 0) shows as a countdown
+local goalRaid = false
+local goalEndsAt: number? = nil
 
 local updatePillLater: () -> () = function() end -- v163: set once updatePill exists (setOpen is defined first)
 
@@ -331,6 +335,14 @@ local function refresh()
 	local st = pillStroke
 	if st then
 		st.Color = accent
+		st.Thickness = if goalRaid then 4 else 2 -- claude-bud JOB 48: the raid goal's outline
+	end
+	local ends = goalEndsAt
+	if t and goalRaid and ends then
+		local left = math.max(0, math.floor(ends - os.clock()))
+		if left > 0 then
+			t.Text = string.format("RAID · %d:%02d", left // 60, left % 60) -- the real fast-raid bonus window
+		end
 	end
 	local ring = crossRing
 	if ring then
@@ -486,11 +498,37 @@ local function build()
 	refresh()
 end
 
+-- claude-bud JOB 48: the tutorial chip's TARGETS button opens the list (the same as tapping the card)
+function RivalController.Open()
+	if pill == nil or open then
+		return
+	end
+	setOpen(true)
+	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestRivalAction, "open", nil)
+end
+
 function RivalController.Init()
 	if RivalConfig.Enabled ~= true or not RivalConfig.LiveFor(player.UserId) then
 		return -- OFF / not live: no pill, nothing pushed
 	end
 	task.spawn(build)
+	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if kind ~= "GuidedGoal" or typeof(data) ~= "table" then
+			return
+		end
+		goalRaid = data.Goal == "Raid"
+		local left = tonumber(data.FastRaidLeft)
+		goalEndsAt = if goalRaid and left and left > 0 then os.clock() + left else nil
+		refresh()
+		if goalEndsAt then
+			task.spawn(function() -- 1 Hz while the bonus window runs (UI refresh well under the 10 Hz cap)
+				while goalRaid and goalEndsAt and os.clock() < goalEndsAt + 1 do
+					task.wait(1)
+					refresh()
+				end
+			end)
+		end
+	end)
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if kind ~= "RivalTargets" or typeof(data) ~= "table" or typeof(data.Rows) ~= "table" then
 			return

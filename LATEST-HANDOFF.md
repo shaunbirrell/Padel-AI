@@ -1,4 +1,72 @@
 <!-- Q2-START -->
+## claude-bud JOB 48 (2026-10-01): THE FIRST 2 MINUTES HOOK (branch `claude/desktop-bud`)
+JOB 44's Studio run was skipped on Shaun's word ("start all the jobs forget studio run").
+
+**Flags to flip (after the phone test):**
+- `TutorialConfig.Guided.Hook.OwnerFirst = true -> false`.
+- Kill switch: `Hook.Enabled = false`, which gives today's v4 chain exactly (pinned).
+- The line is tagged `NEW-OWNER-FIRST`. codebot_v166's "no OwnerFirst = true left" pin now skips lines carrying that
+  tag, and its flip of every older block is still pinned.
+
+**Root cause (model; no live numbers here).** The real TutorialService / GuidedService at a pace derived from the real
+layout:
+- the v4 chain already wins the first fight at 64 s and reaches the Reward at 79 s;
+- what it lacked was army growth after the fight, and a fighting goal after the Reward. It went straight to "build the
+  Barracks", then the 4x4, then ended;
+- `docs/proof/job48/funnel-live.md` has the exact Creator Hub queries. Code Bot / Shaun paste the live FirstMinutes /
+  GuidedStepSeconds numbers there; that is the only proof of WHICH step loses people.
+
+**Built (reuse, not a new tutorial).** OrderVersion 5 (SavedOrders[5]) = v4 + `RaidRival` after the Reward + `Missions`
+last:
+- **Why a saved order, not post-chain goals:** the chip, gold tracker, skip, resume and funnel hooks all work per step
+  already. v4 saves migrate to 5 (and back when the Hook is off) through the existing MigrateLegacyStep.
+- **Reward:** + `Hook.RewardSoldiers` 2 free soldiers via the new `SoldierService.GrantFree`. It writes the same state
+  Recruit writes, clamped to the army cap, with no cash and no Robux. Sim: army 3 -> 5. The Army tile pulses and a
+  burst rings at his feet on every +1 (Juice, Hook-live only).
+- **RAID A RIVAL BASE:**
+  - It uses `RivalService.Candidates` (the JOB 38 verdict, ArmySendRules).
+  - The TARGETS card gets a gold outline, and the chip's TARGETS button opens the list.
+  - SEND ARMY (the JOB 38 path) logs RaidSent; the loot logs RaidWon (ArmyPlan, plus an in-person ATM raid).
+  - The REAL fast-raid bonus: `Hook.FastRaidBonus` $2,000 once, if the raid is won within 300 s of the Reward. The
+    card shows "RAID · m:ss" only while that bonus is > 0.
+- **Fallback (no rival allowed):** the chip reads "Clear hostiles". 2 hostile NPC kills by him finish it; after 180 s
+  the chain moves on anyway, so it never soft-locks. It is re-checked every 15 s.
+- **Then:** Barracks -> 4x4 -> Open Missions (the panel open or a mission claim finishes it).
+- **Funnel:**
+  - FirstMinutes steps 1-11 are untouched; 12 ArmyGrew, 13 GoalRaidShown, 14 RaidSent, 15 RaidWon (or
+    GoalFallbackWon), 16 NextGoal are appended to the same funnel and session.
+  - **Why appended:** it avoids a second funnel against the per-experience funnel limit, and changing 1-11 would break
+    their history. Verify the step limit in the Roblox AnalyticsService docs.
+  - Custom events: `SessionMilestone {sec}` (60/120/180/300/600, once each per session) and `FtueTimeToFight`.
+  - Studio prints `[FUNNEL] FirstMinutes <n> <step>`.
+- **Dashboards to open:** Analytics > Funnels > FirstMinutes (Phone), and Custom events > SessionMilestone (the
+  3-minute wall), FtueTimeToFight, GoalFallback, GuidedStepSeconds.
+
+**A Robux card inside the first minutes: YES, by code.**
+- `MonetizationConfig.FirstOffer.AtPlaySeconds = 120`, and `ClaimSoftOfferSlot` lets it through whatever the tutorial
+  state.
+- At the derived pace the raid goal is up from about 82 s, so the Commander Starter Pack lands during the raid goal.
+  Before this job it landed during the Barracks build.
+- **NOT changed (Shaun's call):** keep it at 120 s, or hold it until RaidWon / the end of the goal.
+
+**Checks:**
+- run_first_minutes_test 67 checks, 0 failed (docs/proof/job48/funnel-sim.txt); claude_bud_job48 pins.
+- BuyPathStatic FAIL=0; all sims; rojo ok; no new LSP errors; remote_audit OK.
+- run_codebot_v163_test now proves the v4 replay with the Hook off; the owner's replay on order 5 is pinned in
+  run_first_minutes_test.
+
+**Owed:**
+- the Studio stopwatch runs before / after at 844x390 + 800x360, and step screenshots;
+- the HUD harness at 6 viewports (`check_hud.py` is not in this repo);
+- the live funnel numbers.
+
+**Test ON HIS PHONE:**
+1. **Fresh test account:** a soldier, the first fight won, and the army growing (+2 at "BASE SECURED!") in about
+   2 minutes, with the gold line on every step.
+2. **The raid goal:** "Raid a rival base" shows with the TARGETS card outlined, and SEND ARMY walks the army there. On
+   an empty server it reads "Clear hostiles" instead.
+3. **The owner account (returning):** never sees the chain (REPLAY GUIDED in Settings > ADMIN shows it in test mode).
+
 ## claude-bud JOB 44 (2026-10-01 ~15:20): ONE-CLICK STUDIO TEST READY, STILL BLOCKED ON THE RUN (branch `claude/desktop-bud`)
 - **Tried from this session:** Roblox Studio is installed. Launching a local server from the command line
   (`RobloxStudioBeta.exe -task StartServer -localPlaceFile ...`) gives "Cannot open place file for reading", and

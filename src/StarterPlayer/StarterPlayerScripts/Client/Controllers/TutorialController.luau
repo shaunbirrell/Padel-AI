@@ -810,6 +810,21 @@ local function runCta()
 		if ok and VehicleController and VehicleController.Open then
 			VehicleController.Open()
 		end
+	elseif action == "OpenTargets" then
+		-- claude-bud JOB 48: RAID A RIVAL BASE: the TARGETS list (each row's SEND ARMY is the JOB 38 path)
+		local ok, RivalController = pcall(function()
+			return require(script.Parent.RivalController)
+		end)
+		if ok and RivalController and RivalController.Open then
+			RivalController.Open()
+		end
+	elseif action == "OpenMissions" then
+		local ok, MissionController = pcall(function()
+			return require(script.Parent.MissionController)
+		end)
+		if ok and MissionController and MissionController.Open then
+			MissionController.Open()
+		end
 	elseif action == "OpenArmy" then
 		local ok, ArmyController = pcall(function()
 			return require(script.Parent.ArmyController)

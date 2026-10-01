@@ -72,6 +72,9 @@ local TutorialConfig = {
 		[3] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Outpost", "Jeep" },
 		-- claude-bud JOB 41: the Guided order (only while TutorialConfig.Guided is live for a NEW player; see GuidedSteps)
 		[4] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "FirstFight", "Outpost", "Reward", "Barracks", "Jeep" },
+		-- claude-bud JOB 48: the Hook order (Guided.Hook live): v4 + RAID A RIVAL BASE after the reward + Open MISSIONS last
+		[5] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "FirstFight", "Outpost", "Reward", "RaidRival",
+			"Barracks", "Jeep", "Missions" },
 	} :: { [number]: { string } },
 	-- Lane Z: the steps whose finish is carried (DoneAhead) when a new order puts them after the step a save moves to:
 	-- the Outpost / 4x4 pair the Home Outpost switch reorders. Any other done step after it is asked again (K2's "first
@@ -374,10 +377,55 @@ TutorialConfig.Guided = {
 		Steps = { "Spawned", "FirstBuild", "Collected", "Recruited", "FightStarted", "FirstKill", "Captured", "Reward",
 			"NextBuilding", "Offered", "Bought" },
 	},
+	--[[ claude-bud JOB 48 (2026-10-01): THE HOOK, the end of the Guided chain (owner-first; OFF == today's v4 chain).
+		Live (Enabled + RetentionConfig.Live, on top of Guided being live) a Guided player plays OrderVersion 5
+		(SavedOrders[5]): after the REWARD the next goal is RAID A RIVAL BASE (SEND ARMY on a TARGETS row, the JOB 38
+		path; ArmySendRules decide), then the Barracks, the 4x4 and Open MISSIONS. ]]
+	Hook = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 48): Code Bot flips it after Shaun's phone test
+		OrderVersion = 5,
+		-- free soldiers at the REWARD through the normal recruit path (SoldierService.GrantFree: within the army cap,
+		-- never above it; no cash, no Robux). 0 = off
+		RewardSoldiers = 2,
+		-- the one REAL timer: a raid won within FastRaidSeconds of the reward pays FastRaidBonus once (reason
+		-- "onboarding"); FastRaidBonus = 0 -> no bonus and no countdown on screen
+		FastRaidSeconds = 300,
+		FastRaidBonus = 2000,
+		-- no rival may be raided right now (empty server, all shielded, his army too weak): the goal falls back to
+		-- clearing FallbackKills hostile NPCs (any CombatService NPC he kills, the server's own camps / Ops sites); after
+		-- FallbackMaxSeconds the chain moves on to the Barracks anyway (never a soft-lock)
+		FallbackKills = 2,
+		FallbackMaxSeconds = 180,
+		RecheckSeconds = 15, -- while the raid goal is open: re-check that a rival is still allowed
+		FallbackTitle = "Clear hostiles", -- <= 18 characters
+		FallbackHint = "Beat 2 enemies: send your army to ATTACK.", -- <= 42 characters, no key names
+		FastRaidText = "Fast raid bonus!",
+		-- funnel steps 12-16 of FirstMinutes (appended after Funnel.Steps 1-11, which never change). "GoalFallbackWon"
+		-- is logged at the RaidWon index (15) when the fallback goal was won instead
+		FunnelSteps = { "ArmyGrew", "GoalRaidShown", "RaidSent", "RaidWon", "NextGoal" },
+		FallbackWonName = "GoalFallbackWon",
+		-- custom event SessionMilestone { sec } once each per session at these play seconds (the 3-minute wall)
+		Milestones = { 60, 120, 180, 300, 600 },
+	},
 }
 
 function TutorialConfig.GuidedLiveFor(userId: any): boolean
 	return (require(script.Parent.RetentionConfig) :: any).Live(TutorialConfig.Guided, userId)
+end
+
+-- claude-bud JOB 48: the Hook (OrderVersion 5) is live only on top of a live Guided
+function TutorialConfig.HookLiveFor(userId: any): boolean
+	local H: any = TutorialConfig.Guided.Hook
+	return typeof(H) == "table" and TutorialConfig.GuidedLiveFor(userId)
+		and (require(script.Parent.RetentionConfig) :: any).Live(H, userId)
+end
+
+-- true for both Guided orders (4 and the Hook's 5)
+function TutorialConfig.IsGuidedVersion(version: any): boolean
+	local v = tonumber(version)
+	local H: any = TutorialConfig.Guided.Hook
+	return v ~= nil and (v == TutorialConfig.Guided.OrderVersion or (typeof(H) == "table" and v == H.OrderVersion))
 end
 
 -- the two new steps of the Guided order (the other seven are the owner's steps above, unchanged)
@@ -401,11 +449,34 @@ local GUIDED_NEW: { [string]: TutorialStepDef } = {
 		CtaLabel = "OK",
 		AdvanceOn = { "GuidedReward" },
 	},
+	-- claude-bud JOB 48: the Hook's two steps (OrderVersion 5)
+	RaidRival = {
+		Id = "RaidRival",
+		Title = "Raid a rival base",
+		Hint = "Tap SEND ARMY on a TARGETS row.",
+		MarkerName = "",
+		HighlightHint = "Targets",
+		CtaAction = "OpenTargets",
+		CtaLabel = "TARGETS",
+		-- RaidWon: a SEND (or an in-person ATM raid) looted; GoalFallbackWon: the fallback hostiles cleared;
+		-- GoalFallbackDone: the fallback timed out (the chain moves on, never a soft-lock)
+		AdvanceOn = { "RaidWon", "GoalFallbackWon", "GoalFallbackDone" },
+	},
+	Missions = {
+		Id = "Missions",
+		Title = "Open Missions",
+		Hint = "Daily jobs pay cash. Open MISSIONS.",
+		MarkerName = "",
+		HighlightHint = "Missions",
+		CtaAction = "OpenMissions",
+		CtaLabel = "MISSIONS",
+		AdvanceOn = { "MissionsOpened", "ClaimMission" },
+	},
 }
 
-local function buildGuided(): { TutorialStepDef }
+local function buildGuided(version: number?): { TutorialStepDef }
 	local list: { TutorialStepDef } = {}
-	for _, id in ipairs(TutorialConfig.SavedOrders[4]) do
+	for _, id in ipairs(TutorialConfig.SavedOrders[version or 4]) do
 		local def = GUIDED_NEW[id]
 		if def == nil then
 			for _, d in ipairs(OWNER_STEPS) do
@@ -419,11 +490,16 @@ local function buildGuided(): { TutorialStepDef }
 	return list
 end
 TutorialConfig.GuidedSteps = buildGuided()
+TutorialConfig.HookSteps = buildGuided(5) -- claude-bud JOB 48
 
--- the step list a saved order version plays (4 = GuidedSteps; anything else = today's Steps)
+-- the step list a saved order version plays (4 = GuidedSteps, 5 = HookSteps; anything else = today's Steps)
 function TutorialConfig.StepsFor(version: any): { TutorialStepDef }
 	if tonumber(version) == TutorialConfig.Guided.OrderVersion then
 		return TutorialConfig.GuidedSteps
+	end
+	local H: any = TutorialConfig.Guided.Hook
+	if typeof(H) == "table" and tonumber(version) == H.OrderVersion then
+		return TutorialConfig.HookSteps
 	end
 	return TutorialConfig.Steps
 end
