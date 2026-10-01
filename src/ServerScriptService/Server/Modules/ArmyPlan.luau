@@ -16,6 +16,12 @@
 	passes AllowRecover = false and NoReposition = true (SoldierController marks a unit that cannot follow LOST; this
 	module reports it). No teleport, no PivotTo, no fast travel.
 	The owner stays where he is; an owner-dead SEND keeps going while he is in the server (Send.RequireOwnerAlive).
+Code Bot (army command bug, 2026-10-01): plans no longer write st.Order; every phase change goes through ArmyState.Set
+(the one writer; opts.Plan = true) and the state the owner sees is the plan's: Attacking / EngagingTarget (CLEAR),
+TravellingToBase / EngagingTarget (SEND to a base, TRAVEL to an area / site), Recalling (RETURN), Retreating (RETREAT).
+New kinds: TRAVEL (StartTravel: the map's SEND to an area / site -> its ArmyTargets approach point -> clear the hostiles
+there -> HOLD) and RETREAT (StartRetreat: a far army marches home as a block). ArmyPlan.Cancel ends a plan cleanly
+(bound as ArmyState's CancelPlan: any non-plan state drops it). ProbeClear: the ATTACK target check before the order.
 Code Bot v145 (owner phone test: "sending my army ... they don't go"): every route starts at the BLOCK (its centre), not
 at the owner (from inside his walled base the closed gate gave NoPath: "No route" + HOLD); the lead is placed
 ArmyController.Standoff studs along the route, and "the block is behind" is measured past that standoff (a block deeper
@@ -35,6 +41,9 @@ local GameConfig = require(Shared.Configs.GameConfig)
 local ArmyRoute = require(script.Parent.ArmyRoute)
 local Rules = require(script.Parent.ArmySendRules)
 local ArmyLog = require(Shared.Util.ArmyLog)
+local ArmyState = require(script.Parent.ArmyState)
+local ArmyTargets = require(script.Parent.ArmyTargets)
+local ArmyCommand = require(script.Parent.ArmyCommand)
 
 local ArmyPlan = {}
 
@@ -43,7 +52,7 @@ local T = C.Text
 
 export type Group = { Kind: string, GroupId: string?, Hum: any, Root: BasePart, Name: string, Player: Player? }
 export type Plan = {
-	Kind: string, -- "Clear" | "Send" | "Return"
+	Kind: string, -- "Clear" | "Send" | "Return" | "Travel" | "Retreat"
 	Phase: string, -- "Seek" | "March" | "Fight" | "Siege" | "Loot" | "Return"
 	Uid: number,
 	Owner: Player,
@@ -86,10 +95,18 @@ export type Plan = {
 	LostCount: number,
 	Squad: any, -- Code Bot v145: the squad state (the block's centre / standoff for the route start and the gap)
 	ReturnGate: boolean?, -- Code Bot v145: RETURN re-aimed at his gate spot (he is inside his walled base)
+	Target: any, -- Code Bot (army command bug): TRAVEL's ArmyTargets target
+	EngageSince: number?,
+	ClearSince: number?,
+	Anchor: Vector3?, -- CLEAR started away from him: the leash centre, and it HOLDS there when done (no march back)
+	HoldWhenDone: boolean?,
+	ThenState: string?, -- the state after finish (default Following)
+	MoveLogAt: number?,
 }
 
 local deps: { [string]: any } = {}
 local plans: { [number]: Plan } = {}
+local probing: number? = nil -- Code Bot: ProbeClear's owner (AllowsNpcGroup lets the probe see what ATTACK would)
 local logAt: { [string]: number } = {}
 local clock: () -> number = os.clock
 local gen = 0
@@ -195,6 +212,9 @@ end
 local function setDest(plan: Plan, dest: Vector3)
 	ArmyLog.Line(plan.Owner, "ARMY DESTINATION", string.format("%s old=%s new=%s source=ArmyPlan.%s/%s", plan.Owner.Name, ArmyLog.Vec(plan.Dest), ArmyLog.Vec(dest), plan.Kind, plan.Phase))
 	plan.Dest = dest
+	pcall(function()
+		plan.Owner:SetAttribute("WE_ArmyDest", dest) -- the ARMY's destination (the map marks it; never his PIN)
+	end)
 	plan.Route = nil
 	plan.RouteIdx = 1
 	plan.Routing = true
@@ -332,7 +352,43 @@ function ArmyPlan.Status(uid: number): { [string]: any }?
 	if plan == nil then
 		return nil
 	end
-	return { Kind = plan.Kind, Phase = plan.Phase, Text = plan.Status, Target = if plan.Kind == "Send" then plan.VictimName elseif plan.Group then plan.Group.Name else nil, Lost = plan.LostCount }
+	return { Kind = plan.Kind, Phase = plan.Phase, Text = plan.Status, Target = if plan.Kind == "Send" then plan.VictimName elseif plan.Kind == "Travel" and plan.Target then plan.Target.Name elseif plan.Group then plan.Group.Name else nil, Lost = plan.LostCount }
+end
+
+-- Code Bot (army command bug): the ArmyState a plan shows (one table, every kind / phase)
+function ArmyPlan.StateFor(plan: Plan): string
+	if plan.Phase == "Return" then
+		return "Recalling"
+	end
+	if plan.Kind == "Retreat" then
+		return "Retreating"
+	end
+	if plan.Kind == "Clear" then
+		return if plan.Phase == "Fight" then "EngagingTarget" else "Attacking"
+	end
+	if plan.Kind == "Send" or plan.Kind == "Travel" then
+		return if plan.Phase == "March" then "TravellingToBase" else "EngagingTarget"
+	end
+	return "Recalling"
+end
+
+local function targetName(plan: Plan): string?
+	if plan.Kind == "Send" then
+		return plan.VictimName .. "'s base"
+	elseif plan.Kind == "Travel" and plan.Target then
+		return plan.Target.Name
+	elseif plan.Group then
+		return plan.Group.Name
+	end
+	return nil
+end
+
+-- every phase change: the plan's state through THE one writer (a no-op while unchanged)
+local function syncState(plan: Plan, st: any, source: string)
+	if st == nil or plans[plan.Uid] ~= plan then
+		return
+	end
+	ArmyState.Set(plan.Owner, st, ArmyPlan.StateFor(plan), source, { Plan = true, Target = targetName(plan) })
 end
 
 -- ── lifecycle ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -346,7 +402,12 @@ local function newPlan(player: Player, kind: string, lead: Vector3): Plan
 		Victim = nil, VictimUid = 0, VictimName = "", PlotId = 0, Bully = false, SiegeAt = nil, Breached = false,
 		NoLoot = nil, HoldUnit = nil, HoldSince = nil, HoldHp = 0, Looted = 0, ThenOrder = nil, Total = 0,
 		Status = "", StatusAt = -math.huge, LostCount = 0, Squad = nil, ReturnGate = nil,
+		Target = nil, EngageSince = nil, ClearSince = nil, Anchor = nil, HoldWhenDone = nil, ThenState = nil, MoveLogAt = nil,
 	}
+	local old = plans[player.UserId]
+	if old then
+		ArmyLog.Line(player, "ARMY MOVE", string.format("%s plan %s/%s replaced by %s", player.Name, old.Kind, old.Phase, kind))
+	end
 	plans[player.UserId] = p
 	return p
 end
@@ -356,17 +417,26 @@ local function finish(plan: Plan, st: any?)
 		return
 	end
 	plans[plan.Uid] = nil
+	pcall(function()
+		plan.Owner:SetAttribute("WE_ArmyDest", nil)
+	end)
 	local sqs = deps.SquadOrdersService
 	if st then
-		st.Order = "Follow"
 		st._acTarget = nil
 	end
 	local thenOrder = plan.ThenOrder
+	local done = false
 	if thenOrder ~= nil and thenOrder ~= "Follow" and thenOrder ~= "Attack" and sqs and sqs.SetOrder then
-		pcall(sqs.SetOrder, plan.Owner, thenOrder) -- Hold / Retreat now (the plan is gone: a normal order)
-	elseif sqs and sqs.Push then
+		local okS, res = pcall(sqs.SetOrder, plan.Owner, thenOrder, "ArmyPlan.finish") -- Hold / Retreat now (the plan is gone: a normal order)
+		done = okS and res == true
+	end
+	if not done and st then
+		-- (one writer: Following, or the plan's ThenState - an ATTACK started away from him holds where it ended)
+		ArmyState.Set(plan.Owner, st, plan.ThenState or "Following", "ArmyPlan.finish " .. plan.Kind)
+	elseif not done and sqs and sqs.Push then
 		pcall(sqs.Push, plan.Owner)
 	end
+	ArmyLog.Line(plan.Owner, "ARMY MOVE", string.format("%s plan %s ended -> %s", plan.Owner.Name, plan.Kind, tostring(thenOrder or plan.ThenState or "Following")))
 	dbg(plan.Owner, "ArmyPlan", "done -> " .. tostring(plan.ThenOrder or "Follow"), true)
 end
 
@@ -413,6 +483,7 @@ local function toReturn(plan: Plan, why: string?)
 	plan.Phase = "Return"
 	plan.Group = nil
 	setDest(plan, returnDest(plan))
+	syncState(plan, plan.Squad, "ArmyPlan.return " .. tostring(why or ""))
 	dbg(plan.Owner, "ArmyPlan", "RETURN " .. tostring(why or ""), true)
 end
 
@@ -432,7 +503,8 @@ function ArmyPlan._NoRoute(plan: Plan)
 		plan.SeekFrom = "army"
 		return
 	end
-	notify(plan.Owner, string.format(T.NoRoute, if plan.Kind == "Send" then plan.VictimName .. "'s base" else "there"), "Warn")
+	notify(plan.Owner, string.format(T.NoRoute, targetName(plan) or "there"), "Warn")
+	ArmyLog.Reject(plan.Owner, "route " .. plan.Kind, "NoRoute", "dest=" .. ArmyLog.Vec(plan.Dest))
 	-- the army stops and holds where it is (no teleport fallback)
 	plan.ThenOrder = "Hold"
 	local sqs = deps.SquadOrdersService
@@ -446,7 +518,7 @@ end
 -- a SEND army does not refill at its owner while it is out (it would spawn far behind the block)
 function ArmyPlan.HoldsRefill(uid: number): boolean
 	local p = plans[uid]
-	return p ~= nil and p.Kind == "Send"
+	return p ~= nil and (p.Kind == "Send" or p.Kind == "Travel") -- Code Bot: a TRAVEL army is out too
 end
 
 -- the lead point ArmyController steers the block after (nil = follow the owner as always)
@@ -477,7 +549,13 @@ end
 
 -- an ordered auto-clear may engage grouped NPCs its owner is not standing next to (CombatService.SetUnitPlanCheck)
 function ArmyPlan.AllowsNpcGroup(owner: Player, _groupId: string?): boolean
+	if probing == owner.UserId then
+		return true -- Code Bot: ProbeClear sees what the ATTACK order would
+	end
 	local p = plans[owner.UserId]
+	if p ~= nil and p.Kind == "Travel" and p.Phase == "Engage" then
+		return true -- Code Bot: the army sent to an area clears its defenders
+	end
 	return p ~= nil and p.Kind == "Clear" and p.Phase ~= "Return"
 end
 
@@ -493,22 +571,88 @@ function ArmyPlan.IncomingFor(uid: number): { any }?
 	return out
 end
 
+-- the one target pick with a plan's centre / reach / leash (SquadOrdersService pickSquadTarget)
+local function pickWith(pick: any, player: Player, st: any, proot: BasePart?, opts: { [string]: any }): any
+	local ok = pcall(pick, player, st, proot, opts)
+	return if ok then st._acTarget else nil
+end
+
 -- ── ATTACK auto-clear ────────────────────────────────────────────────────────────────────────────────────────────
-function ArmyPlan.StartClear(player: Player, st: any): boolean
+function ArmyPlan.StartClear(player: Player, st: any, from: Vector3?, seed: any?): boolean
 	if not live(player.UserId) or st == nil then
 		return false
 	end
 	local r = ownerRoot(player)
 	local _, centre = livingUnits(st)
-	if r == nil or centre == nil then
+	if (r == nil and from == nil) or centre == nil then
 		return false
 	end
-	local p = newPlan(player, "Clear", r.Position)
+	local p = newPlan(player, "Clear", if from then centre :: Vector3 else (r :: BasePart).Position)
 	p.Squad = st
 	p.SeekFrom = "owner"
+	if from then
+		-- Code Bot: an ATTACK away from him (the army holds / travels out there): the leash centre is the army, and
+		-- once the fight is done it holds there (no 1,000-stud march back mid-map)
+		p.Anchor = from
+		p.HoldWhenDone = true
+		p.SeekFrom = "army"
+	end
 	setStatus(p, T.Seeking)
+	local g = groupOf(seed)
+	if g then
+		-- the target ProbeClear found: straight to MARCH (no second seek)
+		p.Group = g
+		p.GroupAlive = ArmyPlan.GroupAlive(player, g)
+		p.Phase = "March"
+		setDest(p, groupPos(g))
+	end
+	syncState(p, st, "ATTACK")
+	ArmyLog.Line(player, "ARMY MOVE", string.format("%s ATTACK started target=%s from=%s", player.Name, if g then g.Kind .. " " .. g.Name else "seek", ArmyLog.Vec(from or (r and r.Position))))
 	dbg(player, "ArmyPlan", "CLEAR start", true)
 	return true
+end
+
+--[[ Code Bot (army command bug): what an ATTACK order would target, BEFORE the order is taken (the one target pick,
+	the one hostility rule, the order's own radius SeekRadius from `from`). nil = "No enemies near" and the army keeps
+	its state. The squad's current target is left as it was. ]]
+function ArmyPlan.ProbeClear(player: Player, st: any, pick: any, from: Vector3): any
+	if st == nil or pick == nil then
+		return nil
+	end
+	local keep = st._acTarget
+	probing = player.UserId
+	local t = pickWith(pick, player, st, ownerRoot(player), { Centre = from, Reach = C.SeekRadius, LeashFrom = from, Leash = C.SeekLeash })
+	probing = nil
+	st._acTarget = keep
+	ArmyLog.Line(player, "ARMY MOVE", string.format("%s ATTACK probe from=%s radius=%d -> %s", player.Name, ArmyLog.Vec(from), C.SeekRadius,
+		if t then tostring(t.Kind) .. " at " .. ArmyLog.Vec(t.Root and t.Root.Position) else "none"))
+	return t
+end
+
+-- Code Bot: end the plan cleanly (ArmyState.CancelPlan: any non-plan state). Its pending route result is dropped (the
+-- plans[uid] ~= plan check in setDest); the squad target is cleared; nobody moves.
+function ArmyPlan.Cancel(player: Player, st: any?, why: string?)
+	local p = plans[player.UserId]
+	if p == nil then
+		return
+	end
+	plans[player.UserId] = nil
+	pcall(function()
+		player:SetAttribute("WE_ArmyDest", nil)
+	end)
+	if st then
+		st._acTarget = nil
+	end
+	ArmyLog.Line(player, "ARMY MOVE", string.format("%s plan %s/%s cancelled by %s", player.Name, p.Kind, p.Phase, tostring(why)))
+end
+
+-- the army's block centre (or nil): ArmyCommand measures "the army is away" with it
+function ArmyPlan.BlockCentre(st: any): Vector3?
+	return blockCentre(st)
+end
+
+function ArmyPlan.Current(uid: number): Plan?
+	return plans[uid]
 end
 
 -- RECALL (and any order during a plan): march back first; true = handled here
@@ -532,7 +676,6 @@ function ArmyPlan.Recall(player: Player, thenOrder: string?, st: any?): boolean
 		local np = newPlan(player, "Return", centre)
 		np.Squad = st
 		np.ThenOrder = thenOrder
-		st.Order = "Attack"
 		toReturn(np, "recall (far)")
 		return true
 	end
@@ -624,9 +767,9 @@ function ArmyPlan.StartSend(sender: Player, plotId: number, st: any): (boolean, 
 	p.Victim, p.VictimUid, p.VictimName, p.PlotId, p.Bully = victim, victim.UserId, victim.Name, plotId, v.Bully
 	p.Total = #living
 	p.Phase = "March"
-	st.Order = "Attack"
 	local dest = ((gateCf :: CFrame) * CFrame.new(0, 0, C.Send.StandoffStuds)).Position
 	setDest(p, dest)
+	syncState(p, st, "SEND base " .. tostring(plotId))
 	local eta = flatDist(p.Lead, dest) * 1.3 / C.MarchSpeed
 	notify(sender, string.format(T.Left, victim.Name .. "'s base"), "Info")
 	notify(victim, string.format(T.Incoming, sender.Name, Rules.Clock(eta)), "Warn")
@@ -636,11 +779,59 @@ function ArmyPlan.StartSend(sender: Player, plotId: number, st: any): (boolean, 
 	return true, v.Text
 end
 
--- ── the per-think step (SquadOrdersService calls it after its own target picks, before the units think) ─────────
-local function pickWith(pick: any, player: Player, st: any, proot: BasePart?, opts: { [string]: any }): any
-	local ok = pcall(pick, player, st, proot, opts)
-	return if ok then st._acTarget else nil
+local function travelCfg(): { [string]: any }
+	local t = (C :: any).Travel
+	return if typeof(t) == "table" then t else {}
 end
+
+--[[ Code Bot (army command bug, 2026-10-01): TRAVEL - the map's SEND to an area / site (ArmyTargets): the block walks
+	its route to the target's approach point (the one nearest the army), clears the hostiles at the objective, then
+	HOLDS there. The owner stays where he is; FOLLOW cannot pull it back (the block follows the plan's lead point; the
+	FOLLOW movers only run for the Following state). ]]
+function ArmyPlan.StartTravel(player: Player, target: any, st: any): (boolean, string)
+	if not live(player.UserId) then
+		return false, "Off"
+	end
+	local living, centre = livingUnits(st)
+	if centre == nil or #living == 0 then
+		return false, "NoSoldiers"
+	end
+	local dest = ArmyTargets.ApproachFor(target, centre)
+	local p = newPlan(player, "Travel", centre :: Vector3)
+	p.Squad = st
+	p.Target = target
+	p.Total = #living
+	p.Phase = "March"
+	setDest(p, dest)
+	syncState(p, st, "SEND " .. tostring(target.Key))
+	setStatus(p, string.format(T.Travelling, target.Name, math.floor(flatDist(centre :: Vector3, dest) * 0.28)))
+	notify(player, string.format(T.Sent, target.Name), "Info")
+	ArmyLog.Line(player, "ARMY MOVE", string.format("%s travel started -> %s (%s) approach=%s objective=%s distance=%.0f units=%d", player.Name, target.Key, target.Name,
+		ArmyLog.Vec(dest), ArmyLog.Vec(target.Centre), flatDist(centre :: Vector3, dest), #living))
+	return true, target.Name
+end
+
+-- Code Bot: RETREAT with the army far from home: it marches home as a block (his gate spot), then the plain RETREAT
+function ArmyPlan.StartRetreat(player: Player, st: any, home: Vector3): boolean
+	if not live(player.UserId) then
+		return false
+	end
+	local _, centre = livingUnits(st)
+	if centre == nil then
+		return false
+	end
+	local g = gateSpot(player)
+	local p = newPlan(player, "Retreat", centre :: Vector3)
+	p.Squad = st
+	p.Phase = "March"
+	p.ThenOrder = "Retreat"
+	setDest(p, g or home)
+	syncState(p, st, "RETREAT (far)")
+	setStatus(p, T.Retreating)
+	return true
+end
+
+-- ── the per-think step (SquadOrdersService calls it after its own target picks, before the units think) ─────────
 
 local function markLost(plan: Plan, living: { any }, centre: Vector3, now: number)
 	local n = 0
@@ -665,7 +856,7 @@ end
 
 local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?, pick: any, centre: Vector3, now: number)
 	local f3 = (ArmyConfig :: any).Follow3
-	local ownerPos = if proot then proot.Position else centre
+	local ownerPos = if plan.Anchor then plan.Anchor :: Vector3 elseif proot then proot.Position else centre
 	if plan.Phase == "Seek" then
 		local from = if plan.SeekFrom == "owner" and proot then proot.Position else centre
 		local radius = if plan.SeekFrom == "owner" then C.SeekRadius else C.ChainRadius
@@ -678,6 +869,11 @@ local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?,
 		if g == nil then
 			if plan.Chain == 0 then
 				notify(player, T.NothingNear, "Info")
+			end
+			if plan.HoldWhenDone then
+				plan.ThenState = "Holding" -- Code Bot: an ATTACK away from him holds where it ended
+				finish(plan, st)
+				return
 			end
 			toReturn(plan, "nothing left")
 			return
@@ -723,13 +919,16 @@ local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?,
 			plan.FightSince = now
 		end
 		setStatus(plan, string.format(T.Fighting, alive))
-		local beyond = proot ~= nil and flatDist(centre, proot.Position) > C.SeekLeash
+		local beyond = (plan.Anchor ~= nil or proot ~= nil) and flatDist(centre, ownerPos) > C.SeekLeash
 		if alive <= 0 or now - plan.FightSince >= C.FightGiveUpSeconds then
 			plan.Chain += 1
 			st._acTarget = nil
 			setStatus(plan, string.format(T.Cleared, plan.Kills))
 			dbg(player, "ArmyPlan", string.format("CLEARED %s (kills %d) chain %d/%d", g.Name, plan.Kills, plan.Chain, C.MaxChain), true)
-			if plan.Chain >= C.MaxChain or beyond or proot == nil then
+			if plan.HoldWhenDone and (plan.Chain >= C.MaxChain or beyond) then
+				plan.ThenState = "Holding"
+				finish(plan, st)
+			elseif plan.Chain >= C.MaxChain or beyond or (proot == nil and not plan.HoldWhenDone) then
 				toReturn(plan, if beyond then "past the leash" else "chain done")
 			else
 				plan.Group = nil
@@ -910,6 +1109,47 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 	end
 end
 
+-- Code Bot (army command bug): TRAVEL's step: MARCH (players shooting the block are answered) -> arrived ->
+-- ENGAGE the hostiles at the objective (the steered ATTACK deploy; the lead point stays at the approach point) -> HOLD
+local function thinkTravel(plan: Plan, player: Player, st: any, proot: BasePart?, pick: any, centre: Vector3, now: number)
+	local tg = plan.Target
+	local cfg = travelCfg()
+	if plan.Phase == "March" then
+		local t = pickWith(pick, player, st, proot, { Centre = centre, Reach = 120, LeashFrom = centre, Leash = 160 })
+		st._acTarget = if t and t.Kind == "Player" then t else nil
+		local dest = plan.Dest or centre
+		setStatus(plan, string.format(T.Travelling, tg.Name, math.floor(flatDist(centre, dest) * 0.28)))
+		if routeDone(plan) and flatDist(centre, dest) <= C.ArriveStuds + standoffOf(st) then
+			plan.Phase = "Engage"
+			plan.EngageSince = now
+			plan.ClearSince = nil
+			plan.Route = nil
+			plan.LeadVel = Vector3.zero
+			ArmyLog.Line(player, "ARMY MOVE", string.format("%s arrived at %s (%s) block=%s", player.Name, tg.Key, tg.Name, ArmyLog.Vec(centre)))
+			notify(player, string.format(T.Arrived, tg.Name), "Success")
+		end
+		return
+	end
+	-- ENGAGE: the hostiles within the objective's radius + EngageExtraStuds (the one pick, the one hostility rule)
+	local reach = (tonumber(tg.Radius) or 60) + (tonumber(cfg.EngageExtraStuds) or 60)
+	local t = pickWith(pick, player, st, proot, { Centre = tg.Centre, Reach = reach, LeashFrom = tg.Centre, Leash = reach + 60 })
+	st._acTarget = t
+	if t then
+		plan.ClearSince = nil
+		setStatus(plan, string.format(T.Engaging, tg.Name))
+	else
+		plan.ClearSince = plan.ClearSince or now
+	end
+	local clear = plan.ClearSince ~= nil and now - (plan.ClearSince :: number) >= (tonumber(cfg.ClearHoldSeconds) or 2)
+	local tooLong = now - (plan.EngageSince or now) >= (tonumber(cfg.EngageMaxSeconds) or 120)
+	if clear or tooLong then
+		notify(player, string.format(if tg.Territory then T.CaptureHint else T.AreaClear, tg.Name), "Success")
+		ArmyLog.Line(player, "ARMY MOVE", string.format("%s %s at %s: HOLD", player.Name, if clear then "clear" else "fight timed out", tg.Name))
+		plan.ThenState = "Holding"
+		finish(plan, st)
+	end
+end
+
 function ArmyPlan.Think(player: Player, st: any, proot: BasePart?, pick: any, now: number?)
 	local plan = plans[player.UserId]
 	if plan == nil then
@@ -926,7 +1166,12 @@ function ArmyPlan.Think(player: Player, st: any, proot: BasePart?, pick: any, no
 	end
 	local c = centre :: Vector3
 	plan.Squad = st
-	st.Order = "Attack" -- a plan fights through the steered ATTACK (attackAimOnly); the lead point moves the block
+	-- (a plan fights through the steered ATTACK (attackAimOnly) and the lead point moves the block: its state's mode is
+	-- Attack; Code Bot: ArmyState.Set is the one writer of st.Order - a squad out of step is re-synced and logged)
+	if st.Order ~= "Attack" then
+		ArmyLog.Line(player, "ARMY STATE", string.format("%s plan %s/%s found mode %s: resync", player.Name, plan.Kind, plan.Phase, tostring(st.Order)))
+		ArmyState.Set(player, st, ArmyPlan.StateFor(plan), "ArmyPlan.Think resync", { Plan = true, Target = targetName(plan), Force = true })
+	end
 	local dt = math.clamp(t - plan.LastAt, 0.05, 1)
 	plan.LastAt = t
 	markLost(plan, living, c, t)
@@ -953,13 +1198,29 @@ function ArmyPlan.Think(player: Player, st: any, proot: BasePart?, pick: any, no
 	end
 	if plan.Kind == "Send" then
 		thinkSend(plan, player, st, proot, pick, living, c, t)
+	elseif plan.Kind == "Travel" then
+		thinkTravel(plan, player, st, proot, pick, c, t)
+	elseif plan.Kind == "Retreat" then
+		st._acTarget = nil
+		setStatus(plan, T.Retreating)
+		local dest = plan.Dest or c
+		if routeDone(plan) and flatDist(c, dest) <= C.ReturnDoneStuds + 10 + standoffOf(st) then
+			finish(plan, st) -- ThenOrder Retreat: the plain RETREAT walks the last bit home
+			return
+		end
 	else
 		thinkClear(plan, player, st, proot, pick, c, t)
 	end
 	if plans[player.UserId] == plan and (plan.Phase == "March" or plan.Phase == "Loot" or plan.Phase == "Return") then
 		advance(plan, c, dt)
 		dbg(player, "ArmyMarch", string.format("lead %.0f studs/s gap %.1f lost %d", plan.LeadVel.Magnitude, flatDist(plan.Lead, c), plan.LostCount))
+		if ArmyLog.On(player) and t - (plan.MoveLogAt or -math.huge) >= 2 then
+			plan.MoveLogAt = t
+			ArmyLog.Line(player, "ARMY MOVE", string.format("%s %s/%s block=%s lead=%s to dest %.0f studs, lead %.0f studs/s, lost %d", player.Name, plan.Kind, plan.Phase,
+				ArmyLog.Vec(c), ArmyLog.Vec(plan.Lead), flatDist(c, plan.Dest or c), plan.LeadVel.Magnitude, plan.LostCount))
+		end
 	end
+	syncState(plan, st, "ArmyPlan " .. plan.Kind .. "/" .. plan.Phase)
 end
 
 -- test hooks
@@ -1026,34 +1287,35 @@ function ArmyPlan.Init(d: { [string]: any })
 			end
 		end)
 	end
+	-- Code Bot army command bug: THE send command. The target is a base plot id (a number / "B:<plot>"), a map area
+	-- ("A:<areaId>") or a world site ("S:<siteId>"); ArmyCommand validates it and starts the one transition. Every
+	-- refusal is logged with its reason (ArmyLog.Reject) - nothing is dropped silently any more.
 	local send = d.RemoteSetup and d.RemoteSetup.Get(Constants.RemoteNames.RequestArmySend)
 	if send and send:IsA("RemoteEvent") then
 		(send :: RemoteEvent).OnServerEvent:Connect(function(player: Player, plotId: any)
 			ArmyLog.Line(player, "SERVER ARMY", string.format("received player=%s command=Send target=%s", player.Name, tostring(plotId)))
 			if not require(script.Parent.RemoteGate).Check(player, "RequestArmySend", plotId) then
+				ArmyLog.Reject(player, "SEND " .. tostring(plotId), "BadPayload")
 				return
 			end
 			if d.RateLimitService and not d.RateLimitService.Allow(player, "army_send", ordersRate(), ordersBurst()) then
+				ArmyLog.Reject(player, "SEND " .. tostring(plotId), "RateLimited")
 				return
 			end
-			local id = math.floor(tonumber(plotId) or 0)
-			if id <= 0 or not live(player.UserId) or sqs == nil or sqs.StateOf == nil then
-				return
-			end
-			local st = sqs.StateOf(player)
-			if st == nil then
-				notify(player, "No soldiers to send", "Warn")
-				return
-			end
-			local ok, text = ArmyPlan.StartSend(player, id, st)
-			if not ok then
-				notify(player, text, "Warn")
-				pushVerdict(player, id, ArmyPlan.CheckSend(player, id))
-			elseif sqs.Push then
-				pcall(sqs.Push, player)
-			end
+			ArmyCommand.Send(player, plotId)
 		end)
 	end
+	ArmyState.Bind({
+		CancelPlan = function(p: Player, st: any, why: string?)
+			ArmyPlan.Cancel(p, st, why)
+		end,
+	})
+	ArmyCommand.Bind({
+		Plan = ArmyPlan,
+		PushVerdict = function(p: Player, id: number)
+			pushVerdict(p, id, ArmyPlan.CheckSend(p, id))
+		end,
+	})
 	Players.PlayerRemoving:Connect(function(p: Player)
 		plans[p.UserId] = nil
 	end)

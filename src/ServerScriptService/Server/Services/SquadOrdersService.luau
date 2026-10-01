@@ -58,6 +58,8 @@ local PlotFrame = require(Shared.Util.PlotFrame) -- army fix: plot centres (Reco
 local FormationController = require(Shared.Util.FormationController) -- claude-bud JOB 24: the sticky squad target
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local ArmyState = require(script.Parent.Parent.Modules.ArmyState) -- Code Bot army command bug: THE army state (one writer)
+local ArmyCommand = require(script.Parent.Parent.Modules.ArmyCommand) -- Code Bot: the live owner's one command path
 
 local SquadOrdersService = {}
 -- v90 (Code Bot): the army despawn fix (Follow / Recover / Gate blocks) is live only for owners with
@@ -375,6 +377,8 @@ local function pushState(player: Player)
 		MaxFieldUnits = (OrdersConfig.MaxFieldUnits or 5) + math.floor(researchAdd(player, "SquadSize")), -- v69 research
 		ShowPanel = show,
 		Plan = if SquadOrdersService._Plan ~= nil then SquadOrdersService._Plan.Status(player.UserId) else nil, -- claude-bud JOB 38
+		State = ArmyState.Of(st), -- Code Bot army command bug: the Army UI highlight is THIS (server state), never a client guess
+		Target = if st then st.ArmyTarget else nil,
 	})
 end
 
@@ -3700,13 +3704,87 @@ local function flashOrderBillboard(player: Player, st: SquadState, order: OrderI
 	end)
 end
 
-function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, string?)
+-- an accepted order's side effects (analytics, the first-minutes hint, the billboard echo, the novice shield)
+local function afterOrder(player: Player, st: SquadState, order: string)
+	-- claude-bud JOB 24 §10: the Army funnel / custom events (an order = he used the Army; ATTACK = first attack)
+	if AnalyticsService and AnalyticsService.Log then
+		pcall(AnalyticsService.Log, "ARMY_OPEN", player.UserId, { order = order })
+		if order == "Attack" then
+			pcall(AnalyticsService.Log, "ARMY_ATTACK", player.UserId, {})
+		end
+	end
+	-- claude-bud JOB 7: the first ATTACK ends the first-minutes hint (TutorialService saves it)
+	do
+		local okT, tut = pcall(function(): any
+			return require(script.Parent.TutorialService)
+		end)
+		if okT and tut and tut.OnArmyOrder then
+			pcall(tut.OnArmyOrder, player, order)
+		end
+	end
+	pushState(player)
+	-- the order echo is this flash + the Army popover (no "Squad: X" toast per order — spec §4.2)
+	if VALID[order] then
+		flashOrderBillboard(player, st, order :: OrderId)
+	end
+	-- F6 (owner's 11 features): an accepted order ends the novice shield for good (EndOnSquadOrder)
+	if CombatService and CombatService.EndNoviceShield then
+		pcall(CombatService.EndNoviceShield, player, "order")
+	end
+end
+
+--[[ Code Bot army command bug: ArmyState's OnChange hook - a NEW state (or a forced repeat) starts every unit with no
+	stale chase / given-up / aim / recover window (was inline in SetOrder; now for every transition, plans included). ]]
+local function onStateChange(player: Player, st: any, _old: string, _new: string, _source: string)
+	local now = os.clock()
+	for _, u in ipairs(st.Units) do
+		-- squadfair: a blocked line is never re-checked early (not even by a new order: at most one check per cooldown)
+		u.LosCheckAt = math.max(u.LosCheckAt or 0, now)
+		resetChase(u)
+		u.AimRoot = nil
+		u.AimHum = nil
+		u.FarSince = nil -- army fix: a new order starts the recover windows over
+		u.PlotId = nil
+		u.ProgPos = nil
+		u.ProgDir = nil
+	end
+end
+
+function SquadOrdersService.SetOrder(player: Player, orderRaw: any, source: string?): (boolean, string?)
 	if not OrdersConfig.Enabled then
 		return false, "Disabled"
 	end
 	if typeof(orderRaw) ~= "string" then
 		return false, "InvalidOrder"
 	end
+	-- Code Bot army command bug: a live ArmyOrders owner (OwnerFirst) -> ArmyCommand, THE one command path (validated,
+	-- one ArmyState transition, the plan moves the block). RECALL is his button only.
+	if ArmyCommand.Live(player) and (VALID[orderRaw] or orderRaw == "Recall") then
+		local flagsL = OrdersConfig.Orders
+		if typeof(flagsL) == "table" and (flagsL :: any)[orderRaw] == false then
+			return false, "OrderDisabled"
+		end
+		local soldiersL = if SoldierService then SoldierService.GetCount(player) else 0
+		if soldiersL < (OrdersConfig.MinSoldiersToShow or 1) then
+			return false, "NoSoldiers"
+		end
+		local stL = squadByUser[player.UserId]
+		if not stL then
+			SquadOrdersService.SyncArmy(player)
+			stL = squadByUser[player.UserId]
+		end
+		if not stL then
+			return false, "NoSquad"
+		end
+		stL.OrderAt = os.clock()
+		local okC, why = ArmyCommand.Order(player, stL, orderRaw, source)
+		if not okC then
+			return false, why or "Rejected"
+		end
+		afterOrder(player, stL, orderRaw)
+		return true, nil
+	end
+	-- (not live: the plain order, as before; the JOB 38 plan path below only runs for a live owner)
 	-- claude-bud JOB 38: RECALL, or another order while an army plan runs: the army marches back first (ArmyPlan);
 	-- ATTACK again while auto-clearing keeps the plan
 	if SquadOrdersService._Plan ~= nil then
@@ -3753,59 +3831,13 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 		and st.OrderAt ~= nil
 		and now - (st.OrderAt :: number) < (tonumber(CombatFairnessConfig.UnitRepeatOrderGraceSeconds) or 0)
 	st.OrderAt = now
-	ArmyLog.Line(player, "ARMY STATE", string.format("%s Order %s -> %s SOURCE=SetOrder", player.Name, tostring(st.Order), order))
-	st.Order = order :: OrderId
-	-- claude-bud JOB 24 §10: the Army funnel / custom events (an order = he used the Army; ATTACK = first attack)
-	if AnalyticsService and AnalyticsService.Log then
-		pcall(AnalyticsService.Log, "ARMY_OPEN", player.UserId, { order = order })
-		if order == "Attack" then
-			pcall(AnalyticsService.Log, "ARMY_ATTACK", player.UserId, {})
-		end
-	end
-	-- claude-bud JOB 7: the first ATTACK ends the first-minutes hint (TutorialService saves it)
-	do
-		local okT, tut = pcall(function(): any
-			return require(script.Parent.TutorialService)
-		end)
-		if okT and tut and tut.OnArmyOrder then
-			pcall(tut.OnArmyOrder, player, order)
-		end
-	end
-	if order == "Hold" then
-		for _, u in ipairs(st.Units) do
-			if u.Alive then
-				u.HoldPos = u.Root.Position
-			end
-		end
-	else
-		for _, u in ipairs(st.Units) do
-			u.HoldPos = nil
-		end
-	end
+	-- Code Bot army command bug: THE one writer (ArmyState.Set: st.ArmyState + st.Order, HoldPos, the unit resets via
+	-- onStateChange; the same order after its grace window is a fresh order again: Force)
+	ArmyState.Set(player, st, ArmyState.OfOrder[order], source or ("order " .. order), { Force = not repeatOrder, NoPush = true })
 	for _, u in ipairs(st.Units) do
-		-- squadfair: a blocked line is never re-checked early (not even by a new order: at most one check per cooldown)
 		u.LosCheckAt = math.max(u.LosCheckAt, now)
-		if not repeatOrder then
-			resetChase(u) -- a new order (or ATTACK again after the grace) starts with no stale chase / given-up state
-			u.AimRoot = nil
-			u.AimHum = nil
-			u.FarSince = nil -- army fix: a new order starts the recover windows over
-			u.PlotId = nil
-			u.ProgPos = nil
-			u.ProgDir = nil
-		end
 	end
-
-	if order == "Attack" and SquadOrdersService._Plan ~= nil then
-		pcall(SquadOrdersService._Plan.StartClear, player, st) -- claude-bud JOB 38: live owners: auto-clear
-	end
-	pushState(player)
-	-- the order echo is this flash + the Army popover (no "Squad: X" toast per order — spec §4.2)
-	flashOrderBillboard(player, st, order :: OrderId)
-	-- F6 (owner's 11 features): an accepted order ends the novice shield for good (EndOnSquadOrder)
-	if CombatService and CombatService.EndNoviceShield then
-		pcall(CombatService.EndNoviceShield, player, "order")
-	end
+	afterOrder(player, st, order)
 	return true, nil
 end
 
@@ -4001,6 +4033,22 @@ function SquadOrdersService.Init(deps: { [string]: any })
 		end,
 	})
 
+	-- Code Bot army command bug: THE army state's hooks + the live owner's command path
+	ArmyState.Bind({ OnChange = onStateChange, Push = pushState })
+	ArmyCommand.Bind({
+		StateOf = function(p: Player): any
+			return squadByUser[p.UserId]
+		end,
+		SyncArmy = SquadOrdersService.SyncArmy,
+		Pick = pickSquadTarget,
+		Push = pushState,
+		OwnerRoot = characterRoot,
+		HomePos = function(p: Player): Vector3?
+			local cf = plotRetreatCFrame(p)
+			return if cf then cf.Position else nil
+		end,
+		NotificationService = NotificationService,
+	})
 	local orderRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSquadOrder) :: RemoteEvent
 	orderRemote.OnServerEvent:Connect(function(player: Player, orderId: any)
 		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestSquadOrder", orderId) then -- claude-bud JOB 15: rate ceiling + argument schema
@@ -4019,8 +4067,8 @@ function SquadOrdersService.Init(deps: { [string]: any })
 		end
 		ArmyLog.Line(player, "SERVER ARMY", string.format("received player=%s command=%s", player.Name, tostring(orderId)))
 		local ok, err = SquadOrdersService.SetOrder(player, orderId)
-		if not ok then
-			ArmyLog.Reject(player, "order " .. tostring(orderId), tostring(err))
+		if not ok and not ArmyCommand.Live(player) then
+			ArmyLog.Reject(player, "order " .. tostring(orderId), tostring(err)) -- (ArmyCommand logs its own rejections)
 		end
 		if not ok and NotificationService then
 			local msg = "Order failed"
@@ -4029,7 +4077,11 @@ function SquadOrdersService.Init(deps: { [string]: any })
 			elseif err == "InvalidOrder" then
 				msg = "Invalid squad order"
 			end
-			NotificationService.Notify(player, msg, "Warn")
+			-- Code Bot: ArmyCommand already told him (its own toast: "No enemies near" ...); the plain path toasts here
+			if not ArmyCommand.Live(player) or err == "NoSoldiers" or err == "OrderDisabled" or err == "NoSquad" or err == "InvalidOrder" then
+				NotificationService.Notify(player, msg, "Warn")
+			end
+			pushState(player) -- the Army UI re-syncs to the real state after a refused order
 		end
 	end)
 

@@ -42,6 +42,25 @@ local ArmyOrdersConfig = {
 	LostStuds = 90, -- a unit this far from the block for LostSeconds is marked LOST (reported, never moved)
 	LostSeconds = 15,
 
+	-- Code Bot (army command bug, 2026-10-01): the ONE command path (Server/Modules/ArmyCommand + ArmyState)
+	-- SEND to a map area / site (ArmyTargets "A:<id>" / "S:<id>"): the block walks to the target's APPROACH POINT
+	-- (Approach[id] when set, else ApproachExtraStuds outside the objective where a road enters it), clears the hostiles
+	-- within EngageExtraStuds of the objective (EngagingTarget), then HOLDS there. Capture stays the player's
+	-- (TerritoryCapture counts players only): the army clears the defenders and guards the spot.
+	Travel = {
+		ApproachExtraStuds = 30, -- the approach ring: this far outside the objective's radius (Central Plaza: 70 + 30)
+		AreaRadiusCap = 80, -- an area without an outpost: its objective radius is at most this
+		EngageExtraStuds = 60, -- arrived: hostiles within objective radius + this are fought
+		ClearHoldSeconds = 2, -- no hostile left for this long: the area is clear, the army holds
+		EngageMaxSeconds = 120, -- a fight at the target with no end for this long: the army holds anyway
+	},
+	Approach = {} :: { [string]: { Vector3 } }, -- per-target approach points ("A:Town" = { Vector3.new(0, 1, 100) }); empty = computed
+	RecallFarStuds = 60, -- FOLLOW / RECALL with the army this far from him: it marches back as a block first (Recalling)
+	RetreatPlanStuds = 120, -- RETREAT with the army this far from home: it marches home as a block first
+	-- ATTACK (DECIDED by Code Bot, owner bug 2026-10-01): seek the nearest valid hostile within SeekRadius of the ARMY
+	-- (of him while it is beside him); none = "No enemies near" and the army stays in its previous state (no broken
+	-- ATTACK). The radius is NOT raised (the owner's list: "bigger detection radius" is a fake fix).
+
 	-- 2. SEND
 	Send = {
 		RequireOwnerAlive = false, -- DECIDED: the army keeps attacking while the sender is dead but in the server
@@ -98,6 +117,13 @@ local ArmyOrdersConfig = {
 		Home = "Army home",
 		Incoming = "⚠ %s's ARMY is marching on your base, ETA %s",
 		NothingNear = "No enemies near",
+		Travelling = "TRAVELLING -> %s %d m", -- Code Bot (army command bug): a SEND to an area / site
+		Engaging = "ENGAGING at %s",
+		HoldingAt = "HOLDING %s",
+		Sent = "Army sent to %s",
+		AreaClear = "%s clear: your army holds it",
+		CaptureHint = "%s clear: your army holds it. Stand in the zone to capture",
+		Retreating = "RETREATING home",
 	},
 }
 
