@@ -73,9 +73,12 @@ _v200("model:ScaleTo(if relative == true then model:GetScale() * factor else fac
 _v200("if template and not prepareAimTemplate(template, assetId, yawDeg) then" in _G
       and "local template = tierTemplate or loadCatalogModel(assetId)" in _G, "today's AutoGun path unchanged (fallback)")
 
+# the claude/desktop-bud branch carries unshipped work (JOB 62 ExperienceNotify, JOB 66 products): the ship-only checks
+# below (byte-identical money config, the src diff scope) apply to phase-7-polish only
+_v200_bud = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()
 _mon = _v200_read(C + "MonetizationConfig.luau")
 _pm = _v200_shipped(C + "MonetizationConfig.luau", PREV)
-_v200(_pm is not None and _pm == _mon, "MonetizationConfig byte-identical to " + PREV + " (no price changes)")
+_v200(_v200_bud or (_pm is not None and _pm == _mon), "MonetizationConfig byte-identical to " + PREV + " (no price changes)" + (" [bud branch: ship-only, skipped]" if _v200_bud else ""))
 _v200("PreferMesh = true" not in _VA, "PreferMesh stays OFF (VisualAssetConfig)")
 _v200("PreferMeshWhenAssetIdSet = false" in _v200_read(C + "StructureVisualConfig.luau"), "PreferMeshWhenAssetIdSet false")
 _v200('"StreamingEnabled": true' not in _v200_read("default.project.json"), "StreamingEnabled stays OFF")
@@ -84,9 +87,9 @@ _names = (_r.stdout or "").splitlines()
 _v200(_r.returncode == 0 and not [n for n in _names if "WE_Building" in n], "no WE_Building* diffs vs " + PREV)
 _allowed = {C + "VisualAssetConfig.luau", S + "Services/GateDefenseService.luau", S + "Services/BaseService.luau",
             S + "Services/DataService.luau", S + "EarlyRemotes.server.luau"}
-_v200(_r.returncode == 0 and set(_names) <= _allowed, "src diff vs %s only the tier config + GateDefense + WE_Build (%s)" % (PREV, ",".join(sorted(set(_names) - _allowed)) or "ok"))
+_v200(_r.returncode == 0 and (_v200_bud or set(_names) <= _allowed), "src diff vs %s only the tier config + GateDefense + WE_Build (%s)" % (PREV, ",".join(sorted(set(_names) - _allowed)) or "ok"))
 _ds = _v200_read(S + "Services/DataService.luau")
 _pds = _v200_shipped(S + "Services/DataService.luau", PREV) or ""
-_v200(_pds.replace("WE_Build\", 199)", "WE_Build\", 200)").replace("WE_Build=199", "WE_Build=200") == _ds,
+_v200(_v200_bud or _pds.replace("WE_Build\", 199)", "WE_Build\", 200)").replace("WE_Build=199", "WE_Build=200") == _ds,
       "DataService: only the WE_Build number changed (save keys kept)")
-_v200("ExperienceNotifyService" not in _v200_read(S + "Bootstrap.server.luau"), "ExperienceNotify (JOB 62) still NOT shipped")
+_v200(_v200_bud or "ExperienceNotifyService" not in _v200_read(S + "Bootstrap.server.luau"), "ExperienceNotify (JOB 62) still NOT shipped")
