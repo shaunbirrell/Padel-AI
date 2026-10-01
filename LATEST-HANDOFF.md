@@ -1,4 +1,20 @@
 <!-- Q2-START -->
+## v159 PUBLISHED (Code Bot Roblox, 2026-10-01 08:55 Dublin): Open Cloud place version 157 — JOB 41 part C owner-first (Rival TARGETS + SEND ARMY)
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **159**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":157}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Cherry-pick:** Claude `aeefda1` JOB 41 C Rival TARGETS -> `4ca755e`; then WE_Build 159 + checks + dist (this publish commit).
+- **Flags left OwnerFirst=true (do NOT flip without Shaun):**
+  - `RivalConfig` Enabled + OwnerFirst=true (TARGETS pill + list; SEND ARMY = JOB 38 RequestArmySend, army walks; VIEW = map card, no travel).
+  - Still from v158: `TutorialConfig.Guided` OwnerFirst=true; `MonetizationConfig.RecruitPackOffer` OwnerFirst=true; `DevProducts.RecruitPack.Id = 0`.
+- **PreferMesh stays OFF.** No WE_Building* touch. Servers stay at 10. No fast travel.
+- **Checks:** BuyPathStatic PASS=7487 FAIL=0; claude_bud_job41 PASS (A+B+C); codebot_v159 PASS; run_rival_targets_test 0 failed; rojo build deterministic (both dist copies identical).
+- **Still owed by Claude on bud:** JOB 41 part D (rate-prompt big-win link to JOB 40 D). Then JOB 43 part 1 (army-vs-army brawl; Army Kills board already live) then JOB 42 (time-based cash packs).
+
+**Phone tests for Shaun (owner-first — use owner / Studio playtest account; need another player online, not clan, past new-player protection, with ATM cash):**
+1. TARGETS pill top-right with a count; tap → name, army size, loot bucket ($1k+ / $10k+ / …), verdict chip.
+2. SEND ARMY: army walks to their base and raids (no teleport). VIEW opens the map card on that base (tap-to-pin only).
+3. Shielded / new / protected / ally players never appear in the list.
+4. A+B still owner-first as v158 (Guided chain + Recruit Pack Id 0 does not prompt). PreferMesh OFF.
+
 ## claude-bud JOB 41 PART C (2026-10-01): RIVAL TARGETS + SEND ARMY (branch `claude/desktop-bud`)
 **Flag:** `RivalConfig` (`Enabled`, `OwnerFirst = true`; a new config, not an ArmyOrdersConfig block). OFF / not live =
 no pill and no push; the map SEND ARMY is unchanged. **To launch:** `OwnerFirst = false`. Servers stay at 10 players

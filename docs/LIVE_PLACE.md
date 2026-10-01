@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Current live (Code Bot):** Open Cloud **versionNumber=156** (2026-10-01 Europe/Dublin) — **v158** JOB 41 A+B owner-first: Guided first minutes (`TutorialConfig.Guided`) + Recruit Pack Id 0 (`RecruitPackOffer`). Both OwnerFirst=true. PreferMesh OFF; fast travel REMOVED. `WE_Build=158`.
+- **Current live (Code Bot):** Open Cloud **versionNumber=157** (2026-10-01 Europe/Dublin) — **v159** JOB 41 part C owner-first: Rival TARGETS (`RivalConfig` OwnerFirst=true) + SEND ARMY (JOB 38 remote). A+B still live owner-first from v158 (Guided + Recruit Pack Id 0). PreferMesh OFF; fast travel REMOVED. `WE_Build=159`.
 - **Live Published:** Open Cloud **versionNumber=63** (2026-09-21 Europe/Madrid) — **v61 BUY PATH**: `Remotes.FireServer` (≤3s TryGet, no unbounded WaitForChild); WorldPrompt/BaseController toast "Buying…" only after FireServer; EnsureProfile on pad+PurchaseUpgrade; DataService Init before UpgradePad; `WE_Build=63`.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** **Public** since 2026-09-24 17:54 UTC (develop API: privacyType Public, audiences Editors + Public). Under current Roblox rules, Private means only users with Edit permission can play.
