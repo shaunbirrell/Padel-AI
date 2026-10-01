@@ -601,6 +601,9 @@ local function buildZone(player: Player, profile: any, plotId: number, zoneId: s
 		dress.Name = "Dress_" .. zoneId
 		dress.Parent = pf
 		local okD, panel = pcall(Dressing.Build, zoneId, lv, frame, a.D, trimOf(player, profile), dress)
+		if ZC.RebuildLive(player.UserId, "Visuals") and Dressing.BuildRunProps then
+			pcall(Dressing.BuildRunProps, zoneId, frame, a.W, a.D, trimOf(player, profile), dress) -- claude-bud JOB 50 B
+		end
 		if ZC.RebuildLive(player.UserId, "Plaques") then
 			pcall(RebirthZoneService._BuildPlaque, player, profile, zoneId, frame, a.D, dress) -- claude-bud JOB 50 A
 		end

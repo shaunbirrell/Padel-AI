@@ -268,6 +268,25 @@ ZC.Rebuild.Enabled = false
 check(not ZC.RebuildLive(OWN.UserId, "Activities"), "Rebuild OFF: the runs are not live (the JOB 46 one-tap activities exactly)")
 ZC.Rebuild.Enabled = true
 Instance.new = realNew
+
+-- ── 6. claude-bud JOB 50 B: the runs' props + the annex edge, per zone ──
+local LIGHTS = 0
+local rn = Instance.new
+Instance.new = function(cls) local o = rn(cls); if cls == "PointLight" or cls == "SpotLight" or cls == "SurfaceLight" then LIGHTS += 1; o.Shadows = o.Shadows end; return o end
+for _, zoneId in ipairs(RC.ZoneOrder) do
+  PARTS, LIGHTS = {}, 0
+  local folder = Instance.new("Folder")
+  local n = DR.BuildRunProps(zoneId, CFrame.new(0, 0, 0), 74, 60, Color3.fromRGB(1, 2, 3), folder)
+  local bad, inYard = false, false
+  for _, p in ipairs(PARTS) do
+    if string.find(p.Name, "WE_Building") or string.find(p.Name, "^Store_") or p.Material == "Material.Neon" then bad = true end
+    local pos = p.CFrame.Position
+    if math.abs(pos.X) < 36 and pos.Z > -29 and pos.Z < 29 then inYard = true end
+  end
+  check(#PARTS >= 6 and #PARTS <= 70 and LIGHTS == 0 and not bad and not inYard,
+    string.format("%s run props + edge: %d parts (<= 70), %d lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard", zoneId, #PARTS, LIGHTS))
+end
+Instance.new = rn
 print(string.format("REBIRTH STATIONS LUA: %d failed", fails))
 if fails > 0 then error("failed") end
 '''

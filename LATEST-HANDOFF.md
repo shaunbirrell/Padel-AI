@@ -58,6 +58,32 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 50 part B (2026-10-01): REBIRTH ZONES: THE RUN PROPS + A FINISHED EDGE (branch `claude/desktop-bud`)
+**Flag:** `RebirthZonesConfig.Rebuild.Visuals` (owner-first with Rebuild).
+
+**Built (RebirthZoneDressing.BuildRunProps):** each run's steps now stand on real props.
+
+| Zone | Props |
+|---|---|
+| Factory | conveyor + crates; a part-built flatbed truck |
+| Silo | 3 arming consoles |
+| Artillery | 6 target stands |
+| Barracks | start / finish gates |
+| Refinery | 4 valve stations |
+| Bunker | sandbag nests |
+
+Every annex also gets a low berm on three sides, painted apron lines and a part-only lamp post. No Light objects: the JOB 46 / v173 dressing rule; night lights are JOB 54.
+
+**Budget:** 6-30 parts per zone (about 130 per plot in total, well under MaxPlotParts 7200); no Lights; no Neon, no WE_Building* / Store_* names, nothing inside the yard (the store models stay as they are).
+
+**Not done here, and why:** re-roofing or swapping the store models in the yards (the "open-roof office block") needs
+probe-verified Creator Store assets and a visual check in Studio.
+- **Ask for Code Bot:** pick a closed-roof replacement for `Military Garage` 12365928579 in the WestYard / DroneBay
+  ZoneRows, or put WestYard in `ZoneKeepParts` so its Part build stays.
+
+**Test ON HIS PHONE:** each built zone shows its run props (crates and truck, consoles, targets, gates, valves,
+sandbags), a berm round the annex and a lamp post at the gate.
+
 ## claude-bud JOB 50 part A (2026-10-01): REBIRTH ZONES: A REAL REASON TO GO (THE ZONE RUNS) (branch `claude/desktop-bud`)
 **Flag to flip:** `RebirthZonesConfig.Rebuild.OwnerFirst = true -> false` (NEW-OWNER-FIRST). OFF = the JOB 46 one-tap
 activities exactly.

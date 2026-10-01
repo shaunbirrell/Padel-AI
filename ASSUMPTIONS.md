@@ -10078,3 +10078,10 @@ ds_territories.luau T3):
 ## 2026-10-01 — claude-bud JOB 52: ATTACK at range
 - **The card's units:** distances use the game's existing m = studs x 0.28, like MARCHING. The config numbers are studs.
 - **Kill credit:** only kills of the ordered ATTACK target group count, capped at 60 / hour per owner.
+
+## claude-bud JOB 50 part B (2026-10-01): rebirth zone run props
+- The run props are parts only, with no Light objects. The JOB 46 / v173 pins forbid lights in the zone dressing, so
+  the gate lamp is a warm SmoothPlastic head. Night lighting is JOB 54's job.
+- Props are built only while `Rebuild.Visuals` is live (owner-first). OFF = the JOB 46 dressing exactly.
+- Store model swaps (the open-roof garage in WestYard / DroneBay) are left to Code Bot. They need WE_CHECK2-probed
+  assets.

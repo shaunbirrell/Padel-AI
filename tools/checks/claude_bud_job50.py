@@ -44,4 +44,11 @@ if _e.get("LUAU"):
     _r2 = _j50_sp.run([_j50_sys.executable, "tools/sim/run_rebirth_stations_test.py"], capture_output=True, text=True, env=_e)
     (ok if (_r2.returncode == 0 and "REBIRTH STATIONS TEST: 0 failed" in _r2.stdout) else bad)(
         "CLAUDE-BUD J50 A: run_rebirth_stations_test.py (every run: win / fail / timeout, pay = formula, cooldown, first clear, best, effects, recon, wave, plaque)")
+# ── part B: the run props + annex edge ──
+_DRs = _j50_src("src/ServerScriptService/Server/Modules/RebirthZoneDressing.luau")
+_bp = _DRs.split("function RebirthZoneDressing.BuildRunProps")[1] if "function RebirthZoneDressing.BuildRunProps" in _DRs else ""
+(ok if ("Light\")" not in _bp and "Neon" not in _bp and "WE_Building" not in _bp and "Store_" not in _bp) else bad)(
+    "CLAUDE-BUD J50 B: run props + annex edge: no Light objects (JOB 46 / v173 rule), no Neon / WE_Building / Store_ names")
+(ok if 'ZC.RebuildLive(player.UserId, "Visuals") and Dressing.BuildRunProps' in _j50_src("src/ServerScriptService/Server/Services/RebirthZoneService.luau") else bad)(
+    "CLAUDE-BUD J50 B: the props are built only while Rebuild.Visuals is live (OFF = the JOB 46 dressing exactly)")
 #@@J50ABC@@

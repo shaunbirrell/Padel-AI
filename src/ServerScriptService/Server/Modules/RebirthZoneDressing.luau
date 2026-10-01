@@ -202,4 +202,94 @@ function RebirthZoneDressing.Build(zoneId: string, level: number, frame: CFrame,
 	return kiosk(zoneId, parent, frame, 18, za + 9, trim, info.ActionText)
 end
 
+--[[ claude-bud JOB 50 part B (2026-10-01; RebirthZonesConfig.Rebuild.Visuals, owner-first): the zone RUN's props become
+	part of the build, so the activity reads at a glance and every step marker stands on something real:
+	  factory: a conveyor with crates at the line, a part-built flatbed truck at the loading spot;
+	  silo: three arming consoles (angled panel in the trim colour, a dark screen);
+	  artillery: six target stands (posts, a white board, a red bull);
+	  barracks: start / finish gates with a hazard header (the JOB 46 course stays);
+	  refinery: four valve stations (a riser, a cross pipe, a red hand wheel);
+	  bunker: sandbag nests where the wave comes in.
+	Plus the annex reads as a finished place: a low berm on three sides, painted lines across the apron, and ONE
+	part-only lamp post at the gate (no Light objects: the JOB 46 / v173 rule; night lights are JOB 54). Parts only; never Neon; never a store-model name; never the yard. ]]
+local function prop(zoneId: string, theme: string, label: string, parent: Instance, c: CFrame, trim: Color3)
+	local cl = cluster(zoneId, zoneId .. "_Run_" .. theme)
+	if theme == "factory" and label == "LOAD TRUCK" then
+		part(cl, "TruckChassis", Vector3.new(4, 0.8, 9), c * CFrame.new(0, 1.2, 0), C.SteelDark, M.Metal, true)
+		part(cl, "TruckCab", Vector3.new(4, 3, 3), c * CFrame.new(0, 3, -3.5), C.Olive, M.Metal, true)
+		part(cl, "TruckWindow", Vector3.new(3.4, 1.2, 0.1), c * CFrame.new(0, 3.6, -5.02), C.Sign, M.Glass, false)
+		part(cl, "TruckBedSide", Vector3.new(0.3, 1.2, 5.6), c * CFrame.new(-1.85, 2.2, 1.4), C.Olive, M.Metal, false)
+		part(cl, "TruckBedSide", Vector3.new(0.3, 1.2, 5.6), c * CFrame.new(1.85, 2.2, 1.4), C.Olive, M.Metal, false)
+		for _, w in ipairs({ { -2.1, -3.2 }, { 2.1, -3.2 }, { -2.1, 2.6 }, { 2.1, 2.6 } }) do
+			part(cl, "TruckWheel", Vector3.new(0.8, 1.6, 1.6), c * CFrame.new(w[1], 0.8, w[2]), C.Black, M.Fabric, false)
+		end
+	elseif theme == "factory" then
+		part(cl, "ConveyorBed", Vector3.new(7, 0.6, 2.2), c * CFrame.new(0, 1.3, -2), C.SteelDark, M.Metal, true)
+		part(cl, "ConveyorBelt", Vector3.new(7, 0.15, 1.8), c * CFrame.new(0, 1.68, -2), C.Black, M.Fabric, false)
+		part(cl, "Crate", Vector3.new(1.6, 1.6, 1.6), c * CFrame.new(-2, 2.55, -2), C.Wood, M.WoodPlanks, false)
+		part(cl, "Crate", Vector3.new(1.6, 1.6, 1.6), c * CFrame.new(1.2, 2.55, -2), C.Wood, M.WoodPlanks, false)
+	elseif theme == "silo" then
+		part(cl, "ConsoleBody", Vector3.new(2.4, 2.6, 1.4), c * CFrame.new(0, 1.3, -1.6), C.SteelDark, M.Metal, true)
+		part(cl, "ConsolePanel", Vector3.new(2.4, 0.2, 1.4), c * CFrame.new(0, 2.75, -1.45) * CFrame.Angles(math.rad(-25), 0, 0), trim, M.Metal, false)
+		part(cl, "ConsoleScreen", Vector3.new(1.8, 0.05, 0.9), c * CFrame.new(0, 2.88, -1.4) * CFrame.Angles(math.rad(-25), 0, 0), C.Sign, M.Glass, false)
+	elseif theme == "artillery" then
+		for sx = -1, 1, 2 do
+			part(cl, "TargetPost", Vector3.new(0.3, 3.4, 0.3), c * CFrame.new(sx * 1.4, 1.7, -1.6), C.Wood, M.Wood, false)
+		end
+		part(cl, "TargetBoard", Vector3.new(3, 3, 0.2), c * CFrame.new(0, 3.2, -1.6), Color3.fromRGB(235, 232, 220), M.SmoothPlastic, false)
+		part(cl, "TargetBull", Vector3.new(1, 1, 0.22), c * CFrame.new(0, 3.2, -1.6), Color3.fromRGB(190, 40, 36), M.SmoothPlastic, false)
+	elseif theme == "barracks" then
+		for sx = -1, 1, 2 do
+			part(cl, "GatePost", Vector3.new(0.5, 4, 0.5), c * CFrame.new(sx * 2.2, 2, -1.2), C.Wood, M.Wood, false)
+		end
+		part(cl, "GateBar", Vector3.new(4.9, 0.6, 0.4), c * CFrame.new(0, 4.1, -1.2), C.Hazard, M.Wood, false)
+	elseif theme == "refinery" then
+		part(cl, "ValveRiser", Vector3.new(0.8, 2.6, 0.8), c * CFrame.new(0, 1.3, -1.6), C.Steel, M.Metal, true)
+		part(cl, "ValvePipe", Vector3.new(4, 0.7, 0.7), c * CFrame.new(0, 1.2, -1.6), C.Steel, M.Metal, false)
+		part(cl, "ValveWheel", Vector3.new(0.2, 1.6, 1.6), c * CFrame.new(0, 2.8, -1.6) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(180, 40, 36), M.Metal, false)
+	end
+	WorldKits.Finish(cl, parent)
+end
+
+local function sandbags(zoneId: string, parent: Instance, c: CFrame)
+	local cl = cluster(zoneId, zoneId .. "_Run_nest")
+	for i = -1, 1 do
+		part(cl, "Sandbag", Vector3.new(2, 0.8, 1), c * CFrame.new(i * 2.1, 0.4, 2), C.Olive, M.Fabric, true)
+		part(cl, "Sandbag", Vector3.new(2, 0.8, 1), c * CFrame.new(i * 2.1 + 1, 1.2, 2), C.Olive, M.Fabric, false)
+	end
+	WorldKits.Finish(cl, parent)
+end
+
+-- the run's props + the annex edge (berm, apron paint, one lamp); W / D = the annex. Returns the parts added.
+function RebirthZoneDressing.BuildRunProps(zoneId: string, frame: CFrame, W: number, D: number, trim: Color3, parent: Instance): number
+	local info = (RebirthZonesConfig :: any).Info[zoneId]
+	local run = (RebirthZonesConfig :: any).Runs and (RebirthZonesConfig :: any).Runs[zoneId]
+	if info == nil or run == nil then
+		return 0
+	end
+	local before = #parent:GetDescendants()
+	local done: { [string]: boolean } = {}
+	for _, st in ipairs(run.Steps or {}) do
+		local key = tostring(st[2]) .. "," .. tostring(st[3])
+		if not done[key] then
+			done[key] = true
+			prop(zoneId, info.Theme, st[1], parent, frame * CFrame.new(st[2], 0, D / 2 + st[3]), trim)
+		end
+	end
+	for _, at in ipairs(run.WaveAt or {}) do
+		sandbags(zoneId, parent, frame * CFrame.new(at[1], 0, D / 2 + at[2]))
+	end
+	local edge = cluster(zoneId, zoneId .. "_Run_edge")
+	part(edge, "BermBack", Vector3.new(W + 2, 0.6, 1.2), frame * CFrame.new(0, 0.3, -D / 2 - 1), C.Concrete, M.Concrete, false)
+	for sx = -1, 1, 2 do
+		part(edge, "BermSide", Vector3.new(1.2, 0.6, D + 2), frame * CFrame.new(sx * (W / 2 + 1), 0.3, 0), C.Concrete, M.Concrete, false)
+	end
+	for _, dz in ipairs({ 1, 17 }) do
+		part(edge, "ApronLine", Vector3.new(W - 6, 0.06, 0.4), frame * CFrame.new(0, 0.05, D / 2 + dz), Color3.fromRGB(235, 232, 220), M.SmoothPlastic, false)
+	end
+	part(edge, "GateLamp", Vector3.new(0.8, 0.4, 0.8), frame * CFrame.new(0, 10.4, D / 2 + 5), Color3.fromRGB(255, 226, 170), M.SmoothPlastic, false)
+	WorldKits.Finish(edge, parent)
+	return #parent:GetDescendants() - before
+end
+
 return RebirthZoneDressing

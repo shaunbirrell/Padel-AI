@@ -74,5 +74,12 @@ ok    RECON FLIGHT: the nearest raidable rival (plot 4) is marked with PIN / SEN
 ok    the plaque: UNLOCKED BY SHAUN · REBIRTH 1 / PRODUCTION RUN BEST 0:18.0 / ZONE COMMANDER
 MATHS production run (slowest..fastest): L1 $18000..$27000, L2 $42000..$63000, L3 $84000..$126000
 ok    Rebuild OFF: the runs are not live (the JOB 46 one-tap activities exactly)
+ok    WestYard run props + edge: 19 parts (<= 70), 0 lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard
+ok    StrategicYard run props + edge: 15 parts (<= 70), 0 lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard
+ok    WestStrip run props + edge: 30 parts (<= 70), 0 lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard
+ok    DroneBay run props + edge: 6 parts (<= 70), 0 lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard
+ok    EastYard run props + edge: 18 parts (<= 70), 0 lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard
+ok    EastStrip run props + edge: 18 parts (<= 70), 0 lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard
+ok    WestFlank run props + edge: 24 parts (<= 70), 0 lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard
 REBIRTH STATIONS LUA: 0 failed
 REBIRTH STATIONS TEST: 0 failed
