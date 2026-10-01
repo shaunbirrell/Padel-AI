@@ -1773,7 +1773,7 @@ end
 
 --[[ claude-bud JOB 38: what an army SEND sees at a base (ArmyPlan / ArmySendRules). nil = no defences here.
 	GuardPower / TurretPower are { Hp, Dps } rows for the power verdict. ]]
--- Code Bot vNNN: the plot whose walls (still standing: gate not breached) enclose pos, or nil (ArmyPlan: a player in
+-- Code Bot v165: the plot whose walls (still standing: gate not breached) enclose pos, or nil (ArmyPlan: a player in
 -- his yard behind his wall is not answered on the march - no unit can see him)
 function GateDefenseService.WalledPlotAt(pos: Vector3): number?
 	if typeof(pos) ~= "Vector3" then
@@ -1820,7 +1820,7 @@ function GateDefenseService.SiegeInfo(plotId: number): { [string]: any }?
 		Breached = def.GateBreached or isDown(def),
 		Turrets = turrets,
 		CollectorPos = def.CollectorPos,
-		PadCenter = def.PadCenter, -- Code Bot v163: the walled plot (ArmyPlan: nothing behind the walls is a siege target before the breach)
+		PadCenter = def.PadCenter, -- Code Bot v165: the walled plot (ArmyPlan: nothing behind the walls is a siege target before the breach)
 		PadHalf = def.PadHalf,
 		GuardPower = gPower,
 		TurretPower = tPower,

@@ -97,6 +97,31 @@ end
 -- claude-bud JOB 38: set by ArmyPlan.Init: (player) -> { Root = a stand-in root at the plan's lead point } | nil
 ArmyController.PlanLead = nil :: ((Player) -> any)?
 
+--[[ Code Bot v165: a SEND raid's broken gate. A unit whose goal is on the other side of the plot walls (in -> out or
+	out -> in) is sent to the gate mouth on its own side, then through the lane to a point past the gate, then on to its
+	slot: no unit presses into the wall beside the gate (f = ArmyPlan's { Gate, Out, Lane, Centre, Half }). ]]
+function ArmyController.Funnel(f: any, upos: Vector3, goal: Vector3): Vector3
+	local c, h = f.Centre, f.Half
+	local function inside(p: Vector3): boolean
+		return math.abs(p.X - c.X) <= h and math.abs(p.Z - c.Z) <= h
+	end
+	local uIn, gIn = inside(upos), inside(goal)
+	if uIn == gIn then
+		return goal
+	end
+	local out: Vector3 = f.Out
+	local side = Vector3.new(-out.Z, 0, out.X)
+	local rel = Vector3.new(upos.X - f.Gate.X, 0, upos.Z - f.Gate.Z)
+	local along, lat = rel:Dot(out), rel:Dot(side)
+	local y = goal.Y
+	if math.abs(lat) <= f.Lane and math.abs(along) <= 10 then
+		local p = f.Gate + out * (if gIn then -12 else 12) -- in the lane: through it
+		return Vector3.new(p.X, y, p.Z)
+	end
+	local p = f.Gate + out * (if uIn then -8 else 8) -- the mouth on his own side
+	return Vector3.new(p.X, y, p.Z)
+end
+
 -- Code Bot v145: how far behind its leader (the owner, or an ArmyPlan lead point) the steered block holds its CENTRE by
 -- design: FirstRowStuds + its half depth, and never nearer than its radius + BubbleStuds (FormationController.SteerFrames).
 -- 0 before the block has formed. ArmyPlan measures "the block is behind" from here, not from the lead itself.
@@ -558,6 +583,9 @@ local function stepArmy(player: Player, st: any, now: number)
 			-- a unit outside his plot never gets a goal inside it
 			local cell = ArmyFollow.HoldSpot(ownPlot, idx)
 			goal = Vector3.new(cell.X, pos.Y, cell.Z)
+		end
+		if planLead ~= nil and planLead.Funnel ~= nil then
+			goal = ArmyController.Funnel(planLead.Funnel, upos, goal)
 		end
 		local g, h = goal, heading
 		local okU, errU = pcall(SoldierController.Drive, u, {

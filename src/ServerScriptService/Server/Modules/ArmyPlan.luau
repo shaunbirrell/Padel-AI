@@ -83,6 +83,7 @@ export type Plan = {
 	Bully: boolean,
 	SiegeAt: number?,
 	Breached: boolean,
+	Funnel: any?, -- v165: the broken gate a raid walks through (ArmyController.Funnel)
 	NoLoot: string?,
 	HoldUnit: any,
 	HoldSince: number?,
@@ -221,7 +222,7 @@ local function setDest(plan: Plan, dest: Vector3)
 	plan.RoutedAt = clock()
 	local pa: any = plan
 	local seq = (pa.RouteSeq or 0) + 1
-	pa.RouteSeq = seq -- vNNN: a re-plan (the routing watchdog) supersedes a slow path request
+	pa.RouteSeq = seq -- v165: a re-plan (the routing watchdog) supersedes a slow path request
 	local g = plan.Gen
 	local st = plan.Squad
 	local c = blockCentre(st)
@@ -255,7 +256,7 @@ local function advance(plan: Plan, centre: Vector3, dt: number)
 	local route = plan.Route
 	if route == nil or plan.Routing then
 		plan.LeadVel = Vector3.zero
-		-- vNNN (owner report: "MARCHING" but stopped): advance() returned here for ever while a path request never came
+		-- v165 (owner report: "MARCHING" but stopped): advance() returned here for ever while a path request never came
 		-- back, so the stuck re-plan below never ran. A path still outstanding after RoutingTimeout is asked again.
 		if plan.Routing and plan.Dest and clock() - plan.RoutedAt >= (C.RoutingTimeoutSeconds or 20) then
 			ArmyLog.Line(plan.Owner, "ARMY MOVE", string.format("%s stalled: path request %.0fs old, re-plan", plan.Owner.Name, clock() - plan.RoutedAt))
@@ -553,6 +554,7 @@ function ArmyPlan.LeadFor(player: Player): { [string]: any }?
 			AssemblyLinearVelocity = p.LeadVel,
 			Parent = nil,
 		},
+		Funnel = p.Funnel, -- v165: through the broken gate
 	}
 end
 
@@ -595,7 +597,7 @@ local function pickWith(pick: any, player: Player, st: any, proot: BasePart?, op
 	return if ok then st._acTarget else nil
 end
 
---[[ Code Bot v163 (owner phone bug "ARMY: SIEGE gate 100% guns 0", the army stood against the wall). PROVEN
+--[[ Code Bot v165 (owner phone bug "ARMY: SIEGE gate 100% guns 0", the army stood against the wall). PROVEN
 	(tools/sim/run_army_siege_test.py, docs/proof/army-siege/): the siege pick took ANY hostile within ReachStuds of the
 	block - the victim standing in his yard, a guard inside - ahead of the gate (players first, then Siege.Priority).
 	Behind the wall none of them can be seen: every unit's line of sight hit the wall (no shot; the gate fallback only
@@ -610,7 +612,7 @@ local function behindWalls(info: any, pos: Vector3): boolean
 	return math.abs(pos.X - c.X) <= h and math.abs(pos.Z - c.Z) <= h
 end
 
---[[ vNNN (owner report 3: "ARMY: MARCHING ->" but the army stood still against another base's wall / around a player
+--[[ v165 (owner report 3: "ARMY: MARCHING ->" but the army stood still against another base's wall / around a player
 	by a runway): on the march the pick took ANY hostile player within 120 studs as the target, and ArmyController
 	steered the whole block at him. A player in his own yard behind his wall cannot be shot (every ray hits the wall), so
 	the block pressed against that wall, the lead waited for it (gap > LeadMaxGap) and the status still said MARCHING.
@@ -618,7 +620,9 @@ end
 	MarchAnswerStuds of the block, and never one behind the walls of a walled plot; anyone else is ignored. ]]
 local function marchAnswer(pick: any, player: Player, st: any, proot: BasePart?, centre: Vector3, leash: number): any
 	local t = pickWith(pick, player, st, proot, { Centre = centre, Reach = C.MarchAnswerStuds or 60, LeashFrom = centre, Leash = leash })
-	if t == nil or t.Kind ~= "Player" or t.Player == nil then
+	-- (a "Unit" = an enemy army soldier, claude-bud JOB 43 brawl: answered under the same rule - his soldiers hurting
+	-- ours count as him hurting us, CombatService.NoteArmyAggressor)
+	if t == nil or (t.Kind ~= "Player" and t.Kind ~= "Unit") or t.Player == nil then
 		return nil
 	end
 	local cs = deps.CombatService
@@ -1001,6 +1005,30 @@ local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?,
 	end
 end
 
+--[[ v165 (proven in tools/sim/run_army_siege_test.py: after the breach half the block - every unit not straight in
+	front of the 14-stud gate - pressed against the wall beside it, so the block centre never came in, the lead waited
+	(gap > LeadMaxGap) and the ATM was never held). The funnel: a unit whose goal is on the other side of the walls walks
+	to the gate mouth first, then through the lane, then on to its slot (ArmyController, plan.Funnel via LeadFor). ]]
+local function gateFunnelOf(info: any): { [string]: any }?
+	local c, h, gp = info.PadCenter, tonumber(info.PadHalf), info.GatePart
+	if typeof(c) ~= "Vector3" or h == nil or gp == nil then
+		return nil
+	end
+	local okG, g = pcall(function()
+		return gp.Position
+	end)
+	if not okG or typeof(g) ~= "Vector3" then
+		return nil
+	end
+	local d = Vector3.new(g.X - c.X, 0, g.Z - c.Z)
+	local out = if math.abs(d.X) >= math.abs(d.Z) then Vector3.new(math.sign(d.X), 0, 0) else Vector3.new(0, 0, math.sign(d.Z))
+	local okB, BL = pcall(function(): any
+		return require(game:GetService("ReplicatedStorage").Shared.Configs.BaseLayoutConfig)
+	end)
+	local width = if okB and BL and tonumber(BL.MainGateWidth) then tonumber(BL.MainGateWidth) :: number else 14
+	return { Gate = Vector3.new(g.X, 0, g.Z), Out = out, Lane = math.max(2, width * 0.5 - 2), Centre = c, Half = h }
+end
+
 local function structureTarget(part: BasePart, hp: number): any
 	return { Kind = "Structure", Hum = { Health = hp, Parent = part }, Root = part }
 end
@@ -1074,7 +1102,8 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 			plan.NoLoot = tostring(why or "no loot")
 		elseif info.CollectorPos then
 			setDest(plan, info.CollectorPos)
-			-- Code Bot v163: the lead walks in through the broken gate (advance runs for Loot; in Siege it stood still,
+			plan.Funnel = gateFunnelOf(info)
+			-- Code Bot v165: the lead walks in through the broken gate (advance runs for Loot; in Siege it stood still,
 			-- so after a breach the block never went in)
 			plan.Phase = "Loot"
 		end
@@ -1090,10 +1119,10 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 	local pickT: any = nil
 	local shut = not info.Breached -- (the walls still stand: only what the block can see from outside counts)
 	if t and shut and t.Root and behindWalls(info, t.Root.Position) then
-		t = nil -- Code Bot v163: behind the walls: the gate first
+		t = nil -- Code Bot v165: behind the walls: the gate first
 	end
-	if t and t.Kind == "Player" then
-		pickT = t
+	if t and (t.Kind == "Player" or t.Kind == "Unit") then
+		pickT = t -- (a defender's soldier in the open shooting back: claude-bud JOB 43 brawl, same tier as a player)
 	else
 		for _, kind in ipairs(C.Siege.Priority) do
 			if kind == "Turret" then
@@ -1120,7 +1149,7 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 		end
 	end
 	local gatePct = if info.GateMax > 0 then math.floor(100 * info.GateHp / info.GateMax) else 0
-	-- Code Bot v163: how many of HIS soldiers fired in the last 2 s (the cooldown is spent on a shot, hit or miss)
+	-- Code Bot v165: how many of HIS soldiers fired in the last 2 s (the cooldown is spent on a shot, hit or miss)
 	local firing = 0
 	for _, u in ipairs(living) do
 		if now - (tonumber(u.LastFireAt) or -math.huge) <= 2 then

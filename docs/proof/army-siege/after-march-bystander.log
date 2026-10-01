@@ -26,95 +26,33 @@ S_SEND	true	Your army 60,000 vs defences 2,500: much stronger: half loot
 [ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=5/24 breached=true
 [ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
 [ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(558,0,-4) dest=(700,3,40) distance=149 status=Success waypoints=19
 [ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
 [ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
 [ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(559,0,-1) dest=(700,3,40) distance=147 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(557,0,-1) dest=(700,3,40) distance=148 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(559,0,-0) dest=(700,3,40) distance=147 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(557,0,-0) dest=(700,3,40) distance=148 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(559,0,0) dest=(700,3,40) distance=147 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(557,0,-0) dest=(700,3,40) distance=148 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(559,0,0) dest=(700,3,40) distance=147 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(557,0,-0) dest=(700,3,40) distance=148 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(559,0,0) dest=(700,3,40) distance=147 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(557,0,-0) dest=(700,3,40) distance=148 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(559,0,0) dest=(700,3,40) distance=147 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(557,0,-0) dest=(700,3,40) distance=148 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(559,0,0) dest=(700,3,40) distance=147 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(700,3,40) source=ArmyPlan.Send/Loot
-[ARMY PATH] shaunie6 start=(557,0,-0) dest=(700,3,40) distance=148 status=Success waypoints=19
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
-[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
+[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(200,3,0) source=ArmyPlan.Return/Return
+[ARMY PATH] shaunie6 start=(684,0,35) dest=(200,3,0) distance=485 status=Success waypoints=64
+[ARMY STATE] shaunie6 EngagingTarget -> Recalling SOURCE=ArmyPlan.return looted mode=Attack
+[ARMY STATE] shaunie6 Recalling -> Following SOURCE=ArmyPlan.finish Return mode=Follow
+[ARMY MOVE] shaunie6 plan Return ended -> Following
 S_GATE_SERIES 100,100,100,100,100,87,29,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 S_GATE_END 0
 S_BREACHED true
 S_ENTERED true
-S_LOOTED 0
+S_LOOTED 4321
 S_KILLS 1
-S_TARGETS Player=13,Structure=19,none=288
-S_SHOTS fired=134 gatehits=125 nolos=0 outofband=375
-S_CENTRE 559,0
+S_TARGETS Player=13,Structure=19,none=38
+S_SHOTS fired=134 gatehits=125 nolos=0 outofband=373
+S_CENTRE 217,1
 S_TELEPORTS 0
+S_UNITS_OUTSIDE 24
+S_UNIT_POS 206,4 206,-3 205,9 206,-8 210,4 210,-3 209,9 210,-8 214,5 215,-2 214,10 215,-7 219,5 219,-2 218,10 219,-7 223,5 224,-2 223,10 224,-7 227,6 228,-1 227,11 228,-6
+S_KILLED Chaplin606;
 S_MARCH_MAXSTILL 0.0
-S_PHASE_END Loot
-S_STATUS Loot: MARCHING -> the ATM 32 m
+S_PHASE_END none
+S_STATUS Return: RETURNING
 notify	shaunie6	Army left for Chaplin606's base
 notify	Chaplin606	⚠ shaunie6's ARMY is marching on your base, ETA 0:29
 notify	shaunie6	Arrived at Chaplin606's base
 notify	shaunie6	Gate breached!
+notify	shaunie6	Looted $4,321
+notify	shaunie6	Army home

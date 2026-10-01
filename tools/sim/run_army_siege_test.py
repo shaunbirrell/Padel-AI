@@ -1,10 +1,10 @@
-"""Code Bot v163 (owner phone bug: SEND to a player base -> "ARMY: SIEGE gate 100% guns 0", the army stood against
+"""Code Bot v165 (owner phone bug: SEND to a player base -> "ARMY: SIEGE gate 100% guns 0", the army stood against
 the wall at night and never shot). The full base siege in the Studio-free sim: real ArmyPlan / ArmyRoute /
 ArmyController / SoldierController / FormationController / ArmyState / ArmyCommand / ArmySendRules, a walled plot
 (square half 160, the gate a 10-stud opening in its west wall, local +Z = outside), the victim standing in his yard.
 
 The shots: a stand-in of SquadOrdersService.attackAimOnly's rule for a Player / Guard / Structure target (pinned to
-the real code in tools/checks/codebot_v163.py): fire band = OrdersConfig.AttackRange x 0.85 (3-D), a shot needs a
+the real code in tools/checks/codebot_v165.py): fire band = OrdersConfig.AttackRange x 0.85 (3-D), a shot needs a
 clear ray from the unit's eye (the walls block it; the gate leaves only where the ray crosses the opening), 1 shot /
 s per unit; a ray at a player that hits a gate leaf shoots the gate (ShootGates). Damage lands through a stand-in of
 GateDefenseService.applyDamageFrom (GateHitMaxDistance 120; breach at 0). Nothing forces damage.
@@ -25,7 +25,7 @@ PROOF = HERE.parents[1] / "docs/proof/army-siege"
 
 EXTRA = r'''
 -- the walled plot: centre (700, 0, 0), half 160; the gate opening in the west wall (x = 540), |z| <= 5
-PLOTC = Vector3.new(700, 0, 0); HALF = 160; GATEX = 540; GATEW = 5; WALLH = 30
+PLOTC = Vector3.new(700, 0, 0); HALF = 160; GATEX = 540; GATEW = 7; WALLH = 30 -- GATEW: BaseLayoutConfig.MainGateWidth 14 / 2
 GATE = CFrame.lookAt(Vector3.new(GATEX, 0, 0), Vector3.new(GATEX + 1, 0, 0)) -- LookVector +X: local +Z = -X = outside
 GATEPART = { Position = Vector3.new(GATEX, 4, 0), Parent = true, Name = "GateBarrier_1" }
 SIEGE = { GatePart = GATEPART, GateHp = 2500, GateMax = 2500, Breached = false, Turrets = {}, CollectorPos = Vector3.new(700, 3, 40),
@@ -99,7 +99,7 @@ function shootPass(st, now)
             if tgt.Hum then tgt.Hum.Health -= 20 end
             if tgt.Hum and tgt.Hum.Health <= 0 and tgt.Player then
               -- he dies and respawns at the town spawn, far away (out of the siege reach)
-              tgt.Player._root.Position = Vector3.new(0, 3, 2000); tgt.Hum.Health = 100; KILLS = (KILLS or 0) + 1
+              tgt.Player._root.Position = Vector3.new(0, 3, 2000); tgt.Hum.Health = 100; KILLS = (KILLS or 0) + 1; KILLED = (KILLED or "") .. tgt.Player.Name .. ";"
             end
           end
         elseif hit == "gate" and tgt.Kind == "Player" then
@@ -139,6 +139,7 @@ local owner = mkPlayer(470626172, "shaunie6", Vector3.new(200, 3, 0))
 local victim = mkPlayer(77, "Chaplin606", Vector3.new(620, 3, 12)) -- standing in his yard, behind the wall
 PLAYERS = { owner, victim }
 local bystander = mkPlayer(88, "Hicktonn94", Vector3.new(380, 3, 106)) -- in HIS yard, just behind his wall (z=100), 106 studs off the route
+if AGGRESSOR then bystander._root.Position = Vector3.new(380, 3, 40) end -- in the open, 40 studs off the route
 if BYSTANDER then table.insert(PLAYERS, bystander); PROFILES[88] = { Raid = {}, FirstJoinUnix = 1 } end
 PROFILES[owner.UserId] = { Raid = {}, FirstJoinUnix = 1 }
 PROFILES[victim.UserId] = { Raid = {}, FirstJoinUnix = 1 }
@@ -229,6 +230,7 @@ do
   print("S_UNITS_OUTSIDE " .. outside)
   print("S_UNIT_POS " .. table.concat(xs, " "))
 end
+print("S_KILLED " .. (KILLED or ""))
 print(string.format("S_MARCH_MAXSTILL %.1f", maxStill))
 local pEnd = AP._Plans()[owner.UserId]
 print("S_PHASE_END " .. (if pEnd then pEnd.Phase else "none"))
@@ -307,7 +309,7 @@ if __name__ == "__main__":
     outA = run(n=24, secs=150, bystander=True, aggressor=True)
     (PROOF / "after-march-aggressor.log").write_text(outA)
     v = vals(outA)
-    check("Player=" in v.get("S_TARGETS", "") and int(v.get("S_KILLS", "0")) >= 1,
-          f"a player shooting his army on the march (in the open) IS answered: targets {v.get('S_TARGETS')}, kills {v.get('S_KILLS')}")
+    check("Hicktonn94" in v.get("S_KILLED", "") and v.get("S_BREACHED") == "true",
+          f"a player shooting his army on the march (in the open, 40 studs off the route) IS answered (killed: {v.get('S_KILLED')}), then the march goes on (breach {v.get('S_BREACHED')})")
     print(f"ARMY SIEGE TEST: {fails} failed")
     sys.exit(1 if fails else 0)
