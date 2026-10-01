@@ -1084,6 +1084,7 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 			mission = missionId,
 			cash = cash,
 		})
+		AnalyticsService.Log(AnalyticsConfig.Events.DAILY_MISSION_COMPLETED, player.UserId, { mission = missionId })
 	end
 	MissionService.Push(player)
 	return true, nil
@@ -1466,6 +1467,7 @@ function MissionService.Complete(player: Player, missionId: string)
 			timed = true,
 			cash = cash,
 		})
+		AnalyticsService.Log(AnalyticsConfig.Events.DAILY_MISSION_COMPLETED, player.UserId, { mission = missionId, timed = true })
 	end
 	MissionService.Push(player)
 end

@@ -48,6 +48,38 @@
   30-min pack amount, still 49 R$) exactly as written in
   [`docs/claude-queue/JOB42-time-cash-packs.md`](docs/claude-queue/JOB42-time-cash-packs.md). Owner-first flag with a
   kill switch, no publish.
+- **QUEUED AFTER THE LAST EXISTING JOB (Shaun 2026-10-01 18:18 Dublin): JOB 59 — Free Creator Store assets pass.**
+  Strict order: complete the jobs already above, then JOB 59, then JOB 60 immediately below it. All listed assets are
+  already in Shaun's (shaunie6) inventory. Keep `OwnerFirst = true` for the config/phone test, add the feature's
+  `tools/checks/claude_bud_job59.py` checks, update `LATEST-HANDOFF.md`, and obey the house rules: mobile-light (few
+  lights/props, cap props per base, sounds 3D/proximity only, no heavy VFX), `StreamingEnabled` / `PreferMesh` off,
+  never touch `WE_Building*`, no franchise models, real detail.
+  - **(A) Helipad helicopter:** rebuild the helipad heli using SKYtech rotorKit `9961947424` (or rotorLite
+    `12918869816`); vendor its remote self-updating module locally using local copy `96681147793573`, audit every
+    script, and use no remote `require`. Fix the tilt and detached rotor. Coordinate with JOB 56 and fold this in if
+    JOB 56 has not started. aeroKit `8521123488` is optional for hangar jets.
+  - **(B) Sound pass:** create/use one central `SoundConfig` with night crickets `9112764546`, night ambience
+    `9112835836`, harbor night `9112792684`, desert wind `9114057104`, flag flap `9114461215` / `9114576083`, radio
+    chatter `9112851398` / `9125793009` near Command Center, distant artillery `9113169264` in desert, heli
+    `9113417759` / `9125390124`, boats `9112750448` / `9126201834`, gate `9116875342`, raid siren `9119661640`,
+    cash collect `9113728042`, UI clicks `15675059323` / `15675032796`, and Military March `1844397606` for
+    menu/rebirth with cuts `1841116989` / `1845181958`. Sounds must be 3D/proximity-only where world-placed.
+  - **(C) Night and base life:** fold into JOB 54 / JOB 57 where applicable. Use lights `8217816335`, `1725607094`,
+    `404475960` sparingly (8k-triangle cap); Night Fog sky `1864839162`, fireflies `3347717118`, dust `615333766`,
+    fire/smoke `11365590395` only on raided bases/wrecks, and VFX textures `17290956157`. Add lightweight props:
+    sandbags `5678434293`, crates `2930926216`, ammo crates `2190705941` (credit the creator), border fence
+    `4715423769`, metal gate fence `9083814252`, and parked Roblox pickup truck `6418225759`.
+  - **(D) Vault top tier:** use Vault Door `14795516338` as the highest vault-upgrade visual, tied into JOB 53 and read
+    from the central upgrade config.
+  - **Available Studio plugins:** Archimedes `144938633`, F3X `144950355`, Brushtool `2268520847`, RigEdit Lite
+    `1274343708`, AutoScale Lite `1496745047`, VFX Studio `135581141962270`, Tag Editor `948084095`, and GapFill
+    `165687726`.
+- **JOB 60 — Fix error report (small job, immediately after JOB 59).** Find and fix the root causes, not symptoms, for
+  the top error report: 2,233/day `Failed to load animation with sanitized ID`; 265 server sanitized-animation errors;
+  340 animation-track-limit warnings; 98 mesh fetch errors; 67 AnchorPoint nil errors; and 42 sound ConnectFail.
+  Add `tools/checks/claude_bud_job60.py`, keep the same `OwnerFirst = true`, mobile-light, `StreamingEnabled` /
+  `PreferMesh` off, `WE_Building*` untouched and no-franchise/real-detail rules, and update `LATEST-HANDOFF.md`.
+- **JOB 61: Creator Hub Economy + Funnels analytics (AnalyticsService)**
 - **Store props (Code Bot STORE-PROPS, v132): DO NOT REMOVE.** The owner's Creator Store buildings / props live in
   `Shared/Configs/StorePropsConfig.luau` (placed by `Services/StorePropsService.luau`; list in
   [`docs/PROP-ASSETS.md`](docs/PROP-ASSETS.md)). They dress the JOB 31 sites / named areas and swap in as the JOB 33

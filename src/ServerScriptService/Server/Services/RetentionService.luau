@@ -327,6 +327,10 @@ local function onLoadOffline(player: Player, profile: any)
 	local seq = typeof(RetentionConfig.ReturnSequence) == "table" and RetentionConfig.Live(RetentionConfig.ReturnSequence, player.UserId)
 	if cash <= 0 or not EconomyService or not EconomyService.AccruePendingCash(player, cash, "offline") then
 		if seq then
+			local comeback = tonumber(player:GetAttribute("WE_ComebackCash")) or 0
+			if comeback > 0 then
+				log(player, "RETURN_SEQUENCE_CLAIMED", { cash = comeback, days = 0 })
+			end
 			task.delay(math.max(1, tonumber(o.ShowDelaySeconds) or 6), function()
 				local comeback = tonumber(player:GetAttribute("WE_ComebackCash")) or 0
 				if comeback > 0 and player.Parent and RetentionService.WaitOnboarding(player, 90) then
@@ -339,6 +343,9 @@ local function onLoadOffline(player: Player, profile: any)
 	end
 	log(player, "OFFLINE_EARNED", { cash = cash, hours = string.format("%.1f", seconds / 3600) })
 	log(player, "OFFLINE_COLLECTED", { cash = cash, capped = if seconds >= capSec then "yes" else "no" }) -- claude-bud JOB 49
+	if seq then
+		log(player, "RETURN_SEQUENCE_CLAIMED", { cash = cash, days = math.floor(seconds / 86400) })
+	end
 	task.delay(math.max(1, tonumber(o.ShowDelaySeconds) or 6), function()
 		if player.Parent and RetentionService.WaitOnboarding(player, 90) then
 			local card = typeof(o.Card) == "table" and RetentionConfig.Live(o.Card, player.UserId)

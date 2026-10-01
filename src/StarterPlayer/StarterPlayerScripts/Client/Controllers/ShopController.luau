@@ -550,6 +550,8 @@ local function promptDevProduct(productKey: string, source: string?)
 		toast("Coming soon", "Info") -- claude-bud: also while MonetizationConfig.Rollout is not live for this player
 		return
 	end
+	-- The client reports only the SKU; the server validates and emits the funnel event.
+	pcall(Remotes.FireServer, Constants.RemoteNames.RequestAnalyticsEvent, "ShopItemViewed", productKey)
 	-- Ask server to log + validate; client still prompts Marketplace (v69: intent log never delays the prompt)
 	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, productKey, cleanSource(source))
 	MarketplaceService:PromptProductPurchase(player, def.Id)
@@ -578,7 +580,8 @@ local function promptGamePass(passKey: string, source: string?)
 		toast("Coming soon", "Info")
 		return
 	end
-	-- Log intent on server; NEVER treat client confirmation as a grant
+	-- Log the SKU view on the server; NEVER treat client confirmation as a grant.
+	pcall(Remotes.FireServer, Constants.RemoteNames.RequestAnalyticsEvent, "ShopItemViewed", passKey)
 	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseGamePass, passKey, cleanSource(source))
 	MarketplaceService:PromptGamePassPurchase(player, def.Id)
 end

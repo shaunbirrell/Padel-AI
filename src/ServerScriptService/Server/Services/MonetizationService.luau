@@ -314,26 +314,12 @@ local function intentSource(userId: number, intentKey: string): string
 	return "none"
 end
 
---[[ v71 money (M1): Roblox's built-in AnalyticsService economy event (bound as RbxAnalytics: the in-house
-	AnalyticsService dep has the same name). Deferred and pcall'd: it can never block or fail a grant. ]]
+-- JOB 61: IAP economy events go through the one server AnalyticsService wrapper. It
+-- batches the call, applies the central transaction type/SKU policy, and excludes admins.
 local function logEconomySource(player: Player, currency: string, amount: number, endingBalance: number, sku: string)
-	if amount <= 0 then
-		return
-	end
+	if amount <= 0 or not AnalyticsService or not AnalyticsService.Economy then return end
 	task.defer(function()
-		pcall(function()
-			local RbxAnalytics: any = game:GetService("AnalyticsService")
-			local E: any = Enum
-			RbxAnalytics:LogEconomyEvent(
-				player,
-				E.AnalyticsEconomyFlowType.Source,
-				currency,
-				amount,
-				endingBalance,
-				E.AnalyticsEconomyTransactionType.IAP.Name,
-				sku
-			)
-		end)
+		pcall(AnalyticsService.Economy, player, "Source", amount, endingBalance, "devproduct", currency, sku)
 	end)
 end
 

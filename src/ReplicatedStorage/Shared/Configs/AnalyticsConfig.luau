@@ -2,6 +2,43 @@
 
 local AnalyticsConfig = {
 	Enabled = true,
+	-- JOB 61: one server-side schema for every Roblox AnalyticsService call. These names are
+	-- deliberately SKU-like and contain no player/name/device data.
+	Economy = {
+		Currencies = { "Cash", "Gold" },
+		TransactionTypes = { IAP = "IAP", Gameplay = "Gameplay", Shop = "Shop", TimedReward = "TimedReward", Onboarding = "Onboarding" },
+		SourceSKUs = {
+			passive = "base_income", training = "base_income", plot_oil = "base_income", collector = "base_income",
+			collect = "cash_collect", offline = "offline_cash", daily = "daily_reward", mission = "mission_reward",
+			timed_mission = "mission_reward", bank_raid = "raid_loot", atm_raid = "raid_loot", army_raid = "raid_loot",
+			endgame_reward = "contract_reward", comeback = "return_sequence", onboarding = "onboarding_reward",
+		},
+		SinkSKUs = {
+			upgrade_ = "building_upgrade", recruit_ = "unit_recruit", army_ = "army_order", unit_ = "unit_purchase",
+			vehicle_ = "vehicle_purchase", weapon_ = "weapon_purchase", research_ = "research_upgrade",
+			defense_ = "defence_upgrade", defence_ = "defence_upgrade", gate_ = "defence_upgrade",
+			reroll = "mission_reroll", nuke_ = "defence_upgrade", missile_ = "defence_upgrade",
+		},
+	},
+	Onboarding = {
+		Enabled = true,
+		MaxFirstSessionSeconds = 900,
+		Steps = {
+			{ Name = "joined", Event = "PLAYER_JOIN" },
+			{ Name = "base_claimed", Event = "BASE_CLAIMED" },
+			{ Name = "first_collect", Event = "CASH_COLLECT" },
+			{ Name = "first_upgrade", Event = "FIRST_UPGRADE" },
+			{ Name = "first_recruit", Event = "SOLDIER_RECRUIT" },
+			{ Name = "first_army_order", Event = "ARMY_ATTACK" },
+			{ Name = "first_raid_or_attack", Event = "RIVAL_RAID_WON" },
+			{ Name = "reached_5_minutes", Event = "REACHED_5_MINUTES" },
+		},
+	},
+	Funnels = {
+		Shop = { Name = "Shop", Steps = { "open_shop", "view_item", "prompt_purchase", "purchase_complete" } },
+		Rebirth = { Name = "Rebirth", Steps = { "available", "opened", "confirmed" } },
+	},
+	Privacy = { ExcludeAdminUserIds = true, NeverLogPII = true },
 	LogToOutput = false, -- claude-bud JOB 24 §10: the Roblox sink below is live; Studio still prints every event
 	-- claude-bud JOB 24 §10: Roblox AnalyticsService (Creator Hub -> Analytics). Funnel = the onboarding steps (new
 	-- players only: FirstJoinUnix within FunnelNewPlayerSeconds; each step once, saved in profile.AnalyticsFunnel).
@@ -14,26 +51,22 @@ local AnalyticsConfig = {
 		-- events come from AnalyticsService.Onboard: RetentionService (Joined / CharacterSpawned on the real join and first
 		-- spawn) and TutorialService (BaseClaimed and Tut_<step Id> when that tutorial step is finished, TutorialDone /
 		-- TutorialSkipped). Order = the owner's tutorial order; a step done early (bought before asked) still counts.
+		-- JOB 61 onboarding is the only production onboarding sequence. Legacy event names below
+		-- remain valid custom events, but do not create extra funnel rows.
 		Funnel = {
-			{ Step = "Joined", Events = { "PLAYER_JOIN", "STEP:Joined" } },
-			{ Step = "Spawned", Events = { "STEP:CharacterSpawned" } },
-			{ Step = "BaseClaimed", Events = { "STEP:BaseClaimed" } },
-			{ Step = "FirstBuilding", Events = { "STEP:Tut_CommandCenter", "FIRST_UPGRADE", "UPGRADE_PURCHASED" } },
-			{ Step = "CollectedCash", Events = { "STEP:Tut_Income", "CASH_COLLECT" } },
-			{ Step = "Recruited", Events = { "STEP:Tut_RecruitSoldiers", "SOLDIER_RECRUIT" } },
-			{ Step = "Barracks", Events = { "STEP:Tut_Barracks" } },
-			{ Step = "FirstOutpost", Events = { "STEP:Tut_Outpost", "FIRST_OUTPOST", "TERRITORY_CAPTURED" } },
-			{ Step = "FirstVehicle", Events = { "STEP:Tut_Jeep", "VEHICLE_SPAWNED" } },
-			{ Step = "TutorialDone", Events = { "STEP:TutorialDone", "STEP:TutorialSkipped" } },
-			{ Step = "OpenedArmy", Events = { "ARMY_OPEN" } },
-			{ Step = "FirstAttack", Events = { "ARMY_ATTACK" } },
-			{ Step = "PurchasePrompt", Events = { "SHOP_PROMPT", "PREMIUM_VEHICLE_PROMPT" } },
-			{ Step = "FirstPurchase", Events = { "FIRST_PURCHASE", "PURCHASE_RECEIPT" } },
+			{ Step = "joined", Events = { "PLAYER_JOIN" } },
+			{ Step = "base_claimed", Events = { "BASE_CLAIMED" } },
+			{ Step = "first_collect", Events = { "CASH_COLLECT" } },
+			{ Step = "first_upgrade", Events = { "FIRST_UPGRADE" } },
+			{ Step = "first_recruit", Events = { "SOLDIER_RECRUIT" } },
+			{ Step = "first_army_order", Events = { "ARMY_ATTACK" } },
+			{ Step = "first_raid_or_attack", Events = { "RIVAL_RAID_WON", "BANK_RAID" } },
+			{ Step = "reached_5_minutes", Events = { "REACHED_5_MINUTES" } },
 		},
 		EconomyFlushSeconds = 60,
 		-- reason (prefix) -> Enum.AnalyticsEconomyTransactionType name; anything else = Gameplay
 		EconomyTypes = { upgrade_ = "Shop", weapon_ = "Shop", vehicle_ = "Shop", research_ = "Shop", recruit_ = "Shop", devproduct = "IAP",
-			daily = "TimedReward", premium_daily = "TimedReward", spinner = "TimedReward", code = "ContextualPurchase", onboarding = "Onboarding", offline = "TimedReward" }, -- claude-bud JOB 29: offline
+			daily = "TimedReward", premium_daily = "TimedReward", spinner = "TimedReward", code = "Gameplay", onboarding = "Onboarding", offline = "TimedReward" }, -- claude-bud JOB 29: offline
 		-- in-house event -> Roblox custom event name (value = the Value prop, else 1; field 1 = the Field prop)
 		Custom = {
 			SHOP_OPEN = { Name = "ShopOpened" },
@@ -68,7 +101,10 @@ local AnalyticsConfig = {
 			STREAK_CLAIMED = { Name = "StreakClaimed", Value = "day", Field = "grace" },
 			STREAK_RESET = { Name = "StreakReset", Field = "lastDay" },
 			OFFLINE_COLLECTED = { Name = "OfflineCollected", Value = "cash", Field = "capped" },
+			BASE_CLAIMED = { Name = "BaseClaimed" },
 			MISSION_DONE = { Name = "MissionDone", Field = "type" },
+			DAILY_MISSION_COMPLETED = { Name = "DailyMissionCompleted", Field = "mission" },
+			RETURN_SEQUENCE_CLAIMED = { Name = "ReturnSequenceClaimed", Value = "cash", Field = "days" },
 			MISSIONS_ALL_DONE = { Name = "MissionsAllDone", Value = "cash" },
 			MISSION_REROLL = { Name = "MissionReroll", Field = "kind" },
 			RETURN_DAY = { Name = "ReturnDay", Value = "days", Field = "guidedDone" },
@@ -94,7 +130,10 @@ local AnalyticsConfig = {
 		MaxCustomPerMinute = 100,
 		PerPlayerPerMinute = 10,
 		-- the client may report only these (RequestAnalyticsEvent; a few per minute per player)
-		ClientEvents = { ShopOpened = "SHOP_OPEN", ArmyOpened = "ARMY_OPEN", TipShown = "TUTORIAL_SHOWN", TipClosed = "TUTORIAL_CLOSED", RebirthOpened = "REBIRTH_OPENED" }, -- claude-bud JOB 33: + RebirthOpened
+		ClientEvents = {
+			ShopOpened = "SHOP_OPEN", ShopItemViewed = "SHOP_ITEM_VIEW", ArmyOpened = "ARMY_OPEN",
+			TipShown = "TUTORIAL_SHOWN", TipClosed = "TUTORIAL_CLOSED", RebirthOpened = "REBIRTH_OPENED",
+		}, -- claude-bud JOB 33: + RebirthOpened
 		ClientPerMinute = 12,
 	},
 	Events = {
@@ -187,6 +226,10 @@ local AnalyticsConfig = {
 		BAG_DELIVER = "BAG_DELIVER",
 		-- claude-bud JOB 24 §10: funnel / custom events
 		CASH_COLLECT = "CASH_COLLECT",
+		BASE_CLAIMED = "BASE_CLAIMED",
+		REACHED_5_MINUTES = "REACHED_5_MINUTES",
+		DAILY_MISSION_COMPLETED = "DAILY_MISSION_COMPLETED",
+		RETURN_SEQUENCE_CLAIMED = "RETURN_SEQUENCE_CLAIMED",
 		ARMY_OPEN = "ARMY_OPEN",
 		ARMY_ATTACK = "ARMY_ATTACK",
 		TUTORIAL_SHOWN = "TUTORIAL_SHOWN",

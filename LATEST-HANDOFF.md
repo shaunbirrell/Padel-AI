@@ -1,3 +1,9 @@
+## JOB 61 (Code Bot Roblox, 2026-10-01 18:36 Dublin): Creator Hub Economy + Funnels analytics
+- Added the server-only `AnalyticsService` path and one central `Shared/Configs/AnalyticsConfig.luau`: batched Cash/Gold economy events with normalized item SKUs, ending balances, allowed transaction types, admin exclusion, and PII sanitization.
+- Added the eight-step first-session onboarding funnel (once per saved player), server-created Shop/Rebirth funnel session IDs, daily mission / return sequence / notification custom events, and a delayed five-minute step with no Heartbeat work.
+- Added `tools/checks/claude_bud_job61.py`. House rules remain unchanged: StreamingEnabled/PreferMesh off, `WE_Building*` untouched, no price changes.
+- Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
+
 <!-- Q2-START -->
 ## claude-bud JOB 51 (2026-10-01, P0): CENTRAL PLAZA GUARDS: ONE SHARED HOSTILITY RULE (branch `claude/desktop-bud`)
 **Flag to flip:** `CombatConfig.SharedHostility.OwnerFirst = true -> false` (NEW-OWNER-FIRST). Enabled = false is the

@@ -37,6 +37,8 @@ local MonetizationService: any = nil
 local TutorialService: any = nil
 local MoneyCollectorService: any = nil
 local XPService: any = nil -- XP rebalance: one-time purchase XP (spec_xp.md §3.3; read from deps, no require)
+-- PendingCash origin buckets are server-only and are flushed once on collect.
+local pendingAnalyticsOrigins: { [number]: { [string]: number } } = {}
 
 -- v65: never index nil DataService (SpendCash must not throw GetProfile on nil)
 local function getDataService(): any
@@ -337,6 +339,7 @@ function EconomyService.Init(deps: { [string]: any })
 	if TycoonGuideConfig.Enabled then
 		game:GetService("Players").PlayerRemoving:Connect(function(player: Player)
 			steadyIncome[player.UserId] = nil
+			pendingAnalyticsOrigins[player.UserId] = nil
 		end)
 	end
 end
@@ -363,13 +366,19 @@ local function analytics(): any
 	end
 	return if analyticsMod then analyticsMod else nil
 end
-local function analyticsEconomy(player: Player, flow: string, amount: number, balance: number, reason: string?)
+local function analyticsEconomy(player: Player, flow: string, amount: number, balance: number, reason: string?, currency: string?)
 	pcall(function()
 		local a = analytics()
 		if a and a.Economy then
-			a.Economy(player, flow, amount, balance, reason)
+			a.Economy(player, flow, amount, balance, reason, currency)
 		end
 	end)
+end
+local function notePendingOrigin(player: Player, amount: number, reason: string?)
+	local key = if typeof(reason) == "string" and reason ~= "" then reason else "collect"
+	local rows = pendingAnalyticsOrigins[player.UserId] or {}
+	pendingAnalyticsOrigins[player.UserId] = rows
+	rows[key] = (rows[key] or 0) + amount
 end
 
 function EconomyService.AddCash(player: Player, amount: number, reason: string?): boolean
@@ -410,7 +419,9 @@ function EconomyService.AccruePendingCash(player: Player, amount: number, reason
 	end
 	local granted = applyCashMult(player, profile, amount, reason)
 	local pending = tonumber((profile :: any).PendingCash) or 0
-	(profile :: any).PendingCash = math.clamp(pending + granted, 0, EconomyConfig.MaxCash)
+	local nextPending = math.clamp(pending + granted, 0, EconomyConfig.MaxCash)
+	;(profile :: any).PendingCash = nextPending
+	notePendingOrigin(player, nextPending - pending, reason)
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	noteSteadyIncome(player, reason, granted) -- v72 WE_IncomePerSec (display only; no-op while the guide is off)
@@ -433,7 +444,18 @@ function EconomyService.CollectPendingCash(player: Player): number
 	-- Pending already had mult applied at accrue; grant with exempt reason
 	profile.Cash = math.clamp(profile.Cash + pending, EconomyConfig.MinCash, EconomyConfig.MaxCash)
 	profile.Stats.TotalCashEarned += pending
-	analyticsEconomy(player, "Source", pending, profile.Cash, "collect") -- claude-bud JOB 24 §10
+	local origins = pendingAnalyticsOrigins[player.UserId]
+	pendingAnalyticsOrigins[player.UserId] = nil
+	if origins == nil then
+		-- A PendingCash balance loaded from an older session has no origin ledger.
+		analyticsEconomy(player, "Source", pending, profile.Cash, "collect")
+	else
+		for reason, amount in pairs(origins) do
+			if amount > 0 then
+				analyticsEconomy(player, "Source", amount, profile.Cash, reason)
+			end
+		end
+	end
 	pcall(function()
 		local a = analytics()
 		if a and a.Log then
@@ -530,7 +552,9 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 	end
 	-- XP rebalance: purchase XP only after a spend that succeeded, deferred so a level-up can never fail or double a
 	-- purchase. XPService.OnSpend pays only the whitelisted one-time reasons (upgrade_ / research_ / vehicle_ / weapon_).
-	if a == true and XPService and XPService.OnSpend then task.defer(XPService.OnSpend, player, amount, _reason) end
+	if a == true and XPService and XPService.OnSpend then
+		task.defer(XPService.OnSpend, player, amount, _reason)
+	end
 	return (a :: any) :: boolean, b :: string?
 end
 
@@ -545,6 +569,7 @@ function EconomyService.AddGold(player: Player, amount: number, _reason: string?
 	end
 	profile.Gold = math.clamp(profile.Gold + amount, EconomyConfig.MinGold, EconomyConfig.MaxGold)
 	profile.Stats.TotalGoldEarned += amount
+	analyticsEconomy(player, "Source", amount, profile.Gold, _reason, "Gold")
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	return true
@@ -563,6 +588,7 @@ function EconomyService.SpendGold(player: Player, amount: number, _reason: strin
 		return false, "InsufficientGold"
 	end
 	profile.Gold -= amount
+	analyticsEconomy(player, "Sink", amount, profile.Gold, _reason, "Gold")
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	return true, nil
