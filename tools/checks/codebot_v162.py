@@ -1,4 +1,4 @@
-# Code Bot Roblox vNNN (2026-10-01): the army command bug (owner report: "Army SEND -> Crossroads Town -> GO and the army
+# Code Bot Roblox v162 (2026-10-01): the army command bug (owner report: "Army SEND -> Crossroads Town -> GO and the army
 # stays beside me on FOLLOW; ATTACK says No enemies near"). Root cause (proven, docs/proof/army-command/before-client.log):
 # the Army SEND button opened the world map in its normal tap-to-pin mode; a zone card's GO set HIS pin and closed the
 # map; no army remote was ever fired, the server never heard of it, FOLLOW stayed. The fix:
@@ -49,26 +49,34 @@ _AOC = read(C + "ArmyOrdersConfig.luau")
 _SEC = read(C + "SecurityConfig.luau")
 _LOG = read("src/ReplicatedStorage/Shared/Util/ArmyLog.luau")
 
-check("OwnerFirst = true" in _AOC, "CODEBOT vNNN: Army Orders stay OwnerFirst")
+# build pins
+for rel, needle in (
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 162)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 162)'),
+    (S + "Services/DataService.luau", "WE_Build=162"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 162)'),
+):
+    check(needle in read(rel), "CODEBOT v162: WE_Build=162 " + rel.rsplit("/", 1)[-1])
+check("OwnerFirst = true" in _AOC, "CODEBOT v162: Army Orders stay OwnerFirst")
 for s in ("Following", "Holding", "TravellingToBase", "Attacking", "EngagingTarget", "Retreating", "Recalling"):
-    check("\t%s = true," % s in _AS, "CODEBOT vNNN: ArmyState has " + s)
+    check("\t%s = true," % s in _AS, "CODEBOT v162: ArmyState has " + s)
 check("st.Order = " in _AS and "st.Order = " not in _AP and "\tst.Order = order" not in _SQ,
-      "CODEBOT vNNN: ArmyState.Set is the one writer of st.Order (ArmyPlan / SetOrder go through it)")
+      "CODEBOT v162: ArmyState.Set is the one writer of st.Order (ArmyPlan / SetOrder go through it)")
 check("ArmyCommand.Live(player)" in _SQ and "ArmyCommand.Order(player, stL, orderRaw, source)" in _SQ,
-      "CODEBOT vNNN: a live owner's order goes through ArmyCommand")
+      "CODEBOT v162: a live owner's order goes through ArmyCommand")
 check("ArmyCommand.Send(player, plotId)" in _AP and 'ArmyLog.Reject(player, "SEND " .. tostring(plotId), "BadPayload")' in _AP,
-      "CODEBOT vNNN: RequestArmySend -> ArmyCommand.Send; no silent return")
-check('"NoEnemiesNear"' in _ACMD and "keep the previous state" in _ACMD, "CODEBOT vNNN: ATTACK with nothing near = rejected, state kept")
-check('RequestArmySend = { "number|string:40" }' in _SEC, "CODEBOT vNNN: RequestArmySend carries a plot id or a target id")
-check('"^A:' in _AT or "A:" in _AT, "CODEBOT vNNN: ArmyTargets resolves map areas")
+      "CODEBOT v162: RequestArmySend -> ArmyCommand.Send; no silent return")
+check('"NoEnemiesNear"' in _ACMD and "keep the previous state" in _ACMD, "CODEBOT v162: ATTACK with nothing near = rejected, state kept")
+check('RequestArmySend = { "number|string:40" }' in _SEC, "CODEBOT v162: RequestArmySend carries a plot id or a target id")
+check('"^A:' in _AT or "A:" in _AT, "CODEBOT v162: ArmyTargets resolves map areas")
 check("function MapController.OpenForArmySend()" in _MC and 'if mode == "ArmySend" then' in _MC
-      and "Constants.RemoteNames.RequestArmySend, tid)" in _MC, "CODEBOT vNNN: the map's ArmySend GO fires the army remote")
-check('button(row, "SendArmy", "SEND ARMY", 150)' in _MC and "FastTravel" not in _MC, "CODEBOT vNNN: SEND ARMY kept, no fast travel")
+      and "Constants.RemoteNames.RequestArmySend, tid)" in _MC, "CODEBOT v162: the map's ArmySend GO fires the army remote")
+check('button(row, "SendArmy", "SEND ARMY", 150)' in _MC and "FastTravel" not in _MC, "CODEBOT v162: SEND ARMY kept, no fast travel")
 check("pcall(MC.OpenForArmySend)" in _OC and "currentOrder = orderId" not in _OC and "STATE_BUTTON[payload.State]" in _OC,
-      "CODEBOT vNNN: Army SEND opens ArmySend mode; the highlight is the server state")
-check("ArmyLog.ForceOn = false" in _LOG and 'GetAttribute("WE_ArmyDebug")' in _LOG, "CODEBOT vNNN: chain logs gated (WE_ArmyDebug / Studio)")
+      "CODEBOT v162: Army SEND opens ArmySend mode; the highlight is the server state")
+check("ArmyLog.ForceOn = false" in _LOG and 'GetAttribute("WE_ArmyDebug")' in _LOG, "CODEBOT v162: chain logs gated (WE_ArmyDebug / Studio)")
 for f in (_AS, _ACMD, _AT):
-    check("PivotTo" not in f and ":MoveTo(" not in f, "CODEBOT vNNN: no teleport / direct move in the command modules")
+    check("PivotTo" not in f and ":MoveTo(" not in f, "CODEBOT v162: no teleport / direct move in the command modules")
 
 # runtime: the full chain in the sim
 if os.environ.get("SKIP_SIM") != "1":
@@ -76,4 +84,4 @@ if os.environ.get("SKIP_SIM") != "1":
     env.setdefault("LUAU", os.path.expanduser("~/.local/bin/luau"))
     r = subprocess.run([sys.executable, "tools/sim/run_army_command_test.py"], cwd=str(ROOT), env=env, capture_output=True, text=True, timeout=900)
     tail = (r.stdout or "").strip().splitlines()[-1:] or ["(no output)"]
-    check(r.returncode == 0, "CODEBOT vNNN: tools/sim/run_army_command_test.py " + tail[0])
+    check(r.returncode == 0, "CODEBOT v162: tools/sim/run_army_command_test.py " + tail[0])

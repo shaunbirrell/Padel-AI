@@ -71,7 +71,7 @@ _j38("local function pickSquadTarget(player: Player, st: SquadState, proot: Base
      and "pcall(SquadOrdersService._Plan.Think, player, st, proot, pickSquadTarget, now)" in _SQ and "local ok = pcall(pick, player, st, proot, opts)" in _AP,
      "ONE target pick (pickSquadTarget, the one hostility rule) for the ordered and the plan paths")
 # remotes
-# (superseded in codebot_v161.py: the schema also carries a target id string "A:/S:/B:")
+# (superseded in codebot_v162.py: the schema also carries a target id string "A:/S:/B:")
 _j38("RequestArmySend = { \"number|string:40\" }," in _SEC and "RequestArmySendCheck = { \"number|string:40\" }," in _SEC
      and 'require(script.Parent.RemoteGate).Check(player, "RequestArmySend", plotId)' in _AP, "RemoteGate schemas: RequestArmySend / Check carry the plot id only")
 _j38('pcall(SquadOrdersService._Plan.Recall, player' not in _SQ and 'SquadOrdersService._Plan.Recall(player, if orderRaw == "Recall" then nil else orderRaw' in _SQ,
