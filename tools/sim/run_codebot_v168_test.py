@@ -432,4 +432,5 @@ check_static("IntelGuide uses the ONE tracker (ObjectiveMarker.ShowWith / Clear;
              and "Modules.IntelGuide" in egc and "IG.Start" in egc)
 
 print("\nCODEBOT V168 TESTS: %d failed%s" % (len(FAILS), "" if not FAILS else " (" + ", ".join(FAILS) + ")"))
-sys.exit(1 if FAILS else 0)
+if __name__ == "__main__":
+    sys.exit(1 if FAILS else 0)

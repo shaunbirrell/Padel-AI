@@ -727,6 +727,53 @@ function PrestigeService.AdminSetRebirth(player: Player, n: number): (boolean, s
 	return true, nil
 end
 
+--[[ Code Bot v169: AdminConfig.OwnerRebirthGrant, once per Key on a profile load (the owner only; see AdminConfig).
+	Returns "applied" | "already" (count >= Rebirths: nothing changed, Key stored) | "done" (Key already stored) | "skip". ]]
+function PrestigeService.ApplyOwnerRebirthGrant(player: Player, profile: any): string
+	local okA, AdminConfig = pcall(function(): any
+		return require(Shared.Configs.AdminConfig)
+	end)
+	local g = okA and AdminConfig and AdminConfig.OwnerRebirthGrant
+	if typeof(g) ~= "table" or typeof(g.Key) ~= "string" or g.Key == "" or typeof(profile) ~= "table" then
+		return "skip"
+	end
+	local uid = tonumber(g.UserId)
+	if uid == nil or player.UserId ~= uid then
+		return "skip"
+	end
+	local listed = false
+	for _, id in ipairs(AdminConfig.UserIds or {}) do
+		if tonumber(id) == uid then
+			listed = true
+		end
+	end
+	if not listed then
+		return "skip"
+	end
+	if typeof(profile.AdminGrants) ~= "table" then
+		profile.AdminGrants = {}
+	end
+	if profile.AdminGrants[g.Key] ~= nil then
+		return "done"
+	end
+	local want = math.clamp(math.floor(tonumber(g.Rebirths) or 0), 0, PrestigeConfig.MaxPrestige)
+	if nonNegInt(profile.Prestige) >= want then
+		profile.AdminGrants[g.Key] = { At = os.time(), From = nonNegInt(profile.Prestige), Applied = false }
+		DataService.MarkDirty(player)
+		print(string.format("[AdminRebirth] %s grant %s: already R%d (>= %d), nothing changed", player.Name, g.Key, nonNegInt(profile.Prestige), want))
+		return "already"
+	end
+	local from = nonNegInt(profile.Prestige)
+	profile.AdminGrants[g.Key] = { At = os.time(), From = from, Applied = true } -- stored before the save inside
+	local ok = PrestigeService.AdminSetRebirth(player, want)
+	if not ok then
+		profile.AdminGrants[g.Key] = nil
+		return "skip"
+	end
+	print(string.format("[AdminRebirth] %s grant %s: R%d -> R%d (one time)", player.Name, g.Key, from, want))
+	return "applied"
+end
+
 function PrestigeService.Init(deps: { [string]: any })
 	-- claude-bud JOB 33: this life's play time (banked into profile.LifePlaySeconds every minute and on leave)
 	task.spawn(function()
@@ -822,6 +869,15 @@ function PrestigeService.Init(deps: { [string]: any })
 		-- Re-apply unlock flags for current prestige (idempotent) in case config grew
 		applyUnlocks(player, profile, profile.Prestige or 0)
 		pushState(player)
+		-- Code Bot v169: the owner's one-time rebirth grant (after the other load handlers: defer)
+		task.defer(function()
+			if player.Parent and DataService.GetProfile(player) == profile then
+				local okG, errG = pcall(PrestigeService.ApplyOwnerRebirthGrant, player, profile)
+				if not okG then
+					warn("[PrestigeService] OwnerRebirthGrant:", errG)
+				end
+			end
+		end)
 		-- UX: remind eligible commanders (MinLevelToPrestige = 40) that Rebirth is ready
 		if PrestigeService.CanPrestige(player) and NotificationService then
 			local msg = string.format(
