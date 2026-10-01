@@ -646,6 +646,30 @@ ok, msg = ES.Purchase(owner, "Scout", "4")
 local rep = ES.State(owner).Intel.Report
 check(ok and rep and rep.Name ~= nil and spentLog[#spentLog].why == "endgame_scout" and spentLog[#spentLog].n == math.max(10000, 60 * 23700), "scouting an online base: 1 min of income ($1.42M), the report is stored")
 check(ES.Purchase(owner, "Scout", "5") == false, "nobody on that plot: refused (offline bases are never scouted)")
+-- Code Bot v171 (Shaun 2026-10-01: "the scout report I paid for did nothing"): the paid result is shown and kept
+do
+check(profiles[470626172].Endgame.ScoutReport == rep and rep.Price == spentLog[#spentLog].n, "v171 scout: the report is saved in profile.Endgame (survives a rejoin / server move), with its price")
+local fired = {}
+deps.RemoteSetup = { Get = function(name) return { IsA = function(_, c) return c == "RemoteEvent" end, FireClient = function(_, p, kind, data) table.insert(fired, { name = name, p = p, kind = kind, data = data }) end } end }
+ES.PushScoutCard(owner)
+check(#fired == 1 and fired[1].p == owner and fired[1].kind == "ScoutReport" and fired[1].data == rep, "v171 scout: the result card is pushed to HIM (FeaturePush \"ScoutReport\") right after the buy")
+ES.PushScoutCard(owner)
+check(#fired == 1, "v171 scout: the card is pushed once per buy")
+for _, fn in ipairs(Players.PlayerRemoving.fns) do fn(owner) end
+check(ES.State(owner).Intel.Report == rep, "v171 scout: after he leaves (this server forgets it) the State still has his report from the profile")
+local rowsI = CT.ListRows("Intel", ES.State(owner))
+check(rowsI[1] and rowsI[1].Kind == "ScoutView" and rowsI[1].Label == "VIEW" and rowsI[1].Price == 0 and string.find(rowsI[1].Name, "SCOUT REPORT", 1, true) == 1, "v171 scout: the report LEADS the Intel list (VIEW, never a purchase)")
+local SLn = CT.ScoutLines({ Name = "Rival", Tier = 2, GateHp = 900, GateMax = 1200, Turrets = 3, Guards = 4, Defence = { Plating = 2 }, Verdict = "Even fight", At = os.time() })
+check(SLn.Title == "SCOUT REPORT: RIVAL" and string.find(SLn.Line1, "900 / 1200 HP", 1, true) ~= nil and string.find(SLn.Line2, "3 turrets", 1, true) ~= nil and SLn.Line4 == "Your army: Even fight" and SLn.Line5 == "Scouted just now", "v171 scout: the card lines (tier, gate HP, turrets / guards, defences, your army's verdict)")
+local SL0 = CT.ScoutLines({ Name = "X" })
+check(SL0.Line1 == "Base tier 0 · gate unknown" and SL0.Line4 == "Your army: no verdict (no soldiers?)", "v171 scout: a sparse report still renders (no nil errors)")
+local nSpent, cash0 = #spentLog, profiles[470626172].Cash
+local realBuild = ES.BuildScoutReport
+ES.BuildScoutReport = function() error("boom") end
+ok, msg = ES.Purchase(owner, "Scout", "4")
+ES.BuildScoutReport = realBuild
+check(not ok and string.find(tostring(msg), "nothing charged", 1, true) ~= nil and #spentLog == nSpent and profiles[470626172].Cash == cash0, "v171 scout: a report that cannot be built charges NOTHING (" .. tostring(msg) .. ")")
+end
 Players.GetPlayers = prevGet
 -- the new stations + the base extras
 for _, kind in ipairs({ "Intel", "BlackMarket", "Heist" }) do
@@ -667,6 +691,59 @@ for _, dd in ipairs(mx0:GetDescendants()) do
   if dd.ClassName == "Part" and string.sub(dd.Name, 1, 5) == "Crest" then crest += 1 elseif dd.ClassName == "Part" and string.sub(dd.Name, 1, 6) == "Trophy" then trophy += 1 end
 end
 check(crest == 3 and trophy > 0 and trophy <= 30, string.format("the Bastion Crest (3 parts) and the trophy cannon (%d parts, cap 30) even at tier 0", trophy))
+-- Code Bot v171: the Recruit Pack's gold base trim (real geometry on HIS base; any tier)
+do
+-- a fresh builder with real colour values (the shared stub's Color3 is opaque)
+local prevC3, prevBTB = Color3, CACHE["Modules/BaseTierBuilder"]
+Color3 = { new = function(r, g, b) return { R = r, G = g, B = b } end, fromRGB = function(r, g, b) return { R = r / 255, G = g / 255, B = b / 255 } end, fromHSV = function() return { R = 0, G = 0, B = 0 } end }
+CACHE["Modules/BaseTierBuilder"] = nil
+local BTB = require(node("Modules/BaseTierBuilder"))
+local function trimCount(model)
+  local c = {}
+  local okAll = true
+  for _, ch in ipairs(model:GetChildren()) do
+    if ch.Name == "RecruitTrim" then
+      for _, dd in ipairs(ch:GetDescendants()) do
+        if dd.ClassName == "Part" then
+          c[dd.Name] = (c[dd.Name] or 0) + 1
+          if dd.CanCollide ~= false or dd.CanQuery ~= false or dd.Material ~= Enum.Material.Metal then okAll = false end
+          local col = dd.Color
+          if not (col and col.R > 0.7 and col.G > 0.5 and col.B < 0.3) then okAll = false end
+        end
+      end
+    end
+  end
+  return c, okAll
+end
+local ctxR = table.clone(ctx)
+ctxR.Walls = {
+  { CFrame = CFrame.new(0, 11.75, -158), Size = Vector3.new(317, 21.5, 2) }, { CFrame = CFrame.new(-158, 11.75, 0), Size = Vector3.new(2, 21.5, 317) },
+  { CFrame = CFrame.new(158, 11.75, 0), Size = Vector3.new(2, 21.5, 317) }, { CFrame = CFrame.new(-84, 11.75, 158), Size = Vector3.new(149, 21.5, 2) },
+  { CFrame = CFrame.new(84, 11.75, 158), Size = Vector3.new(149, 21.5, 2) },
+}
+ctxR.RecruitTrim = true
+local rc0, rok0 = trimCount(BTB.Build(ctxR, 0))
+check(rc0.RecruitWallBand == 5 and rc0.RecruitWallStripe == 5 and rc0.RecruitPostBand == 2 and rc0.RecruitPostFinial == 2 and rok0,
+  "v171 recruit trim at tier 0: a gold Metal band + pinstripe on all 5 wall segments, a band + finial on both gate posts; all gold, no collision, no ray")
+local mR3 = BTB.Build(ctxR, 3)
+local rc3, rok3 = trimCount(mR3)
+local goldFin = 0
+for _, dd in ipairs(mR3:GetDescendants()) do if dd.Name == "GateRoofFinial" and dd.Color.G > 0.7 then goldFin += 1 end end
+check(rc3.RecruitWallBand == 5 and rc3.RecruitPostFinial == nil and goldFin == 2 and rok3, "v171 recruit trim at tier 3: the wall bands, and the post roofs' own finials turn Recruit gold (no second ball)")
+local ctxN = table.clone(ctxR); ctxN.RecruitTrim = nil
+local rcN = trimCount(BTB.Build(ctxN, 3))
+check(next(rcN) == nil, "v171 recruit trim: none without the pack")
+local _, pR = BTB.Build(ctxR, 2)
+local _, pN = BTB.Build(ctxN, 2)
+check(pR - pN == 5 * 2 + 2, string.format("v171 recruit trim adds %d parts (12 = 5 walls x 2 + 2 post bands)", pR - pN))
+CACHE["Configs/MonetizationConfig"] = { RecruitPackLiveFor = function(uid) return uid == 470626172 end }
+check(ES.HasRecruitTrim(owner, { Entitlements = { RecruitPack = true } }) == true and ES.HasRecruitTrim(owner, { Entitlements = {} }) == false
+  and ES.HasRecruitTrim(other, { Entitlements = { RecruitPack = true } }) == false and ES.HasRecruitTrim(owner, nil) == false,
+  "v171 recruit trim: built from the SAVED entitlement (back on every join), only while the pack is live for him")
+CACHE["Configs/MonetizationConfig"] = nil
+Color3 = prevC3
+CACHE["Modules/BaseTierBuilder"] = prevBTB
+end
 local st6 = ES.State(owner)
 check(#CT.ListRows("Intel", st6) >= 4 and #CT.ListRows("BlackMarket", st6) >= 4 and #CT.ListRows("Heist", st6) == 1 and #CT.ListRows("HQ", st6) >= 3, "list rows: Intel, Black Market, Heist, the HQ warheads")
 

@@ -165,7 +165,7 @@ local function crosshair(parent: Instance, x: number, y: number, size: number)
 	}) do
 		local f = Instance.new("Frame")
 		f.BorderSizePixel = 0
-		f.AnchorPoint = spec[5]
+		f.AnchorPoint = spec[4] -- Code Bot v171: was spec[5] (nil): Roblox throws on a nil AnchorPoint, build() died here
 		f.Position = UDim2.fromScale(spec[1], spec[2])
 		f.Size = spec[3]
 		f.BackgroundColor3 = GOLD
@@ -375,7 +375,20 @@ local function build()
 	st.Thickness = 2
 	st.Parent = b
 	pillStroke = st
-	crosshair(b, 8, math.floor((P.Height - P.Icon) / 2), P.Icon) -- layout() places / sizes it (RivalConfig.Layout)
+	-- Code Bot v171 (Shaun 2026-10-01 12:08: "the TARGETS button is gone"): v168's crosshair() assigned AnchorPoint =
+	-- spec[5] (nil; each spec has 4 fields). Roblox throws on that, so build() stopped right here every time: the card
+	-- had been parented with no Size / Position / text and refresh() never ran -> nothing on screen. Fixed (spec[4]),
+	-- and the card is now placed BEFORE any decoration, which runs in a pcall: an icon can never hide the button again.
+	do
+		local cs0 = contentSize()
+		local C0 = RivalConfig.Layout(cs0.X, cs0.Y, 0).Pill
+		b.Position = UDim2.fromOffset(C0.X, C0.Y)
+		b.Size = UDim2.fromOffset(C0.W, C0.H)
+	end
+	local okX, errX = pcall(crosshair, b, 8, math.floor((P.Height - P.Icon) / 2), P.Icon) -- layout() places / sizes it (RivalConfig.Layout)
+	if not okX then
+		warn("[RivalController] crosshair icon failed (the card still shows): " .. tostring(errX))
+	end
 	lineTitle = label(b, "Title", 46, 5, 100, 18, 16, Enum.Font.GothamBlack, GOLD)
 	lineName = label(b, "Rival", 46, 24, 100, 17, 15, Enum.Font.GothamBold, WHITE)
 	lineDetail = label(b, "Detail", 46, 42, 100, 16, 14, Enum.Font.GothamBold, LOOT)

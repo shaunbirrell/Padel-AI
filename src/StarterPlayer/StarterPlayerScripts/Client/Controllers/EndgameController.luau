@@ -632,6 +632,104 @@ local function stationPoint(kind: string): Vector3?
 	return Vector3.new(p.X, p.Y, p.Z)
 end
 
+-- ── Code Bot v171: the SCOUT REPORT result card (Shaun 2026-10-01 12:08: "the scout report I paid for did nothing") ──
+-- The purchase worked, but its only output was a 1.8 s toast and one grey INFO row 5th in the Intel list (under the
+-- three contracts and the weekly target), lost on a server move. Now the server pushes "ScoutReport" right after the
+-- buy and this card shows every number until he closes it; the report also leads the Intel list (VIEW reopens it).
+function EndgameController.ScoutLines(rep: { [string]: any }): { [string]: string }
+	local function n(v: any): string
+		local x = tonumber(v)
+		return if x then tostring(math.floor(x)) else "?"
+	end
+	local gate = if tonumber(rep.GateHp) then (if tonumber(rep.GateMax) then n(rep.GateHp) .. " / " .. n(rep.GateMax) else n(rep.GateHp)) .. " HP" else "unknown"
+	local def = {}
+	local d = rep.Defence
+	if typeof(d) == "table" then
+		for _, tr in ipairs(EndgameConfig.Defence.Tracks) do
+			table.insert(def, string.format("%s %s", tr, n(d[tr] or 0)))
+		end
+	end
+	local ago = math.max(0, math.floor((os.time() - (tonumber(rep.At) or os.time())) / 60))
+	return {
+		Title = "SCOUT REPORT: " .. string.upper(tostring(rep.Name or "?")),
+		Line1 = string.format("Base tier %s · gate %s", n(rep.Tier or 0), gate),
+		Line2 = string.format("%s turrets online · %s guards", n(rep.Turrets or 0), n(rep.Guards or 0)),
+		Line3 = if #def > 0 then "Defences: " .. table.concat(def, ", ") else "Defences: none bought",
+		Line4 = if typeof(rep.Verdict) == "string" and rep.Verdict ~= "" then "Your army: " .. rep.Verdict else "Your army: no verdict (no soldiers?)",
+		Line5 = if ago < 1 then "Scouted just now" else string.format("Scouted %d min ago", ago),
+	}
+end
+
+local scoutGui: ScreenGui? = nil
+function EndgameController.ShowScoutCard(rep: { [string]: any })
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if pg == nil or typeof(rep) ~= "table" then
+		return
+	end
+	local old = scoutGui
+	if old then
+		old:Destroy()
+	end
+	local L = EndgameController.ScoutLines(rep)
+	local sg = Instance.new("ScreenGui")
+	sg.Name = "WE_ScoutReport"
+	sg.ResetOnSpawn = false
+	PanelShell.Screen(sg, HudConfig.DisplayOrder.Panels + 2) -- over the Intel list (60), under the toasts (70)
+	sg.Parent = pg
+	scoutGui = sg
+	local TAP = PanelShell.TouchMinV()
+	local f = Instance.new("Frame")
+	f.Name = "Card"
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Position = UDim2.fromScale(0.5, 0.5)
+	f.Size = UDim2.fromOffset(520, 300 + TAP)
+	f.BackgroundColor3 = Color3.fromRGB(18, 20, 16)
+	f.BorderSizePixel = 0
+	f.Parent = sg
+	UIUtil.Corner(f, 14)
+	local st = Instance.new("UIStroke")
+	st.Color = Constants.Colors.GoldBright
+	st.Thickness = 2
+	st.Parent = f
+	local function line(text: string, y: number, size: number, color: Color3, font: Enum.Font)
+		local l = Instance.new("TextLabel")
+		l.BackgroundTransparency = 1
+		l.Position = UDim2.fromOffset(20, y)
+		l.Size = UDim2.new(1, -40, 0, size + 10)
+		l.Font = font
+		l.TextSize = PanelShell.Text(size)
+		l.TextColor3 = color
+		l.TextXAlignment = Enum.TextXAlignment.Left
+		l.TextWrapped = true
+		l.Text = text
+		l.Parent = f
+	end
+	line(L.Title, 14, 24, Constants.Colors.GoldBright, HudConfig.Fonts.Display)
+	line(L.Line1, 64, 20, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBold)
+	line(L.Line2, 102, 20, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBold)
+	line(L.Line3, 140, 18, Color3.fromRGB(225, 225, 215), Enum.Font.GothamMedium)
+	line(L.Line4, 176, 18, Color3.fromRGB(150, 235, 120), Enum.Font.GothamBold)
+	line(L.Line5, 212, 16, Color3.fromRGB(200, 200, 190), Enum.Font.GothamMedium)
+	local b = Instance.new("TextButton")
+	b.Name = "Close"
+	b.AnchorPoint = Vector2.new(0.5, 1)
+	b.Position = UDim2.new(0.5, 0, 1, -14)
+	b.Size = UDim2.fromOffset(200, TAP)
+	b.BackgroundColor3 = Color3.fromRGB(46, 170, 82)
+	b.Font = HudConfig.Fonts.Display
+	b.TextSize = PanelShell.Text(18)
+	b.TextColor3 = Color3.fromRGB(255, 255, 255)
+	b.Text = "GOT IT"
+	b.Parent = f
+	UIUtil.Corner(b, 8)
+	b.Activated:Connect(function()
+		sg:Destroy()
+		if scoutGui == sg then
+			scoutGui = nil
+		end
+	end)
+end
+
 type Row = { Name: string, Sub: string, Price: number?, Need: string?, Kind: string, Id: string, Done: string?, Gold: boolean?, Label: string? }
 
 -- the rows a list station shows (from the server's EndgameState; display only)
@@ -709,6 +807,16 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 		end
 	elseif kind == "Intel" and typeof(s.Intel) == "table" then
 		local it = s.Intel
+		-- Code Bot v171: the paid scouting report leads the list (it sat 5th, under the contracts, as a grey INFO row);
+		-- VIEW opens the result card again
+		local rep = it.Report
+		if typeof(rep) == "table" then
+			local L = EndgameController.ScoutLines(rep)
+			table.insert(out, {
+				Name = L.Title, Sub = L.Line1 .. ". " .. L.Line2,
+				Price = 0, Need = nil, Kind = "ScoutView", Id = "Report", Label = "VIEW",
+			})
+		end
 		for i, r in ipairs(it.Rows or {}) do
 			local done = r.Have >= r.Need
 			table.insert(out, {
@@ -724,14 +832,6 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 				Name = string.upper(h.Text), Sub = string.format("%d/%d  reward %s + 50 Gold", h.Have, h.Need, short(it.HvtReward or 0)),
 				Price = if done and not h.Paid then 0 else nil, Need = nil, Kind = "Claim", Id = "HVT",
 				Done = if h.Paid then "PAID" elseif not done then string.format("%d/%d", h.Have, h.Need) else nil, Label = "CLAIM",
-			})
-		end
-		local rep = it.Report
-		if typeof(rep) == "table" then
-			table.insert(out, {
-				Name = "REPORT: " .. string.upper(tostring(rep.Name)),
-				Sub = string.format("Tier %s, %s turrets, %s guards, gate %s HP. %s", tostring(rep.Tier or 0), tostring(rep.Turrets or 0), tostring(rep.Guards or 0), tostring(rep.GateHp and math.floor(rep.GateHp) or "?"), tostring(rep.Verdict or "")),
-				Price = nil, Need = nil, Kind = "Info", Id = "Report", Done = "INFO",
 			})
 		end
 		for _, b in ipairs(it.Bases or {}) do
@@ -920,7 +1020,12 @@ local function refreshList()
 			sb.Text = r.Sub .. "  (" .. r.Need .. ")"
 		end
 		b.Activated:Connect(function()
-			if can and r.Kind == "Revenge" then
+			if r.Kind == "ScoutView" then
+				local rp = if typeof(state.Intel) == "table" then state.Intel.Report else nil
+				if typeof(rp) == "table" then
+					EndgameController.ShowScoutCard(rp)
+				end
+			elseif can and r.Kind == "Revenge" then
 				-- the Intel Office's revenge: the JOB 38 SEND (the server re-checks every fairness rule)
 				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySend, tonumber(r.Id))
 				setListOpen(nil)
@@ -1687,6 +1792,10 @@ function EndgameController.Init()
 		syncMed(c and c:FindFirstChildOfClass("Humanoid"))
 	end)
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if kind == "ScoutReport" and typeof(data) == "table" then
+			EndgameController.ShowScoutCard(data) -- Code Bot v171: the paid result, on screen until closed
+			return
+		end
 		if kind ~= "EndgameState" or typeof(data) ~= "table" then
 			return
 		end

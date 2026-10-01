@@ -39,6 +39,8 @@ export type Ctx = {
 	BannerColor: Color3?, -- phase 5: the Black Market banner colour (nil = the base green)
 	Crest: boolean?, -- phase 5: the R35 Bastion Crest (a gold crest over the gate)
 	Trophy: boolean?, -- phase 5: the Black Market trophy cannon on the parade ground
+	Walls: { { CFrame: CFrame, Size: Vector3 } }?, -- Code Bot v171: the perimeter wall bodies (read only)
+	RecruitTrim: boolean?, -- Code Bot v171: the Recruit Pack's gold base trim
 }
 
 local M = Enum.Material
@@ -46,6 +48,8 @@ local C = {
 	Body = Color3.fromRGB(200, 186, 150),
 	Trim = Color3.fromRGB(226, 220, 204),
 	Gold = Color3.fromRGB(214, 178, 64),
+	RecruitGold = Color3.fromRGB(236, 190, 52), -- Code Bot v171: a bright, saturated gold for the Recruit trim
+	RecruitGoldDeep = Color3.fromRGB(196, 146, 30),
 	Roof = Color3.fromRGB(84, 86, 80),
 	Concrete = Color3.fromRGB(150, 146, 136),
 	ConcreteDark = Color3.fromRGB(112, 110, 104),
@@ -347,6 +351,41 @@ function BaseTierBuilder.Build(ctx: Ctx, tier: number): (Model, number, number)
 			put(m, "TrophyShot" .. i, Vector3.new(0.6, 0.6, 0.6), tb * CFrame.new(x, 1.6, -1.4), C.Steel, M.Metal, false, Enum.PartType.Ball)
 		end
 		put(m, "TrophyPlaque", Vector3.new(2.2, 0.6, 0.08), tb * CFrame.new(0, 0.6, -2.24), C.Gold, M.Metal)
+	end
+
+	-- Code Bot v171 (Shaun 2026-10-01: bought the Recruit Pack, "no gold base trim appeared"): until v170 the "gold
+	-- base trim" was only a thicker outline on the base SIGN's title (already gold) and "RECRUIT ·" in its text line;
+	-- nothing on the base itself changed. Now the trim is real geometry on HIS base, built with the rest of
+	-- WE_BaseTier (any tier, saved entitlement -> back on every join): a polished gold crown band right under every
+	-- perimeter wall's concrete cap (it overhangs the cap by 0.05 a side, so it reads from the ground and the air), a
+	-- deep-gold pinstripe below it, a gold band round each gate post and a gold finial on each post. Decorative only:
+	-- no collision, no ray, no stat. Never touches a building model.
+	if ctx.RecruitTrim then
+		local m = tierFolder(root, 0)
+		m.Name = "RecruitTrim"
+		for _, w in ipairs(ctx.Walls or {}) do
+			local sz = w.Size
+			local top = w.CFrame * CFrame.new(0, sz.Y * 0.5, 0)
+			local band = put(m, "RecruitWallBand", Vector3.new(sz.X + 0.5, 0.8, sz.Z + 0.5), top * CFrame.new(0, -0.4, 0), C.RecruitGold, M.Metal)
+			band.Reflectance = 0.12
+			put(m, "RecruitWallStripe", Vector3.new(sz.X + 0.3, 0.35, sz.Z + 0.3), top * CFrame.new(0, -1.6, 0), C.RecruitGoldDeep, M.Metal)
+		end
+		for i, p in ipairs(ctx.Posts) do
+			if i <= 4 then
+				local pb = put(m, "RecruitPostBand", Vector3.new(p.Size.X + 0.4, 0.5, p.Size.Z + 0.4), p.CFrame * CFrame.new(0, p.Size.Y * 0.5 - 1.2, 0), C.RecruitGold, M.Metal)
+				pb.Reflectance = 0.12
+				if t < 1 then -- no Tier 1 post roof: a gold ball finial on the bare post top
+					put(m, "RecruitPostFinial", Vector3.new(0.9, 0.9, 0.9), p.CFrame * CFrame.new(0, p.Size.Y * 0.5 + 0.45, 0), C.RecruitGold, M.Metal, false, Enum.PartType.Ball)
+				end
+			end
+		end
+		-- with a Tier 1 post roof: its own finial turns Recruit gold (no second ball; the Tier 4 masts sit above it)
+		for _, d in ipairs(root:GetDescendants()) do
+			if d:IsA("BasePart") and d.Name == "GateRoofFinial" then
+				d.Color = C.RecruitGold
+				d.Reflectance = 0.12
+			end
+		end
 	end
 
 	local parts = 0

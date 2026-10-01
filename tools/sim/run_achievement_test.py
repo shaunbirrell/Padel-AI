@@ -120,9 +120,12 @@ local BC = require(node("Configs/BaseConfig"))
 local PS = require(node("Modules/ProfileSchema"))
 
 -- ── 1. config ──
--- codebot_v134: the 5 Creator Hub badges wired into AchievementConfig (the other 16 stay 0 until the daily routine)
+-- codebot_v134: the 5 Creator Hub badges wired into AchievementConfig (codebot_v170 wired 5 more; the other 11 stay 0 until the daily routine)
 WIRED = { FirstKillNPC = 772051421546625, FirstPlayerKill = 2489884143486750, FirstUpgrade = 583497417329015,
-  Cash10k = 1847488248714137, PlayerKills10 = 2976613716370877 }
+  Cash10k = 1847488248714137, PlayerKills10 = 2976613716370877,
+  -- codebot_v170 batch 2 (the test was not updated in v170; codebot_v171 brings it in line with AchievementConfig)
+  Cash100k = 3066564903295841, FirstOutpost = 3933837527405364, Level10 = 2735659013414286, Cash1M = 3464730701383868,
+  CommandCenterMax = 2700577206257761 }
 local BRIEF = { "FirstKillNPC", "FirstPlayerKill", "PlayerKills10", "PlayerKills100", "Cash100k", "Cash1M", "Cash100M",
   "FirstUpgrade", "CommandCenterMax", "FirstOutpost", "PlazaCaptured", "Rebirth1", "Rebirth5", "Rebirth10", "Rebirth20",
   "FirstNuke", "Army50", "Streak7", "WeeklyCrown" }
@@ -292,12 +295,12 @@ local prevOF = AC.Live.OwnerFirst
 AC.Live.OwnerFirst = true -- OTHER is not Live: the backfill must still run for him
 local AS3 = freshService()
 check(PLCB ~= nil and typeof(AS3.BackfillBadges) == "function", "v134: BackfillBadges exists and hooks OnProfileLoaded")
-PROFILES[OTHER.UserId] = { Achievements = { FirstKillNPC = true, Cash10k = true, Level10 = true }, AchievementsSeeded = true }
+PROFILES[OTHER.UserId] = { Achievements = { FirstKillNPC = true, Cash10k = true, PlazaCaptured = true }, AchievementsSeeded = true }
 BADGE.has[OTHER.UserId .. ":" .. WIRED.Cash10k] = true
 local b0, t0 = #BADGE.awarded, NOW
 PLCB(OTHER, PROFILES[OTHER.UserId]); runTasks()
 check(BADGE.has[OTHER.UserId .. ":" .. WIRED.FirstKillNPC] == true and #BADGE.awarded == b0 + 1,
-  "v134 backfill: an unlocked First Blood is awarded on join for a non-Live player; owned War Chest skipped; BadgeId 0 (Level10) skipped")
+  "v134 backfill: an unlocked First Blood is awarded on join for a non-Live player; owned War Chest skipped; BadgeId 0 (PlazaCaptured) skipped")
 check(NOW - t0 >= 2 * AC.Badges.SyncGapSeconds, "v134 backfill: throttled SyncGapSeconds per badge (" .. tostring(NOW - t0) .. " s)")
 local b1 = #BADGE.awarded
 PLCB(OTHER, PROFILES[OTHER.UserId]); runTasks()

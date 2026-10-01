@@ -660,6 +660,10 @@ local function ensureEndgameFields(profile: any)
 			e[k] = {}
 		end
 	end
+	-- Code Bot v171: his last paid Intel scouting report (kept so a rejoin / server move does not lose it)
+	if e.ScoutReport ~= nil and (typeof(e.ScoutReport) ~= "table" or typeof(e.ScoutReport.Name) ~= "string") then
+		e.ScoutReport = nil
+	end
 	profile.Endgame = e
 end
 

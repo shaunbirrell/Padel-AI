@@ -52,12 +52,12 @@ CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 # build pins
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 170)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 170)'),
-    (S + "Services/DataService.luau", "WE_Build=170"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 170)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 171)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 171)'),
+    (S + "Services/DataService.luau", "WE_Build=171"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 171)'),
 ):
-    check(needle in read(rel), "CODEBOT v157: WE_Build=170 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v157: WE_Build=171 " + rel.rsplit("/", 1)[-1])
 
 # 1. the gate
 EC = read(C + "EndgameConfig.luau")
@@ -96,7 +96,8 @@ pur = ES.split("function EndgameService.Purchase", 1)[1].split("\nend\n", 1)[0]
 check("eco.SpendGold(player, price, \"endgame_\" .. key)" in pur and "eco.SpendCash(player, price, \"endgame_\" .. key)" in pur, "CODEBOT v157: Gold slot = SpendGold, Cash slots = SpendCash (never Robux)")
 check("Endgame" not in read(S + "Services/MonetizationService.luau"), "CODEBOT v157: no Robux path to the Black Market")
 check("Held = held, HeldName =" in ES and "Camos = camoRows }" in ES, "CODEBOT v157: State.Market carries the held gun and his Black Market camos")
-check("if tier <= 0 and not crest and not trophy and banner == nil then" in ES, "CODEBOT v157: a banner alone builds the base look")
+# codebot_v171: the early-return line also checks the Recruit trim (`and not recruit`); the pin follows it
+check("if tier <= 0 and not crest and not trophy and banner == nil and not recruit then" in ES, "CODEBOT v157: a banner alone builds the base look")
 BTB = read(S + "Modules/BaseTierBuilder.luau")
 check('m.Name = "MarketBanners"' in BTB and "if ctx.BannerColor and t < 4 then" in BTB, "CODEBOT v157: Black Market banners on the gate posts below Tier 4")
 

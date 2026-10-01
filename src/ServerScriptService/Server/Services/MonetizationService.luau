@@ -1923,6 +1923,17 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 		if okC and CS and CS.GrantCashBoost then
 			pcall(CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult)
 		end
+		-- Code Bot v171: the gold base trim goes on at once: the base-tier builder watches the WE_Ent_RecruitPack attribute
+		-- that GrantEntitlement just set (and its 5 s sweep / every join rebuild it from the saved entitlement); the base
+		-- sign's RECRUIT line refreshes here
+		task.defer(function()
+			local okB, BSS = pcall(function(): any
+				return require(script.Parent.BaseSignService)
+			end)
+			if okB and BSS and BSS.Refresh then
+				pcall(BSS.Refresh, profile.BasePlotId)
+			end
+		end)
 	end
 	-- v71 money (M1): whitelisted counters (GrantNukes -> profile.Nukes + NukeStats.Bought)
 	for _, c in ipairs(counters) do

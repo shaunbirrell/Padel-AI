@@ -676,6 +676,7 @@ end
 
 -- ── phase 5: the BLACK MARKET (cosmetics), the rebirth UNLOCKS, the INTEL OFFICE (contracts / scouting / raided-by) ──
 local scoutReport: { [number]: { [string]: any } } = {}
+local pendingScoutCard: { [number]: { [string]: any } } = {} -- Code Bot v171: the result card to push after a scout buy
 
 local function nowUnix(): number
 	return os.time()
@@ -1302,7 +1303,7 @@ function EndgameService.State(player: Player): { [string]: any }
 			RaidedBy = c.RaidedBy,
 			Bases = bases,
 			ScoutPrice = EndgameConfig.IncomeMinutesPrice(EndgameConfig.Contracts.ScoutFloor, EndgameConfig.Contracts.ScoutMinutes, incomePerSec(player)),
-			Report = scoutReport[uid],
+			Report = scoutReport[uid] or (if typeof(profile.Endgame) == "table" and typeof(profile.Endgame.ScoutReport) == "table" then profile.Endgame.ScoutReport else nil), -- Code Bot v171: saved too
 		}
 	end
 	if EndgameConfig.LiveFor(uid, "Mastery") then
@@ -1394,7 +1395,55 @@ function EndgameService.Push(player: Player)
 	end
 end
 
+-- Code Bot v171: after a scout purchase, the result card (FeaturePush "ScoutReport"); a no-op otherwise
+function EndgameService.PushScoutCard(player: Player)
+	local rep = pendingScoutCard[player.UserId]
+	if rep == nil then
+		return
+	end
+	pendingScoutCard[player.UserId] = nil
+	local rs = deps.RemoteSetup
+	local ev = rs and rs.Get(Constants.RemoteNames.FeaturePush)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireClient(player, "ScoutReport", rep)
+	end
+end
+
 type Plan = { Key: string, Price: number, Apply: (profile: any) -> string, Log: string, Gold: boolean? }
+
+-- Code Bot v171: the Intel Office scouting report on an online player's base (pure read; never yields). Built before
+-- the charge (see _Plan "Scout"). Fields: Name, PlotId, At, Turrets, Guards, GateHp, GateMax, Tier, Defence, Verdict.
+function EndgameService.BuildScoutReport(player: Player, tgt: Player, pid: number): { [string]: any }
+	local rep: { [string]: any } = { Name = tgt.DisplayName, PlotId = pid, At = nowUnix() }
+	local gd = deps.GateDefenseService
+	local okI, info = pcall(function()
+		return gd and gd.SiegeInfo and gd.SiegeInfo(pid)
+	end)
+	if okI and typeof(info) == "table" then
+		rep.Turrets = if typeof(info.TurretPower) == "table" then #info.TurretPower else 0
+		rep.Guards = if typeof(info.GuardPower) == "table" then #info.GuardPower else 0
+		rep.GateHp = if typeof(info.GateHp) == "number" and info.GateHp == info.GateHp then math.floor(info.GateHp) else nil
+		rep.GateMax = if typeof(info.GateMax) == "number" and info.GateMax == info.GateMax then math.floor(info.GateMax) else nil
+	end
+	local tp = getProfile(tgt)
+	if tp then
+		rep.Tier = EndgameService.Tier(tp)
+		rep.Defence = {}
+		for _, tr in ipairs(EndgameConfig.Defence.Tracks) do
+			rep.Defence[tr] = EndgameService.DefenceLevel(tp, tr)
+		end
+	end
+	local okP, AP = pcall(function(): any
+		return require(script.Parent.Parent.Modules.ArmyPlan)
+	end)
+	if okP and AP and AP.CheckSend then
+		local okV, v = pcall(AP.CheckSend, player, pid)
+		if okV and typeof(v) == "table" and typeof(v.Text) == "string" then
+			rep.Verdict = v.Text
+		end
+	end
+	return rep
+end
 
 --[[ What a purchase would do: (plan) or (nil, why). Every rule the client might skip is checked here: the part is
 	live, the place (station / HQ console), not hurt, the requirement, the level cap. The price is config's. ]]
@@ -1801,39 +1850,27 @@ function EndgameService._Plan(player: Player, profile: any, kind: string, id: st
 		end
 		local price = EndgameConfig.IncomeMinutesPrice(Ct.ScoutFloor, Ct.ScoutMinutes, incomePerSec(player))
 		local tgt: Player = target
+		-- Code Bot v171 (Shaun 2026-10-01 12:08: "the scout report I paid for did nothing"): the report is built HERE,
+		-- before Purchase spends a dollar (it was built inside Apply, after SpendCash: a failure there kept his cash).
+		-- If it cannot be built, nothing is charged. Apply only stores it: this server's table + profile.Endgame
+		-- (it survives a rejoin / a server move) and pushes the "ScoutReport" result card (EndgameController).
+		local okR, built = pcall(EndgameService.BuildScoutReport, player, tgt, pid :: number)
+		if not okR or typeof(built) ~= "table" then
+			warn("[Station] Intel scout report failed (nothing charged): " .. tostring(built))
+			return nil, "Scouting failed, try again (nothing charged)"
+		end
+		local rep: { [string]: any } = built
 		return {
 			Key = "scout",
 			Price = price,
 			Log = string.format("Intel scout plot=%d price=%d", pid, price),
-			Apply = function(_p: any): string
-				local rep: { [string]: any } = { Name = tgt.DisplayName, PlotId = pid, At = nowUnix() }
-				local gd = deps.GateDefenseService
-				local okI, info = pcall(function()
-					return gd and gd.SiegeInfo and gd.SiegeInfo(pid)
-				end)
-				if okI and typeof(info) == "table" then
-					rep.Turrets = #(info.TurretPower or {})
-					rep.Guards = #(info.GuardPower or {})
-					rep.GateHp = info.GateHp
-				end
-				local tp = getProfile(tgt)
-				if tp then
-					rep.Tier = EndgameService.Tier(tp)
-					rep.Defence = {}
-					for _, tr in ipairs(EndgameConfig.Defence.Tracks) do
-						rep.Defence[tr] = EndgameService.DefenceLevel(tp, tr)
-					end
-				end
-				local okP, AP = pcall(function(): any
-					return require(script.Parent.Parent.Modules.ArmyPlan)
-				end)
-				if okP and AP and AP.CheckSend then
-					local okV, v = pcall(AP.CheckSend, player, pid)
-					if okV and typeof(v) == "table" then
-						rep.Verdict = v.Text
-					end
-				end
+			Apply = function(prof: any): string
+				rep.Price = price
 				scoutReport[uid] = rep
+				if typeof(prof) == "table" then
+					EndgameService.Data(prof).ScoutReport = rep
+				end
+				pendingScoutCard[uid] = rep
 				return "Scouting report ready: " .. tgt.DisplayName
 			end,
 		}
@@ -2218,10 +2255,14 @@ local function plotContext(pid: number, plotFolder: Instance): any?
 	local ground = BaseLayout.PlotCFrame(pad.Position) * CFrame.new(0, pad.Size.Y * 0.5, 0)
 	local wallTop = groundY + 10
 	local walls = plotFolder:FindFirstChild("WE_PerimeterWalls")
+	local wallBoxes = {} -- Code Bot v171: the wall segments' boxes (the Recruit Pack's gold trim caps each one)
 	if walls then
 		for _, w in ipairs(walls:GetChildren()) do
 			if w:IsA("BasePart") then
 				wallTop = math.max(wallTop, w.Position.Y + w.Size.Y * 0.5)
+				if w:GetAttribute("WE_WallLevel") ~= nil then -- the wall bodies only (not the caps / wire / gate posts / arch)
+					table.insert(wallBoxes, { CFrame = w.CFrame, Size = w.Size })
+				end
 			end
 		end
 	end
@@ -2256,7 +2297,20 @@ local function plotContext(pid: number, plotFolder: Instance): any?
 		Gate = gate,
 		Nests = (if gd and gd._Nests then gd._Nests[pid] else nil) or {},
 		HQ = hq,
+		Walls = wallBoxes,
 	}
+end
+
+-- Code Bot v171: the Recruit Pack's gold base trim is owned (the saved entitlement, so it is back on every join) and
+-- the pack is live for him
+function EndgameService.HasRecruitTrim(player: Player, profile: any): boolean
+	local okM, MC = pcall(function(): any
+		return require(ReplicatedStorage.Shared.Configs.MonetizationConfig)
+	end)
+	if not okM or MC == nil or MC.RecruitPackLiveFor == nil or MC.RecruitPackLiveFor(player.UserId) ~= true then
+		return false
+	end
+	return typeof(profile) == "table" and typeof(profile.Entitlements) == "table" and profile.Entitlements.RecruitPack == true
 end
 
 -- build / rebuild / drop one player's WE_BaseTier model (the key: tier, HQ level, walls, nests)
@@ -2276,7 +2330,8 @@ function EndgameService.SyncBaseTier(player: Player)
 	local crest = EndgameService.HasUnlock(player.UserId, "BastionCrest")
 	local trophy = EndgameService.HasTrophy(player.UserId)
 	local banner = EndgameService.BannerColor(player.UserId)
-	if tier <= 0 and not crest and not trophy and banner == nil then
+	local recruit = EndgameService.HasRecruitTrim(player, profile) -- Code Bot v171
+	if tier <= 0 and not crest and not trophy and banner == nil and not recruit then
 		if existing then
 			existing:Destroy()
 		end
@@ -2291,7 +2346,8 @@ function EndgameService.SyncBaseTier(player: Player)
 	ctx.Crest = crest
 	ctx.Trophy = trophy
 	ctx.BannerColor = banner
-	local key = string.format("%d|%d|%d|%s|%.1f|%d|%d|%s|%s|%s", player.UserId, tier, cc, tostring(ctx.HQ ~= nil), ctx.WallTop, #ctx.Nests, #ctx.Posts, tostring(crest), tostring(trophy), tostring(banner))
+	ctx.RecruitTrim = recruit
+	local key = string.format("%d|%d|%d|%s|%.1f|%d|%d|%s|%s|%s|%s|%d", player.UserId, tier, cc, tostring(ctx.HQ ~= nil), ctx.WallTop, #ctx.Nests, #ctx.Posts, tostring(crest), tostring(trophy), tostring(banner), tostring(recruit), #ctx.Walls)
 	if existing and existing:GetAttribute("WE_TierKey") == key then
 		return
 	end
@@ -2480,6 +2536,13 @@ function EndgameService.Init(d: { [string]: any })
 		if player.Character then
 			task.spawn(watchCharacter, player, player.Character)
 		end
+		-- Code Bot v171: the Recruit Pack's gold base trim goes on the moment the entitlement is granted (the receipt
+		-- sets WE_Ent_RecruitPack), not up to 5 s later; the trim itself is built only from the SAVED entitlement
+		player:GetAttributeChangedSignal("WE_Ent_RecruitPack"):Connect(function()
+			task.defer(function()
+				pcall(EndgameService.SyncBaseTier, player)
+			end)
+		end)
 	end
 	Players.PlayerAdded:Connect(onPlayer)
 	for _, p in ipairs(Players:GetPlayers()) do
@@ -2492,6 +2555,7 @@ function EndgameService.Init(d: { [string]: any })
 		healAt[p.UserId] = nil
 		gunCache[p.UserId] = nil
 		scoutReport[p.UserId] = nil
+		pendingScoutCard[p.UserId] = nil
 		diedAt[p.UserId] = nil
 		healing[p.UserId] = nil
 		feeToast[p.UserId] = nil
@@ -2530,6 +2594,7 @@ function EndgameService.Init(d: { [string]: any })
 			local ok, msg = EndgameService.Purchase(player, kind, if typeof(id) == "string" then id else nil)
 			notify(player, msg, if ok then "Success" else "Warn")
 			EndgameService.Push(player)
+			EndgameService.PushScoutCard(player) -- Code Bot v171: the paid scouting report opens as its own result card
 		end)
 	end
 	local ask = rs and rs.Get(Constants.RemoteNames.RequestEndgameState)

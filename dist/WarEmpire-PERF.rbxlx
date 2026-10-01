@@ -30372,7 +30372,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 170)
+		player:SetAttribute("WE_Build", 171)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -37200,6 +37200,8 @@ export type Ctx = {
 	BannerColor: Color3?, -- phase 5: the Black Market banner colour (nil = the base green)
 	Crest: boolean?, -- phase 5: the R35 Bastion Crest (a gold crest over the gate)
 	Trophy: boolean?, -- phase 5: the Black Market trophy cannon on the parade ground
+	Walls: { { CFrame: CFrame, Size: Vector3 } }?, -- Code Bot v171: the perimeter wall bodies (read only)
+	RecruitTrim: boolean?, -- Code Bot v171: the Recruit Pack's gold base trim
 }
 
 local M = Enum.Material
@@ -37207,6 +37209,8 @@ local C = {
 	Body = Color3.fromRGB(200, 186, 150),
 	Trim = Color3.fromRGB(226, 220, 204),
 	Gold = Color3.fromRGB(214, 178, 64),
+	RecruitGold = Color3.fromRGB(236, 190, 52), -- Code Bot v171: a bright, saturated gold for the Recruit trim
+	RecruitGoldDeep = Color3.fromRGB(196, 146, 30),
 	Roof = Color3.fromRGB(84, 86, 80),
 	Concrete = Color3.fromRGB(150, 146, 136),
 	ConcreteDark = Color3.fromRGB(112, 110, 104),
@@ -37508,6 +37512,41 @@ function BaseTierBuilder.Build(ctx: Ctx, tier: number): (Model, number, number)
 			put(m, "TrophyShot" .. i, Vector3.new(0.6, 0.6, 0.6), tb * CFrame.new(x, 1.6, -1.4), C.Steel, M.Metal, false, Enum.PartType.Ball)
 		end
 		put(m, "TrophyPlaque", Vector3.new(2.2, 0.6, 0.08), tb * CFrame.new(0, 0.6, -2.24), C.Gold, M.Metal)
+	end
+
+	-- Code Bot v171 (Shaun 2026-10-01: bought the Recruit Pack, "no gold base trim appeared"): until v170 the "gold
+	-- base trim" was only a thicker outline on the base SIGN's title (already gold) and "RECRUIT ·" in its text line;
+	-- nothing on the base itself changed. Now the trim is real geometry on HIS base, built with the rest of
+	-- WE_BaseTier (any tier, saved entitlement -> back on every join): a polished gold crown band right under every
+	-- perimeter wall's concrete cap (it overhangs the cap by 0.05 a side, so it reads from the ground and the air), a
+	-- deep-gold pinstripe below it, a gold band round each gate post and a gold finial on each post. Decorative only:
+	-- no collision, no ray, no stat. Never touches a building model.
+	if ctx.RecruitTrim then
+		local m = tierFolder(root, 0)
+		m.Name = "RecruitTrim"
+		for _, w in ipairs(ctx.Walls or {}) do
+			local sz = w.Size
+			local top = w.CFrame * CFrame.new(0, sz.Y * 0.5, 0)
+			local band = put(m, "RecruitWallBand", Vector3.new(sz.X + 0.5, 0.8, sz.Z + 0.5), top * CFrame.new(0, -0.4, 0), C.RecruitGold, M.Metal)
+			band.Reflectance = 0.12
+			put(m, "RecruitWallStripe", Vector3.new(sz.X + 0.3, 0.35, sz.Z + 0.3), top * CFrame.new(0, -1.6, 0), C.RecruitGoldDeep, M.Metal)
+		end
+		for i, p in ipairs(ctx.Posts) do
+			if i <= 4 then
+				local pb = put(m, "RecruitPostBand", Vector3.new(p.Size.X + 0.4, 0.5, p.Size.Z + 0.4), p.CFrame * CFrame.new(0, p.Size.Y * 0.5 - 1.2, 0), C.RecruitGold, M.Metal)
+				pb.Reflectance = 0.12
+				if t < 1 then -- no Tier 1 post roof: a gold ball finial on the bare post top
+					put(m, "RecruitPostFinial", Vector3.new(0.9, 0.9, 0.9), p.CFrame * CFrame.new(0, p.Size.Y * 0.5 + 0.45, 0), C.RecruitGold, M.Metal, false, Enum.PartType.Ball)
+				end
+			end
+		end
+		-- with a Tier 1 post roof: its own finial turns Recruit gold (no second ball; the Tier 4 masts sit above it)
+		for _, d in ipairs(root:GetDescendants()) do
+			if d:IsA("BasePart") and d.Name == "GateRoofFinial" then
+				d.Color = C.RecruitGold
+				d.Reflectance = 0.12
+			end
+		end
 	end
 
 	local parts = 0
@@ -49147,6 +49186,10 @@ local function ensureEndgameFields(profile: any)
 		if typeof(e[k]) ~= "table" then
 			e[k] = {}
 		end
+	end
+	-- Code Bot v171: his last paid Intel scouting report (kept so a rejoin / server move does not lose it)
+	if e.ScoutReport ~= nil and (typeof(e.ScoutReport) ~= "table" or typeof(e.ScoutReport.Name) ~= "string") then
+		e.ScoutReport = nil
 	end
 	profile.Endgame = e
 end
@@ -73585,7 +73628,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 170)
+			player:SetAttribute("WE_Build", 171)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -82104,7 +82147,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 170)
+		player:SetAttribute("WE_Build", 171)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -82246,7 +82289,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=170",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=171",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -83820,6 +83863,7 @@ end
 
 -- ── phase 5: the BLACK MARKET (cosmetics), the rebirth UNLOCKS, the INTEL OFFICE (contracts / scouting / raided-by) ──
 local scoutReport: { [number]: { [string]: any } } = {}
+local pendingScoutCard: { [number]: { [string]: any } } = {} -- Code Bot v171: the result card to push after a scout buy
 
 local function nowUnix(): number
 	return os.time()
@@ -84446,7 +84490,7 @@ function EndgameService.State(player: Player): { [string]: any }
 			RaidedBy = c.RaidedBy,
 			Bases = bases,
 			ScoutPrice = EndgameConfig.IncomeMinutesPrice(EndgameConfig.Contracts.ScoutFloor, EndgameConfig.Contracts.ScoutMinutes, incomePerSec(player)),
-			Report = scoutReport[uid],
+			Report = scoutReport[uid] or (if typeof(profile.Endgame) == "table" and typeof(profile.Endgame.ScoutReport) == "table" then profile.Endgame.ScoutReport else nil), -- Code Bot v171: saved too
 		}
 	end
 	if EndgameConfig.LiveFor(uid, "Mastery") then
@@ -84538,7 +84582,55 @@ function EndgameService.Push(player: Player)
 	end
 end
 
+-- Code Bot v171: after a scout purchase, the result card (FeaturePush "ScoutReport"); a no-op otherwise
+function EndgameService.PushScoutCard(player: Player)
+	local rep = pendingScoutCard[player.UserId]
+	if rep == nil then
+		return
+	end
+	pendingScoutCard[player.UserId] = nil
+	local rs = deps.RemoteSetup
+	local ev = rs and rs.Get(Constants.RemoteNames.FeaturePush)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireClient(player, "ScoutReport", rep)
+	end
+end
+
 type Plan = { Key: string, Price: number, Apply: (profile: any) -> string, Log: string, Gold: boolean? }
+
+-- Code Bot v171: the Intel Office scouting report on an online player's base (pure read; never yields). Built before
+-- the charge (see _Plan "Scout"). Fields: Name, PlotId, At, Turrets, Guards, GateHp, GateMax, Tier, Defence, Verdict.
+function EndgameService.BuildScoutReport(player: Player, tgt: Player, pid: number): { [string]: any }
+	local rep: { [string]: any } = { Name = tgt.DisplayName, PlotId = pid, At = nowUnix() }
+	local gd = deps.GateDefenseService
+	local okI, info = pcall(function()
+		return gd and gd.SiegeInfo and gd.SiegeInfo(pid)
+	end)
+	if okI and typeof(info) == "table" then
+		rep.Turrets = if typeof(info.TurretPower) == "table" then #info.TurretPower else 0
+		rep.Guards = if typeof(info.GuardPower) == "table" then #info.GuardPower else 0
+		rep.GateHp = if typeof(info.GateHp) == "number" and info.GateHp == info.GateHp then math.floor(info.GateHp) else nil
+		rep.GateMax = if typeof(info.GateMax) == "number" and info.GateMax == info.GateMax then math.floor(info.GateMax) else nil
+	end
+	local tp = getProfile(tgt)
+	if tp then
+		rep.Tier = EndgameService.Tier(tp)
+		rep.Defence = {}
+		for _, tr in ipairs(EndgameConfig.Defence.Tracks) do
+			rep.Defence[tr] = EndgameService.DefenceLevel(tp, tr)
+		end
+	end
+	local okP, AP = pcall(function(): any
+		return require(script.Parent.Parent.Modules.ArmyPlan)
+	end)
+	if okP and AP and AP.CheckSend then
+		local okV, v = pcall(AP.CheckSend, player, pid)
+		if okV and typeof(v) == "table" and typeof(v.Text) == "string" then
+			rep.Verdict = v.Text
+		end
+	end
+	return rep
+end
 
 --[[ What a purchase would do: (plan) or (nil, why). Every rule the client might skip is checked here: the part is
 	live, the place (station / HQ console), not hurt, the requirement, the level cap. The price is config's. ]]
@@ -84945,39 +85037,27 @@ function EndgameService._Plan(player: Player, profile: any, kind: string, id: st
 		end
 		local price = EndgameConfig.IncomeMinutesPrice(Ct.ScoutFloor, Ct.ScoutMinutes, incomePerSec(player))
 		local tgt: Player = target
+		-- Code Bot v171 (Shaun 2026-10-01 12:08: "the scout report I paid for did nothing"): the report is built HERE,
+		-- before Purchase spends a dollar (it was built inside Apply, after SpendCash: a failure there kept his cash).
+		-- If it cannot be built, nothing is charged. Apply only stores it: this server's table + profile.Endgame
+		-- (it survives a rejoin / a server move) and pushes the "ScoutReport" result card (EndgameController).
+		local okR, built = pcall(EndgameService.BuildScoutReport, player, tgt, pid :: number)
+		if not okR or typeof(built) ~= "table" then
+			warn("[Station] Intel scout report failed (nothing charged): " .. tostring(built))
+			return nil, "Scouting failed, try again (nothing charged)"
+		end
+		local rep: { [string]: any } = built
 		return {
 			Key = "scout",
 			Price = price,
 			Log = string.format("Intel scout plot=%d price=%d", pid, price),
-			Apply = function(_p: any): string
-				local rep: { [string]: any } = { Name = tgt.DisplayName, PlotId = pid, At = nowUnix() }
-				local gd = deps.GateDefenseService
-				local okI, info = pcall(function()
-					return gd and gd.SiegeInfo and gd.SiegeInfo(pid)
-				end)
-				if okI and typeof(info) == "table" then
-					rep.Turrets = #(info.TurretPower or {})
-					rep.Guards = #(info.GuardPower or {})
-					rep.GateHp = info.GateHp
-				end
-				local tp = getProfile(tgt)
-				if tp then
-					rep.Tier = EndgameService.Tier(tp)
-					rep.Defence = {}
-					for _, tr in ipairs(EndgameConfig.Defence.Tracks) do
-						rep.Defence[tr] = EndgameService.DefenceLevel(tp, tr)
-					end
-				end
-				local okP, AP = pcall(function(): any
-					return require(script.Parent.Parent.Modules.ArmyPlan)
-				end)
-				if okP and AP and AP.CheckSend then
-					local okV, v = pcall(AP.CheckSend, player, pid)
-					if okV and typeof(v) == "table" then
-						rep.Verdict = v.Text
-					end
-				end
+			Apply = function(prof: any): string
+				rep.Price = price
 				scoutReport[uid] = rep
+				if typeof(prof) == "table" then
+					EndgameService.Data(prof).ScoutReport = rep
+				end
+				pendingScoutCard[uid] = rep
 				return "Scouting report ready: " .. tgt.DisplayName
 			end,
 		}
@@ -85362,10 +85442,14 @@ local function plotContext(pid: number, plotFolder: Instance): any?
 	local ground = BaseLayout.PlotCFrame(pad.Position) * CFrame.new(0, pad.Size.Y * 0.5, 0)
 	local wallTop = groundY + 10
 	local walls = plotFolder:FindFirstChild("WE_PerimeterWalls")
+	local wallBoxes = {} -- Code Bot v171: the wall segments' boxes (the Recruit Pack's gold trim caps each one)
 	if walls then
 		for _, w in ipairs(walls:GetChildren()) do
 			if w:IsA("BasePart") then
 				wallTop = math.max(wallTop, w.Position.Y + w.Size.Y * 0.5)
+				if w:GetAttribute("WE_WallLevel") ~= nil then -- the wall bodies only (not the caps / wire / gate posts / arch)
+					table.insert(wallBoxes, { CFrame = w.CFrame, Size = w.Size })
+				end
 			end
 		end
 	end
@@ -85400,7 +85484,20 @@ local function plotContext(pid: number, plotFolder: Instance): any?
 		Gate = gate,
 		Nests = (if gd and gd._Nests then gd._Nests[pid] else nil) or {},
 		HQ = hq,
+		Walls = wallBoxes,
 	}
+end
+
+-- Code Bot v171: the Recruit Pack's gold base trim is owned (the saved entitlement, so it is back on every join) and
+-- the pack is live for him
+function EndgameService.HasRecruitTrim(player: Player, profile: any): boolean
+	local okM, MC = pcall(function(): any
+		return require(ReplicatedStorage.Shared.Configs.MonetizationConfig)
+	end)
+	if not okM or MC == nil or MC.RecruitPackLiveFor == nil or MC.RecruitPackLiveFor(player.UserId) ~= true then
+		return false
+	end
+	return typeof(profile) == "table" and typeof(profile.Entitlements) == "table" and profile.Entitlements.RecruitPack == true
 end
 
 -- build / rebuild / drop one player's WE_BaseTier model (the key: tier, HQ level, walls, nests)
@@ -85420,7 +85517,8 @@ function EndgameService.SyncBaseTier(player: Player)
 	local crest = EndgameService.HasUnlock(player.UserId, "BastionCrest")
 	local trophy = EndgameService.HasTrophy(player.UserId)
 	local banner = EndgameService.BannerColor(player.UserId)
-	if tier <= 0 and not crest and not trophy and banner == nil then
+	local recruit = EndgameService.HasRecruitTrim(player, profile) -- Code Bot v171
+	if tier <= 0 and not crest and not trophy and banner == nil and not recruit then
 		if existing then
 			existing:Destroy()
 		end
@@ -85435,7 +85533,8 @@ function EndgameService.SyncBaseTier(player: Player)
 	ctx.Crest = crest
 	ctx.Trophy = trophy
 	ctx.BannerColor = banner
-	local key = string.format("%d|%d|%d|%s|%.1f|%d|%d|%s|%s|%s", player.UserId, tier, cc, tostring(ctx.HQ ~= nil), ctx.WallTop, #ctx.Nests, #ctx.Posts, tostring(crest), tostring(trophy), tostring(banner))
+	ctx.RecruitTrim = recruit
+	local key = string.format("%d|%d|%d|%s|%.1f|%d|%d|%s|%s|%s|%s|%d", player.UserId, tier, cc, tostring(ctx.HQ ~= nil), ctx.WallTop, #ctx.Nests, #ctx.Posts, tostring(crest), tostring(trophy), tostring(banner), tostring(recruit), #ctx.Walls)
 	if existing and existing:GetAttribute("WE_TierKey") == key then
 		return
 	end
@@ -85624,6 +85723,13 @@ function EndgameService.Init(d: { [string]: any })
 		if player.Character then
 			task.spawn(watchCharacter, player, player.Character)
 		end
+		-- Code Bot v171: the Recruit Pack's gold base trim goes on the moment the entitlement is granted (the receipt
+		-- sets WE_Ent_RecruitPack), not up to 5 s later; the trim itself is built only from the SAVED entitlement
+		player:GetAttributeChangedSignal("WE_Ent_RecruitPack"):Connect(function()
+			task.defer(function()
+				pcall(EndgameService.SyncBaseTier, player)
+			end)
+		end)
 	end
 	Players.PlayerAdded:Connect(onPlayer)
 	for _, p in ipairs(Players:GetPlayers()) do
@@ -85636,6 +85742,7 @@ function EndgameService.Init(d: { [string]: any })
 		healAt[p.UserId] = nil
 		gunCache[p.UserId] = nil
 		scoutReport[p.UserId] = nil
+		pendingScoutCard[p.UserId] = nil
 		diedAt[p.UserId] = nil
 		healing[p.UserId] = nil
 		feeToast[p.UserId] = nil
@@ -85674,6 +85781,7 @@ function EndgameService.Init(d: { [string]: any })
 			local ok, msg = EndgameService.Purchase(player, kind, if typeof(id) == "string" then id else nil)
 			notify(player, msg, if ok then "Success" else "Warn")
 			EndgameService.Push(player)
+			EndgameService.PushScoutCard(player) -- Code Bot v171: the paid scouting report opens as its own result card
 		end)
 	end
 	local ask = rs and rs.Get(Constants.RemoteNames.RequestEndgameState)
@@ -95130,6 +95238,17 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 		if okC and CS and CS.GrantCashBoost then
 			pcall(CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult)
 		end
+		-- Code Bot v171: the gold base trim goes on at once: the base-tier builder watches the WE_Ent_RecruitPack attribute
+		-- that GrantEntitlement just set (and its 5 s sweep / every join rebuild it from the saved entitlement); the base
+		-- sign's RECRUIT line refreshes here
+		task.defer(function()
+			local okB, BSS = pcall(function(): any
+				return require(script.Parent.BaseSignService)
+			end)
+			if okB and BSS and BSS.Refresh then
+				pcall(BSS.Refresh, profile.BasePlotId)
+			end
+		end)
 	end
 	-- v71 money (M1): whitelisted counters (GrantNukes -> profile.Nukes + NukeStats.Bought)
 	for _, c in ipairs(counters) do
@@ -134374,6 +134493,104 @@ local function stationPoint(kind: string): Vector3?
 	return Vector3.new(p.X, p.Y, p.Z)
 end
 
+-- ── Code Bot v171: the SCOUT REPORT result card (Shaun 2026-10-01 12:08: "the scout report I paid for did nothing") ──
+-- The purchase worked, but its only output was a 1.8 s toast and one grey INFO row 5th in the Intel list (under the
+-- three contracts and the weekly target), lost on a server move. Now the server pushes "ScoutReport" right after the
+-- buy and this card shows every number until he closes it; the report also leads the Intel list (VIEW reopens it).
+function EndgameController.ScoutLines(rep: { [string]: any }): { [string]: string }
+	local function n(v: any): string
+		local x = tonumber(v)
+		return if x then tostring(math.floor(x)) else "?"
+	end
+	local gate = if tonumber(rep.GateHp) then (if tonumber(rep.GateMax) then n(rep.GateHp) .. " / " .. n(rep.GateMax) else n(rep.GateHp)) .. " HP" else "unknown"
+	local def = {}
+	local d = rep.Defence
+	if typeof(d) == "table" then
+		for _, tr in ipairs(EndgameConfig.Defence.Tracks) do
+			table.insert(def, string.format("%s %s", tr, n(d[tr] or 0)))
+		end
+	end
+	local ago = math.max(0, math.floor((os.time() - (tonumber(rep.At) or os.time())) / 60))
+	return {
+		Title = "SCOUT REPORT: " .. string.upper(tostring(rep.Name or "?")),
+		Line1 = string.format("Base tier %s · gate %s", n(rep.Tier or 0), gate),
+		Line2 = string.format("%s turrets online · %s guards", n(rep.Turrets or 0), n(rep.Guards or 0)),
+		Line3 = if #def > 0 then "Defences: " .. table.concat(def, ", ") else "Defences: none bought",
+		Line4 = if typeof(rep.Verdict) == "string" and rep.Verdict ~= "" then "Your army: " .. rep.Verdict else "Your army: no verdict (no soldiers?)",
+		Line5 = if ago < 1 then "Scouted just now" else string.format("Scouted %d min ago", ago),
+	}
+end
+
+local scoutGui: ScreenGui? = nil
+function EndgameController.ShowScoutCard(rep: { [string]: any })
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if pg == nil or typeof(rep) ~= "table" then
+		return
+	end
+	local old = scoutGui
+	if old then
+		old:Destroy()
+	end
+	local L = EndgameController.ScoutLines(rep)
+	local sg = Instance.new("ScreenGui")
+	sg.Name = "WE_ScoutReport"
+	sg.ResetOnSpawn = false
+	PanelShell.Screen(sg, HudConfig.DisplayOrder.Panels + 2) -- over the Intel list (60), under the toasts (70)
+	sg.Parent = pg
+	scoutGui = sg
+	local TAP = PanelShell.TouchMinV()
+	local f = Instance.new("Frame")
+	f.Name = "Card"
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Position = UDim2.fromScale(0.5, 0.5)
+	f.Size = UDim2.fromOffset(520, 300 + TAP)
+	f.BackgroundColor3 = Color3.fromRGB(18, 20, 16)
+	f.BorderSizePixel = 0
+	f.Parent = sg
+	UIUtil.Corner(f, 14)
+	local st = Instance.new("UIStroke")
+	st.Color = Constants.Colors.GoldBright
+	st.Thickness = 2
+	st.Parent = f
+	local function line(text: string, y: number, size: number, color: Color3, font: Enum.Font)
+		local l = Instance.new("TextLabel")
+		l.BackgroundTransparency = 1
+		l.Position = UDim2.fromOffset(20, y)
+		l.Size = UDim2.new(1, -40, 0, size + 10)
+		l.Font = font
+		l.TextSize = PanelShell.Text(size)
+		l.TextColor3 = color
+		l.TextXAlignment = Enum.TextXAlignment.Left
+		l.TextWrapped = true
+		l.Text = text
+		l.Parent = f
+	end
+	line(L.Title, 14, 24, Constants.Colors.GoldBright, HudConfig.Fonts.Display)
+	line(L.Line1, 64, 20, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBold)
+	line(L.Line2, 102, 20, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBold)
+	line(L.Line3, 140, 18, Color3.fromRGB(225, 225, 215), Enum.Font.GothamMedium)
+	line(L.Line4, 176, 18, Color3.fromRGB(150, 235, 120), Enum.Font.GothamBold)
+	line(L.Line5, 212, 16, Color3.fromRGB(200, 200, 190), Enum.Font.GothamMedium)
+	local b = Instance.new("TextButton")
+	b.Name = "Close"
+	b.AnchorPoint = Vector2.new(0.5, 1)
+	b.Position = UDim2.new(0.5, 0, 1, -14)
+	b.Size = UDim2.fromOffset(200, TAP)
+	b.BackgroundColor3 = Color3.fromRGB(46, 170, 82)
+	b.Font = HudConfig.Fonts.Display
+	b.TextSize = PanelShell.Text(18)
+	b.TextColor3 = Color3.fromRGB(255, 255, 255)
+	b.Text = "GOT IT"
+	b.Parent = f
+	UIUtil.Corner(b, 8)
+	b.Activated:Connect(function()
+		sg:Destroy()
+		if scoutGui == sg then
+			scoutGui = nil
+		end
+	end)
+end
+
 type Row = { Name: string, Sub: string, Price: number?, Need: string?, Kind: string, Id: string, Done: string?, Gold: boolean?, Label: string? }
 
 -- the rows a list station shows (from the server's EndgameState; display only)
@@ -134451,6 +134668,16 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 		end
 	elseif kind == "Intel" and typeof(s.Intel) == "table" then
 		local it = s.Intel
+		-- Code Bot v171: the paid scouting report leads the list (it sat 5th, under the contracts, as a grey INFO row);
+		-- VIEW opens the result card again
+		local rep = it.Report
+		if typeof(rep) == "table" then
+			local L = EndgameController.ScoutLines(rep)
+			table.insert(out, {
+				Name = L.Title, Sub = L.Line1 .. ". " .. L.Line2,
+				Price = 0, Need = nil, Kind = "ScoutView", Id = "Report", Label = "VIEW",
+			})
+		end
 		for i, r in ipairs(it.Rows or {}) do
 			local done = r.Have >= r.Need
 			table.insert(out, {
@@ -134466,14 +134693,6 @@ function EndgameController.ListRows(kind: string, s: { [string]: any }): { Row }
 				Name = string.upper(h.Text), Sub = string.format("%d/%d  reward %s + 50 Gold", h.Have, h.Need, short(it.HvtReward or 0)),
 				Price = if done and not h.Paid then 0 else nil, Need = nil, Kind = "Claim", Id = "HVT",
 				Done = if h.Paid then "PAID" elseif not done then string.format("%d/%d", h.Have, h.Need) else nil, Label = "CLAIM",
-			})
-		end
-		local rep = it.Report
-		if typeof(rep) == "table" then
-			table.insert(out, {
-				Name = "REPORT: " .. string.upper(tostring(rep.Name)),
-				Sub = string.format("Tier %s, %s turrets, %s guards, gate %s HP. %s", tostring(rep.Tier or 0), tostring(rep.Turrets or 0), tostring(rep.Guards or 0), tostring(rep.GateHp and math.floor(rep.GateHp) or "?"), tostring(rep.Verdict or "")),
-				Price = nil, Need = nil, Kind = "Info", Id = "Report", Done = "INFO",
 			})
 		end
 		for _, b in ipairs(it.Bases or {}) do
@@ -134662,7 +134881,12 @@ local function refreshList()
 			sb.Text = r.Sub .. "  (" .. r.Need .. ")"
 		end
 		b.Activated:Connect(function()
-			if can and r.Kind == "Revenge" then
+			if r.Kind == "ScoutView" then
+				local rp = if typeof(state.Intel) == "table" then state.Intel.Report else nil
+				if typeof(rp) == "table" then
+					EndgameController.ShowScoutCard(rp)
+				end
+			elseif can and r.Kind == "Revenge" then
 				-- the Intel Office's revenge: the JOB 38 SEND (the server re-checks every fairness rule)
 				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySend, tonumber(r.Id))
 				setListOpen(nil)
@@ -135429,6 +135653,10 @@ function EndgameController.Init()
 		syncMed(c and c:FindFirstChildOfClass("Humanoid"))
 	end)
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if kind == "ScoutReport" and typeof(data) == "table" then
+			EndgameController.ShowScoutCard(data) -- Code Bot v171: the paid result, on screen until closed
+			return
+		end
 		if kind ~= "EndgameState" or typeof(data) ~= "table" then
 			return
 		end
@@ -151110,7 +151338,7 @@ local function crosshair(parent: Instance, x: number, y: number, size: number)
 	}) do
 		local f = Instance.new("Frame")
 		f.BorderSizePixel = 0
-		f.AnchorPoint = spec[5]
+		f.AnchorPoint = spec[4] -- Code Bot v171: was spec[5] (nil): Roblox throws on a nil AnchorPoint, build() died here
 		f.Position = UDim2.fromScale(spec[1], spec[2])
 		f.Size = spec[3]
 		f.BackgroundColor3 = GOLD
@@ -151320,7 +151548,20 @@ local function build()
 	st.Thickness = 2
 	st.Parent = b
 	pillStroke = st
-	crosshair(b, 8, math.floor((P.Height - P.Icon) / 2), P.Icon) -- layout() places / sizes it (RivalConfig.Layout)
+	-- Code Bot v171 (Shaun 2026-10-01 12:08: "the TARGETS button is gone"): v168's crosshair() assigned AnchorPoint =
+	-- spec[5] (nil; each spec has 4 fields). Roblox throws on that, so build() stopped right here every time: the card
+	-- had been parented with no Size / Position / text and refresh() never ran -> nothing on screen. Fixed (spec[4]),
+	-- and the card is now placed BEFORE any decoration, which runs in a pcall: an icon can never hide the button again.
+	do
+		local cs0 = contentSize()
+		local C0 = RivalConfig.Layout(cs0.X, cs0.Y, 0).Pill
+		b.Position = UDim2.fromOffset(C0.X, C0.Y)
+		b.Size = UDim2.fromOffset(C0.W, C0.H)
+	end
+	local okX, errX = pcall(crosshair, b, 8, math.floor((P.Height - P.Icon) / 2), P.Icon) -- layout() places / sizes it (RivalConfig.Layout)
+	if not okX then
+		warn("[RivalController] crosshair icon failed (the card still shows): " .. tostring(errX))
+	end
 	lineTitle = label(b, "Title", 46, 5, 100, 18, 16, Enum.Font.GothamBlack, GOLD)
 	lineName = label(b, "Rival", 46, 24, 100, 17, 15, Enum.Font.GothamBold, WHITE)
 	lineDetail = label(b, "Detail", 46, 42, 100, 16, 14, Enum.Font.GothamBold, LOOT)
