@@ -281,6 +281,11 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 			Shows = nonNegInt(rp.Shows),
 			Never = rp.Never == true,
 			PlaySeconds = nonNegInt(rp.PlaySeconds),
+			-- claude-bud JOB 41 part D: the one-time big-win triggers already used
+			Triggered = if typeof(rp.Triggered) == "table" then {
+				FirstCapture = rp.Triggered.FirstCapture == true or nil,
+				RaidWin = rp.Triggered.RaidWin == true or nil,
+			} else nil,
 		}
 	else
 		profile.RatePrompt = nil

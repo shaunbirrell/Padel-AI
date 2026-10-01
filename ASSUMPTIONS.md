@@ -9968,3 +9968,9 @@ ds_territories.luau T3):
 - **Telemetry remote:** RequestRivalAction is telemetry only. The send itself is the JOB 38 RequestArmySend, fired by
   the same tap.
 - **Toast:** the optional "new rich target" toast is not built (kept small; the pill's count badge does that job).
+
+## 2026-10-01 — claude-bud JOB 41 part D: big-win rate triggers
+- **When a trigger is spent:** a one-time trigger is spent only when the card actually showed for it. A FirstCapture
+  blocked by the 3-day gap stays unspent, so "the next big win" can still bring it forward.
+- **Pack first:** "the Recruit Pack goes first" is enforced with a 180 s ceiling, so a pack that can never get a
+  soft-offer slot cannot block the rate card for the whole session.

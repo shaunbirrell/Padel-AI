@@ -890,6 +890,8 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 			pcall(function() -- claude-bud JOB 41: a raid win (RivalRaidWon when sent from TARGETS; the rate card's RaidWin)
 				local RS = require(script.Parent.Parent.Services.RivalService) :: any
 				RS.OnRaidWon(player, plan.PlotId, n)
+				local RP = require(script.Parent.Parent.Services.RatePromptService) :: any
+				RP.Trigger(player, "RaidWin")
 			end)
 			pcall(function() -- claude-bud JOB 39: the Intel Office's "win a SEND ARMY raid" contract
 				(require(script.Parent.Parent.Services.EndgameService) :: any).NoteContract(player, "WinSend", 1)

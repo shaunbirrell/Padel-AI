@@ -26,7 +26,7 @@ local MC: any = MonetizationConfig
 local O: any = MC.RecruitPackOffer
 local deps: { [string]: any } = {}
 
-type Session = { Trigger: string?, Tries: number, NextAt: number, Awaiting: boolean, LastAccrue: number, Slot: any? }
+type Session = { Trigger: string?, Tries: number, NextAt: number, Awaiting: boolean, LastAccrue: number, Slot: any?, ShownAt: number? }
 local sessions: { [number]: Session } = {}
 
 RecruitPackService._clock = os.clock -- tests replace these
@@ -217,6 +217,7 @@ function RecruitPackService.Result(player: Player, result: any): boolean
 		return false
 	end
 	if result == "shown" then
+		s.ShownAt = RecruitPackService._clock()
 		profile.RecruitPackOffered = true
 		deps.DataService.MarkDirty(player)
 		guidedFunnel(player, profile, "Offered")
@@ -236,6 +237,26 @@ end
 function RecruitPackService.CardOut(player: Player): boolean
 	local s = sessions[player.UserId]
 	return s ~= nil and s.Awaiting
+end
+
+-- out, or shown and not yet closed + `gap` seconds (the card hides itself after AutoHideSeconds)
+function RecruitPackService.CardBlocks(player: Player, gap: number): boolean
+	local s = sessions[player.UserId]
+	if s == nil then
+		return false
+	end
+	if s.Awaiting then
+		return true
+	end
+	return s.ShownAt ~= nil and RecruitPackService._clock() < (s.ShownAt :: number) + O.AutoHideSeconds + (tonumber(gap) or 0)
+end
+
+-- the pack is still due from a capture this session (live, a real Id, never offered, tries left): it goes first
+function RecruitPackService.Pending(player: Player): boolean
+	local s = sessions[player.UserId]
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	return s ~= nil and profile ~= nil and s.Trigger == "capture" and MC.RecruitPackLiveFor(player.UserId) and productId() ~= 0
+		and profile.RecruitPackOffered ~= true and not hasPack(player, profile) and s.Tries < O.MaxTriesPerSession
 end
 
 function RecruitPackService._Session(player: Player): Session

@@ -853,6 +853,11 @@ function MoneyCollectorService._RaidDone(thief: Player, victim: Player, vProfile
 	pcall(function() -- claude-bud JOB 39: the victim's "Raided by" list (Intel Office revenge)
 		(require(script.Parent.EndgameService) :: any).NoteRaidedBy(victim, thief)
 	end)
+	if moved > 0 then
+		pcall(function() -- claude-bud JOB 41 part D: an in-person raid win may bring the (no-reward) rate card forward once
+			(require(script.Parent.RatePromptService) :: any).Trigger(thief, "RaidWin")
+		end)
+	end
 	markDirty(victim)
 	markDirty(thief)
 	pcall(function()

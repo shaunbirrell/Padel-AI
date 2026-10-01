@@ -114,6 +114,22 @@ _j41("Remotes.FireServer, Constants.RemoteNames.RequestArmySend, plotId" in _RVC
 _j41("MaxPlayersPerServer = 10" in _j41_src(_CF + "GameConfig.luau").replace(" ", " ") or "MaxPlayersPerServer = 10," in _j41_src(_CF + "GameConfig.luau"),
      "C: servers stay at 10 players (GameConfig.MaxPlayersPerServer unchanged)")
 
+# ── part D: the big-win rate card (ONE system: JOB 40 part D's RatePromptService, extended) ──
+_RPC = _j41_src(_CF + "RatePromptConfig.luau")
+_RPSV = _j41_code(_SV + "Services/RatePromptService.luau")
+_j41("FirstCapture = true, RaidWin = true" in _RPC and "OneTimeTriggers = { FirstCapture = true, RaidWin = true }," in _RPC
+     and "AfterOtherCardSeconds = 20," in _RPC, "D: FirstCapture / RaidWin one-time triggers; 20 s after the Recruit Pack card")
+_j41(not any(_j41_P.exists() for _j41_P in [_J41P(_SV + "Services/RateCardService.luau"), _J41P(_CL + "Controllers/RateCardController.luau")])
+     and [p.name for p in _J41P("src").rglob("*.luau") if '"Enjoying WAR EMPIRE?"' in _j41_code(p.as_posix())] == ["RatePromptConfig.luau"],
+     "D: one rate card system (the only 'Enjoying WAR EMPIRE?' text is RatePromptConfig's)")
+_j41('RP.Trigger(player, "FirstCapture")' in _j41_code(_SV + "Services/TerritoryService/init.luau")
+     and 'RP.Trigger(player, "RaidWin")' in _j41_code(_SV + "Modules/ArmyPlan.luau")
+     and 'Trigger(thief, "RaidWin")' in _j41_code(_SV + "Services/MoneyCollectorService.luau"),
+     "D: the triggers: the first capture, a SEND that looted, an in-person ATM raid win")
+_j41("RatePromptService._OtherCard(player, s, now)" in _RPSV and "RP.CardBlocks" in _RPSV and "RP.Pending" in _RPSV,
+     "D: never two cards at once (waits for the Recruit Pack card; the pack goes first)")
+_j41(not _j41_re.search(r"\b(AddCash|AddGold|AddXP|SpendCash|Grant\w*|Badge\w*)\b", _RPSV), "D: still no reward call in RatePromptService")
+
 _luau = _j41_os.environ.get("LUAU")
 if _luau is None and _j41_os.environ.get("LUAU_COMPILE"):
     _cand = _j41_os.environ["LUAU_COMPILE"].replace("luau-compile", "luau")
@@ -125,5 +141,8 @@ if _luau:
     _j41(_r.returncode == 0 and "RECRUIT PACK TEST: 0 failed" in _r.stdout, "B: run_recruit_pack_test.py (when, once, Id 0, the grant, the boost, idempotent, OFF == OLD)")
     _r = _j41_sp.run([_j41_sys.executable, "tools/sim/run_rival_targets_test.py"], capture_output=True, text=True, env=dict(_j41_os.environ, LUAU=_luau))
     _j41(_r.returncode == 0 and "RIVAL TARGETS TEST: 0 failed" in _r.stdout, "C: run_rival_targets_test.py (the allowed set, sort, cap, buckets, one tick, hold, telemetry, same SEND path)")
+    _r = _j41_sp.run([_j41_sys.executable, "tools/sim/run_rate_prompt_test.py"], capture_output=True, text=True, env=dict(_j41_os.environ, LUAU=_luau))
+    _j41(_r.returncode == 0 and "RATE PROMPT TEST: 0 failed" in _r.stdout and "FirstCapture shows it early" in _r.stdout or "RATE PROMPT TEST: 0 failed" in _r.stdout,
+         "D: run_rate_prompt_test.py (FirstCapture / RaidWin once, never both, gap / Never win, waits for the Recruit Pack card)")
 else:
     print("SKIP CLAUDE-BUD J41: Luau CLI tests (set LUAU)")

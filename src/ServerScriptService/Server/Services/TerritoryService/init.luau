@@ -1118,6 +1118,10 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 			local RPS = require(script.Parent.RecruitPackService) :: any
 			RPS.OnCapture(player)
 		end)
+		pcall(function() -- claude-bud JOB 41 part D: the first capture may bring the (no-reward) rate card forward once
+			local RP = require(script.Parent.RatePromptService) :: any
+			RP.Trigger(player, "FirstCapture")
+		end)
 	end
 
 	if BaseService then

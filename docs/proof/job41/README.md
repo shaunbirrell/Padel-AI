@@ -6,7 +6,10 @@
 | funnel-sim.txt | run_first_minutes_test.py: the Guided chain in order with step times, the recruit maths, the camp (200 seeded fights), capture blocked until the camp is dead, the reward once, rejoin / never-soft-lock, skip at every step, returning profiles, OFF == OLD, the FirstMinutes funnel once each in order | Done (headless luau stand-in, real TutorialConfig / TutorialService / GuidedService / ProfileSchema) |
 | studio-run.md, step_<n>.png, reward_confetti.png, step_800x360.png | A fresh-profile Studio run with a stopwatch | **Owed** (needs Studio) |
 | hud-harness.txt | 5 viewports, 0 overlaps with the banner + objective marker + Army popover | **Owed** (the banner is the existing tutorial chip with new 9-step texts; not re-measured) |
-| recruit-pack-sim.txt, rivals-sim.txt, rate-prompt-sim.txt, rivals.md | Parts B-D | Follow with those parts |
+| recruit-pack-sim.txt | Part B: when (capture / 600 s, once, hold / combat / seat / busy slot), Id 0, the grant at 3 income levels, the boost path, idempotent, the old Starter pop-up OFF == OLD | Done (headless, the real MonetizationService) |
+| rivals-sim.txt | Part C: the 8-case allowed set against the real ArmySendRules, sort, cap, buckets, one tick, hold, telemetry, the same SEND remote | Done (headless) |
+| rate-prompt-sim.txt | Part D: FirstCapture / RaidWin once, never both, gap / Never win, waits for the Recruit Pack card, no economy | Done (headless) |
+| rivals.md | The 2-player Studio TARGETS / SEND test | **Owed** (needs 2 Studio clients) |
 
 ## What the sim says (read it as a model, not a measurement)
 - **Pace, from the real layout:** Command Center console → ATM 14 s walk, ATM → Home Outpost 14 s walk

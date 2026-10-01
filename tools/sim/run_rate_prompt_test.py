@@ -56,6 +56,7 @@ game = { GetService = function(_, n)
 LOG = { push = {}, analytics = {}, economy = 0, dirty = 0 }
 PROFILES = {}
 ONBOARDING = false
+PACK_BUSY, PACK_DUE = false, false
 local remote = { IsA = function(_, c) return c == "RemoteEvent" end, OnServerEvent = signal(),
   FireClient = function(_, p, kind, data) table.insert(LOG.push, { p = p, kind = kind, data = data }) end }
 local function boom() LOG.economy += 1 end
@@ -66,6 +67,8 @@ DEPS = {
   XPService = { AddXP = boom },
   AnalyticsService = { Log = function(ev, uid, props) table.insert(LOG.analytics, { ev = ev, props = props }) end },
   RetentionService = { IsOnboarding = function() return ONBOARDING end },
+  -- claude-bud JOB 41 D: the Recruit Pack card state (out / just closed, or still due first)
+  RecruitPackService = { CardBlocks = function() return PACK_BUSY end, Pending = function() return PACK_DUE end },
 }
 function fresh()
   CACHE["Services/RatePromptService"] = nil
@@ -165,6 +168,50 @@ local words = string.lower(Cfg.Text.Title .. " " .. Cfg.Text.Body .. " " .. Cfg.
 local rewardy = false
 for _, w in ipairs({ "reward", "free", "cash", "gold", "gift", "bonus", "prize", "win", "earn", "claim", "unlock" }) do if string.find(words, w, 1, true) then rewardy = true end end
 check(not rewardy, "the card text has no reward words")
+
+-- ── 8. JOB 41 part D: the big-win triggers ──
+local function newcomer() PROFILES[OWNER.UserId] = { TutorialComplete = true }; local S8 = fresh(); LOG.push = {}; play(S8, OWNER, 65); return S8 end
+local S8 = newcomer()
+S8.Trigger(OWNER, "FirstCapture")
+check(play(S8, OWNER, 10) and shows() == 1 and LOG.push[#LOG.push].data.Trigger == "FirstCapture", "FirstCapture shows it early (65 s of play)")
+check(PROFILES[OWNER.UserId].RatePrompt.Triggered.FirstCapture == true, "FirstCapture is spent for good (RatePrompt.Triggered)")
+S8.Trigger(OWNER, "RaidWin")
+check(not play(S8, OWNER, 60) and shows() == 1, "never both in one session (RaidWin after FirstCapture: nothing)")
+-- a later session 3+ days on: FirstCapture again does nothing (one-time), RaidWin shows once
+UNIX += 4 * 86400
+S8 = fresh(); LOG.push = {}; play(S8, OWNER, 65)
+S8.Trigger(OWNER, "FirstCapture")
+check(not play(S8, OWNER, 30) and shows() == 0, "FirstCapture again on the same profile: nothing (one time per profile)")
+S8 = fresh(); LOG.push = {}; play(S8, OWNER, 65)
+S8.Trigger(OWNER, "RaidWin")
+check(play(S8, OWNER, 10) and shows() == 1 and LOG.push[#LOG.push].data.Trigger == "RaidWin", "RaidWin shows it early once")
+-- the 3-day gap and Never still win
+S8 = fresh(); LOG.push = {}; play(S8, OWNER, 65)
+local p8 = PROFILES[OWNER.UserId]
+p8.RatePrompt.Triggered = {}
+S8.Trigger(OWNER, "FirstCapture")
+check(not play(S8, OWNER, 30) and shows() == 0, "the 3-day gap still wins over a big-win trigger")
+UNIX += 4 * 86400
+p8.RatePrompt.Never = true
+S8 = fresh(); LOG.push = {}; play(S8, OWNER, 65)
+S8.Trigger(OWNER, "FirstCapture")
+check(not play(S8, OWNER, 30) and shows() == 0, "Never still wins over a big-win trigger")
+-- it waits for the Recruit Pack card
+S8 = newcomer()
+PACK_BUSY = true
+S8.Trigger(OWNER, "FirstCapture")
+check(not play(S8, OWNER, 40) and shows() == 0, "the Recruit Pack card is out / closed < 20 s ago: the rate card waits")
+PACK_BUSY = false
+check(play(S8, OWNER, 10) and shows() == 1, "... and shows once that card is gone")
+S8 = newcomer()
+PACK_DUE = true
+S8.Trigger(OWNER, "FirstCapture")
+check(not play(S8, OWNER, 60) and shows() == 0, "the Recruit Pack is still due from the same capture: it goes first")
+check(play(S8, OWNER, 180) and shows() == 1, "... the rate card waits at most WaitForPackMaxSeconds, then may show")
+PACK_DUE = false
+check(LOG.economy == 0, "still no economy / XP call (the JOB 40 no-reward rule)")
+local saved = PS.Migrate(deep(PROFILES[OWNER.UserId]))
+check(saved.RatePrompt.Triggered ~= nil and saved.RatePrompt.Triggered.FirstCapture == true, "Triggered survives a save + Migrate")
 
 print(string.format("RATE PROMPT TEST: %d failed", fails))
 if fails > 0 then error("failed") end

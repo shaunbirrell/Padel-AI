@@ -46,13 +46,21 @@ RatePromptService._clock = os.clock -- tests replace these
 RatePromptService._unix = os.time
 
 -- the saved record, repaired in place (ProfileSchema.Migrate does the same on load)
-function RatePromptService.Record(profile: any): { LastShownUnix: number, Shows: number, Never: boolean, PlaySeconds: number }
+function RatePromptService.Record(profile: any): { LastShownUnix: number, Shows: number, Never: boolean, PlaySeconds: number, Triggered: { [string]: boolean } }
 	local r = if typeof(profile.RatePrompt) == "table" then profile.RatePrompt else {}
 	local function n(v: any): number
 		local x = tonumber(v) or 0
 		return if x == x and x > 0 and x < 1e12 then math.floor(x) else 0
 	end
-	local rec = { LastShownUnix = n(r.LastShownUnix), Shows = n(r.Shows), Never = r.Never == true, PlaySeconds = n(r.PlaySeconds) }
+	local trig: { [string]: boolean } = {}
+	if typeof(r.Triggered) == "table" then
+		for k, v in pairs(r.Triggered) do
+			if typeof(k) == "string" and (Cfg.OneTimeTriggers :: any)[k] == true and v == true then
+				trig[k] = true
+			end
+		end
+	end
+	local rec = { LastShownUnix = n(r.LastShownUnix), Shows = n(r.Shows), Never = r.Never == true, PlaySeconds = n(r.PlaySeconds), Triggered = trig }
 	profile.RatePrompt = rec
 	return rec
 end
@@ -77,6 +85,8 @@ function RatePromptService.Decide(s: any): (boolean, string)
 		return false, "gap"
 	elseif (tonumber(s.SinceHurt) or math.huge) < Cfg.CombatQuietSeconds then
 		return false, "combat"
+	elseif s.OtherCard == true then
+		return false, "other_card" -- claude-bud JOB 41 D: the Recruit Pack card is out / just closed / still due first
 	end
 	if typeof(s.Trigger) == "string" and (Cfg.Triggers :: any)[s.Trigger] == true then
 		return true, s.Trigger
@@ -141,8 +151,37 @@ function RatePromptService.Trigger(player: Player, reason: string)
 	if s.Shown or s.Trigger ~= nil then
 		return
 	end
+	if (Cfg.OneTimeTriggers :: any)[reason] == true then
+		local profile = deps.DataService and deps.DataService.GetProfile(player)
+		if profile == nil or RatePromptService.Record(profile).Triggered[reason] == true then
+			return -- already used once on this profile
+		end
+	end
 	s.Trigger = reason
 	s.TriggerAt = RatePromptService._clock() + Cfg.TriggerDelaySeconds
+end
+
+-- claude-bud JOB 41 part D: never two cards at once. True while the Recruit Pack card is out or closed less than
+-- AfterOtherCardSeconds ago, or (for at most WaitForPackMaxSeconds after this trigger) while the pack is still due
+-- from the same capture: the Recruit Pack goes first, the rate card may slip.
+function RatePromptService._OtherCard(player: Player, s: any, now: number): boolean
+	local RP = deps.RecruitPackService
+	if RP == nil then
+		return false
+	end
+	local okB, busy = pcall(function()
+		return RP.CardBlocks and RP.CardBlocks(player, Cfg.AfterOtherCardSeconds) == true
+	end)
+	if okB and busy then
+		return true
+	end
+	if s.Trigger ~= nil and now - (s.TriggerAt - Cfg.TriggerDelaySeconds) < Cfg.WaitForPackMaxSeconds then
+		local okP, pending = pcall(function()
+			return RP.Pending and RP.Pending(player) == true
+		end)
+		return okP and pending == true
+	end
+	return false
 end
 
 -- one player's check (the tick calls it; tests call it with a fake clock)
@@ -180,6 +219,7 @@ function RatePromptService.Step(player: Player, accrueOnly: boolean?): (boolean,
 		SinceLastShow = if rec and rec.LastShownUnix > 0 then RatePromptService._unix() - rec.LastShownUnix else math.huge,
 		SinceHurt = now - s.LastHurt,
 		Trigger = trig,
+		OtherCard = RatePromptService._OtherCard(player, s, now),
 	})
 	if not show or rec == nil then
 		return false, why
@@ -189,6 +229,9 @@ function RatePromptService.Step(player: Player, accrueOnly: boolean?): (boolean,
 	s.Trigger = nil
 	rec.LastShownUnix = RatePromptService._unix()
 	rec.Shows += 1
+	if (Cfg.OneTimeTriggers :: any)[why] == true then
+		rec.Triggered[why] = true -- claude-bud JOB 41 D: this big-win trigger is spent for good
+	end
 	deps.DataService.MarkDirty(player)
 	push(player, { Trigger = why })
 	logEvent(player, "RATE_PROMPT_SHOWN", { trigger = why })

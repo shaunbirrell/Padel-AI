@@ -17,7 +17,13 @@ local RatePromptConfig = {
 	NotBeforeSessionSeconds = 60, -- never in the first minute of a session
 	-- a TRIGGER shows it early (still under every other rule): every rebirth, and the achievements that already
 	-- show a big banner (AchievementConfig Big = true: $100M, Plaza capture, nuke, weekly #1, ...)
-	Triggers = { rebirth = true, achievement = true },
+	Triggers = { rebirth = true, achievement = true, FirstCapture = true, RaidWin = true },
+	-- claude-bud JOB 41 part D: these big wins bring it forward ONCE per profile (RatePrompt.Triggered[<name>] = true
+	-- when it showed for that reason); FirstCapture = the Guided reward capture or any first territory, RaidWin = the
+	-- first raid that looted (a SEND or an in-person ATM raid)
+	OneTimeTriggers = { FirstCapture = true, RaidWin = true },
+	AfterOtherCardSeconds = 20, -- never two cards at once: wait this long after the Recruit Pack card closed
+	WaitForPackMaxSeconds = 180, -- a Recruit Pack still due at the capture goes first; the rate card waits at most this
 	TriggerDelaySeconds = 8, -- after the rebirth screen / the banner has had its moment
 	TickSeconds = 5, -- the server check (all players together)
 	AutoHideSeconds = 20, -- the card hides itself (counts as shown)

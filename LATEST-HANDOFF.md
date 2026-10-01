@@ -1,19 +1,49 @@
 <!-- Q2-START -->
-## v159 PUBLISHED (Code Bot Roblox, 2026-10-01 08:55 Dublin): Open Cloud place version 157 — JOB 41 part C owner-first (Rival TARGETS + SEND ARMY)
-- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **159**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":157}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
-- **Cherry-pick:** Claude `aeefda1` JOB 41 C Rival TARGETS -> `4ca755e`; then WE_Build 159 + checks + dist (this publish commit).
-- **Flags left OwnerFirst=true (do NOT flip without Shaun):**
-  - `RivalConfig` Enabled + OwnerFirst=true (TARGETS pill + list; SEND ARMY = JOB 38 RequestArmySend, army walks; VIEW = map card, no travel).
-  - Still from v158: `TutorialConfig.Guided` OwnerFirst=true; `MonetizationConfig.RecruitPackOffer` OwnerFirst=true; `DevProducts.RecruitPack.Id = 0`.
-- **PreferMesh stays OFF.** No WE_Building* touch. Servers stay at 10. No fast travel.
-- **Checks:** BuyPathStatic PASS=7487 FAIL=0; claude_bud_job41 PASS (A+B+C); codebot_v159 PASS; run_rival_targets_test 0 failed; rojo build deterministic (both dist copies identical).
-- **Still owed by Claude on bud:** JOB 41 part D (rate-prompt big-win link to JOB 40 D). Then JOB 43 part 1 (army-vs-army brawl; Army Kills board already live) then JOB 42 (time-based cash packs).
+## claude-bud JOB 41 (2026-10-01): SUMMARY (parts A-D pushed; the details are in the part sections below)
+**Flags to launch (each owner-first, OFF = today):** `TutorialConfig.Guided`, `MonetizationConfig.RecruitPackOffer`
+(after the product exists), `RivalConfig`, `RatePromptConfig` (JOB 40 D + the JOB 41 D triggers).
 
-**Phone tests for Shaun (owner-first — use owner / Studio playtest account; need another player online, not clan, past new-player protection, with ATM cash):**
-1. TARGETS pill top-right with a count; tap → name, army size, loot bucket ($1k+ / $10k+ / …), verdict chip.
-2. SEND ARMY: army walks to their base and raids (no teleport). VIEW opens the map card on that base (tap-to-pin only).
-3. Shielded / new / protected / ally players never appear in the list.
-4. A+B still owner-first as v158 (Guided chain + Recruit Pack Id 0 does not prompt). PreferMesh OFF.
+**Root cause (owed):** the Creator Hub funnel numbers (docs/proof/job41/funnel-before.md has the query). The code fact:
+today's Home Outpost step has no enemies (OutpostDefenders skips starter rows).
+
+**Step times (sim, derived pace):** first BUILD 8 s, collect 31, recruit 45, camp cleared 64, captured 76, Reward 79,
+Barracks 112. That is FASTER than the brief's 3-4 min (reported, not padded).
+
+**Creator Hub note (B5):** Creator Hub: create the Developer Product 'Recruit Pack' at 49 R$ ONLY after Shaun OKs the
+price; then paste its Id into MonetizationConfig.DevProducts.RecruitPack.Id (Code Bot). Until then Id = 0 and the offer
+never prompts.
+
+**Dashboards:** Analytics > Funnels > FirstMinutes; Analytics > Custom events > GuidedStepSeconds / GuidedSkipped /
+GuidedStuck / RecruitPackOffered / RivalListOpened / RivalSendTapped / RivalRaidWon / rate_prompt_shown /
+rate_prompt_answer.
+
+**Phone tests (not device-verified until Shaun tests):**
+1. With a fresh test account: BUILD the Command Center in the first ~20 s, see the payout and the base grow, collect,
+   recruit, fight the 2 camp soldiers at the Home Outpost (they shoot back), capture it, and see "BASE SECURED!" with
+   confetti, with the yellow line on every step.
+2. With the owner account (returning): no guided chain. Skip works on the test account at any step.
+3. The Recruit Pack card appears only at the first capture (or at 10 min), once. The Shop shows it; the price button
+   reads 49 R$ (Id 0: no prompt until Creator Hub).
+4. TARGETS shows a rival with his name, army size and loot; SEND ARMY walks the army there; a shielded player is not
+   listed.
+5. After the first capture or a raid win, "Enjoying WAR EMPIRE?" shows once (after the Recruit Pack card), with no
+   reward.
+
+## claude-bud JOB 41 PART D (2026-10-01): THE BIG-WIN RATE CARD (ONE system with JOB 40 D, NO reward)
+- **New triggers:** RatePromptConfig.Triggers FirstCapture (TerritoryService: the Guided reward capture or any first
+  territory) and RaidWin (ArmyPlan: a SEND that looted; MoneyCollectorService._RaidDone: an in-person ATM raid with
+  loot).
+  - Each is one-time per profile: RatePrompt.Triggered[<name>] is set when the card SHOWED for it (saved;
+    ProfileSchema repairs it).
+  - Each shows the card early once. Every JOB 40 rule still holds: the 3-day gap, combat quiet, once per session,
+    Never, the hold.
+- **Never two cards:** while the Recruit Pack card is out or closed < 20 s ago (RecruitPackService.CardBlocks), the rate
+  card waits.
+  - If the pack is still due from the same capture (RecruitPackService.Pending), the pack goes first; the rate card
+    waits at most 180 s, then may show or slip to the next win / the 15-min rule.
+- **No reward, no "like for ...":** nothing checks a like. The only events are still rate_prompt_shown / answer.
+- **Checks:** run_rate_prompt_test 0 failed (now 44 checks; docs/proof/job41/rate-prompt-sim.txt); claude_bud_job41
+  part D pins; BuyPathStatic PASS=7490 FAIL=0; all sims 0 failed; rojo ok; remote audit OK; no new LSP errors.
 
 ## claude-bud JOB 41 PART C (2026-10-01): RIVAL TARGETS + SEND ARMY (branch `claude/desktop-bud`)
 **Flag:** `RivalConfig` (`Enabled`, `OwnerFirst = true`; a new config, not an ArmyOrdersConfig block). OFF / not live =
