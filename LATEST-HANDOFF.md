@@ -1,3 +1,20 @@
+## v202 PUBLISHED (Code Bot Roblox, 2026-10-01 ~23:52 Dublin): Open Cloud place version 200. claude-bud JOB 66 two 5 R$ starter products OwnerFirst
+- **Commits:** cherry-pick `63c3870` → `1af6905` (JOB 66; docs-only JOB 69 `c96aa20` skipped — CLAUDE.md / handoff conflicts); code+dist+checks `f14a4db` on phase-7-polish (from v201 `84c50bb`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig identical outside the exact Shaun-approved JOB 66 block; save keys unchanged except new sanitised `Starter5Offered` (ProfileSchema; no wipe).
+- **JOB 66 NEW-OWNER-FIRST (`MonetizationConfig.Starter5`):**
+  - **Recruit Starter Pack** (`DevProducts.StarterRecruit5`): 5 R$ one-time — 3 soldiers via `SoldierService.GrantFree` + ~2.5 min income cash as `devproduct` (never multiplied). Id **0** until Creator Hub products are created (managed pricing OFF).
+  - **2x Income 10 min** (`DevProducts.Boost2x10m`): 5 R$ repeatable via `CodesService.GrantCashBoost` / central `CashBoostMult`. HUD `BoostChip` "2x m:ss" (1 Hz only while active).
+  - **5 R$ ONE-TIME OFFER** at 5 min play through the RecruitPack offer path (`Starter5Offered` flag; others keep the 49 R$ Recruit Pack at 10 min).
+  - `SkuLiveFor` LiveBlock = Starter5 (Shop + purchase intent owner-only until flipped).
+- **Held / not this ship:** JOB 62 ExperienceNotify stays on bud only (needs `WE_NOTIFY_KEY`). JOB 67 walls / rebirth-zone buildings / props / Synty vehicles still owed. JOB 68 / JOB 69 still on Claude queue.
+- **Checks:** BuyPathStatic **PASS=8669 FAIL=0**; `tools/checks/codebot_v202.py` PASS; `claude_bud_job66.py` PASS; `tools/sim/run_starter5_test.py` **0 failed**. PreferMesh OFF; StreamingEnabled OFF. Money guards (v180–v201) allow only the exact JOB 66 block.
+- **Publish:** HTTP 200, versionNumber **200**, universe 10767159222 / place 97112936860418. Servers NOT restarted (players get WE_Build 202 on next join).
+- **Phone tests (Shaun — owner only; rejoin / new server for WE_Build 202):**
+  1. Until Creator Hub products exist (Id still 0): Shop rows stay hidden; the 5-min offer will not prompt a real purchase. Confirm `WE_Build=202` and that the BoostChip code path is live (owner-only Starter5).
+  2. After Code Bot / Shaun creates the two 5 R$ products and fills the Ids (managed pricing OFF): play ~5 min → "5 R$ ONE-TIME OFFER" card → buy → +3 soldiers + starter cash; Shop row = OWNED.
+  3. Buy "2x Income 10 min" → green "2x m:ss" chip; buy again → timer extends. Non-owner players must not see either product / offer.
+- **Code Bot NEXT:** create the two developer products at 5 R$ each, turn OFF managed pricing, put Ids in `StarterRecruit5.Id` / `Boost2x10m.Id`. Then a real purchase test on phone.
+- **Still owed:** JOB 67 remainder (walls/props/vehicles/rebirth buildings), JOB 68 shooting range, JOB 69 rebirth zones docs/impl, held JOB 62 (`WE_NOTIFY_KEY`), OwnerFirst flips after phone OK. Do NOT reopen JOB 44.
+
 ## v201 PUBLISHED (Code Bot Roblox, 2026-10-01 ~23:45 Dublin): Open Cloud place version 199. Offline "Away" cash = Shaun's rule (2 h x 10 %, everyone) + 7-day strip overlap fix
 - **Commits:** code+dist+checks `49821c7` on phase-7-polish (from v200 `7a47209`); bud-skip for the v201 ship-only pins `f2e541a`; bud merge `34792f7` (+ this handoff). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical; no price changes; save keys unchanged (DataService diff = the WE_Build number only). LIVE FOR EVERYONE (not OwnerFirst; Shaun ordered it).
 - **Bug 1 root cause:** `EconomyConfig.OfflineEarnings` had `Share = 0.25`, `CapSeconds = 8 * 3600`, `PremiumBonus = 0.10` and `CapBoost.CapMult = 2` (the 2x Offline Cash pass -> 16 h); `RetentionService.ComputeOffline` / `offlineCapCash` paid perSec x min(away, cap) x 0.25 (x1.1 Premium). Shaun (pass + Premium, ~$173.6k/s non-event passive) saw "Away 16 h: earn up to $2,749,794,426".
