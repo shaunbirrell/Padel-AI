@@ -1,4 +1,21 @@
 <!-- Q2-START -->
+## v161 PUBLISHED (Code Bot Roblox, 2026-10-01 09:17 Dublin): Open Cloud place version 159 — JOB 42 A+B owner-first (time cash packs config/grant + Shop/offers)
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **161**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":159}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
+- **Cherry-pick:** Claude `82da83b` JOB 42 A (config+grant) -> `7a486b3`; Claude `8145a91` JOB 42 B (Shop+offers) -> `093c2a8`; then WE_Build 161 + checks + dist (publish commit `75ac966`).
+- **Flags left OwnerFirst=true (do NOT flip without Shaun):**
+  - `ShopOverhaulConfig.TimePacks` Enabled + OwnerFirst=true; all five `DevProducts` Cash15m/Cash30m/Cash1h/Cash2h/Cash4h **Id = 0** at 25/49/89/159/279 R$. Old packs still shown until TimePacksReady (all five Ids).
+  - Still from v158–v160: `TutorialConfig.Guided` OwnerFirst=true; `MonetizationConfig.RecruitPackOffer` OwnerFirst=true (`RecruitPack.Id = 0`); `RivalConfig` OwnerFirst=true; `RatePromptConfig` OwnerFirst=true.
+- **PreferMesh stays OFF.** No WE_Building* touch. Servers stay at 10. No fast travel. **No Creator Hub products created in this run.**
+- **Checks:** BuyPathStatic PASS=7507 FAIL=0; claude_bud_job42 PASS (A+B); codebot_v161 PASS; run_time_packs_test 0 failed; rojo build deterministic (both dist copies identical).
+- **Creator Hub (Code Bot):** create five Developer Products: '15 Minutes of Cash' 25 R$, '30 Minutes of Cash' 49 R$, '1 Hour of Cash' 89 R$, '2 Hours of Cash' 159 R$, '4 Hours of Cash' 279 R$ (description: 'Instantly get cash equal to <N> of your current income.'). Paste the Ids into MonetizationConfig.DevProducts Cash15m / Cash30m / Cash1h / Cash2h / Cash4h. The Shop keeps the old packs until all five Ids are in. Do NOT create a 1-day or 7-day pack.
+- **JOB 42 A+B shipped owner-first.** NEXT: JOB 42 C/D if Claude pushes them; else JOB 43 part 1 (army-vs-army brawl). Do NOT flip TimePacks/Guided/RecruitPackOffer/Rival/RatePrompt OwnerFirst; do not create Creator Hub products until Shaun OKs after phone tests.
+
+**Phone tests for Shaun (owner-first — use owner / Studio playtest account):**
+1. Owner Shop: five time pack rows (4h → 15m) with **SOON** while Ids are 0; layout readable; **BEST VALUE** on the 4h row. Amounts show floor + "(minimum)" until income passes it.
+2. Cash pill **+** scrolls to / highlights the 4h row (Studio preview path with Ids 0).
+3. Non-owner (e.g. uid 9) still sees the **old** four cash packs (TimePacks OwnerFirst). PreferMesh OFF.
+4. A+B+C+D from JOB 41 still owner-first as v158–v160 (Guided; Recruit Pack Id 0; TARGETS; rate card). Real purchase of time packs needs Creator Hub Ids first.
+
 ## claude-bud JOB 42 PART B (2026-10-01): TIME CASH PACKS IN THE SHOP + OFFERS (branch `claude/desktop-bud`)
 Only while SHOWN (TimePacksLiveFor AND all five Ids set); otherwise the Shop and offers are exactly today's.
 - **Rows:** five rows in the cash place (ShopOverhaulConfig.Order 4h .. 15m), order 4h, 2h, 1h, 30m, 15m.
