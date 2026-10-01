@@ -1,8 +1,14 @@
-## v183 PUBLISHING (Code Bot Roblox, 2026-10-01 ~18:55 Dublin): JOB 51 SharedHostility OwnerFirst + JOB 61 Creator Hub analytics
-- Cherry-pick: `b8c2af5` (JOB 51) → `07bb90a`, `1373c74` (JOB 61) → `fb88365` onto phase-7 `4952138` (v182 tip). WE_Build 183. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v182.
-- **JOB 51 (NEW-OWNER-FIRST):** `CombatConfig.SharedHostility.OwnerFirst = true` — one Hostility rule for every NPC target pick; /guarddebug logs; live 2-player proof owed.
-- **JOB 61:** AnalyticsService economy batch + 8-step onboarding funnel + Shop/Rebirth funnel sessions. No Heartbeat work.
-- BuyPathStatic FAIL=0 (pins updated for JOB 61 contracts). Place version TBD after Open Cloud publish.
+## v183 PUBLISHED (Code Bot Roblox, 2026-10-01 ~18:55 Dublin): Open Cloud place version 181. claude-bud JOB 51 SharedHostility OwnerFirst + JOB 61 Creator Hub analytics
+- **Commits:** cherry-pick `b8c2af5` → `07bb90a` (JOB 51), `1373c74` → `fb88365` (JOB 61); code+dist+checks `3df4db5` on phase-7-polish (from `4952138`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v182 `4952138`.
+- **JOB 51 (NEW-OWNER-FIRST):** `CombatConfig.SharedHostility.OwnerFirst = true` — `Server/Modules/Hostility` bound by CombatService; every NPC target pick uses it; CheckpointGuardService.Protected calls it; `/guarddebug` + `[GuardTarget]`/`[GuardShot]`/`[NpcHit]`. Enabled=false is the old brain. Live 2-player proof owed.
+- **JOB 61:** AnalyticsService batched Cash/Gold economy + 8-step first-session onboarding funnel + Shop/Rebirth funnel session IDs + daily mission / return / notification custom events. No Heartbeat work. Admin exclusion + PII sanitization.
+- **Checks:** BuyPathStatic **PASS=8043 FAIL=0**; `tools/checks/codebot_v183.py`; `claude_bud_job51.py`; `claude_bud_job61.py`. PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP 200, versionNumber **181**, universe 10767159222 / place 97112936860418. Servers NOT restarted: Migrate to Latest Update when convenient.
+- **Phone tests (Shaun — JOB 51 needs Laumartinez26 in the same server; owner types `/guarddebug on`):**
+  1. Both in the plaza circle: guards shoot both of you; nobody shielded soaks the shots forever.
+  2. Both can damage and kill a guard.
+  3. Respawn at the plaza: shield ends normally; note how fast guards kill you.
+- **Still owed:** flip SharedHostility.OwnerFirst after phone OK; JOB 44 Studio 2-player siege/march; JOB 52 / 50 / 59 / 60 / 62 queued; spawn-out-of-plaza-aggro question for Shaun.
 
 ## JOB 61 (Code Bot Roblox, 2026-10-01 18:36 Dublin): Creator Hub Economy + Funnels analytics
 - Added the server-only `AnalyticsService` path and one central `Shared/Configs/AnalyticsConfig.luau`: batched Cash/Gold economy events with normalized item SKUs, ending balances, allowed transaction types, admin exclusion, and PII sanitization.
