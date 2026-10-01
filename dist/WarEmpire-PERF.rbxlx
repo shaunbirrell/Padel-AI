@@ -6612,7 +6612,8 @@ HudConfig.CashPill = {
 	NumberSizeDesktop = 32,
 	NumberColor = Color3.fromRGB(255, 255, 255),
 	ShowDollarSign = false, -- the icon says "cash"; prices elsewhere keep "$"
-	AbbreviateAbove = 1e9, -- 1,234,567,890 → "1.23B"
+	AbbreviateAbove = 1e9, -- 1,234,567,890 → "1.235B"
+	AbbreviateDecimalsBig = 3, -- Code Bot v195: decimals for B/T on the cash pill (was 2: "1.00B" hid $1M+ of growth)
 	CountUpSeconds = 0.35,
 	PopScale = 1.08, -- the number pops once per change
 	FlashSeconds = 0.5, -- gain/spend colour (CashFloat.GainColor / SpendColor) settles back to NumberColor
@@ -31467,7 +31468,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 194)
+		player:SetAttribute("WE_Build", 195)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -77428,7 +77429,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 194)
+			player:SetAttribute("WE_Build", 195)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -86115,7 +86116,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 194)
+		player:SetAttribute("WE_Build", 195)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -86257,7 +86258,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=194",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=195",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -143671,7 +143672,7 @@ local ABBREV: { { Value: number, Suffix: string } } = {
 	{ Value = 1e3, Suffix = "K" },
 }
 
--- "50,015,946"; at/above HudConfig.CashPill.AbbreviateAbove → "1.23B" (no "$": the pill's icon says cash)
+-- "50,015,946"; at/above HudConfig.CashPill.AbbreviateAbove → "1.234B" (v195: 3 decimals for B/T) (no "$": the pill's icon says cash)
 local function formatCash(n: number): string
 	local P = HudConfig.CashPill
 	local v = math.floor((tonumber(n) or 0) + 0.5)
@@ -143679,7 +143680,10 @@ local function formatCash(n: number): string
 	if math.abs(v) >= P.AbbreviateAbove then
 		for _, a in ipairs(ABBREV) do
 			if math.abs(v) >= a.Value then
-				body = string.format("%.2f%s", v / a.Value, a.Suffix)
+				-- Code Bot v195: 3 decimals from B up ("1.003B") so income is visible above $1B (2 decimals sat on
+				-- "1.00B" for ~57 s at $174k/s); M/K keep 2 (HudConfig.CashPill.AbbreviateDecimalsBig)
+				local dp = if a.Value >= 1e9 then (tonumber(P.AbbreviateDecimalsBig) or 3) else 2
+				body = string.format("%." .. tostring(dp) .. "f%s", v / a.Value, a.Suffix)
 				break
 			end
 		end

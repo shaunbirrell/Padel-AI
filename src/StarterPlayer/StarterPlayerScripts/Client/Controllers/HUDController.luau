@@ -261,7 +261,7 @@ local ABBREV: { { Value: number, Suffix: string } } = {
 	{ Value = 1e3, Suffix = "K" },
 }
 
--- "50,015,946"; at/above HudConfig.CashPill.AbbreviateAbove → "1.23B" (no "$": the pill's icon says cash)
+-- "50,015,946"; at/above HudConfig.CashPill.AbbreviateAbove → "1.234B" (v195: 3 decimals for B/T) (no "$": the pill's icon says cash)
 local function formatCash(n: number): string
 	local P = HudConfig.CashPill
 	local v = math.floor((tonumber(n) or 0) + 0.5)
@@ -269,7 +269,10 @@ local function formatCash(n: number): string
 	if math.abs(v) >= P.AbbreviateAbove then
 		for _, a in ipairs(ABBREV) do
 			if math.abs(v) >= a.Value then
-				body = string.format("%.2f%s", v / a.Value, a.Suffix)
+				-- Code Bot v195: 3 decimals from B up ("1.003B") so income is visible above $1B (2 decimals sat on
+				-- "1.00B" for ~57 s at $174k/s); M/K keep 2 (HudConfig.CashPill.AbbreviateDecimalsBig)
+				local dp = if a.Value >= 1e9 then (tonumber(P.AbbreviateDecimalsBig) or 3) else 2
+				body = string.format("%." .. tostring(dp) .. "f%s", v / a.Value, a.Suffix)
 				break
 			end
 		end

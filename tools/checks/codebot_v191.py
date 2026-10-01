@@ -47,12 +47,12 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 194)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 194)'),
-    (S + "Services/DataService.luau", "WE_Build=194"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 194)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 195)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 195)'),
+    (S + "Services/DataService.luau", "WE_Build=195"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 195)'),
 ):
-    check(needle in read(rel), "CODEBOT v191: WE_Build=194 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v191: WE_Build=195 " + rel.rsplit("/", 1)[-1])
 
 HC = read(C + "HangarDockConfig.luau")
 check("Enabled = true," in HC and "OwnerFirst = true," in HC,
