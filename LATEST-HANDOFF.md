@@ -1,4 +1,30 @@
 <!-- Q2-START -->
+## v164 PUBLISHED (Code Bot Roblox, 2026-10-01 09:46 Dublin): Open Cloud place version 162 — JOB 42 part C + JOB 43 owner-first
+- **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **164**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":162}`. Servers NOT restarted (Migrate to Latest Update / rejoin). Code commit `49f1df1`.
+- **Cherry-pick:** Claude `7808f30` JOB 42 C (Recruit Pack cash = Cash30m while TimePacks live) + Claude `77b4172` JOB 43 (army vs army brawl); JOB 42 D docs (SHOP.md + proof README). SquadOrdersService conflict with v162 resolved by keeping **both** ArmyState/ArmyCommand and ArmyBrawl.
+- **Flags left OwnerFirst=true (do NOT flip without Shaun):**
+  - `ArmyConfig.ArmyBrawl` Enabled + OwnerFirst=true (soldier-vs-soldier only for owner until flipped).
+  - Still: `ShopOverhaulConfig.TimePacks` OwnerFirst=true (Ids=0); `TutorialConfig.Guided` OwnerFirst=true; `MonetizationConfig.RecruitPackOffer` OwnerFirst=true (Id=0); `RivalConfig` OwnerFirst=true; `RatePromptConfig` OwnerFirst=true; `ArmyOrdersConfig` OwnerFirst stays true.
+- **JOB 42 C:** while TimePacks is live for the player, Recruit Pack cash = `ShopOverhaulConfig.TimePackAmount("Cash30m", perMin)` via `CashFromTimePack` / `RecruitPackCashFor` (same income lookup + re-check; card shows the same $). OFF = the JOB 41 clamp. 49 R$ / Id 0 / 2x boost / gold trim unchanged.
+- **JOB 43:** root cause proven — `nearestHostile` skipped OwnerUserId models so enemy soldiers never became candidates. Fix: `Modules/ArmyBrawl.Candidates` under `CombatService.ArmyHostility`; ATTACK/SEND + FOLLOW/HOLD picks add "Unit"; `CombatService.ApplyUnitUnitHit` re-checks per shot; kills -> ARMY KILLS + 10 XP (pair-capped). Board already live (v156).
+- **PreferMesh stays OFF.** No WE_Building* touch. Servers stay at 10. No fast travel. **No Creator Hub products created.**
+- **Checks:** BuyPathStatic PASS=7556 FAIL=0; codebot_v164 PASS; run_recruit_pack_test 0 failed; run_army_brawl_test 0 failed; rojo build deterministic (both dist copies identical).
+- **Owed / NEXT:** Creator Hub five time-pack Ids (still); 2-player Studio test for JOB 43 (soldier-vs-soldier, fight continues after player dies, clan mates untouched). Do NOT flip OwnerFirst flags.
+
+**Phone tests for Shaun (owner account):**
+1. Shop / Recruit Pack card: while TimePacks is live for you, the Recruit Pack "$N Cash" matches the 30 MIN OF CASH row (Ids still 0 = SOON layout only until Creator Hub).
+2. With a friend NOT in your clan: walk armies together — your soldiers shoot his SOLDIERS too; after he dies the fight continues until one army is wiped / out of range; ARMY KILLS board counts soldier kills (owner/admin never listed).
+3. Clan mate's army is never attacked.
+4. Non-owner still: no TimePacks shop swap, no ArmyBrawl (OwnerFirst). PreferMesh OFF.
+
+## claude-bud JOB 43 (2026-10-01): ARMY VS ARMY BRAWL + ARMY KILLS BOARD (merged into v164)
+**Flag:** `ArmyConfig.ArmyBrawl` (`Enabled`, `OwnerFirst = true`). OFF = today.
+**To launch:** `OwnerFirst = false`.
+See v164 PUBLISHED above for root cause, fix, checks, and phone tests.
+
+## claude-bud JOB 42 PART C (2026-10-01): THE RECRUIT PACK CASH = THE 30-MIN PACK (merged into v164)
+See v164 PUBLISHED above. Parts A+B already live owner-first (v161); part D docs shipped with v164.
+
 ## v163 PUBLISHED (Code Bot Roblox, 2026-10-01 09:37 Dublin): Open Cloud place version 161 — TARGETS always visible, owner Guided replay (test mode), TOP SUPPORTERS credits every purchase
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **163**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":161}`. Servers NOT restarted (Migrate to Latest Update / rejoin). Code commit `05f52f9` (worktree `/workspace/wt-tgs`, branch `codebot/targets-guided-supporters`); bud merge `b00006f`.
 - **1. TARGETS (JOB 41 C, RivalConfig OwnerFirst=true kept):** the pill is top-right, under the top-bar row (the compass chip), Right 16 / Top 64 real px under the topbar inset (1024x471 phone: x 880..1008, y 122..170). It was **hidden whenever the server listed 0 targets**, i.e. unless another player was in the server AND past new-player protection (10 min since first join, + novice shield) AND not shielded / just-raided / a clan ally AND had >= $10k in the ATM (10% steal >= MinLootToShow $1,000; bully targets need $20k) AND beatable (army power >= 0.25x defences), while Shaun had soldiers, no SEND out / cooldown, and was not in the Guided hold. Distance only sorts. So he almost never saw it. **Now** the pill always shows for a live player (dimmed, no badge, when empty); tapping it opens "No targets right now — rivals appear when other players have cash to raid" + one server reason (alone / recruit soldiers / everyone protected / nobody has $10k+ / defences too strong / army out or resting / finish the guided minutes). It hides only while another full-screen panel is open (Modal), while dead, and while the Recruit Pack card slides into the same corner. Desktop caveat: Roblox's own player list (top-right, Tab) can cover it when expanded.
