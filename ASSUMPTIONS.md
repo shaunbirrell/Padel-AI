@@ -10057,3 +10057,9 @@ ds_territories.luau T3):
 - **The reset hour:** Core.ResetHourUtc moves the reset for the whole daily list (it is 0, so no change today).
 - **The Build GO target:** the cheapest next upgrade by BaseConfig cost. A reroll picks the first loop type not
   already offered (Pool order).
+
+## 2026-10-01 — claude-bud JOB 49 part D: return sequence
+- **The queue:** it is client-side, ordered by priority, and each card waits up to 90 s for a free screen. The
+  server timings stay as they were.
+- **The missions toast:** it shows only when 3 untouched core missions are offered (part C live), once per session.
+- **Comeback with no offline pay:** it still gets the Welcome back card (Cash 0 + Comeback).

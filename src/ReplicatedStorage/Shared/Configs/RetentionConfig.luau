@@ -41,6 +41,19 @@ local RetentionConfig = {
 		StateStore = "WE_NotifyState_v1",
 		MaxPerDay = 1, -- enforced by the sender (docs/NOTIFICATIONS.md); LastSentDay is its field
 	},
+	--[[ claude-bud JOB 49 part D (2026-10-01): ONE return sequence. On join the cards come in one queue, one at a time
+		(Welcome back -> the streak card -> a one-line "3 new missions" toast that pulses the Missions button), never
+		while the onboarding hold is on (the Guided chain), never in combat / driving / with a panel open. The
+		EngagementConfig Comeback cash folds into the Welcome back card when both are due (one card, both amounts).
+		ReturnDay { days since the first join, guidedDone } is logged once per session on join. OFF = the cards as
+		before (each on its own timer). ]]
+	ReturnSequence = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): Code Bot flips it after Shaun's phone test
+		GapSeconds = 1.5, -- between two cards
+		MissionsText = "3 new missions today: open MISSIONS", -- device-neutral, no key names
+		MissionsToastSeconds = 5,
+	},
 }
 
 --[[ One owner-first rule for JOB 29's switches (a block with Enabled + OwnerFirst):

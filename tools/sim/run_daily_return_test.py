@@ -452,6 +452,37 @@ local oc = false
 for _, e in ipairs(o.Daily) do if e.Core then oc = true end end
 check(not oc, "owner-first: another player still gets today's rotation")
 
+-- ── D. ONE RETURN SEQUENCE (server side; the client queue is a phone test) ──
+local RCf = require(node("Configs/RetentionConfig"))
+check(RCf.ReturnSequence.Enabled == true and RCf.ReturnSequence.OwnerFirst == true, "D flags: ReturnSequence is owner-first")
+PER_MIN = 600
+OWNER:SetAttribute("WE_ComebackCash", 25000)
+local pd, cd = offlineLoad(OWNER, 3600)
+check(cd ~= nil and cd.Cash == pd and cd.Comeback == 25000 and OWNER:GetAttribute("WE_ComebackCash") == nil,
+  "Comeback + offline both due: ONE Welcome back card with both amounts ($" .. tostring(cd and cd.Cash) .. " + comeback $" .. tostring(cd and cd.Comeback) .. ")")
+OWNER:SetAttribute("WE_ComebackCash", 25000)
+local _, cz = offlineLoad(OWNER, nil)
+check(cz ~= nil and cz.Cash == 0 and cz.Comeback == 25000, "Comeback with no offline pay (first join of the day elsewhere): the card still shows the comeback")
+RCf.ReturnSequence.Enabled = false
+OWNER:SetAttribute("WE_ComebackCash", 25000)
+local _, co = offlineLoad(OWNER, 3600)
+RCf.ReturnSequence.Enabled = true
+check(co ~= nil and co.Comeback == nil, "ReturnSequence OFF: the Welcome back payload as before (no comeback on it)")
+OWNER:SetAttribute("WE_ComebackCash", nil)
+PER_MIN = 0
+-- ReturnDay once per session on join
+local rd = newProfile(OWNER, { FirstJoinUnix = CLOCK - 86400 - 3600, TutorialComplete = true })
+MS, RS = boot(); clearLog()
+for _, cb in ipairs(loaded) do cb(OWNER, rd) end
+runTo(CLOCK + 5)
+local r = lastEv("RETURN_DAY")
+check(evCount("RETURN_DAY") == 1 and r and r.days >= 1 and r.guidedDone == "yes", "ReturnDay on join: days " .. tostring(r and r.days) .. ", guidedDone " .. tostring(r and r.guidedDone))
+local rd2 = newProfile(OTHER, { FirstJoinUnix = CLOCK - 86400 })
+clearLog()
+for _, cb in ipairs(loaded) do cb(OTHER, rd2) end
+runTo(CLOCK + 5)
+check(evCount("RETURN_DAY") == 0, "owner-first: no ReturnDay for another player yet")
+
 --@@C@@
 
 print(string.format("DAILY RETURN TEST: %d failed", fails))

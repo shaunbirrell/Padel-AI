@@ -69,6 +69,60 @@ local function whenFree(fn: () -> ())
 	end)
 end
 
+-- ── claude-bud JOB 49 D: ONE return sequence (RetentionConfig.ReturnSequence) ──────────────────────────────────
+-- the cards queue and show one at a time in priority order (1 Welcome back, 2 the streak card, 3 the missions toast),
+-- each only when the screen is free and the onboarding hold is off; OFF = each card on its own (whenFree) as before
+local RetentionConfigC: any = require(Shared.Configs.RetentionConfig)
+local function seqLive(): boolean
+	local s = RetentionConfigC.ReturnSequence
+	return typeof(s) == "table" and RetentionConfigC.Live(s, player.UserId)
+end
+type QueuedCard = { Pri: number, Show: (done: () -> ()) -> () }
+local cardQueue: { QueuedCard } = {}
+local cardBusy = false
+local missionsToastDone = false
+local pumpQueue: () -> () = function() end
+pumpQueue = function()
+	if cardBusy or #cardQueue == 0 then
+		return
+	end
+	cardBusy = true
+	task.spawn(function()
+		local left = 90
+		while left > 0 and (blocked() or player:GetAttribute("WE_Onboarding") == true) do
+			task.wait(1)
+			left -= 1
+		end
+		table.sort(cardQueue, function(a, b)
+			return a.Pri < b.Pri
+		end)
+		local item = table.remove(cardQueue, 1)
+		local finished = false
+		local function done()
+			if finished then
+				return
+			end
+			finished = true
+			task.delay(tonumber(RetentionConfigC.ReturnSequence.GapSeconds) or 1.5, function()
+				cardBusy = false
+				pumpQueue()
+			end)
+		end
+		if item then
+			local ok = pcall(item.Show, done)
+			if not ok then
+				done()
+			end
+		else
+			cardBusy = false
+		end
+	end)
+end
+local function enqueueCard(pri: number, show: (done: () -> ()) -> ())
+	table.insert(cardQueue, { Pri = pri, Show = show })
+	pumpQueue()
+end
+
 local function screen(name: string, order: number): ScreenGui?
 	local pg = player:FindFirstChildOfClass("PlayerGui")
 	if pg == nil then
@@ -161,14 +215,24 @@ local function awayText(seconds: number): string
 	return string.format("%d min", m)
 end
 
-local function welcomeBackCard(data: any)
+local function welcomeBackCard(data: any, onClosed: (() -> ())?)
 	local cash = math.floor(tonumber(data.Cash) or 0)
-	if cash <= 0 then
+	local comeback = math.floor(tonumber(data.Comeback) or 0) -- claude-bud JOB 49 D: the Comeback cash on the same card
+	if cash <= 0 and comeback <= 0 then
+		if onClosed then
+			onClosed()
+		end
 		return
 	end
 	local g = screen("WE_WelcomeBackCard", 38)
 	if g == nil then
+		if onClosed then
+			onClosed()
+		end
 		return
+	end
+	if onClosed then
+		g.Destroying:Connect(onClosed)
 	end
 	local card = Instance.new("Frame")
 	card.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -190,13 +254,16 @@ local function welcomeBackCard(data: any)
 	local body = label(card, if newCard then "Your base earned while you were away" else "While you were away you earned", 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
 	body.Position = UDim2.fromOffset(14, 44)
 	body.Size = UDim2.new(1, -28, 0, 20)
-	local amt = label(card, "+" .. money(cash), 32, GOLD, Enum.Font.GothamBlack)
+	local amt = label(card, if cash > 0 then "+" .. money(cash) else "+" .. money(comeback), 32, GOLD, Enum.Font.GothamBlack)
 	amt.Position = UDim2.fromOffset(14, 66)
 	amt.Size = UDim2.new(1, -28, 0, 38)
 	local capH = math.floor(tonumber(data.CapHours) or 8)
 	local sub = awayText(tonumber(data.Seconds) or 0) .. (if data.Capped == true then (if newCard then string.format(" (capped at %d h)", capH) else " (8 h max)") else "") .. " · in your ATM"
 	if data.Premium == true then
 		sub ..= " · Premium +10%"
+	end
+	if comeback > 0 then
+		sub = if cash > 0 then sub .. " · + Comeback " .. money(comeback) else "Comeback bonus for returning" -- claude-bud JOB 49 D
 	end
 	local subL = label(card, sub, 15, Color3.fromRGB(190, 190, 180), Enum.Font.GothamMedium)
 	subL.Position = UDim2.fromOffset(14, 106)
@@ -219,7 +286,7 @@ local function welcomeBackCard(data: any)
 	collect.TextColor3 = Color3.new(1, 1, 1)
 	collect.Font = Enum.Font.GothamBlack
 	collect.TextSize = 18
-	collect.Text = if newCard then "COLLECT " .. money(cash) else "OK"
+	collect.Text = if newCard and cash > 0 then "COLLECT " .. money(cash) else "OK"
 	corner(collect, 10)
 	collect.Parent = card
 	-- the money is already in his ATM (server, PendingCash): both buttons only close the card
@@ -229,7 +296,7 @@ local function welcomeBackCard(data: any)
 		end
 	end
 	collect.Activated:Connect(function()
-		if newCard then
+		if newCard and cash > 0 then
 			-- claude-bud JOB 49 B: the gold line to HIS ATM (walk up to collect; no travel, no second claim)
 			pcall(function()
 				local CW: any = require(script.Parent.Parent.Modules.ConsoleWaypoint)
@@ -243,10 +310,16 @@ local function welcomeBackCard(data: any)
 end
 
 -- ── the streak card ────────────────────────────────────────────────────────────────────────────────────────────────
-local function streakCard(data: any)
+local function streakCard(data: any, onClosed: (() -> ())?)
 	local g = screen("WE_StreakCard", 36)
 	if g == nil then
+		if onClosed then
+			onClosed()
+		end
 		return
+	end
+	if onClosed then
+		g.Destroying:Connect(onClosed)
 	end
 	local today = math.floor(tonumber(data.Today) or 1)
 	local cash = if typeof(data.Cash) == "table" then tonumber(data.Cash[today]) or 0 else 0
@@ -377,20 +450,61 @@ function RetentionController.Init()
 			clearArrow()
 			coinBurst(math.floor(tonumber(data.Cash) or 0), if typeof(data.Text) == "string" then data.Text else nil)
 		elseif kind == "WelcomeBack" and typeof(data) == "table" then
-			whenFree(function()
-				welcomeBackCard(data)
-			end)
+			if seqLive() then
+				enqueueCard(1, function(done)
+					welcomeBackCard(data, done)
+				end)
+			else
+				whenFree(function()
+					welcomeBackCard(data)
+				end)
+			end
 		elseif kind == "Streak" and typeof(data) == "table" then
 			data._ReceivedAt = os.clock() -- claude-bud JOB 49 A: the countdown keeps counting while the card waits
-			whenFree(function()
-				streakCard(data)
-			end)
+			if seqLive() then
+				enqueueCard(2, function(done)
+					streakCard(data, done)
+				end)
+			else
+				whenFree(function()
+					streakCard(data)
+				end)
+			end
 		elseif kind == "NotifOptIn" then
 			whenFree(function()
 				NotifOptIn.Ask("auto")
 			end)
 		end
 	end)
+	-- claude-bud JOB 49 D: once per session, after the other cards: "3 new missions" + the Missions button pulses
+	if seqLive() then
+		Remotes.BindEvent(Constants.RemoteNames.MissionStateUpdate, function(payload: any)
+			if missionsToastDone or typeof(payload) ~= "table" or typeof(payload.Core) ~= "table" or typeof(payload.Daily) ~= "table" then
+				return
+			end
+			local fresh = 0
+			for _, e in ipairs(payload.Daily) do
+				if typeof(e) == "table" and e.Core == true and e.Claimed ~= true and (tonumber(e.Progress) or 0) == 0 then
+					fresh += 1
+				end
+			end
+			if fresh < 3 then
+				return
+			end
+			missionsToastDone = true
+			enqueueCard(3, function(done)
+				pcall(function()
+					local NC: any = (require :: any)(script.Parent.NotificationController)
+					NC.Show(RetentionConfigC.ReturnSequence.MissionsText, "Info", RetentionConfigC.ReturnSequence.MissionsToastSeconds)
+				end)
+				pcall(function()
+					local HUD: any = (require :: any)(script.Parent.HUDController)
+					HUD.PulseRail("Missions")
+				end)
+				task.delay(tonumber(RetentionConfigC.ReturnSequence.MissionsToastSeconds) or 5, done)
+			end)
+		end)
+	end
 	player:GetAttributeChangedSignal("WE_Onboarding"):Connect(showArrow)
 	player:GetAttributeChangedSignal("WE_ConsolePos_CommandCenter"):Connect(showArrow)
 	showArrow()

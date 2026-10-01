@@ -290,7 +290,18 @@ local function onLoadOffline(player: Player, profile: any)
 		oc
 	)
 	profile.PrevSeenUnix = nil -- paid once per load: a later call in this session finds nothing
+	-- claude-bud JOB 49 D: the return sequence: the Comeback cash (EngagementService, already paid) rides on this card
+	local seq = typeof(RetentionConfig.ReturnSequence) == "table" and RetentionConfig.Live(RetentionConfig.ReturnSequence, player.UserId)
 	if cash <= 0 or not EconomyService or not EconomyService.AccruePendingCash(player, cash, "offline") then
+		if seq then
+			task.delay(math.max(1, tonumber(o.ShowDelaySeconds) or 6), function()
+				local comeback = tonumber(player:GetAttribute("WE_ComebackCash")) or 0
+				if comeback > 0 and player.Parent and RetentionService.WaitOnboarding(player, 90) then
+					player:SetAttribute("WE_ComebackCash", nil)
+					push(player, "WelcomeBack", { Cash = 0, Seconds = 0, Comeback = comeback, Collect = nil })
+				end
+			end)
+		end
 		return
 	end
 	log(player, "OFFLINE_EARNED", { cash = cash, hours = string.format("%.1f", seconds / 3600) })
@@ -298,7 +309,12 @@ local function onLoadOffline(player: Player, profile: any)
 	task.delay(math.max(1, tonumber(o.ShowDelaySeconds) or 6), function()
 		if player.Parent and RetentionService.WaitOnboarding(player, 90) then
 			local card = typeof(o.Card) == "table" and RetentionConfig.Live(o.Card, player.UserId)
+			local comeback = if seq then tonumber(player:GetAttribute("WE_ComebackCash")) or 0 else 0
+			if comeback > 0 then
+				player:SetAttribute("WE_ComebackCash", nil)
+			end
 			push(player, "WelcomeBack", {
+				Comeback = if comeback > 0 then comeback else nil, -- claude-bud JOB 49 D: one card for both
 				Cash = cash,
 				Seconds = seconds,
 				Capped = seconds >= capSec,
@@ -459,6 +475,14 @@ function RetentionService.Init(deps: { [string]: any })
 
 	DataService.OnProfileLoaded(function(player: Player, profile: any)
 		startHold(player, profile)
+		-- claude-bud JOB 49 D: ReturnDay (UTC days since the first join, guided done) once per session, so D1 ties to JOB 48
+		if typeof(RetentionConfig.ReturnSequence) == "table" and RetentionConfig.Live(RetentionConfig.ReturnSequence, player.UserId) then
+			local first = tonumber(profile.FirstJoinUnix) or 0
+			if first > 0 then
+				local days = math.max(0, math.floor(os.time() / 86400) - math.floor(first / 86400))
+				log(player, "RETURN_DAY", { days = days, guidedDone = if profile.TutorialComplete == true then "yes" else "no" })
+			end
+		end
 		-- after the other load hooks (BaseService's plot / income state), in its own thread
 		task.defer(onLoadOffline, player, profile)
 		-- a day-7 army boost still running from before (DailyRewardConfig.Day7Boost)

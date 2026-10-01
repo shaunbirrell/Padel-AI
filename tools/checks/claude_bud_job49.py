@@ -95,6 +95,19 @@ _j49('RequestMissionReroll = { "string:48" }' in _SC, "C: RequestMissionReroll's
 _MON = _j49_src(_SV + "Services/MonetizationService.luau")
 _j49("GrantsMissionReroll == true" in _MON and "GrantRerollToken(player)" in _MON, "C: the Robux reroll grant exists in ProcessReceipt (product Id 0 = never sold)")
 
+# ── D ──
+_RCF = _j49_src(_CF + "RetentionConfig.luau")
+_rsq = _j49_block(_RCF, "ReturnSequence")
+_j49("Enabled = true," in _rsq and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _rsq, "D: RetentionConfig.ReturnSequence is owner-first")
+_RCC = _j49_src("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/RetentionController.luau")
+_j49("enqueueCard(1," in _RCC and "enqueueCard(2," in _RCC and "enqueueCard(3," in _RCC and 'player:GetAttribute("WE_Onboarding") == true' in _RCC,
+     "D: one card queue (Welcome back, streak, missions toast), never during the onboarding hold")
+_ENG = _j49_src(_SV + "Services/EngagementService.luau")
+_j49('player:SetAttribute("WE_ComebackCash", E.ComebackCash)' in _ENG, "D: the Comeback cash folds into the Welcome back card while the sequence is live")
+for _row in ("STREAK_CLAIMED", "STREAK_RESET", "OFFLINE_COLLECTED", "MISSION_DONE", "MISSIONS_ALL_DONE", "MISSION_REROLL", "RETURN_DAY"):
+    _j49(_row + " = { Name = " in _j49_src(_CF + "AnalyticsConfig.luau"), "D: analytics row " + _row)
+
+#@@C@@
 
 _luau = _j49_os.environ.get("LUAU")
 if _luau is None and _j49_os.environ.get("LUAU_COMPILE"):

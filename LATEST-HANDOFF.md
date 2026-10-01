@@ -7,6 +7,58 @@
 - **Publish:** HTTP 200, versionNumber **176**, universe 10767159222 / place 97112936860418. Servers NOT restarted: Migrate to Latest Update when convenient.
 - **Phone tests (owed — Shaun):** (1) Missions shows "TODAY'S 3 MISSIONS · new in Xh Ym" with 3 different types; each GO goes to the right place. (2) Reroll once; second reroll refused. (3) Finish all 3; chest pays once. (4) After shown reset time, 3 new missions. Also: CapBoost/OfflineCap2x/MissionReroll Id 0 still off. After phone OK: flip MissionConfig.Core.OwnerFirst true→false. **Question for Shaun:** should Daily Ops below the 3 core missions be hidden?
 - **Still owed:** JOB 44 Studio 2-player siege/march still owed.
+## claude-bud JOB 49 part D (2026-10-01): ONE RETURN SEQUENCE + ANALYTICS (JOB 49 COMPLETE) (branch `claude/desktop-bud`)
+**Flags to flip:**
+- `RetentionConfig.ReturnSequence.OwnerFirst = true -> false` (NEW-OWNER-FIRST).
+- Also still owner-first: `MissionConfig.Core` (part C). A + B were flipped live by Code Bot in v177.
+
+**Root cause:**
+- The Welcome back card (6 s + hold) and the streak card (8 s + hold) ran on their own timers and could stack.
+- The Comeback cash was a third toast.
+- Nothing pointed at the new missions.
+- Details: docs/proof/job49/before.md.
+
+**Built:**
+- **One queue on the client (RetentionController):** cards show one at a time in priority order: Welcome back -> the
+  streak card -> "3 new missions today: open MISSIONS" (one toast + the Missions button pulses, once per session when
+  3 fresh core missions are up).
+  - Each card waits while the onboarding hold is on (the Guided chain) and while he is in combat / driving / in a
+    panel.
+- **Comeback cash:** EngagementConfig Comeback (still paid by EngagementService, once per absence) folds into the
+  Welcome back card ("+ Comeback $25,000") instead of its own toast. With no offline pay, the card shows the comeback
+  alone.
+- **ReturnDay {days since the first join, guidedDone}:** logged once per session on join, so D1 ties to the JOB 48
+  chain.
+- **AnalyticsConfig rows:** StreakClaimed, StreakReset, OfflineCollected, MissionDone, MissionsAllDone, MissionReroll,
+  ReturnDay.
+
+**JOB 49 maths at 3 income levels** (Day 7 = max($20k, 60 min); missions = max(floor, 10 min); chest = max($10k,
+20 min); offline cap 8 h x 0.25):
+
+| Income | Day 7 | Each mission | Chest | Full offline |
+|---|---|---|---|---|
+| $60/min | $20,000 | $2-4k (floor) | $10,000 | $7,200 |
+| $1,000/min | $60,000 | $10,000 | $20,000 | $120,000 |
+| $20,000/min | $1.2M | $200,000 | $400,000 | $2.4M |
+
+**Questions for Shaun:**
+1. Offline cash in the ATM can be raided before he collects it. Keep it raidable?
+2. Hide the Daily Ops below the 3 core missions?
+3. Prices for OfflineCap2x / MissionReroll. Both are Id 0 with no price, so they are never sold until you approve.
+
+**Checks:**
+- run_daily_return_test A-D, all 0 failed (docs/proof/job49/daily-return-sim.txt); claude_bud_job49 pins.
+- BuyPathStatic FAIL=0; rojo ok; no new LSP errors; remote_audit OK.
+
+**Owed:** the Studio "come back" screenshots, the HUD harness (`check_hud.py` is not in this repo), the live D1 / D7
+numbers.
+
+**Test ON HIS PHONE:**
+1. Day 1: the streak card + calendar with "Next in ...".
+2. The next day: Welcome back (Collect $X) first, then Day 2, then the "3 new missions" toast. One at a time.
+3. Skip one day: the streak is kept and shows SAVED.
+4. The 3 missions reset at the time the Missions panel shows.
+
 ## claude-bud JOB 49 part C (2026-10-01): 3 CORE DAILY MISSIONS + RAID + REROLL (branch `claude/desktop-bud`)
 **Flags to flip:**
 - `MissionConfig.Core.OwnerFirst = true -> false` (NEW-OWNER-FIRST).

@@ -67,6 +67,11 @@ local AnalyticsConfig = {
 			-- claude-bud JOB 49: reasons to come back (streak / offline / missions / the return day)
 			STREAK_CLAIMED = { Name = "StreakClaimed", Value = "day", Field = "grace" },
 			STREAK_RESET = { Name = "StreakReset", Field = "lastDay" },
+			OFFLINE_COLLECTED = { Name = "OfflineCollected", Value = "cash", Field = "capped" },
+			MISSION_DONE = { Name = "MissionDone", Field = "type" },
+			MISSIONS_ALL_DONE = { Name = "MissionsAllDone", Value = "cash" },
+			MISSION_REROLL = { Name = "MissionReroll", Field = "kind" },
+			RETURN_DAY = { Name = "ReturnDay", Value = "days", Field = "guidedDone" },
 			-- claude-bud JOB 41 C: rival targets (PvP rate = RivalSendTapped per session)
 			RIVAL_LIST_OPENED = { Name = "RivalListOpened" },
 			RIVAL_SEND_TAPPED = { Name = "RivalSendTapped", Field = "verdict" },

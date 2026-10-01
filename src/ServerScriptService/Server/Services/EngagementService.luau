@@ -895,6 +895,12 @@ local function onComeback(player: Player, profile: any)
 	profile.ComebackPaidAt = os.time()
 	pay(player, E.ComebackCash, "comeback")
 	saveNow(player)
+	-- claude-bud JOB 49 D: with the return sequence live the Comeback cash folds into the Welcome back card (one card)
+	local RC: any = require(ReplicatedStorage.Shared.Configs.RetentionConfig)
+	if RC.ReturnSequence and RC.Live(RC.ReturnSequence, player.UserId) then
+		player:SetAttribute("WE_ComebackCash", E.ComebackCash)
+		return
+	end
 	notify(player, string.format("Welcome back, Commander! +$%d", E.ComebackCash), "Reward")
 end
 
