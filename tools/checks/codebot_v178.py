@@ -37,12 +37,12 @@ def block(src, name):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 178)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 178)'),
-    (S + "Services/DataService.luau", "WE_Build=178"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 178)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 179)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 179)'),
+    (S + "Services/DataService.luau", "WE_Build=179"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 179)'),
 ):
-    check(needle in read(rel), "CODEBOT v178: WE_Build=178 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v178: WE_Build=179 " + rel.rsplit("/", 1)[-1])
 
 # JOB 49 C: Core missions owner-first; free reroll; Robux reroll disabled
 MCF = read(C + "MissionConfig.luau")

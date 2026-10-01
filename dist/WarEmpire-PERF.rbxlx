@@ -800,6 +800,11 @@ local AnalyticsConfig = {
 			-- claude-bud JOB 49: reasons to come back (streak / offline / missions / the return day)
 			STREAK_CLAIMED = { Name = "StreakClaimed", Value = "day", Field = "grace" },
 			STREAK_RESET = { Name = "StreakReset", Field = "lastDay" },
+			OFFLINE_COLLECTED = { Name = "OfflineCollected", Value = "cash", Field = "capped" },
+			MISSION_DONE = { Name = "MissionDone", Field = "type" },
+			MISSIONS_ALL_DONE = { Name = "MissionsAllDone", Value = "cash" },
+			MISSION_REROLL = { Name = "MissionReroll", Field = "kind" },
+			RETURN_DAY = { Name = "ReturnDay", Value = "days", Field = "guidedDone" },
 			-- claude-bud JOB 41 C: rival targets (PvP rate = RivalSendTapped per session)
 			RIVAL_LIST_OPENED = { Name = "RivalListOpened" },
 			RIVAL_SEND_TAPPED = { Name = "RivalSendTapped", Field = "verdict" },
@@ -4913,6 +4918,11 @@ local EndgameConfig = {
 		RatePerSec = 2,
 		Burst = 4,
 		CloseRange = 22, -- the client closes the panel when you walk this far from the station
+		--[[ claude-bud JOB A (2026-10-01, P0 "the Recruitment Office closes by itself ~0.5 s after it opens"): the
+			Recruitment Office opens from TWO interaction points: the plaza NPC (prompt 12 studs) and the DRILL kiosk on
+			the player's own Elite Barracks zone (prompt 10 studs, JOB 46). The walk-away close is measured from the
+			point it was OPENED from, with hysteresis: open inside the prompt range, close only past RecruitCloseRange. ]]
+		RecruitCloseRange = 17,
 	},
 
 	Text = {
@@ -5224,6 +5234,15 @@ function EndgameConfig.BlackMarketStock(week: number): { Cash: { string }, Gold:
 	end
 	local gi = (w % #B.GoldPool) + 1
 	return { Cash = out, Gold = B.GoldPool[gi], GoldPrice = B.GoldPrices[gi] or B.GoldPrices[1] }
+end
+
+-- claude-bud JOB A: the Recruitment Office's walk-away rule (pure): close only past RecruitCloseRange from the point it
+-- was opened from (the hysteresis band between the prompt's 10-12 studs and 17)
+function EndgameConfig.RecruitShouldClose(distFromAnchor: number?): boolean
+	if distFromAnchor == nil or distFromAnchor ~= distFromAnchor then
+		return false -- no anchor known (state still loading): never a close
+	end
+	return distFromAnchor > (tonumber(EndgameConfig.Station.RecruitCloseRange) or 17)
 end
 
 return EndgameConfig
@@ -13855,6 +13874,19 @@ local RetentionConfig = {
 		Moments = { TutorialComplete = true } :: { [string]: boolean },
 		StateStore = "WE_NotifyState_v1",
 		MaxPerDay = 1, -- enforced by the sender (docs/NOTIFICATIONS.md); LastSentDay is its field
+	},
+	--[[ claude-bud JOB 49 part D (2026-10-01): ONE return sequence. On join the cards come in one queue, one at a time
+		(Welcome back -> the streak card -> a one-line "3 new missions" toast that pulses the Missions button), never
+		while the onboarding hold is on (the Guided chain), never in combat / driving / with a panel open. The
+		EngagementConfig Comeback cash folds into the Welcome back card when both are due (one card, both amounts).
+		ReturnDay { days since the first join, guidedDone } is logged once per session on join. OFF = the cards as
+		before (each on its own timer). ]]
+	ReturnSequence = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): Code Bot flips it after Shaun's phone test
+		GapSeconds = 1.5, -- between two cards
+		MissionsText = "3 new missions today: open MISSIONS", -- device-neutral, no key names
+		MissionsToastSeconds = 5,
 	},
 }
 
@@ -30744,7 +30776,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 178)
+		player:SetAttribute("WE_Build", 179)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -74385,7 +74417,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 178)
+			player:SetAttribute("WE_Build", 179)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -82904,7 +82936,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 178)
+		player:SetAttribute("WE_Build", 179)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -83046,7 +83078,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=178",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=179",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -85024,6 +85056,18 @@ end
 
 -- (true) when the player stands within BuyRange of the station's NPC
 function EndgameService.AtStation(player: Player, kind: string): boolean
+	if kind == "Recruits" then
+		-- claude-bud JOB A: the Recruitment Office's second interaction point: the DRILL kiosk on HIS own built Elite
+		-- Barracks zone (JOB 46). Without this a buy from the kiosk was refused even with the panel open.
+		local okK, kp = pcall(function(): any
+			return (require :: any)(script.Parent.RebirthZoneService).KioskPoint(player, "drill")
+		end)
+		local c0 = player.Character
+		local r0 = c0 and c0:FindFirstChild("HumanoidRootPart")
+		if okK and typeof(kp) == "Vector3" and r0 and r0:IsA("BasePart") and (r0.Position - kp).Magnitude <= EndgameConfig.Station.BuyRange then
+			return true
+		end
+	end
 	local p = EndgameService.StationPoint(kind)
 	local c = player.Character
 	local r = c and c:FindFirstChild("HumanoidRootPart")
@@ -87462,6 +87506,12 @@ local function onComeback(player: Player, profile: any)
 	profile.ComebackPaidAt = os.time()
 	pay(player, E.ComebackCash, "comeback")
 	saveNow(player)
+	-- claude-bud JOB 49 D: with the return sequence live the Comeback cash folds into the Welcome back card (one card)
+	local RC: any = require(ReplicatedStorage.Shared.Configs.RetentionConfig)
+	if RC.ReturnSequence and RC.Live(RC.ReturnSequence, player.UserId) then
+		player:SetAttribute("WE_ComebackCash", E.ComebackCash)
+		return
+	end
 	notify(player, string.format("Welcome back, Commander! +$%d", E.ComebackCash), "Reward")
 end
 
@@ -106845,6 +106895,7 @@ local Dressing: any = nil -- claude-bud JOB 46: Modules/RebirthZoneDressing (the
 local ZC: any = RebirthZonesConfig
 local apronOk: { [number]: { [string]: boolean } } = {} -- plotId -> zoneId -> the front apron is free (checked once)
 local sweepAt: { [number]: number } = {} -- userId -> clock of the last drone sweep
+local kioskOf: { [number]: { [string]: BasePart } } = {} -- claude-bud JOB A: userId -> zoneId -> his activity kiosk
 local Z = RebirthZonesConfig
 
 local plotOf: { [number]: number } = {} -- userId -> the plot his zones are built on
@@ -107170,6 +107221,22 @@ end
 	ship = Shipment.Minutes of this zone's own flat income once every Shipment.CooldownMinutes (profile.ZoneShipAt,
 	saved); sweep = the drones empty the ATM now; drill / strike = open the Elite Training / missile panel (FeaturePush
 	"ZoneOpen"); nuke = NukeService.OpenPanel. Returns (ok, why). ]]
+-- claude-bud JOB A: the position of HIS built kiosk for an activity ("drill" = the Recruitment Office's second
+-- interaction point), or nil. Another player's kiosk is never returned (keyed by his UserId).
+function RebirthZoneService.KioskPoint(player: Player, activity: string): Vector3?
+	local mine = kioskOf[player.UserId]
+	if mine == nil then
+		return nil
+	end
+	for zoneId, panel in pairs(mine) do
+		local info = ZC.Info[zoneId]
+		if info and info.Activity == activity and panel.Parent then
+			return panel.Position
+		end
+	end
+	return nil
+end
+
 function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: number?): (boolean, string)
 	local profile = deps.DataService and deps.DataService.GetProfile(player)
 	local info = ZC.Info[zoneId]
@@ -107222,7 +107289,9 @@ function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: nu
 		local rs = deps.RemoteSetup
 		local ev = rs and rs.Get(require(Shared.Constants).RemoteNames.FeaturePush)
 		if ev and ev:IsA("RemoteEvent") then
-			(ev :: RemoteEvent):FireClient(player, "ZoneOpen", { Panel = if kind == "drill" then "Recruits" else "Missile", Zone = zoneId })
+			local kp = kioskOf[player.UserId] and kioskOf[player.UserId][zoneId] -- claude-bud JOB A: the client's anchor point
+			;(ev :: RemoteEvent):FireClient(player, "ZoneOpen", { Panel = if kind == "drill" then "Recruits" else "Missile", Zone = zoneId,
+				Point = if kp and kp.Parent then kp.Position else nil })
 		end
 		return true, "opened"
 	elseif kind == "nuke" then
@@ -107236,6 +107305,8 @@ function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: nu
 end
 
 local function addActivityPrompt(player: Player, zoneId: string, panel: BasePart)
+	kioskOf[player.UserId] = kioskOf[player.UserId] or {}
+	kioskOf[player.UserId][zoneId] = panel -- claude-bud JOB A: his kiosk (the Recruitment Office's second interaction point)
 	local info = ZC.Info[zoneId]
 	local z = Z.Zones[zoneId]
 	local p = Instance.new("ProximityPrompt")
@@ -107515,6 +107586,7 @@ function RebirthZoneService.Init(d: { [string]: any })
 		plotOf[p.UserId] = nil
 		lastCollect[p.UserId] = nil
 		sweepAt[p.UserId] = nil
+		kioskOf[p.UserId] = nil -- claude-bud JOB A
 		if plotId then
 			local pf = zonesFolder():FindFirstChild("Plot" .. plotId)
 			if pf then
@@ -109016,7 +109088,18 @@ local function onLoadOffline(player: Player, profile: any)
 		oc
 	)
 	profile.PrevSeenUnix = nil -- paid once per load: a later call in this session finds nothing
+	-- claude-bud JOB 49 D: the return sequence: the Comeback cash (EngagementService, already paid) rides on this card
+	local seq = typeof(RetentionConfig.ReturnSequence) == "table" and RetentionConfig.Live(RetentionConfig.ReturnSequence, player.UserId)
 	if cash <= 0 or not EconomyService or not EconomyService.AccruePendingCash(player, cash, "offline") then
+		if seq then
+			task.delay(math.max(1, tonumber(o.ShowDelaySeconds) or 6), function()
+				local comeback = tonumber(player:GetAttribute("WE_ComebackCash")) or 0
+				if comeback > 0 and player.Parent and RetentionService.WaitOnboarding(player, 90) then
+					player:SetAttribute("WE_ComebackCash", nil)
+					push(player, "WelcomeBack", { Cash = 0, Seconds = 0, Comeback = comeback, Collect = nil })
+				end
+			end)
+		end
 		return
 	end
 	log(player, "OFFLINE_EARNED", { cash = cash, hours = string.format("%.1f", seconds / 3600) })
@@ -109024,7 +109107,12 @@ local function onLoadOffline(player: Player, profile: any)
 	task.delay(math.max(1, tonumber(o.ShowDelaySeconds) or 6), function()
 		if player.Parent and RetentionService.WaitOnboarding(player, 90) then
 			local card = typeof(o.Card) == "table" and RetentionConfig.Live(o.Card, player.UserId)
+			local comeback = if seq then tonumber(player:GetAttribute("WE_ComebackCash")) or 0 else 0
+			if comeback > 0 then
+				player:SetAttribute("WE_ComebackCash", nil)
+			end
 			push(player, "WelcomeBack", {
+				Comeback = if comeback > 0 then comeback else nil, -- claude-bud JOB 49 D: one card for both
 				Cash = cash,
 				Seconds = seconds,
 				Capped = seconds >= capSec,
@@ -109185,6 +109273,14 @@ function RetentionService.Init(deps: { [string]: any })
 
 	DataService.OnProfileLoaded(function(player: Player, profile: any)
 		startHold(player, profile)
+		-- claude-bud JOB 49 D: ReturnDay (UTC days since the first join, guided done) once per session, so D1 ties to JOB 48
+		if typeof(RetentionConfig.ReturnSequence) == "table" and RetentionConfig.Live(RetentionConfig.ReturnSequence, player.UserId) then
+			local first = tonumber(profile.FirstJoinUnix) or 0
+			if first > 0 then
+				local days = math.max(0, math.floor(os.time() / 86400) - math.floor(first / 86400))
+				log(player, "RETURN_DAY", { days = days, guidedDone = if profile.TutorialComplete == true then "yes" else "no" })
+			end
+		end
 		-- after the other load hooks (BaseService's plot / income state), in its own thread
 		task.defer(onLoadOffline, player, profile)
 		-- a day-7 army boost still running from before (DailyRewardConfig.Day7Boost)
@@ -136592,6 +136688,11 @@ local function refreshStation()
 	end
 end
 
+-- claude-bud JOB A: where the Recruitment Office was opened from ("Plaza" NPC / "Zone" kiosk on his own base) and that
+-- point (the walk-away close is measured from it). Set only by OpenRecruitmentOffice.
+local recruitSource: string? = nil
+local recruitAnchor: Vector3? = nil
+
 local function stationPoint(kind: string): Vector3?
 	if kind == "HQ" then
 		local c = hqConsole
@@ -137041,14 +137142,61 @@ function setListOpen(kind: string?)
 				if tick % 4 == 0 then
 					refreshList() -- the ETAs (every 2 s; a buy's push refreshes at once)
 				end
-				local pt = stationPoint(kind)
 				local c = player.Character
 				local r = c and c:FindFirstChild("HumanoidRootPart")
-				if pt and r and r:IsA("BasePart") and (r.Position - pt).Magnitude > EndgameConfig.Station.CloseRange then
-					setListOpen(nil)
+				if kind == "Recruits" then
+					-- claude-bud JOB A: ROOT CAUSE of "closes by itself ~0.5 s later": this loop measured the distance to
+					-- the PLAZA office (stationPoint) even when the panel was opened from the DRILL kiosk on his own Elite
+					-- Barracks zone, so the first tick (0.5 s) was always past CloseRange and called setListOpen(nil).
+					-- Now: from the point it was opened from, with hysteresis (RecruitShouldClose).
+					local pt = recruitAnchor or stationPoint(kind)
+					if pt and r and r:IsA("BasePart") and EndgameConfig.RecruitShouldClose((r.Position - pt).Magnitude) then
+						EndgameController.CloseRecruitmentOffice("WalkAway")
+					end
+				else
+					local pt = stationPoint(kind)
+					if pt and r and r:IsA("BasePart") and (r.Position - pt).Magnitude > EndgameConfig.Station.CloseRange then
+						setListOpen(nil)
+					end
 				end
 			end
 		end)
+	end
+end
+
+--[[ claude-bud JOB A: THE one way to open / close the Recruitment Office. Every path goes through these two (the plaza
+	prompt, the zone kiosk's ZoneOpen push, X, walk-away, death, another menu). A second open while it is open only
+	re-points the anchor (no second loop, no second connection). ]]
+function EndgameController.OpenRecruitmentOffice(source: string, point: Vector3?)
+	warn("[RECRUITMENT OPEN]", source, os.clock())
+	if listOpen == "Recruits" then
+		recruitSource, recruitAnchor = source, point or recruitAnchor
+		return
+	end
+	recruitSource, recruitAnchor = source, point
+	setListOpen("Recruits")
+end
+
+-- where the open Recruitment Office was opened from ("Plaza" / "Zone"), nil when closed (debug / tests)
+function EndgameController.RecruitmentSource(): string?
+	return recruitSource
+end
+
+function EndgameController.CloseRecruitmentOffice(reason: string)
+	if listOpen ~= "Recruits" then
+		return
+	end
+	warn("[RECRUITMENT CLOSE] Reason:", reason, os.clock())
+	recruitSource, recruitAnchor = nil, nil
+	setListOpen(nil)
+end
+
+-- the list panel's own closers: the Recruitment Office goes through CloseRecruitmentOffice (with its reason)
+local function closeList(reason: string)
+	if listOpen == "Recruits" then
+		EndgameController.CloseRecruitmentOffice(reason)
+	else
+		setListOpen(nil)
 	end
 end
 
@@ -137226,6 +137374,8 @@ function EndgameController.OpenStation(kind: string)
 	end
 	if kind == "Command" then
 		setStationOpen(kind)
+	elseif kind == "Recruits" then
+		EndgameController.OpenRecruitmentOffice("Plaza", stationPoint("Recruits")) -- claude-bud JOB A
 	elseif LIST_TITLES[kind] then
 		setListOpen(kind)
 	end
@@ -137351,7 +137501,7 @@ local function buildPanels(pg: PlayerGui)
 	listPanel = lp
 	listTitle = PanelShell.Title(lp, "ENGINEERING BUREAU")
 	PanelShell.CloseButton(lp, function()
-		setListOpen(nil)
+		closeList("X") -- claude-bud JOB A
 	end)
 	local lsub = Instance.new("TextLabel")
 	lsub.BackgroundTransparency = 1
@@ -137387,7 +137537,7 @@ local function buildPanels(pg: PlayerGui)
 			return listOpen ~= nil
 		end,
 		Close = function()
-			setListOpen(nil)
+			closeList("OtherMenu") -- claude-bud JOB A: another major menu opened
 		end,
 	})
 
@@ -137711,6 +137861,7 @@ local function watchDamage(char: Model)
 	local last = hum.Health
 	syncMed(hum)
 	hum.Died:Connect(function()
+		EndgameController.CloseRecruitmentOffice("Death") -- claude-bud JOB A
 		local ub = upBtn
 		if ub and player:GetAttribute("WE_Revive") == true then
 			ub.Visible = true
@@ -137730,8 +137881,8 @@ local function watchDamage(char: Model)
 		if h < last and stationOpen ~= nil then
 			setStationOpen(nil) -- the plaza is contested PvP: taking damage closes the shop
 		end
-		if h < last and listOpen ~= nil then
-			setListOpen(nil)
+		if h < last and listOpen ~= nil and listOpen ~= "Recruits" then
+			setListOpen(nil) -- claude-bud JOB A: the Recruitment Office closes on death, not on a scratch (the server's HurtLock still blocks buys)
 		end
 		syncMed(hum)
 		last = h
@@ -151827,8 +151978,10 @@ function RebirthZoneController.Init()
 			local ok, EC = pcall(function(): any
 				return require(script.Parent.EndgameController)
 			end)
-			if ok and EC and EC.OpenStation then
-				EC.OpenStation("Recruits")
+			-- claude-bud JOB A: the kiosk on HIS zone opens the Recruitment Office anchored at that kiosk (the server sends
+			-- its point), so the walk-away close measures from where he stands, not from the plaza
+			if ok and EC and EC.OpenRecruitmentOffice then
+				EC.OpenRecruitmentOffice("Zone", if typeof(data.Point) == "Vector3" then data.Point else nil)
 			end
 		elseif data.Panel == "Missile" then
 			local ok, MC = pcall(function(): any
@@ -153233,6 +153386,60 @@ local function whenFree(fn: () -> ())
 	end)
 end
 
+-- ── claude-bud JOB 49 D: ONE return sequence (RetentionConfig.ReturnSequence) ──────────────────────────────────
+-- the cards queue and show one at a time in priority order (1 Welcome back, 2 the streak card, 3 the missions toast),
+-- each only when the screen is free and the onboarding hold is off; OFF = each card on its own (whenFree) as before
+local RetentionConfigC: any = require(Shared.Configs.RetentionConfig)
+local function seqLive(): boolean
+	local s = RetentionConfigC.ReturnSequence
+	return typeof(s) == "table" and RetentionConfigC.Live(s, player.UserId)
+end
+type QueuedCard = { Pri: number, Show: (done: () -> ()) -> () }
+local cardQueue: { QueuedCard } = {}
+local cardBusy = false
+local missionsToastDone = false
+local pumpQueue: () -> () = function() end
+pumpQueue = function()
+	if cardBusy or #cardQueue == 0 then
+		return
+	end
+	cardBusy = true
+	task.spawn(function()
+		local left = 90
+		while left > 0 and (blocked() or player:GetAttribute("WE_Onboarding") == true) do
+			task.wait(1)
+			left -= 1
+		end
+		table.sort(cardQueue, function(a, b)
+			return a.Pri < b.Pri
+		end)
+		local item = table.remove(cardQueue, 1)
+		local finished = false
+		local function done()
+			if finished then
+				return
+			end
+			finished = true
+			task.delay(tonumber(RetentionConfigC.ReturnSequence.GapSeconds) or 1.5, function()
+				cardBusy = false
+				pumpQueue()
+			end)
+		end
+		if item then
+			local ok = pcall(item.Show, done)
+			if not ok then
+				done()
+			end
+		else
+			cardBusy = false
+		end
+	end)
+end
+local function enqueueCard(pri: number, show: (done: () -> ()) -> ())
+	table.insert(cardQueue, { Pri = pri, Show = show })
+	pumpQueue()
+end
+
 local function screen(name: string, order: number): ScreenGui?
 	local pg = player:FindFirstChildOfClass("PlayerGui")
 	if pg == nil then
@@ -153325,14 +153532,24 @@ local function awayText(seconds: number): string
 	return string.format("%d min", m)
 end
 
-local function welcomeBackCard(data: any)
+local function welcomeBackCard(data: any, onClosed: (() -> ())?)
 	local cash = math.floor(tonumber(data.Cash) or 0)
-	if cash <= 0 then
+	local comeback = math.floor(tonumber(data.Comeback) or 0) -- claude-bud JOB 49 D: the Comeback cash on the same card
+	if cash <= 0 and comeback <= 0 then
+		if onClosed then
+			onClosed()
+		end
 		return
 	end
 	local g = screen("WE_WelcomeBackCard", 38)
 	if g == nil then
+		if onClosed then
+			onClosed()
+		end
 		return
+	end
+	if onClosed then
+		g.Destroying:Connect(onClosed)
 	end
 	local card = Instance.new("Frame")
 	card.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -153354,13 +153571,16 @@ local function welcomeBackCard(data: any)
 	local body = label(card, if newCard then "Your base earned while you were away" else "While you were away you earned", 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
 	body.Position = UDim2.fromOffset(14, 44)
 	body.Size = UDim2.new(1, -28, 0, 20)
-	local amt = label(card, "+" .. money(cash), 32, GOLD, Enum.Font.GothamBlack)
+	local amt = label(card, if cash > 0 then "+" .. money(cash) else "+" .. money(comeback), 32, GOLD, Enum.Font.GothamBlack)
 	amt.Position = UDim2.fromOffset(14, 66)
 	amt.Size = UDim2.new(1, -28, 0, 38)
 	local capH = math.floor(tonumber(data.CapHours) or 8)
 	local sub = awayText(tonumber(data.Seconds) or 0) .. (if data.Capped == true then (if newCard then string.format(" (capped at %d h)", capH) else " (8 h max)") else "") .. " · in your ATM"
 	if data.Premium == true then
 		sub ..= " · Premium +10%"
+	end
+	if comeback > 0 then
+		sub = if cash > 0 then sub .. " · + Comeback " .. money(comeback) else "Comeback bonus for returning" -- claude-bud JOB 49 D
 	end
 	local subL = label(card, sub, 15, Color3.fromRGB(190, 190, 180), Enum.Font.GothamMedium)
 	subL.Position = UDim2.fromOffset(14, 106)
@@ -153383,7 +153603,7 @@ local function welcomeBackCard(data: any)
 	collect.TextColor3 = Color3.new(1, 1, 1)
 	collect.Font = Enum.Font.GothamBlack
 	collect.TextSize = 18
-	collect.Text = if newCard then "COLLECT " .. money(cash) else "OK"
+	collect.Text = if newCard and cash > 0 then "COLLECT " .. money(cash) else "OK"
 	corner(collect, 10)
 	collect.Parent = card
 	-- the money is already in his ATM (server, PendingCash): both buttons only close the card
@@ -153393,7 +153613,7 @@ local function welcomeBackCard(data: any)
 		end
 	end
 	collect.Activated:Connect(function()
-		if newCard then
+		if newCard and cash > 0 then
 			-- claude-bud JOB 49 B: the gold line to HIS ATM (walk up to collect; no travel, no second claim)
 			pcall(function()
 				local CW: any = require(script.Parent.Parent.Modules.ConsoleWaypoint)
@@ -153407,10 +153627,16 @@ local function welcomeBackCard(data: any)
 end
 
 -- ── the streak card ────────────────────────────────────────────────────────────────────────────────────────────────
-local function streakCard(data: any)
+local function streakCard(data: any, onClosed: (() -> ())?)
 	local g = screen("WE_StreakCard", 36)
 	if g == nil then
+		if onClosed then
+			onClosed()
+		end
 		return
+	end
+	if onClosed then
+		g.Destroying:Connect(onClosed)
 	end
 	local today = math.floor(tonumber(data.Today) or 1)
 	local cash = if typeof(data.Cash) == "table" then tonumber(data.Cash[today]) or 0 else 0
@@ -153541,20 +153767,61 @@ function RetentionController.Init()
 			clearArrow()
 			coinBurst(math.floor(tonumber(data.Cash) or 0), if typeof(data.Text) == "string" then data.Text else nil)
 		elseif kind == "WelcomeBack" and typeof(data) == "table" then
-			whenFree(function()
-				welcomeBackCard(data)
-			end)
+			if seqLive() then
+				enqueueCard(1, function(done)
+					welcomeBackCard(data, done)
+				end)
+			else
+				whenFree(function()
+					welcomeBackCard(data)
+				end)
+			end
 		elseif kind == "Streak" and typeof(data) == "table" then
 			data._ReceivedAt = os.clock() -- claude-bud JOB 49 A: the countdown keeps counting while the card waits
-			whenFree(function()
-				streakCard(data)
-			end)
+			if seqLive() then
+				enqueueCard(2, function(done)
+					streakCard(data, done)
+				end)
+			else
+				whenFree(function()
+					streakCard(data)
+				end)
+			end
 		elseif kind == "NotifOptIn" then
 			whenFree(function()
 				NotifOptIn.Ask("auto")
 			end)
 		end
 	end)
+	-- claude-bud JOB 49 D: once per session, after the other cards: "3 new missions" + the Missions button pulses
+	if seqLive() then
+		Remotes.BindEvent(Constants.RemoteNames.MissionStateUpdate, function(payload: any)
+			if missionsToastDone or typeof(payload) ~= "table" or typeof(payload.Core) ~= "table" or typeof(payload.Daily) ~= "table" then
+				return
+			end
+			local fresh = 0
+			for _, e in ipairs(payload.Daily) do
+				if typeof(e) == "table" and e.Core == true and e.Claimed ~= true and (tonumber(e.Progress) or 0) == 0 then
+					fresh += 1
+				end
+			end
+			if fresh < 3 then
+				return
+			end
+			missionsToastDone = true
+			enqueueCard(3, function(done)
+				pcall(function()
+					local NC: any = (require :: any)(script.Parent.NotificationController)
+					NC.Show(RetentionConfigC.ReturnSequence.MissionsText, "Info", RetentionConfigC.ReturnSequence.MissionsToastSeconds)
+				end)
+				pcall(function()
+					local HUD: any = (require :: any)(script.Parent.HUDController)
+					HUD.PulseRail("Missions")
+				end)
+				task.delay(tonumber(RetentionConfigC.ReturnSequence.MissionsToastSeconds) or 5, done)
+			end)
+		end)
+	end
 	player:GetAttributeChangedSignal("WE_Onboarding"):Connect(showArrow)
 	player:GetAttributeChangedSignal("WE_ConsolePos_CommandCenter"):Connect(showArrow)
 	showArrow()

@@ -39,12 +39,12 @@ S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 178)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 178)'),
-    (S + "Services/DataService.luau", "WE_Build=178"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 178)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 179)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 179)'),
+    (S + "Services/DataService.luau", "WE_Build=179"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 179)'),
 ):
-    check(needle in read(rel), "CODEBOT v175: WE_Build=178 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v175: WE_Build=179 " + rel.rsplit("/", 1)[-1])
 
 # Hook for everyone (Shaun approved)
 TC = read(C + "TutorialConfig.luau")

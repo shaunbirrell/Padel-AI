@@ -40,12 +40,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 178)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 178)'),
-    (S + "Services/DataService.luau", "WE_Build=178"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 178)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 179)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 179)'),
+    (S + "Services/DataService.luau", "WE_Build=179"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 179)'),
 ):
-    check(needle in read(rel), "CODEBOT v163: WE_Build=178 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v163: WE_Build=179 " + rel.rsplit("/", 1)[-1])
 
 _RC = read(C + "RivalConfig.luau")
 _RCTL = read(CL + "RivalController.luau")
