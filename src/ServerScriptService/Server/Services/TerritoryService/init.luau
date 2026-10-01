@@ -1113,6 +1113,11 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	end)
 	if TutorialService and TutorialService.Notify then
 		TutorialService.Notify(player, "CaptureTerritory", rt.Id)
+		-- claude-bud JOB 41 part B: the first capture is the Recruit Pack moment (its service decides; owner-first)
+		pcall(function()
+			local RPS = require(script.Parent.RecruitPackService) :: any
+			RPS.OnCapture(player)
+		end)
 	end
 
 	if BaseService then

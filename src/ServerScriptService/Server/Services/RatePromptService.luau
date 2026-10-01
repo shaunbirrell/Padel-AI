@@ -215,6 +215,12 @@ function RatePromptService.Answer(player: Player, answer: any): boolean
 	return true
 end
 
+-- seconds since this player last took damage (math.huge = not this session); RecruitPackService reads it (JOB 41 B)
+function RatePromptService.SinceHurt(player: Player): number
+	local s = sessions[player.UserId]
+	return if s then RatePromptService._clock() - s.LastHurt else math.huge
+end
+
 function RatePromptService._Session(player: Player): Session
 	return sessionOf(player)
 end

@@ -59,6 +59,7 @@ local AnalyticsConfig = {
 			GUIDED_STEP = { Name = "GuidedStepSeconds", Value = "seconds", Field = "step" },
 			GUIDED_SKIPPED = { Name = "GuidedSkipped", Field = "step" },
 			GUIDED_STUCK = { Name = "GuidedStuck", Field = "step" },
+			RECRUIT_PACK_OFFERED = { Name = "RecruitPackOffered", Field = "trigger" }, -- claude-bud JOB 41 B
 			STREAK_DAY = { Name = "StreakDay", Value = "day" },
 			-- claude-bud JOB 31: site activities
 			ACTIVITY_START = { Name = "ActivityStarted", Field = "activity" },
@@ -185,6 +186,7 @@ local AnalyticsConfig = {
 		GUIDED_STEP = "GUIDED_STEP", -- claude-bud JOB 41
 		GUIDED_SKIPPED = "GUIDED_SKIPPED",
 		GUIDED_STUCK = "GUIDED_STUCK",
+		RECRUIT_PACK_OFFERED = "RECRUIT_PACK_OFFERED", -- claude-bud JOB 41 B
 		STREAK_DAY = "STREAK_DAY",
 		ACTIVITY_START = "ACTIVITY_START",
 		ACTIVITY_DONE = "ACTIVITY_DONE",

@@ -121,7 +121,11 @@ check('"Unlock premium rewards on every Battle Pass tier"' in MC and '"$50,000 c
 try:
     d = subprocess.run(["git", "diff", "-U0", "2dc0534", "--", C + "MonetizationConfig.luau"], capture_output=True, text=True).stdout
     lines = [l for l in d.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
-    check(not any(re.search(r"(^|[\s{,])Id\s*=\s*\d", l) for l in lines), "CODEBOT v156: no product Id changed since v155")
+    # claude-bud JOB 41 part B: retired the unfiltered form (the brief adds ONE new SKU row, RecruitPack = { Id = 0, 49 R$ });
+    # replacement: the same two checks with that one new row left out (its Id 0 / 49 are pinned in claude_bud_job41.py)
+    #check(not any(re.search(r"(^|[\s{,])Id\s*=\s*\d", l) for l in lines), "CODEBOT v156: no product Id changed since v155")
+    lines = [l for l in lines if not (l.startswith("+") and "RecruitPack = { Id = 0," in l)]
+    check(not any(re.search(r"(^|[\s{,])Id\s*=\s*\d", l) for l in lines), "CODEBOT v156: no product Id changed since v155 (claude-bud JOB 41: the new RecruitPack row aside)")
     pr = sorted(re.sub(r"\s+", " ", l.split("--")[0]).strip() for l in lines if re.search(r"(?<!Overhaul)RobuxPrice\s*=", l))
     check(pr in ([], sorted(["- RobuxPrice = 149,", "- RobuxPrice = 99,", "+ RobuxPrice = 249,", "+ RobuxPrice = 79,"])),
           "CODEBOT v156: only the StarterBundle / ExtraSoldierSlot fallbacks changed (" + "; ".join(pr) + ")")

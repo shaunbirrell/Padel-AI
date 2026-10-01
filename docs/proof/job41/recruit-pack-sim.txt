@@ -1,0 +1,29 @@
+# run_recruit_pack_test.py output (2026-10-01T07:36Z, VERBOSE=1, headless luau stand-in: NOT Roblox)
+ok    the row: Id 0, 49 R$, one time, entitlement RecruitPack, no stat key ()
+ok    cash = clamp(30 x $/min, 25k, 150k): $0/min -> 25,000, $1,000/min -> 30,000, $10,000/min -> 150,000
+ok    always >= 2.5x Cash Pack S ($10000)
+ok    no offer at 9:55 of play without a capture (play counted: 595 s)
+ok    an offer at 10:00 without a capture (trigger playtime, cash $25000 = his number now)
+ok    'shown' marks RecruitPackOffered (saved)
+ok    once per profile (20 more minutes: nothing)
+ok    a new session after it was shown: never again (capture + 10 min)
+ok    nothing at 2:55 before a capture
+ok    an offer at the first capture (3:00, trigger capture)
+ok    never during the Guided / onboarding hold
+ok    never 5 s after taking damage (combat quiet 20 s)
+ok    never while seated
+ok    free screen, on foot, quiet: offered
+ok    never a second card while one is out
+ok    'dropped' (never seen): not marked, waits RetrySeconds
+ok    ... then offered again (30 s later)
+ok    a busy soft-offer slot: not sent, retried RetrySeconds later
+ok    Id 0: never offered (so never prompted)
+ok    grant at $0/min: $25000 cash (want $25000)
+ok    grant at $2000/min: $60000 cash (want $60000)
+ok    the 2x cash boost goes through CodesService.GrantCashBoost (30 min, x2)
+ok    the cosmetic entitlement RecruitPack is saved
+ok    idempotent per PurchaseId (a re-delivered receipt grants nothing)
+ok    grant at $9000/min: $150000 cash (want $150000)
+ok    live for him: the old after-tutorial Starter Pack pop-up does NOT fire
+ok    not live for another player: the Starter Pack pop-up fires as before (OFF == OLD)
+RECRUIT PACK TEST: 0 failed

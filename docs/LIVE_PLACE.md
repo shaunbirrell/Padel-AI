@@ -84,6 +84,7 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | SpeedBoost | Speed Boost | 3713839342 | 99 | Shop; the cyan ATM pad sells it while ImpulseSpeed is 0 |
 | GoldenPumpjack | Golden Pumpjacks | 3714663783 | 49 | Shop row + one gold pad by the pumps (+50% pump income); owner-only while Rollout = "owner" |
 | StarterBundle | Commander Starter Pack | 3713839505 | 149 | Shop + one offer after the tutorial |
+| RecruitPack | Recruit Pack | 0 | 49 | claude-bud JOB 41 B: offered once after the first capture or 10 min (owner-first); Id 0 until the owner OKs the price |
 | Nuke | Nuke | 0 | 19 | hidden |
 | NukeBundle3 | Nuke x3 | 0 | 49 | hidden |
 | SoldierRefill | Instant Army Refill | 3715442523 | 49 | Shop / army prompt (owner-only first; Id wired v99) |

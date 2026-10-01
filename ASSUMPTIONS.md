@@ -9946,3 +9946,14 @@ ds_territories.luau T3):
   measured from then.
 - **Sim pace:** the sim's pace is DERIVED from the layout. The brief's 180-240 s target is reported as not met
   (faster), instead of padding the script.
+
+## 2026-10-01 — claude-bud JOB 41 part B: Recruit Pack
+- **Starter pop-up:** while RecruitPackOffer is live for a player, the RecruitPack takes the StarterBundle's pop-up slot
+  (and the first-offer Speed Boost fallback). The StarterBundle row stays in the Shop, unchanged. Only ONE starter
+  offer pops up per profile.
+- **Play time:** Stats.PlayTimeSeconds is now accrued by RecruitPackService for every player while the kill switch is
+  on (analytics already read it as minutesPlayed; it was always 0).
+- **Combat quiet:** on the server this is damage taken (RatePromptService.SinceHurt); the client waits 20 s past its
+  RecentCombat flag (covers firing).
+- **Id 0:** the card is never sent while the Id is 0, so nothing can prompt before Creator Hub.
+- **Owned in the Shop:** an owned pack stays at the top of the Shop with OWNED (the order pattern does not move it).

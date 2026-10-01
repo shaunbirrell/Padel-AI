@@ -81,6 +81,7 @@ local SecurityConfig = {
 		RequestArmySendCheck = { "number" }, -- claude-bud JOB 38
 		RequestEndgameBuy = { "string:16", "string:32?" }, -- claude-bud JOB 39: kind + id only, never a price
 		RequestEndgameState = {}, -- claude-bud JOB 39
+		RequestRecruitPackResult = { "string:8" }, -- claude-bud JOB 41 B: "shown" | "dropped" (checked in the service)
 		RequestRatePromptAnswer = { "string:8" }, -- claude-bud JOB 40 D: one answer word (the service checks the enum)
 		RequestNotifOptInResult = { "string:12", "string?" }, -- claude-bud JOB 29: accepted / declined / unavailable, "settings"?
 		RequestArmourLook = { "boolean" }, -- claude-bud JOB 26 -- claude-bud JOB 24 §10 (AnalyticsConfig.Roblox.ClientEvents only)

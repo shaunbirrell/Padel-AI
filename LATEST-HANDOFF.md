@@ -1,4 +1,57 @@
 <!-- Q2-START -->
+## claude-bud JOB 41 PART B (2026-10-01): RECRUIT PACK, 49 R$ PROPOSED, ID 0 (branch `claude/desktop-bud`)
+**Flag:** `MonetizationConfig.RecruitPackOffer` (`Enabled`, `OwnerFirst = true`). **To launch:** Code Bot sets
+`OwnerFirst = false` after the product exists.
+
+**The product:** `MonetizationConfig.DevProducts.RecruitPack` = Id 0, 49 R$, one time. It gives:
+- **Cash** = 30 min of his income, clamped $25,000..$150,000 (always >= 2.5x the 49 R$ Cash Pack S), computed in
+  ProcessReceipt at purchase time;
+- **a 2x cash boost for 30 min** through CodesService.GrantCashBoost (the one boost path; the WE_CashBoostUntil HUD
+  timer shows it);
+- **a gold "RECRUIT" trim** on his base sign ("RECRUIT ·" + a thicker gold stroke) and his base owner marker (a gold
+  stroke). It is the entitlement WE_Ent_RecruitPack, with no stat.
+- **Not pay-to-win:** no damage / HP / armour / army / raid / protection key (pinned).
+
+**When (Services/RecruitPackService, server):**
+- Once per profile (RecruitPackOffered, marked when the client confirms the card SHOWED), at the FIRST of: his first
+  capture (TerritoryService awardCapture -> OnCapture), or 600 s of total play (profile.Stats.PlayTimeSeconds, which is
+  now counted; it was never incremented before).
+- Never: with Id 0, owned, during the Guided / onboarding hold, within 20 s of damage taken, seated, or while the card
+  is out.
+- It goes through ClaimSoftOfferSlot (the existing budget, incl. the v153 120 s quiet window). A busy slot or a
+  "dropped" card retries 30 s later; a dropped card refunds the slot, like the Starter Pack.
+
+**The old Starter pop-up:** for players it is live for, TrySoftOfferStarterBundle and ScheduleFirstOffer (and its
+Speed Boost fallback) do NOT fire. The StarterBundle row stays in the Shop. Proof: run_recruit_pack_test "live: the old
+pop-up does NOT fire / not live: fires as before".
+
+**Card (Controllers/RecruitPackController):** top-right, 300 px, "Recruit Pack" + "$<N> Cash" (his real number) /
+"2x Cash for 30 min" / "Gold base trim", the price button (the server's live price), "Maybe later", X. It hides after
+20 s; no timer and no "only today".
+
+**Shop:** the row sits on top (ShopOverhaulConfig.Order) once its Id is set (Id 0 rows are not listed).
+
+**Telemetry:** the existing ProductPrompted / PromptCancelled / RobuxPurchase (productKey RecruitPack, source
+recruit_offer) + RecruitPackOffered { trigger }; the FirstMinutes funnel steps 10 Offered / 11 Bought.
+
+**Creator Hub (required note):** Creator Hub: create the Developer Product 'Recruit Pack' at 49 R$ ONLY after Shaun OKs
+the price; then paste its Id into MonetizationConfig.DevProducts.RecruitPack.Id (Code Bot). Until then Id = 0 and the
+offer never prompts.
+
+**Pins / checks:**
+- codebot_v156's "no product Id changed since v155" is retired + replaced (the new RecruitPack row aside).
+- docs/LIVE_PLACE.md has the RecruitPack row.
+- run_recruit_pack_test 0 failed (docs/proof/job41/recruit-pack-sim.txt); claude_bud_job41 part B pins.
+- BuyPathStatic PASS=7478 FAIL=0; all sims 0 failed; rojo ok; remote audit OK; no new LSP errors (one pre-existing
+  LocalShadow moved lines).
+
+**Test ON HIS PHONE** (after the Id is set):
+1. The Recruit Pack card appears once: at your first capture or after 10 min of play, never mid-fight. The price button
+   reads 49 R$.
+2. Buy it: the cash lands (the amount on the card), the 2x boost timer shows, and your base sign / marker get the gold
+   trim.
+3. Rejoin: no card again; the Shop shows it OWNED at the top.
+
 ## claude-bud JOB 41 PART A (2026-10-01): THE GUIDED FIRST MINUTES (branch `claude/desktop-bud`)
 **Flag:** `TutorialConfig.Guided` (`Enabled`, `OwnerFirst = true`, through RetentionConfig.Live). OFF / not live =
 today's OrderVersion 3, no camp, no new banner, no new events. **To launch:** Code Bot sets `OwnerFirst = false`.

@@ -42,6 +42,7 @@ type Marker = {
 	Gui: BillboardGui,
 	Pill: CanvasGroup,
 	Scale: UIScale,
+	Stroke: UIStroke,
 	Flag: ImageLabel,
 	NameL: TextLabel,
 	UserL: TextLabel,
@@ -160,7 +161,7 @@ local function build(conf: Instance): Marker
 	local rank = label(pill, "Rank", NAME_FONT, C.Rank, B.UserTextSize)
 	rank.TextXAlignment = Enum.TextXAlignment.Right
 	return {
-		Conf = conf, Anchor = anchor, Gui = g, Pill = pill, Scale = scale, Flag = flag, NameL = nameL, UserL = userL,
+		Conf = conf, Anchor = anchor, Gui = g, Pill = pill, Scale = scale, Stroke = stroke, Flag = flag, NameL = nameL, UserL = userL,
 		Rank = rank, Has = false, Mine = false, W = 100, WDetail = 100, Detail = false, Height = B.HeightStuds,
 	}
 end
@@ -201,6 +202,10 @@ local function paint(m: Marker)
 	local text = if mine then B.Text.You elseif typeof(clan) == "string" and clan ~= "" then string.format("[%s] %s", clan, name) else name
 	m.NameL.Text = text
 	m.NameL.TextColor3 = if mine then C.You elseif ally then C.Ally else C.Name
+	-- claude-bud JOB 41 part B: the Recruit Pack's gold trim
+	local recruit = conf:GetAttribute("Recruit") == true
+	m.Stroke.Color = if recruit then C.Rank else C.Stroke
+	m.Stroke.Thickness = if recruit then 2 else 1
 	local user = "@" .. tostring(conf:GetAttribute("User") or "")
 	m.UserL.Text = user
 	local rt = B.RankText(tonumber(conf:GetAttribute("Prestige")) or 0)

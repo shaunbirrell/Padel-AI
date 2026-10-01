@@ -448,6 +448,11 @@ local MonetizationConfig = {
 			OneTime = true,
 			Description = "$50,000 cash plus Auto Collect forever", -- Code Bot v156: plain player text
 		},
+		-- claude-bud JOB 41 part B: the Recruit Pack (one time). Id 0 until the owner OKs 49 R$ and Code Bot creates the
+		-- product. Cash is computed in ProcessReceipt from his income (RecruitPackOffer: 30 min of income, $25k..$150k), plus a
+		-- 2x cash boost for 30 min (CodesService.GrantCashBoost) and the gold "RECRUIT" base trim (entitlement, no stat).
+		-- NOT pay-to-win: no damage / health / armour / army / raid / protection key in this row (pinned).
+		RecruitPack = { Id = 0, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, Description = "Cash, 2x cash for 30 min and a gold base trim" },
 		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
 		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
 		Nuke = {
@@ -678,6 +683,7 @@ local MonetizationConfig = {
 		prompt came from). Analytics only; anything not listed is logged as "other". A receipt within
 		IntentAttributionSeconds of the intent for the same key inherits its source. ]]
 	PurchaseSources = {
+		recruit_offer = true, -- claude-bud JOB 41 B: the Recruit Pack card
 		shop = true,
 		featured = true,
 		hud_plus = true,
@@ -923,6 +929,43 @@ end
 	the Speed Boost toast). MaxWalkSpeedMult is the sanity cap MonetizationService applies (it was a local 2.0). Robux
 	prices and Ids are unchanged. ]]
 local cfg: any = MonetizationConfig
+
+--[[ claude-bud JOB 41 part B: WHEN the Recruit Pack is offered (owner-first; RetentionConfig.Live). Once per profile
+	(profile.RecruitPackOffered), at the FIRST of: his first capture, or OfferAfterPlaySeconds of total play
+	(Stats.PlayTimeSeconds); never in the Guided hold, combat, a seat or another card; through ClaimSoftOfferSlot (busy =
+	retry every RetrySeconds this session). While it is live for a player the old after-tutorial Starter Pack pop-up does
+	NOT fire for him (the StarterBundle row stays in the Shop). Id 0 = never offered. ]]
+cfg.RecruitPackOffer = {
+	Enabled = true,
+	OwnerFirst = true,
+	IncomeMinutes = 30, -- cash = this many minutes of his passive income ...
+	MinCash = 25000, -- ... at least (2.5x the 49 R$ Cash Pack S $10,000) ...
+	MaxCash = 150000, -- ... at most
+	BoostMinutes = 30,
+	BoostMult = 2,
+	OfferAfterPlaySeconds = 600,
+	CombatQuietSeconds = 20,
+	RetrySeconds = 30,
+	MaxTriesPerSession = 6,
+	TickSeconds = 5,
+	AutoHideSeconds = 20,
+	ClientWaitMaxSeconds = 90,
+	Lines = { Cash = "$%s Cash", Boost = "2x Cash for 30 min", Trim = "Gold base trim" },
+}
+
+function cfg.RecruitPackLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live(cfg.RecruitPackOffer, userId)
+end
+
+-- the pack's cash for an income of `perMin` $/min (clamped; never below MinCash)
+function cfg.RecruitPackCash(perMin: number): number
+	local o = cfg.RecruitPackOffer
+	local p = tonumber(perMin) or 0
+	if p ~= p or p < 0 then
+		p = 0
+	end
+	return math.clamp(math.floor(o.IncomeMinutes * p + 0.5), o.MinCash, o.MaxCash)
+end
 cfg.SpeedV2 = {
 	Enabled = true,
 	OwnerFirst = true, -- only UserId 470626172 (+ Studio) until Code Bot sets false = everyone

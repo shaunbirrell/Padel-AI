@@ -219,6 +219,19 @@ local function refundSoftOfferSlot(player: Player, slot: any)
 	end
 end
 
+-- claude-bud JOB 41 part B: the same claim with a refund ticket, for an offer the client may report as never shown
+function MonetizationService.ClaimSoftOfferSlotRefundable(player: Player): { Prev: number?, At: number? }?
+	local prev = lastSoftOfferAt[player.UserId]
+	if not MonetizationService.ClaimSoftOfferSlot(player) then
+		return nil
+	end
+	return { Prev = prev, At = lastSoftOfferAt[player.UserId] }
+end
+
+function MonetizationService.RefundSoftOfferSlot(player: Player, slot: any)
+	refundSoftOfferSlot(player, slot)
+end
+
 --[[ v71 money (M1): listener registries. Each returns a function that removes the listener. Listeners run
 	deferred, each in its own pcall, so a failing listener never touches a receipt or another listener.
 	OnGranted(fn(player, productKey, event)): after a DevProduct grant is SAVED (the receipt is then acknowledged).
@@ -904,6 +917,11 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 	if typeof(player) ~= "Instance" or not player:IsA("Player") or not player.Parent or not DataService then
 		return nil
 	end
+	-- claude-bud JOB 41 part B: while the Recruit Pack offer is live for him it takes this pop-up slot (one starter
+	-- offer per profile); the StarterBundle row stays in the Shop
+	if (MonetizationConfig :: any).RecruitPackLiveFor(player.UserId) then
+		return nil
+	end
 	local bundle = starterBundleLive()
 	local profile = DataService.GetProfile(player)
 	local first = firstOfferCfg()
@@ -1046,6 +1064,10 @@ end
 function MonetizationService.ScheduleFirstOffer(player: Player, reason: string, delaySec: number?)
 	local first = firstOfferCfg()
 	if not first or typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return
+	end
+	-- claude-bud JOB 41 part B: the Recruit Pack replaces the first offer (and its fallback) for players it is live for
+	if (MonetizationConfig :: any).RecruitPackLiveFor(player.UserId) then
 		return
 	end
 	local uid = player.UserId
@@ -1790,6 +1812,15 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 		end
 		cashGrant = nonNegInt(ShopOverhaulConfig.CashPackAmount(productKey :: string, perMin))
 	end
+	-- claude-bud JOB 41 part B: the Recruit Pack's cash = RecruitPackOffer.IncomeMinutes of his income, clamped
+	-- ($25k..$150k); computed here (the lookup may yield) and re-checked, before any mutation
+	if productKey == "RecruitPack" then
+		local perMin = MonetizationService.PassivePerMin(player, profile)
+		if not player.Parent or DataService.GetProfile(player) ~= profile then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		cashGrant = nonNegInt((MonetizationConfig :: any).RecruitPackCash(perMin))
+	end
 	local fallbackCash = nonNegInt(product.StarterFallbackCash)
 	if fallbackCash > 0 then
 		if MonetizationService.PlayerOwnsEntitlement(player, "AutoCollect") then
@@ -1834,6 +1865,17 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 	-- DevProduct entitlement flags (AutoCollect / DoubleCash / VIP / StarterBundle + AutoCollect / etc.)
 	for _, ent in ipairs(entitlements) do
 		MonetizationService.GrantEntitlement(player, ent)
+	end
+	-- claude-bud JOB 41 part B: the Recruit Pack's 2x cash boost through the ONE boost path (CodesService.GrantCashBoost:
+	-- stacks like codes, capped at CashBoostMaxMinutes; it only mutates the profile, no yield)
+	if productKey == "RecruitPack" then
+		local o: any = (MonetizationConfig :: any).RecruitPackOffer
+		local okC, CS = pcall(function(): any
+			return require(script.Parent.CodesService)
+		end)
+		if okC and CS and CS.GrantCashBoost then
+			pcall(CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult)
+		end
 	end
 	-- v71 money (M1): whitelisted counters (GrantNukes -> profile.Nukes + NukeStats.Bought)
 	for _, c in ipairs(counters) do

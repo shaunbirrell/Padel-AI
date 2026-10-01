@@ -77,6 +77,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestEndgameBuy, -- claude-bud JOB 39
 	Constants.RemoteNames.RequestEndgameState, -- claude-bud JOB 39
 	Constants.RemoteNames.RequestRatePromptAnswer, -- claude-bud JOB 40 part D
+	Constants.RemoteNames.RequestRecruitPackResult, -- claude-bud JOB 41 part B
 	Constants.RemoteNames.CodeStateUpdate,
 	Constants.RemoteNames.NationColorUpdate,
 	Constants.RemoteNames.RequestSetNation,

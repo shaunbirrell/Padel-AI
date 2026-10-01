@@ -30,6 +30,7 @@ local ShopOverhaulConfig = {
 		premium vehicles -> cash packs -> consumables. ]]
 	Order = {
 		"^ShopRow_fr_",
+		"^ShopRow_RecruitPack$", -- claude-bud JOB 41 B: the Recruit Pack on top (shown only once its Id is set)
 		"^ShopRow_Pass_WarChest$",
 		"^ShopRow_Pass_DoubleCash$",
 		"^ShopRow_Pass_VIP$",

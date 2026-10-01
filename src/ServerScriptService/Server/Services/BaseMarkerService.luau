@@ -53,6 +53,12 @@ function BaseMarkerService.PlotData(plotId: number): { [string]: any }
 	out.User = owner.Name
 	local profile = deps.DataService and deps.DataService.GetProfile(owner)
 	out.Prestige = if profile then math.max(0, math.floor(tonumber(profile.Prestige) or 0)) else 0
+	-- claude-bud JOB 41 part B: the Recruit Pack's gold trim (an entitlement, no stat; the pack's owner-first flag)
+	local okRec, live = pcall(function(): boolean
+		local MC: any = require(Shared.Configs.MonetizationConfig)
+		return MC.RecruitPackLiveFor(owner.UserId) == true and owner:GetAttribute("WE_Ent_RecruitPack") == true
+	end)
+	out.Recruit = if okRec and live == true then true else nil
 	local view = if NationFlagMod and NationFlagMod.ViewOf then NationFlagMod.ViewOf(plotId) else nil
 	if view and view.Show == true and typeof(view.NationId) == "string" then
 		local okN, NC = pcall(function(): any
@@ -104,7 +110,7 @@ function BaseMarkerService.Refresh(plotId: number)
 	local d = BaseMarkerService.PlotData(plotId)
 	setAttr(conf, "PlotId", plotId)
 	setAttr(conf, "Pos", plotCentre(plotId) or conf:GetAttribute("Pos"))
-	for _, k in ipairs({ "Owner", "Name", "User", "Nation", "Prestige", "Clan", "ClanId" }) do
+	for _, k in ipairs({ "Owner", "Name", "User", "Nation", "Prestige", "Clan", "ClanId", "Recruit" }) do
 		setAttr(conf, k, d[k])
 	end
 end

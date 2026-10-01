@@ -75,6 +75,29 @@ _j41("local def = getStep(profile, step)\n\tif def and typeof(def.AdvanceOn) == 
 _j41("holdUntil(profile)" in _j41_code(_SV + "Services/RetentionService.luau") and "HoldMaxSeconds = 300," in _TC,
      "A: the WE_Onboarding hold covers the whole Guided chain up to Reward (max 300 s)")
 
+# ── part B: the Recruit Pack ──
+_MC = _j41_src(_CF + "MonetizationConfig.luau")
+_rp = [l for l in _MC.splitlines() if "RecruitPack = {" in l]
+_j41(len(_rp) == 1 and "Id = 0," in _rp[0] and "RobuxPrice = 49," in _rp[0] and "OneTime = true" in _rp[0]
+     and not _j41_re.search(r"(?i)damage|health|\bhp\b|armou?r|army|soldier|raid|shield|protect", _rp[0].split("Description")[0]),
+     "B: RecruitPack Id 0 + 49 R$, one time, no stat key in the product row (not pay-to-win)")
+_j41("cfg.RecruitPackOffer = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MC and "OfferAfterPlaySeconds = 600," in _MC and "MinCash = 25000," in _MC
+     and "MaxCash = 150000," in _MC and "IncomeMinutes = 30," in _MC, "B: RecruitPackOffer owner-first; 600 s / capture; 30 min of income, $25k..$150k")
+_RPS = _j41_code(_SV + "Services/RecruitPackService.luau")
+_dec = _RPS.split("function RecruitPackService.Decide")[1].split("\nend\n")[0]
+_j41('s.Trigger == "capture"' in _dec and "O.OfferAfterPlaySeconds" in _dec and '"too_early"' in _dec and '"id0"' in _dec,
+     "B: the offer is gated on the first capture OR 600 s of play, and never with Id 0")
+_j41("ClaimSoftOfferSlotRefundable" in _RPS and "profile.RecruitPackOffered = true" in _RPS, "B: through the existing soft-offer budget; once per profile (marked on 'shown')")
+_MSV = _j41_code(_SV + "Services/MonetizationService.luau")
+_j41('if productKey == "RecruitPack" then' in _MSV and "RecruitPackCash(perMin)" in _MSV and "CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult" in _MSV,
+     "B: the grant in ProcessReceipt (income-scaled cash, the ONE boost path)")
+_j41(_MSV.count("RecruitPackLiveFor(player.UserId)") >= 2, "B: the old Starter Pack pop-up (TrySoftOfferStarterBundle + ScheduleFirstOffer) is suppressed while the offer is live")
+import subprocess as _sp41b
+_md41 = _sp41b.run(["git", "diff", "-U0", "af3a858", "--", _CF + "MonetizationConfig.luau"], capture_output=True, text=True).stdout
+_chg = [l for l in _md41.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))
+        and _j41_re.search(r"\bRobuxPrice\s*=|(^|[\s{,])Id\s*=\s*\d", l) and "RecruitPack = {" not in l]
+_j41(True, "B: RobuxPrice / Id lines changed since af3a858 other than the RecruitPack row: %d (Code Bot's own v156 display-price edits count here)" % len(_chg))
+
 _luau = _j41_os.environ.get("LUAU")
 if _luau is None and _j41_os.environ.get("LUAU_COMPILE"):
     _cand = _j41_os.environ["LUAU_COMPILE"].replace("luau-compile", "luau")
@@ -82,5 +105,7 @@ if _luau is None and _j41_os.environ.get("LUAU_COMPILE"):
 if _luau:
     _r = _j41_sp.run([_j41_sys.executable, "tools/sim/run_first_minutes_test.py"], capture_output=True, text=True, env=dict(_j41_os.environ, LUAU=_luau))
     _j41(_r.returncode == 0 and "FIRST MINUTES TEST: 0 failed" in _r.stdout, "A: run_first_minutes_test.py (chain, recruit maths, camp, skip, rejoin, returning, OFF == OLD, funnel)")
+    _r = _j41_sp.run([_j41_sys.executable, "tools/sim/run_recruit_pack_test.py"], capture_output=True, text=True, env=dict(_j41_os.environ, LUAU=_luau))
+    _j41(_r.returncode == 0 and "RECRUIT PACK TEST: 0 failed" in _r.stdout, "B: run_recruit_pack_test.py (when, once, Id 0, the grant, the boost, idempotent, OFF == OLD)")
 else:
     print("SKIP CLAUDE-BUD J41: Luau CLI tests (set LUAU)")

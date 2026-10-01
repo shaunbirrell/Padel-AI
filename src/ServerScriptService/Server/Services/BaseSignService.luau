@@ -156,6 +156,7 @@ local function refresh(plotId: number)
 	local ownerId = if bs and bs.GetOwnerUserId then bs.GetOwnerUserId(plotId) else nil
 	local owner = if ownerId then Players:GetPlayerByUserId(ownerId) else nil
 	local key: string
+	local recruit = false -- claude-bud JOB 41 B
 	local title, line, image = BaseSignConfig.UnclaimedTitle, BaseSignConfig.UnclaimedLine, ""
 	if owner then
 		local profile = deps.DataService and deps.DataService.GetProfile(owner)
@@ -186,6 +187,12 @@ local function refresh(plotId: number)
 			end
 		end
 		image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", owner.UserId)
+		-- claude-bud JOB 41 part B: the Recruit Pack's gold "RECRUIT" trim (an entitlement, no stat; owner-first flag)
+		local MC: any = require(game:GetService("ReplicatedStorage").Shared.Configs.MonetizationConfig)
+		if MC.RecruitPackLiveFor(owner.UserId) and owner:GetAttribute("WE_Ent_RecruitPack") == true then
+			line = "RECRUIT · " .. line
+			recruit = true
+		end
 	end
 	-- the flag plate shows what the plot's own flags show (NationFlag's view: the owner's pick, art permitting)
 	local nf = NationFlagMod
@@ -194,13 +201,17 @@ local function refresh(plotId: number)
 		view = nil
 	end
 	local flagKey = if view then tostring(view.NationId) .. tostring(view.Show) else "-"
-	key = title .. "|" .. line .. "|" .. image .. "|" .. flagKey
+	key = title .. "|" .. line .. "|" .. image .. "|" .. flagKey .. (if recruit then "|R" else "")
 	if shownKey[plotId] == key then
 		return
 	end
 	shownKey[plotId] = key
 	s.Title.Text = title
 	s.Line.Text = line
+	local trim = s.Title.Parent and s.Title.Parent:FindFirstChildOfClass("UIStroke")
+	if trim then
+		trim.Thickness = if recruit then 3 else 1.5 -- claude-bud JOB 41 B: the gold Recruit trim (existing Part / stroke colour)
+	end
 	s.Head.Image = image
 	s.Head.Visible = image ~= ""
 	if nf and nf.DressPart then

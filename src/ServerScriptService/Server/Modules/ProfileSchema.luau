@@ -249,6 +249,8 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	else
 		profile.NotifOptIn = nil
 	end
+	-- claude-bud JOB 41 part B: the Recruit Pack card was shown (once per profile)
+	profile.RecruitPackOffered = if profile.RecruitPackOffered == true then true else nil
 	-- claude-bud JOB 41: the Guided first minutes record (missing -> nil; each flag only ever turns on)
 	if typeof(profile.Guided) == "table" then
 		local g = profile.Guided
