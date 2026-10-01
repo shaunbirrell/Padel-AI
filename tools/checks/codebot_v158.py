@@ -41,12 +41,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 190)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 190)'),
-    (S + "Services/DataService.luau", "WE_Build=190"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 190)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 191)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 191)'),
+    (S + "Services/DataService.luau", "WE_Build=191"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 191)'),
 ):
-    check(needle in read(rel), "CODEBOT v158: WE_Build=190 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v158: WE_Build=191 " + rel.rsplit("/", 1)[-1])
 
 TC = read(C + "TutorialConfig.luau")
 guided = block(TC, "TutorialConfig.Guided") or block(TC, "Guided")
