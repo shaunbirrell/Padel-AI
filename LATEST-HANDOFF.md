@@ -100,6 +100,31 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 60 (2026-10-01): ERROR REPORT: AUDITED; MOSTLY BLOCKED ON THE CSV TEXT (branch `claude/desktop-bud`)
+**What I could prove from the code (pinned in `tools/checks/claude_bud_job60.py`):**
+- **AnchorPoint nil (67):** the root cause was the TARGETS crosshair reading `spec[5]` (nil), already fixed in v171
+  (`RivalController`: `spec[4]`). Every other non-literal `AnchorPoint` source (CombatController `AM.Anchor` /
+  `TC.Fire.Anchor` / `TC.Reload.Anchor`, MissileController `e.Anchor`) is defined. The check fails on any new unknown
+  source. If the next report still shows it, its script line names the new spot.
+- **Animation-track limit (340):** the game's own tracks cannot pile up.
+  - There are only 2 `LoadAnimation` paths: WeaponVisuals caches one track per (Animator, id), and RigAnimator loads
+    only when a figure has none and destroys on stop.
+  - So the warnings come from an Animator the game doesn't drive (most likely a player character's default Animate
+    or emote tracks, or a store model's own script). **Needed:** the warning's Animator path from the CSV.
+- **Sanitized-ID animations (2,233 client / 265 server):** the v148 `AvatarMoodGuard` swaps known-bad dynamic-head
+  moods. The new counts mean other ids or paths are still loading, and I can't name them without the report's asset
+  ids.
+  - The guard's own server-side `GetAnimationClipAsync` probe of an unknown id may itself be what logs the server
+    copies (one per new id per server).
+  - **Needed:** the top asset ids in the "sanitized ID" rows (client and server).
+- **Mesh fetch (98) / sound ConnectFail (42):** both need the asset ids from the CSV. ConnectFail is a network
+  failure on a sound download. v147 already spread the join-time sound loads; the JOB 59 sounds load lazily (only
+  when played).
+
+**Ask for Shaun / Code Bot:** export the Creator Hub error report CSV (Analytics → Errors → the top 6 rows, with the
+full message + script + asset id) into `docs/proof/errors/` and re-queue JOB 60. Each one can then be fixed at its
+source. No symptom patch was made (house rule).
+
 ## claude-bud JOB 59 (2026-10-01): FREE ASSETS PASS: (B) SOUNDS BUILT; (A) / (C) / (D) NEED THE ASSET PIPELINE (branch `claude/desktop-bud`)
 **Flag:** `SoundConfig.Pass59` (owner-first, NEW-OWNER-FIRST).
 

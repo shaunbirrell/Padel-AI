@@ -10146,3 +10146,7 @@ ds_territories.luau T3):
   D are left to Code Bot).
 - Existing keys change their id only for the owner (Pass59.Overrides), so a sound he dislikes never reaches
   players.
+
+## claude-bud JOB 60 (2026-10-01): error report
+- No code change without the report text: the house rule is to prove the root cause first. The verified invariants
+  are pinned so the fixed causes (AnchorPoint, track stacking) cannot come back.
