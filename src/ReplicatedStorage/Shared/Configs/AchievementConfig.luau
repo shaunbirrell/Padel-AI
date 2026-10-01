@@ -11,9 +11,11 @@
 	  * Earner: a popup + sound + the small reward below (server-side AddCash / AddGold / AddXP, reason "achievement").
 	  * Whole server: one styled TextChatService system line ("[WAR EMPIRE] <name> just ..."), rate limited (Shout).
 	    Big = also a short banner at the top for everyone.
-	  * BadgeId: 0 = no badge yet. codebot_v134: the first 5 created badges are wired (First Blood, Duelist, First
-	    Building, War Chest, Hunter); the other 16 are wired by the daily badge routine (5 free per 24h GMT). Code Bot creates them in Creator Hub (docs/BADGES.md) and fills the ids; the server
-	    awards only a non-zero id (pcall, UserHasBadgeAsync first, retried, re-synced on join).
+	  * BadgeId: 0 = no badge yet. codebot_v134: first 5 wired (First Blood, Duelist, First Building, War Chest,
+	    Hunter). codebot_v170: next 5 wired (Six Figures, Outpost Taken, Sergeant, Millionaire, High Command);
+	    11 remain for the daily badge routine (5 free per 24h GMT). Code Bot creates them in Creator Hub
+	    (docs/BADGES.md) and fills the ids; the server awards only a non-zero id (pcall, UserHasBadgeAsync first,
+	    retried, re-synced on join).
 	  * Kill switch: Live (RetentionConfig.Live rule: OwnerFirst = UserId 470626172 + Studio). Off = the old 3-entry
 	    behaviour.
 	Shout text follows the player's name. Tokens: {nth} = the rebirth ordinal ("3rd"), {label} = the board title.
@@ -99,7 +101,7 @@ local AchievementConfig = {
 			RewardXP = 100,
 			Stat = "Level",
 			Target = 10,
-			BadgeId = 0,
+			BadgeId = 2735659013414286,
 			Order = 8,
 		},
 
@@ -127,12 +129,12 @@ local AchievementConfig = {
 		Cash100k = {
 			Id = "Cash100k", DisplayName = "Six Figures", Description = "Earn $100,000 in total.",
 			RewardCash = 2500, RewardGold = 1, RewardXP = 50, Stat = "Stats.TotalCashEarned", Target = 100000,
-			Shout = "has earned their first $100,000!", BadgeId = 0, Order = 6,
+			Shout = "has earned their first $100,000!", BadgeId = 3066564903295841, Order = 6,
 		},
 		Cash1M = {
 			Id = "Cash1M", DisplayName = "Millionaire", Description = "Earn $1,000,000 in total.",
 			RewardCash = 10000, RewardGold = 3, RewardXP = 150, Stat = "Stats.TotalCashEarned", Target = 1000000,
-			Shout = "is a MILLIONAIRE!", BadgeId = 0, Order = 9,
+			Shout = "is a MILLIONAIRE!", BadgeId = 3464730701383868, Order = 9,
 		},
 		Cash100M = {
 			Id = "Cash100M", DisplayName = "War Tycoon", Description = "Earn $100,000,000 in total.",
@@ -143,12 +145,12 @@ local AchievementConfig = {
 			-- Target = BaseConfig.Structures.CommandCenter.MaxLevel (the test checks they match)
 			Id = "CommandCenterMax", DisplayName = "High Command", Description = "Upgrade the Command Center to max level.",
 			RewardCash = 5000, RewardGold = 2, RewardXP = 100, Stat = "BaseUpgrades.CommandCenter", Target = 5,
-			Shout = "maxed out their Command Center!", BadgeId = 0, Order = 10,
+			Shout = "maxed out their Command Center!", BadgeId = 2700577206257761, Order = 10,
 		},
 		FirstOutpost = {
 			Id = "FirstOutpost", DisplayName = "Outpost Taken", Description = "Capture an outpost.",
 			RewardCash = 2000, RewardGold = 1, RewardXP = 50, Stat = "Stats.TerritoriesCaptured", Target = 1,
-			Shout = "captured their first outpost!", BadgeId = 0, Order = 7,
+			Shout = "captured their first outpost!", BadgeId = 3933837527405364, Order = 7,
 		},
 		PlazaCaptured = {
 			Id = "PlazaCaptured", DisplayName = "Plaza Conqueror", Description = "Capture the Central Plaza.",

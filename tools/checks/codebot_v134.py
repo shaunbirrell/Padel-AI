@@ -3,7 +3,7 @@
 #  * BadgeIds (Creator Hub, universe 10767159222, verified enabled via badges.roblox.com + BadgeService:GetBadgeInfoAsync):
 #    FirstKillNPC = First Blood 772051421546625, FirstPlayerKill = Duelist 2489884143486750,
 #    FirstUpgrade = First Building 583497417329015, Cash10k = War Chest 1847488248714137,
-#    PlayerKills10 = Hunter 2976613716370877. The other 16 stay 0 (the daily badge routine wires 5 per 24 h GMT).
+#    PlayerKills10 = Hunter 2976613716370877. Originally 16 stayed 0; codebot_v170 wired 5 more (11 remain for the daily routine).
 #  * Award on unlock unchanged (pcall, UserHasBadgeAsync first, retried). Backfill on join (BackfillBadges): every
 #    already-unlocked achievement with a BadgeId is awarded if not owned, throttled, pcall, NOT gated by Live, admins
 #    included; one in-flight award per player + badge.
@@ -46,7 +46,7 @@ _IDS = {"FirstKillNPC": 772051421546625, "FirstPlayerKill": 2489884143486750, "F
 for _k, _v in _IDS.items():
     _b = _block134(_AC, _k)
     _cb134(_b != "" and ("BadgeId = %d," % _v) in _b, "CODEBOT v134: %s BadgeId = %d" % (_k, _v))
-_cb134(_AC.count("BadgeId = 0,") == 16, "CODEBOT v134: the other 16 achievements keep BadgeId 0 (daily routine): %d" % _AC.count("BadgeId = 0,"))
+_cb134(_AC.count("BadgeId = 0,") == 11, "CODEBOT v134: 11 achievements keep BadgeId 0 (v170 wired batch 2; daily routine): %d" % _AC.count("BadgeId = 0,"))
 _cb134('"Build your first base building."' not in _AC and "Title = \"First Building\"" in _block134(_AC, "FirstUpgrade"),
        "CODEBOT v134: First Building badge = FirstUpgrade (Title First Building)")
 
