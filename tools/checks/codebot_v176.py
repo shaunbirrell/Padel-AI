@@ -37,27 +37,27 @@ S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 176)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 176)'),
-    (S + "Services/DataService.luau", "WE_Build=176"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 176)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 177)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 177)'),
+    (S + "Services/DataService.luau", "WE_Build=177"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 177)'),
 ):
-    check(needle in read(rel), "CODEBOT v176: WE_Build=176 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v176: WE_Build=177 " + rel.rsplit("/", 1)[-1])
 
 # JOB 49 A — DailyRewardConfig Grace / Day7Scale / Calendar owner-first
 DR = read(C + "DailyRewardConfig.luau")
 for name in ("Grace", "Day7Scale", "Calendar"):
     blk = block(DR, name)
-    check("Enabled = true," in blk and "OwnerFirst = true," in blk and "NEW-OWNER-FIRST" in blk,
-          "CODEBOT v176: DailyRewardConfig.%s Enabled + OwnerFirst=true (NEW-OWNER-FIRST)" % name)
+    check("Enabled = true," in blk and "OwnerFirst = false," in blk,
+          "CODEBOT v176: DailyRewardConfig.%s Enabled (OwnerFirst=false since codebot_v177 flip)" % name)
 check("MissedDaysAllowed = 1," in block(DR, "Grace") and "PerCycle = 1," in block(DR, "Grace"),
       "CODEBOT v176: Grace = 1 missed day per 7-day cycle")
 
 # JOB 49 B — OfflineEarnings.Card owner-first; CapBoost disabled; Id 0 products
 EC = read(C + "EconomyConfig.luau")
 card = block(EC, "Card")
-check("Enabled = true," in card and "OwnerFirst = true," in card and "NEW-OWNER-FIRST" in card,
-      "CODEBOT v176: OfflineEarnings.Card Enabled + OwnerFirst=true (NEW-OWNER-FIRST)")
+check("Enabled = true," in card and "OwnerFirst = false," in card,
+      "CODEBOT v176: OfflineEarnings.Card Enabled (OwnerFirst=false since codebot_v177 flip)")
 cb = block(EC, "CapBoost")
 check("Enabled = false," in cb and "OwnerFirst = true," in cb and 'ProductKey = "OfflineCap2x"' in cb,
       "CODEBOT v176: CapBoost Enabled=false (sidegrade hook off) + OwnerFirst=true")

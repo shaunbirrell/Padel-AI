@@ -141,7 +141,7 @@ local PS = require(node("Modules/ProfileSchema"))
 local MS, RS = boot()
 
 -- ── A. STREAK ──
-check(DR.Grace.OwnerFirst == true and DR.Day7Scale.OwnerFirst == true and DR.Calendar.OwnerFirst == true, "A flags: Grace / Day7Scale / Calendar are owner-first")
+check(DR.Grace.OwnerFirst == false and DR.Day7Scale.OwnerFirst == false and DR.Calendar.OwnerFirst == false, "A flags: Grace / Day7Scale / Calendar live for everyone (codebot_v177: OwnerFirst=false)")
 local pr = newProfile(OWNER)
 clearLog()
 local got = {}
@@ -199,12 +199,19 @@ day(2)
 MS.ClaimDailyLogin(OWNER, true)
 check(g3.DailyLogin.Streak == 1 and g3.DailyLogin.GraceDay == nil, "Grace OFF: one missed day resets (today's hard reset)")
 DR.Grace.Enabled = true
--- owner-first: another player has no grace
+-- codebot_v177: launched for everyone (OwnerFirst=false); the owner-first rule is still proved with OwnerFirst = true
+local o4 = newProfile(OTHER)
+MS.ClaimDailyLogin(OTHER, true); day(1); MS.ClaimDailyLogin(OTHER, true)
+day(2)
+MS.ClaimDailyLogin(OTHER, true)
+check(o4.DailyLogin.Streak > 1, "codebot_v177: grace is live for another player (OwnerFirst=false, one missed day saved)")
+DR.Grace.OwnerFirst = true
 local o3 = newProfile(OTHER)
 MS.ClaimDailyLogin(OTHER, true); day(1); MS.ClaimDailyLogin(OTHER, true)
 day(2)
 MS.ClaimDailyLogin(OTHER, true)
-check(o3.DailyLogin.Streak == 1, "owner-first: grace is not live for another player yet (reset)")
+check(o3.DailyLogin.Streak == 1, "owner-first (OwnerFirst = true): grace is not live for another player (reset)")
+DR.Grace.OwnerFirst = false
 -- Day 7 income-scaled
 PER_MIN = 900 -- $900 / min
 local s7 = newProfile(OWNER)
@@ -251,8 +258,8 @@ check(tOff >= 97 and tOff <= 99, string.format("Calendar OFF: the JOB 29 timing 
 -- ── B. OFFLINE ──
 local EC = require(node("Configs/EconomyConfig"))
 local O = EC.OfflineEarnings
-check(O.Card.OwnerFirst == true and O.CapBoost.Enabled == false and O.CapBoost.OwnerFirst == true and O.CapBoost.CapMult == 2,
-  "B flags: the Welcome back card is owner-first; the CapBoost sidegrade hook is DISABLED (Enabled = false, OwnerFirst = true)")
+check(O.Card.OwnerFirst == false and O.CapBoost.Enabled == false and O.CapBoost.OwnerFirst == true and O.CapBoost.CapMult == 2,
+  "B flags: the Welcome back card is live for everyone (codebot_v177); the CapBoost sidegrade hook is DISABLED (Enabled = false, OwnerFirst = true)")
 local MC = require(node("Configs/MonetizationConfig"))
 local row = MC.DevProducts.OfflineCap2x
 check(row ~= nil and row.Id == 0 and row.RobuxPrice == nil and row.HideFromShop == true and row.GrantEntitlement == "OfflineCap2x",

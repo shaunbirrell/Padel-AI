@@ -134,7 +134,7 @@ local EconomyConfig = {
 			own ATM (ConsoleWaypoint.ShowAtm: the money is already in the ATM; no travel, no second claim). ]]
 		Card = {
 			Enabled = true,
-			OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+			OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
 		},
 		--[[ claude-bud JOB 49 B: the Robux SIDEGRADE hook, DISABLED. With the MonetizationConfig.DevProducts.OfflineCap2x
 			entitlement (Id 0 + no price until Shaun approves one: never prompted, never in the Shop) the cap TIME is

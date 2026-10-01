@@ -50,18 +50,18 @@ local DailyRewardConfig = {
 		FirstCardSeconds of play (and the client still waits out combat / driving / panels). ]]
 	Grace = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): Code Bot flips it after Shaun's phone test
+		OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
 		MissedDaysAllowed = 1,
 		PerCycle = 1,
 	},
 	Day7Scale = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+		OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
 		IncomeMinutes = 60,
 	},
 	Calendar = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+		OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
 		FirstCardSeconds = 150, -- the latest a new player's first streak card waits for the onboarding hold
 	},
 }

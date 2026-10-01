@@ -52,12 +52,12 @@ CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 # build pins
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 176)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 176)'),
-    (S + "Services/DataService.luau", "WE_Build=176"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 176)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 177)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 177)'),
+    (S + "Services/DataService.luau", "WE_Build=177"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 177)'),
 ):
-    check(needle in read(rel), "CODEBOT v157: WE_Build=176 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v157: WE_Build=177 " + rel.rsplit("/", 1)[-1])
 
 # 1. the gate
 EC = read(C + "EndgameConfig.luau")

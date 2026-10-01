@@ -44,7 +44,7 @@ _SV = "src/ServerScriptService/Server/"
 _DR = _j49_src(_CF + "DailyRewardConfig.luau")
 for _b in ("Grace", "Day7Scale", "Calendar"):
     _blk = _j49_block(_DR, _b)
-    _j49("Enabled = true," in _blk and "OwnerFirst = true," in _blk, "A: DailyRewardConfig.%s is owner-first (Enabled + OwnerFirst = true)" % _b)
+    _j49("Enabled = true," in _blk and "OwnerFirst = false," in _blk, "A: DailyRewardConfig.%s is live for everyone (Enabled + OwnerFirst = false, codebot_v177 flip)" % _b)
 _j49("MissedDaysAllowed = 1," in _j49_block(_DR, "Grace") and "PerCycle = 1," in _j49_block(_DR, "Grace"), "A: grace = 1 missed day per 7-day cycle")
 _MS = _j49_src(_SV + "Services/MissionService.luau")
 _claim = _j49_fn(_MS, "function MissionService.ClaimDailyLogin")
@@ -60,7 +60,7 @@ _EC = _j49_src(_CF + "EconomyConfig.luau")
 _cb = _j49_block(_EC, "CapBoost")
 _j49("Enabled = false," in _cb and "OwnerFirst = true," in _cb and 'ProductKey = "OfflineCap2x"' in _cb and "CapMult = 2" in _cb,
      "B: the OfflineCap2x sidegrade hook is DISABLED (Enabled = false, OwnerFirst = true), cap time x2 only")
-_j49("Enabled = true," in _j49_block(_EC, "Card") and "OwnerFirst = true," in _j49_block(_EC, "Card"), "B: the Welcome back / COLLECT card is owner-first")
+_j49("Enabled = true," in _j49_block(_EC, "Card") and "OwnerFirst = false," in _j49_block(_EC, "Card"), "B: the Welcome back / COLLECT card is live for everyone (codebot_v177 flip)")
 _MC = _j49_src(_CF + "MonetizationConfig.luau")
 for _k in ("OfflineCap2x", "MissionReroll"):
     _m = _j49_re.search(r"\n\t\t" + _k + r" = \{([^\n]*)\}", _MC)

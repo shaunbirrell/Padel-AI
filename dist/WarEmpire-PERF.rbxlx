@@ -4153,18 +4153,18 @@ local DailyRewardConfig = {
 		FirstCardSeconds of play (and the client still waits out combat / driving / panels). ]]
 	Grace = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): Code Bot flips it after Shaun's phone test
+		OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
 		MissedDaysAllowed = 1,
 		PerCycle = 1,
 	},
 	Day7Scale = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+		OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
 		IncomeMinutes = 60,
 	},
 	Calendar = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+		OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
 		FirstCardSeconds = 150, -- the latest a new player's first streak card waits for the onboarding hold
 	},
 }
@@ -4636,7 +4636,7 @@ local EconomyConfig = {
 			own ATM (ConsoleWaypoint.ShowAtm: the money is already in the ATM; no travel, no second claim). ]]
 		Card = {
 			Enabled = true,
-			OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+			OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
 		},
 		--[[ claude-bud JOB 49 B: the Robux SIDEGRADE hook, DISABLED. With the MonetizationConfig.DevProducts.OfflineCap2x
 			entitlement (Id 0 + no price until Shaun approves one: never prompted, never in the Shop) the cap TIME is
@@ -30669,7 +30669,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 176)
+		player:SetAttribute("WE_Build", 177)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -74288,7 +74288,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 176)
+			player:SetAttribute("WE_Build", 177)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -82807,7 +82807,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 176)
+		player:SetAttribute("WE_Build", 177)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -82949,7 +82949,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=176",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=177",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
