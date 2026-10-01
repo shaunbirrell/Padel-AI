@@ -61,12 +61,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 204)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 204)'),
-    (S + "Services/DataService.luau", "WE_Build=204"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 204)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 205)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 205)'),
+    (S + "Services/DataService.luau", "WE_Build=205"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 205)'),
 ):
-    check(needle in read(rel), "CODEBOT v201: WE_Build=204 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v201: WE_Build=205 " + rel.rsplit("/", 1)[-1])
 
 # ── the formula: ONE central config ──
 OFC = code(read(C + "OfflineConfig.luau"))
@@ -106,7 +106,9 @@ EV = code(read(C + "EventConfig.luau"))
 ecr = EV.split("ExtraCashReasons = {")[1].split("}")[0] if "ExtraCashReasons = {" in EV else "?"
 check("offline" not in ecr, "CODEBOT v201: 'offline' NOT in EventConfig.ExtraCashReasons (Double Weekend does not double it)")
 prev_ev = shipped(C + "EventConfig.luau", PREV)
-check(prev_ev is None or prev_ev == read(C + "EventConfig.luau"), "CODEBOT v201: EventConfig byte-identical to " + PREV)
+# Code Bot v205: the display-only ChipPublic block (codebot_v205.py) is allowed; everything else stays byte-identical
+_ev_strip = lambda t: re.sub(r"\t-- Code Bot v205 \(owner 2026-10-01: \"switch the 2x event.*?\tChipPublic = true,\n", "", t, flags=re.S)
+check(prev_ev is None or prev_ev == _ev_strip(read(C + "EventConfig.luau")), "CODEBOT v201: EventConfig byte-identical to " + PREV + " (v205 ChipPublic display block allowed)")
 check("DoubleEvent).OfflineFactor(" in RS and "mult /= em" in RS, "CODEBOT v201: the v185 offline event rule as before (rate excludes the event; in-window span only)")
 
 # ── executed: the real OfflineConfig in Luau ──

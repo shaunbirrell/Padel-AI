@@ -16,7 +16,9 @@
 	     driving / in combat, and no first-join card up (Rate prompt, Recruit Pack, building tip, rebirth / raid /
 	     scout report). The game has no modal queue, so it simply waits behind them. It registers as a HudLayout panel
 	     while open (Modal on: the other cards wait for it in turn).
-	  2. LIVE (the window, or the owner preview before it): only a small chip right under the TARGETS card (same
+	  2. Code Bot v205: EventConfig.ChipPublic = true -> BEFORE the start everyone sees the same chip as a countdown to the
+	     start ("2x WEEKEND · in 21h 6m"; tap = details "starts in ..."); display only, the 2x still starts at StartUnix.
+	     LIVE (the window, or the owner preview before it): only a small chip right under the TARGETS card (same
 	     x / width as RivalConfig.Layout's card, 6 px gap, 30 px tall, 12..15 px text): "2x WEEKEND · 1d 4h". Tap = the
 	     details card (OK). No chip before the start (except the owner preview); nothing at all after EndUnix.
 	  3. Owner: /eventpreview (unchanged) and /eventpopup (AdminService bumps PopupTestAttr -> the pop-up shows now,
@@ -195,7 +197,10 @@ local function run()
 
 	local function infoLine(t: number): string
 		if t < EventConfig.StartUnix then
-			return "starts in " .. EventConfig.FormatLeft(EventConfig.StartUnix - t) .. "  (OWNER PREVIEW)"
+			-- Code Bot v205: the OWNER PREVIEW tag only when the preview really has it on for him (ChipPublic: everyone
+			-- else sees the plain countdown to the start)
+			local tag = if EventConfig.ActiveFor(player.UserId, t, previewOn()) then "  (OWNER PREVIEW)" else ""
+			return "starts in " .. EventConfig.FormatLeft(EventConfig.StartUnix - t) .. tag
 		end
 		return "LIVE NOW · ends in " .. EventConfig.FormatLeft(EventConfig.EndUnix - t)
 	end
@@ -385,7 +390,10 @@ local function run()
 		end
 		pcall(popupTick, t)
 		local live = EventConfig.ActiveFor(player.UserId, t, previewOn())
-		local show = live and pop == nil and not HudLayout.GetFlag("Modal") and not HudLayout.GetFlag("Dead")
+		-- Code Bot v205: EventConfig.ChipPublic (display only) -> everyone sees the chip before the start as a countdown
+		-- to it; `live` (the real 2x: the window / the owner preview) is unchanged and still decides the "ends in" text
+		local soon = not live and EventConfig.ChipPublic == true and t < EventConfig.StartUnix
+		local show = (live or soon) and pop == nil and not HudLayout.GetFlag("Modal") and not HudLayout.GetFlag("Dead")
 			and not HudLayout.GetFlag("Tutorial")
 		if show then
 			local gui = player:FindFirstChildOfClass("PlayerGui")
@@ -395,7 +403,9 @@ local function run()
 		end
 		if show then
 			placeChip()
-			local txt = EventConfig.ChipText .. " · " .. EventConfig.FormatLeft(EventConfig.EndUnix - t)
+			local txt = if live
+				then EventConfig.ChipText .. " · " .. EventConfig.FormatLeft(EventConfig.EndUnix - t)
+				else EventConfig.ChipText .. " · in " .. EventConfig.FormatLeft(EventConfig.StartUnix - t)
 			if chip.Text ~= txt then
 				chip.Text = txt
 			end

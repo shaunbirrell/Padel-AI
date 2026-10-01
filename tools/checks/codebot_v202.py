@@ -51,12 +51,12 @@ def check(cond, label):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 204)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 204)'),
-    (S + "Services/DataService.luau", "WE_Build=204"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 204)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 205)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 205)'),
+    (S + "Services/DataService.luau", "WE_Build=205"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 205)'),
 ):
-    check(needle in read(rel), "CODEBOT v202: WE_Build=204 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v202: WE_Build=205 " + rel.rsplit("/", 1)[-1])
 
 MON = read(C + "MonetizationConfig.luau")
 # v204: Id 0 pins superseded in codebot_v204.py (Creator Hub Ids filled)

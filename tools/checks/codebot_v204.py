@@ -34,15 +34,15 @@ def check(cond, label):
 
 
 BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
-OWN = 'SetAttribute("WE_Build", 204)' in read(S + "Services/DataService.luau")  # this build's own scope
+OWN = 'SetAttribute("WE_Build", 205)' in read(S + "Services/DataService.luau")  # this build's own scope
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 204)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 204)'),
-    (S + "Services/DataService.luau", "WE_Build=204"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 204)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 205)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 205)'),
+    (S + "Services/DataService.luau", "WE_Build=205"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 205)'),
 ):
-    check(BUD or needle in read(rel), "CODEBOT v204: WE_Build=204 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
+    check(BUD or needle in read(rel), "CODEBOT v204: WE_Build=205 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
 
 MON = read(C + "MonetizationConfig.luau")
 check(('StarterRecruit5 = { Id = %d, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' % SR5_ID) in MON,
@@ -74,7 +74,7 @@ if not BUD and OWN:
                 S + "Services/RecruitPackService.luau", S + "Modules/ProfileSchema.luau"):
         check(shipped(rel, PREV) == read(rel), "CODEBOT v204: " + rel.rsplit("/", 1)[-1] + " byte-identical to " + PREV)
     _pds = shipped(S + "Services/DataService.luau", PREV) or ""
-    check(_pds.replace('WE_Build", 203)', 'WE_Build", 204)').replace("WE_Build=203", "WE_Build=204") == read(S + "Services/DataService.luau"),
+    check(_pds.replace('WE_Build", 203)', 'WE_Build", 205)').replace("WE_Build=203", "WE_Build=205") == read(S + "Services/DataService.luau"),
           "CODEBOT v204: DataService: only the WE_Build number changed (save keys kept)")
 
 check("PreferMesh = true" not in read(C + "VisualAssetConfig.luau"), "CODEBOT v204: PreferMesh stays OFF")

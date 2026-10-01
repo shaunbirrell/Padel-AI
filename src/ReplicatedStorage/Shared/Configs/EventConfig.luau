@@ -58,6 +58,11 @@ local EventConfig = {
 	PopupSeenAttr = "WE_EventPopupSeen", -- player attribute (server-written on profile load): true = already shown
 	PopupTestAttr = "WE_EventPopupTest", -- player attribute: the owner's /eventpopup bumps it -> show the pop-up now
 	ChipText = "2x WEEKEND",
+	-- Code Bot v205 (owner 2026-10-01: "switch the 2x event notification on for everyone now"): DISPLAY ONLY. true = the
+	--   chip shows for EVERYONE before StartUnix too, as a countdown to the start ("2x WEEKEND · in 21h 6m"; tap = the details
+	--   card "starts in ..."). It never touches ActiveFor / InWindow / the multipliers (Server/Modules/DoubleEvent never
+	--   reads it): the 2x itself still starts at StartUnix for everyone (the owner preview is OwnerFirst, unchanged).
+	ChipPublic = true,
 	ToastTag = "2x", -- Code Bot v198: reward toasts the event doubled end " · 2x" (Server/Modules/RewardToast; display only)
 
 	KillReasons = {
