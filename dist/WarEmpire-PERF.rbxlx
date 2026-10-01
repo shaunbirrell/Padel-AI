@@ -12413,7 +12413,13 @@ local RatePromptConfig = {
 	NotBeforeSessionSeconds = 60, -- never in the first minute of a session
 	-- a TRIGGER shows it early (still under every other rule): every rebirth, and the achievements that already
 	-- show a big banner (AchievementConfig Big = true: $100M, Plaza capture, nuke, weekly #1, ...)
-	Triggers = { rebirth = true, achievement = true },
+	Triggers = { rebirth = true, achievement = true, FirstCapture = true, RaidWin = true },
+	-- claude-bud JOB 41 part D: these big wins bring it forward ONCE per profile (RatePrompt.Triggered[<name>] = true
+	-- when it showed for that reason); FirstCapture = the Guided reward capture or any first territory, RaidWin = the
+	-- first raid that looted (a SEND or an in-person ATM raid)
+	OneTimeTriggers = { FirstCapture = true, RaidWin = true },
+	AfterOtherCardSeconds = 20, -- never two cards at once: wait this long after the Recruit Pack card closed
+	WaitForPackMaxSeconds = 180, -- a Recruit Pack still due at the capture goes first; the rate card waits at most this
 	TriggerDelaySeconds = 8, -- after the rebirth screen / the banner has had its moment
 	TickSeconds = 5, -- the server check (all players together)
 	AutoHideSeconds = 20, -- the card hides itself (counts as shown)
@@ -30002,7 +30008,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 159)
+		player:SetAttribute("WE_Build", 160)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -34134,6 +34140,8 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 			pcall(function() -- claude-bud JOB 41: a raid win (RivalRaidWon when sent from TARGETS; the rate card's RaidWin)
 				local RS = require(script.Parent.Parent.Services.RivalService) :: any
 				RS.OnRaidWon(player, plan.PlotId, n)
+				local RP = require(script.Parent.Parent.Services.RatePromptService) :: any
+				RP.Trigger(player, "RaidWin")
 			end)
 			pcall(function() -- claude-bud JOB 39: the Intel Office's "win a SEND ARMY raid" contract
 				(require(script.Parent.Parent.Services.EndgameService) :: any).NoteContract(player, "WinSend", 1)
@@ -47331,6 +47339,11 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 			Shows = nonNegInt(rp.Shows),
 			Never = rp.Never == true,
 			PlaySeconds = nonNegInt(rp.PlaySeconds),
+			-- claude-bud JOB 41 part D: the one-time big-win triggers already used
+			Triggered = if typeof(rp.Triggered) == "table" then {
+				FirstCapture = rp.Triggered.FirstCapture == true or nil,
+				RaidWin = rp.Triggered.RaidWin == true or nil,
+			} else nil,
 		}
 	else
 		profile.RatePrompt = nil
@@ -72060,7 +72073,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 159)
+			player:SetAttribute("WE_Build", 160)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -80517,7 +80530,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 159)
+		player:SetAttribute("WE_Build", 160)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -80659,7 +80672,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=159",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=160",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -94411,6 +94424,11 @@ function MoneyCollectorService._RaidDone(thief: Player, victim: Player, vProfile
 	pcall(function() -- claude-bud JOB 39: the victim's "Raided by" list (Intel Office revenge)
 		(require(script.Parent.EndgameService) :: any).NoteRaidedBy(victim, thief)
 	end)
+	if moved > 0 then
+		pcall(function() -- claude-bud JOB 41 part D: an in-person raid win may bring the (no-reward) rate card forward once
+			(require(script.Parent.RatePromptService) :: any).Trigger(thief, "RaidWin")
+		end)
+	end
 	markDirty(victim)
 	markDirty(thief)
 	pcall(function()
@@ -102803,13 +102821,21 @@ RatePromptService._clock = os.clock -- tests replace these
 RatePromptService._unix = os.time
 
 -- the saved record, repaired in place (ProfileSchema.Migrate does the same on load)
-function RatePromptService.Record(profile: any): { LastShownUnix: number, Shows: number, Never: boolean, PlaySeconds: number }
+function RatePromptService.Record(profile: any): { LastShownUnix: number, Shows: number, Never: boolean, PlaySeconds: number, Triggered: { [string]: boolean } }
 	local r = if typeof(profile.RatePrompt) == "table" then profile.RatePrompt else {}
 	local function n(v: any): number
 		local x = tonumber(v) or 0
 		return if x == x and x > 0 and x < 1e12 then math.floor(x) else 0
 	end
-	local rec = { LastShownUnix = n(r.LastShownUnix), Shows = n(r.Shows), Never = r.Never == true, PlaySeconds = n(r.PlaySeconds) }
+	local trig: { [string]: boolean } = {}
+	if typeof(r.Triggered) == "table" then
+		for k, v in pairs(r.Triggered) do
+			if typeof(k) == "string" and (Cfg.OneTimeTriggers :: any)[k] == true and v == true then
+				trig[k] = true
+			end
+		end
+	end
+	local rec = { LastShownUnix = n(r.LastShownUnix), Shows = n(r.Shows), Never = r.Never == true, PlaySeconds = n(r.PlaySeconds), Triggered = trig }
 	profile.RatePrompt = rec
 	return rec
 end
@@ -102834,6 +102860,8 @@ function RatePromptService.Decide(s: any): (boolean, string)
 		return false, "gap"
 	elseif (tonumber(s.SinceHurt) or math.huge) < Cfg.CombatQuietSeconds then
 		return false, "combat"
+	elseif s.OtherCard == true then
+		return false, "other_card" -- claude-bud JOB 41 D: the Recruit Pack card is out / just closed / still due first
 	end
 	if typeof(s.Trigger) == "string" and (Cfg.Triggers :: any)[s.Trigger] == true then
 		return true, s.Trigger
@@ -102898,8 +102926,37 @@ function RatePromptService.Trigger(player: Player, reason: string)
 	if s.Shown or s.Trigger ~= nil then
 		return
 	end
+	if (Cfg.OneTimeTriggers :: any)[reason] == true then
+		local profile = deps.DataService and deps.DataService.GetProfile(player)
+		if profile == nil or RatePromptService.Record(profile).Triggered[reason] == true then
+			return -- already used once on this profile
+		end
+	end
 	s.Trigger = reason
 	s.TriggerAt = RatePromptService._clock() + Cfg.TriggerDelaySeconds
+end
+
+-- claude-bud JOB 41 part D: never two cards at once. True while the Recruit Pack card is out or closed less than
+-- AfterOtherCardSeconds ago, or (for at most WaitForPackMaxSeconds after this trigger) while the pack is still due
+-- from the same capture: the Recruit Pack goes first, the rate card may slip.
+function RatePromptService._OtherCard(player: Player, s: any, now: number): boolean
+	local RP = deps.RecruitPackService
+	if RP == nil then
+		return false
+	end
+	local okB, busy = pcall(function()
+		return RP.CardBlocks and RP.CardBlocks(player, Cfg.AfterOtherCardSeconds) == true
+	end)
+	if okB and busy then
+		return true
+	end
+	if s.Trigger ~= nil and now - (s.TriggerAt - Cfg.TriggerDelaySeconds) < Cfg.WaitForPackMaxSeconds then
+		local okP, pending = pcall(function()
+			return RP.Pending and RP.Pending(player) == true
+		end)
+		return okP and pending == true
+	end
+	return false
 end
 
 -- one player's check (the tick calls it; tests call it with a fake clock)
@@ -102937,6 +102994,7 @@ function RatePromptService.Step(player: Player, accrueOnly: boolean?): (boolean,
 		SinceLastShow = if rec and rec.LastShownUnix > 0 then RatePromptService._unix() - rec.LastShownUnix else math.huge,
 		SinceHurt = now - s.LastHurt,
 		Trigger = trig,
+		OtherCard = RatePromptService._OtherCard(player, s, now),
 	})
 	if not show or rec == nil then
 		return false, why
@@ -102946,6 +103004,9 @@ function RatePromptService.Step(player: Player, accrueOnly: boolean?): (boolean,
 	s.Trigger = nil
 	rec.LastShownUnix = RatePromptService._unix()
 	rec.Shows += 1
+	if (Cfg.OneTimeTriggers :: any)[why] == true then
+		rec.Triggered[why] = true -- claude-bud JOB 41 D: this big-win trigger is spent for good
+	end
 	deps.DataService.MarkDirty(player)
 	push(player, { Trigger = why })
 	logEvent(player, "RATE_PROMPT_SHOWN", { trigger = why })
@@ -103637,7 +103698,7 @@ local MC: any = MonetizationConfig
 local O: any = MC.RecruitPackOffer
 local deps: { [string]: any } = {}
 
-type Session = { Trigger: string?, Tries: number, NextAt: number, Awaiting: boolean, LastAccrue: number, Slot: any? }
+type Session = { Trigger: string?, Tries: number, NextAt: number, Awaiting: boolean, LastAccrue: number, Slot: any?, ShownAt: number? }
 local sessions: { [number]: Session } = {}
 
 RecruitPackService._clock = os.clock -- tests replace these
@@ -103828,6 +103889,7 @@ function RecruitPackService.Result(player: Player, result: any): boolean
 		return false
 	end
 	if result == "shown" then
+		s.ShownAt = RecruitPackService._clock()
 		profile.RecruitPackOffered = true
 		deps.DataService.MarkDirty(player)
 		guidedFunnel(player, profile, "Offered")
@@ -103847,6 +103909,26 @@ end
 function RecruitPackService.CardOut(player: Player): boolean
 	local s = sessions[player.UserId]
 	return s ~= nil and s.Awaiting
+end
+
+-- out, or shown and not yet closed + `gap` seconds (the card hides itself after AutoHideSeconds)
+function RecruitPackService.CardBlocks(player: Player, gap: number): boolean
+	local s = sessions[player.UserId]
+	if s == nil then
+		return false
+	end
+	if s.Awaiting then
+		return true
+	end
+	return s.ShownAt ~= nil and RecruitPackService._clock() < (s.ShownAt :: number) + O.AutoHideSeconds + (tonumber(gap) or 0)
+end
+
+-- the pack is still due from a capture this session (live, a real Id, never offered, tries left): it goes first
+function RecruitPackService.Pending(player: Player): boolean
+	local s = sessions[player.UserId]
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	return s ~= nil and profile ~= nil and s.Trigger == "capture" and MC.RecruitPackLiveFor(player.UserId) and productId() ~= 0
+		and profile.RecruitPackOffered ~= true and not hasPack(player, profile) and s.Tries < O.MaxTriesPerSession
 end
 
 function RecruitPackService._Session(player: Player): Session
@@ -113908,6 +113990,10 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 		pcall(function()
 			local RPS = require(script.Parent.RecruitPackService) :: any
 			RPS.OnCapture(player)
+		end)
+		pcall(function() -- claude-bud JOB 41 part D: the first capture may bring the (no-reward) rate card forward once
+			local RP = require(script.Parent.RatePromptService) :: any
+			RP.Trigger(player, "FirstCapture")
 		end)
 	end
 
