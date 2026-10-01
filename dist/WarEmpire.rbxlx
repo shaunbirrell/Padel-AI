@@ -1812,6 +1812,30 @@ local ArmyOrdersConfig = {
 	-- (of him while it is beside him); none = "No enemies near" and the army stays in its previous state (no broken
 	-- ATTACK). The radius is NOT raised (the owner's list: "bigger detection radius" is a fake fix).
 
+	--[[ claude-bud JOB 52 (2026-10-01, Shaun: "ATTACK says No enemies near while enemies are clearly visible"): ATTACK AT
+		RANGE. ROOT CAUSE (tools/sim/run_attack_range_test.py): the probe reach was SeekRadius 250 from him, but awake enemies
+		stand where the wake / sleep bands keep them (OutpostDefender WakeStuds 260 / SleepStuds 380, SiteActivity 380), so
+		the ones he could see were 260-380 studs out; and even a bigger reach alone would not hold: SeekLeash 300 cut
+		them again, and the running plan re-sought / fought with SeekLeash 300 from him (it dropped the target it marched to).
+		Live: ONE set of radii for the whole order (the probe, the plan's seek, its march answer, its fight pick, the leash
+		check): SeekStuds 400 (one route leg, LegStuds 400, under 30 s at MarchSpeed 14), LeashStuds 450, ChainStuds 200;
+		flat distances. Nothing within SeekStuds: the toast says the distance + direction to the nearest valid enemy and
+		offers PIN / SEND ("N:<npcId>" through ArmyTargets; the client never sends a position). Kills of the ordered target
+		group count on ARMY KILLS, at most KillCreditPerHour per owner (no AFK farm). OFF == OLD (250 / 300 / 150). ]]
+	AttackRange = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 52): Code Bot flips it after Shaun's 2-player phone test
+		SeekStuds = 400,
+		LeashStuds = 450,
+		ChainStuds = 200,
+		NearestScanStuds = 2500, -- "Nearest: 620 m NE": how far the nothing-in-range scan looks
+		KillCreditPerHour = 60, -- ordered-ATTACK army kills of hostile combat NPCs credited per owner per rolling hour
+		Text = {
+			NoneInRange = "No enemies within %d m. Nearest: %d m %s",
+			NoneAtAll = "No enemies on the map",
+		},
+	},
+
 	-- 2. SEND
 	Send = {
 		RequireOwnerAlive = false, -- DECIDED: the army keeps attacking while the sender is dead but in the server
@@ -1907,6 +1931,30 @@ function ArmyOrdersConfig.TurretHealth(wallsLevel: number): number
 		return 0
 	end
 	return list[math.min(i, #list)]
+end
+
+-- claude-bud JOB 52: the ATTACK radii for this owner: (seek, leash, chain) studs. AttackRange live: its numbers (seek
+-- clamped 300-500, leash >= seek); else the old SeekRadius / SeekLeash / ChainRadius exactly.
+function ArmyOrdersConfig.AttackRadii(userId: any): (number, number, number)
+	local A: any = (ArmyOrdersConfig :: any).AttackRange
+	local live = typeof(A) == "table" and (require(script.Parent.RetentionConfig) :: any).Live(A, userId)
+	if not live then
+		return ArmyOrdersConfig.SeekRadius, ArmyOrdersConfig.SeekLeash, ArmyOrdersConfig.ChainRadius
+	end
+	local seek = math.clamp(tonumber(A.SeekStuds) or 400, 300, 500)
+	return seek, math.max(seek, tonumber(A.LeashStuds) or seek + 50), math.max(50, tonumber(A.ChainStuds) or 200)
+end
+
+function ArmyOrdersConfig.AttackRangeLive(userId: any): boolean
+	local A: any = (ArmyOrdersConfig :: any).AttackRange
+	return typeof(A) == "table" and (require(script.Parent.RetentionConfig) :: any).Live(A, userId)
+end
+
+-- the compass word for a flat direction (dx, dz) in world space (-Z = north, as the map / compass draw it)
+function ArmyOrdersConfig.Compass8(dx: number, dz: number): string
+	local a = math.deg(math.atan2(dx, -dz)) % 360
+	local names = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" }
+	return names[(math.floor((a + 22.5) / 45) % 8) + 1]
 end
 
 return ArmyOrdersConfig
@@ -30845,7 +30893,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 183)
+		player:SetAttribute("WE_Build", 184)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -32336,9 +32384,27 @@ function ArmyCommand.Order(player: Player, st: any, order: string, source: strin
 		end
 		local t = Plan.ProbeClear(player, st, deps.Pick, seekFrom :: Vector3)
 		if t == nil then
+			local seekR = ArmyOrdersConfig.AttackRadii(player.UserId)
+			if ArmyOrdersConfig.AttackRangeLive(player.UserId) and Plan.NearestBeyond then
+				-- claude-bud JOB 52: say how far the nearest valid enemy is, and offer PIN / SEND to it (server ids only)
+				local A: any = ArmyOrdersConfig.AttackRange
+				local nt, nd, nid = Plan.NearestBeyond(player, st, deps.Pick, seekFrom :: Vector3)
+				local text = A.Text.NoneAtAll
+				if nt and nd and nt.Root then
+					local p = nt.Root.Position
+					text = string.format(A.Text.NoneInRange, math.floor(seekR * 0.28), math.floor(nd * 0.28),
+						ArmyOrdersConfig.Compass8(p.X - (seekFrom :: Vector3).X, p.Z - (seekFrom :: Vector3).Z))
+					if deps.PushFeature then
+						pcall(deps.PushFeature, player, "ArmyNearest", { Text = text, X = p.X, Y = p.Y, Z = p.Z,
+							Target = if nid then "N:" .. nid else nil })
+					end
+				end
+				return reject(player, "ATTACK", "NoEnemiesNear", if nt then nil else text,
+					string.format("from=%s radius=%d nearest=%s", ArmyLog.Vec(seekFrom), seekR, if nd then string.format("%.0f", nd) else "none"))
+			end
 			-- DECIDED: nothing to fight within SeekRadius: say so and keep the previous state (never a broken ATTACK)
 			return reject(player, "ATTACK", "NoEnemiesNear", ArmyOrdersConfig.Text.NothingNear,
-				string.format("from=%s radius=%d", ArmyLog.Vec(seekFrom), ArmyOrdersConfig.SeekRadius))
+				string.format("from=%s radius=%d", ArmyLog.Vec(seekFrom), seekR))
 		end
 		if not Plan.StartClear(player, st, if away or cur ~= nil then seekFrom else nil, t) then
 			return reject(player, "ATTACK", "StartFailed", "Order failed")
@@ -35098,13 +35164,74 @@ function ArmyPlan.ProbeClear(player: Player, st: any, pick: any, from: Vector3):
 		return nil
 	end
 	local keep = st._acTarget
+	local seek, leash = C.AttackRadii(player.UserId) -- claude-bud JOB 52: AttackRange live = 400 / 450 (else 250 / 300)
 	probing = player.UserId
-	local t = pickWith(pick, player, st, ownerRoot(player), { Centre = from, Reach = C.SeekRadius, LeashFrom = from, Leash = C.SeekLeash })
+	local t = pickWith(pick, player, st, ownerRoot(player), { Centre = from, Reach = seek, LeashFrom = from, Leash = leash })
 	probing = nil
 	st._acTarget = keep
-	ArmyLog.Line(player, "ARMY MOVE", string.format("%s ATTACK probe from=%s radius=%d -> %s", player.Name, ArmyLog.Vec(from), C.SeekRadius,
+	ArmyLog.Line(player, "ARMY MOVE", string.format("%s ATTACK probe from=%s radius=%d -> %s", player.Name, ArmyLog.Vec(from), seek,
 		if t then tostring(t.Kind) .. " at " .. ArmyLog.Vec(t.Root and t.Root.Position) else "none"))
 	return t
+end
+
+--[[ claude-bud JOB 52: nothing within the ATTACK range: the nearest valid enemy beyond it (the SAME pick and hostility
+	rule, reach NearestScanStuds), as (target, flat distance, the NPCId when it is a combat NPC). nil = none anywhere. ]]
+function ArmyPlan.NearestBeyond(player: Player, st: any, pick: any, from: Vector3): (any, number?, string?)
+	if st == nil or pick == nil then
+		return nil, nil, nil
+	end
+	local A: any = C.AttackRange
+	local far = tonumber(A and A.NearestScanStuds) or 2500
+	local keep = st._acTarget
+	probing = player.UserId
+	local t = pickWith(pick, player, st, ownerRoot(player), { Centre = from, Reach = far, LeashFrom = from, Leash = far })
+	probing = nil
+	st._acTarget = keep
+	if t == nil or t.Root == nil then
+		return nil, nil, nil
+	end
+	local model = t.Hum and t.Hum.Parent
+	local id = if model then model:GetAttribute("NPCId") else nil
+	return t, flatDist(from, t.Root.Position), if typeof(id) == "string" then id else nil
+end
+
+-- claude-bud JOB 52: does this army NPC kill count on ARMY KILLS? Only the target group of HIS running ATTACK (Clear)
+-- plan, at most AttackRange.KillCreditPerHour per owner per rolling hour (no AFK farm), only while AttackRange is live.
+local creditLog: { [number]: { number } } = {}
+function ArmyPlan.CreditsArmyKill(killer: Player, info: any): boolean
+	if not C.AttackRangeLive(killer.UserId) or typeof(info) ~= "table" then
+		return false
+	end
+	local plan = plans[killer.UserId]
+	if plan == nil or plan.Kind ~= "Clear" or plan.Group == nil then
+		return false
+	end
+	local g = plan.Group :: Group
+	if g.Kind ~= "NPC" then
+		return false
+	end
+	local same = (g.GroupId ~= nil and info.GroupId == g.GroupId)
+	if not same and g.Hum and g.Hum.Parent then
+		same = g.Hum.Parent:GetAttribute("NPCId") == info.Id
+	end
+	if not same then
+		return false
+	end
+	local now = clock()
+	local list = creditLog[killer.UserId] or {}
+	local kept = {}
+	for _, t in ipairs(list) do
+		if now - t < 3600 then
+			table.insert(kept, t)
+		end
+	end
+	if #kept >= math.max(0, math.floor(tonumber(C.AttackRange.KillCreditPerHour) or 60)) then
+		creditLog[killer.UserId] = kept
+		return false
+	end
+	table.insert(kept, now)
+	creditLog[killer.UserId] = kept
+	return true
 end
 
 -- Code Bot: end the plan cleanly (ArmyState.CancelPlan: any non-plan state). Its pending route result is dropped (the
@@ -35335,10 +35462,11 @@ end
 local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?, pick: any, centre: Vector3, now: number)
 	local f3 = (ArmyConfig :: any).Follow3
 	local ownerPos = if plan.Anchor then plan.Anchor :: Vector3 elseif proot then proot.Position else centre
+	local seekR, leashR, chainR = C.AttackRadii(player.UserId) -- claude-bud JOB 52: ONE set of radii for the whole order
 	if plan.Phase == "Seek" then
 		local from = if plan.SeekFrom == "owner" and proot then proot.Position else centre
-		local radius = if plan.SeekFrom == "owner" then C.SeekRadius else C.ChainRadius
-		local t = pickWith(pick, player, st, proot, { Centre = from, Reach = radius, LeashFrom = ownerPos, Leash = C.SeekLeash })
+		local radius = if plan.SeekFrom == "owner" then seekR else chainR
+		local t = pickWith(pick, player, st, proot, { Centre = from, Reach = radius, LeashFrom = ownerPos, Leash = leashR })
 		if t and plan.Bad[t.Root] then
 			t = nil
 		end
@@ -35371,7 +35499,7 @@ local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?,
 	local alive = ArmyPlan.GroupAlive(player, g)
 	if plan.Phase == "March" then
 		-- an enemy player shooting the army on the way is answered (players first); NPCs wait for the fight
-		local t = pickWith(pick, player, st, proot, { Centre = centre, Reach = (tonumber(f3.AttackAggroStuds) or 120), LeashFrom = ownerPos, Leash = C.SeekLeash })
+		local t = pickWith(pick, player, st, proot, { Centre = centre, Reach = (tonumber(f3.AttackAggroStuds) or 120), LeashFrom = ownerPos, Leash = leashR })
 		st._acTarget = if t and t.Kind == "Player" then t else nil
 		if alive <= 0 then
 			plan.Phase = "Seek"
@@ -35390,14 +35518,14 @@ local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?,
 		return
 	end
 	if plan.Phase == "Fight" then
-		pickWith(pick, player, st, proot, { Centre = centre, Reach = (tonumber(f3.AttackAggroStuds) or 120) + (tonumber(f3.AttackKeepExtraStuds) or 20), LeashFrom = ownerPos, Leash = C.SeekLeash })
+		pickWith(pick, player, st, proot, { Centre = centre, Reach = (tonumber(f3.AttackAggroStuds) or 120) + (tonumber(f3.AttackKeepExtraStuds) or 20), LeashFrom = ownerPos, Leash = leashR })
 		if alive < plan.GroupAlive then
 			plan.Kills += plan.GroupAlive - alive
 			plan.GroupAlive = alive
 			plan.FightSince = now
 		end
 		setStatus(plan, string.format(T.Fighting, alive))
-		local beyond = (plan.Anchor ~= nil or proot ~= nil) and flatDist(centre, ownerPos) > C.SeekLeash
+		local beyond = (plan.Anchor ~= nil or proot ~= nil) and flatDist(centre, ownerPos) > leashR
 		if alive <= 0 or now - plan.FightSince >= C.FightGiveUpSeconds then
 			plan.Chain += 1
 			st._acTarget = nil
@@ -35842,7 +35970,20 @@ function ArmyPlan.Init(d: { [string]: any })
 		PushVerdict = function(p: Player, id: number)
 			pushVerdict(p, id, ArmyPlan.CheckSend(p, id))
 		end,
+		-- claude-bud JOB 52: the "nothing in range" card (distance + direction, PIN / SEND)
+		PushFeature = function(p: Player, kind: string, data: any)
+			local rs = deps.RemoteSetup
+			local ev = rs and rs.Get(require(Shared.Constants).RemoteNames.FeaturePush)
+			if ev and ev:IsA("RemoteEvent") then
+				(ev :: RemoteEvent):FireClient(p, kind, data)
+			end
+		end,
 	})
+	if cs and cs.NPCInfoOf then
+		ArmyTargets.BindNpcLookup(function(id: string): { Position: Vector3, Name: string }?
+			return cs.NPCInfoOf(id) -- claude-bud JOB 52: "N:<npcId>" for the SEND the ATTACK toast offers
+		end)
+	end
 	Players.PlayerRemoving:Connect(function(p: Player)
 		plans[p.UserId] = nil
 	end)
@@ -36456,6 +36597,12 @@ end
 
 --[[ (target, nil) or (nil, reason): "BadTarget" (not a target id), "UnknownTarget" (no such area / site). A base id
 	comes back as Kind "Base" with its PlotId: ArmyPlan.StartSend checks it (owner online, fairness, his own base). ]]
+-- claude-bud JOB 52: CombatService's NPC lookup for "N:<npcId>" (bound by ArmyPlan.Init): id -> { Position, Name } or nil
+local npcLookup: ((string) -> { Position: Vector3, Name: string }?)? = nil
+function ArmyTargets.BindNpcLookup(fn: (string) -> { Position: Vector3, Name: string }?)
+	npcLookup = fn
+end
+
 function ArmyTargets.Resolve(raw: any): (Target?, string?)
 	if typeof(raw) == "number" then
 		if raw ~= raw or raw <= 0 or raw % 1 ~= 0 then
@@ -36493,6 +36640,17 @@ function ArmyTargets.Resolve(raw: any): (Target?, string?)
 			Key = key, Kind = "Area", Id = a.Id, Name = a.Name, Centre = centre, Radius = radius,
 			Approaches = configured(key) or ArmyTargets.ApproachRing(centre, radius), Territory = a.Territory,
 		}, nil
+	elseif kind == "N" then
+		-- claude-bud JOB 52: the nearest enemy group the ATTACK toast offered ("N:<npcId>"): a live CombatService NPC the
+		-- server resolves now (its position, its group's name); the client sends only the id
+		local cs = npcLookup and npcLookup(id)
+		if cs == nil then
+			return nil, "UnknownTarget"
+		end
+		local centre = cs.Position
+		local key = "N:" .. id
+		return { Key = key, Kind = "Site", Id = id, Name = cs.Name, Centre = centre, Radius = 40,
+			Approaches = ArmyTargets.ApproachRing(centre, 40) }, nil
 	elseif kind == "S" then
 		for _, s in ipairs(WorldSitesConfig.Sites or {}) do
 			if s.Id == id then
@@ -74767,7 +74925,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 183)
+			player:SetAttribute("WE_Build", 184)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -80459,6 +80617,16 @@ function CombatService.SetUnitPlanCheck(fn: ((Player, string?) -> boolean)?)
 end
 
 -- claude-bud JOB 38: an NPC's group id (ArmyPlan: "clear it" means the whole group)
+-- claude-bud JOB 52: a live NPC's position + display name (ArmyTargets "N:<npcId>": the SEND the ATTACK toast offers)
+function CombatService.NPCInfoOf(npcId: string): { Position: Vector3, Name: string }?
+	local rec = if typeof(npcId) == "string" and #npcId <= 64 then npcRecords[npcId] else nil
+	if rec == nil or not rec.Alive or rec.Humanoid.Health <= 0 or rec.Root.Parent == nil then
+		return nil
+	end
+	local gid = rec.GroupId
+	return { Position = rec.Root.Position, Name = if typeof(gid) == "string" then (string.match(gid, "([^%.]+)$") or gid) else rec.Def.DisplayName }
+end
+
 function CombatService.NPCGroupOf(npcId: string): string?
 	local rec = if typeof(npcId) == "string" then npcRecords[npcId] else nil
 	return if rec then rec.GroupId else nil
@@ -83397,7 +83565,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 183)
+		player:SetAttribute("WE_Build", 184)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -83539,7 +83707,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=183",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=184",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -88080,6 +88248,14 @@ function EngagementService.Init(d: { [string]: any })
 			local AOC: any = require(Shared.Configs.ArmyOrdersConfig)
 			if typeof(info) == "table" and info.ByUnit == true and info.Killer and AOC.ArmyKillNpcTypes[info.TypeId] == true then
 				EngagementService.NoteArmyKill(info.Killer)
+			elseif typeof(info) == "table" and info.ByUnit == true and info.Killer then
+				-- claude-bud JOB 52: a hostile combat NPC of HIS ordered ATTACK target group (capped per hour: no AFK farm)
+				local okP, AP = pcall(function(): any
+					return (require :: any)(script.Parent.Parent.Modules.ArmyPlan)
+				end)
+				if okP and AP and AP.CreditsArmyKill and AP.CreditsArmyKill(info.Killer, info) then
+					EngagementService.NoteArmyKill(info.Killer)
+				end
 			end
 		end)
 	end
@@ -113155,6 +113331,15 @@ end
 	`avoidB` (the fights this unit gave up on) is never the first result; the nearest such one comes back as the second
 	(its Humanoid, root and distance after the first three). It still goes into `list`. The last two results say
 	whether any live hostile, however far from `fromPos`, still stands within `avoidR` of `avoidA` / `avoidB`. ]]
+-- claude-bud JOB 52: ATTACK at range live for this owner (ArmyOrdersConfig.AttackRange; lazy, nil-safe)
+local function attackRangeLive(owner: Player): boolean
+	local ok, live = pcall(function(): any
+		local AOC: any = require(Shared.Configs.ArmyOrdersConfig)
+		return AOC.AttackRangeLive ~= nil and AOC.AttackRangeLive(owner.UserId)
+	end)
+	return ok and live == true
+end
+
 local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: boolean?, owner: Player?, list: CandList?, listRange: number?, avoidA: Vector3?, avoidB: Vector3?, avoidR: number?): (Humanoid?, BasePart?, number, Humanoid?, BasePart?, number, boolean, boolean)
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil
@@ -113175,6 +113360,8 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 	end
 	local lr = if list then (listRange or maxRange) else -1
 	local cap = candCap()
+	-- claude-bud JOB 52: with ATTACK at range live for the owner, NPC distances are flat (the pick's centre is at Y = 0)
+	local flatPick = owner ~= nil and attackRangeLive(owner)
 	if list then
 		candReset(list)
 	end
@@ -113198,6 +113385,9 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 				heldA = heldA or inA
 				heldB = heldB or inB
 				local d = (p - fromPos).Magnitude
+				if flatPick then
+					d = Vector3.new(p.X - fromPos.X, 0, p.Z - fromPos.Z).Magnitude -- claude-bud JOB 52: flat (no height bias)
+				end
 				if d < bestDist or d < zoneDist or d <= lr or d <= tScan then
 					local id = inst:GetAttribute("NPCId")
 					if not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(owner, id) == false) then
@@ -130237,6 +130427,7 @@ safeInit("RetentionController", safeRequire("RetentionController", Controllers:W
 safeInit("RatePromptController", safeRequire("RatePromptController", Controllers:WaitForChild("RatePromptController", 5) :: Instance)) -- claude-bud JOB 40 part D
 safeInit("RecruitPackController", safeRequire("RecruitPackController", Controllers:WaitForChild("RecruitPackController", 5) :: Instance)) -- claude-bud JOB 41 part B
 safeInit("RebirthZoneController", safeRequire("RebirthZoneController", Controllers:WaitForChild("RebirthZoneController", 5) :: Instance)) -- claude-bud JOB 46: the zone preview card + ZoneOpen
+safeInit("ArmyNearestController", safeRequire("ArmyNearestController", Controllers:WaitForChild("ArmyNearestController", 5) :: Instance)) -- claude-bud JOB 52: the ATTACK nothing-in-range card (PIN / SEND)
 safeInit("RivalController", safeRequire("RivalController", Controllers:WaitForChild("RivalController", 5) :: Instance)) -- claude-bud JOB 41 part C
 safeInit("NukeController", safeRequire("NukeController", Controllers:WaitForChild("NukeController", 5) :: Instance)) -- claude-bud JOB 33
 safeInit("AchievementController", safeRequire("AchievementController", Controllers:WaitForChild("AchievementController", 5) :: Instance)) -- claude-bud JOB 34
@@ -131543,6 +131734,147 @@ return ArmyController
           </Item>
           <Item class="ModuleScript" referent="303">
             <Properties>
+              <string name="Name">ArmyNearestController</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	claude-bud JOB 52 (2026-10-01): the "nothing in range" card for ATTACK at range (ArmyOrdersConfig.AttackRange, owner-
+	first). The server found no valid enemy within the ATTACK range and pushes FeaturePush "ArmyNearest" { Text =
+	"No enemies within 112 m. Nearest: 174 m NE", X, Y, Z, Target = "N:<npcId>" }. One card in the HUD top stack
+	(HudLayout.RegisterTopStack: no overlap with the other top items, never under the thumbstick / fire / jump):
+	  PIN  -> the ONE objective marker on that spot (ObjectiveMarker.ShowWith, Pin) - his own pin, nothing moves;
+	  SEND -> RequestArmySend with the server's id only (ArmyTargets resolves it; the client never sends a position).
+	Gone after CardSeconds or a tap. Display only; the server decides every order.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ArmyNearestController: no ReplicatedStorage.Shared after 60 s; not started")
+	return {}
+end
+local Constants = require(Shared.Constants)
+local Remotes = require(Shared.Remotes)
+
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
+
+local ArmyNearestController = {}
+
+local player = Players.LocalPlayer
+local GOLD = Color3.fromRGB(255, 205, 60)
+local PLATE = Color3.fromRGB(22, 24, 20)
+local STACK = "ArmyNearestCard"
+local CARD_SECONDS = 9
+
+local gui: ScreenGui? = nil
+local seq = 0
+
+local function close()
+	local g = gui
+	gui = nil
+	pcall(HudLayout.UnregisterTopStack, STACK)
+	if g then
+		g:Destroy()
+	end
+end
+
+local function button(parent: Instance, text: string, x: number, color: Color3, onTap: () -> ()): TextButton
+	local b = Instance.new("TextButton")
+	b.Name = text
+	b.Position = UDim2.new(x, 6, 0, 46)
+	b.Size = UDim2.new(0.5, -12, 0, 64) -- 64 code px under the HUD UIScale (~0.7) = ~45 px real, a finger target
+	b.BackgroundColor3 = color
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.Font = Enum.Font.GothamBlack
+	b.TextSize = 22
+	b.Text = text
+	b.Parent = parent
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 10)
+	c.Parent = b
+	b.Activated:Connect(onTap)
+	return b
+end
+
+local function show(data: any)
+	close()
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if pg == nil then
+		return
+	end
+	local g = Instance.new("ScreenGui")
+	g.Name = "WE_ArmyNearestCard"
+	g.ResetOnSpawn = false
+	g.DisplayOrder = 34
+	g.Parent = pg
+	gui = g
+	local f = Instance.new("Frame")
+	f.Name = "Card"
+	f.AnchorPoint = Vector2.new(0.5, 0)
+	f.Position = UDim2.new(0.5, 0, 0, 80)
+	f.Size = UDim2.fromOffset(460, 122)
+	f.BackgroundColor3 = PLATE
+	f.BackgroundTransparency = 0.08
+	f.Parent = g
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 14)
+	c.Parent = f
+	local st = Instance.new("UIStroke")
+	st.Color = GOLD
+	st.Thickness = 2
+	st.Parent = f
+	local t = Instance.new("TextLabel")
+	t.BackgroundTransparency = 1
+	t.Position = UDim2.fromOffset(12, 8)
+	t.Size = UDim2.new(1, -24, 0, 32)
+	t.Font = Enum.Font.GothamBold
+	t.TextSize = 21 -- >= 14 px real at the phone HUD scale
+	t.TextColor3 = Color3.new(1, 1, 1)
+	t.TextTruncate = Enum.TextTruncate.AtEnd
+	t.Text = tostring(data.Text or "")
+	t.Parent = f
+	local x, y, z = tonumber(data.X), tonumber(data.Y), tonumber(data.Z)
+	button(f, "PIN", 0, Color3.fromRGB(60, 66, 54), function()
+		if x and y and z then
+			pcall(ObjectiveMarker.ShowWith, { Short = "ENEMY", X = x, Y = y, Z = z }, { Pin = true, ArriveStuds = 15 })
+		end
+		close()
+	end)
+	local target = if typeof(data.Target) == "string" and #data.Target <= 70 then data.Target else nil
+	local send = button(f, "SEND ARMY", 0.5, Color3.fromRGB(170, 55, 45), function()
+		if target then
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySend, target)
+		end
+		close()
+	end)
+	send.Visible = target ~= nil
+	pcall(HudLayout.ApplyScreen, g)
+	pcall(HudLayout.RegisterTopStack, STACK, f, 14)
+	seq += 1
+	local my = seq
+	task.delay(CARD_SECONDS, function()
+		if seq == my then
+			close()
+		end
+	end)
+end
+
+function ArmyNearestController.Init()
+	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if kind == "ArmyNearest" and typeof(data) == "table" then
+			show(data)
+		end
+	end)
+end
+
+return ArmyNearestController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="304">
+            <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
 --[[
@@ -131814,7 +132146,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="304">
+          <Item class="ModuleScript" referent="305">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -132556,7 +132888,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="305">
+          <Item class="ModuleScript" referent="306">
             <Properties>
               <string name="Name">BaseMarkerController</string>
               <string name="Source"><![CDATA[--!strict
@@ -132909,7 +133241,7 @@ return BaseMarkerController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="306">
+          <Item class="ModuleScript" referent="307">
             <Properties>
               <string name="Name">BuildingTipController</string>
               <string name="Source"><![CDATA[--!strict
@@ -133139,7 +133471,7 @@ return BuildingTipController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="307">
+          <Item class="ModuleScript" referent="308">
             <Properties>
               <string name="Name">CheckpointController</string>
               <string name="Source"><![CDATA[--!strict
@@ -133254,7 +133586,7 @@ return CheckpointController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="308">
+          <Item class="ModuleScript" referent="309">
             <Properties>
               <string name="Name">CodesController</string>
               <string name="Source"><![CDATA[--!strict
@@ -133623,7 +133955,7 @@ return CodesController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="309">
+          <Item class="ModuleScript" referent="310">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -136256,7 +136588,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="310">
+          <Item class="ModuleScript" referent="311">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -136633,7 +136965,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="311">
+          <Item class="ModuleScript" referent="312">
             <Properties>
               <string name="Name">EndgameController</string>
               <string name="Source"><![CDATA[--!strict
@@ -138606,7 +138938,7 @@ return EndgameController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="312">
+          <Item class="ModuleScript" referent="313">
             <Properties>
               <string name="Name">FeatureController</string>
               <string name="Source"><![CDATA[--!strict
@@ -138901,7 +139233,7 @@ return FeatureController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="313">
+          <Item class="ModuleScript" referent="314">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -140765,7 +141097,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="314">
+          <Item class="ModuleScript" referent="315">
             <Properties>
               <string name="Name">MapController</string>
               <string name="Source"><![CDATA[--!strict
@@ -142332,7 +142664,7 @@ return MapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="315">
+          <Item class="ModuleScript" referent="316">
             <Properties>
               <string name="Name">MissileController</string>
               <string name="Source"><![CDATA[--!strict
@@ -144214,7 +144546,7 @@ return MissileController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="316">
+          <Item class="ModuleScript" referent="317">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -145593,7 +145925,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="317">
+          <Item class="ModuleScript" referent="318">
             <Properties>
               <string name="Name">NationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -147055,7 +147387,7 @@ return NationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="318">
+          <Item class="ModuleScript" referent="319">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -148202,7 +148534,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="319">
+          <Item class="ModuleScript" referent="320">
             <Properties>
               <string name="Name">NukeController</string>
               <string name="Source"><![CDATA[--!strict
@@ -148524,7 +148856,7 @@ return NukeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="320">
+          <Item class="ModuleScript" referent="321">
             <Properties>
               <string name="Name">OpsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -149417,7 +149749,7 @@ return OpsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="321">
+          <Item class="ModuleScript" referent="322">
             <Properties>
               <string name="Name">OrdersController</string>
               <string name="Source"><![CDATA[--!strict
@@ -150088,7 +150420,7 @@ return OrdersController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="322">
+          <Item class="ModuleScript" referent="323">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -151073,7 +151405,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="323">
+            <Item class="ModuleScript" referent="324">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -151238,7 +151570,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="324">
+            <Item class="ModuleScript" referent="325">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -151278,7 +151610,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="325">
+          <Item class="ModuleScript" referent="326">
             <Properties>
               <string name="Name">PromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -152193,7 +152525,7 @@ return PromptController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="326">
+          <Item class="ModuleScript" referent="327">
             <Properties>
               <string name="Name">RatePromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -152402,7 +152734,7 @@ return RatePromptController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="327">
+          <Item class="ModuleScript" referent="328">
             <Properties>
               <string name="Name">RebirthZoneController</string>
               <string name="Source"><![CDATA[--!strict
@@ -152594,7 +152926,7 @@ return RebirthZoneController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="328">
+          <Item class="ModuleScript" referent="329">
             <Properties>
               <string name="Name">RecruitPackController</string>
               <string name="Source"><![CDATA[--!strict
@@ -152812,7 +153144,7 @@ return RecruitPackController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="329">
+          <Item class="ModuleScript" referent="330">
             <Properties>
               <string name="Name">ResearchController</string>
               <string name="Source"><![CDATA[--!strict
@@ -153908,7 +154240,7 @@ return ResearchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="330">
+          <Item class="ModuleScript" referent="331">
             <Properties>
               <string name="Name">RetentionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -154427,7 +154759,7 @@ return RetentionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="331">
+          <Item class="ModuleScript" referent="332">
             <Properties>
               <string name="Name">RivalController</string>
               <string name="Source"><![CDATA[--!strict
@@ -154981,7 +155313,7 @@ return RivalController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="332">
+          <Item class="ModuleScript" referent="333">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -155576,7 +155908,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="333">
+          <Item class="ModuleScript" referent="334">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -157752,7 +158084,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="334">
+          <Item class="ModuleScript" referent="335">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -159019,7 +159351,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="335">
+          <Item class="ModuleScript" referent="336">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -160700,7 +161032,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="336">
+          <Item class="ModuleScript" referent="337">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -161101,7 +161433,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="337">
+          <Item class="ModuleScript" referent="338">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -162574,7 +162906,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="338">
+          <Item class="ModuleScript" referent="339">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -164895,11 +165227,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="339">
+        <Item class="Folder" referent="340">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="340">
+          <Item class="ModuleScript" referent="341">
             <Properties>
               <string name="Name">AimTargets</string>
               <string name="Source"><![CDATA[--!strict
@@ -165442,7 +165774,7 @@ return AimTargets
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="341">
+          <Item class="ModuleScript" referent="342">
             <Properties>
               <string name="Name">AirWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -166094,7 +166426,7 @@ return AirWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="342">
+          <Item class="ModuleScript" referent="343">
             <Properties>
               <string name="Name">AircraftBodyClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -166425,7 +166757,7 @@ return AircraftBodyClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="343">
+          <Item class="ModuleScript" referent="344">
             <Properties>
               <string name="Name">ArmyDebugClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -166769,7 +167101,7 @@ return ArmyDebugClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="344">
+          <Item class="ModuleScript" referent="345">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -167626,7 +167958,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="345">
+          <Item class="ModuleScript" referent="346">
             <Properties>
               <string name="Name">AudioHooks</string>
               <string name="Source"><![CDATA[--!strict
@@ -168158,7 +168490,7 @@ return AudioHooks
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="346">
+          <Item class="ModuleScript" referent="347">
             <Properties>
               <string name="Name">BusinessVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -169593,7 +169925,7 @@ return BusinessVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="347">
+          <Item class="ModuleScript" referent="348">
             <Properties>
               <string name="Name">CameraFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -170144,7 +170476,7 @@ return CameraFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="348">
+          <Item class="ModuleScript" referent="349">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -170212,7 +170544,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="349">
+          <Item class="ModuleScript" referent="350">
             <Properties>
               <string name="Name">ConsoleWaypoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -170526,7 +170858,7 @@ return ConsoleWaypoint
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="350">
+          <Item class="ModuleScript" referent="351">
             <Properties>
               <string name="Name">EngagementClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -170972,7 +171304,7 @@ return EngagementClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="351">
+          <Item class="ModuleScript" referent="352">
             <Properties>
               <string name="Name">GameFeelClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -171275,7 +171607,7 @@ return GameFeelClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="352">
+          <Item class="ModuleScript" referent="353">
             <Properties>
               <string name="Name">HudIcons</string>
               <string name="Source"><![CDATA[--!strict
@@ -171643,7 +171975,7 @@ return HudIcons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="353">
+          <Item class="ModuleScript" referent="354">
             <Properties>
               <string name="Name">HudLayout</string>
               <string name="Source"><![CDATA[--!strict
@@ -172960,7 +173292,7 @@ return HudLayout
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="354">
+          <Item class="ModuleScript" referent="355">
             <Properties>
               <string name="Name">IntelGuide</string>
               <string name="Source"><![CDATA[--!strict
@@ -173078,7 +173410,7 @@ return IntelGuide
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="355">
+          <Item class="ModuleScript" referent="356">
             <Properties>
               <string name="Name">Juice</string>
               <string name="Source"><![CDATA[--!strict
@@ -173272,7 +173604,7 @@ return Juice
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="356">
+          <Item class="ModuleScript" referent="357">
             <Properties>
               <string name="Name">LabelGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -173514,7 +173846,7 @@ return LabelGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="357">
+          <Item class="ModuleScript" referent="358">
             <Properties>
               <string name="Name">MoveDebugClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -173888,7 +174220,7 @@ return MoveDebugClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="358">
+          <Item class="ModuleScript" referent="359">
             <Properties>
               <string name="Name">NextPadChevrons</string>
               <string name="Source"><![CDATA[--!strict
@@ -174375,7 +174707,7 @@ return NextPadChevrons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="359">
+          <Item class="ModuleScript" referent="360">
             <Properties>
               <string name="Name">NotifOptIn</string>
               <string name="Source"><![CDATA[--!strict
@@ -174466,7 +174798,7 @@ return NotifOptIn
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="360">
+          <Item class="ModuleScript" referent="361">
             <Properties>
               <string name="Name">ObjectiveMarker</string>
               <string name="Source"><![CDATA[--!strict
@@ -175032,7 +175364,7 @@ return ObjectiveMarker
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="361">
+          <Item class="ModuleScript" referent="362">
             <Properties>
               <string name="Name">OpsJobs</string>
               <string name="Source"><![CDATA[--!strict
@@ -175656,7 +175988,7 @@ return OpsJobs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="362">
+          <Item class="ModuleScript" referent="363">
             <Properties>
               <string name="Name">PanelShell</string>
               <string name="Source"><![CDATA[--!strict
@@ -175902,7 +176234,7 @@ return PanelShell
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="363">
+          <Item class="ModuleScript" referent="364">
             <Properties>
               <string name="Name">PremiumWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -176316,7 +176648,7 @@ return PremiumWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="364">
+          <Item class="ModuleScript" referent="365">
             <Properties>
               <string name="Name">ProducerLabels</string>
               <string name="Source"><![CDATA[--!strict
@@ -176749,7 +177081,7 @@ return ProducerLabels
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="365">
+          <Item class="ModuleScript" referent="366">
             <Properties>
               <string name="Name">ProductionFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -178003,7 +178335,7 @@ return ProductionFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="366">
+          <Item class="ModuleScript" referent="367">
             <Properties>
               <string name="Name">ProgressPill</string>
               <string name="Source"><![CDATA[--!strict
@@ -178182,7 +178514,7 @@ return ProgressPill
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="367">
+          <Item class="ModuleScript" referent="368">
             <Properties>
               <string name="Name">QualityGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -178528,7 +178860,7 @@ return QualityGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="368">
+          <Item class="ModuleScript" referent="369">
             <Properties>
               <string name="Name">RebirthConfirm</string>
               <string name="Source"><![CDATA[--!strict
@@ -179423,7 +179755,7 @@ return RebirthConfirm
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="369">
+          <Item class="ModuleScript" referent="370">
             <Properties>
               <string name="Name">RigAnimator</string>
               <string name="Source"><![CDATA[--!strict
@@ -180451,7 +180783,7 @@ return RigAnimator
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="370">
+          <Item class="ModuleScript" referent="371">
             <Properties>
               <string name="Name">Scope</string>
               <string name="Source"><![CDATA[--!strict
@@ -180656,7 +180988,7 @@ return Scope
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="371">
+          <Item class="ModuleScript" referent="372">
             <Properties>
               <string name="Name">StandFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -180737,7 +181069,7 @@ return StandFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="372">
+          <Item class="ModuleScript" referent="373">
             <Properties>
               <string name="Name">StreakStrip</string>
               <string name="Source"><![CDATA[--!strict
@@ -180852,7 +181184,7 @@ return StreakStrip
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="373">
+          <Item class="ModuleScript" referent="374">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -180917,7 +181249,7 @@ return StudioSmokeClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="374">
+          <Item class="ModuleScript" referent="375">
             <Properties>
               <string name="Name">VehicleCombatClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -181607,7 +181939,7 @@ return VehicleCombatClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="375">
+          <Item class="ModuleScript" referent="376">
             <Properties>
               <string name="Name">VehicleDriveClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -185375,7 +185707,7 @@ return VehicleDriveClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="376">
+          <Item class="ModuleScript" referent="377">
             <Properties>
               <string name="Name">WeaponVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -187603,7 +187935,7 @@ return WeaponVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="377">
+          <Item class="ModuleScript" referent="378">
             <Properties>
               <string name="Name">WorldSpinners</string>
               <string name="Source"><![CDATA[--!strict
@@ -187744,7 +188076,7 @@ return WorldSpinners
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="378">
+  <Item class="Workspace" referent="379">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

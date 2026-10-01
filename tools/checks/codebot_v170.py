@@ -31,12 +31,12 @@ def block(src, key):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 183)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 183)'),
-    (S + "Services/DataService.luau", "WE_Build=183"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 183)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 184)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 184)'),
+    (S + "Services/DataService.luau", "WE_Build=184"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 184)'),
 ):
-    check(needle in read(rel), "CODEBOT v170: WE_Build=183 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v170: WE_Build=184 " + rel.rsplit("/", 1)[-1])
 
 AC = read(C + "AchievementConfig.luau")
 IDS = {
