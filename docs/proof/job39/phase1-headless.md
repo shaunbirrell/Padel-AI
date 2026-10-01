@@ -39,7 +39,7 @@ ok    EmpireCost strictly rising
 ok    no Empire level 0 / 31 for sale
 ok    all 30 Empire levels = $3.24B (spec $3.24B)
 ok    EmpireMult: L30 = 1.60, clamped, NaN-safe
-ok    every one of 79 endgame prices is > 0 and < MaxCash 1000000000
+ok    every one of 79 endgame prices is > 0 and < MaxCash 1000000000   (historical run; MaxCash is 1e15 since Code Bot v194)
 ok    Defence L10 $68.7M, Workshop L5 $23.4M, rebirth gun Mastery L5 $32M
 ok    rebirth scale: R0 1x, R3 1.6x, capped at R20 (5x)
 ok    one life (15 structures + 4 businesses to max) = $16.07M (spec $16.07M)

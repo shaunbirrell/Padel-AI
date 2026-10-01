@@ -11,7 +11,7 @@
 
 	Pure helpers (no Instances, no services): LiveFor, EmpireCost, EmpireMult, DefenceCost, WorkshopCost, MasteryCost,
 	IncomeMinutesPrice, RebirthCostScale, ScaleStructureCost, LifeCost, BlackMarketStock, WeekIndex.
-	Every price stays below EconomyConfig.MaxCash (1,000,000,000): tools/sim/run_endgame_test.py checks it.
+	Every price stays below EconomyConfig.MaxCash (1e15; was 1,000,000,000 before Code Bot v194): tools/sim/run_endgame_test.py checks it.
 ]]
 
 local RetentionConfig = require(script.Parent.RetentionConfig)

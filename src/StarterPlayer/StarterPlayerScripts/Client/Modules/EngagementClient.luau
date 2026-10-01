@@ -26,7 +26,9 @@ local function fmtLeft(s: number): string
 end
 
 local function short(n: number): string
-	if n >= 1e9 then
+	if n >= 1e12 then
+		return string.format("%.1fT", n / 1e12)
+	elseif n >= 1e9 then
 		return string.format("%.1fB", n / 1e9)
 	elseif n >= 1e6 then
 		return string.format("%.1fM", n / 1e6)

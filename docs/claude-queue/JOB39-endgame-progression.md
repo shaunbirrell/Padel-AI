@@ -108,7 +108,7 @@ army, stronger turrets, a better gun. Nothing is a pure number unless it is labe
 (plus Gold for cosmetics). No Robux is needed, and no new Robux SKU is part of the core (§9).
 
 The whole new catalogue is about $5.4B, roughly 60-65 h of Shaun's current income (less with passes). Its cost grows
-faster than the income it adds, so it never "finishes" quickly. Every price stays below EconomyConfig.MaxCash 1,000,000,000.
+faster than the income it adds, so it never "finishes" quickly. Every price stays below EconomyConfig.MaxCash (1e15 since Code Bot v194; was 1,000,000,000 — the $1B wallet cap bug).
 
 ---
 

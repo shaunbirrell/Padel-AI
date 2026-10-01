@@ -414,8 +414,10 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	end
 
 	local granted = applyCashMult(player, profile, amount, reason)
+	local before = profile.Cash
 	profile.Cash = math.clamp(profile.Cash + granted, EconomyConfig.MinCash, EconomyConfig.MaxCash)
-	profile.Stats.TotalCashEarned += granted
+	-- Code Bot v194: count only what actually landed in the wallet (was the full grant even past MaxCash)
+	profile.Stats.TotalCashEarned += math.max(0, profile.Cash - before)
 	analyticsEconomy(player, "Source", granted, profile.Cash, reason) -- claude-bud JOB 24 §10
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
@@ -462,34 +464,55 @@ function EconomyService.CollectPendingCash(player: Player): number
 	if pending <= 0 then
 		return 0
 	end
-	(profile :: any).PendingCash = 0
-	-- Pending already had mult applied at accrue; grant with exempt reason
-	profile.Cash = math.clamp(profile.Cash + pending, EconomyConfig.MinCash, EconomyConfig.MaxCash)
-	profile.Stats.TotalCashEarned += pending
+	-- Pending already had mult applied at accrue; grant with exempt reason.
+	-- Code Bot v194: credit only what fits under MaxCash and leave the rest in PendingCash
+	-- (was: PendingCash zeroed before the clamp, so everything over the cap was deleted).
+	local room = math.max(0, EconomyConfig.MaxCash - profile.Cash)
+	local credited = math.min(pending, room)
+	if credited <= 0 then
+		return 0
+	end
+	(profile :: any).PendingCash = pending - credited
+	profile.Cash = math.clamp(profile.Cash + credited, EconomyConfig.MinCash, EconomyConfig.MaxCash)
+	profile.Stats.TotalCashEarned += credited
 	local origins = pendingAnalyticsOrigins[player.UserId]
-	pendingAnalyticsOrigins[player.UserId] = nil
+	if credited >= pending then
+		pendingAnalyticsOrigins[player.UserId] = nil
+	end
 	if origins == nil then
 		-- A PendingCash balance loaded from an older session has no origin ledger.
-		analyticsEconomy(player, "Source", pending, profile.Cash, "collect")
-	else
+		analyticsEconomy(player, "Source", credited, profile.Cash, "collect")
+	elseif credited >= pending then
 		for reason, amount in pairs(origins) do
 			if amount > 0 then
 				analyticsEconomy(player, "Source", amount, profile.Cash, reason)
+			end
+		end
+	else
+		-- partial collect (wallet at MaxCash): report the credited share per origin, keep the rest on the ledger
+		local share = credited / pending
+		for reason, amount in pairs(origins) do
+			if amount > 0 then
+				local part = math.floor(amount * share)
+				if part > 0 then
+					analyticsEconomy(player, "Source", part, profile.Cash, reason)
+					origins[reason] = amount - part
+				end
 			end
 		end
 	end
 	pcall(function()
 		local a = analytics()
 		if a and a.Log then
-			a.Log("CASH_COLLECT", player.UserId, { amount = pending })
+			a.Log("CASH_COLLECT", player.UserId, { amount = credited })
 		end
 	end)
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	if MissionService and MissionService.TrackProgress then
-		MissionService.TrackProgress(player, "EarnCash", pending)
+		MissionService.TrackProgress(player, "EarnCash", credited)
 	end
-	return pending
+	return credited
 end
 
 function EconomyService.GetPendingCash(player: Player): number

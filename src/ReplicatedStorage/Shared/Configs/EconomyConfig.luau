@@ -9,7 +9,7 @@ local EconomyConfig = {
 	StartingGold = 0,
 	MinCash = 0,
 	MinGold = 0,
-	MaxCash = 1_000_000_000,
+	MaxCash = 1e15, -- Code Bot v194: was 1_000_000_000 (the $1B wall); matches the 1e15 ceilings in ProfileSchema / XP / Prestige
 	MaxGold = 10_000_000,
 
 	-- Passive income: base + sum(structureLevel * rate)

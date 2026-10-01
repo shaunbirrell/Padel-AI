@@ -4689,7 +4689,7 @@ local EconomyConfig = {
 	StartingGold = 0,
 	MinCash = 0,
 	MinGold = 0,
-	MaxCash = 1_000_000_000,
+	MaxCash = 1e15, -- Code Bot v194: was 1_000_000_000 (the $1B wall); matches the 1e15 ceilings in ProfileSchema / XP / Prestige
 	MaxGold = 10_000_000,
 
 	-- Passive income: base + sum(structureLevel * rate)
@@ -4848,7 +4848,7 @@ return EconomyConfig
 
 	Pure helpers (no Instances, no services): LiveFor, EmpireCost, EmpireMult, DefenceCost, WorkshopCost, MasteryCost,
 	IncomeMinutesPrice, RebirthCostScale, ScaleStructureCost, LifeCost, BlackMarketStock, WeekIndex.
-	Every price stays below EconomyConfig.MaxCash (1,000,000,000): tools/sim/run_endgame_test.py checks it.
+	Every price stays below EconomyConfig.MaxCash (1e15; was 1,000,000,000 before Code Bot v194): tools/sim/run_endgame_test.py checks it.
 ]]
 
 local RetentionConfig = require(script.Parent.RetentionConfig)
@@ -31467,7 +31467,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 193)
+		player:SetAttribute("WE_Build", 194)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -77428,7 +77428,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 193)
+			player:SetAttribute("WE_Build", 194)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -86115,7 +86115,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 193)
+		player:SetAttribute("WE_Build", 194)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -86257,7 +86257,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=193",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=194",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -86866,8 +86866,10 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	end
 
 	local granted = applyCashMult(player, profile, amount, reason)
+	local before = profile.Cash
 	profile.Cash = math.clamp(profile.Cash + granted, EconomyConfig.MinCash, EconomyConfig.MaxCash)
-	profile.Stats.TotalCashEarned += granted
+	-- Code Bot v194: count only what actually landed in the wallet (was the full grant even past MaxCash)
+	profile.Stats.TotalCashEarned += math.max(0, profile.Cash - before)
 	analyticsEconomy(player, "Source", granted, profile.Cash, reason) -- claude-bud JOB 24 §10
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
@@ -86914,34 +86916,55 @@ function EconomyService.CollectPendingCash(player: Player): number
 	if pending <= 0 then
 		return 0
 	end
-	(profile :: any).PendingCash = 0
-	-- Pending already had mult applied at accrue; grant with exempt reason
-	profile.Cash = math.clamp(profile.Cash + pending, EconomyConfig.MinCash, EconomyConfig.MaxCash)
-	profile.Stats.TotalCashEarned += pending
+	-- Pending already had mult applied at accrue; grant with exempt reason.
+	-- Code Bot v194: credit only what fits under MaxCash and leave the rest in PendingCash
+	-- (was: PendingCash zeroed before the clamp, so everything over the cap was deleted).
+	local room = math.max(0, EconomyConfig.MaxCash - profile.Cash)
+	local credited = math.min(pending, room)
+	if credited <= 0 then
+		return 0
+	end
+	(profile :: any).PendingCash = pending - credited
+	profile.Cash = math.clamp(profile.Cash + credited, EconomyConfig.MinCash, EconomyConfig.MaxCash)
+	profile.Stats.TotalCashEarned += credited
 	local origins = pendingAnalyticsOrigins[player.UserId]
-	pendingAnalyticsOrigins[player.UserId] = nil
+	if credited >= pending then
+		pendingAnalyticsOrigins[player.UserId] = nil
+	end
 	if origins == nil then
 		-- A PendingCash balance loaded from an older session has no origin ledger.
-		analyticsEconomy(player, "Source", pending, profile.Cash, "collect")
-	else
+		analyticsEconomy(player, "Source", credited, profile.Cash, "collect")
+	elseif credited >= pending then
 		for reason, amount in pairs(origins) do
 			if amount > 0 then
 				analyticsEconomy(player, "Source", amount, profile.Cash, reason)
+			end
+		end
+	else
+		-- partial collect (wallet at MaxCash): report the credited share per origin, keep the rest on the ledger
+		local share = credited / pending
+		for reason, amount in pairs(origins) do
+			if amount > 0 then
+				local part = math.floor(amount * share)
+				if part > 0 then
+					analyticsEconomy(player, "Source", part, profile.Cash, reason)
+					origins[reason] = amount - part
+				end
 			end
 		end
 	end
 	pcall(function()
 		local a = analytics()
 		if a and a.Log then
-			a.Log("CASH_COLLECT", player.UserId, { amount = pending })
+			a.Log("CASH_COLLECT", player.UserId, { amount = credited })
 		end
 	end)
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	if MissionService and MissionService.TrackProgress then
-		MissionService.TrackProgress(player, "EarnCash", pending)
+		MissionService.TrackProgress(player, "EarnCash", credited)
 	end
-	return pending
+	return credited
 end
 
 function EconomyService.GetPendingCash(player: Player): number
@@ -88320,7 +88343,9 @@ function EndgameService.RecentlyHurt(player: Player): boolean
 end
 
 local function short(n: number): string
-	if n >= 1e9 then
+	if n >= 1e12 then
+		return string.format("%.2fT", n / 1e12)
+	elseif n >= 1e9 then
 		return string.format("%.2fB", n / 1e9)
 	elseif n >= 1e6 then
 		return string.format("%.1fM", n / 1e6)
@@ -141651,7 +141676,9 @@ local LIST_TITLES = { Engineers = "ENGINEERING BUREAU", HQ = "HQ UPGRADE", Recru
 local depotConsole: BasePart? = nil
 
 local function short(n: number): string
-	if n >= 1e9 then
+	if n >= 1e12 then
+		return string.format("$%.2fT", n / 1e12)
+	elseif n >= 1e9 then
 		return string.format("$%.2fB", n / 1e9)
 	elseif n >= 1e6 then
 		return string.format("$%.1fM", n / 1e6)
@@ -175156,7 +175183,9 @@ local function fmtLeft(s: number): string
 end
 
 local function short(n: number): string
-	if n >= 1e9 then
+	if n >= 1e12 then
+		return string.format("%.1fT", n / 1e12)
+	elseif n >= 1e9 then
 		return string.format("%.1fB", n / 1e9)
 	elseif n >= 1e6 then
 		return string.format("%.1fM", n / 1e6)
