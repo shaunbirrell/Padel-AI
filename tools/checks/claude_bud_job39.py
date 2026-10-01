@@ -46,8 +46,8 @@ _ECO = _j39_code(_SV + "Services/EconomyService.luau")
 _BS = _j39_code(_SV + "Services/BaseService.luau")
 
 # flags: one owner-first kill switch + a switch per system; phase 1 turns on Rebirth + EmpireLevel only
-_j39("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- only UserId 470626172" in _EGC and "RetentionConfig.Live(EndgameConfig.Live, userId)" in _EGC,
-     "one owner-first kill switch (EndgameConfig.Live)")
+_j39("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false, -- codebot_v166" in _EGC and "RetentionConfig.Live(EndgameConfig.Live, userId)" in _EGC,
+     "one kill switch (EndgameConfig.Live) (codebot_v166: OwnerFirst=false, everyone; superseded in codebot_v166.py)")
 _j39("\t\tRebirth = true," in _EGC and "\t\tEmpireLevel = true," in _EGC and "\t\tBaseTier = true," in _EGC and "\t\tDefence = true," in _EGC,
      "phases 1-2 parts on (Rebirth, EmpireLevel, BaseTier, Defence)")
 _j39('= "owner"' not in _EGC and '= "owner"' not in _j39_src(_CF + "PlazaServicesConfig.luau"), "no \"owner\" strings in the new configs (codebot_v101)")

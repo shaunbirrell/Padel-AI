@@ -33,7 +33,7 @@ _CL149 = "src/StarterPlayer/StarterPlayerScripts/Client/"
 
 # Endgame phases 3–5
 _EC = _rd149(_C149 + "EndgameConfig.luau")
-_cb149("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _EC, "CODEBOT v149: EndgameConfig.Live Enabled + OwnerFirst=true")
+_cb149("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _EC, "CODEBOT v149: EndgameConfig.Live Enabled + OwnerFirst=false (v166 flip-all-live)")
 _cb149("\t\tElite = true," in _EC, "CODEBOT v149: Parts.Elite true (phase 3)")
 _cb149("\t\tHospital = true," in _EC and "\t\tMastery = true," in _EC and "\t\tWorkshop = true," in _EC,
 	"CODEBOT v149: Parts.Hospital + Mastery + Workshop true (phase 4)")
@@ -61,7 +61,7 @@ _cb149("BaseMarkerController" in _BC, "CODEBOT v149: Bootstrap.client wires Base
 
 # live state kept — do NOT flip OwnerFirst on new systems; keep prior live state
 _AOC = _rd149(_C149 + "ArmyOrdersConfig.luau")
-_cb149("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _AOC, "CODEBOT v149: ArmyOrdersConfig OwnerFirst stays true")
+_cb149("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _AOC, "CODEBOT v149: ArmyOrdersConfig OwnerFirst=false (v166 flip-all-live)")
 _cb149("OwnerFirst = false, -- codebot_v142 launch" in _rd149(_C149 + "ShopOverhaulConfig.luau"), "CODEBOT v149: ShopOverhaul stays OwnerFirst=false")
 _cb149("OwnerFirst = false, -- codebot_v142 launch" in _rd149(_C149 + "CheckpointGuardConfig.luau"), "CODEBOT v149: CheckpointGuard stays OwnerFirst=false")
 _cb149("PreferMeshWhenAssetIdSet = false" in _rd149(_C149 + "StructureVisualConfig.luau"), "CODEBOT v149: PreferMesh stays OFF")

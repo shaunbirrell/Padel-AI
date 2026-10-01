@@ -138,11 +138,19 @@ for _, case in ipairs({ { "sender cooldown", { CooldownLeft = 120 } }, { "one ac
   check(#rowsFor(VIEWER) == 0, case[1] .. ": nothing listed (the verdict blocks every base)")
 end
 
--- 3. one tick, live viewers only
+-- 3. one tick, live viewers only (codebot_v166: launched; the owner-first rule is still proved with OwnerFirst = true)
+local launched = RC.OwnerFirst
+RC.OwnerFirst = true
 setup(); PUSHES = {}; RS.Tick()
 local toViewer, toOther = 0, 0
 for _, e in ipairs(PUSHES) do if e.p == VIEWER then toViewer += 1 elseif e.p == OTHER then toOther += 1 end end
-check(toViewer == 1 and toOther == 0, "one push per live viewer per tick; none for a viewer it is not live for (OFF == OLD)")
+check(toViewer == 1 and toOther == 0, "owner-first rule: one push per live viewer per tick; none for a viewer it is not live for (OFF == OLD)")
+RC.OwnerFirst = launched
+check(launched == false and RC.LiveFor(OTHER.UserId), "codebot_v166: RivalConfig live for everyone (OwnerFirst=false)")
+setup(); PUSHES = {}; RS.Tick()
+toViewer, toOther = 0, 0
+for _, e in ipairs(PUSHES) do if e.p == VIEWER then toViewer += 1 elseif e.p == OTHER then toOther += 1 end end
+check(toViewer == 1 and toOther == 1, "codebot_v166: one push per viewer per tick, the non-owner included")
 -- 4. the hold
 HOLD = true; PUSHES = {}; RS.Tick(); HOLD = false
 check(#rowsFor(VIEWER) == 0, "during the Guided / onboarding hold: an empty list (no pill)")

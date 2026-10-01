@@ -37,7 +37,7 @@ export type ZoneRow = { Id: number, L0: number, L1: number, X: number, Z: number
 
 local StorePropsConfig = {
 	Enabled = true, -- KILL SWITCH: false = no store props anywhere (the Part builds as before)
-	OwnerFirst = true, -- owner-first rollout rail; unchanged for this publish
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 	World = true, -- the site / area dressing
 	ZonesOn = true, -- the rebirth zone upgrade visuals
 	LiveAttribute = "WE_StorePropsOff", -- Workspace attribute: true = remove every copy now
@@ -368,7 +368,7 @@ local StorePropsConfig = {
 	wire only ids the probe shows loading). The candidates are listed in Candidates + docs/PROP-ASSETS.md. Empty lists =
 	OFF == OLD (the RadarDome kit and the plain helipad exactly as today). ]]
 local cfg40: any = StorePropsConfig
-cfg40.JOB40 = { Enabled = true, OwnerFirst = true }
+cfg40.JOB40 = { Enabled = true, OwnerFirst = false } -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 -- Code Bot v152 re-probe (2026-09-30, after the owner's Get Model; docs/PROP-ASSETS.md): 1 of 19 passes, the market
 -- stall 86311252190175 (1 MeshPart, its mesh + texture by its creator IAmASwedishMale, no scripts). It replaces the two
 -- tier-1 Part stalls in the Crossroads Town market lane (dry run: bottom on the kit base, 0 overlaps, faces the lane).

@@ -42,16 +42,16 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", "WE_Build=165"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 165)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", "WE_Build=166"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
 ):
-    check(needle in read(rel), "CODEBOT v160: WE_Build=165 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v160: WE_Build=166 " + rel.rsplit("/", 1)[-1])
 
 RPC = read(C + "RatePromptConfig.luau")
-check("Enabled = true," in RPC and "OwnerFirst = true," in RPC,
-      "CODEBOT v160: RatePromptConfig Enabled + OwnerFirst=true")
+check("Enabled = true," in RPC and "OwnerFirst = false," in RPC,
+      "CODEBOT v160: RatePromptConfig Enabled + OwnerFirst=false (v166 flip-all-live)")
 check("FirstCapture = true" in RPC and "RaidWin = true" in RPC,
       "CODEBOT v160: RatePromptConfig FirstCapture + RaidWin triggers")
 check("OneTimeTriggers = { FirstCapture = true, RaidWin = true }," in RPC,
@@ -63,17 +63,17 @@ check('Title = "Enjoying WAR EMPIRE?"' in RPC,
 # A+B+C still owner-first
 TC = read(C + "TutorialConfig.luau")
 guided = block(TC, "TutorialConfig.Guided") or block(TC, "Guided")
-check("Enabled = true," in guided and "OwnerFirst = true," in guided,
-      "CODEBOT v160: TutorialConfig.Guided still OwnerFirst=true")
+check("Enabled = true," in guided and "OwnerFirst = false," in guided,
+      "CODEBOT v160: TutorialConfig.Guided OwnerFirst=false (v166 flip-all-live)")
 MC = read(C + "MonetizationConfig.luau")
 offer = block(MC, "cfg.RecruitPackOffer") or block(MC, "RecruitPackOffer")
-check("Enabled = true," in offer and "OwnerFirst = true," in offer,
-      "CODEBOT v160: RecruitPackOffer still OwnerFirst=true")
+check("Enabled = true," in offer and "OwnerFirst = false," in offer,
+      "CODEBOT v160: RecruitPackOffer OwnerFirst=false (v166 flip-all-live)")
 check("RecruitPack" in MC and "Id = 0" in MC,
       "CODEBOT v160: RecruitPack Id still 0")
 RC = read(C + "RivalConfig.luau")
-check("Enabled = true," in RC and "OwnerFirst = true," in RC,
-      "CODEBOT v160: RivalConfig still OwnerFirst=true")
+check("Enabled = true," in RC and "OwnerFirst = false," in RC,
+      "CODEBOT v160: RivalConfig OwnerFirst=false (v166 flip-all-live)")
 
 # PreferMesh OFF; no WE_Building* since v159 tip
 svc = read(C + "StructureVisualConfig.luau")

@@ -36,11 +36,19 @@ check(MC.SpeedText(1.5) == "Run 50% faster" and MC.SpeedText(1.75) == "Run 75% f
 check(MC.SpeedText(2.5, true) == "Run 2.5x faster, forever", "', forever' where the surface has room")
 local SP, SB = MC.GamePasses.ImpulseSpeed, MC.DevProducts.SpeedBoost
 check(SP.Description == "Run 50% faster, forever" and SB.Description == "Run 2x faster, forever", "off: the Descriptions read exactly as today (now from the helper)")
+-- codebot_v166: SpeedV2 launched (OwnerFirst=false); the old owner-first numbers are still proved with OwnerFirst = true
+local launched = MC.SpeedV2.OwnerFirst
+MC.SpeedV2.OwnerFirst = true
 check(MC.SpeedMultOf(SP, 9) == 1.5 and MC.SpeedMultOf(SB, 9) == 2 and MC.SpeedMultOf(SP, nil) == 1.5, "not live: x1.5 / x2 (WalkSpeed 24 / 32)")
+check(MC.DescFor(SB, 9) == "Run 2x faster, forever", "not live: DescFor reads the old x2")
+MC.SpeedV2.OwnerFirst = launched
+check(launched == false and MC.SpeedV2LiveFor(9) and MC.SpeedV2LiveFor(12345), "codebot_v166: SpeedV2 live for everyone (OwnerFirst=false)")
+check(MC.SpeedMultOf(SP, 9) == 1.75 and MC.SpeedMultOf(SB, 9) == 2.5 and MC.SpeedMultOf(SP, nil) == 1.5, "codebot_v166: a non-owner's speed SKUs read x1.75 / x2.5 (nil userId = the static x1.5)")
+check(MC.SpeedMultOf({ DisplayName = "Not a speed SKU" }, 9) == 1 and MC.SpeedMultOf(MC.GamePasses.VIP, 9) == 1, "codebot_v166: SpeedV2 never adds speed to a non-speed SKU (x1)")
 check(MC.SpeedMultOf(SP, 470626172) == 1.75 and MC.SpeedMultOf(SB, 470626172) == 2.5, "SpeedV2 live: x1.75 (28) / x2.5 (40)")
 check(16 * MC.SpeedMultOf(SP, 470626172) == 28 and 16 * MC.SpeedMultOf(SB, 470626172) == 40 and MC.MaxWalkSpeedMult == 2.5, "WalkSpeed 28 / 40; the cap 2.5 (40)")
-check(MC.DescFor(SP, 470626172) == "Run 75% faster, forever" and MC.DescFor(SB, 470626172) == "Run 2.5x faster, forever" and MC.DescFor(SB, 9) == "Run 2x faster, forever",
-  "DescFor: every speed string from the multiplier the player actually gets")
+check(MC.DescFor(SP, 470626172) == "Run 75% faster, forever" and MC.DescFor(SB, 470626172) == "Run 2.5x faster, forever" and MC.DescFor(SB, 9) == "Run 2.5x faster, forever",
+  "DescFor: every speed string from the multiplier the player actually gets (codebot_v166: x2.5 for everyone)")
 check(SP.Id == 1998656357 and SP.RobuxPrice == 99 and SB.Id == 3713839342 and SB.RobuxPrice == 99, "Robux prices / Ids unchanged")
 print(string.format("SPEED TEST: %d failed", fails))
 if fails > 0 then error("failed") end

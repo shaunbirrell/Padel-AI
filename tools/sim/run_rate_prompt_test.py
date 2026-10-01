@@ -149,7 +149,11 @@ ONBOARDING = false
 S = fresh(); LOG.push = {}
 check(not play(S, OWNER, 55) and shows() == 0, "never in the first minute of a session")
 PROFILES[OTHER.UserId] = { TutorialComplete = true, RatePrompt = { PlaySeconds = 5000 } }
+local launched = Cfg.OwnerFirst
+Cfg.OwnerFirst = true -- codebot_v166: launched; the owner-first rule is still proved with OwnerFirst = true
 check(not play(S, OTHER, 200) and shows() == 0, "OwnerFirst: not live for another player -> nothing")
+Cfg.OwnerFirst = launched
+check(launched == false and Cfg.LiveFor(OTHER.UserId), "codebot_v166: RatePromptConfig live for everyone (OwnerFirst=false)")
 check(S.Decide({ Live = true, Loaded = true, TutorialDone = true, SessionSeconds = 100, PlaySeconds = 900, SinceHurt = 25 }) == true, "Decide: all rules pass -> show")
 
 -- 7. answers / telemetry / no economy

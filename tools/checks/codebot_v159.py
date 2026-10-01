@@ -41,16 +41,16 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", "WE_Build=165"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 165)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", "WE_Build=166"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
 ):
-    check(needle in read(rel), "CODEBOT v159: WE_Build=165 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v159: WE_Build=166 " + rel.rsplit("/", 1)[-1])
 
 RC = read(C + "RivalConfig.luau")
-check("Enabled = true," in RC and "OwnerFirst = true," in RC,
-      "CODEBOT v159: RivalConfig Enabled + OwnerFirst=true")
+check("Enabled = true," in RC and "OwnerFirst = false," in RC,
+      "CODEBOT v159: RivalConfig Enabled + OwnerFirst=false (v166 flip-all-live)")
 check(Path(S + "Services/RivalService.luau").is_file(), "CODEBOT v159: RivalService.luau present")
 check(Path(CL + "RivalController.luau").is_file(), "CODEBOT v159: RivalController.luau present")
 # SEND ARMY reuses JOB 38 remote; VIEW opens map (no travel)
@@ -64,12 +64,12 @@ check("Teleport" not in rvc and "PivotTo" not in rvc,
 # A+B still owner-first from v158
 TC = read(C + "TutorialConfig.luau")
 guided = block(TC, "TutorialConfig.Guided") or block(TC, "Guided")
-check("Enabled = true," in guided and "OwnerFirst = true," in guided,
-      "CODEBOT v159: TutorialConfig.Guided still OwnerFirst=true")
+check("Enabled = true," in guided and "OwnerFirst = false," in guided,
+      "CODEBOT v159: TutorialConfig.Guided OwnerFirst=false (v166 flip-all-live)")
 MC = read(C + "MonetizationConfig.luau")
 offer = block(MC, "cfg.RecruitPackOffer") or block(MC, "RecruitPackOffer")
-check("Enabled = true," in offer and "OwnerFirst = true," in offer,
-      "CODEBOT v159: RecruitPackOffer still OwnerFirst=true")
+check("Enabled = true," in offer and "OwnerFirst = false," in offer,
+      "CODEBOT v159: RecruitPackOffer OwnerFirst=false (v166 flip-all-live)")
 
 # PreferMesh OFF; no WE_Building* in this ship vs v158 tip
 svc = read(C + "StructureVisualConfig.luau")

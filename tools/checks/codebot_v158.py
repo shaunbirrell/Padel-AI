@@ -41,23 +41,23 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", "WE_Build=165"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 165)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", "WE_Build=166"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
 ):
-    check(needle in read(rel), "CODEBOT v158: WE_Build=165 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v158: WE_Build=166 " + rel.rsplit("/", 1)[-1])
 
 TC = read(C + "TutorialConfig.luau")
 guided = block(TC, "TutorialConfig.Guided") or block(TC, "Guided")
-check("Enabled = true," in guided and "OwnerFirst = true," in guided,
-      "CODEBOT v158: TutorialConfig.Guided Enabled + OwnerFirst=true")
+check("Enabled = true," in guided and "OwnerFirst = false," in guided,
+      "CODEBOT v158: TutorialConfig.Guided Enabled + OwnerFirst=false (v166 flip-all-live)")
 check(Path(S + "Services/GuidedService.luau").is_file(), "CODEBOT v158: GuidedService.luau present")
 
 MC = read(C + "MonetizationConfig.luau")
 offer = block(MC, "cfg.RecruitPackOffer") or block(MC, "RecruitPackOffer")
-check("Enabled = true," in offer and "OwnerFirst = true," in offer,
-      "CODEBOT v158: RecruitPackOffer Enabled + OwnerFirst=true")
+check("Enabled = true," in offer and "OwnerFirst = false," in offer,
+      "CODEBOT v158: RecruitPackOffer Enabled + OwnerFirst=false (v166 flip-all-live)")
 rp = block(MC, "DevProducts")
 # RecruitPack row Id must stay 0 until Creator Hub product exists
 m = re.search(r"RecruitPack\s*=\s*\{[^}]*Id\s*=\s*(\d+)", rp, re.S)

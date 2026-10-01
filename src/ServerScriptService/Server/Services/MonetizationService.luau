@@ -934,7 +934,7 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 	end
 	-- claude-bud JOB 41 part B: while the Recruit Pack offer is live for him it takes this pop-up slot (one starter
 	-- offer per profile); the StarterBundle row stays in the Shop
-	if (MonetizationConfig :: any).RecruitPackLiveFor(player.UserId) then
+	if (MonetizationConfig :: any).RecruitPackTakesStarterSlot(player.UserId) then -- Code Bot v166: live AND Id set
 		return nil
 	end
 	local bundle = starterBundleLive()
@@ -1082,7 +1082,7 @@ function MonetizationService.ScheduleFirstOffer(player: Player, reason: string, 
 		return
 	end
 	-- claude-bud JOB 41 part B: the Recruit Pack replaces the first offer (and its fallback) for players it is live for
-	if (MonetizationConfig :: any).RecruitPackLiveFor(player.UserId) then
+	if (MonetizationConfig :: any).RecruitPackTakesStarterSlot(player.UserId) then -- Code Bot v166: live AND Id set
 		return
 	end
 	local uid = player.UserId

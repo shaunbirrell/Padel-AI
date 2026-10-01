@@ -350,7 +350,7 @@ end
 	OFF (Enabled = false, or not live for him): OrderVersion 3, no camp, no banner, no new events (today's game). ]]
 TutorialConfig.Guided = {
 	Enabled = true,
-	OwnerFirst = true, -- RetentionConfig.Live: the playtest owner (and Studio) until Code Bot flips it
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 	OrderVersion = 4,
 	NewPlayerSeconds = 900, -- a profile older than this (FirstJoinUnix) never enters Guided
 	HoldMaxSeconds = 300, -- the WE_Onboarding hold covers the whole chain up to Reward, never longer than this

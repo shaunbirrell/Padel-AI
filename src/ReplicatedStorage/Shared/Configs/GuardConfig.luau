@@ -40,7 +40,7 @@ local GuardConfig = {
 		today's statues, gate guards and turrets exactly (their old checks included). ]]
 	Posts = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172's base (+ Studio) until Code Bot sets false = every base
+		OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone (real base guards at every base)
 		StatuePatterns = { "^GateGuard_%a+[LR]$", "^GateGuard_Sea%d*$" }, -- MapSetup's rear-gate / sea-gate statues
 		ModelPrefix = "BaseGuard_",
 		AlertStuds = 80, -- a hostile outside the plot this close to the post (with line of sight) is noticed

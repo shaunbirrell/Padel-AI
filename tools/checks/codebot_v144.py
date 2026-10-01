@@ -25,14 +25,14 @@ _C144 = "src/ReplicatedStorage/Shared/Configs/"
 # v145 (Code Bot Roblox): the WE_Build=144 pins are superseded in tools/checks/codebot_v145.py (WE_Build=145).
 
 _EC = _rd144(_C144 + "EndgameConfig.luau")
-_cb144("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _EC, "CODEBOT v144: EndgameConfig.Live Enabled + OwnerFirst=true (await Studio §11)")
+_cb144("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _EC, "CODEBOT v144: EndgameConfig.Live Enabled + OwnerFirst=false (v166 flip-all-live) (await Studio §11)")
 _cb144(_P144(_S144 + "Services/EndgameService.luau").is_file(), "CODEBOT v144: EndgameService present")
 _cb144(_P144("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/EndgameController.luau").is_file(), "CODEBOT v144: EndgameController present")
 _cb144(_P144(_C144 + "PlazaServicesConfig.luau").is_file(), "CODEBOT v144: PlazaServicesConfig present")
 
 # Live state kept from v143/v142
 _AOC = _rd144(_C144 + "ArmyOrdersConfig.luau")
-_cb144("OwnerFirst = true" in _AOC, "CODEBOT v144: ArmyOrdersConfig OwnerFirst stays true")
+_cb144("OwnerFirst = false" in _AOC, "CODEBOT v144: ArmyOrdersConfig OwnerFirst=false (v166 flip-all-live)")
 _SOC = _rd144(_C144 + "ShopOverhaulConfig.luau")
 _cb144("OwnerFirst = false, -- codebot_v142 launch" in _SOC, "CODEBOT v144: ShopOverhaul stays OwnerFirst=false")
 _CGC = _rd144(_C144 + "CheckpointGuardConfig.luau")

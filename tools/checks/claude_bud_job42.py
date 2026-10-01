@@ -51,8 +51,8 @@ _j42(all(("Id = 0," in _rows[k] and ("RobuxPrice = %d," % p) in _rows[k] and "On
 _j42(not any(_j42_re.search(r"(?i)damage|health|armou?r|army|raid|protect|shield", r) for r in _rows.values()), "A: cash only: no stat key in the new rows")
 _SOC = _j42_src(_CF + "ShopOverhaulConfig.luau")
 _tp = _SOC.split("TimePacks = {")[1].split("\n\t},")[0] if "TimePacks = {" in _SOC else ""
-_j42("\t\tEnabled = true,\n\t\tOwnerFirst = true," in _tp and 'BestValueKey = "Cash4h",' in _tp and "ExcludeTimedBoosts = true," in _tp,
-     "A: TimePacks Enabled + OwnerFirst = true; BEST VALUE on Cash4h; timed boosts left out")
+_j42("\t\tEnabled = true,\n\t\tOwnerFirst = false," in _tp and 'BestValueKey = "Cash4h",' in _tp and "ExcludeTimedBoosts = true," in _tp,
+     "A: TimePacks Enabled (v166 OwnerFirst=false; still hidden until all five Ids); BEST VALUE on Cash4h; timed boosts left out")
 _cash_keys = _j42_re.findall(r"\n\t\t(Cash\w+) = \{", _MC)
 _titles = _j42_re.findall(r'Title = "([^"]+)"', _tp)
 _mins = [int(x) for x in _j42_re.findall(r"Minutes = (\d+)", _tp)]

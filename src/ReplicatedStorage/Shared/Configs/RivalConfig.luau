@@ -15,7 +15,7 @@
 
 local RivalConfig = {
 	Enabled = true,
-	OwnerFirst = true, -- RetentionConfig.Live
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 	RefreshSeconds = 10,
 	MaxShown = 3,
 	MinLootToShow = 1000,

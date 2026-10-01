@@ -95,6 +95,9 @@ TEST = r'''
 local fails = 0
 local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if not ok then fails += 1 end end
 local EG = require(node("Configs/EndgameConfig"))
+-- codebot_v166: Live.OwnerFirst=false (everyone); the owner-first paths below are still proved with OwnerFirst = true
+local EG_LAUNCHED = EG.Live.OwnerFirst
+EG.Live.OwnerFirst = true
 local EC = require(node("Configs/EconomyConfig"))
 local RC = require(node("Configs/ResearchConfig"))
 local BC = require(node("Configs/BaseConfig"))
@@ -681,6 +684,14 @@ local nb = false
 for _, l in ipairs(kb.Reset) do if string.find(l, "Next base") then nb = true end end
 check(not nb, "keep-base rebirth: no next base price (the base is kept)")
 
+-- codebot_v166: launched: every endgame part is live for a non-owner
+EG.Live.OwnerFirst = EG_LAUNCHED
+check(EG_LAUNCHED == false, "codebot_v166: EndgameConfig.Live.OwnerFirst=false")
+local egOff = {}
+for part, on in pairs(EG.Parts) do if on == true and not EG.LiveFor(9, part) then table.insert(egOff, part) end end
+check(#egOff == 0 and EG.AnyLiveFor(9) and EG.CamoLiveFor(9), "codebot_v166: every endgame part live for a non-owner (" .. table.concat(egOff, ",") .. ")")
+check(ES.ScaledCost(other, { Prestige = 3, Endgame = {} }, "CommandCenter", 10000) == 16000, "codebot_v166: ScaledCost: a non-owner at R3 pays 1.6x too")
+check(math.abs(ES.EmpireMultFor(other, { Endgame = { EmpireLevel = 10 } }) - 1.2) < 1e-9, "codebot_v166: EmpireMultFor: a non-owner at L10 = 1.20")
 print(string.format("ENDGAME TEST: %d failed", fails))
 if fails > 0 then error("failed") end
 '''

@@ -32,12 +32,12 @@ S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", "WE_Build=165"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 165)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", "WE_Build=166"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
 ):
-    check(needle in read(rel), "CODEBOT v164: WE_Build=165 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v164: WE_Build=166 " + rel.rsplit("/", 1)[-1])
 
 # PreferMesh OFF
 svc = read(C + "StructureVisualConfig.luau")
@@ -56,8 +56,8 @@ check("RecruitPackCashFor" in MS, "CODEBOT v164: MonetizationService ProcessRece
 
 # JOB 43: ArmyBrawl owner-first
 AC = read(C + "ArmyConfig.luau")
-check("ArmyBrawl = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in AC,
-      "CODEBOT v164: ArmyConfig.ArmyBrawl Enabled + OwnerFirst=true")
+check("ArmyBrawl = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in AC,
+      "CODEBOT v164: ArmyConfig.ArmyBrawl Enabled + OwnerFirst=false (v166 flip-all-live)")
 check((ROOT / (S + "Modules/ArmyBrawl.luau")).is_file(),
       "CODEBOT v164: Modules/ArmyBrawl.luau present")
 AB = read(S + "Modules/ArmyBrawl.luau")
@@ -76,8 +76,8 @@ check("ArmyBrawl.Candidates" in SO and ('Kind = "Unit"' in SO or 'kind == "Unit"
 
 # Prior OwnerFirst flags still true
 for rel, needle, label in (
-    (C + "ShopOverhaulConfig.luau", "OwnerFirst = true", "CODEBOT v164: TimePacks OwnerFirst still present"),
-    (C + "RivalConfig.luau", "OwnerFirst = true", "CODEBOT v164: RivalConfig OwnerFirst stays true"),
+    (C + "ShopOverhaulConfig.luau", "OwnerFirst = false", "CODEBOT v164: TimePacks OwnerFirst=false (v166 flip-all-live)"),
+    (C + "RivalConfig.luau", "OwnerFirst = false", "CODEBOT v164: RivalConfig OwnerFirst=false (v166 flip-all-live)"),
 ):
     check(needle in read(rel), label)
 

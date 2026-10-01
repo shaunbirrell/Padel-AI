@@ -34,7 +34,7 @@ _CL150 = "src/StarterPlayer/StarterPlayerScripts/Client/"
 
 # JOB 40 part A base guards
 _GC = _rd150(_C150 + "GuardConfig.luau")
-_cb150("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _GC, "CODEBOT v150: GuardConfig.Posts Enabled + OwnerFirst=true")
+_cb150("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _GC, "CODEBOT v150: GuardConfig.Posts Enabled + OwnerFirst=false (v166 flip-all-live)")
 _cb150("function GuardConfig.PostsLiveFor" in _GC, "CODEBOT v150: GuardConfig.PostsLiveFor present")
 _BG = _rd150(_S150 + "Modules/BaseGuards.luau")
 _cb150("ThinkPost" in _BG, "CODEBOT v150: BaseGuards.ThinkPost present")
@@ -46,7 +46,7 @@ _cb150(_P150("tools/sim/run_base_guards_test.py").is_file(), "CODEBOT v150: run_
 
 # JOB 40 part B SpeedV2
 _MC = _rd150(_C150 + "MonetizationConfig.luau")
-_cb150("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MC, "CODEBOT v150: MonetizationConfig.SpeedV2 Enabled + OwnerFirst=true")
+_cb150("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = false," in _MC, "CODEBOT v150: MonetizationConfig.SpeedV2 Enabled + OwnerFirst=false (v166 flip-all-live)")
 _cb150("cfg.MaxWalkSpeedMult = 2.5" in _MC, "CODEBOT v150: MaxWalkSpeedMult = 2.5")
 _cb150("WalkSpeedMultV2 = 1.75" in _MC and "WalkSpeedMultV2 = 2.5" in _MC, "CODEBOT v150: WalkSpeedMultV2 1.75 / 2.5")
 _cb150("function cfg.SpeedText" in _MC or "function MonetizationConfig.SpeedText" in _MC or "function cfg.SpeedText(" in _MC or "SpeedText =" in _MC or "function cfg.SpeedText" in _MC,
@@ -59,11 +59,11 @@ _cb150(_P150("tools/sim/run_speed_test.py").is_file(), "CODEBOT v150: run_speed_
 
 # prior owner-first kept — do NOT flip
 _EC = _rd150(_C150 + "EndgameConfig.luau")
-_cb150("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _EC, "CODEBOT v150: EndgameConfig.Live OwnerFirst stays true")
+_cb150("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _EC, "CODEBOT v150: EndgameConfig.Live OwnerFirst=false (v166 flip-all-live)")
 _BMC = _rd150(_C150 + "BaseMarkerConfig.luau")
 _cb150("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _BMC, "CODEBOT v150: BaseMarkerConfig.Live OwnerFirst stays true")
 _AOC = _rd150(_C150 + "ArmyOrdersConfig.luau")
-_cb150("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _AOC, "CODEBOT v150: ArmyOrdersConfig OwnerFirst stays true")
+_cb150("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _AOC, "CODEBOT v150: ArmyOrdersConfig OwnerFirst=false (v166 flip-all-live)")
 _cb150("OwnerFirst = false, -- codebot_v142 launch" in _rd150(_C150 + "ShopOverhaulConfig.luau"), "CODEBOT v150: ShopOverhaul stays OwnerFirst=false")
 _cb150("OwnerFirst = false, -- codebot_v142 launch" in _rd150(_C150 + "CheckpointGuardConfig.luau"), "CODEBOT v150: CheckpointGuard stays OwnerFirst=false")
 _cb150("PreferMeshWhenAssetIdSet = false" in _rd150(_C150 + "StructureVisualConfig.luau"), "CODEBOT v150: PreferMesh stays OFF")

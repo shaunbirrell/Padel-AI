@@ -40,17 +40,17 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", "WE_Build=165"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 165)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", "WE_Build=166"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
 ):
-    check(needle in read(rel), "CODEBOT v163: WE_Build=165 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v163: WE_Build=166 " + rel.rsplit("/", 1)[-1])
 
 _RC = read(C + "RivalConfig.luau")
 _RCTL = read(CL + "RivalController.luau")
 _RS = read(S + "Services/RivalService.luau")
-check("OwnerFirst = true, -- RetentionConfig.Live" in _RC, "CODEBOT v163: RivalConfig stays OwnerFirst")
+check("OwnerFirst = false, -- codebot_v166" in _RC, "CODEBOT v163: RivalConfig OwnerFirst=false (v166 flip-all-live)")
 check('EmptyText = "No targets right now — rivals appear when other players have cash to raid"' in _RC,
       "CODEBOT v163: TARGETS empty-state text")
 check("b.Visible = true" in _RCTL and "pl.Visible = #rows > 0" not in _RCTL, "CODEBOT v163: TARGETS pill always visible (not hidden when empty)")
@@ -83,7 +83,7 @@ check('elseif cmd == "replaytutorial" or cmd == "replayguided" then' in _AD and 
       "CODEBOT v163: admin remote + chat command")
 check('section("ADMIN")' in _ST and "REPLAY GUIDED TUTORIAL (test)" in _ST and "table.find(AdminConfig.UserIds, player.UserId) ~= nil then\n\t\tsection(\"ADMIN\")" in _ST,
       "CODEBOT v163: Settings ADMIN row only for AdminConfig.UserIds")
-check(re.search(r"TutorialConfig\.Guided = \{[^}]*?OwnerFirst = true", _TC, re.S) is not None, "CODEBOT v163: Guided stays OwnerFirst")
+check(re.search(r"TutorialConfig\.Guided = \{[^}]*?OwnerFirst = false", _TC, re.S) is not None, "CODEBOT v163: Guided OwnerFirst=false (v166 flip-all-live)")
 
 _ES = read(S + "Services/EngagementService.luau")
 check("MS.OnGranted(EngagementService.OnGranted)" in _ES and "MS.OnPassOwned(EngagementService.OnPassOwned)" in _ES,

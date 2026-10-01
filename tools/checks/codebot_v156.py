@@ -52,12 +52,12 @@ CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 # build pins
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", "WE_Build=165"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 165)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", "WE_Build=166"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
 ):
-    check(needle in read(rel), "CODEBOT v156: WE_Build=165 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v156: WE_Build=166 " + rel.rsplit("/", 1)[-1])
 
 # 1. the live price cache
 LP = read("src/ReplicatedStorage/Shared/Util/LivePrices.luau")
@@ -142,12 +142,12 @@ nak = ES.split("function EngagementService.NoteArmyKill", 1)[1].split("\nend", 1
 check("LeaderboardConfig.ArmyKillsBoardLive ~= true" in nak and "AOC.LiveFor" not in nak, "CODEBOT v156: army kills count for everyone (not only army-orders players)")
 check("if isBoardExcluded(player.UserId) then" in ES and "not isBoardExcluded(uid)" in ES, "CODEBOT v156: admin / owner stay off the boards")
 check('_info.WeaponId == "Squad"' in ES and "info.ByUnit == true" in ES, "CODEBOT v156: player + guard kills by the army credit the board")
-check("OwnerFirst = true," in block(read(C + "ArmyOrdersConfig.luau"), "Live"), "CODEBOT v156: army orders stay owner-first")
+check("OwnerFirst = false," in block(read(C + "ArmyOrdersConfig.luau"), "Live"), "CODEBOT v156: army orders live for everyone (v166 flip-all-live)")
 
 # owner-first rails unchanged
 for rel, key, label in ((C + "EndgameConfig.luau", "Live", "Endgame"), (C + "GuardConfig.luau", "Posts", "GuardConfig.Posts"),
                         (C + "MonetizationConfig.luau", "cfg.SpeedV2", "SpeedV2")):
-    check("OwnerFirst = true," in block(read(rel), key), "CODEBOT v156: " + label + " OwnerFirst stays true")
+    check("OwnerFirst = false," in block(read(rel), key), "CODEBOT v156: " + label + " OwnerFirst=false (v166 flip-all-live)")
 check(re.search(r"Live\s*=\s*\{[^}]*OwnerFirst\s*=\s*false\s*,", read(C + "BaseMarkerConfig.luau"), re.S) is not None, "CODEBOT v156: BaseMarker stays live for everyone (v155)")
 
 # the real ShopController in the Luau CLI: every row's text / price at phone width, the live price refresh

@@ -26,8 +26,8 @@ _C154 = "src/ReplicatedStorage/Shared/Configs/"
 _CL154 = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for _f in (_S154 + "Services/DataService.luau", _S154 + "Services/BaseService.luau", _S154 + "EarlyRemotes.server.luau"):
-	_cb154('SetAttribute("WE_Build", 165)' in _rd154(_f), "CODEBOT v154: WE_Build=165 " + _f.rsplit("/", 1)[-1])
-_cb154("WE_Build=165" in _rd154(_S154 + "Services/DataService.luau"), "CODEBOT v154: DataService profile-loaded log says WE_Build=165")
+	_cb154('SetAttribute("WE_Build", 166)' in _rd154(_f), "CODEBOT v154: WE_Build=166 " + _f.rsplit("/", 1)[-1])
+_cb154("WE_Build=166" in _rd154(_S154 + "Services/DataService.luau"), "CODEBOT v154: DataService profile-loaded log says WE_Build=166")
 
 _BMC = _rd154(_C154 + "BaseMarkerConfig.luau")
 _BMK = _rd154(_CL154 + "BaseMarkerController.luau")
@@ -72,7 +72,7 @@ if _P154(_lu).is_file() and _P154("tools/sim/run_base_marker_test.py").is_file()
 
 # unchanged rails
 _MC = _rd154(_C154 + "MonetizationConfig.luau")
-_cb154("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MC, "CODEBOT v154: SpeedV2 OwnerFirst stays true")
+_cb154("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = false," in _MC, "CODEBOT v154: SpeedV2 OwnerFirst=false (v166 flip-all-live)")
 _cb154("PreferMeshWhenAssetIdSet = false" in _rd154(_C154 + "StructureVisualConfig.luau"), "CODEBOT v154: PreferMesh stays OFF")
 _cb154("FastTravelEnabled = false" in _rd154(_C154 + "MapConfig.luau"), "CODEBOT v154: fast travel stays REMOVED")
 _cb154("		VIP = {" in _MC and "RobuxPrice = 199," in _MC.split("VIP = {", 1)[1][:400], "CODEBOT v154: VIP RobuxPrice stays 199")

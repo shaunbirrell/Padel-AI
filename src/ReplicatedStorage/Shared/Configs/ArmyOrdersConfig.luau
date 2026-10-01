@@ -19,7 +19,7 @@
 local ArmyOrdersConfig = {
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 	},
 
 	-- 1. ATTACK auto-clear

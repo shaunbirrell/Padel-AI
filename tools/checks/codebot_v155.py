@@ -35,35 +35,35 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 
 # All four runtime build pins: BaseService, DataService attribute + load log, EarlyRemotes.
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", "WE_Build=165"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 165)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", "WE_Build=166"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
 ):
-    check(needle in read(rel), "CODEBOT v155: WE_Build=165 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v155: WE_Build=166 " + rel.rsplit("/", 1)[-1])
 
 bmc = read(C + "BaseMarkerConfig.luau")
 check(re.search(r"Live\s*=\s*\{[^}]*OwnerFirst\s*=\s*false\s*,", bmc, re.S) is not None,
       "CODEBOT v155: BaseMarker OwnerFirst=false for everyone")
 
 endgame = read(C + "EndgameConfig.luau")
-check("OwnerFirst = true," in block(endgame, "Live"), "CODEBOT v155: Endgame OwnerFirst stays true")
+check("OwnerFirst = false," in block(endgame, "Live"), "CODEBOT v155: Endgame OwnerFirst=false (v166 flip-all-live)")
 army = read(C + "ArmyOrdersConfig.luau")
-check("OwnerFirst = true," in block(army, "Live"), "CODEBOT v155: ArmyOrders OwnerFirst stays true")
+check("OwnerFirst = false," in block(army, "Live"), "CODEBOT v155: ArmyOrders OwnerFirst=false (v166 flip-all-live)")
 guard = read(C + "GuardConfig.luau")
-check("OwnerFirst = true," in block(guard, "Posts"), "CODEBOT v155: GuardConfig.Posts OwnerFirst stays true")
+check("OwnerFirst = false," in block(guard, "Posts"), "CODEBOT v155: GuardConfig.Posts OwnerFirst=false (v166 flip-all-live)")
 mon = read(C + "MonetizationConfig.luau")
-check("OwnerFirst = true," in block(mon, "cfg.SpeedV2"), "CODEBOT v155: SpeedV2 OwnerFirst stays true")
+check("OwnerFirst = false," in block(mon, "cfg.SpeedV2"), "CODEBOT v155: SpeedV2 OwnerFirst=false (v166 flip-all-live)")
 store = read(C + "StorePropsConfig.luau")
-check(re.search(r"local StorePropsConfig\s*=\s*\{[^}]*OwnerFirst\s*=\s*true\s*,", store, re.S) is not None,
-      "CODEBOT v155: StorePropsConfig OwnerFirst stays true")
+check(re.search(r"local StorePropsConfig\s*=\s*\{[^}]*OwnerFirst\s*=\s*false\s*,", store, re.S) is not None,
+      "CODEBOT v155: StorePropsConfig OwnerFirst=false (v166 flip-all-live)")
 
 # Do not silently alter the other named owner-first rails in this build.
 for rel, needle, label in (
-    (C + "EndgameConfig.luau", "OwnerFirst = true", "Endgame"),
-    (C + "ArmyOrdersConfig.luau", "OwnerFirst = true", "ArmyOrders"),
-    (C + "GuardConfig.luau", "OwnerFirst = true", "GuardConfig.Posts"),
-    (C + "MonetizationConfig.luau", "OwnerFirst = true", "SpeedV2"),
-    (C + "StorePropsConfig.luau", "OwnerFirst = true", "StorePropsConfig"),
+    (C + "EndgameConfig.luau", "OwnerFirst = false", "Endgame"),
+    (C + "ArmyOrdersConfig.luau", "OwnerFirst = false", "ArmyOrders"),
+    (C + "GuardConfig.luau", "OwnerFirst = false", "GuardConfig.Posts"),
+    (C + "MonetizationConfig.luau", "OwnerFirst = false", "SpeedV2"),
+    (C + "StorePropsConfig.luau", "OwnerFirst = false", "StorePropsConfig"),
 ):
     check(needle in read(rel), "CODEBOT v155: " + label + " rail unchanged")

@@ -37,7 +37,7 @@ def _j43_code(path):
 _SV = "src/ServerScriptService/Server/"
 _CF = "src/ReplicatedStorage/Shared/Configs/"
 _AC = _j43_src(_CF + "ArmyConfig.luau")
-_j43("ArmyBrawl = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _AC, "ArmyConfig.ArmyBrawl Enabled + OwnerFirst = true (OFF = soldiers ignore enemy soldiers, as before)")
+_j43("ArmyBrawl = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _AC, "ArmyConfig.ArmyBrawl Enabled (codebot_v166: OwnerFirst=false, everyone; superseded in codebot_v166.py)")
 _SQ = _j43_code(_SV + "Services/SquadOrdersService.luau")
 _pst = _SQ.split("local function pickSquadTarget")[1].split("\nend\n")[0]
 _pdt = _SQ.split("local function pickDefendTarget")[1].split("\nend\n")[0]

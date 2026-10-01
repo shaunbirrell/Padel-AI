@@ -43,17 +43,17 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", "WE_Build=165"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 165)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", "WE_Build=166"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
 ):
-    check(needle in read(rel), "CODEBOT v161: WE_Build=165 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v161: WE_Build=166 " + rel.rsplit("/", 1)[-1])
 
 SOC = read(C + "ShopOverhaulConfig.luau")
 tp = block(SOC, "TimePacks") or block(SOC, "ShopOverhaulConfig.TimePacks")
-check("Enabled = true," in tp and "OwnerFirst = true," in tp,
-      "CODEBOT v161: ShopOverhaulConfig.TimePacks Enabled + OwnerFirst=true")
+check("Enabled = true," in tp and "OwnerFirst = false," in tp,
+      "CODEBOT v161: ShopOverhaulConfig.TimePacks Enabled + OwnerFirst=false (v166 flip-all-live)")
 check('BestValueKey = "Cash4h"' in tp or "BestValueKey = \"Cash4h\"" in tp,
       "CODEBOT v161: TimePacks BestValueKey Cash4h")
 
@@ -78,19 +78,19 @@ check("PreferMeshWhenAssetIdSet = false" in svc, "CODEBOT v161: PreferMeshWhenAs
 # Prior OwnerFirst flags still true (do not flip)
 TC = read(C + "TutorialConfig.luau")
 guided = block(TC, "TutorialConfig.Guided") or block(TC, "Guided")
-check("Enabled = true," in guided and "OwnerFirst = true," in guided,
-      "CODEBOT v161: TutorialConfig.Guided still OwnerFirst=true")
+check("Enabled = true," in guided and "OwnerFirst = false," in guided,
+      "CODEBOT v161: TutorialConfig.Guided OwnerFirst=false (v166 flip-all-live)")
 offer = block(MC, "cfg.RecruitPackOffer") or block(MC, "RecruitPackOffer")
-check("Enabled = true," in offer and "OwnerFirst = true," in offer,
-      "CODEBOT v161: RecruitPackOffer still OwnerFirst=true")
+check("Enabled = true," in offer and "OwnerFirst = false," in offer,
+      "CODEBOT v161: RecruitPackOffer OwnerFirst=false (v166 flip-all-live)")
 check(re.search(r"RecruitPack = \{ Id = 0,", MC) is not None,
       "CODEBOT v161: RecruitPack Id still 0")
 RC = read(C + "RivalConfig.luau")
-check("Enabled = true," in RC and "OwnerFirst = true," in RC,
-      "CODEBOT v161: RivalConfig still OwnerFirst=true")
+check("Enabled = true," in RC and "OwnerFirst = false," in RC,
+      "CODEBOT v161: RivalConfig OwnerFirst=false (v166 flip-all-live)")
 RPC = read(C + "RatePromptConfig.luau")
-check("Enabled = true," in RPC and "OwnerFirst = true," in RPC,
-      "CODEBOT v161: RatePromptConfig still OwnerFirst=true")
+check("Enabled = true," in RPC and "OwnerFirst = false," in RPC,
+      "CODEBOT v161: RatePromptConfig OwnerFirst=false (v166 flip-all-live)")
 
 # no WE_Building* since v160 tip (d024178 / 37b94b0 era)
 base = "d024178"

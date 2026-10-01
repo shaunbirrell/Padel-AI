@@ -80,7 +80,7 @@ local ShopOverhaulConfig = {
 		(profile.CashBoost, the Double Cash event) so the pack does not double while a boost runs. NO 1-day / 7-day pack. ]]
 	TimePacks = {
 		Enabled = true,
-		OwnerFirst = true,
+		OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone (still hidden until all five Ids are set: TimePacksReady)
 		Order = { "Cash4h", "Cash2h", "Cash1h", "Cash30m", "Cash15m" }, -- Shop order, biggest first
 		Packs = {
 			Cash4h = { Minutes = 240, Floor = 200000, Title = "4 HOURS OF CASH", Label = "4 hours of cash" },

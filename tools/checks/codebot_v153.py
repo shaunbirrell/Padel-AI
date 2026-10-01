@@ -87,7 +87,7 @@ _sb = _MC.split("\t\tStarterBundle = {", 1)[1][:300] if "\t\tStarterBundle = {" 
 # _cb153("Id = 3713839505," in _sb and "RobuxPrice = 149," in _sb, "CODEBOT v153: Starter Pack Id / 149 R$ unchanged")
 pass
 _cb153("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _rd153(_C153 + "BaseMarkerConfig.luau"), "CODEBOT v153: BaseMarker OwnerFirst stays true")
-_cb153("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MC, "CODEBOT v153: SpeedV2 OwnerFirst stays true")
+_cb153("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = false," in _MC, "CODEBOT v153: SpeedV2 OwnerFirst=false (v166 flip-all-live)")
 _cb153("FastTravelEnabled = false" in _rd153(_C153 + "MapConfig.luau"), "CODEBOT v153: fast travel stays REMOVED")
 _cb153("PreferMeshWhenAssetIdSet = false" in _rd153(_C153 + "StructureVisualConfig.luau"), "CODEBOT v153: PreferMesh stays OFF")
 try:

@@ -248,8 +248,43 @@ do
   local sent = false
   CLIENT_HANDLERS["StarterBundleOffer"] = function(pl) if pl == q then sent = true end end
   runUntil(200)
+  -- codebot_v166: launched for everyone (OwnerFirst=false); the owner-first rule is still proved with OwnerFirst = true
+  local launched = MC.RecruitPackOffer.OwnerFirst
+  check(launched == false and MC.RecruitPackLiveFor(1234), "codebot_v166: RecruitPackOffer live for everyone (OwnerFirst=false)")
+  check(MS.TrySoftOfferStarterBundle(q, "tutorial_complete") == nil, "codebot_v166: live for a non-owner too (Id set): the old pop-up does NOT fire")
+  MC.RecruitPackOffer.OwnerFirst = true
   local r = MS.TrySoftOfferStarterBundle(q, "tutorial_complete")
-  check(r == true and sent, "not live for another player: the Starter Pack pop-up fires as before (OFF == OLD)")
+  check(r == true and sent, "owner-first rule: not live for another player -> the Starter Pack pop-up fires as before (OFF == OLD)")
+  MC.RecruitPackOffer.OwnerFirst = launched
+end
+-- codebot_v166: Id 0 (the Recruit Pack can never be offered) -> the Starter Pack pop-up keeps its slot for everyone
+do
+  MC.FirstOffer.Enabled = true
+  local MS, RPS = fresh(0)
+  local q = join(4321)
+  local sent = false
+  CLIENT_HANDLERS["StarterBundleOffer"] = function(pl) if pl == q then sent = true end end
+  runUntil(200)
+  check(MC.RecruitPackLiveFor(4321) and not MC.RecruitPackTakesStarterSlot(4321), "codebot_v166: Id 0 -> live but never takes the Starter Pack slot")
+  local r = MS.TrySoftOfferStarterBundle(q, "tutorial_complete")
+  check(r == true and sent, "codebot_v166: Id 0 -> the Starter Pack pop-up fires for a non-owner as before")
+end
+
+-- codebot_v166: SpeedV2 live for everyone, but the speed only reaches players who OWN a speed SKU (the real
+-- MonetizationService.SpeedMultFor: the highest owned Speed Pass / Speed Boost multiplier, 1 when none is owned)
+do
+  local MS = fresh(0)
+  check(MC.SpeedV2.OwnerFirst == false and MC.SpeedV2LiveFor(5555), "codebot_v166: SpeedV2 OwnerFirst=false (live for everyone)")
+  local none = join(5555)
+  local boost = join(5556, { Entitlements = { SpeedBoost = true } })
+  local pass = join(5557, { Entitlements = { ImpulseSpeed = true } })
+  local both = join(5558, { Entitlements = { SpeedBoost = true, ImpulseSpeed = true } })
+  check(MS.SpeedMultFor(none) == 1, "codebot_v166: a non-owner who never paid for speed: x1 (no SpeedV2)")
+  check(MS.SpeedMultFor(boost) == 2.5, "codebot_v166: a non-owner who bought the Speed Boost: x2.5 (40) " .. tostring(MS.SpeedMultFor(boost)))
+  check(MS.SpeedMultFor(pass) == 1.75, "codebot_v166: a Speed Pass owner: x1.75 (28) " .. tostring(MS.SpeedMultFor(pass)))
+  check(MS.SpeedMultFor(both) == 2.5, "codebot_v166: owning both = the higher x2.5, never the product")
+  local owner = join(OWNER)
+  check(MS.SpeedMultFor(owner) == 1, "codebot_v166: the owner without a speed SKU in this profile: x1 (no free speed)")
 end
 
 print(string.format("RECRUIT PACK TEST: %d failed", fails))

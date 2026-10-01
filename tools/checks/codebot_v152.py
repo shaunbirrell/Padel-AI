@@ -30,7 +30,7 @@ _C152 = "src/ReplicatedStorage/Shared/Configs/"
 
 # JOB 40 part C: only probe-passing ids are wired
 _SPC = _rd152(_C152 + "StorePropsConfig.luau")
-_cb152("cfg40.JOB40 = { Enabled = true, OwnerFirst = true }" in _SPC, "CODEBOT v152: StorePropsConfig.JOB40 Enabled + OwnerFirst=true")
+_cb152("cfg40.JOB40 = { Enabled = true, OwnerFirst = false }" in _SPC, "CODEBOT v152: StorePropsConfig.JOB40 Enabled + OwnerFirst=false (v166 flip-all-live)")
 _PASSED = {"86311252190175"}
 import re as _re152
 _rr = _SPC.split("cfg40.ReplaceRows = {", 1)[1].split("} :: { any }", 1)[0]
@@ -52,14 +52,14 @@ _cb152(_P152("tools/probes/job40c_stall_dryrun.luau").is_file() and _P152("docs/
 
 # JOB 40 part D
 _RPC = _rd152(_C152 + "RatePromptConfig.luau")
-_cb152("Enabled = true," in _RPC and "OwnerFirst = true," in _RPC, "CODEBOT v152: RatePromptConfig Enabled + OwnerFirst=true")
+_cb152("Enabled = true," in _RPC and "OwnerFirst = false," in _RPC, "CODEBOT v152: RatePromptConfig Enabled + OwnerFirst=false (v166 flip-all-live)")
 _cb152(_P152(_S152 + "Services/RatePromptService.luau").is_file(), "CODEBOT v152: RatePromptService present")
 
 # prior owner-first kept — do NOT flip
-_cb152("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _rd152(_C152 + "GuardConfig.luau"), "CODEBOT v152: GuardConfig.Posts OwnerFirst stays true")
+_cb152("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _rd152(_C152 + "GuardConfig.luau"), "CODEBOT v152: GuardConfig.Posts OwnerFirst=false (v166 flip-all-live)")
 _MC = _rd152(_C152 + "MonetizationConfig.luau")
-_cb152("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MC, "CODEBOT v152: SpeedV2 OwnerFirst stays true")
-_cb152("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _rd152(_C152 + "EndgameConfig.luau"), "CODEBOT v152: Endgame OwnerFirst stays true")
+_cb152("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = false," in _MC, "CODEBOT v152: SpeedV2 OwnerFirst=false (v166 flip-all-live)")
+_cb152("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _rd152(_C152 + "EndgameConfig.luau"), "CODEBOT v152: Endgame OwnerFirst=false (v166 flip-all-live)")
 _cb152("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _rd152(_C152 + "BaseMarkerConfig.luau"), "CODEBOT v152: BaseMarker OwnerFirst stays true")
 _cb152("PreferMeshWhenAssetIdSet = false" in _rd152(_C152 + "StructureVisualConfig.luau"), "CODEBOT v152: PreferMesh stays OFF")
 _cb152("FastTravelEnabled = false" in _rd152(_C152 + "MapConfig.luau"), "CODEBOT v152: fast travel stays REMOVED")

@@ -20,7 +20,7 @@ local BaseConfig = require(script.Parent.BaseConfig)
 local EndgameConfig = {
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone (every endgame part)
 	},
 	-- Code Bot v157 (owner-approved 2026-10-01): a part listed here is live for EVERY player while Live.OwnerFirst keeps
 	-- every other part owner-only. It still needs Live.Enabled and its own Parts switch (either false = off for all).

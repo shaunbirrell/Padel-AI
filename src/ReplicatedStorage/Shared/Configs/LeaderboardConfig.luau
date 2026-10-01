@@ -113,7 +113,7 @@ end
 -- claude-bud JOB 38 ADDENDUM (owner 2026-09-30): ARMY KILLS replaces TOP ARMY in the same slot (army size is capped, so
 -- TOP ARMY is a tie). Its own store keys ("WE_LB2_ArmyKills", weekly "_W<week>").
 -- Code Bot v156 (Shaun 2026-10-01: the live plaza still showed TOP ARMY, everyone tied at 75). Root cause: the swap
--- below waited for ArmyOrdersConfig.LiveForAll(), which is false while army orders stay OwnerFirst = true, AND
+-- below waited for ArmyOrdersConfig.LiveForAll(), which was false while army orders stayed owner-first (v166 flipped them live for all), AND
 -- EngagementService.NoteArmyKill only counted kills for players army orders were live for (the owner, who is excluded
 -- from every board), so nobody could ever score. The board is only a leaderboard: it now has its own switch,
 -- ArmyKillsBoardLive (true = ARMY KILLS for everyone, whatever the army orders rollout; false = TOP ARMY exactly as

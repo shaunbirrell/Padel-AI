@@ -324,9 +324,16 @@ for _, c in ipairs(cases) do
 end
 
 -- ── 9. OFF == OLD ──
+local launched = G.OwnerFirst
+G.OwnerFirst = true -- codebot_v166: launched; the owner-first rule is still proved with OwnerFirst = true
 local p9 = newProfile(OTHER)
 TS, GS = boot(); clearLog(); load(OTHER)
-check(p9.TutorialOrderVersion == TC.OrderVersion and lastTut(OTHER).Total == #TC.Steps and #LOG.funnel == 0, "not live for another player: OrderVersion " .. TC.OrderVersion .. ", 7 steps, no Guided event")
+check(p9.TutorialOrderVersion == TC.OrderVersion and lastTut(OTHER).Total == #TC.Steps and #LOG.funnel == 0, "owner-first rule: not live for another player: OrderVersion " .. TC.OrderVersion .. ", 7 steps, no Guided event")
+G.OwnerFirst = launched
+check(launched == false and TC.GuidedLiveFor(OTHER.UserId), "codebot_v166: TutorialConfig.Guided live for everyone (OwnerFirst=false)")
+local p9b = newProfile(OTHER)
+TS, GS = boot(); clearLog(); load(OTHER)
+check(p9b.TutorialOrderVersion == 4, "codebot_v166: a new non-owner profile enters Guided (OrderVersion 4, got " .. tostring(p9b.TutorialOrderVersion) .. ")")
 G.Enabled = false
 local p10 = newProfile(OWNER)
 TS, GS = boot(); clearLog(); load(OWNER)

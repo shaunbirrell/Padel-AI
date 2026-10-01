@@ -88,7 +88,7 @@ allFacts(); for i = 1, 9 do BAL[5000 + i] = 2e6 end
 PUSHES = {}; RS.Tick(); d = last(VIEWER)
 check(#d.Rows == 3 and d.Why == nil, "a non-empty list: 3 rows, no Why")
 check(type(RC.EmptyText) == "string" and RC.EmptyText:find("No targets right now", 1, true) ~= nil, "RivalConfig.EmptyText = 'No targets right now - rivals appear when other players have cash to raid'")
-check(RC.OwnerFirst == true, "RivalConfig.OwnerFirst untouched (true)")
+check(RC.OwnerFirst == false, "RivalConfig.OwnerFirst=false (codebot_v166: everyone; v163 kept it true)")
 print(string.format("V163 TARGETS: %d failed", fails))
 if fails > 0 then error("failed") end
 '''
@@ -189,7 +189,7 @@ st = (ROOT / "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Settings
 i_gate = st.find('if table.find(AdminConfig.UserIds, player.UserId) ~= nil then\n\t\tsection("ADMIN")')
 check_static("Settings: ADMIN > REPLAY GUIDED TUTORIAL (test) only for AdminConfig.UserIds", i_gate > 0 and "REPLAY GUIDED TUTORIAL (test)" in st[i_gate:i_gate + 600])
 tc = (ROOT / "src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau").read_text(encoding="utf-8")
-check_static("TutorialConfig.Guided.OwnerFirst untouched (true)", re.search(r"TutorialConfig\.Guided = \{[^}]*?OwnerFirst = true", tc, re.S) is not None)
+check_static("TutorialConfig.Guided.OwnerFirst=false (codebot_v166: everyone; v163 kept it true)", re.search(r"TutorialConfig\.Guided = \{[^}]*?OwnerFirst = false", tc, re.S) is not None)
 
 # ── C. TOP SUPPORTERS ───────────────────────────────────────────────────────────────────────────────────────────
 import engagement_gate_test as EG  # noqa: E402

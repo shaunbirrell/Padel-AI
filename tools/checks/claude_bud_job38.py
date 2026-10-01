@@ -49,8 +49,8 @@ _MC = _j38_code(_SV + "Services/MoneyCollectorService.luau")
 _SEC = _j38_src("src/ReplicatedStorage/Shared/Configs/SecurityConfig.luau")
 
 # flags + the decided numbers
-_j38("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- only UserId 470626172" in _AOC and "RetentionConfig.Live(ArmyOrdersConfig.Live, userId)" in _AOC,
-     "one owner-first kill switch (ArmyOrdersConfig.Live)")
+_j38("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false, -- codebot_v166" in _AOC and "RetentionConfig.Live(ArmyOrdersConfig.Live, userId)" in _AOC,
+     "one kill switch (ArmyOrdersConfig.Live) (codebot_v166: OwnerFirst=false, everyone; superseded in codebot_v166.py)")
 for _s in ("SendCooldownSeconds = 300,", "ProtectAfterSiegeSeconds = 600,", "MinPowerRatio = 0.25,", "BullyRatio = 4,", "ArmyLootMult = 0.5,",
            "RequireOwnerAlive = false,", "VictimLeftCooldownSeconds = 150,", "SeekRadius = 250,", "ChainRadius = 150,", "MaxChain = 4,",
            "SeekLeash = 300,", "MarchSpeed = 14,", "LegStuds = 400,", "RouteRetries = 3,", "SiegeMaxSeconds = 240,"):

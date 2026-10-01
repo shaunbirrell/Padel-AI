@@ -52,17 +52,17 @@ CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 # build pins
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", "WE_Build=165"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 165)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", "WE_Build=166"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
 ):
-    check(needle in read(rel), "CODEBOT v157: WE_Build=165 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v157: WE_Build=166 " + rel.rsplit("/", 1)[-1])
 
 # 1. the gate
 EC = read(C + "EndgameConfig.luau")
 live = block(EC, "Live")
-check("Enabled = true," in live and "OwnerFirst = true," in live, "CODEBOT v157: EndgameConfig.Live Enabled + OwnerFirst=true (every other part owner-only)")
+check("Enabled = true," in live and "OwnerFirst = false," in live, "CODEBOT v157: EndgameConfig.Live Enabled + OwnerFirst=false (v166 flip-all-live) (every other part owner-only)")
 pub = block(EC, "PublicParts")
 pub_on = re.findall(r"(?m)^\s*(\w+)\s*=\s*true\b", pub)
 check(pub_on == ["BlackMarket"], "CODEBOT v157: PublicParts = { BlackMarket = true } only (" + ",".join(pub_on) + ")")
@@ -110,7 +110,7 @@ check('if not EndgameConfig.LiveFor(player.UserId, "Mastery") then\n\t\tdoorSign
 # rails unchanged
 for rel, key, label in ((C + "GuardConfig.luau", "Posts", "GuardConfig.Posts"), (C + "MonetizationConfig.luau", "cfg.SpeedV2", "SpeedV2"),
                         (C + "ArmyOrdersConfig.luau", "Live", "ArmyOrders")):
-    check("OwnerFirst = true," in block(read(rel), key), "CODEBOT v157: " + label + " OwnerFirst stays true")
+    check("OwnerFirst = false," in block(read(rel), key), "CODEBOT v157: " + label + " OwnerFirst=false (v166 flip-all-live)")
 
 # the real code in the Luau CLI
 luau = os.environ.get("LUAU")

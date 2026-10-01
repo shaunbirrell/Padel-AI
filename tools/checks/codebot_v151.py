@@ -31,7 +31,7 @@ _C151 = "src/ReplicatedStorage/Shared/Configs/"
 
 # JOB 40 part C
 _SPC = _rd151(_C151 + "StorePropsConfig.luau")
-_cb151("cfg40.JOB40 = { Enabled = true, OwnerFirst = true }" in _SPC, "CODEBOT v151: StorePropsConfig.JOB40 Enabled + OwnerFirst=true")
+_cb151("cfg40.JOB40 = { Enabled = true, OwnerFirst = false }" in _SPC, "CODEBOT v151: StorePropsConfig.JOB40 Enabled + OwnerFirst=false (v166 flip-all-live)")
 # _rr = _SPC.split("cfg40.ReplaceRows = {", 1)[1].split("} :: { any }", 1)[0] if "cfg40.ReplaceRows = {" in _SPC else "x"
 # _br = _SPC.split("cfg40.BaseRows = {", 1)[1].split("} :: { any }", 1)[0] if "cfg40.BaseRows = {" in _SPC else "x"
 # _cb151("Id =" not in "".join(l for l in _rr.splitlines() if not l.strip().startswith("--")), "CODEBOT v151: ReplaceRows empty (probe: 0 of 19 load + pass)")
@@ -39,14 +39,14 @@ _cb151("cfg40.JOB40 = { Enabled = true, OwnerFirst = true }" in _SPC, "CODEBOT v
 _cb151("function StorePropsService.PlaceReplaceRows" in _rd151(_S151 + "Services/StorePropsService.luau"), "CODEBOT v151: StorePropsService.PlaceReplaceRows present")
 _cb151(_P151("tools/probes/job40c_codebot_probe.luau").is_file() and "0 of 19 pass" in _rd151("docs/PROP-ASSETS.md"),
 	"CODEBOT v151: the Code Bot load probe + its result are in the repo")
-_cb151("OwnerFirst = true" in _SPC, "CODEBOT v151: STORE-PROPS world rows stay launched (v136)")
+_cb151("OwnerFirst = false" in _SPC, "CODEBOT v151: STORE-PROPS world rows stay launched (v136)")
 
 # prior owner-first kept — do NOT flip
 _GC = _rd151(_C151 + "GuardConfig.luau")
-_cb151("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _GC, "CODEBOT v151: GuardConfig.Posts OwnerFirst stays true")
+_cb151("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _GC, "CODEBOT v151: GuardConfig.Posts OwnerFirst=false (v166 flip-all-live)")
 _MC = _rd151(_C151 + "MonetizationConfig.luau")
-_cb151("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MC, "CODEBOT v151: SpeedV2 OwnerFirst stays true")
-_cb151("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _rd151(_C151 + "EndgameConfig.luau"), "CODEBOT v151: Endgame OwnerFirst stays true")
+_cb151("cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = false," in _MC, "CODEBOT v151: SpeedV2 OwnerFirst=false (v166 flip-all-live)")
+_cb151("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _rd151(_C151 + "EndgameConfig.luau"), "CODEBOT v151: Endgame OwnerFirst=false (v166 flip-all-live)")
 _cb151("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _rd151(_C151 + "BaseMarkerConfig.luau"), "CODEBOT v151: BaseMarker OwnerFirst stays true")
 _cb151("PreferMeshWhenAssetIdSet = false" in _rd151(_C151 + "StructureVisualConfig.luau"), "CODEBOT v151: PreferMesh stays OFF")
 _cb151("FastTravelEnabled = false" in _rd151(_C151 + "MapConfig.luau"), "CODEBOT v151: fast travel stays REMOVED")

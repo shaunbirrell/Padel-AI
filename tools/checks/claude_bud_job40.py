@@ -70,8 +70,8 @@ _j40("one documented exception" in (_j40_src("CLAUDE.md")).lower() or "base owne
 _GC = _j40_src(_CF + "GuardConfig.luau")
 _BG = _j40_code(_SV + "Modules/BaseGuards.luau")
 _GD = _j40_code(_SV + "Services/GateDefenseService.luau")
-_j40("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _GC and "Live((GuardConfig :: any).Posts, ownerUserId)" in _GC,
-     "A: GuardConfig.Posts kill switch, owner-first by the base owner")
+_j40("\tPosts = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _GC and "Live((GuardConfig :: any).Posts, ownerUserId)" in _GC,
+     "A: GuardConfig.Posts kill switch, by the base owner (codebot_v166: OwnerFirst=false, everyone; superseded in codebot_v166.py)")
 _post = _BG.split("function BaseGuards.ThinkPost")[1].split("function BaseGuards.PostDamageMult")[0]
 _j40("TakeDamage" not in _post and [l.strip() for l in _post.splitlines() if ".Health =" in l] == ["g.Humanoid.Health = g.Humanoid.MaxHealth"],
      "A: the post guard brain never deals raw damage; its one Health write is the at-post regen of the guard itself")
@@ -94,8 +94,8 @@ _j40("bgR.RestoreStatues, plotId" in _GD and "bgMod.CollectPosts(plotFolder, plo
 # ── part B: speed (JOB 40 replacements for the retired codebot_v133 / v126 speed pins) ──
 _MCF = _j40_src(_CF + "MonetizationConfig.luau")
 _j40("WalkSpeedMultV2 = 1.75," in _MCF and "WalkSpeedMultV2 = 2.5," in _MCF and "cfg.MaxWalkSpeedMult = 2.5" in _MCF
-     and "cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MCF,
-     "B: Speed Pass x1.75 (28) / Speed Boost x2.5 (40), cap 2.5, owner-first (SpeedV2); off = x1.5 / x2")
+     and "cfg.SpeedV2 = {\n\tEnabled = true,\n\tOwnerFirst = false," in _MCF,
+     "B: Speed Pass x1.75 (28) / Speed Boost x2.5 (40), cap 2.5, SpeedV2 (v166: everyone, applied only through owned speed SKUs); off = x1.5 / x2")
 _j40("cfg.GamePasses.ImpulseSpeed.Description = cfg.SpeedText(" in _MCF and "cfg.DevProducts.SpeedBoost.Description = cfg.SpeedText(" in _MCF
      and 'Description = "Run' not in _MCF, "B: the speed Descriptions come from the helper (no typed speed string)")
 _speed_strings = [p.as_posix() for p in _J40P("src").rglob("*.luau") if p.name != "MonetizationConfig.luau"
@@ -114,8 +114,8 @@ _j40("MaxSpeed = 58, -- claude-bud JOB 40: x1.45" in _AY and "MaxOwnerSpeed = 48
 # ── part C: store props at landmarks / bases (owner-first JOB40; rows wired only after the probe) ──
 _SPC = _j40_src(_CF + "StorePropsConfig.luau")
 _SPS = _j40_code(_SV + "Services/StorePropsService.luau")
-_j40("cfg40.JOB40 = { Enabled = true, OwnerFirst = true }" in _SPC and "cfg40.Budget.MaxBasePartsPerPlot = 600" in _SPC
-     and "cfg40.BaseKeepOut = {" in _SPC and "function cfg40.JOB40LiveFor(" in _SPC, "C: JOB40 owner-first, 600-part base cap, keep-out boxes")
+_j40("cfg40.JOB40 = { Enabled = true, OwnerFirst = false }" in _SPC and "cfg40.Budget.MaxBasePartsPerPlot = 600" in _SPC
+     and "cfg40.BaseKeepOut = {" in _SPC and "function cfg40.JOB40LiveFor(" in _SPC, "C: JOB40 (v166 everyone), 600-part base cap, keep-out boxes")
 _cand = _j40_re.findall(r"\{ Id = (\d+), Name = \"([^\"]+)\"", _SPC.split("cfg40.Candidates = {")[1].split("\n}")[0])
 _j40(len(_cand) >= 10 and not any(_j40_re.search(r"(?i)sn-75|phoenix|orly|f-16|apache|black hawk", n) for _, n in _cand),
      "C: %d candidates, none a real weapon system / real place" % len(_cand))
@@ -133,8 +133,8 @@ _j40(_J40P("tools/probes/job40_props_probe.luau").exists() and "InsertService" i
 _RPC = _j40_src(_CF + "RatePromptConfig.luau")
 _RPS = _j40_code(_SV + "Services/RatePromptService.luau")
 _RPK = _j40_code(_CL + "Controllers/RatePromptController.luau")
-_j40("Enabled = true," in _RPC and "OwnerFirst = true," in _RPC and "PlaySecondsBeforeShow = 900," in _RPC and "MinGapSeconds = 259200," in _RPC
-     and "CombatQuietSeconds = 20," in _RPC, "D: RatePromptConfig owner-first; 900 s play, 3-day gap, 20 s combat quiet")
+_j40("Enabled = true," in _RPC and "OwnerFirst = false," in _RPC and "PlaySecondsBeforeShow = 900," in _RPC and "MinGapSeconds = 259200," in _RPC
+     and "CombatQuietSeconds = 20," in _RPC, "D: RatePromptConfig (v166 everyone); 900 s play, 3-day gap, 20 s combat quiet")
 _j40(not any(_j40_re.search(r"\b(AddCash|AddGold|AddXP|SpendCash|SpendGold|Grant\w*|Badge\w*|AwardBadge)\b", x) for x in (_RPS, _RPK)),
      "D: no AddCash / AddGold / AddXP / Grant / Badge in RatePromptService or its controller (no reward)")
 _j40(not _j40_re.search(r"(?i)\b(reward|free|gift|bonus|prize|claim)\b", _RPC.split("Text = {")[1].split("}")[0]), "D: the card text has no reward words")

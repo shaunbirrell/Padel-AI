@@ -51,13 +51,13 @@ _LOG = read("src/ReplicatedStorage/Shared/Util/ArmyLog.luau")
 
 # build pins
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 165)'),
-    (S + "Services/DataService.luau", "WE_Build=165"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 165)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 166)'),
+    (S + "Services/DataService.luau", "WE_Build=166"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 166)'),
 ):
-    check(needle in read(rel), "CODEBOT v162: WE_Build=165 " + rel.rsplit("/", 1)[-1])
-check("OwnerFirst = true" in _AOC, "CODEBOT v162: Army Orders stay OwnerFirst")
+    check(needle in read(rel), "CODEBOT v162: WE_Build=166 " + rel.rsplit("/", 1)[-1])
+check("OwnerFirst = false" in _AOC, "CODEBOT v162: Army Orders OwnerFirst=false (v166 flip-all-live)")
 for s in ("Following", "Holding", "TravellingToBase", "Attacking", "EngagingTarget", "Retreating", "Recalling"):
     check("\t%s = true," % s in _AS, "CODEBOT v162: ArmyState has " + s)
 check("st.Order = " in _AS and "st.Order = " not in _AP and "\tst.Order = order" not in _SQ,

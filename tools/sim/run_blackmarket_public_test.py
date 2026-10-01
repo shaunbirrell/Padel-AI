@@ -29,7 +29,11 @@ local EG = require(node("Configs/EndgameConfig"))
 local OWNER, OTHER = 470626172, 9
 
 -- ── 1. gating ──
-check(EG.Live.Enabled == true and EG.Live.OwnerFirst == true, "Endgame stays Enabled + OwnerFirst")
+-- codebot_v166: Live.OwnerFirst=false (every part for everyone); this test still proves the v157 public-part rule
+-- with OwnerFirst = true, then checks the launch at the end
+local EG_LAUNCHED = EG.Live.OwnerFirst
+check(EG.Live.Enabled == true and EG_LAUNCHED == false, "codebot_v166: Endgame Enabled + OwnerFirst=false (everyone)")
+EG.Live.OwnerFirst = true
 check(EG.PublicParts.BlackMarket == true, "PublicParts.BlackMarket = true")
 local pubCount = 0
 for k, v in pairs(EG.PublicParts) do if v == true then pubCount += 1 end end
@@ -193,6 +197,10 @@ local put = nil
 for _, r in ipairs(rows) do if r.Kind == "EquipCamo" then put = r end end
 check(st2.Market.Held == gun and #st2.Market.Camos == 1 and put ~= nil and put.Id == gun .. ":None" and put.Label == "TAKE OFF", "Black Market list: his camo row on the gun in his hand (" .. tostring(put and put.Id) .. ")")
 
+EG.Live.OwnerFirst = EG_LAUNCHED
+local bmOff = {}
+for part, on in pairs(EG.Parts) do if on == true and not EG.LiveFor(OTHER, part) then table.insert(bmOff, part) end end
+check(#bmOff == 0 and EG.LiveFor(OTHER, "Mastery") and EG.CamoLiveFor(OTHER), "codebot_v166: launched: a non-owner gets every part, the Armory included (" .. table.concat(bmOff, ",") .. ")")
 print(string.format("BLACK MARKET PUBLIC TEST: %d failed", fails))
 if fails > 0 then error("failed") end
 '''

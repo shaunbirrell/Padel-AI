@@ -28,7 +28,7 @@ _C143 = "src/ReplicatedStorage/Shared/Configs/"
 
 # JOB 38 present + owner-first (do NOT flip OwnerFirst to false on this ship)
 _AOC = _rd143(_C143 + "ArmyOrdersConfig.luau")
-_cb143("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _AOC, "CODEBOT v143: ArmyOrdersConfig.Live Enabled + OwnerFirst=true (owner phone-test first)")
+_cb143("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _AOC, "CODEBOT v143: ArmyOrdersConfig.Live Enabled + OwnerFirst=false (v166 flip-all-live) (owner phone-test first)")
 _cb143(_P143(_S143 + "Modules/ArmyPlan.luau").is_file(), "CODEBOT v143: ArmyPlan present")
 _cb143(_P143(_S143 + "Modules/ArmyRoute.luau").is_file(), "CODEBOT v143: ArmyRoute present")
 _cb143(_P143(_S143 + "Modules/ArmySendRules.luau").is_file(), "CODEBOT v143: ArmySendRules present")

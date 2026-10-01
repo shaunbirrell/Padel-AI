@@ -58,10 +58,10 @@ if _P145(_luau).is_file():
 
 # live state kept
 _AOC = _rd145(_C145 + "ArmyOrdersConfig.luau")
-_cb145("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _AOC, "CODEBOT v145: ArmyOrdersConfig OwnerFirst stays true")
+_cb145("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _AOC, "CODEBOT v145: ArmyOrdersConfig OwnerFirst=false (v166 flip-all-live)")
 _cb145("OwnerFirst = false, -- codebot_v142 launch" in _rd145(_C145 + "ShopOverhaulConfig.luau"), "CODEBOT v145: ShopOverhaul stays OwnerFirst=false")
 _cb145("OwnerFirst = false, -- codebot_v142 launch" in _rd145(_C145 + "CheckpointGuardConfig.luau"), "CODEBOT v145: CheckpointGuard stays OwnerFirst=false")
-_cb145("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _rd145(_C145 + "EndgameConfig.luau"), "CODEBOT v145: EndgameConfig stays OwnerFirst=true")
+_cb145("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _rd145(_C145 + "EndgameConfig.luau"), "CODEBOT v145: EndgameConfig OwnerFirst=false (v166 flip-all-live)")
 _cb145("PreferMeshWhenAssetIdSet = false" in _rd145(_C145 + "StructureVisualConfig.luau"), "CODEBOT v145: PreferMesh stays OFF")
 _cb145("FastTravelEnabled = false" in _rd145(_C145 + "MapConfig.luau"), "CODEBOT v145: fast travel stays REMOVED")
 try:

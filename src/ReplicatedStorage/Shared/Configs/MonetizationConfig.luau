@@ -945,7 +945,7 @@ local cfg: any = MonetizationConfig
 	NOT fire for him (the StarterBundle row stays in the Shop). Id 0 = never offered. ]]
 cfg.RecruitPackOffer = {
 	Enabled = true,
-	OwnerFirst = true,
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone (Id 0 = never offered)
 	IncomeMinutes = 30, -- cash = this many minutes of his passive income ...
 	MinCash = 25000, -- ... at least (2.5x the 49 R$ Cash Pack S $10,000) ...
 	MaxCash = 150000, -- ... at most
@@ -963,6 +963,14 @@ cfg.RecruitPackOffer = {
 
 function cfg.RecruitPackLiveFor(userId: any): boolean
 	return (require(script.Parent.RetentionConfig) :: any).Live(cfg.RecruitPackOffer, userId)
+end
+
+-- Code Bot v166: the Recruit Pack takes the old Starter Pack pop-up slot only once it can actually be offered (live for
+-- him AND its Id set). While the Id is 0 the Starter Pack first offer (+ its Speed Boost fallback) runs as before.
+function cfg.RecruitPackTakesStarterSlot(userId: any): boolean
+	local def = cfg.DevProducts.RecruitPack
+	local id = if typeof(def) == "table" then tonumber(def.Id) or 0 else 0
+	return id ~= 0 and cfg.RecruitPackLiveFor(userId) == true
 end
 
 -- claude-bud JOB 42 part C: the Recruit Pack's cash for a player: the CashFromTimePack time pack's amount (no cap, the
@@ -998,7 +1006,7 @@ function cfg.RecruitPackCash(perMin: number): number
 end
 cfg.SpeedV2 = {
 	Enabled = true,
-	OwnerFirst = true, -- only UserId 470626172 (+ Studio) until Code Bot sets false = everyone
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone: only changes the speed SKUs' multiplier, so only Speed Pass / Speed Boost owners run faster (SpeedMultFor counts owned SKUs only)
 }
 cfg.MaxWalkSpeedMult = 2.5
 

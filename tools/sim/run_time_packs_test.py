@@ -86,7 +86,8 @@ for _, bad in ipairs({ 0 / 0, -50, 1e13 }) do
   check(SO.TimePackAmount("Cash4h", bad) == TP.Packs.Cash4h.Floor, "income " .. tostring(bad) .. " -> the floor")
 end
 check(SO.TimePackAmount("CashSmall", 1000) == nil and SO.TimePackAmount("Cash4h", 1e11) <= 2 ^ 53, "nil for a non-time pack; capped at 2^53")
-check(TP.BestValueKey == "Cash4h" and TP.Enabled == true and TP.OwnerFirst == true, "BEST VALUE on Cash4h; Enabled, owner-first")
+check(TP.BestValueKey == "Cash4h" and TP.Enabled == true and TP.OwnerFirst == false, "BEST VALUE on Cash4h; Enabled, codebot_v166: OwnerFirst=false (everyone, once all five Ids are set)")
+local TP_LAUNCHED = TP.OwnerFirst
 
 print("== RECEIPT ORDER ==")
 local OWNER = 470626172
@@ -179,6 +180,7 @@ end
 
 print("== GATING ==")
 do
+  TP.OwnerFirst = true -- codebot_v166: launched; the owner-first gating is still proved with OwnerFirst = true
   local MS, p, PR, cash = fresh({ Cash15m = 0, Cash30m = 0, Cash1h = 0, Cash2h = 0, Cash4h = 0 })
   check(SO.TimePacksReady() == false and SO.TimePacksShown(OWNER) == false, "live but not Ready (Ids 0) -> not shown (the old rows stay)")
   MC.DevProducts.Cash15m.Id = 801; MC.DevProducts.Cash30m.Id = 802; MC.DevProducts.Cash1h.Id = 803; MC.DevProducts.Cash2h.Id = 804
@@ -205,6 +207,17 @@ do
   runUntil(NOW + 5)
   check(sent[1] == "Cash4h" and sent[2] == "CashMega", "the Mega offer slot sells Cash4h while shown, CashMega otherwise (" .. table.concat(sent, ",") .. ")")
   for k, id in pairs(IDS) do MC.DevProducts[k].Id = 0 end
+  TP.OwnerFirst = TP_LAUNCHED
+end
+-- codebot_v166: launched for everyone; still hidden for everyone until all five Ids are set (TimePacksReady)
+do
+  check(TP.OwnerFirst == false and SO.TimePacksLiveFor(1234) == true, "codebot_v166: TimePacks live for a non-owner (OwnerFirst=false)")
+  local saved = {}
+  for _, k in ipairs(TP.Order) do saved[k] = MC.DevProducts[k].Id; MC.DevProducts[k].Id = 0 end
+  check(SO.TimePacksShown(1234) == false and SO.TimePacksShown(OWNER) == false, "codebot_v166: Ids 0 -> not shown to anyone (the old rows stay)")
+  for i, k in ipairs(TP.Order) do MC.DevProducts[k].Id = 900 + i end
+  check(SO.TimePacksShown(1234) == true, "codebot_v166: all five Ids set -> shown to a non-owner")
+  for _, k in ipairs(TP.Order) do MC.DevProducts[k].Id = saved[k] end
 end
 check(SO.TimePacks.HideOldKeys.CashSmall and SO.TimePacks.HideOldKeys.CashMega and MC.DevProducts.CashSmall.Id == 3713838744 and MC.DevProducts.CashMega.RobuxPrice == 799,
   "the old four stay in config with their Ids / prices (only hidden from the Shop once live)")

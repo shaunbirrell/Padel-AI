@@ -1553,7 +1553,7 @@ local ArmyConfig = {
 	-- army's owner; OFF = today (soldiers ignore enemy soldiers).
 	ArmyBrawl = {
 		Enabled = true,
-		OwnerFirst = true,
+		OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 		UnitDamageMult = 1, -- x OrdersConfig.AttackDamage (research-scaled) per soldier hit on an enemy soldier
 		MaxCandidates = 8, -- the nearest enemy soldiers considered per think pass
 		KillXP = 10, -- XP to the owner per enemy soldier killed by his army
@@ -1704,7 +1704,7 @@ return ArmyConfig
 local ArmyOrdersConfig = {
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 	},
 
 	-- 1. ATTACK auto-clear
@@ -4600,7 +4600,7 @@ local BaseConfig = require(script.Parent.BaseConfig)
 local EndgameConfig = {
 	Live = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172 (+ Studio test players) until Code Bot sets false = everyone
+		OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone (every endgame part)
 	},
 	-- Code Bot v157 (owner-approved 2026-10-01): a part listed here is live for EVERY player while Live.OwnerFirst keeps
 	-- every other part owner-only. It still needs Live.Enabled and its own Parts switch (either false = off for all).
@@ -5636,7 +5636,7 @@ local GuardConfig = {
 		today's statues, gate guards and turrets exactly (their old checks included). ]]
 	Posts = {
 		Enabled = true,
-		OwnerFirst = true, -- only UserId 470626172's base (+ Studio) until Code Bot sets false = every base
+		OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone (real base guards at every base)
 		StatuePatterns = { "^GateGuard_%a+[LR]$", "^GateGuard_Sea%d*$" }, -- MapSetup's rear-gate / sea-gate statues
 		ModelPrefix = "BaseGuard_",
 		AlertStuds = 80, -- a hostile outside the plot this close to the post (with line of sight) is noticed
@@ -6687,7 +6687,7 @@ end
 -- claude-bud JOB 38 ADDENDUM (owner 2026-09-30): ARMY KILLS replaces TOP ARMY in the same slot (army size is capped, so
 -- TOP ARMY is a tie). Its own store keys ("WE_LB2_ArmyKills", weekly "_W<week>").
 -- Code Bot v156 (Shaun 2026-10-01: the live plaza still showed TOP ARMY, everyone tied at 75). Root cause: the swap
--- below waited for ArmyOrdersConfig.LiveForAll(), which is false while army orders stay OwnerFirst = true, AND
+-- below waited for ArmyOrdersConfig.LiveForAll(), which was false while army orders stayed owner-first (v166 flipped them live for all), AND
 -- EngagementService.NoteArmyKill only counted kills for players army orders were live for (the owner, who is excluded
 -- from every board), so nobody could ever score. The board is only a leaderboard: it now has its own switch,
 -- ArmyKillsBoardLive (true = ARMY KILLS for everyone, whatever the army orders rollout; false = TOP ARMY exactly as
@@ -8542,7 +8542,7 @@ local cfg: any = MonetizationConfig
 	NOT fire for him (the StarterBundle row stays in the Shop). Id 0 = never offered. ]]
 cfg.RecruitPackOffer = {
 	Enabled = true,
-	OwnerFirst = true,
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone (Id 0 = never offered)
 	IncomeMinutes = 30, -- cash = this many minutes of his passive income ...
 	MinCash = 25000, -- ... at least (2.5x the 49 R$ Cash Pack S $10,000) ...
 	MaxCash = 150000, -- ... at most
@@ -8560,6 +8560,14 @@ cfg.RecruitPackOffer = {
 
 function cfg.RecruitPackLiveFor(userId: any): boolean
 	return (require(script.Parent.RetentionConfig) :: any).Live(cfg.RecruitPackOffer, userId)
+end
+
+-- Code Bot v166: the Recruit Pack takes the old Starter Pack pop-up slot only once it can actually be offered (live for
+-- him AND its Id set). While the Id is 0 the Starter Pack first offer (+ its Speed Boost fallback) runs as before.
+function cfg.RecruitPackTakesStarterSlot(userId: any): boolean
+	local def = cfg.DevProducts.RecruitPack
+	local id = if typeof(def) == "table" then tonumber(def.Id) or 0 else 0
+	return id ~= 0 and cfg.RecruitPackLiveFor(userId) == true
 end
 
 -- claude-bud JOB 42 part C: the Recruit Pack's cash for a player: the CashFromTimePack time pack's amount (no cap, the
@@ -8595,7 +8603,7 @@ function cfg.RecruitPackCash(perMin: number): number
 end
 cfg.SpeedV2 = {
 	Enabled = true,
-	OwnerFirst = true, -- only UserId 470626172 (+ Studio) until Code Bot sets false = everyone
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone: only changes the speed SKUs' multiplier, so only Speed Pass / Speed Boost owners run faster (SpeedMultFor counts owned SKUs only)
 }
 cfg.MaxWalkSpeedMult = 2.5
 
@@ -12475,7 +12483,7 @@ return RaidConfig
 
 local RatePromptConfig = {
 	Enabled = true, -- kill switch
-	OwnerFirst = true, -- RetentionConfig.Live: only the playtest owner (and Studio) until Code Bot flips it
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 
 	PlaySecondsBeforeShow = 900, -- 15 min of total play (RatePrompt.PlaySeconds, across sessions)
 	MinGapSeconds = 259200, -- 3 days between shows
@@ -13813,7 +13821,7 @@ return RigConfig
 
 local RivalConfig = {
 	Enabled = true,
-	OwnerFirst = true, -- RetentionConfig.Live
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 	RefreshSeconds = 10,
 	MaxShown = 3,
 	MinLootToShow = 1000,
@@ -14132,7 +14140,7 @@ local ShopOverhaulConfig = {
 		(profile.CashBoost, the Double Cash event) so the pack does not double while a boost runs. NO 1-day / 7-day pack. ]]
 	TimePacks = {
 		Enabled = true,
-		OwnerFirst = true,
+		OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone (still hidden until all five Ids are set: TimePacksReady)
 		Order = { "Cash4h", "Cash2h", "Cash1h", "Cash30m", "Cash15m" }, -- Shop order, biggest first
 		Packs = {
 			Cash4h = { Minutes = 240, Floor = 200000, Title = "4 HOURS OF CASH", Label = "4 hours of cash" },
@@ -14774,7 +14782,7 @@ export type ZoneRow = { Id: number, L0: number, L1: number, X: number, Z: number
 
 local StorePropsConfig = {
 	Enabled = true, -- KILL SWITCH: false = no store props anywhere (the Part builds as before)
-	OwnerFirst = true, -- owner-first rollout rail; unchanged for this publish
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 	World = true, -- the site / area dressing
 	ZonesOn = true, -- the rebirth zone upgrade visuals
 	LiveAttribute = "WE_StorePropsOff", -- Workspace attribute: true = remove every copy now
@@ -15105,7 +15113,7 @@ local StorePropsConfig = {
 	wire only ids the probe shows loading). The candidates are listed in Candidates + docs/PROP-ASSETS.md. Empty lists =
 	OFF == OLD (the RadarDome kit and the plain helipad exactly as today). ]]
 local cfg40: any = StorePropsConfig
-cfg40.JOB40 = { Enabled = true, OwnerFirst = true }
+cfg40.JOB40 = { Enabled = true, OwnerFirst = false } -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 -- Code Bot v152 re-probe (2026-09-30, after the owner's Get Model; docs/PROP-ASSETS.md): 1 of 19 passes, the market
 -- stall 86311252190175 (1 MeshPart, its mesh + texture by its creator IAmASwedishMale, no scripts). It replaces the two
 -- tier-1 Part stalls in the Crossroads Town market lane (dry run: bottom on the kit base, 0 overlaps, faces the lane).
@@ -16605,7 +16613,7 @@ end
 	OFF (Enabled = false, or not live for him): OrderVersion 3, no camp, no banner, no new events (today's game). ]]
 TutorialConfig.Guided = {
 	Enabled = true,
-	OwnerFirst = true, -- RetentionConfig.Live: the playtest owner (and Studio) until Code Bot flips it
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 	OrderVersion = 4,
 	NewPlayerSeconds = 900, -- a profile older than this (FirstJoinUnix) never enters Guided
 	HoldMaxSeconds = 300, -- the WE_Onboarding hold covers the whole chain up to Reward, never longer than this
@@ -30238,7 +30246,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 165)
+		player:SetAttribute("WE_Build", 166)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -73404,7 +73412,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 165)
+			player:SetAttribute("WE_Build", 166)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -81923,7 +81931,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 165)
+		player:SetAttribute("WE_Build", 166)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -82065,7 +82073,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=165",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=166",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -93888,7 +93896,7 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 	end
 	-- claude-bud JOB 41 part B: while the Recruit Pack offer is live for him it takes this pop-up slot (one starter
 	-- offer per profile); the StarterBundle row stays in the Shop
-	if (MonetizationConfig :: any).RecruitPackLiveFor(player.UserId) then
+	if (MonetizationConfig :: any).RecruitPackTakesStarterSlot(player.UserId) then -- Code Bot v166: live AND Id set
 		return nil
 	end
 	local bundle = starterBundleLive()
@@ -94036,7 +94044,7 @@ function MonetizationService.ScheduleFirstOffer(player: Player, reason: string, 
 		return
 	end
 	-- claude-bud JOB 41 part B: the Recruit Pack replaces the first offer (and its fallback) for players it is live for
-	if (MonetizationConfig :: any).RecruitPackLiveFor(player.UserId) then
+	if (MonetizationConfig :: any).RecruitPackTakesStarterSlot(player.UserId) then -- Code Bot v166: live AND Id set
 		return
 	end
 	local uid = player.UserId

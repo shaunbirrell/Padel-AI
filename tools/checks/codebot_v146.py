@@ -29,7 +29,7 @@ _CL146 = "src/StarterPlayer/StarterPlayerScripts/Client/"
 
 # phase 2 feature presence
 _EC = _rd146(_C146 + "EndgameConfig.luau")
-_cb146("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _EC, "CODEBOT v146: EndgameConfig.Live Enabled + OwnerFirst=true")
+_cb146("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _EC, "CODEBOT v146: EndgameConfig.Live Enabled + OwnerFirst=false (v166 flip-all-live)")
 _cb146("\t\tBaseTier = true," in _EC and "\t\tDefence = true," in _EC, "CODEBOT v146: Parts.BaseTier + Defence true (phase 2)")
 _cb146(_P146(_S146 + "Modules/BaseTierBuilder.luau").is_file(), "CODEBOT v146: BaseTierBuilder present")
 _cb146(_P146(_S146 + "Services/EndgameService.luau").is_file(), "CODEBOT v146: EndgameService present")
@@ -47,7 +47,7 @@ _cb146("local start = if c then c else plan.Lead" in _AP and "ArmyRoute.PointAlo
 
 # live state kept
 _AOC = _rd146(_C146 + "ArmyOrdersConfig.luau")
-_cb146("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true," in _AOC, "CODEBOT v146: ArmyOrdersConfig OwnerFirst stays true")
+_cb146("\tLive = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false," in _AOC, "CODEBOT v146: ArmyOrdersConfig OwnerFirst=false (v166 flip-all-live)")
 _cb146("OwnerFirst = false, -- codebot_v142 launch" in _rd146(_C146 + "ShopOverhaulConfig.luau"), "CODEBOT v146: ShopOverhaul stays OwnerFirst=false")
 _cb146("OwnerFirst = false, -- codebot_v142 launch" in _rd146(_C146 + "CheckpointGuardConfig.luau"), "CODEBOT v146: CheckpointGuard stays OwnerFirst=false")
 _cb146("PreferMeshWhenAssetIdSet = false" in _rd146(_C146 + "StructureVisualConfig.luau"), "CODEBOT v146: PreferMesh stays OFF")

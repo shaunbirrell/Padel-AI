@@ -112,7 +112,7 @@ PVP = true
 B.Character = nil
 check(#AB.Candidates(A, squads, Vector3.zero, 50, hostile, 8) == 3, "after the enemy player dies his soldiers are still targets: the brawl goes on")
 local AC = require(node("Configs/ArmyConfig"))
-check(AC.ArmyBrawl.Enabled == true and AC.ArmyBrawl.OwnerFirst == true and AB.LiveFor(1) == true, "ArmyBrawl Enabled, owner-first (Studio: live for every test player)")
+check(AC.ArmyBrawl.Enabled == true and AC.ArmyBrawl.OwnerFirst == false and AB.LiveFor(1) == true and AB.LiveFor(98765) == true, "codebot_v166: ArmyBrawl Enabled + OwnerFirst=false (live for every player)")
 print(string.format("ARMY BRAWL LUA: %d failed", fails))
 if fails > 0 then error("failed") end
 '''

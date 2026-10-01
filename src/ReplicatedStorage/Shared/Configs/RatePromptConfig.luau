@@ -9,7 +9,7 @@
 
 local RatePromptConfig = {
 	Enabled = true, -- kill switch
-	OwnerFirst = true, -- RetentionConfig.Live: only the playtest owner (and Studio) until Code Bot flips it
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
 
 	PlaySecondsBeforeShow = 900, -- 15 min of total play (RatePrompt.PlaySeconds, across sessions)
 	MinGapSeconds = 259200, -- 3 days between shows

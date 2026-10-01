@@ -43,8 +43,8 @@ _CF = "src/ReplicatedStorage/Shared/Configs/"
 _TC = _j41_src(_CF + "TutorialConfig.luau")
 _GS = _j41_code(_SV + "Services/GuidedService.luau")
 _TS = _j41_code(_SV + "Services/TutorialService.luau")
-_j41("TutorialConfig.Guided = {\n\tEnabled = true,\n\tOwnerFirst = true," in _TC and "RetentionConfig) :: any).Live(TutorialConfig.Guided, userId)" in _TC,
-     "A: TutorialConfig.Guided Enabled + OwnerFirst = true (RetentionConfig.Live)")
+_j41("TutorialConfig.Guided = {\n\tEnabled = true,\n\tOwnerFirst = false," in _TC and "RetentionConfig) :: any).Live(TutorialConfig.Guided, userId)" in _TC,
+     "A: TutorialConfig.Guided Enabled (RetentionConfig.Live) (codebot_v166: OwnerFirst=false, everyone; superseded in codebot_v166.py)")
 _j41('[4] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "FirstFight", "Outpost", "Reward", "Barracks", "Jeep" },' in _TC
      and "OrderVersion = if TerritoryConfig.Starter.Enabled == true then 3 else 2," in _TC,
      "A: OrderVersion 4 = the Guided order; the default order stays 3 / 2")
@@ -81,8 +81,8 @@ _rp = [l for l in _MC.splitlines() if "RecruitPack = {" in l]
 _j41(len(_rp) == 1 and "Id = 0," in _rp[0] and "RobuxPrice = 49," in _rp[0] and "OneTime = true" in _rp[0]
      and not _j41_re.search(r"(?i)damage|health|\bhp\b|armou?r|army|soldier|raid|shield|protect", _rp[0].split("Description")[0]),
      "B: RecruitPack Id 0 + 49 R$, one time, no stat key in the product row (not pay-to-win)")
-_j41("cfg.RecruitPackOffer = {\n\tEnabled = true,\n\tOwnerFirst = true," in _MC and "OfferAfterPlaySeconds = 600," in _MC and "MinCash = 25000," in _MC
-     and "MaxCash = 150000," in _MC and "IncomeMinutes = 30," in _MC, "B: RecruitPackOffer owner-first; 600 s / capture; 30 min of income, $25k..$150k")
+_j41("cfg.RecruitPackOffer = {\n\tEnabled = true,\n\tOwnerFirst = false," in _MC and "OfferAfterPlaySeconds = 600," in _MC and "MinCash = 25000," in _MC
+     and "MaxCash = 150000," in _MC and "IncomeMinutes = 30," in _MC, "B: RecruitPackOffer (v166 everyone); 600 s / capture; 30 min of income, $25k..$150k")
 _RPS = _j41_code(_SV + "Services/RecruitPackService.luau")
 _dec = _RPS.split("function RecruitPackService.Decide")[1].split("\nend\n")[0]
 _j41('s.Trigger == "capture"' in _dec and "O.OfferAfterPlaySeconds" in _dec and '"too_early"' in _dec and '"id0"' in _dec,
@@ -93,7 +93,7 @@ _MSV = _j41_code(_SV + "Services/MonetizationService.luau")
 # live, else this JOB 41 clamp); the pin follows it:
 _j41('if productKey == "RecruitPack" then' in _MSV and "RecruitPackCashFor(player.UserId, perMin)" in _MSV and "CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult" in _MSV,
      "B: the grant in ProcessReceipt (income-scaled cash, the ONE boost path)")
-_j41(_MSV.count("RecruitPackLiveFor(player.UserId)") >= 2, "B: the old Starter Pack pop-up (TrySoftOfferStarterBundle + ScheduleFirstOffer) is suppressed while the offer is live")
+_j41(_MSV.count("RecruitPackTakesStarterSlot(player.UserId)") >= 2, "B: the old Starter Pack pop-up (TrySoftOfferStarterBundle + ScheduleFirstOffer) is suppressed while the offer is live AND its Id is set (codebot_v166 RecruitPackTakesStarterSlot)")
 import subprocess as _sp41b
 _md41 = _sp41b.run(["git", "diff", "-U0", "af3a858", "--", _CF + "MonetizationConfig.luau"], capture_output=True, text=True).stdout
 _chg = [l for l in _md41.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))
@@ -104,8 +104,8 @@ _j41(True, "B: RobuxPrice / Id lines changed since af3a858 other than the Recrui
 _RC = _j41_src(_CF + "RivalConfig.luau")
 _RVS = _j41_code(_SV + "Services/RivalService.luau")
 _RVC = _j41_code(_CL + "Controllers/RivalController.luau")
-_j41("Enabled = true," in _RC and "OwnerFirst = true," in _RC and "RefreshSeconds = 10," in _RC and "MaxShown = 3," in _RC and "MinLootToShow = 1000," in _RC,
-     "C: RivalConfig owner-first; 10 s, 3 shown, $1k minimum")
+_j41("Enabled = true," in _RC and "OwnerFirst = false," in _RC and "RefreshSeconds = 10," in _RC and "MaxShown = 3," in _RC and "MinLootToShow = 1000," in _RC,
+     "C: RivalConfig (v166 everyone); 10 s, 3 shown, $1k minimum")
 _j41("P.CheckSend, viewer, plotId" in _RVS and "v.Ok == true" in _RVS and "RivalConfig.Pick(" in _RVS,
      "C: the list is exactly the bases ArmySendRules allows (ArmyPlan.CheckSend: no second rule), bucketed by RivalConfig.Pick")
 _j41("task.wait(RivalConfig.RefreshSeconds)" in _RVS and _RVS.count("task.spawn(") == 1 and "RenderStepped" not in _RVS and "Heartbeat" not in _RVS,
