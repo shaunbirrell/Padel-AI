@@ -249,6 +249,18 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	else
 		profile.NotifOptIn = nil
 	end
+	-- Code Bot v192: the DOUBLE WEEKEND one-time pop-up, shown once per event Id (id -> os.time())
+	if typeof(profile.EventPopupSeen) == "table" then
+		local seen = {}
+		for id, t in pairs(profile.EventPopupSeen) do
+			if typeof(id) == "string" and #id <= 32 then
+				seen[id] = nonNegInt(t)
+			end
+		end
+		profile.EventPopupSeen = seen
+	else
+		profile.EventPopupSeen = nil
+	end
 	-- claude-bud JOB 46: the last rebirth-zone shipment per zone (unix)
 	if typeof(profile.ZoneShipAt) == "table" then
 		local t = {}

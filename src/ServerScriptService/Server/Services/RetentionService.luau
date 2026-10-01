@@ -559,6 +559,14 @@ function RetentionService.Init(deps: { [string]: any })
 		end)
 	end
 
+	-- Code Bot v192: the DOUBLE WEEKEND one-time pop-up's seen flag (profile.EventPopupSeen + RequestEventPopupSeen)
+	local okDE, errDE = pcall(function()
+		require(script.Parent.Parent.Modules.DoubleEvent).InitPopup({ DataService = DataService, RemoteSetup = RemoteSetup, RateLimitService = RateLimitService })
+	end)
+	if not okDE then
+		warn("[RetentionService] DoubleEvent.InitPopup failed:", errDE)
+	end
+
 	local optIn = RemoteSetup.Get(Constants.RemoteNames.RequestNotifOptInResult) :: RemoteEvent
 	optIn.OnServerEvent:Connect(function(player: Player, result: any, source: any)
 		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestNotifOptInResult", result, source) then

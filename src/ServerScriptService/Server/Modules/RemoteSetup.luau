@@ -77,6 +77,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestEndgameBuy, -- claude-bud JOB 39
 	Constants.RemoteNames.RequestEndgameState, -- claude-bud JOB 39
 	Constants.RemoteNames.RequestRatePromptAnswer, -- claude-bud JOB 40 part D
+	Constants.RemoteNames.RequestEventPopupSeen, -- Code Bot v192: DOUBLE WEEKEND one-time pop-up
 	Constants.RemoteNames.RequestRecruitPackResult, -- claude-bud JOB 41 part B
 	Constants.RemoteNames.RequestRivalAction, -- claude-bud JOB 41 part C
 	Constants.RemoteNames.RequestMissionReroll, -- claude-bud JOB 49 part C

@@ -86,6 +86,7 @@ local SecurityConfig = {
 		RequestRecruitPackResult = { "string:8" }, -- claude-bud JOB 41 B: "shown" | "dropped" (checked in the service)
 		RequestRatePromptAnswer = { "string:8" }, -- claude-bud JOB 40 D: one answer word (the service checks the enum)
 		RequestNotifOptInResult = { "string:12", "string?" }, -- claude-bud JOB 29: accepted / declined / unavailable, "settings"?
+		RequestEventPopupSeen = { "string:32" }, -- Code Bot v192: the EventConfig.Id (the service checks it)
 		RequestArmourLook = { "boolean" }, -- claude-bud JOB 26 -- claude-bud JOB 24 §10 (AnalyticsConfig.Roblox.ClientEvents only)
 		RequestResearch = { "string", "string?" },
 		RequestMissileStrike = { "table" },

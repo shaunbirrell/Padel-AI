@@ -36,6 +36,21 @@ local EventConfig = {
 	-- Roblox experience event (Creator Hub) for the banner's NOTIFY ME (SocialService RSVP). "" = no button.
 	EventId = "5990901055452480269", -- a string: event ids do not fit a Luau number
 	BannerText = "DOUBLE WEEKEND · 2x XP · 2x CASH · 2x KILLS",
+	-- Code Bot v192 (owner: "the banner stays stuck on screen, ugly and blocking"): the top-centre banner is gone.
+	--   BEFORE the start: a ONE-TIME centred pop-up (once per player per Id: profile.EventPopupSeen[Id], a new profile
+	--   field; replicated as the PopupSeenAttr player attribute), a few seconds after spawn, never over the tutorial /
+	--   onboarding hold / another panel or first-join card; skipped when GetEventRsvpStatusAsync says Going.
+	--   DURING the live window (or the owner preview): only a small chip under the TARGETS card ("2x WEEKEND · 1d 4h");
+	--   tap = the details card. After EndUnix: nothing.
+	PopupTitle = "DOUBLE WEEKEND",
+	PopupWhen = "Fri 9pm – Sun 9pm (Irish time)",
+	PopupPerks = "2x XP · 2x Cash · 2x Kills",
+	PopupAsk = "Get notified when it starts?",
+	PopupDelaySeconds = 6, -- after the character spawns (and the screen has been free for PopupQuietSeconds)
+	PopupQuietSeconds = 2,
+	PopupSeenAttr = "WE_EventPopupSeen", -- player attribute (server-written on profile load): true = already shown
+	PopupTestAttr = "WE_EventPopupTest", -- player attribute: the owner's /eventpopup bumps it -> show the pop-up now
+	ChipText = "2x WEEKEND",
 
 	KillReasons = {
 		pvp_kill = true,

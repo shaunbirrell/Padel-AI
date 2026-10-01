@@ -560,7 +560,8 @@ function AdminService.Init(deps: { [string]: any })
 		local isSetRebirthCmd = cmd == "setrebirth" -- Code Bot v168: the owner's own rebirth count (no reset)
 		local isGuardDebugCmd = cmd == "guarddebug" -- claude-bud JOB 51: [GuardTarget] / [GuardShot] / [NpcHit] logs
 		local isEventPreviewCmd = cmd == "eventpreview" -- Code Bot v185: DOUBLE WEEKEND owner preview (before StartUnix only)
-		if cmd ~= "cash" and not isEventPreviewCmd and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd and not isSetRebirthCmd and not isGuardDebugCmd then
+		local isEventPopupCmd = cmd == "eventpopup" -- Code Bot v192: re-show the DOUBLE WEEKEND one-time pop-up (owner only)
+		if cmd ~= "cash" and not isEventPreviewCmd and not isEventPopupCmd and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd and not isSetRebirthCmd and not isGuardDebugCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -597,6 +598,33 @@ function AdminService.Init(deps: { [string]: any })
 			if deps.NotificationService then
 				deps.NotificationService.Notify(player, "Event preview " .. (if want then "ON" else "OFF") .. " (window itself is live for all regardless)", "Success")
 			end
+			return
+		end
+		-- Code Bot v192: /eventpopup (OWNER ONLY) shows the DOUBLE WEEKEND pop-up on his screen now (whatever his seen
+		-- flag / RSVP / the clock say; a test copy, tagged OWNER TEST). /eventpopup reset also forgets his saved seen flag
+		-- (profile.EventPopupSeen[Id]), so his client runs the real first-time flow again (before the start only).
+		if isEventPopupCmd then
+			local okC, EC = pcall(function(): any
+				return require(ReplicatedStorage.Shared.Configs.EventConfig)
+			end)
+			if not okC or player.UserId ~= EC.OwnerUserId then
+				return
+			end
+			if rest == "reset" then
+				local okD, DE = pcall(function(): any
+					return require(script.Parent.Parent.Modules.DoubleEvent)
+				end)
+				if okD then
+					DE.ResetPopupSeen(player)
+				end
+				print(string.format("[DoubleEvent] %s /eventpopup reset (seen flag cleared)", player.Name))
+				if deps.NotificationService then
+					deps.NotificationService.Notify(player, "Event pop-up seen flag cleared (shows again before the start)", "Success")
+				end
+				return
+			end
+			player:SetAttribute(EC.PopupTestAttr, (tonumber(player:GetAttribute(EC.PopupTestAttr)) or 0) + 1)
+			print(string.format("[DoubleEvent] %s /eventpopup (test show)", player.Name))
 			return
 		end
 		if isGuardDebugCmd then
@@ -768,9 +796,9 @@ function AdminService.Init(deps: { [string]: any })
 				end
 			end)
 			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
-			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" }, { "WE_ReplayTutorial", "/replaytutorial", "/replayguided" }, { "WE_SetRebirth", "/setrebirth" }, { "WE_EventPreview", "/eventpreview" } }) do
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" }, { "WE_ReplayTutorial", "/replaytutorial", "/replayguided" }, { "WE_SetRebirth", "/setrebirth" }, { "WE_EventPreview", "/eventpreview" }, { "WE_EventPopup", "/eventpopup" } }) do
 				local c = ensureCommand(spec[1], spec[2], spec[3])
-				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" or spec[1] == "WE_ReplayTutorial" or spec[1] == "WE_SetRebirth" or spec[1] == "WE_EventPreview" then
+				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" or spec[1] == "WE_ReplayTutorial" or spec[1] == "WE_SetRebirth" or spec[1] == "WE_EventPreview" or spec[1] == "WE_EventPopup" then
 					-- nations: never offered in chat autocomplete (lead decision 6: nothing of the feature shows for
 					-- non-admins before the flag art is live); the admin still types it
 					local cmdAny: any = c
@@ -811,6 +839,7 @@ function AdminService.Init(deps: { [string]: any })
 					or string.sub(lower, 1, 13) == "/replayguided"
 					or string.sub(lower, 1, 11) == "/setrebirth"
 					or string.sub(lower, 1, 13) == "/eventpreview" -- Code Bot v185 (owner only, checked in onAdminChat)
+					or string.sub(lower, 1, 11) == "/eventpopup" -- Code Bot v192 (owner only, checked in onAdminChat)
 				if not isAdminLine then
 					return
 				end

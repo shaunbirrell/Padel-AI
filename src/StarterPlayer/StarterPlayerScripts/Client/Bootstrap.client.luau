@@ -159,7 +159,7 @@ safeInit("CheckpointController", safeRequire("CheckpointController", Controllers
 safeInit("EndgameController", safeRequire("EndgameController", Controllers:WaitForChild("EndgameController", 5) :: Instance)) -- claude-bud JOB 39
 safeInit("BaseMarkerController", safeRequire("BaseMarkerController", Controllers:WaitForChild("BaseMarkerController", 5) :: Instance)) -- claude-bud JOB 40 part E
 safeInit("BuildingTipController", safeRequire("BuildingTipController", Controllers:WaitForChild("BuildingTipController", 5) :: Instance)) -- claude-bud JOB 24 §5
-safeInit("DoubleWeekendController", safeRequire("DoubleWeekendController", Controllers:WaitForChild("DoubleWeekendController", 5) :: Instance)) -- Code Bot v185: DOUBLE WEEKEND banner + countdown + NOTIFY ME (EventConfig)
+safeInit("DoubleWeekendController", safeRequire("DoubleWeekendController", Controllers:WaitForChild("DoubleWeekendController", 5) :: Instance)) -- Code Bot v185: DOUBLE WEEKEND (EventConfig); v192: one-time pop-up + live chip under TARGETS (no banner)
 safeInit("ArmyDebugClient", safeRequire("ArmyDebugClient", Modules:WaitForChild("ArmyDebugClient", 5) :: Instance)) -- v115: owner-only army slot markers + labels (ArmyConfig.Follow3.Debug + WE_ArmyDebug; /armydebug)
 safeInit("MoveDebugClient", safeRequire("MoveDebugClient", Modules:WaitForChild("MoveDebugClient", 5) :: Instance)) -- v123: /movedebug player-movement log (WE_MoveDebug; quiet otherwise)
 safeInit("PremiumWeaponsClient", safeRequire("PremiumWeaponsClient", Modules:WaitForChild("PremiumWeaponsClient", 5) :: Instance)) -- claude-bud PREMIUM: FIRE / MISSILE while driving a Robux-only vehicle

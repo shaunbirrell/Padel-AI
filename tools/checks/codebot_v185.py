@@ -38,12 +38,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 191)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 191)'),
-    (S + "Services/DataService.luau", "WE_Build=191"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 191)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 192)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 192)'),
+    (S + "Services/DataService.luau", "WE_Build=192"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 192)'),
 ):
-    check(needle in read(rel), "CODEBOT v185: WE_Build=191 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v185: WE_Build=192 " + rel.rsplit("/", 1)[-1])
 
 # --- the config: times and multipliers ---
 EC = code(read(C + "EventConfig.luau"))
@@ -100,7 +100,7 @@ for rel in ("Services/MonetizationService.luau",):
 # --- client banner ---
 UI = code(read(CL + "Controllers/DoubleWeekendController.luau"))
 check("Heartbeat" not in UI and "RenderStepped" not in UI and "task.wait(1)" in UI, "CODEBOT v185: banner = one 1 s task.wait loop")
-check("RegisterTopStack" in UI, "CODEBOT v185: banner in the HUD top stack (no overlap)")
+# v192 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v192.py (no banner: one-time pop-up + chip under TARGETS): #check("RegisterTopStack" in UI, "CODEBOT v185: banner in the HUD top stack (no overlap)")
 check("PromptRsvpToEventAsync" in UI and "GetEventRsvpStatusAsync" in UI and "pcall" in UI, "CODEBOT v185: NOTIFY ME RSVP calls pcall'd")
 check("DoubleWeekendController" in read(CL + "Bootstrap.client.luau"), "CODEBOT v185: Bootstrap inits the banner")
 

@@ -101,6 +101,7 @@ Constants.RemoteNames = {
 	RequestEndgameState = "RequestEndgameState", -- claude-bud JOB 39: () -> FeaturePush "EndgameState"
 	RequestSiteActivity = "RequestSiteActivity", -- claude-bud JOB 31: (action "list" | "start" | "quit", id?) SiteActivityService
 	RequestNotifOptInResult = "RequestNotifOptInResult", -- claude-bud JOB 29: the notification opt-in prompt result
+	RequestEventPopupSeen = "RequestEventPopupSeen", -- Code Bot v192: (EventConfig.Id) the DOUBLE WEEKEND pop-up was shown
 	CodeStateUpdate = "CodeStateUpdate",
 	-- Code Bot v102: RemoteFunction. Client -> server (code: string) -> { Result = "Success" | "AlreadyUsed" | "Invalid"
 	-- | "Expired" | "RateLimited" | "NotReady", Message: string }. Server validates + rate-limits (CodesService).

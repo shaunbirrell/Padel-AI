@@ -44,12 +44,12 @@ S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 191)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 191)'),
-    (S + "Services/DataService.luau", "WE_Build=191"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 191)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 192)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 192)'),
+    (S + "Services/DataService.luau", "WE_Build=192"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 192)'),
 ):
-    check(needle in read(rel), "CODEBOT v176: WE_Build=191 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v176: WE_Build=192 " + rel.rsplit("/", 1)[-1])
 
 # JOB 49 A — DailyRewardConfig Grace / Day7Scale / Calendar owner-first
 DR = read(C + "DailyRewardConfig.luau")

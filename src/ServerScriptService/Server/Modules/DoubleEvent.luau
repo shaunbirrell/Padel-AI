@@ -27,6 +27,72 @@ function DoubleEvent.Init()
 	end
 end
 
+-- Code Bot v192: the one-time DOUBLE WEEKEND pop-up's "seen" flag. profile.EventPopupSeen = { [EventConfig.Id] = unix }
+-- (a NEW profile field; no existing key renamed), replicated as the EventConfig.PopupSeenAttr player attribute
+-- (true / false, written once the profile has loaded, so the client waits for it before it decides).
+local popupData: any = nil
+
+local function seenIn(profile: any): boolean
+	local t = if typeof(profile) == "table" then profile.EventPopupSeen else nil
+	return typeof(t) == "table" and (tonumber(t[EventConfig.Id]) or 0) > 0
+end
+
+function DoubleEvent.MarkPopupSeen(player: Player)
+	pcall(function()
+		player:SetAttribute(EventConfig.PopupSeenAttr, true)
+	end)
+	local profile = popupData and popupData.GetProfile(player)
+	if typeof(profile) ~= "table" or seenIn(profile) then
+		return
+	end
+	local t = if typeof(profile.EventPopupSeen) == "table" then profile.EventPopupSeen else {}
+	t[EventConfig.Id] = os.time()
+	profile.EventPopupSeen = t
+	pcall(popupData.MarkDirty, player)
+end
+
+-- owner /eventpopup reset: forget his seen flag (so a rejoin shows the real first-time flow again)
+function DoubleEvent.ResetPopupSeen(player: Player)
+	local profile = popupData and popupData.GetProfile(player)
+	if typeof(profile) == "table" and typeof(profile.EventPopupSeen) == "table" then
+		profile.EventPopupSeen[EventConfig.Id] = nil
+		pcall(popupData.MarkDirty, player)
+	end
+	pcall(function()
+		player:SetAttribute(EventConfig.PopupSeenAttr, false)
+	end)
+end
+
+-- called from RetentionService.Init (deps: DataService, RemoteSetup, RateLimitService)
+function DoubleEvent.InitPopup(deps: { [string]: any })
+	popupData = deps.DataService
+	if popupData and popupData.OnProfileLoaded then
+		popupData.OnProfileLoaded(function(player: Player, profile: any)
+			pcall(function()
+				player:SetAttribute(EventConfig.PopupSeenAttr, seenIn(profile))
+			end)
+		end)
+	end
+	local Constants = require(ReplicatedStorage.Shared.Constants) :: any
+	local ev = deps.RemoteSetup and deps.RemoteSetup.Get(Constants.RemoteNames.RequestEventPopupSeen)
+	if ev == nil then
+		warn("[DoubleEvent] RequestEventPopupSeen remote missing; the pop-up seen flag is session-only")
+		return
+	end
+	ev.OnServerEvent:Connect(function(player: Player, id: any)
+		if not require(script.Parent.RemoteGate).Check(player, "RequestEventPopupSeen", id) then
+			return
+		end
+		if id ~= EventConfig.Id then
+			return
+		end
+		if deps.RateLimitService and not deps.RateLimitService.Allow(player, "event_popup_seen", 1, 2) then
+			return
+		end
+		DoubleEvent.MarkPopupSeen(player)
+	end)
+end
+
 function DoubleEvent.ActiveFor(player: Player?): boolean
 	if typeof(player) ~= "Instance" then
 		return false
