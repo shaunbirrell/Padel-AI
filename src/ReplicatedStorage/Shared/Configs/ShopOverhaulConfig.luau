@@ -46,6 +46,12 @@ local ShopOverhaulConfig = {
 		"^ShopRow_Pass_PV_",
 		"^ShopRow_Pass_ExtraGarageSlot$",
 		"^ShopRow_Pass_",
+		-- claude-bud JOB 42: the time packs take the cash place (only built while shown); the old four stay for OFF
+		"^ShopRow_Cash4h$",
+		"^ShopRow_Cash2h$",
+		"^ShopRow_Cash1h$",
+		"^ShopRow_Cash30m$",
+		"^ShopRow_Cash15m$",
 		"^ShopRow_CashMega$",
 		"^ShopRow_CashLarge$",
 		"^ShopRow_CashMedium$",

@@ -1200,6 +1200,12 @@ function MonetizationService.OfferMoment(player: Player, moment: string)
 		local dc: any = MonetizationConfig.GamePasses.DoubleCash
 		if dc and (tonumber(dc.Id) or 0) ~= 0 and not ownsCached(player, "DoubleCash") then
 			kind, key, title, cta = "GamePass", "DoubleCash", "Rebuild faster: 2x Cash", LivePrices.Cta("GamePass", "DoubleCash")
+		elseif ShopOverhaulConfig.TimePacksShown(player.UserId) then
+			-- claude-bud JOB 42: "Fresh start boost" sells the 1 HOUR OF CASH pack (its live amount, timed boosts left out)
+			local prof = DataService and DataService.GetProfile(player)
+			local boost = ShopOverhaulConfig.TimePackAmount("Cash1h", MonetizationService.PassivePerMin(player, prof, ShopOverhaulConfig.TimePacks.ExcludeTimedBoosts == true)) or 0
+			local s = tostring(math.floor(boost)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+			kind, key, title, cta = "DevProduct", "Cash1h", "Fresh start boost: $" .. s, LivePrices.Cta("DevProduct", "Cash1h")
 		else
 			local cl: any = MonetizationConfig.DevProducts.CashLarge
 			if cl and (tonumber(cl.Id) or 0) ~= 0 then
@@ -2107,7 +2113,9 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 			return
 		end
 	end
-	local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.CashMega
+	-- claude-bud JOB 42: the same slot sells the 4h time pack while the time packs are shown for him
+	local megaKey = if ShopOverhaulConfig.TimePacksShown(player.UserId) then ShopOverhaulConfig.TimePacks.BestValueKey else "CashMega"
+	local dp = MonetizationConfig.DevProducts and (MonetizationConfig.DevProducts :: any)[megaKey]
 	if not dp or typeof(dp.Id) ~= "number" or dp.Id == 0 then
 		return
 	end
@@ -2135,10 +2143,10 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 			local remote = RemoteSetup.Get(Constants.RemoteNames.CashMegaOffer)
 			if remote and remote:IsA("RemoteEvent") then
 				(remote :: RemoteEvent):FireClient(player, {
-					ProductKey = "CashMega",
+					ProductKey = megaKey,
 					ProductId = dp.Id,
-					DisplayName = LivePrices.Name("DevProduct", "CashMega"), -- Code Bot v156
-					RobuxPrice = LivePrices.Price("DevProduct", "CashMega"),
+					DisplayName = LivePrices.Name("DevProduct", megaKey), -- Code Bot v156
+					RobuxPrice = LivePrices.Price("DevProduct", megaKey),
 					Reason = reason or "pending_collect",
 				})
 			end

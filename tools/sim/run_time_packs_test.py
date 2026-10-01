@@ -191,6 +191,19 @@ do
   INCOME = 100; YIELD = 0
   receipt(MS, 3713838952, "t-old")
   check(paid(cash) == SO.CashPackAmount("CashMega", pm(100)), "an old CashMega receipt keeps the JOB 36 formula while the time packs are live ($" .. commas(paid(cash)) .. ")")
+  -- part B: the Mega toast slot sells the 4h pack while shown (same slot / budget); CashMega for a player it is not live for
+  local sent = {}
+  CLIENT_HANDLERS["CashMegaOffer"] = function(pl, payload) table.insert(sent, payload.ProductKey) end
+  MS.ClaimSoftOfferSlot = function() return true end -- the budget itself is run_first_offer_test's subject
+  runUntil(NOW + 200)
+  MS.TrySoftOfferCashMega(p, "pending_collect", 50000)
+  runUntil(NOW + 5)
+  local q = newPlayer(1234)
+  PR[1234] = { Entitlements = {}, Stats = {}, ProcessedReceipts = {} }
+  runUntil(NOW + 200)
+  MS.TrySoftOfferCashMega(q, "pending_collect", 50000)
+  runUntil(NOW + 5)
+  check(sent[1] == "Cash4h" and sent[2] == "CashMega", "the Mega offer slot sells Cash4h while shown, CashMega otherwise (" .. table.concat(sent, ",") .. ")")
   for k, id in pairs(IDS) do MC.DevProducts[k].Id = 0 end
 end
 check(SO.TimePacks.HideOldKeys.CashSmall and SO.TimePacks.HideOldKeys.CashMega and MC.DevProducts.CashSmall.Id == 3713838744 and MC.DevProducts.CashMega.RobuxPrice == 799,

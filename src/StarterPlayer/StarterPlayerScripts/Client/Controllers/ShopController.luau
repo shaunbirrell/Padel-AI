@@ -70,6 +70,29 @@ local function packCash(key: string, def: any): number
 	end
 	return tonumber(typeof(def) == "table" and def.Cash) or 0
 end
+-- claude-bud JOB 42: the time packs. SHOWN = TimePacksLiveFor AND all five Ids set (TimePacksReady); in Studio a
+-- live player also sees them with the Ids still 0 (price button "SOON") so the layout can be tested.
+local function timePacksShown(): boolean
+	return ShopOverhaulConfig.TimePacksShown(player.UserId)
+end
+local function timePacksPreview(): boolean
+	return game:GetService("RunService"):IsStudio() and ShopOverhaulConfig.TimePacksLiveFor(player.UserId) and not ShopOverhaulConfig.TimePacksReady()
+end
+-- the live amount (WE_TimePackPerMin; the floor until the first publish, never $0) and its row line
+local function timePackCash(key: string): number
+	local per = tonumber(player:GetAttribute(ShopOverhaulConfig.TimePacks.PerMinAttribute)) or 0
+	return ShopOverhaulConfig.TimePackAmount(key, per) or 0
+end
+local function timePackText(key: string): string
+	local n = math.floor(timePackCash(key))
+	local s = tostring(n):reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if s:sub(1, 1) == "," then
+		s = s:sub(2)
+	end
+	local p = ShopOverhaulConfig.TimePacks.Packs[key]
+	return "$" .. s .. (if p and n <= p.Floor then " " .. ShopOverhaulConfig.TimePacks.MinimumText else "")
+end
+
 -- Code Bot v156: a cash pack row in plain words ("Get $50,000 cash right away"; the live amount while JOB 36 is on)
 local function cashPackText(key: string, def: any): string
 	local n = math.floor(packCash(key, def))
@@ -442,7 +465,8 @@ local function highlightCashMegaRow()
 	if not list then
 		return
 	end
-	local row = list:FindFirstChild("ShopRow_CashMega")
+	-- claude-bud JOB 42: the cash "+" lands on the 4 HOURS OF CASH row while the time packs are shown
+	local row = list:FindFirstChild(if timePacksShown() or timePacksPreview() then "ShopRow_" .. ShopOverhaulConfig.TimePacks.BestValueKey else "ShopRow_CashMega")
 	if not row or not row:IsA("GuiObject") then
 		return
 	end
@@ -1041,7 +1065,33 @@ function ShopController.Init()
 	-- Hero CashMega first, then remaining cash packs, then other DevProducts
 	local cashOrder = { "CashMega", "CashLarge", "CashMedium", "CashSmall" }
 	local listed: { [string]: boolean } = {}
-	do
+	local TP = ShopOverhaulConfig.TimePacks
+	local timeRows = timePacksShown() or timePacksPreview()
+	if timeRows then
+		-- claude-bud JOB 42: five TIME rows (4h .. 15m) replace the four old packs (hidden only while shown; their Ids
+		-- stay in config and their receipts are still granted)
+		for _, key in ipairs(TP.Order) do
+			local def: any = (MonetizationConfig.DevProducts :: any)[key]
+			local p = TP.Packs[key]
+			if typeof(def) == "table" and p then
+				local id = tonumber(def.Id) or 0
+				local robux = LivePrices.Price("DevProduct", key)
+				local best = key == TP.BestValueKey
+				addRow((if best then TP.BestValueLabel .. " · " else "") .. p.Title, timePackText(key), if id ~= 0 then function()
+					promptDevProduct(key, openSource)
+				end else nil, if id ~= 0 then (tostring(robux) .. " R$") else "SOON", key, best)
+			end
+			listed[key] = true
+		end
+		for key in pairs(TP.HideOldKeys) do
+			listed[key] = true
+		end
+	else
+		for _, key in ipairs(TP.Order) do
+			listed[key] = true -- claude-bud JOB 42: never a time row while they are not shown (OFF == OLD)
+		end
+	end
+	if not timeRows then
 		local mega = MonetizationConfig.DevProducts.CashMega
 		if mega then
 			addDevRow("CashMega", mega, "★ BEST OFFER")
@@ -1162,9 +1212,12 @@ function ShopController.Init()
 				local def: any = (MonetizationConfig.DevProducts :: any)[r.Key]
 				if ShopOverhaulConfig.CashPacks[r.Key] ~= nil and typeof(def) == "table" then
 					r.Sub.Text = cashPackText(r.Key, def) -- Code Bot v156: plain text
+				elseif ShopOverhaulConfig.TimePacks.Packs[r.Key] ~= nil then
+					r.Sub.Text = timePackText(r.Key) -- claude-bud JOB 42: the live amount (the floor until the first publish)
 				end
 			end
 		end
+		Players.LocalPlayer:GetAttributeChangedSignal(ShopOverhaulConfig.TimePacks.PerMinAttribute):Connect(refreshPacks) -- claude-bud JOB 42
 		Players.LocalPlayer:GetAttributeChangedSignal(ShopOverhaulConfig.PerMinAttribute):Connect(refreshPacks)
 		refreshPacks()
 	end
@@ -1721,6 +1774,27 @@ function ShopController.Init()
 			local now = os.clock()
 			if now - lastMegaToastAt < MEGA_TOAST_DEBOUNCE then
 				return false
+			end
+			local tkey = if typeof(payload) == "table" and typeof(payload.ProductKey) == "string" then payload.ProductKey else nil
+			local tp = if tkey then ShopOverhaulConfig.TimePacks.Packs[tkey :: string] else nil
+			if tp then
+				-- claude-bud JOB 42: the same slot sells "4 HOURS OF CASH: $<N>" while the time packs are shown
+				local tdef = (MonetizationConfig.DevProducts :: any)[tkey :: string]
+				if typeof(tdef) ~= "table" or (tonumber(tdef.Id) or 0) == 0 then
+					return false
+				end
+				lastMegaToastAt = now
+				local n = timePackCash(tkey :: string)
+				return showOffer({
+					Key = "CashMegaToast",
+					Title = string.format("%s: $%s", tp.Title, formatCash(n)),
+					Sub = tp.Label,
+					Cta = ctaFor(LivePrices.ForOffer("DevProduct", tkey :: string, payload.RobuxPrice)),
+					OnGet = function()
+						pendingCashMegaHighlight = true
+						promptDevProduct(tkey :: string, "offer")
+					end,
+				})
 			end
 			local def = (MonetizationConfig.DevProducts :: any).CashMega
 			if typeof(def) ~= "table" or typeof(def.Id) ~= "number" or def.Id == 0 then

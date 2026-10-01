@@ -76,6 +76,23 @@ _old = {"CashSmall": ("3713838744", "49"), "CashMedium": ("3713838815", "149"), 
 _j42(all(_j42_re.search(k + r" = \{ Id = " + i + r", .*RobuxPrice = " + p + r",", _MC) for k, (i, p) in _old.items()) and "RecruitPack = { Id = 0," in _MC and "RobuxPrice = 49," in _MC.split("RecruitPack = {")[1][:200],
      "A: the old four unchanged (Ids / prices), RecruitPack still Id 0 / 49")
 
+# ── part B: the Shop + offers ──
+_SC = _j42_code(_CL + "Controllers/ShopController.luau")
+_SOC2 = _j42_src(_CF + "ShopOverhaulConfig.luau")
+_j42("return ShopOverhaulConfig.TimePacksLiveFor(userId) and ShopOverhaulConfig.TimePacksReady()" in _SOC2
+     and "local timeRows = timePacksShown() or timePacksPreview()" in _SC and "for key in pairs(TP.HideOldKeys) do" in _SC,
+     "B: the Shop hides the old four only behind TimePacksLiveFor + TimePacksReady (Studio preview with Ids 0: SOON)")
+_j42('if id ~= 0 then (tostring(robux) .. " R$") else "SOON"' in _SC and "timePackText(key)" in _SC and "TP.BestValueLabel" in _SC,
+     "B: the time rows: config title, the live amount, the real price (SOON while Id 0), BEST VALUE on 4h")
+_j42(_SOC2.index('"^ShopRow_Cash4h$"') < _SOC2.index('"^ShopRow_Cash15m$"') < _SOC2.index('"^ShopRow_CashMega$"'), "B: the order puts 4h .. 15m in the cash place")
+_MSV2 = _j42_code(_SV + "Services/MonetizationService.luau")
+_j42("ShopOverhaulConfig.TimePacksShown(player.UserId) then ShopOverhaulConfig.TimePacks.BestValueKey else \"CashMega\"" in _MSV2
+     and 'kind, key, title, cta = "DevProduct", "Cash1h", "Fresh start boost: $"' in _MSV2,
+     "B: offers: the Mega toast sells Cash4h, the rebirth boost sells Cash1h (only while shown)")
+_VC = _j42_code(_CL + "Controllers/VehicleController.luau")
+_j42('keys = { "Cash15m", "Cash30m", "Cash1h", "Cash2h", "Cash4h" }' in _VC and "SOC.TimePacksShown(lp.UserId)" in _VC,
+     "B: the garage 'Short on cash' picks the smallest time pack that covers the gap (else 4h, real amount)")
+
 _luau = _j42_os.environ.get("LUAU")
 if _luau is None and _j42_os.environ.get("LUAU_COMPILE"):
     _cand = _j42_os.environ["LUAU_COMPILE"].replace("luau-compile", "luau")

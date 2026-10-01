@@ -1,4 +1,46 @@
 <!-- Q2-START -->
+## claude-bud JOB 42 PART B (2026-10-01): TIME CASH PACKS IN THE SHOP + OFFERS (branch `claude/desktop-bud`)
+Only while SHOWN (TimePacksLiveFor AND all five Ids set); otherwise the Shop and offers are exactly today's.
+- **Rows:** five rows in the cash place (ShopOverhaulConfig.Order 4h .. 15m), order 4h, 2h, 1h, 30m, 15m.
+  - Each shows the config title "4 HOURS OF CASH", the live "$N" (WE_TimePackPerMin; the floor + "(minimum)" until
+    income passes it, never $0) and the real price button.
+  - "BEST VALUE · " on the 4h row (the 2x Cash row's tag style). The old four rows are hidden; their Ids stay.
+  - Studio with the Ids still 0: the rows render with "SOON" so the layout can be checked.
+- **The cash pill +:** scrolls to / highlights the 4h row.
+- **Offers (same slots, same budget):**
+  - the Mega toast sells Cash4h ("4 HOURS OF CASH: $N");
+  - the rebirth "Fresh start boost" sells Cash1h;
+  - the garage "Short on cash" offers the smallest time pack whose live amount covers the gap, else Cash4h with its
+    REAL amount.
+- **Checks:**
+  - run_shop_render_test now runs 4 builds (docs/proof/job42/shop-render.txt): owner / uid 9, Ids 0 / Ids set. The
+    owner with the Ids sees exactly the five rows (titles, amounts, prices, order, BEST VALUE) with the old four hidden;
+    uid 9 sees the old rows; the + lands on 4h.
+  - run_time_packs_test: the Mega slot sells Cash4h while shown, CashMega otherwise.
+  - claude_bud_job42 part B pins; BuyPathStatic PASS=7504 FAIL=0; all sims 0 failed; rojo ok; no new LSP errors.
+- **Owed:** the Studio screenshots (shop_800x360.png, shop_desktop.png, shop_newplayer.png). The render harness checks
+  rows and phone text budgets; it does not measure pixel overlaps at 5 viewports.
+
+## claude-bud JOB 42 PART A (2026-10-01): TIME CASH PACKS, CONFIG + SERVER GRANT (branch `claude/desktop-bud`)
+- **Products:** MonetizationConfig.DevProducts Cash15m / Cash30m / Cash1h / Cash2h / Cash4h at 25 / 49 / 89 / 159 /
+  279 R$. All Id 0, repeatable, Cash = the floor. No 1-day / 7-day pack.
+- **Config:** ShopOverhaulConfig.TimePacks (Enabled, OwnerFirst = true): Minutes 15 / 30 / 60 / 120 / 240, Floors 10k /
+  25k / 50k / 100k / 200k (PROPOSED minimums for new players), BEST VALUE on Cash4h, ExcludeTimedBoosts, HideOldKeys
+  (the old four), WE_TimePackPerMin.
+- **Helpers:** TimePacksLiveFor, TimePackAmount (guarded, integer, <= 2^53), TimePacksReady (all five Ids), TimePacksShown
+  (live AND ready), PerMinBucket.
+- **Grant (ProcessReceipt, inside the JOB 36 path):** for ANY time-pack receipt:
+  - perMin = PassivePerMin(player, profile, excludeTimed = true). This is the ONE income function with a new option that
+    divides out profile.CashBoost and the Double Cash event.
+  - Then the player + profile re-check (else NotProcessedYet), then max(Floor, Minutes x perMin) via AddCash
+    "devproduct" (exempt).
+  - The toast reads "+$N (4 hours of cash)". RobuxPurchase gets perMinBucket (CustomField02; AnalyticsService custom()
+    gained an optional Field2).
+- **Display:** WE_TimePackPerMin comes from the same ShopOverhaulService tick, only for players it is live for.
+- **Pins:** codebot_v156's "no product Id changed since v155" replacement now also leaves out the five new Id-0 rows;
+  docs/LIVE_PLACE.md lists them.
+- **Checks:** run_time_packs_test 0 failed (docs/proof/job42/amounts-sim.txt, receipt-order.txt, gating-sim.txt);
+  claude_bud_job42 part A pins; BuyPathStatic PASS=7499 FAIL=0; all sims 0 failed; rojo ok; no new LSP errors.
 ## v160 PUBLISHED (Code Bot Roblox, 2026-10-01 09:02 Dublin): Open Cloud place version 158 — JOB 41 part D owner-first (big-win rate card FirstCapture/RaidWin)
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **160**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":158}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Cherry-pick:** Claude `d383948` JOB 41 D big-win rate card -> `8caa2f3`; then WE_Build 160 + checks + dist (this publish commit `37b94b0`).

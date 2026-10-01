@@ -593,9 +593,31 @@ local function onRowTap(id: string)
 			local function packCash(k: string, pk: any): number
 				return (if SOC.LiveFor(lp.UserId) then SOC.CashPackAmount(k, rate) else nil) or tonumber(pk.Cash) or 0
 			end
-			for _, k in ipairs({ "CashSmall", "CashMedium", "CashLarge", "CashMega" }) do
+			-- claude-bud JOB 42: while the time packs are shown, the SMALLEST time pack that covers the gap (else 4h)
+			local keys = { "CashSmall", "CashMedium", "CashLarge", "CashMega" }
+			local forceKey: string? = nil
+			if SOC.TimePacksShown(lp.UserId) then
+				local trate = tonumber(lp:GetAttribute(SOC.TimePacks.PerMinAttribute)) or 0
+				packCash = function(k: string, pk: any): number
+					return SOC.TimePackAmount(k, trate) or tonumber(pk.Cash) or 0
+				end
+				keys = { "Cash15m", "Cash30m", "Cash1h", "Cash2h", "Cash4h" }
+				local best = SOC.TimePacks.BestValueKey
+				local covered = false
+				for _, k in ipairs(keys) do
+					local pk: any = (MonetizationConfig.DevProducts :: any)[k]
+					if typeof(pk) == "table" and packCash(k, pk) >= need then
+						covered = true
+					end
+				end
+				if not covered then
+					keys = { best }
+					forceKey = best -- none covers the gap: the biggest pack, with its REAL amount shown
+				end
+			end
+			for _, k in ipairs(keys) do
 				local pk: any = (MonetizationConfig.DevProducts :: any)[k]
-				if typeof(pk) == "table" and (tonumber(pk.Id) or 0) ~= 0 and packCash(k, pk) >= need then
+				if typeof(pk) == "table" and (tonumber(pk.Id) or 0) ~= 0 and (packCash(k, pk) >= need or k == forceKey) then
 					local okN, NC = pcall(require, script.Parent.NotificationController)
 					local okS, SC = pcall(require, script.Parent.ShopController)
 					if okN and okS then
