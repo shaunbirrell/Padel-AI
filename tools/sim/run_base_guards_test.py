@@ -29,6 +29,10 @@ MODS = {
     "Configs/AdminConfig": SH / "Configs/AdminConfig.luau",
     "Configs/EconomyConfig": SH / "Configs/EconomyConfig.luau",
     "Modules/BaseGuards": SV / "Modules/BaseGuards.luau",
+    "Configs/EndgameConfig": SH / "Configs/EndgameConfig.luau",  # claude-bud JOB 55
+    "Configs/BaseConfig": SH / "Configs/BaseConfig.luau",
+    "Configs/BaseLayoutConfig": SH / "Configs/BaseLayoutConfig.luau",
+    "Configs/BusinessConfig": SH / "Configs/BusinessConfig.luau",
 }
 
 EXTRA = r'''
@@ -140,6 +144,22 @@ local log = {}
 local allowed = 0
 for i = 1, 5 do if GC.AllowPair(log, 1, 2, i) then allowed += 1 end end
 check(allowed == (GC.Rewards.PairMax or 3), "the kill-credit pair limit (" .. allowed .. " in a window)")
+
+-- ── 4. claude-bud JOB 55: Turret Guns arms the gate / tower guards; the post HP reads Defence.GatePct ──
+do
+  local EG = require(node("Configs/EndgameConfig"))
+  local H = { ResearchMult = function() return 1.5 end }
+  local GUNS = { [470626172] = 10, [9] = 10 }
+  BG.Bind({ CombatService = rule, EndgameService = {
+    TurretDmgMult = function(uid, r) return math.min(3, r * (1 + EG.Defence.GunsPct / 100 * (GUNS[uid] or 0))) end,
+    DefenceLevelFor = function() return 5 end } })
+  local own, other = BG.GuardDamageMult(470626172, H), BG.GuardDamageMult(9, H)
+  check(math.abs(own - 2.4) < 1e-9 and other == 1.5, string.format("[DefFix] gate / tower guards: Guns L10 x research 1.5 = x%.2f for the owner (fix live); another owner (OwnerFirst) keeps x%.2f (research only)", own, other))
+  local hum = { MaxHealth = 0, Health = 0 }
+  local g = { Humanoid = hum, Model = { SetAttribute = function() end } }
+  BG.AfterSpawnPost(g, 470626172)
+  check(hum.MaxHealth == math.floor(GC.Posts.Health * math.min(3, 1 + EG.Defence.GatePct / 100 * 5) + 0.5), string.format("[DefFix] post guard HP reads Defence.GatePct (%d %%) x Gate L5: %d", EG.Defence.GatePct, hum.MaxHealth))
+end
 
 print(string.format("BASE GUARDS TEST: %d failed", fails))
 if fails > 0 then error("failed") end

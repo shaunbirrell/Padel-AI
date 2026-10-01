@@ -86,6 +86,47 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 55 (2026-10-01): HONEST DEFENCE TEXT + EXPLOIT FIXES (branch `claude/desktop-bud`)
+**Flag:** `EndgameConfig.DefenceFix` (owner-first by the BASE OWNER, NEW-OWNER-FIRST). OFF = the old rules and text.
+
+**Fixed (each from the code):**
+- **Turret Plating vs Walls L4:** turrets exist only from Walls L4 (`GateDefenseConfig.AutoGunMinWallsLevel`), so
+  Plating bought before that did nothing. The row now says "Needs Walls L4 (turrets)" and the purchase is refused
+  with the same text (`NextDefence(profile, track, uid)`, used by both the row and the buy).
+- **Vault text:** now shows both cuts: "-30% ATM, -50% army raid loot" (it only showed the ATM cut).
+- **Turret Guns:** the post guards had it, but the gate guards (BaseGuards ~:614) and tower guards (~:924) used
+  Research only. Both now use `BaseGuards.GuardDamageMult` (= PostDamageMult: research x Guns, cap 3). The text says
+  "turret + guard dmg".
+- **Wall HP:** "Gate & Walls" promised walls, but walls have no HP anywhere. The track is shown as "Gate Armour":
+  "+X% gate + guard HP, -Y s rebuild" (the gate guards' HP really does come from it).
+- **The 0.12:** BaseGuards `AfterSpawnPost` now reads `EndgameConfig.Defence.GatePct / 100` (12, so the same number,
+  typed once).
+- **Mid-raid repair exploit:** a Defence buy ran a full `GateDefenseService.SyncPlot`, rebuilding a breached /
+  damaged gate (and dead turrets) at full HP mid-raid. It now calls `GateDefenseService.RefreshDefence(plotId)`:
+  - new max HP, with the damage kept (`EndgameConfig.KeepDamage`: 400/1000 -> 520/1120, not 1120);
+  - breached stays breached, a dead turret stays dead;
+  - the JOB 53 look is re-dressed and the damage stage re-applied;
+  - logs `[DefenseUpgrade] plot=.. gate a/b -> c/d breached=.. turrets=[..] (in place, no repair)`.
+  - A Base Tier buy still uses the full resync (not in this job's list; it can heal the gate mid-raid too, so flagged
+    for Code Bot).
+
+**Tests:**
+- `run_endgame_test` [DefFix]:
+  - Walls L3 refusal + the row text;
+  - 30 in-place refreshes, 0 extra SyncPlots;
+  - the honest rows: "Gate Armour | +60% turret + guard dmg | +120% gate + guard HP, -30 s rebuild | -30% ATM, -50%
+    army raid loot".
+- `run_base_guards_test` §4: guards x2.40 for the owner (fix live), x1.50 for another owner; post HP reads GatePct.
+- `run_defence_visuals_test` §5: KeepDamage.
+- `tools/checks/claude_bud_job55.py`.
+- **Owed:** a live 2-player test (B raids A, A buys Gate & Walls at the Engineering Bureau mid-raid, and A's gate
+  keeps its damage).
+
+**Test ON HIS PHONE:**
+1. Engineering Bureau with Walls below L4: the Turret Plating row says "Needs Walls L4 (turrets)".
+2. Read the Vault row: both cuts.
+3. Have an alt damage your gate, buy a Gate level: the bar keeps the damage (it doesn't jump to full).
+
 ## claude-bud JOB 54 (2026-10-01): NIGHT LIGHTING ON THE BASES (branch `claude/desktop-bud`)
 **Flag:** `LightingConfig.Night2` (owner-first by the PLOT OWNER, NEW-OWNER-FIRST).
 

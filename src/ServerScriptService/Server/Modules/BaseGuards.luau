@@ -483,7 +483,18 @@ function BaseGuards.PostDamageMult(ownerUserId: number, H: any): number
 	return r
 end
 
--- the post guards' HP: Posts.Health x Research GuardHP (min 3) x the JOB 39 Gate & Walls (+12 % a level), <= x3
+-- claude-bud JOB 55: the gate / tower guards' damage multiplier. With the fix live for the base owner they get the
+-- Turret Guns track too (= the post guards' PostDamageMult); OFF = Research only, as before.
+function BaseGuards.GuardDamageMult(ownerUserId: number, H: any): number
+	local EC: any = require(Shared.Configs.EndgameConfig)
+	if EC.DefenceFixLive(ownerUserId) then
+		return BaseGuards.PostDamageMult(ownerUserId, H)
+	end
+	return H.ResearchMult(ownerUserId)
+end
+
+-- the post guards' HP: Posts.Health x Research GuardHP (min 3) x the JOB 39 Gate & Walls (EndgameConfig.Defence.GatePct
+-- a level, 12 %), <= x3
 function BaseGuards.AfterSpawnPost(g: any, ownerUserId: number)
 	local P = C.Posts
 	local owner = Players:GetPlayerByUserId(ownerUserId)
@@ -499,7 +510,7 @@ function BaseGuards.AfterSpawnPost(g: any, ownerUserId: number)
 	if eg and eg.DefenceLevelFor then
 		local ok, L = pcall(eg.DefenceLevelFor, ownerUserId, "Gate")
 		if ok and typeof(L) == "number" then
-			m *= 1 + 0.12 * L
+			m *= 1 + ((require(Shared.Configs.EndgameConfig) :: any).Defence.GatePct / 100) * L -- claude-bud JOB 55: was 0.12 typed twice
 		end
 	end
 	m = math.min(m, 3)
@@ -611,7 +622,7 @@ function BaseGuards.ThinkGuard(def: any, g: any, stats: any, tnow: number, H: an
 		if sees and bestD <= range and tnow - g.LastFireAt >= interval and claimShooter(def, tnow) then
 			g.LastFireAt = tnow
 			if rng:NextNumber() <= hitChance(bestD, range) then
-				hurt(def, t, (stats.GuardDamage or 14) * H.ResearchMult(def.OwnerUserId), "BaseGuard", H)
+				hurt(def, t, (stats.GuardDamage or 14) * BaseGuards.GuardDamageMult(def.OwnerUserId, H), "BaseGuard", H) -- claude-bud JOB 55
 			end
 			pcall(H.ShotFx, def, g, pos, t.Root.Position)
 		end
@@ -921,7 +932,7 @@ function BaseGuards.ThinkTowers(def: any, tnow: number, H: any)
 				if tnow - g.LastFireAt >= interval and H.HasLos(pos, t.Root.Position, { g.Model, def.Folder, t.Root.Parent :: Instance }) and claimShooter(def, tnow) then
 					g.LastFireAt = tnow
 					if rng:NextNumber() <= C.Tower.HitChance then
-						hurt(def, t, C.Tower.Damage * H.ResearchMult(def.OwnerUserId), "TowerGuard", H)
+						hurt(def, t, C.Tower.Damage * BaseGuards.GuardDamageMult(def.OwnerUserId, H), "TowerGuard", H) -- claude-bud JOB 55
 					end
 					pcall(H.ShotFx, def, g, pos, t.Root.Position)
 				end

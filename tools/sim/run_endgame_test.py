@@ -262,7 +262,8 @@ po.BaseUpgrades = { CommandCenter = 5 }
 po.Cash = 5e9
 local atHQ, down, rebuilt, synced = false, false, 0, 0
 deps.BaseService = { IsAtConsole = function(p, id) return atHQ and id == "CommandCenter", "ok" end }
-deps.GateDefenseService = { NeedsRebuild = function() return down end, InstantRebuild = function() rebuilt += 1; down = false; return true end, SyncPlot = function() synced += 1 end }
+J55 = { refreshed = 0 } -- claude-bud JOB 55: a Defence buy refreshes in place (RefreshDefence), never the full SyncPlot (a global: the chunk is at the 200-local limit)
+deps.GateDefenseService = { NeedsRebuild = function() return down end, InstantRebuild = function() rebuilt += 1; down = false; return true end, SyncPlot = function() synced += 1 end, RefreshDefence = function() J55.refreshed += 1 end }
 spentLog = {}
 local te = EG.TierEffects(5)
 check(te.GateHpPct == 30 and te.SoldierCap == 20 and te.Nests == 2 and te.RebuildSeconds == -10, "Tier 5 = gate HP +30 %, soldiers +20, 2 nests, rebuild -10 s")
@@ -305,14 +306,34 @@ ok, msg = ES.Purchase(owner, "Defence", "Gate")
 check(po.Endgame.Defence.Gate == 4 and not ok and msg == string.format(EG.Text.NeedTier, 1), "Gate & Walls L1-4 bought, L5 needs Base Tier 1 (" .. tostring(msg) .. ")")
 po.Endgame.BaseTier = 5
 for _ = 1, 6 do ES.Purchase(owner, "Defence", "Gate") end
+-- claude-bud JOB 55: no turrets before Walls L4: Turret Plating is refused (and the row says why); with Walls L4 it sells
+po.BaseUpgrades = po.BaseUpgrades or {}
+po.BaseUpgrades.DefensiveWalls = 3
+do
+  local okW, msgW = ES.Purchase(owner, "Defence", "Plating")
+  local rowW
+  for _, r in ipairs(ES.State(owner).Defence or {}) do if r.Id == "Plating" then rowW = r end end
+  check(not okW and msgW == string.format(EG.Text.NeedWalls, 4) and rowW and rowW.Need == msgW, "[DefFix] Walls L3: Turret Plating refused + the row says " .. tostring(msgW))
+end
+po.BaseUpgrades.DefensiveWalls = 4
+J55.s0, J55.r0 = synced, J55.refreshed
 -- claude-bud JOB 53: L3 -> L4 is a new visual tier: the toast says what changed on his base; L3 (same tier) does not
-local _, m3, m4
-for i = 1, 4 do _, m4 = ES.Purchase(owner, "Defence", "Plating"); if i == 3 then m3 = m4 end end
-check(string.find(tostring(m4), string.format(EG.Text.DefenceNewLook, EG.Text.DefenceLook.Plating[2]), 1, true) ~= nil and string.find(tostring(m3), "New on", 1, true) == nil,
-  "[DefLook] Plating L4 toast: " .. tostring(m4) .. " | L3: " .. tostring(m3))
+do
+  local _, m3, m4
+  for i = 1, 4 do _, m4 = ES.Purchase(owner, "Defence", "Plating"); if i == 3 then m3 = m4 end end
+  check(string.find(tostring(m4), string.format(EG.Text.DefenceNewLook, EG.Text.DefenceLook.Plating[2]), 1, true) ~= nil and string.find(tostring(m3), "New on", 1, true) == nil,
+    "[DefLook] Plating L4 toast: " .. tostring(m4) .. " | L3: " .. tostring(m3))
+end
 for _, tr in ipairs({ "Plating", "Guns", "Vault" }) do for _ = 1, 10 do ES.Purchase(owner, "Defence", tr) end end
 check(po.Endgame.Defence.Gate == 10 and po.Endgame.Defence.Plating == 10 and po.Endgame.Defence.Guns == 10 and po.Endgame.Defence.Vault == 10 and synced > 0,
   "every track to L10 (the gate defences resync after each buy)")
+check(J55.refreshed > J55.r0 and synced == J55.s0, string.format("[DefFix] Defence buys refresh the gate IN PLACE (%d RefreshDefence, %d extra SyncPlot): no mid-raid full repair", J55.refreshed - J55.r0, synced - J55.s0))
+do
+  local rows = {}
+  for _, r in ipairs(ES.State(owner).Defence or {}) do rows[r.Id] = r end
+  check(rows.Gate.Name == EG.Text.GateName and rows.Guns.Now == EG.DefenceText("Guns", 10) and string.find(rows.Vault.Now, "ATM", 1, true) and string.find(rows.Vault.Now, "army", 1, true),
+    "[DefFix] honest rows: " .. rows.Gate.Name .. " | " .. rows.Guns.Now .. " | " .. rows.Gate.Now .. " | " .. rows.Vault.Now)
+end
 check(spentLog[#spentLog].why == "endgame_defence" and spentLog[#spentLog].n == EG.DefenceCost(10), "L10 costs $68.7M as endgame_defence")
 check(math.abs(ES.GateHpMult(470626172) - 2.5) < 1e-9, string.format("[DefTest] gate=10 tier=5 gateHP x%.2f (+30 %% tier +120 %% track)", ES.GateHpMult(470626172)))
 check(ES.RebuildCut(470626172, 50) == 10, "[DefTest] gate=10 rebuild=10 s (50 - 10 - 30, floor 10)")

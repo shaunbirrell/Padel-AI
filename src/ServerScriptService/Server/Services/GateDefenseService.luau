@@ -2432,6 +2432,77 @@ local function syncPlotNow(plotId: number)
 	end
 end
 
+--[[ claude-bud JOB 55: a Defence level changed (EndgameService.Purchase, owner-first): the new gate / turret max HP
+	and the JOB 53 look, IN PLACE. The damage already taken stays (new HP = new max - the damage, at least 1); a
+	breached gate stays breached, a dead turret stays dead (their own rebuild timers bring them back). Guns / Vault
+	are read at fire / loot time, nothing to refresh. No defence built yet: the normal SyncPlot. ]]
+function GateDefenseService.RefreshDefence(plotId: number)
+	local def = defenses[plotId]
+	if def == nil or def.Folder.Parent == nil then
+		GateDefenseService.SyncPlot(plotId)
+		return
+	end
+	local owner = def.OwnerUserId
+	local eg = GateDefenseService._Endgame
+	local oldMax, oldHp = def.GateMaxHealth, def.GateHealth
+	local newMax = gateMaxHealthForWalls(def.WallsLevel)
+	if eg and eg.GateHpMult then
+		newMax = math.floor(newMax * eg.GateHpMult(owner) + 0.5)
+	end
+	if not def.GateBreached then
+		def.GateHealth = EndgameConfigMod.KeepDamage(oldMax, oldHp, newMax)
+	end
+	def.GateMaxHealth = newMax
+	for _, p in ipairs(def.GateBarriers) do
+		if p.Parent then
+			p:SetAttribute("GateMaxHealth", newMax)
+			p:SetAttribute("GateHealth", def.GateHealth)
+		end
+	end
+	local AOC: any = require(ReplicatedStorage.Shared.Configs.ArmyOrdersConfig)
+	local turretsOut = {}
+	if AOC.TurretHP.Enabled == true then
+		local tMax = AOC.TurretHealth(def.WallsLevel)
+		if eg and eg.TurretHpMult then
+			tMax = math.floor(tMax * eg.TurretHpMult(owner) + 0.5)
+		end
+		for _, t in ipairs(def.Turrets) do
+			local tu: any = t
+			local oMax, oH = tonumber(tu.MaxHealth) or tMax, tonumber(tu.Health) or tMax
+			tu.MaxHealth = tMax
+			tu.Health = EndgameConfigMod.KeepDamage(oMax, oH, tMax)
+			t.Model:SetAttribute("GateAutoGunHealth", tu.Health)
+			table.insert(turretsOut, string.format("%d/%d", math.floor(tu.Health), tMax))
+		end
+	end
+	-- the JOB 53 look: re-dress from the saved levels, then re-apply the damage stage
+	if DefenceVisualsMod and EndgameConfigMod.DefenceVisualsLive(owner) then
+		for _, c in ipairs(def.Folder:GetChildren()) do
+			if string.sub(c.Name, 1, 7) == "DefVis_" then
+				c:Destroy()
+			end
+		end
+		local levels: { [string]: number } = {}
+		for _, tr in ipairs({ "Plating", "Guns", "Gate", "Vault" }) do
+			levels[tr] = if eg and eg.DefenceLevelFor then (tonumber(eg.DefenceLevelFor(owner, tr)) or 0) else 0
+		end
+		local bases: { CFrame } = {}
+		for _, t in ipairs(def.Turrets) do
+			local b = t.Model:GetAttribute("WE_NestBase")
+			if typeof(b) == "CFrame" then
+				table.insert(bases, b)
+			end
+		end
+		pcall(DefenceVisualsMod.Apply, owner, levels, bases, def.GateBarriers, findCollectorModel(plotId), def.Folder)
+		if def.GateBarriers[1] then
+			def.GateBarriers[1]:SetAttribute("WE_GateDmgStage", nil)
+		end
+	end
+	updateGateBillboard(def.GateBarriers, def.GateHealth, def.GateMaxHealth, def.GateBreached)
+	print(string.format("[DefenseUpgrade] plot=%d owner=%d gate %d/%d -> %d/%d breached=%s turrets=[%s] (in place, no repair)",
+		plotId, owner, math.floor(oldHp), oldMax, math.floor(def.GateHealth), newMax, tostring(def.GateBreached), table.concat(turretsOut, ",")))
+end
+
 function GateDefenseService.SyncPlot(plotId: number)
 	if syncBusy[plotId] then
 		syncAgain[plotId] = true -- coalesce: re-run once the running sync ends (picks up the latest level)

@@ -159,6 +159,11 @@ check(DV.GateDamage(L, 1, false) == 0 and allT(partsNamed("Dent"), 1) and smokeO
 check(DV.GateDamage(L, 0, true) == 3 and allT(partsNamed("Band"), 1) and allT(partsNamed("Dent"), 1) and smokeOf() ~= nil, "breached: stage 3, the reinforcement is gone, smoke")
 check(DV.GateDamage(L, 1, false) == 0 and allT(partsNamed("Band"), 0), "rebuilt after a breach: the tier reinforcement is back")
 
+-- 5. claude-bud JOB 55: a Defence buy mid-raid never heals (EndgameConfig.KeepDamage, used by GateDefenseService.RefreshDefence)
+check(EG.KeepDamage(1000, 400, 1120) == 520, "gate 400/1000, Gate +12 %: 520/1120 (the 600 damage stays; was a full 1120 repair)")
+check(EG.KeepDamage(1000, 1000, 1120) == 1120, "an undamaged gate: full at the new max")
+check(EG.KeepDamage(1000, 0, 1120) == 0, "a breached gate stays breached (its rebuild timer brings it back)")
+check(EG.KeepDamage(1000, 50, 900) == 1 and EG.KeepDamage(400, 10, 460) == 70, "never below 1 while standing; a turret 10/400 -> 70/460")
 print(string.format("DEFENCE VISUALS LUA: %d failed", fails))
 if fails > 0 then error("failed") end
 '''

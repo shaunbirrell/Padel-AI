@@ -1165,7 +1165,7 @@ function EndgameService.NextTier(profile: any): { [string]: any }?
 end
 
 -- the next level of a Defence track (nil at max): { Level, Cost, Need }
-function EndgameService.NextDefence(profile: any, track: string): { [string]: any }?
+function EndgameService.NextDefence(profile: any, track: string, uid: number?): { [string]: any }?
 	local L = EndgameService.DefenceLevel(profile, track) + 1
 	local cost = EndgameConfig.DefenceCost(L)
 	if cost == nil then
@@ -1173,10 +1173,29 @@ function EndgameService.NextDefence(profile: any, track: string): { [string]: an
 	end
 	local needT = EndgameConfig.DefenceNeedTier(L)
 	local need = if EndgameService.Tier(profile) < needT then string.format(EndgameConfig.Text.NeedTier, needT) else nil
+	-- claude-bud JOB 55: no turrets before Walls L4, so Turret Plating would buy nothing (owner-first)
+	if need == nil and track == "Plating" and uid and EndgameConfig.DefenceFixLive(uid) then
+		local minW = tonumber((require(Shared.Configs.GateDefenseConfig) :: any).AutoGunMinWallsLevel) or 4
+		local walls = if typeof(profile.BaseUpgrades) == "table" then tonumber(profile.BaseUpgrades.DefensiveWalls) or 0 else 0
+		if walls < minW then
+			need = string.format(EndgameConfig.Text.NeedWalls, minW)
+		end
+	end
 	return { Level = L, Cost = cost, Need = need }
 end
 
-local function defEffect(track: string, L: number): string
+-- claude-bud JOB 55: the track's display name (Gate & Walls -> Gate Armour while the fix is live)
+local function defName(track: string, uid: number?): string
+	if track == "Gate" and uid and EndgameConfig.DefenceFixLive(uid) then
+		return EndgameConfig.Text.GateName
+	end
+	return DEF_NAMES[track] or track
+end
+
+local function defEffect(track: string, L: number, uid: number?): string
+	if uid and EndgameConfig.DefenceFixLive(uid) then
+		return EndgameConfig.DefenceText(track, L) -- claude-bud JOB 55: the honest text
+	end
 	local D = EndgameConfig.Defence
 	if track == "Plating" then
 		return string.format("+%d%% turret HP", D.PlatingPct * L)
@@ -1224,14 +1243,14 @@ function EndgameService.State(player: Player): { [string]: any }
 		local rows = {}
 		for _, track in ipairs(EndgameConfig.Defence.Tracks) do
 			local L = EndgameService.DefenceLevel(profile, track)
-			local nx = EndgameService.NextDefence(profile, track)
+			local nx = EndgameService.NextDefence(profile, track, uid)
 			table.insert(rows, {
 				Id = track,
-				Name = DEF_NAMES[track] or track,
+				Name = defName(track, uid),
 				Level = L,
 				Max = EndgameConfig.Defence.MaxLevel,
-				Now = if L > 0 then defEffect(track, L) else "none yet",
-				Next = if nx then defEffect(track, nx.Level) else nil,
+				Now = if L > 0 then defEffect(track, L, uid) else "none yet",
+				Next = if nx then defEffect(track, nx.Level, uid) else nil,
 				NextCost = if nx then nx.Cost else nil,
 				Need = if nx then nx.Need else nil,
 			})
@@ -2109,7 +2128,7 @@ function EndgameService._Plan(player: Player, profile: any, kind: string, id: st
 			return nil, T.Hurt
 		end
 		local tr: string = track
-		local nx = EndgameService.NextDefence(profile, tr)
+		local nx = EndgameService.NextDefence(profile, tr, uid) -- claude-bud JOB 55: the walls need too
 		if nx == nil then
 			return nil, DEF_NAMES[tr] .. " maxed"
 		end
@@ -2131,10 +2150,10 @@ function EndgameService._Plan(player: Player, profile: any, kind: string, id: st
 				if EndgameConfig.DefenceVisualsLive(uid) and tNow > EndgameConfig.DefenceVisualTier(nx.Level - 1) then
 					local look = (T.DefenceLook :: any)[tr]
 					if look then
-						return string.format(T.DefenceBought, DEF_NAMES[tr], nx.Level) .. " " .. string.format(T.DefenceNewLook, look[tNow] or "")
+						return string.format(T.DefenceBought, defName(tr, uid), nx.Level) .. " " .. string.format(T.DefenceNewLook, look[tNow] or "")
 					end
 				end
-				return string.format(T.DefenceBought, DEF_NAMES[tr], nx.Level)
+				return string.format(T.DefenceBought, defName(tr, uid), nx.Level)
 			end,
 		}
 	elseif kind == "Rebuild" then
@@ -2219,8 +2238,15 @@ function EndgameService.Purchase(player: Player, kind: string, id: string?, auto
 		local gd = deps.GateDefenseService
 		local pid = plotId(profile)
 		if gd and gd.SyncPlot and pid then
+			-- claude-bud JOB 55: a Defence buy refreshes the numbers IN PLACE (the damage taken stays; the old full
+			-- SyncPlot rebuilt a breached / damaged gate at full HP mid-raid). OFF / a tier buy = the old resync.
+			local inPlace = key == "defence" and EndgameConfig.DefenceFixLive(player.UserId) and gd.RefreshDefence ~= nil
 			task.defer(function()
-				pcall(gd.SyncPlot, pid)
+				if inPlace then
+					pcall(gd.RefreshDefence, pid)
+				else
+					pcall(gd.SyncPlot, pid)
+				end
 				task.wait(0.5)
 				pcall(EndgameService.SyncBaseTier, player)
 			end)

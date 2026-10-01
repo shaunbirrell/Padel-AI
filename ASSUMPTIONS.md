@@ -10108,3 +10108,12 @@ ds_territories.luau T3):
 - The exposure is client-side. Lighting is server-global, and a client write lets it ship owner-first; the server
   never writes ExposureCompensation, so nothing fights it.
 - The beacon is steady (no blink). A blink would need a loop per base; Neon + one small light reads from the air.
+
+## claude-bud JOB 55 (2026-10-01): honest Defence + exploit fixes
+- Plating before Walls L4 is REFUSED (not just labelled): spending millions on nothing is the trap the job names.
+  Guns stays buyable (it now arms the guards).
+- "Gate & Walls" is shown as "Gate Armour" rather than inventing wall HP. Making walls destructible is a big gameplay
+  change nobody asked for.
+- The mid-raid fix keeps the damage taken (new max - damage), not the fraction: a fraction would still heal a
+  little on every buy.
+- Base Tier purchases still resync fully. That is out of scope here and reported to Code Bot.

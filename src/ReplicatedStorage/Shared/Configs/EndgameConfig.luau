@@ -127,6 +127,16 @@ local EndgameConfig = {
 		InstantRebuildSeconds = 30,
 		InstantRebuildMin = 25_000,
 	},
+	-- claude-bud JOB 55: honest Defence text + the exploit fixes, keyed by the BASE OWNER (OFF = the old rules / text):
+	--   * Turret Plating needs Walls L<AutoGunMinWallsLevel> (no turrets before that: it did nothing)
+	--   * Turret Guns also arms the gate / tower guards (the text said "turret damage"; the post guards had it, the gate
+	--     and tower guards did not)
+	--   * the text names what each track really does (the gate guards' HP comes from Gate & Walls; walls have no HP)
+	--   * a mid-raid Defence purchase keeps the gate's / turrets' damage (it used to rebuild them at full HP)
+	DefenceFix = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 55): Code Bot flips it after Shaun's phone test
+	},
 	-- claude-bud JOB 53: the Defence levels you can SEE (Server/Modules/DefenceVisuals). Visual tier by level: TierAt[t]
 	-- is the first level of tier t (L1-3 = 1, L4-6 = 2, L7-9 = 3, L10 = 4). Gate damage states at DamageStages (HP
 	-- fraction). OFF = no visuals, the gate's old look exactly.
@@ -279,6 +289,8 @@ local EndgameConfig = {
 		TierBought = "BASE TIER %d: %s!",
 		DefenceBought = "%s level %d!",
 		DefenceNewLook = "New on your base: %s", -- claude-bud JOB 53 (a new visual tier)
+		NeedWalls = "Needs Walls L%d (turrets)", -- claude-bud JOB 55: Turret Plating before the turrets exist
+		GateName = "Gate Armour", -- claude-bud JOB 55: "Gate & Walls" promised walls; walls have no HP
 		DefenceLook = { -- claude-bud JOB 53: what each visual tier adds (DefenceVisuals), short for a phone toast
 			Plating = { "turret side plates", "turret front shields", "dark steel turret armour", "gold-edged turret armour" },
 			Guns = { "ammo crates", "a shell rack", "heavy ammo boxes", "belt-fed guns" },
@@ -325,6 +337,33 @@ function EndgameConfig.GateDamageStage(frac: number, breached: boolean): number
 		return 1
 	end
 	return 0
+end
+
+-- claude-bud JOB 55: the honest Defence rules on for this base owner (the Defence tree live AND the fix flag)
+function EndgameConfig.DefenceFixLive(userId: any): boolean
+	return EndgameConfig.LiveFor(userId, "Defence") and RetentionConfig.Live(EndgameConfig.DefenceFix, userId)
+end
+
+-- claude-bud JOB 55: the HP after a max-HP change that must NOT heal (a mid-raid Defence buy): the damage already taken
+-- stays (new max - damage, at least 1); a broken thing (hp <= 0: a breached gate, a dead turret) stays broken (pure)
+function EndgameConfig.KeepDamage(oldMax: number, oldHp: number, newMax: number): number
+	if oldHp <= 0 then
+		return 0
+	end
+	return math.clamp(newMax - (oldMax - oldHp), 1, newMax)
+end
+
+-- claude-bud JOB 55: what a Defence track gives at level L, honestly (pure; the Engineering Bureau rows + tests)
+function EndgameConfig.DefenceText(track: string, L: number): string
+	local D = EndgameConfig.Defence
+	if track == "Plating" then
+		return string.format("+%d%% turret HP", D.PlatingPct * L)
+	elseif track == "Guns" then
+		return string.format("+%d%% turret + guard dmg", D.GunsPct * L)
+	elseif track == "Gate" then
+		return string.format("+%d%% gate + guard HP, -%d s rebuild", D.GatePct * L, D.GateRebuildPerLevel * L)
+	end
+	return string.format("-%d%% ATM, -%d%% army raid loot", math.floor(D.VaultAtmPerLevel * L * 100 + 0.5), math.floor(D.VaultArmyPerLevel * L * 100 + 0.5))
 end
 
 -- claude-bud JOB 53: Defence visuals on for this base owner (the Defence tree live AND the visuals flag)
