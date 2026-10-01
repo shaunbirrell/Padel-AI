@@ -72,6 +72,54 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 53 (2026-10-01): DEFENCE UPGRADES YOU CAN SEE (branch `claude/desktop-bud`)
+**Flag:** `EndgameConfig.DefenceVisuals` (owner-first, NEW-OWNER-FIRST).
+
+**Root cause:** the Defence levels (Engineering Bureau: Turret Plating / Turret Guns / Gate & Walls / Vault Plating,
+saved in `profile.Endgame.Defence`) changed numbers only. Nothing on the base read them (BaseTierBuilder looks at the
+Base Tier only), so a $68.7M L10 looked the same as L0.
+
+**Built:** `Server/Modules/DefenceVisuals`.
+- **Tiers:** visual tier by level is L1-3 = 1, L4-6 = 2, L7-9 = 3, L10 = 4. The numbers stay EXACTLY
+  `EndgameConfig.Defence` (no balance change).
+
+| Track | T1 | T2 | T3 | T4 |
+|---|---|---|---|---|
+| Plating | side plates on every turret nest | front shield | dark steel + hazard band | gold-edged caps |
+| Guns | ammo crates | shell rack | heavy ammo box + rounds | belt feed |
+| Gate | steel bands (both faces) | corner plates | braces | a gold top beam |
+| Vault | brackets round the money collector | side plates | cage | armour cap |
+
+- **Gate leaves:** they also change colour / material by tier (DiamondPlate from T2). A rebuilt gate returns to its
+  tier look; with no attribute it is the old look exactly.
+- **Gate damage states:** <= 60 % HP: dents + scorch. <= 30 %: the bands sag + one capped smoke emitter. Breached:
+  the reinforcement is gone. Repaired / rebuilt: clean again. They hang off the one HP funnel (`updateGateBillboard`),
+  and only a stage change touches anything.
+- **Applied in `GateDefenseService.syncPlotNow`** from the SAVED levels (`EndgameService.DefenceLevelFor`), so a
+  purchase (it already resyncs), rejoin, server restart or rebuild always shows the right tier. Log:
+  `[DefenceVisuals] plot=.. owner=.. Plating=.. Guns=.. Gate=.. Vault=.. parts=..`
+- **Purchase feedback:** buying into a new tier adds "New on your base: turret front shields" (etc.) to the toast.
+- **Budget:** plain Parts only (anchored, no collide / query / touch, so they never block shots, raycasts or walking),
+  no Neon, no lights, no labels. A full L10 base with 4 nests adds 104 instances (cap 2,700).
+
+**Not in this job (JOB 55):** a mid-raid Defence purchase still runs the full SyncPlot (the gate goes back to full
+HP), and the BaseGuards 0.12 is still there.
+
+**Tests:**
+- `tools/sim/run_defence_visuals_test.py`: tiers, every piece at every tier, the L10 budget, OFF, and the damage stages
+  0-1-2-0-3-0.
+- `run_endgame_test` [DefLook]: the L4 toast.
+- `tools/checks/claude_bud_job53.py`.
+- **Owed:** the live 2-player check (B sees A's tier on A's base; A's raid on B shows B's damage states) and Studio
+  screenshots.
+
+**Test ON HIS PHONE:**
+1. Buy one Defence level that crosses a tier (L1 / L4 / L7 / L10): the toast names the new look.
+2. Fly home: plates / crates / gate bands / vault plating are there.
+3. Rejoin: still there.
+4. Have an alt shoot your gate to below 60 % / 30 %: dents, then smoke. Breach it, let it rebuild: clean, with the
+   tier look back.
+
 ## claude-bud JOB 50 part C (2026-10-01): REBIRTH ZONES: SIGNS, CARD, MAP (branch `claude/desktop-bud`)
 **Flag:** `RebirthZonesConfig.Rebuild.Signs` (owner-first with Rebuild). With it OFF, the JOB 46 / 50 A versions are
 unchanged.

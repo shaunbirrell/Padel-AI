@@ -2126,6 +2126,14 @@ function EndgameService._Plan(player: Player, profile: any, kind: string, id: st
 					e.Defence = {}
 				end
 				e.Defence[tr] = nx.Level
+				-- claude-bud JOB 53: a new visual tier says what changed on his base (owner-first with DefenceVisuals)
+				local tNow = EndgameConfig.DefenceVisualTier(nx.Level)
+				if EndgameConfig.DefenceVisualsLive(uid) and tNow > EndgameConfig.DefenceVisualTier(nx.Level - 1) then
+					local look = (T.DefenceLook :: any)[tr]
+					if look then
+						return string.format(T.DefenceBought, DEF_NAMES[tr], nx.Level) .. " " .. string.format(T.DefenceNewLook, look[tNow] or "")
+					end
+				end
 				return string.format(T.DefenceBought, DEF_NAMES[tr], nx.Level)
 			end,
 		}

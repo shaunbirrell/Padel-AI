@@ -51,6 +51,14 @@ local HudConfig = require(Shared.Configs.HudConfig)
 local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
 local AircraftWeaponConfig = require(Shared.Configs.AircraftWeaponConfig) -- aircraft weapon reach (ApplyDamage)
 local ArmyConfig = require(Shared.Configs.ArmyConfig) -- army fix: Gate.OwnUnitsOpen (the owner's units open his gate)
+local EndgameConfigMod: any = require(Shared.Configs.EndgameConfig) -- claude-bud JOB 53 (DefenceVisualsLive)
+local DefenceVisualsMod: any = nil -- claude-bud JOB 53: Server/Modules/DefenceVisuals (loaded in a pcall below)
+do
+	local okDV, DV = pcall(function(): any
+		return require(script.Parent.Parent.Modules.DefenceVisuals)
+	end)
+	DefenceVisualsMod = if okDV then DV else nil
+end
 
 local GateDefenseService = {}
 -- claude-bud JOB 39 phase 2 (EndgameService, from deps): Base Tier + the Defence tree. Every helper returns the old
@@ -1304,8 +1312,10 @@ local function setGateBarrierOpen(parts: { BasePart }, open: boolean)
 				p.Color = Color3.fromRGB(90, 70, 55)
 				p.Material = Enum.Material.Concrete
 			else
-				p.Color = Color3.fromRGB(55, 58, 62)
-				p.Material = Enum.Material.Metal
+				-- claude-bud JOB 53: a Gate-tier leaf goes back to its tier look (no attributes = the old look)
+				local dc, dm = p:GetAttribute("WE_DefColor"), p:GetAttribute("WE_DefMaterial")
+				p.Color = if typeof(dc) == "Color3" then dc else Color3.fromRGB(55, 58, 62)
+				p.Material = if typeof(dm) == "string" and (Enum.Material :: any)[dm] then (Enum.Material :: any)[dm] else Enum.Material.Metal
 			end
 		end
 	end
@@ -1420,6 +1430,11 @@ end
 
 local function updateGateBillboard(parts: { BasePart }, health: number, maxHealth: number, breached: boolean)
 	local plotId = parts[1] and parts[1]:GetAttribute("PlotId")
+	-- claude-bud JOB 53: the gate's damage state (dents / scorch at 60 %, sag + smoke at 30 %, gone when breached)
+	local dv = DefenceVisualsMod
+	if dv and parts[1] and EndgameConfigMod.DefenceVisualsLive(parts[1]:GetAttribute("OwnerUserId")) then
+		pcall(dv.GateDamage, parts, health / math.max(maxHealth, 1), breached)
+	end
 	if breached then
 		setGateBar(parts, 0, "BREACHED", Color3.fromRGB(255, 160, 80), true)
 	else
@@ -2293,6 +2308,7 @@ local function syncPlotNow(plotId: number)
 			end
 			local t = spawnAutoGun(slot, at, folder)
 			if t then
+				t.Model:SetAttribute("WE_NestBase", at) -- claude-bud JOB 53: where DefenceVisuals plates / arms this nest
 				t.Outside = outside
 				t.Model:SetAttribute("OwnerUserId", ownerUserId)
 				t.Model:SetAttribute("PlotId", plotId)
@@ -2333,6 +2349,24 @@ local function syncPlotNow(plotId: number)
 	end
 
 	local barriers, maxHp = spawnGateBarriers(gateCf, wallsLevel, folder, plotId, ownerUserId)
+	-- claude-bud JOB 53: the Defence levels you can see, from the SAVED levels (rejoin / restart / rebuild all land here)
+	if DefenceVisualsMod and EndgameConfigMod.DefenceVisualsLive(ownerUserId) then
+		local eg = GateDefenseService._Endgame
+		local levels: { [string]: number } = {}
+		for _, tr in ipairs({ "Plating", "Guns", "Gate", "Vault" }) do
+			levels[tr] = if eg and eg.DefenceLevelFor then (tonumber(eg.DefenceLevelFor(ownerUserId, tr)) or 0) else 0
+		end
+		local bases: { CFrame } = {}
+		for _, t in ipairs(turrets) do
+			local b = t.Model:GetAttribute("WE_NestBase")
+			if typeof(b) == "CFrame" then
+				table.insert(bases, b)
+			end
+		end
+		local okV, added = pcall(DefenceVisualsMod.Apply, ownerUserId, levels, bases, barriers, findCollectorModel(plotId), folder)
+		print(string.format("[DefenceVisuals] plot=%d owner=%d Plating=%d Guns=%d Gate=%d Vault=%d parts=%s", plotId, ownerUserId,
+			levels.Plating, levels.Guns, levels.Gate, levels.Vault, if okV then tostring(added) else "ERR " .. tostring(added)))
+	end
 	for _, leaf in ipairs(barriers) do
 		local prompt = leaf:FindFirstChild("GateRepairPrompt")
 		if prompt and prompt:IsA("ProximityPrompt") then

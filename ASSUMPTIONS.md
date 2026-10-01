@@ -10092,3 +10092,12 @@ ds_territories.luau T3):
   `RunRules.StatusRefreshSeconds`.
 - Map zone dots are unlabelled to avoid label overlap with the area / site pills. The name shows on tap.
 - "Ready" toast: once per zone per off-cooldown edge, only while the plaques exist (he has the plot loaded).
+
+## claude-bud JOB 53 (2026-10-01): Defence visuals
+- Four visual tiers per track (L1 / 4 / 7 / 10) rather than ten looks. Each step is readable on a phone, and the
+  budget stays small. `EndgameConfig.DefenceVisuals.TierAt` is tunable.
+- The turret visuals are static (round the nest, not on the turning gun). The guns rotate by PivotTo / welded
+  catalog parts, and attaching parts to them risks the aim code.
+- The vault has no model on the base, so "Vault Plating" dresses the plot's money collector (the thing raiders
+  rob).
+- The gate damage stages run with the visuals flag only (OFF = no smoke, no scorch: the old gate exactly).

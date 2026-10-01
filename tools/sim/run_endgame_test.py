@@ -305,6 +305,11 @@ ok, msg = ES.Purchase(owner, "Defence", "Gate")
 check(po.Endgame.Defence.Gate == 4 and not ok and msg == string.format(EG.Text.NeedTier, 1), "Gate & Walls L1-4 bought, L5 needs Base Tier 1 (" .. tostring(msg) .. ")")
 po.Endgame.BaseTier = 5
 for _ = 1, 6 do ES.Purchase(owner, "Defence", "Gate") end
+-- claude-bud JOB 53: L3 -> L4 is a new visual tier: the toast says what changed on his base; L3 (same tier) does not
+local _, m3, m4
+for i = 1, 4 do _, m4 = ES.Purchase(owner, "Defence", "Plating"); if i == 3 then m3 = m4 end end
+check(string.find(tostring(m4), string.format(EG.Text.DefenceNewLook, EG.Text.DefenceLook.Plating[2]), 1, true) ~= nil and string.find(tostring(m3), "New on", 1, true) == nil,
+  "[DefLook] Plating L4 toast: " .. tostring(m4) .. " | L3: " .. tostring(m3))
 for _, tr in ipairs({ "Plating", "Guns", "Vault" }) do for _ = 1, 10 do ES.Purchase(owner, "Defence", tr) end end
 check(po.Endgame.Defence.Gate == 10 and po.Endgame.Defence.Plating == 10 and po.Endgame.Defence.Guns == 10 and po.Endgame.Defence.Vault == 10 and synced > 0,
   "every track to L10 (the gate defences resync after each buy)")

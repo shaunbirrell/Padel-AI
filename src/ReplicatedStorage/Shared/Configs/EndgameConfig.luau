@@ -127,6 +127,17 @@ local EndgameConfig = {
 		InstantRebuildSeconds = 30,
 		InstantRebuildMin = 25_000,
 	},
+	-- claude-bud JOB 53: the Defence levels you can SEE (Server/Modules/DefenceVisuals). Visual tier by level: TierAt[t]
+	-- is the first level of tier t (L1-3 = 1, L4-6 = 2, L7-9 = 3, L10 = 4). Gate damage states at DamageStages (HP
+	-- fraction). OFF = no visuals, the gate's old look exactly.
+	DefenceVisuals = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 53): Code Bot flips it after Shaun's phone test
+		TierAt = { 1, 4, 7, 10 },
+		DamageStages = { 0.6, 0.3 }, -- <= 60 %: dents + scorch; <= 30 %: sagging bands + smoke
+		SmokeRate = 4, -- one capped emitter on the gate at <= 30 % / breached
+		MaxParts = { Turret = 12, Gate = 30, Vault = 12 }, -- per piece (the budget test)
+	},
 
 	-- §2.6 VEHICLE WORKSHOP (phase 4): Cost(L) = 1M x 2.2^(L-1)
 	Workshop = {
@@ -267,6 +278,13 @@ local EndgameConfig = {
 		Hurt = "You're in combat",
 		TierBought = "BASE TIER %d: %s!",
 		DefenceBought = "%s level %d!",
+		DefenceNewLook = "New on your base: %s", -- claude-bud JOB 53 (a new visual tier)
+		DefenceLook = { -- claude-bud JOB 53: what each visual tier adds (DefenceVisuals), short for a phone toast
+			Plating = { "turret side plates", "turret front shields", "dark steel turret armour", "gold-edged turret armour" },
+			Guns = { "ammo crates", "a shell rack", "heavy ammo boxes", "belt-fed guns" },
+			Gate = { "steel gate bands", "gate corner plates", "gate braces", "a gold gate beam" },
+			Vault = { "vault brackets", "vault side plates", "a vault cage", "a vault armour cap" },
+		},
 		Rebuilt = "Defences rebuilt",
 		NothingDown = "Nothing to rebuild",
 		NotAtHQ = "Use the HQ console at your base",
@@ -281,6 +299,38 @@ local EndgameConfig = {
 		NotLive = "Not open yet",
 	},
 }
+
+-- claude-bud JOB 53: the visual tier (0..4) of a Defence level (pure)
+function EndgameConfig.DefenceVisualTier(level: number): number
+	local at: any = EndgameConfig.DefenceVisuals.TierAt
+	local t = 0
+	for i, l in ipairs(at) do
+		if (tonumber(level) or 0) >= l then
+			t = i
+		end
+	end
+	return t
+end
+
+-- claude-bud JOB 53: the gate's damage stage (pure): 0 clean, 1 <= 60 %, 2 <= 30 %, 3 breached
+function EndgameConfig.GateDamageStage(frac: number, breached: boolean): number
+	if breached then
+		return 3
+	end
+	local st: any = EndgameConfig.DefenceVisuals.DamageStages
+	local f = tonumber(frac) or 1
+	if f <= st[2] then
+		return 2
+	elseif f <= st[1] then
+		return 1
+	end
+	return 0
+end
+
+-- claude-bud JOB 53: Defence visuals on for this base owner (the Defence tree live AND the visuals flag)
+function EndgameConfig.DefenceVisualsLive(userId: any): boolean
+	return EndgameConfig.LiveFor(userId, "Defence") and RetentionConfig.Live(EndgameConfig.DefenceVisuals, userId)
+end
 
 function EndgameConfig.LiveFor(userId: any, part: string): boolean
 	local parts: any = EndgameConfig.Parts
