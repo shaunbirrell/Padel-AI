@@ -20490,6 +20490,15 @@ local VisualAssetConfig = {
 	-- on the blades' centre makes them orbit ("detached rotor"). With this on (owner-first by the vehicle owner) the
 	-- spin axis is the blades' thinnest box axis (within MaxCorrectionDeg of the configured axis, only when clearly
 	-- thin: ThinRatio) and the centre is the blades' own centre. Every rotor logs [RotorRig] tilt / offset.
+	-- claude-bud JOB 67: the asset upgrade switch (owner-first by the BASE OWNER; OFF = today's models)
+	Job67 = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 67): Code Bot flips it with the public flip
+		-- the turret tier by the owner's Turret Guns level (EndgameConfig.Defence, 0..10): 0 = T1, 1-3 = T2, 4-6 = T3,
+		-- 7-9 = T4, 10 = T5
+		TurretTierAt = { 1, 4, 7, 10 }, -- the first level of T2 / T3 / T4 / T5
+		TurretTierKeys = { "AutoGunT1", "AutoGunT2", "AutoGunT3", "AutoGunT4", "AutoGunT5" },
+	},
 	AirRotorDisc = {
 		Enabled = true,
 		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 56): Code Bot flips it after Shaun's phone test
@@ -21117,6 +21126,15 @@ local VisualAssetConfig = {
 		-- tripod leg reaching forward, the rear grips behind, the ammo box on the left); GateDefenseService turns the template
 		-- once so it aims -Z, stands it on the ground and welds it to its aim part (only that part is anchored)
 		AutoGun = { ModelAssetId = 114570602, Yaw = 90, Note = "owner pick: Tripod Mounted Machine Gun by GuestCapone (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
+		-- claude-bud JOB 67 (1): the turret TIERS from Shaun's paid Minigun Turret Pack (Lvl 1-10, 109072907337393; its
+		-- one script is stripped by the loader). Pack levels 1 / 3 / 5 / 8 / 10 = T1..T5 (ChildName = the pack's model
+		-- name for that level, read from the WE_CHECK2 probe). PendingAssetId until tools/wire-asset-ids.py promotes it
+		-- (WE_CHECK2: <= 40 parts per piece, <= 20k tris); a tier with ModelAssetId 0 = the AutoGun above (today).
+		AutoGunT1 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 1 (paid, shaunie6) - JOB 67 T1" } :: AssetRef,
+		AutoGunT2 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 3 - JOB 67 T2" } :: AssetRef,
+		AutoGunT3 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 5 - JOB 67 T3" } :: AssetRef,
+		AutoGunT4 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 8 - JOB 67 T4" } :: AssetRef,
+		AutoGunT5 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 10 - JOB 67 T5" } :: AssetRef,
 		-- L2 elevated ONLY (not door flanks):
 		AutoGunElevated = { ModelAssetId = 0, Note = "W1 CFG drop (uploader not the author) — unused key" } :: AssetRef,
 		AutoGunElevatedAlt = { ModelAssetId = 10354803684, Note = "Military turret — L2/corner only" } :: AssetRef,
@@ -21395,6 +21413,18 @@ local VisualAssetConfig = {
 		NavalSub = "_FallbackNaval",
 	} :: { [string]: string },
 }
+
+-- claude-bud JOB 67: the turret tier (1..5) for a Turret Guns level 0..10 (pure; Job67.TurretTierAt)
+function VisualAssetConfig.TurretTierFor(level: number): number
+	local J: any = (VisualAssetConfig :: any).Job67
+	local t = 1
+	for i, l in ipairs(if J then J.TurretTierAt else {}) do
+		if (tonumber(level) or 0) >= l then
+			t = i + 1
+		end
+	end
+	return t
+end
 
 return VisualAssetConfig
 ]]></string>
@@ -31517,7 +31547,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 198)
+		player:SetAttribute("WE_Build", 199)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -77520,7 +77550,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 198)
+			player:SetAttribute("WE_Build", 199)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -86227,7 +86257,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 198)
+		player:SetAttribute("WE_Build", 199)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -86369,7 +86399,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=198",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=199",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -92359,7 +92389,56 @@ local function prepareAimTemplate(template: Model, assetId: number, yawDeg: numb
 	return true
 end
 
-local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUnit?
+-- claude-bud JOB 67: the turret tier (1..5) for a Turret Guns level (pure; VisualAssetConfig.Job67.TurretTierAt)
+function GateDefenseService.TurretTier(level: number): number
+	return (VisualAssetConfig :: any).TurretTierFor(level)
+end
+
+-- claude-bud JOB 67: a pack PIECE (one model inside a multi-model store asset, e.g. one level of the Minigun pack):
+-- the asset is inserted once (scripts stripped), the named piece cloned out, then the same 40-part / no-Humanoid
+-- refusal as a whole model. Cached per "<id>:<name>"; a missing piece or a refusal = nil (the caller keeps today's gun).
+local packRaw: { [number]: Instance } = {}
+local pieceCache: { [string]: Model | false } = {}
+local function loadCatalogPiece(assetId: number, childName: string): Model?
+	local key = assetId .. ":" .. childName
+	local have: any = pieceCache[key]
+	if have ~= nil then
+		return if have == false then nil else have :: Model
+	end
+	local raw: Instance? = packRaw[assetId]
+	if raw == nil then
+		local ok, result = pcall(function()
+			return InsertService:LoadAsset(assetId)
+		end)
+		if not ok or typeof(result) ~= "Instance" then
+			pieceCache[key] = false
+			return nil
+		end
+		stripScripts(result)
+		packRaw[assetId] = result
+		raw = result
+	end
+	local piece: Instance? = (raw :: Instance):FindFirstChild(childName, true)
+	if piece == nil or not piece:IsA("Model") then
+		pieceCache[key] = false
+		return nil
+	end
+	local model = (piece :: Model):Clone()
+	stripScripts(model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d.Parent ~= nil and (d:IsA("ValueBase") or d:IsA("Configuration")) then
+			d:Destroy()
+		end
+	end
+	if catalogRefusal(model) then
+		pieceCache[key] = false
+		return nil
+	end
+	pieceCache[key] = model
+	return model
+end
+
+local function spawnAutoGun(slot: number, at: CFrame, parent: Folder, tier: number?): TurretUnit?
 	local gd = (VisualAssetConfig :: any).GateDefense
 	local assetId = 0 -- the config decides (a missing key = the Part-built gun)
 	local yawDeg = 0
@@ -92367,10 +92446,24 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 		assetId = gd.AutoGun.ModelAssetId
 		yawDeg = tonumber(gd.AutoGun.Yaw) or 0
 	end
+	-- claude-bud JOB 67: the owner's turret tier, when that tier's model is promoted (else today's AutoGun)
+	local tierTemplate: Model? = nil
+	local J: any = (VisualAssetConfig :: any).Job67
+	if tier and J and gd then
+		local ref = gd[J.TurretTierKeys[tier] or ""]
+		local id = if ref then tonumber(ref.ModelAssetId) or 0 else 0
+		if id > 0 then
+			tierTemplate = if typeof(ref.ChildName) == "string" then loadCatalogPiece(id, ref.ChildName) else loadCatalogModel(id)
+			if tierTemplate then
+				assetId = id
+				yawDeg = tonumber(ref.Yaw) or 0
+			end
+		end
+	end
 	-- every piece of the nest stands on the ground under the post (the gate CFrame is GATE_POST_LIFT above it)
 	local groundY = groundYAt(at, parent)
 	local base = at - Vector3.new(0, at.Position.Y - groundY, 0)
-	local template = loadCatalogModel(assetId)
+	local template = tierTemplate or loadCatalogModel(assetId)
 	if template and not prepareAimTemplate(template, assetId, yawDeg) then
 		template = nil
 	end
@@ -93840,7 +93933,14 @@ local function syncPlotNow(plotId: number)
 			if slot > 2 then
 				table.insert(nests, at) -- claude-bud JOB 39: a Base Tier nest (BaseTierBuilder adds its sandbags)
 			end
-			local t = spawnAutoGun(slot, at, folder)
+			-- claude-bud JOB 67: the turret tier from the owner's saved Turret Guns level (owner-first; nil = today)
+			local tier: number? = nil
+			if EndgameConfigMod.LiveFor and require(ReplicatedStorage.Shared.Configs.RetentionConfig).Live((VisualAssetConfig :: any).Job67, ownerUserId) then
+				local eg = GateDefenseService._Endgame
+				local lvl = if eg and eg.DefenceLevelFor then tonumber(eg.DefenceLevelFor(ownerUserId, "Guns")) or 0 else 0
+				tier = GateDefenseService.TurretTier(lvl)
+			end
+			local t = spawnAutoGun(slot, at, folder, tier)
 			if t then
 				t.Model:SetAttribute("WE_NestBase", at) -- claude-bud JOB 53: where DefenceVisuals plates / arms this nest
 				t.Outside = outside

@@ -46,12 +46,12 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 198)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 198)'),
-    (S + "Services/DataService.luau", "WE_Build=198"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 198)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 199)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 199)'),
+    (S + "Services/DataService.luau", "WE_Build=199"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 199)'),
 ):
-    check(needle in read(rel), "CODEBOT v190: WE_Build=198 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v190: WE_Build=199 " + rel.rsplit("/", 1)[-1])
 
 EC = read(C + "EndgameConfig.luau")
 df = EC.split("DefenceFix = {")[1].split("\n\t},")[0] if "DefenceFix = {" in EC else ""
