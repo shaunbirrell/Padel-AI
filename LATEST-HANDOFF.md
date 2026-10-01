@@ -1,3 +1,17 @@
+## v196 PUBLISHED (Code Bot Roblox, 2026-10-01 ~22:44 Dublin): Open Cloud place version 194. claude-bud JOB 65 NukeRaid OwnerFirst (nuke instant raid)
+- **Commits:** cherry-pick `e099ea9` → `a0b4cbf` (JOB 65 NukeRaid); code+dist+checks `7fd72f1` on phase-7-polish (from v195 `c55da52`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v195 `1b8d5fa`.
+- **JOB 65 (NEW-OWNER-FIRST by ATTACKER):** `RebirthZonesConfig.NukeRaid` — TARGETS **NUKE** button → server preview (`RequestNuke "rpreview"`) shows name / base level / EXACT raidable ATM; LAUNCH (`rlaunch`) spends warhead + 30 min cooldown (`NukeLastLaunch`, existing keys), then `MoneyCollectorService.NukeRaid` moves FULL ATM 1:1 via `_MoveLoot` + `EconomyService.PendingToCash` (no Double Weekend / VIP / boost on a transfer). Fairness: raid rules + ONE protection rule + never admin + JOB 63 same-base cooldown. MissileStrikeFx + light NukeBlast (Vfx switch). Victim gets shield, raid report, `NUKE_RAID` analytics, BaseRaided hook.
+- **Held:** JOB 62 ExperienceNotify (`00a76af`) stays on bud until Creator Hub secret `WE_NOTIFY_KEY` + Shaun opt-in.
+- **Checks:** BuyPathStatic **PASS=8443 FAIL=0**; `tools/checks/codebot_v196.py`; `claude_bud_job65.py`; `tools/sim/run_nuke_raid_test.py` 0 failed. PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP 200, versionNumber **194**, universe 10767159222 / place 97112936860418. Servers NOT restarted (players get it on next join).
+- **Phone tests (Shaun — rejoin / new server for WE_Build 196; owner-only while OwnerFirst):**
+  1. Have Nuclear Silo built + a ready warhead; TARGETS shows **NUKE** on a valid rival
+  2. Tap NUKE → preview card shows their name, base level, and exact ATM $; CANCEL closes
+  3. LAUNCH → you get that ATM as Cash; they get raid shield + report; silo cooldown ~30 min on the button
+  4. Blocked targets (shield / new / admin / ally / camp cooldown / own base) show why; no warhead spent
+  5. Only you (attacker OwnerFirst) until flipped
+- **Still owed:** After phone OK flip `RebirthZonesConfig.NukeRaid` OwnerFirst. Still owed flips: AntiCamp, HangarDock, Pass59, DefenceFix, SpawnTerminal, AirRotorDisc, BaseLife, DefenceVisuals, Night2, SharedHostility, AttackRange, Rebuild (JOB 50–59/63). JOB 62 held for WE_NOTIFY_KEY. JOB 64 referrals next on Claude queue. Do NOT reopen JOB 44.
+
 ## v195 PUBLISHED (Code Bot Roblox, 2026-10-01 ~22:38 Dublin): Open Cloud place version 193. Cash pill 3 decimals above $1B (display only)
 - **Commit:** code+dist+checks `1b8d5fa` on phase-7-polish (from v194 `be8074d`); bud merge `18e5869`. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; EconomyConfig / EconomyService / MonetizationConfig / Constants / LeaderboardConfig byte-identical to v194 `c288e7a`; no price changes; save keys unchanged.
 - **Why:** owner report "HUD still 1.00B with +$174,688/s" after v194. Full src audit found NO remaining $1B cap (only MaxCash=1e15 clamps in EconomyService 418/446/470/476/756; owner floors are 50M floors via math.max; ProfileSchema Migrate only floors Cash; leaderstats IntValue is int64; AdminService 1e9 limits are per-command grant sizes, not wallet caps). Cause = HUDController formatCash `%.2f` B (1.00B covers $1.000B-$1.005B, ~29-57 s of growth at $174k/s) + passive income lands in PendingCash (ATM) until collected / AutoCollect + servers started before 22:31 still run v193 (MaxCash 1e9, wallet pinned at exactly 1,000,000,000 and old collect deletes overflow).
