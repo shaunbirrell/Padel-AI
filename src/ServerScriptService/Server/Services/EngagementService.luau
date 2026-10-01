@@ -982,6 +982,14 @@ function EngagementService.Init(d: { [string]: any })
 			local AOC: any = require(Shared.Configs.ArmyOrdersConfig)
 			if typeof(info) == "table" and info.ByUnit == true and info.Killer and AOC.ArmyKillNpcTypes[info.TypeId] == true then
 				EngagementService.NoteArmyKill(info.Killer)
+			elseif typeof(info) == "table" and info.ByUnit == true and info.Killer then
+				-- claude-bud JOB 52: a hostile combat NPC of HIS ordered ATTACK target group (capped per hour: no AFK farm)
+				local okP, AP = pcall(function(): any
+					return (require :: any)(script.Parent.Parent.Modules.ArmyPlan)
+				end)
+				if okP and AP and AP.CreditsArmyKill and AP.CreditsArmyKill(info.Killer, info) then
+					EngagementService.NoteArmyKill(info.Killer)
+				end
 			end
 		end)
 	end

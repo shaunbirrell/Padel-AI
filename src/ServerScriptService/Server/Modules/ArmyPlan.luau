@@ -686,13 +686,74 @@ function ArmyPlan.ProbeClear(player: Player, st: any, pick: any, from: Vector3):
 		return nil
 	end
 	local keep = st._acTarget
+	local seek, leash = C.AttackRadii(player.UserId) -- claude-bud JOB 52: AttackRange live = 400 / 450 (else 250 / 300)
 	probing = player.UserId
-	local t = pickWith(pick, player, st, ownerRoot(player), { Centre = from, Reach = C.SeekRadius, LeashFrom = from, Leash = C.SeekLeash })
+	local t = pickWith(pick, player, st, ownerRoot(player), { Centre = from, Reach = seek, LeashFrom = from, Leash = leash })
 	probing = nil
 	st._acTarget = keep
-	ArmyLog.Line(player, "ARMY MOVE", string.format("%s ATTACK probe from=%s radius=%d -> %s", player.Name, ArmyLog.Vec(from), C.SeekRadius,
+	ArmyLog.Line(player, "ARMY MOVE", string.format("%s ATTACK probe from=%s radius=%d -> %s", player.Name, ArmyLog.Vec(from), seek,
 		if t then tostring(t.Kind) .. " at " .. ArmyLog.Vec(t.Root and t.Root.Position) else "none"))
 	return t
+end
+
+--[[ claude-bud JOB 52: nothing within the ATTACK range: the nearest valid enemy beyond it (the SAME pick and hostility
+	rule, reach NearestScanStuds), as (target, flat distance, the NPCId when it is a combat NPC). nil = none anywhere. ]]
+function ArmyPlan.NearestBeyond(player: Player, st: any, pick: any, from: Vector3): (any, number?, string?)
+	if st == nil or pick == nil then
+		return nil, nil, nil
+	end
+	local A: any = C.AttackRange
+	local far = tonumber(A and A.NearestScanStuds) or 2500
+	local keep = st._acTarget
+	probing = player.UserId
+	local t = pickWith(pick, player, st, ownerRoot(player), { Centre = from, Reach = far, LeashFrom = from, Leash = far })
+	probing = nil
+	st._acTarget = keep
+	if t == nil or t.Root == nil then
+		return nil, nil, nil
+	end
+	local model = t.Hum and t.Hum.Parent
+	local id = if model then model:GetAttribute("NPCId") else nil
+	return t, flatDist(from, t.Root.Position), if typeof(id) == "string" then id else nil
+end
+
+-- claude-bud JOB 52: does this army NPC kill count on ARMY KILLS? Only the target group of HIS running ATTACK (Clear)
+-- plan, at most AttackRange.KillCreditPerHour per owner per rolling hour (no AFK farm), only while AttackRange is live.
+local creditLog: { [number]: { number } } = {}
+function ArmyPlan.CreditsArmyKill(killer: Player, info: any): boolean
+	if not C.AttackRangeLive(killer.UserId) or typeof(info) ~= "table" then
+		return false
+	end
+	local plan = plans[killer.UserId]
+	if plan == nil or plan.Kind ~= "Clear" or plan.Group == nil then
+		return false
+	end
+	local g = plan.Group :: Group
+	if g.Kind ~= "NPC" then
+		return false
+	end
+	local same = (g.GroupId ~= nil and info.GroupId == g.GroupId)
+	if not same and g.Hum and g.Hum.Parent then
+		same = g.Hum.Parent:GetAttribute("NPCId") == info.Id
+	end
+	if not same then
+		return false
+	end
+	local now = clock()
+	local list = creditLog[killer.UserId] or {}
+	local kept = {}
+	for _, t in ipairs(list) do
+		if now - t < 3600 then
+			table.insert(kept, t)
+		end
+	end
+	if #kept >= math.max(0, math.floor(tonumber(C.AttackRange.KillCreditPerHour) or 60)) then
+		creditLog[killer.UserId] = kept
+		return false
+	end
+	table.insert(kept, now)
+	creditLog[killer.UserId] = kept
+	return true
 end
 
 -- Code Bot: end the plan cleanly (ArmyState.CancelPlan: any non-plan state). Its pending route result is dropped (the
@@ -923,10 +984,11 @@ end
 local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?, pick: any, centre: Vector3, now: number)
 	local f3 = (ArmyConfig :: any).Follow3
 	local ownerPos = if plan.Anchor then plan.Anchor :: Vector3 elseif proot then proot.Position else centre
+	local seekR, leashR, chainR = C.AttackRadii(player.UserId) -- claude-bud JOB 52: ONE set of radii for the whole order
 	if plan.Phase == "Seek" then
 		local from = if plan.SeekFrom == "owner" and proot then proot.Position else centre
-		local radius = if plan.SeekFrom == "owner" then C.SeekRadius else C.ChainRadius
-		local t = pickWith(pick, player, st, proot, { Centre = from, Reach = radius, LeashFrom = ownerPos, Leash = C.SeekLeash })
+		local radius = if plan.SeekFrom == "owner" then seekR else chainR
+		local t = pickWith(pick, player, st, proot, { Centre = from, Reach = radius, LeashFrom = ownerPos, Leash = leashR })
 		if t and plan.Bad[t.Root] then
 			t = nil
 		end
@@ -959,7 +1021,7 @@ local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?,
 	local alive = ArmyPlan.GroupAlive(player, g)
 	if plan.Phase == "March" then
 		-- an enemy player shooting the army on the way is answered (players first); NPCs wait for the fight
-		local t = pickWith(pick, player, st, proot, { Centre = centre, Reach = (tonumber(f3.AttackAggroStuds) or 120), LeashFrom = ownerPos, Leash = C.SeekLeash })
+		local t = pickWith(pick, player, st, proot, { Centre = centre, Reach = (tonumber(f3.AttackAggroStuds) or 120), LeashFrom = ownerPos, Leash = leashR })
 		st._acTarget = if t and t.Kind == "Player" then t else nil
 		if alive <= 0 then
 			plan.Phase = "Seek"
@@ -978,14 +1040,14 @@ local function thinkClear(plan: Plan, player: Player, st: any, proot: BasePart?,
 		return
 	end
 	if plan.Phase == "Fight" then
-		pickWith(pick, player, st, proot, { Centre = centre, Reach = (tonumber(f3.AttackAggroStuds) or 120) + (tonumber(f3.AttackKeepExtraStuds) or 20), LeashFrom = ownerPos, Leash = C.SeekLeash })
+		pickWith(pick, player, st, proot, { Centre = centre, Reach = (tonumber(f3.AttackAggroStuds) or 120) + (tonumber(f3.AttackKeepExtraStuds) or 20), LeashFrom = ownerPos, Leash = leashR })
 		if alive < plan.GroupAlive then
 			plan.Kills += plan.GroupAlive - alive
 			plan.GroupAlive = alive
 			plan.FightSince = now
 		end
 		setStatus(plan, string.format(T.Fighting, alive))
-		local beyond = (plan.Anchor ~= nil or proot ~= nil) and flatDist(centre, ownerPos) > C.SeekLeash
+		local beyond = (plan.Anchor ~= nil or proot ~= nil) and flatDist(centre, ownerPos) > leashR
 		if alive <= 0 or now - plan.FightSince >= C.FightGiveUpSeconds then
 			plan.Chain += 1
 			st._acTarget = nil
@@ -1430,7 +1492,20 @@ function ArmyPlan.Init(d: { [string]: any })
 		PushVerdict = function(p: Player, id: number)
 			pushVerdict(p, id, ArmyPlan.CheckSend(p, id))
 		end,
+		-- claude-bud JOB 52: the "nothing in range" card (distance + direction, PIN / SEND)
+		PushFeature = function(p: Player, kind: string, data: any)
+			local rs = deps.RemoteSetup
+			local ev = rs and rs.Get(require(Shared.Constants).RemoteNames.FeaturePush)
+			if ev and ev:IsA("RemoteEvent") then
+				(ev :: RemoteEvent):FireClient(p, kind, data)
+			end
+		end,
 	})
+	if cs and cs.NPCInfoOf then
+		ArmyTargets.BindNpcLookup(function(id: string): { Position: Vector3, Name: string }?
+			return cs.NPCInfoOf(id) -- claude-bud JOB 52: "N:<npcId>" for the SEND the ATTACK toast offers
+		end)
+	end
 	Players.PlayerRemoving:Connect(function(p: Player)
 		plans[p.UserId] = nil
 	end)

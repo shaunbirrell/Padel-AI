@@ -64,6 +64,30 @@ local ArmyOrdersConfig = {
 	-- (of him while it is beside him); none = "No enemies near" and the army stays in its previous state (no broken
 	-- ATTACK). The radius is NOT raised (the owner's list: "bigger detection radius" is a fake fix).
 
+	--[[ claude-bud JOB 52 (2026-10-01, Shaun: "ATTACK says No enemies near while enemies are clearly visible"): ATTACK AT
+		RANGE. ROOT CAUSE (tools/sim/run_attack_range_test.py): the probe reach was SeekRadius 250 from him, but awake enemies
+		stand where the wake / sleep bands keep them (OutpostDefender WakeStuds 260 / SleepStuds 380, SiteActivity 380), so
+		the ones he could see were 260-380 studs out; and even a bigger reach alone would not hold: SeekLeash 300 cut
+		them again, and the running plan re-sought / fought with SeekLeash 300 from him (it dropped the target it marched to).
+		Live: ONE set of radii for the whole order (the probe, the plan's seek, its march answer, its fight pick, the leash
+		check): SeekStuds 400 (one route leg, LegStuds 400, under 30 s at MarchSpeed 14), LeashStuds 450, ChainStuds 200;
+		flat distances. Nothing within SeekStuds: the toast says the distance + direction to the nearest valid enemy and
+		offers PIN / SEND ("N:<npcId>" through ArmyTargets; the client never sends a position). Kills of the ordered target
+		group count on ARMY KILLS, at most KillCreditPerHour per owner (no AFK farm). OFF == OLD (250 / 300 / 150). ]]
+	AttackRange = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 52): Code Bot flips it after Shaun's 2-player phone test
+		SeekStuds = 400,
+		LeashStuds = 450,
+		ChainStuds = 200,
+		NearestScanStuds = 2500, -- "Nearest: 620 m NE": how far the nothing-in-range scan looks
+		KillCreditPerHour = 60, -- ordered-ATTACK army kills of hostile combat NPCs credited per owner per rolling hour
+		Text = {
+			NoneInRange = "No enemies within %d m. Nearest: %d m %s",
+			NoneAtAll = "No enemies on the map",
+		},
+	},
+
 	-- 2. SEND
 	Send = {
 		RequireOwnerAlive = false, -- DECIDED: the army keeps attacking while the sender is dead but in the server
@@ -159,6 +183,30 @@ function ArmyOrdersConfig.TurretHealth(wallsLevel: number): number
 		return 0
 	end
 	return list[math.min(i, #list)]
+end
+
+-- claude-bud JOB 52: the ATTACK radii for this owner: (seek, leash, chain) studs. AttackRange live: its numbers (seek
+-- clamped 300-500, leash >= seek); else the old SeekRadius / SeekLeash / ChainRadius exactly.
+function ArmyOrdersConfig.AttackRadii(userId: any): (number, number, number)
+	local A: any = (ArmyOrdersConfig :: any).AttackRange
+	local live = typeof(A) == "table" and (require(script.Parent.RetentionConfig) :: any).Live(A, userId)
+	if not live then
+		return ArmyOrdersConfig.SeekRadius, ArmyOrdersConfig.SeekLeash, ArmyOrdersConfig.ChainRadius
+	end
+	local seek = math.clamp(tonumber(A.SeekStuds) or 400, 300, 500)
+	return seek, math.max(seek, tonumber(A.LeashStuds) or seek + 50), math.max(50, tonumber(A.ChainStuds) or 200)
+end
+
+function ArmyOrdersConfig.AttackRangeLive(userId: any): boolean
+	local A: any = (ArmyOrdersConfig :: any).AttackRange
+	return typeof(A) == "table" and (require(script.Parent.RetentionConfig) :: any).Live(A, userId)
+end
+
+-- the compass word for a flat direction (dx, dz) in world space (-Z = north, as the map / compass draw it)
+function ArmyOrdersConfig.Compass8(dx: number, dz: number): string
+	local a = math.deg(math.atan2(dx, -dz)) % 360
+	local names = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" }
+	return names[(math.floor((a + 22.5) / 45) % 8) + 1]
 end
 
 return ArmyOrdersConfig

@@ -10074,3 +10074,7 @@ ds_territories.luau T3):
 ## 2026-10-01 — claude-bud JOB 51: plaza guards
 - **Owner-first gate:** SharedHostility is gated by the CANDIDATE player (owner + Studio testers first); NPCs keep the old pick for everyone else until the flip.
 - **Spawn not moved:** the emergency / plot-less spawn and the defender ring are not moved without a Studio check of clear ground.
+
+## 2026-10-01 — claude-bud JOB 52: ATTACK at range
+- **The card's units:** distances use the game's existing m = studs x 0.28, like MARCHING. The config numbers are studs.
+- **Kill credit:** only kills of the ordered ATTACK target group count, capped at 60 / hour per owner.

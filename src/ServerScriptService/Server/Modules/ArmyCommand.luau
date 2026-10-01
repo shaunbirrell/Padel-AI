@@ -143,9 +143,27 @@ function ArmyCommand.Order(player: Player, st: any, order: string, source: strin
 		end
 		local t = Plan.ProbeClear(player, st, deps.Pick, seekFrom :: Vector3)
 		if t == nil then
+			local seekR = ArmyOrdersConfig.AttackRadii(player.UserId)
+			if ArmyOrdersConfig.AttackRangeLive(player.UserId) and Plan.NearestBeyond then
+				-- claude-bud JOB 52: say how far the nearest valid enemy is, and offer PIN / SEND to it (server ids only)
+				local A: any = ArmyOrdersConfig.AttackRange
+				local nt, nd, nid = Plan.NearestBeyond(player, st, deps.Pick, seekFrom :: Vector3)
+				local text = A.Text.NoneAtAll
+				if nt and nd and nt.Root then
+					local p = nt.Root.Position
+					text = string.format(A.Text.NoneInRange, math.floor(seekR * 0.28), math.floor(nd * 0.28),
+						ArmyOrdersConfig.Compass8(p.X - (seekFrom :: Vector3).X, p.Z - (seekFrom :: Vector3).Z))
+					if deps.PushFeature then
+						pcall(deps.PushFeature, player, "ArmyNearest", { Text = text, X = p.X, Y = p.Y, Z = p.Z,
+							Target = if nid then "N:" .. nid else nil })
+					end
+				end
+				return reject(player, "ATTACK", "NoEnemiesNear", if nt then nil else text,
+					string.format("from=%s radius=%d nearest=%s", ArmyLog.Vec(seekFrom), seekR, if nd then string.format("%.0f", nd) else "none"))
+			end
 			-- DECIDED: nothing to fight within SeekRadius: say so and keep the previous state (never a broken ATTACK)
 			return reject(player, "ATTACK", "NoEnemiesNear", ArmyOrdersConfig.Text.NothingNear,
-				string.format("from=%s radius=%d", ArmyLog.Vec(seekFrom), ArmyOrdersConfig.SeekRadius))
+				string.format("from=%s radius=%d", ArmyLog.Vec(seekFrom), seekR))
 		end
 		if not Plan.StartClear(player, st, if away or cur ~= nil then seekFrom else nil, t) then
 			return reject(player, "ATTACK", "StartFailed", "Order failed")

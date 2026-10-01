@@ -17,6 +17,38 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 52 (2026-10-01): ARMY ATTACK AT RANGE ("No enemies near" with enemies in sight) (branch `claude/desktop-bud`)
+**Flag to flip:** `ArmyOrdersConfig.AttackRange.OwnerFirst = true -> false` (NEW-OWNER-FIRST). Enabled = false is the
+old 250 / 300 / 150 exactly.
+
+**Root cause (reproduced; docs/proof/job52/):**
+- The ATTACK probe was `SeekRadius` 250 from him, while awake enemies stand 260-380 studs out (the wake / sleep bands).
+  Flag OFF, an enemy at 260 / 380 gives `REJECTED NoEnemiesNear radius=250`, the reported bug.
+- `SeekLeash` 300 and the running plan's re-seek / fight leash (300 from him) would have dropped a farther target even
+  with a bigger probe.
+- **Ruled out:** static figures; grouped-NPC refusal (`probing` is set).
+
+**Fix:**
+- One set of radii for the whole order (seek 400 / leash 450 / chain 200), flat distances, the existing march (no
+  teleport).
+- Nothing within range: "No enemies within X m. Nearest: Y m NE" plus a PIN / SEND ARMY card (`"N:<npcId>"`,
+  resolved on the server).
+- ARMY KILLS counts HIS ordered ATTACK target group, at most 60 per owner per rolling hour (no AFK farm).
+
+**Files:**
+- Configs: ArmyOrdersConfig.
+- Server: ArmyPlan, ArmyCommand, ArmyTargets, CombatService (NPCInfoOf), SquadOrdersService (flat pick),
+  EngagementService (credit).
+- Client: Controllers/ArmyNearestController (+ Bootstrap).
+- Tests: tools/sim/run_army_command_test.py (OFF / ON / 450 / height scenarios), tools/checks/claude_bud_job52.py.
+
+**Checks:** run_army_command_test 0 failed; BuyPathStatic FAIL=0. **The Studio 2-player test is owed.**
+
+**Test ON HIS PHONE:**
+1. Army out, enemies visible ~300 m away: ATTACK. The army marches in formation and fights; ARMY KILLS go up.
+2. Nothing within range: the card shows the distance + direction. PIN marks it; SEND ARMY takes the army there.
+3. A shielded / new player nearby is never attacked (JOB 51 rule).
+
 ## claude-bud JOB 51 (2026-10-01, P0): CENTRAL PLAZA GUARDS: ONE SHARED HOSTILITY RULE (branch `claude/desktop-bud`)
 **Flag to flip:** `CombatConfig.SharedHostility.OwnerFirst = true -> false` (NEW-OWNER-FIRST). Enabled = false is the
 old brain exactly.

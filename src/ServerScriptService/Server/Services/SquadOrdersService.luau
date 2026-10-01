@@ -1194,6 +1194,15 @@ end
 	`avoidB` (the fights this unit gave up on) is never the first result; the nearest such one comes back as the second
 	(its Humanoid, root and distance after the first three). It still goes into `list`. The last two results say
 	whether any live hostile, however far from `fromPos`, still stands within `avoidR` of `avoidA` / `avoidB`. ]]
+-- claude-bud JOB 52: ATTACK at range live for this owner (ArmyOrdersConfig.AttackRange; lazy, nil-safe)
+local function attackRangeLive(owner: Player): boolean
+	local ok, live = pcall(function(): any
+		local AOC: any = require(Shared.Configs.ArmyOrdersConfig)
+		return AOC.AttackRangeLive ~= nil and AOC.AttackRangeLive(owner.UserId)
+	end)
+	return ok and live == true
+end
+
 local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: boolean?, owner: Player?, list: CandList?, listRange: number?, avoidA: Vector3?, avoidB: Vector3?, avoidR: number?): (Humanoid?, BasePart?, number, Humanoid?, BasePart?, number, boolean, boolean)
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil
@@ -1214,6 +1223,8 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 	end
 	local lr = if list then (listRange or maxRange) else -1
 	local cap = candCap()
+	-- claude-bud JOB 52: with ATTACK at range live for the owner, NPC distances are flat (the pick's centre is at Y = 0)
+	local flatPick = owner ~= nil and attackRangeLive(owner)
 	if list then
 		candReset(list)
 	end
@@ -1237,6 +1248,9 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 				heldA = heldA or inA
 				heldB = heldB or inB
 				local d = (p - fromPos).Magnitude
+				if flatPick then
+					d = Vector3.new(p.X - fromPos.X, 0, p.Z - fromPos.Z).Magnitude -- claude-bud JOB 52: flat (no height bias)
+				end
 				if d < bestDist or d < zoneDist or d <= lr or d <= tScan then
 					local id = inst:GetAttribute("NPCId")
 					if not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(owner, id) == false) then

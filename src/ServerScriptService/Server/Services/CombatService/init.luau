@@ -2191,6 +2191,16 @@ function CombatService.SetUnitPlanCheck(fn: ((Player, string?) -> boolean)?)
 end
 
 -- claude-bud JOB 38: an NPC's group id (ArmyPlan: "clear it" means the whole group)
+-- claude-bud JOB 52: a live NPC's position + display name (ArmyTargets "N:<npcId>": the SEND the ATTACK toast offers)
+function CombatService.NPCInfoOf(npcId: string): { Position: Vector3, Name: string }?
+	local rec = if typeof(npcId) == "string" and #npcId <= 64 then npcRecords[npcId] else nil
+	if rec == nil or not rec.Alive or rec.Humanoid.Health <= 0 or rec.Root.Parent == nil then
+		return nil
+	end
+	local gid = rec.GroupId
+	return { Position = rec.Root.Position, Name = if typeof(gid) == "string" then (string.match(gid, "([^%.]+)$") or gid) else rec.Def.DisplayName }
+end
+
 function CombatService.NPCGroupOf(npcId: string): string?
 	local rec = if typeof(npcId) == "string" then npcRecords[npcId] else nil
 	return if rec then rec.GroupId else nil

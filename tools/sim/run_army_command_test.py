@@ -348,7 +348,7 @@ end
 '''
 
 
-def server_run(name, n=24, owner="Vector3.new(-500, 3, 0)", enemies="{}", payload='"A:Town"', home="Vector3.new(-900, 0, 0)"):
+def server_run(name, n=24, owner="Vector3.new(-500, 3, 0)", enemies="{}", payload='"A:Town"', home="Vector3.new(-900, 0, 0)", pre=""):
     mods = {**army_cmd_mods(), **M.MODS}
     mods["Configs/SecurityConfig"] = SH / "Configs/SecurityConfig.luau"
     mods["Modules/RemoteGate"] = SV / "Modules/RemoteGate.luau"
@@ -358,7 +358,8 @@ def server_run(name, n=24, owner="Vector3.new(-500, 3, 0)", enemies="{}", payloa
     for key, path in mods.items():
         body = path.read_text(encoding="utf-8") if isinstance(path, Path) else path
         chunks.append("SOURCES[%r] = function(script)\n%s\nend" % (key, body))
-    chunks.append(SERVER_TEST.replace("\nSCENARIO()\n", "\n" + SCEN[name] + "\nSCENARIO()\n"))
+    # claude-bud JOB 52: `pre` = Luau run just before the scenario (e.g. the AttackRange flag off: the OLD behaviour)
+    chunks.append(SERVER_TEST.replace("\nSCENARIO()\n", "\n" + SCEN[name] + "\n" + pre + "\nSCENARIO()\n"))
     return luau(chunks)
 
 
@@ -430,9 +431,25 @@ if __name__ == "__main__":
     check(v.get("S_BEFORE") == "TravellingToBase" and v.get("S_AFTER") == "TravellingToBase" and v.get("S_TARGETS", "").endswith("->S:CampViper"), f"SEND while Travelling retargets: {v.get('S_TARGETS')}")
     v, _ = scen("attack_following_target", enemies="{ Vector3.new(-400, 3, 60) }")
     check(v.get("S_BEFORE") == "Following" and v.get("S_OK") == "true" and v.get("S_AFTER") == "Attacking", f"ATTACK while Following (enemy 110 studs away): {v.get('S_BEFORE')} -> {v.get('S_AFTER')} later {v.get('S_LATER')}")
-    v, o = scen("attack_following_none")
+    OFF52 = 'require(node("Configs/ArmyOrdersConfig")).AttackRange.Enabled = false'
+    v, o = scen("attack_following_none", pre=OFF52)
     check(v.get("S_OK") == "false" and v.get("S_WHY") == "NoEnemiesNear" and v.get("S_AFTER") == "Following" and "No enemies near" in o and "REJECTED" in o,
-          f"ATTACK with nothing near: rejected NoEnemiesNear (logged + toast), state kept {v.get('S_AFTER')}")
+          f"ATTACK with nothing near (AttackRange OFF = the old rule): rejected NoEnemiesNear (logged + toast), state kept {v.get('S_AFTER')}")
+    # claude-bud JOB 52: ATTACK at range (AttackRange live for the owner; owner at (-500, 3, 0), the army beside him)
+    v, o = scen("attack_following_none")
+    check(v.get("S_OK") == "false" and v.get("S_WHY") == "NoEnemiesNear" and v.get("S_AFTER") == "Following" and "No enemies on the map" in o and "radius=400" in o,
+          f"JOB 52 ON, no enemy anywhere: 'No enemies on the map', radius 400, state kept {v.get('S_AFTER')}")
+    for d, want in ((260, "Attacking"), (380, "Attacking")):
+        v, o = scen("attack_following_target", enemies="{ Vector3.new(%d, 3, 0) }" % (-500 + d))
+        check(v.get("S_OK") == "true" and v.get("S_AFTER") == want and "radius=400" in o, f"JOB 52 ON: an enemy {d} studs away -> ATTACK accepted, {v.get('S_AFTER')} (later {v.get('S_LATER')})")
+        v, o = scen("attack_following_target", enemies="{ Vector3.new(%d, 3, 0) }" % (-500 + d), pre=OFF52)
+        check(d > 250 and v.get("S_AFTER") == "Following" and "reason=NoEnemiesNear" in o and "radius=250" in o,
+              f"JOB 52 OFF (old SeekRadius 250): an enemy {d} studs away -> 'No enemies near', state {v.get('S_AFTER')} (the reported bug)")
+    v, o = scen("attack_following_target", enemies="{ Vector3.new(-50, 3, 0) }")
+    check("reason=NoEnemiesNear" in o and "nearest=450" in o and "radius=400" in o,
+          f"JOB 52 ON: the nearest enemy at 450 studs (past 400): rejected with its distance in the log (nearest=450) + the PIN / SEND card")
+    v, o = scen("attack_following_target", enemies="{ Vector3.new(-120, 40, 0) }")
+    check(v.get("S_AFTER") == "Attacking", f"JOB 52 ON: height does not change the verdict (an enemy 380 studs out on a 40-stud rise -> {v.get('S_AFTER')})")
     v, _ = scen("attack_while_travelling", enemies="{ Vector3.new(-330, 3, 40) }")
     check(v.get("S_BEFORE") == "TravellingToBase" and v.get("S_AFTER") == "Attacking" and v.get("S_PLAN") == "Clear", f"ATTACK while Travelling (an enemy by the army): {v.get('S_BEFORE')} -> {v.get('S_AFTER')} ({v.get('S_PLAN')})")
     v, _ = scen("attack_while_travelling")

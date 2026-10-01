@@ -125,6 +125,12 @@ end
 
 --[[ (target, nil) or (nil, reason): "BadTarget" (not a target id), "UnknownTarget" (no such area / site). A base id
 	comes back as Kind "Base" with its PlotId: ArmyPlan.StartSend checks it (owner online, fairness, his own base). ]]
+-- claude-bud JOB 52: CombatService's NPC lookup for "N:<npcId>" (bound by ArmyPlan.Init): id -> { Position, Name } or nil
+local npcLookup: ((string) -> { Position: Vector3, Name: string }?)? = nil
+function ArmyTargets.BindNpcLookup(fn: (string) -> { Position: Vector3, Name: string }?)
+	npcLookup = fn
+end
+
 function ArmyTargets.Resolve(raw: any): (Target?, string?)
 	if typeof(raw) == "number" then
 		if raw ~= raw or raw <= 0 or raw % 1 ~= 0 then
@@ -162,6 +168,17 @@ function ArmyTargets.Resolve(raw: any): (Target?, string?)
 			Key = key, Kind = "Area", Id = a.Id, Name = a.Name, Centre = centre, Radius = radius,
 			Approaches = configured(key) or ArmyTargets.ApproachRing(centre, radius), Territory = a.Territory,
 		}, nil
+	elseif kind == "N" then
+		-- claude-bud JOB 52: the nearest enemy group the ATTACK toast offered ("N:<npcId>"): a live CombatService NPC the
+		-- server resolves now (its position, its group's name); the client sends only the id
+		local cs = npcLookup and npcLookup(id)
+		if cs == nil then
+			return nil, "UnknownTarget"
+		end
+		local centre = cs.Position
+		local key = "N:" .. id
+		return { Key = key, Kind = "Site", Id = id, Name = cs.Name, Centre = centre, Radius = 40,
+			Approaches = ArmyTargets.ApproachRing(centre, 40) }, nil
 	elseif kind == "S" then
 		for _, s in ipairs(WorldSitesConfig.Sites or {}) do
 			if s.Id == id then
