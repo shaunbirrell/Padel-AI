@@ -264,6 +264,29 @@ local function onboardSend(player: Player)
 	end
 end
 
+--[[ claude-bud JOB 41: the separate "FirstMinutes" Roblox funnel (TutorialConfig.Guided.Funnel; the onboarding funnel
+	above is left as it is). GuidedService logs each step once per profile, with its own funnel session id. ]]
+function AnalyticsService.GuidedFunnel(player: Player, sessionId: string, index: number, name: string, seconds: number?)
+	if not AnalyticsConfig.Enabled then
+		return
+	end
+	local F: any = (RetentionConfig :: any).Funnel
+	if typeof(F) == "table" and F.PrintInStudio == true and RunService:IsStudio() then
+		print(string.format("[FUNNEL] FirstMinutes %d %s t=%.1fs user=%d", index, name, tonumber(seconds) or 0, player.UserId))
+	end
+	local svc = rbx()
+	if svc == nil then
+		return
+	end
+	local funnelName = (require(ReplicatedStorage.Shared.Configs.TutorialConfig) :: any).Guided.Funnel.Name
+	local ok = pcall(function()
+		svc:LogFunnelStepEvent(player, funnelName, sessionId, index, name)
+	end)
+	if ok then
+		AnalyticsService.Stats.Funnel += 1
+	end
+end
+
 --[[ Seconds from this session's join to `step`, once per session (RetentionConfig.Funnel). Analytics only. ]]
 function AnalyticsService.Onboard(player: Player, step: string)
 	local F: any = (RetentionConfig :: any).Funnel

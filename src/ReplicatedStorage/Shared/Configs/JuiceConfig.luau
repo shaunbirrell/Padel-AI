@@ -23,6 +23,7 @@ local JuiceConfig = {
 		Confetti = 26,
 		Colors = { Color3.fromRGB(255, 205, 60), Color3.fromRGB(255, 255, 255), Color3.fromRGB(110, 200, 90) } :: { Color3 },
 	},
+	Guided = { BannerSeconds = 3, Confetti = 26 }, -- claude-bud JOB 41: the Guided "BASE SECURED!" banner (Rebirth path)
 }
 
 function JuiceConfig.LiveFor(userId: any): boolean

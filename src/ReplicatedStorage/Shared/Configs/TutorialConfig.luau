@@ -70,6 +70,8 @@ local TutorialConfig = {
 	SavedOrders = {
 		[2] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Jeep", "Outpost" },
 		[3] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Outpost", "Jeep" },
+		-- claude-bud JOB 41: the Guided order (only while TutorialConfig.Guided is live for a NEW player; see GuidedSteps)
+		[4] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "FirstFight", "Outpost", "Reward", "Barracks", "Jeep" },
 	} :: { [number]: { string } },
 	-- Lane Z: the steps whose finish is carried (DoneAhead) when a new order puts them after the step a save moves to:
 	-- the Outpost / 4x4 pair the Home Outpost switch reorders. Any other done step after it is asked again (K2's "first
@@ -337,6 +339,106 @@ TutorialConfig.FastStart = {
 
 function TutorialConfig.FastStartLiveFor(userId: any): boolean
 	return (require(script.Parent.RetentionConfig) :: any).Live(TutorialConfig.FastStart, userId)
+end
+
+--[[ claude-bud JOB 41 part A (2026-09-30): THE GUIDED FIRST 3-4 MINUTES, owner-first. A NEW player (tutorial not done,
+	Command Center not bought, no building, first join < NewPlayerSeconds ago) is stamped with OrderVersion 4 (SavedOrders
+	[4] / GuidedSteps): Command Center (the FastStart BUILD + payout: the big win inside ~60 s) -> collect at the ATM ->
+	recruit -> FIRST FIGHT (a 2-Recruit training camp at HIS Home Outpost, real CombatService NPCs, hostile only to him)
+	-> capture it -> REWARD ("BASE SECURED!", confetti, GuidedRewardCash) -> the Barracks / 4x4 as the next goals.
+	Versions 2 / 3 are untouched; a v4 save whose Guided switch went off migrates back like any other order.
+	OFF (Enabled = false, or not live for him): OrderVersion 3, no camp, no banner, no new events (today's game). ]]
+TutorialConfig.Guided = {
+	Enabled = true,
+	OwnerFirst = true, -- RetentionConfig.Live: the playtest owner (and Studio) until Code Bot flips it
+	OrderVersion = 4,
+	NewPlayerSeconds = 900, -- a profile older than this (FirstJoinUnix) never enters Guided
+	HoldMaxSeconds = 300, -- the WE_Onboarding hold covers the whole chain up to Reward, never longer than this
+	StuckSeconds = 90, -- "GuidedStuck" once a step has been open this long (analytics only)
+	RecruitCount = 3, -- the recruit step wants him able to afford this many soldiers
+	GuidedRecruitCashMax = 5000, -- the one-time top-up that covers exactly the gap to RecruitCount soldiers (0 = never)
+	GuidedRewardCash = 2500, -- the one-time REWARD (reason "onboarding"): enough for the next building right away
+	RewardText = "BASE SECURED!",
+	RewardSub = "Your outpost is yours. Next: the Barracks.",
+	CampSkipText = "The camp pulled out. Take the outpost!", -- the never-soft-lock line after MaxCampSpawns
+	Camp = {
+		Npc = { "Recruit", "Recruit" }, -- CombatConfig NPC types (weak on purpose)
+		-- the 2 sandbag posts, relative to the Home Outpost centre (studs; on the Starter ring, Radius 20)
+		Posts = { { X = -9, Z = -12 }, { X = 9, Z = -12 } },
+		MaxCampSpawns = 3, -- a death / respawn / rejoin re-spawns them at full health at most this often, then auto-complete
+		Label = "ENEMY CAMP",
+		SandbagColor = Color3.fromRGB(150, 130, 90),
+	},
+	Funnel = {
+		Name = "FirstMinutes",
+		Steps = { "Spawned", "FirstBuild", "Collected", "Recruited", "FightStarted", "FirstKill", "Captured", "Reward",
+			"NextBuilding", "Offered", "Bought" },
+	},
+}
+
+function TutorialConfig.GuidedLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live(TutorialConfig.Guided, userId)
+end
+
+-- the two new steps of the Guided order (the other seven are the owner's steps above, unchanged)
+local GUIDED_NEW: { [string]: TutorialStepDef } = {
+	FirstFight = {
+		Id = "FirstFight",
+		Title = "Clear the camp",
+		Hint = "Beat the 2 enemies at your outpost.",
+		MarkerName = "Tutorial_Outpost",
+		HighlightHint = "Territory",
+		CtaAction = "Capture",
+		CtaLabel = "GO",
+		AdvanceOn = { "CampCleared" },
+	},
+	Reward = {
+		Id = "Reward",
+		Title = "Base secured!",
+		Hint = "Great win! Your next goal is up.",
+		MarkerName = "Tutorial_Outpost",
+		CtaAction = "WatchHud",
+		CtaLabel = "OK",
+		AdvanceOn = { "GuidedReward" },
+	},
+}
+
+local function buildGuided(): { TutorialStepDef }
+	local list: { TutorialStepDef } = {}
+	for _, id in ipairs(TutorialConfig.SavedOrders[4]) do
+		local def = GUIDED_NEW[id]
+		if def == nil then
+			for _, d in ipairs(OWNER_STEPS) do
+				if d.Id == id then
+					def = d
+				end
+			end
+		end
+		table.insert(list, def :: TutorialStepDef)
+	end
+	return list
+end
+TutorialConfig.GuidedSteps = buildGuided()
+
+-- the step list a saved order version plays (4 = GuidedSteps; anything else = today's Steps)
+function TutorialConfig.StepsFor(version: any): { TutorialStepDef }
+	if tonumber(version) == TutorialConfig.Guided.OrderVersion then
+		return TutorialConfig.GuidedSteps
+	end
+	return TutorialConfig.Steps
+end
+
+function TutorialConfig.GetStepFor(version: any, index: number): TutorialStepDef?
+	return TutorialConfig.StepsFor(version)[index]
+end
+
+-- a step definition by Id in either list (the client's per-Id lookups)
+function TutorialConfig.ById(id: string): TutorialStepDef?
+	local i = TutorialConfig.IndexOf(id)
+	if i then
+		return TutorialConfig.Steps[i]
+	end
+	return GUIDED_NEW[id]
 end
 
 return TutorialConfig

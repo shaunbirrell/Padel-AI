@@ -174,8 +174,7 @@ end
 
 local function stepFromId(id: any, pad: any, pointer: any): Step?
 	if typeof(id) == "string" then
-		local i = TutorialConfig.IndexOf(id)
-		local def = if i ~= nil then TutorialConfig.Steps[i] else nil
+		local def = if typeof(id) == "string" then (TutorialConfig :: any).ById(id) else nil -- claude-bud JOB 41: either step list
 		if def ~= nil then
 			return def
 		end
@@ -227,7 +226,7 @@ local function onPlayerState(state: any)
 		tutStep = nil
 		markRetarget()
 	elseif state.TutorialComplete == false and typeof(state.TutorialStep) == "number" then
-		local def = TutorialConfig.GetStep(state.TutorialStep)
+		local def = (TutorialConfig :: any).GetStepFor(state.TutorialOrderVersion, state.TutorialStep) -- claude-bud JOB 41: the Guided list too
 		if def ~= nil then
 			tutKnown = true
 			tutStep = def

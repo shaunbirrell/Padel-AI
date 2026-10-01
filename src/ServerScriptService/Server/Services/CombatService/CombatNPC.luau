@@ -135,15 +135,21 @@ end
 
 --[[ Hit chance of one NPC shot: NpcNearHitChance at <= NpcNearStuds, falling linearly to NpcFarHitChance at the
 	type's max range; minus NpcFastTargetPenalty against a target faster than NpcFastTargetSpeed studs/s. ]]
-function CombatNPC.HitChance(dist: number, maxRange: number, targetSpeed: number): number
+-- claude-bud JOB 41: `def` (optional) = the NPC type; its HitChanceNear / HitChanceFar cap the two ends (the Recruit).
+function CombatNPC.HitChance(dist: number, maxRange: number, targetSpeed: number, def: any?): number
 	local C = CombatFairnessConfig
 	local nearD = C.NpcNearStuds
+	local nearC, farC = C.NpcNearHitChance, C.NpcFarHitChance
+	if typeof(def) == "table" then
+		nearC = math.min(nearC, tonumber(def.HitChanceNear) or nearC)
+		farC = math.min(farC, tonumber(def.HitChanceFar) or farC)
+	end
 	local chance: number
 	if dist <= nearD or maxRange <= nearD then
-		chance = C.NpcNearHitChance
+		chance = nearC
 	else
 		local t = math.clamp((dist - nearD) / (maxRange - nearD), 0, 1)
-		chance = C.NpcNearHitChance + (C.NpcFarHitChance - C.NpcNearHitChance) * t
+		chance = nearC + (farC - nearC) * t
 	end
 	if targetSpeed > C.NpcFastTargetSpeed then
 		chance -= C.NpcFastTargetPenalty
@@ -327,7 +333,7 @@ local function engage(rec: any, target: Player, dist: number, now: number, canMo
 			if aimed and now - rec.LastFireAt >= interval and dist <= rec.Def.Range then
 				rec.LastFireAt = now
 				local tState = B.combatStates[target.UserId]
-				local chance = CombatNPC.HitChance(dist, rec.Def.Range, speedOf[target.UserId] or 0)
+				local chance = CombatNPC.HitChance(dist, rec.Def.Range, speedOf[target.UserId] or 0, rec.Def)
 				local eye = rec.Root.Position + Vector3.new(0, C.NpcEyeHeight, 0)
 				if not (tState and now < tState.InvulnerableUntil) and rng:NextNumber() < chance then
 					if redirectToVehicle(target, rec.Def.Damage) then
@@ -685,7 +691,7 @@ local function fightUnit(rec: any, now: number): boolean
 	local interval = 1 / math.max(rec.Def.FireRate, 0.1)
 	if now - rec.UnitAimSince >= C.NpcReactionSeconds and now - rec.LastFireAt >= interval and dist <= rec.Def.Range then
 		rec.LastFireAt = now
-		local chance = CombatNPC.HitChance(dist, rec.Def.Range, froot.AssemblyLinearVelocity.Magnitude)
+		local chance = CombatNPC.HitChance(dist, rec.Def.Range, froot.AssemblyLinearVelocity.Magnitude, rec.Def)
 		if rng:NextNumber() < chance then
 			fh:TakeDamage(rec.Def.Damage * math.clamp(tonumber(cfg.DamageMult) or 1, 0, 3))
 			sendFx(rec, eye, froot.Position, "P")

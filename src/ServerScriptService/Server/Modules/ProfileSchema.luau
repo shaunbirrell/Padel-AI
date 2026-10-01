@@ -249,6 +249,28 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	else
 		profile.NotifOptIn = nil
 	end
+	-- claude-bud JOB 41: the Guided first minutes record (missing -> nil; each flag only ever turns on)
+	if typeof(profile.Guided) == "table" then
+		local g = profile.Guided
+		local funnel = {}
+		if typeof(g.Funnel) == "table" then
+			for k, v in pairs(g.Funnel) do
+				if typeof(k) == "string" and #k <= 24 and v == true then
+					funnel[k] = true
+				end
+			end
+		end
+		profile.Guided = {
+			SessionId = if typeof(g.SessionId) == "string" and #g.SessionId <= 64 then g.SessionId else nil,
+			CampDone = g.CampDone == true or nil,
+			CampSpawns = nonNegInt(g.CampSpawns),
+			RewardDone = g.RewardDone == true or nil,
+			RecruitTopUp = if g.RecruitTopUp ~= nil then nonNegInt(g.RecruitTopUp) else nil,
+			Funnel = funnel,
+		}
+	else
+		profile.Guided = nil
+	end
 	-- claude-bud JOB 40 part D: the rate reminder's record (missing -> nil = the defaults; Never sticks across servers)
 	if typeof(profile.RatePrompt) == "table" then
 		local rp = profile.RatePrompt

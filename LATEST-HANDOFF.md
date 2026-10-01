@@ -1,4 +1,64 @@
 <!-- Q2-START -->
+## claude-bud JOB 41 PART A (2026-10-01): THE GUIDED FIRST MINUTES (branch `claude/desktop-bud`)
+**Flag:** `TutorialConfig.Guided` (`Enabled`, `OwnerFirst = true`, through RetentionConfig.Live). OFF / not live =
+today's OrderVersion 3, no camp, no new banner, no new events. **To launch:** Code Bot sets `OwnerFirst = false`.
+
+**Who gets it:** only a NEW player: tutorial not done, no building, first join < 900 s ago. He is stamped
+OrderVersion 4. A Guided save migrates back to 3 like any other order if the switch goes off.
+
+**The chain (OrderVersion 4, TutorialConfig.GuidedSteps):** Command Center -> Collect -> Recruit -> **Clear the camp**
+-> Capture outpost -> **Base secured!** -> Barracks -> 4x4.
+- The first win: FastStart's BUILD + the $1,500 payout, unchanged.
+- Recruit: a one-time top-up covers exactly the gap to 3 soldiers. It is $0 with today's numbers: $10,000 + $1,500 -
+  $1,500 = $10,000 >= 3 x $500.
+- FIRST FIGHT (Services/GuidedService):
+  - 2 "Recruit" NPCs (a new weak CombatConfig type: 40 HP, 4 dmg, 1.2 shots/s, hit chance capped 0.35 / 0.2) at HIS
+    Home Outpost, spawned through CombatService.SpawnNPC (NoRespawn, leashed to the ring, a TargetFilter so they only
+    shoot him), with 2 sandbag parts.
+  - Real shots both ways (the normal NPC brain). Capture of his Home Outpost is blocked while one lives
+    (TerritoryService guidedBlocking, starter rows only).
+  - The first ATTACK hint shows here. The "ENEMY CAMP" objective marker sits on his outpost.
+  - A death or a rejoin brings the camp back at full health, at most 3 times; then the step completes with a friendly
+    line (never a soft-lock).
+- REWARD: $2,500 once (reason "onboarding"), "BASE SECURED!" banner + confetti (the Juice Rebirth path, JuiceConfig
+  .Guided) + the coin burst. Then the Barracks goal with the gold line.
+- The WE_Onboarding hold now lasts until the Reward (max 300 s) for Guided profiles: no streak card, nation picker,
+  promo, rate card or offer during the chain.
+- Skip: works at every step; it clears the camp at once and logs GuidedSkipped { step }.
+
+**Funnel (Creator Hub):**
+- A SEPARATE funnel, **Analytics > Funnels > FirstMinutes** (LogFunnelStepEvent, one session per profile): 1 Spawned,
+  2 FirstBuild, 3 Collected, 4 Recruited, 5 FightStarted, 6 FirstKill, 7 Captured, 8 Reward, 9 NextBuilding.
+- **Analytics > Custom events > GuidedStepSeconds** (Field step), plus GuidedSkipped and GuidedStuck (> 90 s on a step).
+- The old Onboarding funnel is untouched. Studio prints `[FUNNEL] FirstMinutes ...` lines.
+
+**Root cause input (owed):** docs/proof/job41/funnel-before.md has the Creator Hub query + an empty table. I cannot
+open Creator Hub; please paste the numbers.
+
+**Findings (reported, not hidden):**
+- **Faster than the target:** the sim's pace is derived from the real layout (console -> ATM -> Home Outpost walks,
+  banner reading, one passive tick, the capture time). It reaches the Reward in **~79 s**, much FASTER than the
+  brief's 3-4 min estimate.
+- **The fight is very short:** with the brief's Recruit numbers the modelled camp dies in a median ~2 s (StarterRifle
+  18 x 8/s). A real new phone player misses more. If it feels like no fight, raise
+  `CombatConfig.NPCTypes.Recruit.Health`.
+- **Other players:** they cannot be TARGETED by the camp, but they can still see it and shoot it (server NPCs are
+  shared).
+
+**Checks:**
+- run_first_minutes_test 0 failed (docs/proof/job41/funnel-sim.txt); claude_bud_job41 part A pins.
+- The BPS F6 "active step" pin is retired and replaced (per-profile step list).
+- BuyPathStatic PASS=7298 FAIL=0; all sims 0 failed; rojo ok; remote audit OK; no new LSP errors (LSP caught a wrong
+  require path in TerritoryService, fixed).
+
+**Owed:** the Studio fresh-profile run with screenshots, and the HUD harness with the camp marker.
+
+**Test ON HIS PHONE** (a fresh test account; the owner account is not a new player):
+1. Join: BUILD the Command Center in the first ~20 s and see the payout. Then collect at the ATM and recruit.
+2. Follow the line to "ENEMY CAMP" at your Home Outpost: 2 enemies shoot back, and you and your soldiers kill them.
+3. Capture the outpost: "BASE SECURED!" with confetti and +$2,500, then the Barracks goal shows.
+4. Skip at any step works. With the owner account (returning) there is no guided chain.
+
 ## v157 PUBLISHED (Code Bot Roblox, 2026-10-01 00:45 Dublin): Open Cloud place version 155 — the weekly Black Market live for everyone
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **157**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":155}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Commits:** phase-7-polish `867befd` (source, checks, dist); claude/desktop-bud merge `7fd3d8a` (temp worktree); this handoff.

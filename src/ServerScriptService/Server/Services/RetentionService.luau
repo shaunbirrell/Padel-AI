@@ -128,10 +128,24 @@ function RetentionService.WaitOnboarding(player: Player, maxSeconds: number?): b
 	return player.Parent ~= nil
 end
 
+-- claude-bud JOB 41: the step the hold lasts until, and its cap. A Guided profile (OrderVersion 4) is held for the
+-- whole chain up to the Reward (Guided.HoldMaxSeconds); everyone else exactly as JOB 29 (HoldPopupsUntilStep, 60 s).
+local function holdUntil(profile: any): (number, number)
+	local G: any = (TutorialConfig :: any).Guided
+	if G and profile and tonumber(profile.TutorialOrderVersion) == G.OrderVersion then
+		local r = TutorialConfig.IndexOf("Reward", (TutorialConfig :: any).GuidedSteps)
+		if r then
+			return r + 1, math.max(5, tonumber(G.HoldMaxSeconds) or 300)
+		end
+	end
+	return tonumber(TutorialConfig.FastStart.HoldPopupsUntilStep) or 3, math.max(5, tonumber(TutorialConfig.FastStart.HoldMaxSeconds) or 60)
+end
+RetentionService._HoldUntil = holdUntil
+
 -- TutorialService tells us each step change (after it is saved)
 function RetentionService.OnTutorialStep(player: Player, step: number, complete: boolean)
-	if player:GetAttribute(ONBOARD_ATTR) == true
-		and (complete or step >= (tonumber(TutorialConfig.FastStart.HoldPopupsUntilStep) or 3)) then
+	local until_ = holdUntil(DataService and DataService.GetProfile(player))
+	if player:GetAttribute(ONBOARD_ATTR) == true and (complete or step >= until_) then
 		setHold(player, false)
 	end
 	if complete then
@@ -149,14 +163,15 @@ local function startHold(player: Player, profile: any)
 	if not TutorialConfig.FastStartLiveFor(player.UserId) or profile.TutorialComplete == true then
 		return
 	end
-	if (tonumber(profile.TutorialStep) or 1) >= (tonumber(TutorialConfig.FastStart.HoldPopupsUntilStep) or 3) then
+	local untilStep, maxSeconds = holdUntil(profile) -- claude-bud JOB 41: the Guided chain holds longer
+	if (tonumber(profile.TutorialStep) or 1) >= untilStep then
 		return
 	end
 	setHold(player, true)
 	local uid = player.UserId
 	local my = (holdToken[uid] or 0) + 1
 	holdToken[uid] = my
-	task.delay(math.max(5, tonumber(TutorialConfig.FastStart.HoldMaxSeconds) or 60), function()
+	task.delay(maxSeconds, function()
 		if holdToken[uid] == my and player.Parent then
 			setHold(player, false)
 		end

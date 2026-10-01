@@ -1124,10 +1124,21 @@ end
 
 local OutpostDefenders = require(script.Parent.Parent.Modules.OutpostDefenders) -- claude-bud JOB 24 §6
 
+-- claude-bud JOB 41: the Guided training camp at a Home Outpost blocks its capture the same way (starter rows only)
+local function guidedBlocking(id: string): boolean
+	if not TerritoryConfig.Starter.Enabled or string.sub(id, 1, #TerritoryConfig.Starter.IdPrefix) ~= TerritoryConfig.Starter.IdPrefix then
+		return false
+	end
+	local ok, GS = pcall(function(): any
+		return require(script.Parent.GuidedService) -- (script = the TerritoryService folder module, so Parent = Services)
+	end)
+	return ok and GS ~= nil and GS.Blocking ~= nil and GS.Blocking(id) == true
+end
+
 local function playersInZone(rt: TerritoryRuntime): { Player }
 	local inside = TerritoryCapture.PlayersInZone(rt)
 	-- claude-bud JOB 24 §6: nobody captures (or contests) an outpost while its defenders stand; they are told why
-	if #inside > 0 and OutpostDefenders.Blocking(rt.Def.Id) then
+	if #inside > 0 and (OutpostDefenders.Blocking(rt.Def.Id) or guidedBlocking(rt.Def.Id)) then
 		for _, p in ipairs(inside) do
 			OutpostDefenders.NoteBlocked(p)
 		end

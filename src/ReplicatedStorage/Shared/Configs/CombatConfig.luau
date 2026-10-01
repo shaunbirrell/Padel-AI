@@ -16,6 +16,8 @@ export type NPCTypeDef = {
 	CashReward: number,
 	XPReward: number,
 	Color: Color3,
+	HitChanceNear: number?, -- claude-bud JOB 41: an optional per-type CAP on CombatNPC.HitChance (near / far)
+	HitChanceFar: number?,
 }
 
 local AdminConfig = require(script.Parent.AdminConfig)
@@ -71,6 +73,22 @@ local CombatConfig = {
 	},
 
 	NPCTypes = {
+		-- claude-bud JOB 41: the Guided training camp (TutorialConfig.Guided.Camp): weak on purpose, a first win
+		Recruit = {
+			Id = "Recruit",
+			DisplayName = "Camp Recruit",
+			Health = 40,
+			Damage = 4,
+			FireRate = 1.2,
+			Range = 50,
+			WalkSpeed = 10,
+			AggroRange = 60,
+			CashReward = 50,
+			XPReward = 15,
+			Color = Color3.fromRGB(120, 100, 70),
+			HitChanceNear = 0.35,
+			HitChanceFar = 0.2,
+		},
 		Infantry = {
 			Id = "Infantry",
 			DisplayName = "Hostile Infantry",

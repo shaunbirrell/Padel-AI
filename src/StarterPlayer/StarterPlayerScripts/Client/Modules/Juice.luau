@@ -71,7 +71,11 @@ local function celebrate(J: any, data: any)
 	if pg == nil then
 		return
 	end
+	local guided = typeof(data) == "table" and data.Guided == true -- claude-bud JOB 41: "BASE SECURED!"
 	local R = J.Rebirth
+	if guided and typeof(J.Guided) == "table" then
+		R = { BannerSeconds = J.Guided.BannerSeconds, Confetti = J.Guided.Confetti, Colors = J.Rebirth.Colors }
+	end
 	local okH, HudLayout = pcall(require, script.Parent.HudLayout)
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WE_RebirthCelebration"
@@ -90,7 +94,8 @@ local function celebrate(J: any, data: any)
 	banner.TextSize = 30
 	banner.TextWrapped = true
 	local p = tonumber(typeof(data) == "table" and data.Prestige) or 0
-	banner.Text = string.format("REBIRTH P%d!\n%s", p, tostring(typeof(data) == "table" and data.Sub or "Cash earnings up"))
+	banner.Text = if guided then string.format("%s\n%s", tostring(data.Title), tostring(data.Sub or ""))
+		else string.format("REBIRTH P%d!\n%s", p, tostring(typeof(data) == "table" and data.Sub or "Cash earnings up"))
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, 12)
 	c.Parent = banner
@@ -151,6 +156,8 @@ function Juice.Init()
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if kind == "Rebirth" then
 			celebrate(J, data)
+		elseif kind == "GuidedReward" and typeof(data) == "table" then -- claude-bud JOB 41
+			celebrate(J, { Guided = true, Title = data.Title, Sub = data.Sub })
 		end
 	end)
 end

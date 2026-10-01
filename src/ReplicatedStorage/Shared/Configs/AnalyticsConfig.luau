@@ -55,6 +55,10 @@ local AnalyticsConfig = {
 			-- claude-bud JOB 40 part D: the rate reminder (never a "liked" event: there is no such signal)
 			RATE_PROMPT_SHOWN = { Name = "rate_prompt_shown", Field = "trigger" },
 			RATE_PROMPT_ANSWER = { Name = "rate_prompt_answer", Field = "answer" },
+			-- claude-bud JOB 41: the Guided first minutes (Funnels.FirstMinutes is logged separately)
+			GUIDED_STEP = { Name = "GuidedStepSeconds", Value = "seconds", Field = "step" },
+			GUIDED_SKIPPED = { Name = "GuidedSkipped", Field = "step" },
+			GUIDED_STUCK = { Name = "GuidedStuck", Field = "step" },
 			STREAK_DAY = { Name = "StreakDay", Value = "day" },
 			-- claude-bud JOB 31: site activities
 			ACTIVITY_START = { Name = "ActivityStarted", Field = "activity" },
@@ -178,6 +182,9 @@ local AnalyticsConfig = {
 		NOTIF_OPTIN = "NOTIF_OPTIN",
 		RATE_PROMPT_SHOWN = "RATE_PROMPT_SHOWN", -- claude-bud JOB 40 D
 		RATE_PROMPT_ANSWER = "RATE_PROMPT_ANSWER",
+		GUIDED_STEP = "GUIDED_STEP", -- claude-bud JOB 41
+		GUIDED_SKIPPED = "GUIDED_SKIPPED",
+		GUIDED_STUCK = "GUIDED_STUCK",
 		STREAK_DAY = "STREAK_DAY",
 		ACTIVITY_START = "ACTIVITY_START",
 		ACTIVITY_DONE = "ACTIVITY_DONE",

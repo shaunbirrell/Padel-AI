@@ -261,6 +261,7 @@ export type PlayerStatePayload = {
 	TrainingIncomePerTick: number?,
 	Base: BaseStatePayload,
 	TutorialStep: number?,
+	TutorialOrderVersion: number?, -- claude-bud JOB 41: 4 = the Guided step list
 	TutorialComplete: boolean,
 	Vehicles: { [string]: boolean },
 	Weapons: { [string]: boolean },

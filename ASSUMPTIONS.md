@@ -9932,3 +9932,17 @@ ds_territories.luau T3):
   players) count, not only ATTACK / SEND. Army units do not shoot enemy army soldiers yet (JOB 43), so those kills
   cannot count until that ships. The weekly and all-time ARMY KILLS stores start empty (earlier kills were never
   counted for anyone but the owner, who is excluded).
+
+## 2026-10-01 — claude-bud JOB 41 part A: the Guided first minutes
+- **Barracks / 4x4 placement:** they stay in the tutorial AFTER the Reward (steps 8 and 9 of OrderVersion 4), so the
+  chain ends on a goal, not a blank screen. The WE_Onboarding hold ends at the Reward.
+- **Collect step:** the old Notify path is reused (PassiveIncome / ManualDrop). The ATM always has cash once one 5 s
+  tick has passed after the Command Center, so no extra payment exists; it can never pay twice.
+- **Per-type hit chance:** CombatNPC.HitChance takes the NPC type as an optional 4th argument. Its HitChanceNear /
+  HitChanceFar only CAP the curve (only the Recruit sets them; every other NPC is unchanged).
+- **Who the camp targets:** the TargetFilter restricts the camp's targets to its owner; the server NPCs are still
+  visible to others.
+- **Spawned step:** the funnel's "Spawned" is logged when the Guided profile loads (the join), with step seconds
+  measured from then.
+- **Sim pace:** the sim's pace is DERIVED from the layout. The brief's 180-240 s target is reported as not met
+  (faster), instead of padding the script.

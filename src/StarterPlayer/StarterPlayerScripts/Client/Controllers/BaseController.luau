@@ -141,8 +141,7 @@ local function applyTutorialStep(complete: boolean, id: any, pad: any, pointer: 
 		tutStep = nil
 		return
 	end
-	local i = if typeof(id) == "string" then TutorialConfig.IndexOf(id) else nil
-	local def = if i ~= nil then TutorialConfig.Steps[i] else nil
+	local def = if typeof(id) == "string" then (TutorialConfig :: any).ById(id) else nil -- claude-bud JOB 41: either step list
 	if def ~= nil then
 		tutStep = def
 	else
@@ -678,7 +677,7 @@ function BaseController.Init()
 				applyTutorialStep(true, nil, nil, nil)
 				queueRelist()
 			elseif state.TutorialComplete == false and typeof(state.TutorialStep) == "number" then
-				local def = TutorialConfig.GetStep(state.TutorialStep)
+				local def = (TutorialConfig :: any).GetStepFor(state.TutorialOrderVersion, state.TutorialStep) -- claude-bud JOB 41: the Guided list too
 				if def ~= nil then
 					applyTutorialStep(false, def.Id, nil, nil)
 					queueRelist()

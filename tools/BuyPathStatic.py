@@ -3332,7 +3332,9 @@ T_TUS = "src/ServerScriptService/Server/Services/TutorialService.luau"
 T_TC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau"
 # F6 dispatch: the ACTIVE step's AdvanceOn (spec pin `def.AdvanceOn`), no fixed step indexes
 must_contain(T_TUS, "def.AdvanceOn", "F6 TutorialService advances on the step's AdvanceOn (replaces STEP_DROPPER)")
-must_contain(T_TUS, "local def = TutorialConfig.GetStep(step)\n\tif def and typeof(def.AdvanceOn) == \"table\" and table.find(def.AdvanceOn, eventType)\n\t\tand (eventType ~= \"Upgrade\" or (typeof(detail) == \"string\" and detail == def.PadStructureId)) then\n\t\tadvanceTo(player, step)", "F6 only the active step finishes; an Upgrade only for its own PadStructureId")
+# claude-bud JOB 41: retired (the active step now comes from the profile's own list: getStep(profile, step), OrderVersion 4 =
+# the Guided steps); replacement in tools/checks/claude_bud_job41.py:
+#must_contain(T_TUS, "local def = TutorialConfig.GetStep(step)\n\tif def and typeof(def.AdvanceOn) == \"table\" and table.find(def.AdvanceOn, eventType)\n\t\tand (eventType ~= \"Upgrade\" or (typeof(detail) == \"string\" and detail == def.PadStructureId)) then\n\t\tadvanceTo(player, step)", "F6 only the active step finishes; an Upgrade only for its own PadStructureId")
 must_contain(T_TUS, "if eventType == \"PlotAssigned\" and profile.BasePlotId == nil then\n\t\treturn", "F6 no plot yet: the claim step waits")
 for _n in ("STEP_BUSINESS", "BusinessStepIndex", "businessStepStructureId", "STEP_INCOME", "STEP_COMMAND", "STEP_RECRUIT", "STEP_JEEP", "STEP_OUTPOST", "STEP_DROPPER"):
     must_not_contain(T_TUS, _n, f"F6 TutorialService has no fixed step index ({_n}); the order lives in TutorialConfig")

@@ -1605,6 +1605,7 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 			PassiveIncomePerTick = BaseService.ComputePassiveIncomePerTick(profile, player),
 		},
 		TutorialStep = profile.TutorialStep,
+		TutorialOrderVersion = profile.TutorialOrderVersion, -- claude-bud JOB 41: 4 = the Guided step list
 		TutorialComplete = profile.TutorialComplete,
 		Vehicles = profile.Vehicles,
 		Weapons = profile.Weapons,

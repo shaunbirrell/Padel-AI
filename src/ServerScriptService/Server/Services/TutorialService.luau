@@ -35,6 +35,26 @@ local MonetizationService: any = nil
 local CombatService: any = nil -- F6: EndNoviceShield (batch A lane C API), pcall + nil-check
 local RetentionService: any = nil -- claude-bud JOB 29: the FastStart onboarding hold follows the step
 local AnalyticsService: any = nil -- claude-bud JOB 29: onboarding timing (Step1..7, BaseClaimed)
+local GuidedService: any = nil -- claude-bud JOB 41: the Guided first minutes (camp, reward, funnel); nil = the old tutorial
+
+-- claude-bud JOB 41: the step list THIS profile plays (OrderVersion 4 = the Guided list, else the normal Steps)
+local function stepsOf(profile: any): { TutorialConfig.TutorialStepDef }
+	return TutorialConfig.StepsFor(profile and profile.TutorialOrderVersion)
+end
+local function getStep(profile: any, index: number): TutorialConfig.TutorialStepDef?
+	return stepsOf(profile)[index]
+end
+local function stepCount(profile: any): number
+	return #stepsOf(profile)
+end
+local function guidedHook(name: string, ...: any)
+	if GuidedService and typeof(GuidedService[name]) == "function" then
+		local ok, err = pcall(GuidedService[name], ...)
+		if not ok then
+			warn("[TutorialService] Guided." .. name .. " failed:", err)
+		end
+	end
+end
 
 -- claude-bud JOB 29: seconds-since-join marks (analytics only) and the FastStart hold; never breaks the tutorial
 local function onboard(player: Player, step: string)
@@ -79,11 +99,12 @@ local function pushTutorial(player: Player)
 	end
 	local remote = RemoteSetup.Get(Constants.RemoteNames.TutorialStateUpdate) :: RemoteEvent
 	local stepIndex = profile.TutorialStep
-	local stepDef = if not profile.TutorialComplete then TutorialConfig.GetStep(stepIndex) else nil
+	local stepDef = if not profile.TutorialComplete then getStep(profile, stepIndex) else nil
 	remote:FireClient(player, {
 		Step = stepIndex,
 		Complete = profile.TutorialComplete == true,
-		Total = TutorialConfig.StepCount(),
+		Total = stepCount(profile),
+		OrderVersion = tonumber(profile.TutorialOrderVersion) or 1, -- claude-bud JOB 41: 4 = the Guided list
 		Id = if stepDef then stepDef.Id else nil,
 		Title = if stepDef then stepDef.Title else nil,
 		Hint = if stepDef then stepDef.Hint else nil,
@@ -226,12 +247,19 @@ local function stepAlreadyDone(profile: any, def: TutorialConfig.TutorialStepDef
 	if def.Id == "Outpost" then
 		return TerritoryConfig.Starter.Enabled == true and profile.StarterOutpostTaken == true
 	end
+	-- claude-bud JOB 41: the Guided fight / reward are done once (profile.Guided)
+	local g = profile.Guided
+	if def.Id == "FirstFight" then
+		return (typeof(g) == "table" and g.CampDone == true) or profile.StarterOutpostTaken == true
+	elseif def.Id == "Reward" then
+		return typeof(g) == "table" and g.RewardDone == true
+	end
 	return false
 end
 
 local function skipOwnedBuySteps(profile: any, step: number): number
-	local total = TutorialConfig.StepCount()
-	while step <= total and stepAlreadyDone(profile, TutorialConfig.GetStep(step)) do
+	local total = stepCount(profile)
+	while step <= total and stepAlreadyDone(profile, getStep(profile, step)) do
 		step += 1
 	end
 	return step
@@ -297,6 +325,7 @@ local function setStep(player: Player, step: number, complete: boolean?)
 	end
 	DataService.MarkDirty(player)
 	pushTutorial(player)
+	guidedHook("OnStep", player, profile, getStep(profile, step), complete == true) -- claude-bud JOB 41
 	retentionStep(player, step, complete == true) -- claude-bud JOB 29
 	if complete then
 		onboard(player, "TutorialDone") -- claude-bud JOB 29
@@ -332,13 +361,14 @@ local function advanceTo(player: Player, targetStep: number)
 	lastAdvanceAt[player.UserId] = now
 	lastAdvanceStep[player.UserId] = targetStep
 	-- claude-bud JOB 29: the funnel step just finished, at the real moment (ClaimBase = "BaseClaimed", else Tut_<Id>)
-	local doneDef = TutorialConfig.GetStep(targetStep)
+	local doneDef = getStep(profile, targetStep)
 	if doneDef then
 		onboard(player, if doneDef.Id == "ClaimBase" then "BaseClaimed" else "Tut_" .. doneDef.Id)
+		guidedHook("OnStepDone", player, profile, doneDef) -- claude-bud JOB 41: the FirstMinutes funnel
 	end
 	-- One setStep (one push): the client drops a second TutorialStateUpdate that lands within 0.2 s
 	local nextStep = skipOwnedBuySteps(profile, targetStep + 1)
-	if nextStep > TutorialConfig.StepCount() then
+	if nextStep > stepCount(profile) then
 		setStep(player, nextStep, true)
 	else
 		-- Panel update only — no toast spam per step
@@ -354,10 +384,12 @@ function TutorialService.Complete(player: Player)
 	if not profile then
 		return
 	end
+	local skippedAt = getStep(profile, profile.TutorialStep) -- claude-bud JOB 41: where he skipped (before the stamp)
 	profile.TutorialComplete = true
-	profile.TutorialStep = TutorialConfig.StepCount() + 1
+	profile.TutorialStep = stepCount(profile) + 1
 	DataService.MarkDirty(player)
 	pushTutorial(player)
+	guidedHook("OnSkip", player, profile, skippedAt) -- claude-bud JOB 41: clears the camp at once, GuidedSkipped
 	if NotificationService then
 		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
@@ -414,7 +446,7 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 	end
 	-- F6: only the ACTIVE step can finish, and only on an event its AdvanceOn lists ("Upgrade" = its own console buy;
 	-- any vehicle spawn = the 4x4 step; a collect or a cash drop ("ManualDrop") = the collect step)
-	local def = TutorialConfig.GetStep(step)
+	local def = getStep(profile, step)
 	if def and typeof(def.AdvanceOn) == "table" and table.find(def.AdvanceOn, eventType)
 		and (eventType ~= "Upgrade" or (typeof(detail) == "string" and detail == def.PadStructureId)) then
 		advanceTo(player, step)
@@ -430,6 +462,7 @@ function TutorialService.Init(deps: { [string]: any })
 	CombatService = deps.CombatService -- F6: EndNoviceShield (CombatService.Init runs later; called only at run time)
 	RetentionService = deps.RetentionService -- claude-bud JOB 29
 	AnalyticsService = deps.AnalyticsService -- claude-bud JOB 29
+	GuidedService = deps.GuidedService -- claude-bud JOB 41 (nil = the old tutorial)
 
 	local skipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSkipTutorial) :: RemoteEvent
 	skipRemote.OnServerEvent:Connect(function(player: Player)
@@ -454,6 +487,19 @@ function TutorialService.Init(deps: { [string]: any })
 		alone (never stamped down, so it is never migrated twice). ]]
 	local function migrateOrder(player: Player, profile: any)
 		local current = orderVersion()
+		-- claude-bud JOB 41: a NEW player enters the Guided order (steps 1-4 have the same index in 3 and 4), and a
+		-- Guided save stays Guided while the switch is live for him; otherwise it migrates back like any other order
+		if GuidedService and typeof(GuidedService.Wants) == "function" then
+			local okW, wants = pcall(GuidedService.Wants, player, profile)
+			if okW and wants == true then
+				current = TutorialConfig.Guided.OrderVersion
+				if tonumber(profile.TutorialOrderVersion) ~= current then
+					profile.TutorialOrderVersion = current
+					DataService.MarkDirty(player)
+				end
+				return
+			end
+		end
 		local saved = tonumber(profile.TutorialOrderVersion) or 1
 		if saved == current or TutorialConfig.SavedOrder(saved) == nil then
 			return
@@ -500,13 +546,13 @@ function TutorialService.Init(deps: { [string]: any })
 		local firstOpen = skipOwnedBuySteps(profile, profile.TutorialStep)
 		if firstOpen ~= profile.TutorialStep then
 			profile.TutorialStep = firstOpen
-			if firstOpen > TutorialConfig.StepCount() then
+			if firstOpen > stepCount(profile) then
 				profile.TutorialComplete = true
 			end
 			DataService.MarkDirty(player)
 		end
 		-- F6: a migrated v1 save past the last step (or everything already done) is a finished tutorial
-		if profile.TutorialStep > TutorialConfig.StepCount() and profile.TutorialComplete ~= true then
+		if profile.TutorialStep > stepCount(profile) and profile.TutorialComplete ~= true then
 			profile.TutorialComplete = true
 			DataService.MarkDirty(player)
 		end
@@ -515,6 +561,7 @@ function TutorialService.Init(deps: { [string]: any })
 			endNoviceShield(player) -- F6 (no-op unless a shield is already up)
 			return
 		end
+		guidedHook("OnResume", player, profile, getStep(profile, profile.TutorialStep)) -- claude-bud JOB 41: a rejoin mid-chain
 		-- Plot assignment counts as claim-base progress
 		task.defer(function()
 			if profile.BasePlotId then
