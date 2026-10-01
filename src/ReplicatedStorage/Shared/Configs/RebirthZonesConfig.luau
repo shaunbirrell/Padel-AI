@@ -138,6 +138,8 @@ cfg.RunRules = {
 	CooldownMinutes = 20, -- per zone, saved (profile.ZoneRunAt)
 	SpeedBonusMax = 1.5, -- the fastest run pays this x ShipmentCash (a run at the time limit pays 1.0 x)
 	FirstClearMult = 1, -- the first clear of a zone also pays this x ShipmentCash once (profile.ZoneFirstClear)
+	ReadyToast = true, -- claude-bud JOB 50 C: one toast when a zone's run comes off cooldown (Rebuild.Signs)
+	StatusRefreshSeconds = 30, -- claude-bud JOB 50 C: the gateway plaque's READY / NEXT RUN line (minutes, no per-second churn)
 	AnnexSlackStuds = 24, -- a step only counts with him inside the annex + this (no remote triggering)
 	StepHold = 0.3, -- seconds to hold a step prompt (fingers)
 	StepReach = 9, -- the step prompt's MaxActivationDistance
@@ -246,6 +248,36 @@ function cfg.ShipmentCash(zoneId: string, level: number, tickSeconds: number): n
 	return math.floor(inc / math.max(1, tickSeconds) * 60 * cfg.Shipment.Minutes)
 end
 
+-- claude-bud JOB 50 C: what the run is and what a win gives, one short line (pure; the preview card + the map card)
+local EFFECT_TEXT: { [string]: (r: any) -> string } = {
+	cash = function(_r) return "cash" end,
+	nukecharge = function(r) return string.format("nuke -%d min", tonumber(r.ChargeCutMinutes) or 0) end,
+	reloadcut = function(r) return string.format("reload -%d s", tonumber(r.ReloadCutSeconds) or 0) end,
+	recon = function(_r) return "marks a rival" end,
+	armyboost = function(r) return string.format("par %d s: boost", tonumber(r.Par) or 0) end,
+	banner = function(_r) return "cash + banner" end,
+}
+function cfg.RunLine(zoneId: string): string?
+	local r: any = (cfg.Runs :: any)[zoneId]
+	if r == nil then
+		return nil
+	end
+	local fx = EFFECT_TEXT[r.Effect]
+	local secs = tonumber(r.Seconds) or 0
+	return string.format("Run: %s%s%s", r.Title, if secs > 0 then string.format(" · %d s", secs) else "", if fx then " · " .. fx(r) else "")
+end
+
+-- claude-bud JOB 50 C: the plaque / map status of a run (pure): READY, IN PROGRESS, or NEXT RUN n MIN (rounded up)
+function cfg.RunStatus(cooldownLeft: number, active: boolean): (string, boolean)
+	if active then
+		return "RUN IN PROGRESS", false
+	end
+	if cooldownLeft <= 0 then
+		return "RUN READY", true
+	end
+	return string.format("NEXT RUN %d MIN", math.max(1, math.ceil(cooldownLeft / 60))), false
+end
+
 --[[ The preview card for a zone at its current level: { Title, Level, Cost (nil at max), Gains (the NEXT level's, or
 	the current at max), Do, Action }. Pure (the client card, the locked sign and the tests). ]]
 function cfg.CardFor(zoneId: string, level: number, tickSeconds: number): any
@@ -265,6 +297,7 @@ function cfg.CardFor(zoneId: string, level: number, tickSeconds: number): any
 		Do = info.Do,
 		Action = info.ActionText,
 		Maxed = maxed,
+		Run = cfg.RunLine(zoneId), -- claude-bud JOB 50 C (shown only while Rebuild.Signs is live)
 	}
 end
 

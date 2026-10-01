@@ -81,5 +81,24 @@ ok    DroneBay run props + edge: 6 parts (<= 70), 0 lights (none: the JOB 46 rul
 ok    EastYard run props + edge: 18 parts (<= 70), 0 lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard
 ok    EastStrip run props + edge: 18 parts (<= 70), 0 lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard
 ok    WestFlank run props + edge: 24 parts (<= 70), 0 lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard
+ok    card run line: Run: PRODUCTION RUN · 60 s · cash
+ok    instant run has no time: Run: RECON FLIGHT · marks a rival
+ok    drill line: Run: DRILL COURSE · 45 s · par 30 s: boost
+ok    WestYard run line fits the 500 px card at 20 px (33 <= 42 chars): Run: PRODUCTION RUN · 60 s · cash
+ok    EastStrip run line fits the 500 px card at 20 px (34 <= 42 chars): Run: PRESSURE VALVES · 30 s · cash
+ok    StrategicYard run line fits the 500 px card at 20 px (37 <= 42 chars): Run: LAUNCH PREP · 30 s · nuke -5 min
+ok    EastYard run line fits the 500 px card at 20 px (42 <= 42 chars): Run: DRILL COURSE · 45 s · par 30 s: boost
+ok    WestFlank run line fits the 500 px card at 20 px (41 <= 42 chars): Run: HOLD THE LINE · 60 s · cash + banner
+ok    DroneBay run line fits the 500 px card at 20 px (33 <= 42 chars): Run: RECON FLIGHT · marks a rival
+ok    WestStrip run line fits the 500 px card at 20 px (42 <= 42 chars): Run: RANGE PRACTICE · 45 s · reload -120 s
+ok    CardFor carries the run line
+ok    status: READY
+ok    status: NEXT RUN n MIN (rounded up, never 0)
+ok    status: IN PROGRESS beats READY
+ok    the gateway plaque shows the run's cooldown: UNLOCKED BY SHAUN · REBIRTH 1 / PRODUCTION RUN BEST 0:18.0 / NEXT RUN 20 MIN
+ok    after the cooldown: RUN READY
+ok    Signs OFF: the JOB 50 A plaque exactly (no status line)
+ok    Signs OFF: no zones on the map
+ok    the status refresh is slow (>= 10 s; minutes on the sign, no per-second text churn)
 REBIRTH STATIONS LUA: 0 failed
 REBIRTH STATIONS TEST: 0 failed

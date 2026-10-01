@@ -713,6 +713,11 @@ local function paint()
 		for i, j in ipairs(live.Jobs or {}) do
 			mark("Job" .. tostring(i), j.X, j.Z, C.Job, I.Job, "circle", nil)
 		end
+		-- claude-bud JOB 50 C: HIS rebirth zones (green = the run is ready, gold = cooling down); no labels on the map
+		-- (tap one: its card + a pin, the same tap-to-pin as anywhere else; nothing moves him)
+		for i, zr in ipairs(live.Zones or {}) do
+			mark("Zone" .. tostring(i), zr.X, zr.Z, if zr.R then C.OutpostMine else C.Outpost, I.Job, "circle", nil)
+		end
 		-- claude-bud JOB 37: road checkpoints (server: hostile while the guards are up, cleared with the respawn countdown)
 		for i, cp in ipairs(live.Checkpoints or {}) do
 			local left = tonumber(cp.T) or 0
@@ -1016,6 +1021,30 @@ local function onTap(pos: Vector2)
 			end
 		end
 		if best and selectItem(best.Id) then
+			return
+		end
+	end
+	-- 3b. claude-bud JOB 50 C: one of HIS rebirth zones (Normal mode only): its card + a pin on its kiosk
+	if mapMode ~= "ArmySend" and typeof(lastLive) == "table" then
+		local bestZ, bestZd = nil, math.huge
+		for _, zr in ipairs((lastLive :: any).Zones or {}) do
+			local d = math.sqrt((zr.X - x) ^ 2 + (zr.Z - z) ^ 2) * pxPerStud
+			if d <= MapConfig.IconTapPx and d < bestZd then
+				bestZ, bestZd = zr, d
+			end
+		end
+		if bestZ then
+			selected = nil
+			selectedItem = nil
+			showFocus()
+			pcall(AudioController.PlayClick)
+			ObjectiveMarker.ShowWith({ Short = tostring(bestZ.N), X = bestZ.X, Y = tonumber(bestZ.Y) or 5, Z = bestZ.Z }, {
+				Pin = true,
+				ArriveStuds = MapConfig.PinArriveStuds,
+				TimeoutSeconds = MapConfig.PinTimeoutSeconds,
+			})
+			paint()
+			showCard(tostring(bestZ.N), { tostring(bestZ.S), "Pin set: follow the gold line" }, false)
 			return
 		end
 	end

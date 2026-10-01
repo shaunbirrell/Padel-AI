@@ -287,6 +287,39 @@ for _, zoneId in ipairs(RC.ZoneOrder) do
     string.format("%s run props + edge: %d parts (<= 70), %d lights (none: the JOB 46 rule), no Neon / WE_Building / Store_, nothing inside the yard", zoneId, #PARTS, LIGHTS))
 end
 Instance.new = rn
+
+-- ── 7. claude-bud JOB 50 C: the run line, the gateway status, the ready toast, the map rows ──
+check(ZC.RunLine("WestYard") == "Run: PRODUCTION RUN · 60 s · cash", "card run line: " .. tostring(ZC.RunLine("WestYard")))
+check(ZC.RunLine("DroneBay") == "Run: RECON FLIGHT · marks a rival", "instant run has no time: " .. tostring(ZC.RunLine("DroneBay")))
+check(ZC.RunLine("EastYard") == "Run: DRILL COURSE · 45 s · par 30 s: boost", "drill line: " .. tostring(ZC.RunLine("EastYard")))
+for zoneId in pairs(ZC.Runs) do
+  local line = ZC.RunLine(zoneId)
+  check(line ~= nil and utf8.len(line) <= 42, string.format("%s run line fits the 500 px card at 20 px (%d <= 42 chars): %s", zoneId, line and utf8.len(line) or -1, tostring(line)))
+end
+check(ZC.CardFor("WestStrip", 1, TICK).Run == "Run: RANGE PRACTICE · 45 s · reload -120 s", "CardFor carries the run line")
+check(select(1, ZC.RunStatus(0, false)) == "RUN READY" and select(2, ZC.RunStatus(0, false)) == true, "status: READY")
+check(ZC.RunStatus(61, false) == "NEXT RUN 2 MIN" and ZC.RunStatus(1, false) == "NEXT RUN 1 MIN" and ZC.RunStatus(1200, false) == "NEXT RUN 20 MIN", "status: NEXT RUN n MIN (rounded up, never 0)")
+check(ZC.RunStatus(0, true) == "RUN IN PROGRESS", "status: IN PROGRESS beats READY")
+-- the plaque text (the real service; the TextLabel caught at creation)
+local LABELS = {}
+local rn7 = Instance.new
+Instance.new = function(cls) local o = rn7(cls); if cls == "TextLabel" then table.insert(LABELS, o) end; return o end
+local OWN7 = { UserId = 470626172, Name = "shaunie6", DisplayName = "Shaun" }
+local PR7 = { Prestige = 10, RebirthZones = { WestYard = 2 }, ZoneBest = { WestYard = 18 }, ZoneRunAt = { WestYard = UNIX } }
+S._BuildPlaque(OWN7, PR7, "WestYard", CFrame.new(0, 0, 0), 60, Instance.new("Folder"))
+Instance.new = rn7
+local lbl = LABELS[#LABELS]
+check(lbl ~= nil and string.find(lbl.Text, "NEXT RUN 20 MIN", 1, true) ~= nil and string.find(lbl.Text, "PRODUCTION RUN BEST 0:18.0", 1, true) ~= nil,
+  "the gateway plaque shows the run's cooldown: " .. tostring(lbl and string.gsub(lbl.Text, "\n", " / ")))
+PR7.ZoneRunAt.WestYard = UNIX - ZC.RunRules.CooldownMinutes * 60
+S._RefreshPlaque(OWN7, PR7, "WestYard")
+check(string.find(lbl.Text, "RUN READY", 1, true) ~= nil, "after the cooldown: RUN READY")
+ZC.Rebuild.Signs = false
+S._RefreshPlaque(OWN7, PR7, "WestYard")
+check(string.find(lbl.Text, "RUN", 1, true) == string.find(lbl.Text, "RUN BEST", 1, true) and string.find(lbl.Text, "READY", 1, true) == nil, "Signs OFF: the JOB 50 A plaque exactly (no status line)")
+check(S.MapRows(OWN7) == nil, "Signs OFF: no zones on the map")
+ZC.Rebuild.Signs = true
+check(ZC.RunRules.StatusRefreshSeconds >= 10, "the status refresh is slow (>= 10 s; minutes on the sign, no per-second text churn)")
 print(string.format("REBIRTH STATIONS LUA: %d failed", fails))
 if fails > 0 then error("failed") end
 '''

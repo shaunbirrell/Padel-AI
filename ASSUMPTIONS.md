@@ -10085,3 +10085,10 @@ ds_territories.luau T3):
 - Props are built only while `Rebuild.Visuals` is live (owner-first). OFF = the JOB 46 dressing exactly.
 - Store model swaps (the open-roof garage in WestYard / DroneBay) are left to Code Bot. They need WE_CHECK2-probed
   assets.
+
+## claude-bud JOB 50 part C (2026-10-01): zone signs / card / map
+- The plaque status shows minutes ("NEXT RUN 12 MIN") instead of m:ss. A 30 s server refresh keeps replication
+  traffic tiny (at most 7 labels x 10 players), and a live m:ss would need a client countdown. Reversible:
+  `RunRules.StatusRefreshSeconds`.
+- Map zone dots are unlabelled to avoid label overlap with the area / site pills. The name shows on tap.
+- "Ready" toast: once per zone per off-cooldown edge, only while the plaques exist (he has the plot loaded).

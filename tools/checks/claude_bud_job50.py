@@ -51,4 +51,17 @@ _bp = _DRs.split("function RebirthZoneDressing.BuildRunProps")[1] if "function R
     "CLAUDE-BUD J50 B: run props + annex edge: no Light objects (JOB 46 / v173 rule), no Neon / WE_Building / Store_ names")
 (ok if 'ZC.RebuildLive(player.UserId, "Visuals") and Dressing.BuildRunProps' in _j50_src("src/ServerScriptService/Server/Services/RebirthZoneService.luau") else bad)(
     "CLAUDE-BUD J50 B: the props are built only while Rebuild.Visuals is live (OFF = the JOB 46 dressing exactly)")
+# ── part C: the gateway status, the card's run line, his zones on the map (tap-to-pin only) ──
+_MSs = _j50_src("src/ServerScriptService/Server/Services/MapService.luau")
+(ok if "Zones = zoneRows(player)" in _MSs and "RZ.MapRows" in _MSs else bad)("CLAUDE-BUD J50 C: the map snapshot carries HIS zones (RebirthZoneService.MapRows)")
+_RZSs = _j50_src("src/ServerScriptService/Server/Services/RebirthZoneService.luau")
+_mr = _RZSs.split("function RebirthZoneService.MapRows")[1].split("\nend\n")[0] if "function RebirthZoneService.MapRows" in _RZSs else ""
+(ok if ('ZC.RebuildLive(player.UserId, "Signs")' in _mr and "kioskOf[player.UserId]" in _mr) else bad)("CLAUDE-BUD J50 C: map rows are his own kiosks only, behind Rebuild.Signs")
+(ok if ("if t.Text ~= text then" in _RZSs and "ZC.RunRules.StatusRefreshSeconds" in _RZSs) else bad)("CLAUDE-BUD J50 C: the plaque status is refreshed slowly and set only when it changed")
+_MCs = _j50_src("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MapController.luau")
+_zt = _MCs.split("-- 3b. claude-bud JOB 50 C")[1].split("-- 4. a named site")[0] if "-- 3b. claude-bud JOB 50 C" in _MCs else ""
+(ok if ("Pin = true" in _zt and "ObjectiveMarker.ShowWith" in _zt and not _j50_re.search(r"PivotTo|Teleport|CFrame\s*=", _zt) and 'mapMode ~= "ArmySend"' in _zt) else bad)(
+    "CLAUDE-BUD J50 C: tapping his zone on the map only pins it (no fast travel, Normal mode only)")
+_RCs = _j50_src("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/RebirthZoneController.luau")
+(ok if 'ZC.RebuildLive(player.UserId, "Signs")' in _RCs and "lines[5].Visible = runLine ~= nil" in _RCs else bad)("CLAUDE-BUD J50 C: the preview card's run line is owner-first (OFF = the 4-line card)")
 #@@J50ABC@@

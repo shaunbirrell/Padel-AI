@@ -437,8 +437,83 @@ function RebirthZoneService._RefreshPlaque(player: Player, profile: any, zoneId:
 	local z = RebirthConfig.Zones[zoneId]
 	local best = if typeof(profile.ZoneBest) == "table" then tonumber(profile.ZoneBest[zoneId]) else nil
 	local run = ZC.Runs[zoneId]
-	t.Text = ZoneRuns.PlaqueText(player.DisplayName, if z then z.Tier else 1, best, profile.ZoneCommander == true,
+	local text = ZoneRuns.PlaqueText(player.DisplayName, if z then z.Tier else 1, best, profile.ZoneCommander == true,
 		if run and run.Seconds > 0 then run.Title else nil)
+	-- claude-bud JOB 50 C: the run's state on the gateway (READY / IN PROGRESS / NEXT RUN n MIN)
+	if run and ZC.RebuildLive(player.UserId, "Signs") then
+		local status = RebirthZoneService.RunStatusOf(player, profile, zoneId)
+		text ..= "\n" .. status
+	end
+	if t.Text ~= text then
+		t.Text = text
+	end
+end
+
+-- claude-bud JOB 50 C: one zone's run state for him (READY / IN PROGRESS / NEXT RUN n MIN) + ready flag
+function RebirthZoneService.RunStatusOf(player: Player, profile: any, zoneId: string): (string, boolean)
+	local active: any = if ZoneRuns then ZoneRuns.Active(player.UserId) else nil
+	local left = if ZoneRuns then ZoneRuns.CooldownLeft(profile, zoneId) else 0
+	return ZC.RunStatus(left, active ~= nil and active.Zone == zoneId)
+end
+
+-- claude-bud JOB 50 C: HIS built zones for the map (his kiosks only; nil when Signs is not live for him)
+function RebirthZoneService.MapRows(player: Player): { any }?
+	if not ZC.RebuildLive(player.UserId, "Signs") or ZoneRuns == nil then
+		return nil
+	end
+	local mine = kioskOf[player.UserId]
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if mine == nil or profile == nil then
+		return nil
+	end
+	local rows = {}
+	for _, zoneId in ipairs(RebirthConfig.ZoneOrder) do
+		local panel = mine[zoneId]
+		local zc = (Z.Zones :: any)[zoneId]
+		if panel and panel.Parent and zc and ZC.Runs[zoneId] then
+			local status, ready = RebirthZoneService.RunStatusOf(player, profile, zoneId)
+			table.insert(rows, {
+				Id = zoneId,
+				N = string.upper(zc.Name),
+				S = status,
+				R = ready,
+				X = math.floor(panel.Position.X),
+				Y = math.floor(panel.Position.Y),
+				Z = math.floor(panel.Position.Z),
+			})
+		end
+	end
+	return rows
+end
+
+-- claude-bud JOB 50 C: the plaques' status line every StatusRefreshSeconds, and ONE toast when a run comes ready
+local wasReady: { [number]: { [string]: boolean } } = {}
+function RebirthZoneService._StatusTick()
+	if ZoneRuns == nil then
+		return
+	end
+	for uid, byZone in pairs(plaqueOf) do
+		local player = Players:GetPlayerByUserId(uid)
+		local profile = if player and deps.DataService then deps.DataService.GetProfile(player) else nil
+		if player and profile and ZC.RebuildLive(uid, "Signs") then
+			local seen = wasReady[uid]
+			if seen == nil then
+				seen = {}
+				wasReady[uid] = seen
+			end
+			for zoneId in pairs(byZone) do
+				RebirthZoneService._RefreshPlaque(player, profile, zoneId)
+				if ZC.Runs[zoneId] then
+					local _, ready = RebirthZoneService.RunStatusOf(player, profile, zoneId)
+					if ready and seen[zoneId] == false and ZC.RunRules.ReadyToast then
+						local zc = (Z.Zones :: any)[zoneId]
+						notify(player, string.format("%s ready: %s", ZC.Runs[zoneId].Title, string.upper(if zc then zc.Name else zoneId)), "Info")
+					end
+					seen[zoneId] = ready
+				end
+			end
+		end
+	end
 end
 
 -- claude-bud JOB 50 A: every zone at MaxLevel -> ZONE COMMANDER (free; a status title, saved once)
@@ -853,6 +928,7 @@ function RebirthZoneService.Init(d: { [string]: any })
 		sweepAt[p.UserId] = nil
 		kioskOf[p.UserId] = nil -- claude-bud JOB A
 		plaqueOf[p.UserId] = nil -- claude-bud JOB 50 A
+		wasReady[p.UserId] = nil -- claude-bud JOB 50 C
 		if ZoneRuns then
 			ZoneRuns.Cancel(p.UserId)
 		end
@@ -867,6 +943,12 @@ function RebirthZoneService.Init(d: { [string]: any })
 		while true do
 			task.wait(2)
 			pcall(droneTick)
+		end
+	end)
+	task.spawn(function() -- claude-bud JOB 50 C: the gateway status line (every 30 s; text set only when it changed)
+		while true do
+			task.wait(math.max(5, tonumber(ZC.RunRules.StatusRefreshSeconds) or 30))
+			pcall(RebirthZoneService._StatusTick)
 		end
 	end)
 	print("[WAR EMPIRE] RebirthZoneService Init: zones=" .. #RebirthConfig.ZoneOrder)

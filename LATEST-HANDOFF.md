@@ -58,6 +58,31 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 50 part C (2026-10-01): REBIRTH ZONES: SIGNS, CARD, MAP (branch `claude/desktop-bud`)
+**Flag:** `RebirthZonesConfig.Rebuild.Signs` (owner-first with Rebuild). With it OFF, the JOB 46 / 50 A versions are
+unchanged.
+
+**What changed:**
+- **Gateway plaque:** gets a 4th line: `RUN READY` / `RUN IN PROGRESS` / `NEXT RUN n MIN`.
+  - The server refreshes it every `RunRules.StatusRefreshSeconds` (30 s) and sets the text only when it changed.
+  - It shows minutes, not m:ss, so there is no per-second replication.
+  - Locked zones keep the JOB 46 sign (`<NAME> · <gain>` / `Unlocks at Rebirth N`).
+- **Preview card:** gets a 5th line naming the run, its time limit and what a win gives (`RebirthZonesConfig.RunLine`,
+  for example "Run: RANGE PRACTICE · 45 s · reload -120 s"). Every line is <= 42 characters (tested), so it fits at
+  20 px.
+- **Map:** shows HIS built zones as small unlabelled dots (green = ready, gold = cooling down), from `MapService.Live`
+  `Zones` → `RebirthZoneService.MapRows`.
+  - Tapping a dot shows its name and status and sets the normal pin on its kiosk.
+  - Nothing moves him (no fast travel). ArmySend mode ignores them.
+- **Ready toast:** one toast when a run comes off cooldown ("RANGE PRACTICE ready: ARTILLERY BATTERY";
+  `RunRules.ReadyToast`).
+
+**Test ON HIS PHONE (1024x471 or 956x440):**
+1. Walk to a built zone: the plaque by the gate shows the run state.
+2. Stand at the upgrade prompt: the card has the gold "Run: ..." line, not cut off.
+3. Open the map: your zone dots are there. Tap one: the card and the gold line to it.
+4. Wait out a 20 min cooldown: one "ready" toast.
+
 ## claude-bud JOB 50 part B (2026-10-01): REBIRTH ZONES: THE RUN PROPS + A FINISHED EDGE (branch `claude/desktop-bud`)
 **Flag:** `RebirthZonesConfig.Rebuild.Visuals` (owner-first with Rebuild).
 

@@ -92,6 +92,7 @@ local function build()
 		{ Size = 21, Color = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold },
 		{ Size = 21, Color = GREEN, Font = Enum.Font.GothamBold },
 		{ Size = 20, Color = Color3.fromRGB(215, 205, 170), Font = Enum.Font.GothamMedium },
+		{ Size = 20, Color = GOLD, Font = Enum.Font.GothamBold }, -- claude-bud JOB 50 C: the zone's run (Rebuild.Signs)
 	}
 	for i, sp in ipairs(specs) do
 		local l = Instance.new("TextLabel")
@@ -144,6 +145,13 @@ local function show(prompt: ProximityPrompt)
 		else string.format("Level %d → %d · $%s", data.Level, data.NextLevel, commas(data.Cost))
 	lines[3].Text = (if data.Maxed then "Gives: " else "Gets you: ") .. table.concat(data.Gains, " · ")
 	lines[4].Text = "Here: " .. data.Do
+	-- claude-bud JOB 50 C: name the run and what a win gives (owner-first with Rebuild.Signs; OFF = the 4-line card)
+	local runLine = if data.Run and data.Level >= 1 and ZC.RebuildLive(player.UserId, "Signs") then data.Run else nil
+	if lines[5] then
+		lines[5].Visible = runLine ~= nil
+		lines[5].Text = runLine or ""
+	end
+	f.Size = UDim2.fromOffset(500, if runLine then 180 else 150)
 	g.Enabled = true
 	pcall(HudLayout.RegisterTopStack, STACK, f, 14)
 end

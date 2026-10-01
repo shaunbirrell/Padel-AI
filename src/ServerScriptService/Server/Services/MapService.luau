@@ -164,6 +164,18 @@ local function checkpointRows(player: Player): { any }?
 	return if ok then list else nil
 end
 
+-- claude-bud JOB 50 C: HIS built rebirth zones (RebirthZoneService.MapRows; nil when not live)
+local function zoneRows(player: Player): { any }?
+	local okZ, RZ = pcall(function(): any
+		return require(script.Parent.RebirthZoneService)
+	end)
+	if not okZ or RZ == nil or RZ.MapRows == nil then
+		return nil
+	end
+	local ok, list = pcall(RZ.MapRows, player)
+	return if ok then list else nil
+end
+
 function MapService.Live(player: Player): { [string]: any }?
 	if not live(player.UserId) then
 		return nil
@@ -185,6 +197,7 @@ function MapService.Live(player: Player): { [string]: any }?
 		Jobs = s.Jobs,
 		Sites = s.Sites, -- claude-bud JOB 31
 		Checkpoints = checkpointRows(player), -- claude-bud JOB 37: hostile / cleared + respawn countdown (live players only)
+		Zones = zoneRows(player), -- claude-bud JOB 50 C: his rebirth zones (tap = pin)
 		Incoming = incomingRows(player), -- claude-bud JOB 38: armies marching on / sieging his base (always shown to him)
 		Bank = { X = math.floor(BankRaidConfig.Position.X), Z = math.floor(BankRaidConfig.Position.Z) },
 	}
