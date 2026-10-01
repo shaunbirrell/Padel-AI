@@ -201,7 +201,14 @@ function RebirthZoneBuilder.Locked(zoneId: string, tier: number, frame: CFrame, 
 	t.TextColor3 = C.Hazard
 	t.TextWrapped = true
 	local z = RebirthConfig.Zones[zoneId]
-	t.Text = string.format("%s\nUnlocks at Rebirth %d", string.upper(z and z.DisplayName or zoneId), tier)
+	-- claude-bud JOB 46: the building, what it gives at level 1 (from RebirthZonesConfig, never typed) and the unlock
+	local zc: any = require(Shared.Configs.RebirthZonesConfig)
+	local card = zc.CardFor and zc.CardFor(zoneId, 0, 5) or nil
+	local gains = if card and #card.Gains > 0 then card.Gains[1] else nil
+	t.Text = if card
+		then string.format("%s%s\nUnlocks at Rebirth %d", card.Title, if gains then " · " .. gains else "", tier)
+		else string.format("%s\nUnlocks at Rebirth %d", string.upper(z and z.DisplayName or zoneId), tier)
+	bb.Size = UDim2.fromOffset(250, 48)
 	t.Parent = bb
 	-- Code Bot v168: the objective marker (AIRDROP / INTEL OFFICE, AlwaysOnTop) yields its label while it covers this sign
 	pcall(function()

@@ -39,6 +39,10 @@ local RebirthZoneService = {}
 
 local deps: { [string]: any } = {}
 local Builder: any = nil
+local Dressing: any = nil -- claude-bud JOB 46: Modules/RebirthZoneDressing (the apron gateway, themed props, activity kiosk)
+local ZC: any = RebirthZonesConfig
+local apronOk: { [number]: { [string]: boolean } } = {} -- plotId -> zoneId -> the front apron is free (checked once)
+local sweepAt: { [number]: number } = {} -- userId -> clock of the last drone sweep
 local Z = RebirthZonesConfig
 
 local plotOf: { [number]: number } = {} -- userId -> the plot his zones are built on
@@ -268,6 +272,7 @@ local function addPrompts(player: Player, plotId: number, zoneId: string, consol
 		p.ActionText = if level == 0 then "BUILD" else string.format("UPGRADE L%d", level + 1)
 		p.ObjectText = string.format("%s  $%s", def.Name, tostring(costOf(zoneId, level)))
 	end
+	p:SetAttribute("Level", level) -- claude-bud JOB 46: the client preview card reads the level from here
 	p.Parent = console
 	local uid = player.UserId
 	p.Triggered:Connect(function(who: Player)
@@ -296,11 +301,167 @@ local function addPrompts(player: Player, plotId: number, zoneId: string, consol
 	end
 end
 
+-- claude-bud JOB 46: the annex's front apron (where the dressing goes) is checked once like the annex itself: decor is
+-- cleared, anything else (a road, a building) means no apron dressing on that plot (logged)
+local function checkApron(plotId: number, zoneId: string): boolean
+	local cache = apronOk[plotId]
+	if cache == nil then
+		cache = {}
+		apronOk[plotId] = cache
+	end
+	if cache[zoneId] ~= nil then
+		return cache[zoneId]
+	end
+	local frame, a = annexFrame(plotId, zoneId)
+	if frame == nil or a == nil then
+		cache[zoneId] = false
+		return false
+	end
+	overlap.FilterDescendantsInstances = { zonesFolder() }
+	local box = frame * CFrame.new(0, 12, a.D * 0.5 + 10)
+	local hits = Workspace:GetPartBoundsInBox(box, Vector3.new(a.W, 24, 16), overlap)
+	local clear: { [Model]: boolean } = {}
+	for _, p in ipairs(hits) do
+		if p.Size.X >= 300 and p.Size.Z >= 300 then
+			continue -- the desert floor
+		end
+		local m = p:FindFirstAncestorWhichIsA("Model")
+		if m and m:FindFirstChildOfClass("Humanoid") then
+			continue
+		end
+		local cl = clusterOf(p)
+		local src = if cl then string.match(tostring(cl:GetAttribute("WE_Cluster")), "^([^:]+)") else nil
+		if cl and src and Z.ClearableSources[src] == true then
+			clear[cl] = true
+		else
+			cache[zoneId] = false
+			print(string.format("[RebirthZones] plot %d %s: apron blocked by %s (no apron dressing)", plotId, zoneId, p:GetFullName()))
+			return false
+		end
+	end
+	for cl in pairs(clear) do
+		cl:Destroy()
+	end
+	cache[zoneId] = true
+	return true
+end
+
+local function tickSeconds(): number
+	local okE, EC = pcall(function(): any
+		return require(Shared.Configs.EconomyConfig)
+	end)
+	return if okE and EC then tonumber(EC.PassiveIncome.TickSeconds) or 5 else 5
+end
+
+local function notify(player: Player, text: string, kind: string)
+	if deps.NotificationService then
+		pcall(deps.NotificationService.Notify, player, text, kind, 4)
+	end
+end
+
+local function clock(sec: number): string
+	local s = math.max(0, math.ceil(sec))
+	return string.format("%d:%02d", math.floor(s / 60), s % 60)
+end
+
+--[[ claude-bud JOB 46: the area's activity (RebirthZonesConfig.Info.Activity), server-side, owner only:
+	ship = Shipment.Minutes of this zone's own flat income once every Shipment.CooldownMinutes (profile.ZoneShipAt,
+	saved); sweep = the drones empty the ATM now; drill / strike = open the Elite Training / missile panel (FeaturePush
+	"ZoneOpen"); nuke = NukeService.OpenPanel. Returns (ok, why). ]]
+function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: number?): (boolean, string)
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	local info = ZC.Info[zoneId]
+	if profile == nil or info == nil or not zonesLive(player.UserId) then
+		return false, "off"
+	end
+	local lv = activeLevel(profile, player.UserId, zoneId)
+	if lv < 1 then
+		return false, "not_built"
+	end
+	local kind = info.Activity
+	if kind == "ship" then
+		local now = nowUnix or os.time()
+		local t = if typeof(profile.ZoneShipAt) == "table" then profile.ZoneShipAt else {}
+		profile.ZoneShipAt = t
+		local last = tonumber(t[zoneId]) -- nil = never shipped: ready now
+		local wait = if last then last + ZC.Shipment.CooldownMinutes * 60 - now else 0
+		if wait > 0 then
+			notify(player, string.format("Next %s in %s", string.lower(info.ActionText), clock(wait)), "Info")
+			return false, "cooldown"
+		end
+		local cash = ZC.ShipmentCash(zoneId, lv, tickSeconds())
+		if cash <= 0 then
+			return false, "no_income"
+		end
+		t[zoneId] = now
+		deps.DataService.MarkDirty(player)
+		local es = deps.EconomyService
+		if es and es.AddCash then
+			es.AddCash(player, cash, "rebirthzone_ship")
+		end
+		notify(player, string.format("%s: +$%d", info.ActionText, cash), "Success")
+		return true, "shipped"
+	elseif kind == "sweep" then
+		local now = os.clock()
+		if now - (sweepAt[player.UserId] or -math.huge) < ZC.Sweep.CooldownSeconds then
+			notify(player, "Drones are refuelling: sweep in " .. clock(ZC.Sweep.CooldownSeconds - (now - sweepAt[player.UserId])), "Info")
+			return false, "cooldown"
+		end
+		local es = deps.EconomyService
+		if es == nil or es.GetPendingCash == nil or (tonumber(es.GetPendingCash(player)) or 0) <= 0 then
+			notify(player, "Your ATM is empty", "Info")
+			return false, "empty"
+		end
+		sweepAt[player.UserId] = now
+		pcall(es.CollectPendingCash, player)
+		notify(player, "Drone sweep: your ATM is emptied", "Success")
+		return true, "swept"
+	elseif kind == "drill" or kind == "strike" then
+		local rs = deps.RemoteSetup
+		local ev = rs and rs.Get(require(Shared.Constants).RemoteNames.FeaturePush)
+		if ev and ev:IsA("RemoteEvent") then
+			(ev :: RemoteEvent):FireClient(player, "ZoneOpen", { Panel = if kind == "drill" then "Recruits" else "Missile", Zone = zoneId })
+		end
+		return true, "opened"
+	elseif kind == "nuke" then
+		local ns = deps.NukeService
+		if ns and ns.OpenPanel then
+			ns.OpenPanel(player)
+		end
+		return true, "opened"
+	end
+	return false, "unknown"
+end
+
+local function addActivityPrompt(player: Player, zoneId: string, panel: BasePart)
+	local info = ZC.Info[zoneId]
+	local z = Z.Zones[zoneId]
+	local p = Instance.new("ProximityPrompt")
+	p.Name = "WE_ZoneActivity"
+	p:SetAttribute("ZoneId", zoneId)
+	p.ActionText = info.ActionText
+	p.ObjectText = z.Name
+	p.HoldDuration = 0.2
+	p.MaxActivationDistance = 10
+	p.RequiresLineOfSight = false
+	p.Parent = panel
+	local uid = player.UserId
+	p.Triggered:Connect(function(who: Player)
+		if who.UserId == uid then
+			RebirthZoneService.Activity(who, zoneId)
+		end
+	end)
+end
+
 local function buildZone(player: Player, profile: any, plotId: number, zoneId: string)
 	local pf = plotFolder(plotId)
 	local old = pf:FindFirstChild("Zone_" .. zoneId)
 	if old then
 		old:Destroy()
+	end
+	local oldDress = pf:FindFirstChild("Dress_" .. zoneId) -- claude-bud JOB 46
+	if oldDress then
+		oldDress:Destroy()
 	end
 	if not checkSlot(plotId, zoneId) then
 		return
@@ -321,6 +482,18 @@ local function buildZone(player: Player, profile: any, plotId: number, zoneId: s
 	local console = Builder.Build(zoneId, lv, frame, a.W, a.D, trimOf(player, profile), folder)
 	if console then
 		addPrompts(player, plotId, zoneId, console, lv)
+	end
+	-- claude-bud JOB 46: a BUILT zone gets its dressing (gateway, themed props) and its activity kiosk on the apron
+	if lv >= 1 and Dressing and checkApron(plotId, zoneId) then
+		local dress = Instance.new("Folder")
+		dress.Name = "Dress_" .. zoneId
+		dress.Parent = pf
+		local okD, panel = pcall(Dressing.Build, zoneId, lv, frame, a.D, trimOf(player, profile), dress)
+		if okD and panel then
+			addActivityPrompt(player, zoneId, panel)
+		elseif not okD then
+			warn("[RebirthZones] dressing failed:", zoneId, panel)
+		end
 	end
 end
 
@@ -511,6 +684,10 @@ function RebirthZoneService.Init(d: { [string]: any })
 	if not okB then
 		warn("[RebirthZones] builder failed to load:", B)
 	end
+	local okDr, Dr = pcall(function(): any
+		return require(script.Parent.Parent.Modules.RebirthZoneDressing)
+	end)
+	Dressing = if okDr then Dr else nil -- claude-bud JOB 46
 	d.DataService.OnProfileLoaded(function(player: Player, profile: any)
 		profileOwner[profile] = player.UserId
 		publishArmy(player, profile)
@@ -535,6 +712,7 @@ function RebirthZoneService.Init(d: { [string]: any })
 		local plotId = plotOf[p.UserId]
 		plotOf[p.UserId] = nil
 		lastCollect[p.UserId] = nil
+		sweepAt[p.UserId] = nil
 		if plotId then
 			local pf = zonesFolder():FindFirstChild("Plot" .. plotId)
 			if pf then

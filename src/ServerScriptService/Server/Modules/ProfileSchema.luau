@@ -249,6 +249,18 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	else
 		profile.NotifOptIn = nil
 	end
+	-- claude-bud JOB 46: the last rebirth-zone shipment per zone (unix)
+	if typeof(profile.ZoneShipAt) == "table" then
+		local t = {}
+		for k, v in pairs(profile.ZoneShipAt) do
+			if typeof(k) == "string" and #k <= 24 then
+				t[k] = nonNegInt(v)
+			end
+		end
+		profile.ZoneShipAt = t
+	else
+		profile.ZoneShipAt = nil
+	end
 	-- claude-bud JOB 41 part B: the Recruit Pack card was shown (once per profile)
 	profile.RecruitPackOffered = if profile.RecruitPackOffered == true then true else nil
 	-- claude-bud JOB 41: the Guided first minutes record (missing -> nil; each flag only ever turns on)

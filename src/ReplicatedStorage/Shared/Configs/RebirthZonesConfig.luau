@@ -92,4 +92,103 @@ local RebirthZonesConfig = {
 	},
 }
 
+--[[ claude-bud JOB 46 (2026-10-01, Shaun: "before you buy them it's not clear what you're buying ... the buildings are
+	pretty bad ... there should be more to do"). ONE source for what a zone shows and does:
+	  * Info[zoneId].Do: what you can do there (the preview card, the locked sign);
+	  * Info[zoneId].Activity: the one thing to do in the area once built (RebirthZoneService handles it, server-side):
+	      "ship"   a shipment worth Shipment.Minutes of THIS zone's income, once every Shipment.CooldownMinutes;
+	      "sweep"  the drones empty your ATM now (Sweep.CooldownSeconds);
+	      "drill"  opens the Elite Training panel (EndgameService, the Recruitment Office's list);
+	      "strike" opens the missile strike panel;
+	      "nuke"   the silo's own NUKE panel (NukeService);
+	  * Gains(zoneId, level): the exact gains of one level, read from Zones (never typed twice). ]]
+local cfg: any = RebirthZonesConfig
+cfg.Info = {
+	WestYard = { Do = "Builds tanks for cash. Ship a batch here every 20 min.", Activity = "ship", ActionText = "SHIP TANKS", Theme = "factory" },
+	StrategicYard = { Do = "Charges nukes. Launch from the silo console.", Activity = "nuke", ActionText = "NUKE", Theme = "silo" },
+	WestStrip = { Do = "Cuts your missile reload. Call a strike from here.", Activity = "strike", ActionText = "CALL STRIKE", Theme = "artillery" },
+	DroneBay = { Do = "Drones empty your ATM. Launch a sweep any time.", Activity = "sweep", ActionText = "LAUNCH SWEEP", Theme = "drones" },
+	EastYard = { Do = "More soldiers. Drill your army at the yard.", Activity = "drill", ActionText = "DRILL", Theme = "barracks" },
+	EastStrip = { Do = "Big cash every tick. Fill a tanker every 20 min.", Activity = "ship", ActionText = "FILL TANKER", Theme = "refinery" },
+	WestFlank = { Do = "Longer raid shield. Run a supply drop every 20 min.", Activity = "ship", ActionText = "SUPPLY RUN", Theme = "bunker" },
+}
+cfg.Shipment = { Minutes = 10, CooldownMinutes = 20 } -- "ship": Minutes of the zone's own flat income (before multipliers)
+cfg.Sweep = { CooldownSeconds = 45 }
+cfg.Card = { MaxDistance = 18 } -- the preview card shows while the zone's prompt is shown (the console)
+
+local function at(list: { number }?, level: number): number
+	if list == nil or level < 1 then
+		return 0
+	end
+	return tonumber(list[math.min(level, #list)]) or 0
+end
+
+local function commas(n: number): string
+	local s = tostring(math.floor(n + 0.5))
+	return (s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
+end
+
+-- the exact gains of one level (1..MaxLevel), as short lines, from Zones; tickSeconds = EconomyConfig PassiveIncome
+function cfg.Gains(zoneId: string, level: number, tickSeconds: number): { string }
+	local z = RebirthZonesConfig.Zones[zoneId]
+	local out: { string } = {}
+	if z == nil or level < 1 then
+		return out
+	end
+	local inc = at(z.IncomePerTick, level)
+	if inc > 0 then
+		table.insert(out, string.format("+$%s/s income", commas(inc / math.max(1, tickSeconds))))
+	end
+	local sol = at(z.Soldiers, level)
+	if sol > 0 then
+		table.insert(out, string.format("+%d soldiers", sol))
+	end
+	local cut = at(z.MissileReloadCut, level)
+	if cut > 0 then
+		table.insert(out, string.format("Missile reload -%d s", cut))
+	end
+	local ac = at(z.AutoCollectSeconds, level)
+	if ac > 0 then
+		table.insert(out, string.format("Drones empty your ATM every %d s", ac))
+	end
+	local sh = at(z.RaidShieldBonus, level)
+	if sh > 0 then
+		table.insert(out, string.format("+%d s raid shield", sh))
+	end
+	local cap = at(z.SiloCapacity, level)
+	if cap > 0 then
+		table.insert(out, string.format("Holds %d nuke%s, %d min charge", cap, if cap == 1 then "" else "s", at(z.SiloChargeMinutes, level)))
+	end
+	return out
+end
+
+-- the shipment of an income zone at a level ($), from Shipment.Minutes of its flat income
+function cfg.ShipmentCash(zoneId: string, level: number, tickSeconds: number): number
+	local z = RebirthZonesConfig.Zones[zoneId]
+	local inc = if z then at(z.IncomePerTick, level) else 0
+	return math.floor(inc / math.max(1, tickSeconds) * 60 * cfg.Shipment.Minutes)
+end
+
+--[[ The preview card for a zone at its current level: { Title, Level, Cost (nil at max), Gains (the NEXT level's, or
+	the current at max), Do, Action }. Pure (the client card, the locked sign and the tests). ]]
+function cfg.CardFor(zoneId: string, level: number, tickSeconds: number): any
+	local z = RebirthZonesConfig.Zones[zoneId]
+	local info = cfg.Info[zoneId]
+	if z == nil or info == nil then
+		return nil
+	end
+	local maxed = level >= RebirthZonesConfig.MaxLevel
+	local nextL = if maxed then level else level + 1
+	return {
+		Title = string.upper(z.Name),
+		Level = level,
+		NextLevel = nextL,
+		Cost = if maxed then nil else math.floor(tonumber(z.Cost[math.min(level + 1, #z.Cost)]) or 0),
+		Gains = cfg.Gains(zoneId, nextL, tickSeconds),
+		Do = info.Do,
+		Action = info.ActionText,
+		Maxed = maxed,
+	}
+end
+
 return RebirthZonesConfig

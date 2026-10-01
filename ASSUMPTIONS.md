@@ -9999,3 +9999,20 @@ ds_territories.luau T3):
   shield). The JOB 38 post-raid ArmyProtectUntil protects a BASE from SENDs; it does not make field armies immune.
 - **Credit cap:** the per-pair credit cap (30 per 10 min) stops two friends farming XP / ARMY KILLS by brawling
   respawning soldiers.
+
+## 2026-10-01 — claude-bud JOB 46: rebirth stations
+- **Shipments:** a shipment is 10 min of that zone's own flat income (before multipliers) once every 20 min, so the
+  extra is at most +50 % of that zone's income for a player who visits every time. The card shows income per
+  second before multipliers.
+- **Where the dressing goes:** the dressing sits on the front apron (outside the yard), so it never fights the
+  probe-verified store models in the yard. Better main buildings need new probed assets (Code Bot).
+- **Activity per zone:** DRILL reuses the Recruitment Office's Elite Training list; CALL STRIKE reuses the missile
+  panel. There is no second system for either.
+
+## 2026-10-01 — claude-bud JOB 47: the ghost label
+- **The ghost:** I take the ghost behind INTEL OFFICE to be a base owner marker (flag + name, AlwaysOnTop) projected
+  into the top-bar row. Tags are now hidden there (TopBarPadPx 6); the row's height comes from GetGuiInset /
+  TopbarInset.
+- **Not covered yet:** tags behind other HUD cards (TARGETS, top stack) are not filtered yet. If one is seen, the
+  next step is to add those cards' rects to the same rule.
+- **No re-implementation:** the TARGETS card and scout fixes are Code Bot v171's; I did not re-implement them.

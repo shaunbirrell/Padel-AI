@@ -12,7 +12,7 @@
 	    MonetizationConfig.RecruitPackLiveFor(owner); OFF = nothing built.
 	  * Instant: the attribute's change signal (set in ProcessReceipt) builds it the same frame; a 5 s sweep rebuilds it
 	    after a join / plot claim / rebirth / map rebuild, and removes it when the plot is released.
-	  * Its own folder Workspace.WE_RecruitTrim (never a building-model part; never inside the base kits), non-colliding
+	  * Its own folder Workspace.WE_RecruitTrim (never a protected base building part; never inside the base kits), non-colliding
 	    decor (it never blocks the gate lane or the army), Parts only (no meshes, no lights).
 	[RECRUIT] logs: every grant / build / remove.
 ]]

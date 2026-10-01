@@ -20,6 +20,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local TextService = game:GetService("TextService")
+local GuiService = game:GetService("GuiService")
 
 local BaseMarkerController = {}
 
@@ -271,6 +272,15 @@ local function step()
 	if me == nil or cam == nil then
 		return
 	end
+	-- JOB 47: the top-bar row's bottom in viewport px (the same space as WorldToViewportPoint)
+	local topPx = 0
+	pcall(function()
+		topPx = GuiService:GetGuiInset().Y
+		local r = (GuiService :: any).TopbarInset
+		if typeof(r) == "Rect" then
+			topPx = math.max(topPx, r.Max.Y)
+		end
+	end)
 	local list = {}
 	for conf, m in pairs(markers) do
 		local pos = conf:GetAttribute("Pos")
@@ -291,7 +301,7 @@ local function step()
 			local fade = B.Fade(flat)
 			m.Pill.GroupTransparency = 1 - fade
 			local v, onScreen = cam:WorldToViewportPoint(m.Anchor.Position)
-			if fade > 0 and onScreen then
+			if fade > 0 and onScreen and not B.InTopBar(v.Y, h, topPx) then
 				table.insert(list, { Key = conf, Dist = flat, X = v.X, Y = v.Y, W = w, H = h, Mine = m.Mine })
 			else
 				m.Gui.Enabled = false

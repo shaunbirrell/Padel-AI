@@ -57,6 +57,9 @@ local BaseMarkerConfig = {
 	FarStuds = 1500, -- ... MinScale at or past this
 	MaxShown = 5, -- rival tags at once (the nearest); the own base is always allowed
 	OverlapPadPx = 4, -- two tags whose screen boxes come closer than this: the farther one hides
+	-- claude-bud JOB 47 (ghost label behind the INTEL OFFICE pill): a tag whose box reaches into the top-bar row (the
+	-- Roblox inset where the LV / cash / compass pills sit) hides, so no tag ever shows through a HUD pill
+	TopBarPadPx = 6,
 	UpdateHz = 10,
 	Colors = {
 		Plate = Color3.fromRGB(24, 26, 21),
@@ -143,6 +146,14 @@ function BaseMarkerConfig.VisibleSet(tags: { any }): { [any]: boolean }
 		end
 	end
 	return out
+end
+
+--[[ claude-bud JOB 47: true when a tag (screen centre y, height h, viewport px) reaches into the top-bar row
+	(0 .. topPx + TopBarPadPx). ROOT CAUSE of the ghost: the tags float high in the sky (HeightAt), so a far base
+	projects into the top row; VisibleSet only kept tags apart from each other, never from the HUD, and a
+	BillboardGui draws under every ScreenGui, so the name showed through the translucent compass pill. ]]
+function BaseMarkerConfig.InTopBar(y: number, h: number, topPx: number): boolean
+	return y - h / 2 < math.max(0, topPx) + BaseMarkerConfig.TopBarPadPx
 end
 
 return BaseMarkerConfig
