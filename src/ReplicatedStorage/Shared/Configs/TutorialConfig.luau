@@ -383,7 +383,7 @@ TutorialConfig.Guided = {
 		path; ArmySendRules decide), then the Barracks, the 4x4 and Open MISSIONS. ]]
 	Hook = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 48): Code Bot flips it after Shaun's phone test
+		OwnerFirst = false, -- Code Bot v175 (Shaun approved 2026-10-01): the Hook is live for everyone (was NEW-OWNER-FIRST, claude-bud JOB 48)
 		OrderVersion = 5,
 		-- free soldiers at the REWARD through the normal recruit path (SoldierService.GrantFree: within the army cap,
 		-- never above it; no cash, no Robux). 0 = off

@@ -9,6 +9,10 @@
 	    DataStore call is pcall'd; after a failure that kind of call backs off (BackoffSeconds doubling to BackoffMax).
 	  * Kills: real player-vs-player kills only (the server's creator tag via CombatService.OnPlayerDeath), never self or
 	    a clan mate, and one killer -> victim pair counts at most KillPairMax times per KillPairWindowSeconds.
+	  * Code Bot v175: Supporters has an ALL-TIME and a THIS WEEK tab (WE_LB2_Supporters / WE_LB2_Supporters_W<week>):
+	    this week = Monetization.RobuxSpent - profile.LB.SupWBase (the total at the week's start). Every dev product
+	    (ProcessReceipt CurrencySpent) and confirmed pass purchase moves both; a never-counted pass credited on join
+	    counts all-time only. Written at once on every saved purchase, on join and on leave ("[SUPPORTERS]" log lines).
 	  * Supporters: Robux spent in game (profile.Monetization.RobuxSpent: dev products from ProcessReceipt's
 	    CurrencySpent, saved before the ack; game passes at the real price once UserOwnsGamePassAsync confirms). A player
 	    who spent nothing is never written; Settings "Supporter board" (profile.Settings.SupporterBoardOptOut) removes
@@ -31,7 +35,7 @@ local LeaderboardConfig = {
 	Boards = {
 		{ Id = "Kills", Title = "MOST KILLS", Unit = "kills", AllTime = true, Weekly = true },
 		{ Id = "Richest", Title = "RICHEST", Unit = "", AllTime = true, Weekly = false, Money = true },
-		{ Id = "Supporters", Title = "TOP SUPPORTERS", Unit = "Robux", AllTime = true, Weekly = false, OptOut = true },
+		{ Id = "Supporters", Title = "TOP SUPPORTERS", Unit = "Robux", AllTime = true, Weekly = true, OptOut = true }, -- Code Bot v175: + THIS WEEK
 		{ Id = "Plaza", Title = "PLAZA CONQUEROR", Unit = "captures", AllTime = false, Weekly = true },
 		{ Id = "Rebirths", Title = "REBIRTH KINGS", Unit = "rebirths", AllTime = true, Weekly = false },
 		{ Id = "Army", Title = "TOP ARMY", Unit = "soldiers", AllTime = true, Weekly = false },
@@ -39,7 +43,7 @@ local LeaderboardConfig = {
 
 	StorePrefix = "WE_LB2_",
 	WriteMinSeconds = 90, -- per player (the owner's rule: 60-120 s), plus on leave
-	ReadSeconds = 75, -- one shared fetch per board (the owner's rule: 60-90 s)
+	ReadSeconds = 90, -- one shared fetch per board (the owner's rule: 60-90 s). Code Bot v175: 90 (was 75): 10 keys / 90 s = 6.7 / min, inside a 1-player server's 5 + 2 x 1 = 7 GetSortedAsync / min
 	TopN = 10, -- rows on a board
 	FetchN = 100, -- rows fetched (one page) so a player's own rank is known inside the top 100
 	BackoffSeconds = 30,

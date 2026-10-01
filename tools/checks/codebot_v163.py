@@ -40,12 +40,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 174)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 174)'),
-    (S + "Services/DataService.luau", "WE_Build=174"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 174)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 175)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 175)'),
+    (S + "Services/DataService.luau", "WE_Build=175"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 175)'),
 ):
-    check(needle in read(rel), "CODEBOT v163: WE_Build=174 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v163: WE_Build=175 " + rel.rsplit("/", 1)[-1])
 
 _RC = read(C + "RivalConfig.luau")
 _RCTL = read(CL + "RivalController.luau")
@@ -90,7 +90,8 @@ check(re.search(r"TutorialConfig\.Guided = \{[^}]*?OwnerFirst = false", _TC, re.
 _ES = read(S + "Services/EngagementService.luau")
 check("MS.OnGranted(EngagementService.OnGranted)" in _ES and "MS.OnPassOwned(EngagementService.OnPassOwned)" in _ES,
       "CODEBOT v163: TOP SUPPORTERS hears every saved grant + pass")
-check("pcall(writeSupporters, p, leaving)" in _ES, "CODEBOT v163: the leave flush always writes a changed supporter value")
+check("pcall(writeSupporters, p, leaving" in _ES,  # Code Bot v175: + the why argument ("leave")
+      "CODEBOT v163: the leave flush always writes a changed supporter value")
 check("lb.PassCredit" in _ES and "passLegacy[player.UserId] = (math.floor(tonumber(m.Purchases) or 0) - receiptCount(profile)) > 0" in _ES,
       "CODEBOT v163: pass credit ledger, legacy profiles never double counted")
 check("if isBoardExcluded(uid) then\n\t\treturn false" in _ES, "CODEBOT v163: admin / owner never written to TOP SUPPORTERS")

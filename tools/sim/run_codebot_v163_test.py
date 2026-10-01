@@ -297,7 +297,7 @@ check(sup(OWNER) == nil, "the owner / admin account is never written to TOP SUPP
 local H = mk(9008, prof()); profiles[9008].Settings = { SupporterBoardOptOut = true }; join(H); tick(6); buy(H, 49)
 check(sup(9008) == nil, "an opted-out buyer stays off the board")
 -- 8. the published board shows the buyer within one read
-tick(80)
+tick(95) -- Code Bot v175: ReadSeconds 90
 local sv = RS:FindFirstChild("WE_Leaderboards") and RS:FindFirstChild("WE_Leaderboards"):FindFirstChild("Supporters")
 local found = false
 for _, r in ipairs(sv and sv.Value and sv.Value.Rows or {}) do if r.U == 9001 and r.V == 49 then found = true end end

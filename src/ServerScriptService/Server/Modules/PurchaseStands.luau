@@ -8,8 +8,9 @@
 	    what the old flat pad carried), WE_Stand = true, and a ProximityPrompt "Buy - R$ X". PremiumPadService listens
 	    to that prompt ONLY for stands: stepping on a stand never buys (no Touched, no standing check). The purchase path
 	    is unchanged: PremiumPadService.tryPrompt -> PromptPremiumPad -> the client's PromptPurchase / ProcessReceipt.
-	  * A slowly spinning glowing hologram (client spins it; icon BillboardGui) and a floating info BillboardGui (name, a
-	    short benefit line, a gold price chip with the Robux icon; price read from MonetizationConfig, never typed here).
+	  * A slowly spinning glowing hologram (client spins it) and, Code Bot v175, ONE physical sign over the plinth (a
+	    SurfaceGui panel: icon, name, one benefit line, a gold Robux price pill; price from MonetizationConfig /
+	    LivePrices, never typed here). Was a floating BillboardGui + an icon billboard (they overlapped side by side).
 	  * A soft Neon ring on the floor (the client pulses it; low quality: still).
 	  * OWNED (client, ShopController): green ring + tint, a check badge in the chip, the prompt hidden.
 	No shadows; one PointLight per stand (Shadows off). Anchored; only the plinth collides.
@@ -38,6 +39,7 @@ export type StandOpts = {
 	Icon: string?, -- the hologram glyph
 	OwnedIfAny: string?, -- comma list (PremiumPads slot)
 	PadSlot: string?,
+	FaceDir: Vector3?, -- Code Bot v175: the direction the sign's readable face looks (world, flattened); nil = the stand's front (-Z)
 }
 
 -- price + name + benefit, from MonetizationConfig only
@@ -86,6 +88,130 @@ local function label(parent: Instance, name: string, text: string, pos: UDim2, s
 	return t
 end
 
+--[[ Code Bot v175 (Shaun 2026-10-01, phone: "2x Cash overlaps Auto Collect, the descriptions are cut off"). Root cause:
+	every stand drew its name / benefit / price on a camera-facing BillboardGui 7 x 3.6 studs wide floating ~7.6 studs up
+	(plus a 2.6-stud icon billboard on the hologram). Billboards always turn to the camera, so from any angle off the
+	row's normal the three stands' boards (12 studs apart) slide over each other, and the benefit line had 24 % of a
+	3.6-stud board, TextScaled, so long lines shrank to nothing. Now each stand carries ONE physical sign: a dark
+	military panel (SignW x SignH studs, never wider than the row step minus a gap, so neighbours can never overlap at any
+	angle or distance: they are solid parts in one plane) on two slim posts over the plinth, with a SurfaceGui
+	(PixelsPerStud, MaxDistance = LabelMaxDistance): gold edge, the icon disc, the NAME in bold, one description line,
+	the price in a gold Robux pill, and OWNED (the Shop client turns the pill green "✓ OWNED" and the edge green).
+	Nothing collides (CanCollide / CanQuery / CanTouch false); the purchase part, prompt and attributes are unchanged. ]]
+local function gl(parent: Instance, name: string, text: string, x: number, y: number, w: number, h: number, color: Color3, font: Enum.Font, maxSize: number, align: Enum.TextXAlignment?): TextLabel
+	local t = Instance.new("TextLabel")
+	t.Name = name
+	t.BackgroundTransparency = 1
+	t.Position = UDim2.fromOffset(x, y)
+	t.Size = UDim2.fromOffset(w, h)
+	t.Font = font
+	t.Text = text
+	t.TextColor3 = color
+	t.TextScaled = true
+	t.TextWrapped = false
+	t.TextXAlignment = align or Enum.TextXAlignment.Left
+	t.TextYAlignment = Enum.TextYAlignment.Center
+	t.ZIndex = 3
+	local c = Instance.new("UITextSizeConstraint")
+	c.MaxTextSize = maxSize
+	c.MinTextSize = 14
+	c.Parent = t
+	t.Parent = parent
+	return t
+end
+
+-- the sign's numbers (pure; the check reads them): panel size, the gap to the next stand, its centre height
+function PurchaseStands.SignLayout(): { W: number, H: number, Lift: number, PostX: number, Px: number, CanvasW: number, CanvasH: number }
+	local S: any = MonetizationConfig.PremiumPads.Stand
+	local W, H = S.SignW or 6.4, S.SignH or 3.4
+	local px = S.SignPixelsPerStud or 60
+	return { W = W, H = H, Lift = S.Height + S.HoloLift + 1.6 + H / 2, PostX = W / 2 - 0.45, Px = px, CanvasW = W * px, CanvasH = H * px }
+end
+
+function PurchaseStands.BuildSign(m: Instance, top: BasePart, base: CFrame, o: StandOpts, name: string, benefit: string, price: number)
+	local S: any = MonetizationConfig.PremiumPads.Stand
+	local L = PurchaseStands.SignLayout()
+	local face = o.FaceDir or base.LookVector
+	face = Vector3.new(face.X, 0, face.Z)
+	if face.Magnitude < 1e-3 then
+		face = Vector3.new(0, 0, -1)
+	end
+	face = face.Unit
+	local centre = base.Position + Vector3.new(0, L.Lift, 0)
+	local cf = CFrame.lookAt(centre, centre + face) -- Front face (the SurfaceGui) looks along `face`
+	local panel = part("SignPanel", Vector3.new(L.W, L.H, 0.25), cf, S.SignBack or Color3.fromRGB(26, 30, 26), Enum.Material.Metal, false, m)
+	panel.CanQuery = false
+	for _, x in ipairs({ -L.PostX, L.PostX }) do
+		local postH = L.Lift - L.H / 2 - S.Height + 0.1
+		local post = part("SignPost", Vector3.new(0.22, postH, 0.22), cf * CFrame.new(x, -L.H / 2 - postH / 2 + 0.05, 0.2), S.Gold, Enum.Material.Metal, false, m)
+		post.CanQuery = false
+	end
+	local sg = Instance.new("SurfaceGui")
+	sg.Name = "WE_PremiumBillboard" -- the Shop client's OWNED look and Retarget find it by this name (as before)
+	sg.Face = Enum.NormalId.Front
+	sg.Adornee = panel
+	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = L.Px
+	sg.MaxDistance = S.LabelMaxDistance
+	sg.LightInfluence = 0
+	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	sg.ResetOnSpawn = false
+	local CW, CH = L.CanvasW, L.CanvasH
+	local card = Instance.new("Frame")
+	card.Name = "Card"
+	card.Size = UDim2.fromScale(1, 1)
+	card.BackgroundColor3 = S.SignBack or Color3.fromRGB(26, 30, 26)
+	card.BorderSizePixel = 0
+	card.ZIndex = 1
+	card.Parent = sg
+	local cc = Instance.new("UICorner")
+	cc.CornerRadius = UDim.new(0, 16)
+	cc.Parent = card
+	local edge = Instance.new("UIStroke")
+	edge.Name = "Edge"
+	edge.Color = S.Gold
+	edge.Thickness = 6
+	edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	edge.Parent = card
+	-- the icon disc (the stand's colour), top-left
+	local disc = Instance.new("Frame")
+	disc.Name = "IconDisc"
+	disc.Position = UDim2.fromOffset(14, 14)
+	disc.Size = UDim2.fromOffset(78, 78)
+	disc.BackgroundColor3 = o.Color
+	disc.BorderSizePixel = 0
+	disc.ZIndex = 2
+	disc.Parent = sg
+	local dc = Instance.new("UICorner")
+	dc.CornerRadius = UDim.new(0.5, 0)
+	dc.Parent = disc
+	local ds = Instance.new("UIStroke")
+	ds.Color = Color3.fromRGB(20, 20, 18)
+	ds.Thickness = 3
+	ds.Parent = disc
+	local icon = gl(disc, "Icon", o.Icon or "★", 8, 8, 62, 62, Color3.new(1, 1, 1), Enum.Font.GothamBlack, 52, Enum.TextXAlignment.Center)
+	icon.TextStrokeTransparency = 0.5
+	-- the NAME (bold) beside the icon, the one description line under both, the gold Robux pill at the bottom
+	gl(sg, "Title", name, 104, 12, CW - 118, 80, Color3.fromRGB(248, 242, 226), Enum.Font.GothamBlack, 58)
+	gl(sg, "Benefit", benefit, 16, 98, CW - 32, 34, Color3.fromRGB(206, 212, 200), Enum.Font.GothamMedium, 28, Enum.TextXAlignment.Center)
+	local chip = Instance.new("Frame")
+	chip.Name = "PriceChip"
+	chip.AnchorPoint = Vector2.new(0.5, 0)
+	chip.Position = UDim2.fromOffset(CW / 2, 138)
+	chip.Size = UDim2.fromOffset(math.floor(CW * 0.62), CH - 138 - 12)
+	chip.BackgroundColor3 = S.Gold
+	chip.BorderSizePixel = 0
+	chip.ZIndex = 2
+	chip.Parent = sg
+	local pc = Instance.new("UICorner")
+	pc.CornerRadius = UDim.new(0.5, 0)
+	pc.Parent = chip
+	local pr = gl(chip, "Price", ROBUX .. " " .. tostring(price), 10, 4, math.floor(CW * 0.62) - 20, CH - 138 - 20, Color3.fromRGB(34, 26, 8), Enum.Font.GothamBlack, 44, Enum.TextXAlignment.Center)
+	pr.TextStrokeTransparency = 1
+	sg.Parent = top
+	return panel
+end
+
 --[[ One stand at `base` (world CFrame on the floor; its -Z = the stand's front). Returns the purchase part (the top). ]]
 function PurchaseStands.Build(parent: Instance, base: CFrame, o: StandOpts): BasePart
 	local S: any = MonetizationConfig.PremiumPads.Stand
@@ -128,36 +254,7 @@ function PurchaseStands.Build(parent: Instance, base: CFrame, o: StandOpts): Bas
 	light.Range = S.LightRange
 	light.Shadows = false
 	light.Parent = holo
-	local icon = Instance.new("BillboardGui")
-	icon.Name = "WE_StandIcon"
-	icon.Size = UDim2.fromScale(2.6, 2.6)
-	icon.MaxDistance = S.LabelMaxDistance
-	icon.LightInfluence = 0
-	icon.Parent = holo
-	label(icon, "Icon", o.Icon or "★", UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), Color3.new(1, 1, 1), Enum.Font.GothamBlack)
-	-- the info board: name, benefit, gold price chip (the client's OWNED look finds it by name)
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "WE_PremiumBillboard"
-	bb.Size = UDim2.fromScale(7, 3.6)
-	bb.StudsOffsetWorldSpace = Vector3.new(0, H + S.HoloLift + 3.4, 0)
-	bb.MaxDistance = S.LabelMaxDistance
-	bb.LightInfluence = 0
-	bb.Adornee = top
-	bb.Parent = top
-	label(bb, "Title", name, UDim2.fromScale(0, 0), UDim2.fromScale(1, 0.38), Color3.fromRGB(245, 240, 225), Enum.Font.GothamBlack)
-	label(bb, "Benefit", benefit, UDim2.fromScale(0, 0.38), UDim2.fromScale(1, 0.24), Color3.fromRGB(210, 214, 220), Enum.Font.GothamMedium)
-	local chip = Instance.new("Frame")
-	chip.Name = "PriceChip"
-	chip.AnchorPoint = Vector2.new(0.5, 0)
-	chip.Position = UDim2.fromScale(0.5, 0.66)
-	chip.Size = UDim2.fromScale(0.5, 0.32)
-	chip.BackgroundColor3 = S.Gold
-	chip.BorderSizePixel = 0
-	chip.Parent = bb
-	local cc = Instance.new("UICorner")
-	cc.CornerRadius = UDim.new(0.5, 0)
-	cc.Parent = chip
-	label(chip, "Price", ROBUX .. " " .. tostring(price), UDim2.fromScale(0.05, 0.05), UDim2.fromScale(0.9, 0.9), Color3.fromRGB(34, 26, 8), Enum.Font.GothamBlack).TextStrokeTransparency = 1
+	PurchaseStands.BuildSign(m, top, base, o, name, benefit, price)
 	-- the ONLY purchase trigger
 	local pp = Instance.new("ProximityPrompt")
 	pp.Name = "WE_BuyPrompt"
@@ -204,15 +301,17 @@ function PurchaseStands.Retarget(top: BasePart, kind: string, key: string)
 	end
 end
 
-function PurchaseStands.Sign(parent: Instance, cf: CFrame, text: string)
+-- Code Bot v175: lift = the board's centre height (default 6, as before); the Supply Depot raises it over the stand signs
+function PurchaseStands.Sign(parent: Instance, cf: CFrame, text: string, lift: number?)
 	local S: any = MonetizationConfig.PremiumPads.Stand
+	local y = lift or 6
 	local m = Instance.new("Model")
 	m.Name = "SupplyDepotSign"
 	for _, x in ipairs({ -6, 6 }) do
-		part("SignPost", Vector3.new(0.6, 7, 0.6), cf * CFrame.new(x, 3.5, 0.3), S.Steel, Enum.Material.Metal, false, m)
+		part("SignPost", Vector3.new(0.6, y + 1, 0.6), cf * CFrame.new(x, (y + 1) / 2, 0.3), S.Steel, Enum.Material.Metal, false, m)
 	end
-	local board = part("SignBoard", Vector3.new(14, 2.6, 0.4), cf * CFrame.new(0, 6, 0), S.Steel, Enum.Material.Metal, false, m)
-	part("SignGold", Vector3.new(14.4, 0.3, 0.5), cf * CFrame.new(0, 7.4, 0), S.Gold, Enum.Material.Metal, false, m)
+	local board = part("SignBoard", Vector3.new(14, 2.6, 0.4), cf * CFrame.new(0, y, 0), S.Steel, Enum.Material.Metal, false, m)
+	part("SignGold", Vector3.new(14.4, 0.3, 0.5), cf * CFrame.new(0, y + 1.4, 0), S.Gold, Enum.Material.Metal, false, m)
 	local sg = Instance.new("SurfaceGui")
 	sg.Face = Enum.NormalId.Front
 	sg.MaxDistance = 60

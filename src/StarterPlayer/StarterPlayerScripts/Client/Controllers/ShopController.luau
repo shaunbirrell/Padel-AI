@@ -1506,6 +1506,13 @@ function ShopController.Init()
 					end
 					chip.BackgroundColor3 = if owned then green else Color3.fromRGB(214, 170, 62)
 				end
+				-- Code Bot v175: the stand sign (a SurfaceGui panel): its gold edge turns green while owned
+				local sign = part:FindFirstChild("WE_PremiumBillboard")
+				local card = sign and sign:FindFirstChild("Card")
+				local edge = card and card:FindFirstChild("Edge")
+				if edge and edge:IsA("UIStroke") then
+					edge.Color = if owned then green else Color3.fromRGB(214, 170, 62)
+				end
 				local pp = part:FindFirstChild("WE_BuyPrompt")
 				if pp and pp:IsA("ProximityPrompt") then
 					pp.Enabled = not owned

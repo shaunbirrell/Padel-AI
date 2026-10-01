@@ -56,7 +56,8 @@ _rec = _b_m.find("first = recordPurchase(profile, price)", _cf)
 (ok if 0 <= _cf < _own < _price < _rec else bad)("CLAUDE-BUD BOARDS: a game pass counts only after UserOwnsGamePassAsync confirms it, at the real PriceInRobux")
 must_contain(_b_ms, "if not wasOwned then", "CLAUDE-BUD BOARDS: a pass counts once")
 must_contain(_b_es, "if spent > 0 and settings.SupporterBoardOptOut ~= true then", "CLAUDE-BUD BOARDS: Robux never shown for non-buyers or opted-out players")
-must_contain(_b_es, 'storeFor("Supporters", os.time()):RemoveAsync(tostring(player.UserId))', "CLAUDE-BUD BOARDS: opting out removes the entry")
+# Code Bot v175: opting out removes BOTH supporter stores (Supporters + Supporters_W) in one loop
+must_contain(_b_es, 'storeFor(key, os.time()):RemoveAsync(tostring(player.UserId))', "CLAUDE-BUD BOARDS: opting out removes the entry")
 must_contain("src/ReplicatedStorage/Shared/Configs/SecurityConfig.luau", 'RequestBoardSetting = { "boolean" },', "CLAUDE-BUD BOARDS: opt-out remote schema (RemoteGate)")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/SettingsController.luau", 'supBtn.Text = if hidden then "Supporter board: HIDDEN" else "Supporter board: SHOWN"', "CLAUDE-BUD BOARDS: Settings toggle")
 

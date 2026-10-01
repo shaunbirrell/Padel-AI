@@ -323,6 +323,7 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 		lb.PlazaBase = nonNegInt(lb.PlazaBase)
 		lb.ArmyMax = nonNegInt(lb.ArmyMax)
 		lb.Seeded = if lb.Seeded == true then true else nil
+		lb.SupWBase = if lb.SupWBase ~= nil then nonNegInt(lb.SupWBase) else nil -- Code Bot v175: TOP SUPPORTERS week start (nil = seed once)
 	end
 	if typeof(profile.Settings) == "table" and profile.Settings.SupporterBoardOptOut ~= true then
 		profile.Settings.SupporterBoardOptOut = nil

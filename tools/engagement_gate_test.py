@@ -276,7 +276,7 @@ local richestStore = "WE_LB2_Richest"
 ordered[richestStore] = ordered[richestStore] or {}
 ordered[richestStore][tostring(OWNER)] = 50000000
 for i = 1, 14 do ordered[richestStore][tostring(800 + i)] = i * 1000 end
-tick(80) -- ReadSeconds = 75
+tick(95) -- ReadSeconds = 90 (Code Bot v175; was 75)
 local sv = RS:FindFirstChild("WE_Leaderboards") and RS:FindFirstChild("WE_Leaderboards"):FindFirstChild("Richest")
 local rows = sv and sv.Value and sv.Value.Rows or {}
 local ownerShown = false

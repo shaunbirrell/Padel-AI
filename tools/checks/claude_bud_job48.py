@@ -36,8 +36,8 @@ _CF = "src/ReplicatedStorage/Shared/Configs/"
 _SV = "src/ServerScriptService/Server/"
 _TC = _j48_src(_CF + "TutorialConfig.luau")
 _hook = _TC.split("\tHook = {")[1].split("\n\t},\n}")[0] if "\tHook = {" in _TC else ""
-_j48("Enabled = true," in _hook and "OwnerFirst = true," in _hook and "OrderVersion = 5," in _hook,
-     "TutorialConfig.Guided.Hook: Enabled = true, OwnerFirst = true (owner-first), OrderVersion 5")
+_j48("Enabled = true," in _hook and "OwnerFirst = false," in _hook and "OrderVersion = 5," in _hook,
+     "TutorialConfig.Guided.Hook: Enabled = true, OwnerFirst = false (codebot_v175: live for everyone), OrderVersion 5")
 _j48('Steps = { "Spawned", "FirstBuild", "Collected", "Recruited", "FightStarted", "FirstKill", "Captured", "Reward",\n\t\t\t"NextBuilding", "Offered", "Bought" },' in _TC,
      "the live FirstMinutes funnel steps 1-11 are unchanged (the Hook's steps go after them)")
 _j48('FunnelSteps = { "ArmyGrew", "GoalRaidShown", "RaidSent", "RaidWon", "NextGoal" },' in _hook and 'FallbackWonName = "GoalFallbackWon"' in _hook,

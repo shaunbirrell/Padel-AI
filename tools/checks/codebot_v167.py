@@ -30,12 +30,12 @@ def check(cond, label):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 174)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 174)'),
-    (S + "Services/DataService.luau", "WE_Build=174"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 174)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 175)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 175)'),
+    (S + "Services/DataService.luau", "WE_Build=175"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 175)'),
 ):
-    check(needle in read(rel), "CODEBOT v167: WE_Build=174 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v167: WE_Build=175 " + rel.rsplit("/", 1)[-1])
 
 MC = read(C + "MonetizationConfig.luau")
 WANT = {
@@ -56,6 +56,9 @@ check(all(len(re.findall(r"\bId = %d\b" % pid, MC)) == 1 for pid, _ in WANT.valu
 try:
     d = subprocess.run(["git", "diff", "-U0", "ec524bf", "--", C + "MonetizationConfig.luau"], cwd=str(ROOT), capture_output=True, text=True).stdout
     ch = [l for l in d.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
+    # Code Bot v175: the stand-sign rows (SignW / SignH / SignPixelsPerStud / SignBack, Depot.SignLift) are later, separate edits
+    ch = [l for l in ch if "Code Bot v175" not in l and "Depot = { X0 = " not in l
+          and not re.match(r"\s*Sign(W|H|PixelsPerStud|Back) = ", l[1:])]
     norm = lambda l: re.sub(r"\bId = \d+,", "Id = X,", l[1:])
     minus = sorted(norm(l) for l in ch if l.startswith("-"))
     plus = sorted(norm(l) for l in ch if l.startswith("+"))

@@ -36,7 +36,8 @@ for _a in ('top:SetAttribute("PlotId", o.PlotId)', 'top:SetAttribute("OfferKind"
 must_contain(_s_ps, 'part("GoldTrim"', "CLAUDE-BUD J19: gold trim ring")
 must_contain(_s_ps, 'local ring = part("FloorRing"', "CLAUDE-BUD J19: the Neon floor ring")
 must_contain(_s_ps, 'local holo = part("Hologram"', "CLAUDE-BUD J19: the hologram")
-must_contain(_s_ps, 'label(chip, "Price", ROBUX', "CLAUDE-BUD J19: gold price chip with the Robux icon")
+# Code Bot v175: the chip is on the stand's SurfaceGui sign (gl = the sign label helper)
+must_contain(_s_ps, 'gl(chip, "Price", ROBUX', "CLAUDE-BUD J19: gold price chip with the Robux icon")
 (ok if _s_p.count('Instance.new("PointLight")') == 1 and "light.Shadows = false" in _s_p else bad)("CLAUDE-BUD J19: one light per stand, Shadows off")
 must_contain(_s_ps, "p.CastShadow = false", "CLAUDE-BUD J19: no shadows")
 _lm = re.search(r"LabelMaxDistance = (\d+), -- CLAUDE.md world labels", read(_s_mc) or "")
@@ -77,5 +78,6 @@ if _d:
     (ok if not _hits and _sz < 158 and _z + _stand_r < _sz else bad)(f"CLAUDE-BUD J19: Supply Depot row {_row} clear of the layout / spawn / ATM, sign inside the front wall {_hits}")
 else:
     bad("CLAUDE-BUD J19: Depot config missing")
-must_contain(_s_ms, "pcall((Stands :: any).Sign, folder, F * CFrame.new(mid, 0.3, D.SignZ) * CFrame.Angles(0, math.pi, 0), D.Sign)", "CLAUDE-BUD J19: one Supply Depot sign")
+# Code Bot v175: the depot board faces the plot inside and stands over the stand signs (D.SignLift)
+must_contain(_s_ms, "pcall((Stands :: any).Sign, folder, F * CFrame.new(mid, 0.3, D.SignZ), D.Sign, D.SignLift or 11)", "CLAUDE-BUD J19: one Supply Depot sign")
 must_contain(_s_mc, "\t\tStands = true,", "CLAUDE-BUD J19: stands live for all (false = the old pads)")

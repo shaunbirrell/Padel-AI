@@ -35,18 +35,18 @@ S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 174)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 174)'),
-    (S + "Services/DataService.luau", "WE_Build=174"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 174)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 175)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 175)'),
+    (S + "Services/DataService.luau", "WE_Build=175"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 175)'),
 ):
-    check(needle in read(rel), "CODEBOT v174: WE_Build=174 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v174: WE_Build=175 " + rel.rsplit("/", 1)[-1])
 
 # JOB 48 — Hook owner-first
 TC = read(C + "TutorialConfig.luau")
 hook = TC.split("\tHook = {")[1].split("\n\t},\n}")[0] if "\tHook = {" in TC else ""
-check("Enabled = true," in hook and "OwnerFirst = true," in hook and "NEW-OWNER-FIRST" in hook and "OrderVersion = 5," in hook,
-      "CODEBOT v174: Guided.Hook Enabled + OwnerFirst=true (NEW-OWNER-FIRST) + OrderVersion 5")
+check("Enabled = true," in hook and "OwnerFirst = false," in hook and "OrderVersion = 5," in hook,
+      "CODEBOT v174: Guided.Hook Enabled + OwnerFirst (codebot_v175 flipped it to false) + OrderVersion 5")
 check('FunnelSteps = { "ArmyGrew", "GoalRaidShown", "RaidSent", "RaidWon", "NextGoal" },' in hook
       and 'FallbackWonName = "GoalFallbackWon"' in hook,
       "CODEBOT v174: Hook FirstMinutes funnel steps 12-16 + FallbackWonName")

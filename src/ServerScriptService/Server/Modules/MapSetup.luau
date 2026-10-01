@@ -1921,6 +1921,9 @@ local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLo
 				Icon = (slot :: any).Icon,
 				OwnedIfAny = table.concat(MonetizationConfig.PadOwnedKeys(slot), ","),
 				PadSlot = slot.Id,
+				-- Code Bot v175: the sign reads toward the plot inside (local -Z: the ATM / courtyard side). The stand's
+				-- own front (turned pi) looks at the front wall, so its old camera-facing billboard hid that.
+				FaceDir = F:VectorToWorldSpace(Vector3.new(0, 0, -1)),
 			})
 			if not okB then
 				warn("[MapSetup] purchase stand failed", offer.Key, errB)
@@ -1954,7 +1957,9 @@ local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLo
 	if useStands and standIndex > 0 then
 		local D = PP.Depot
 		local mid = D.X0 + (standIndex - 1) * D.Step / 2
-		pcall((Stands :: any).Sign, folder, F * CFrame.new(mid, 0.3, D.SignZ) * CFrame.Angles(0, math.pi, 0), D.Sign)
+		-- Code Bot v175: the SUPPLY DEPOT board faces the plot inside too (its Front was turned to the front wall) and stands
+		-- above the stand signs (centre D.SignLift, default 11) so they never cover it
+		pcall((Stands :: any).Sign, folder, F * CFrame.new(mid, 0.3, D.SignZ), D.Sign, D.SignLift or 11)
 	end
 end
 

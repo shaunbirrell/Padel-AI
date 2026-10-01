@@ -24,7 +24,7 @@ local deps: { [string]: any } = {}
 local friendsOf: { [number]: { [number]: boolean } } = {}
 local nameCache: { [number]: string } = {}
 -- Code Bot v163: TOP SUPPORTERS (see writeSupporters)
-local supporterSeen: { [number]: number } = {} -- uid -> the latest supporter value seen this session
+local supporterSeen: { [number]: { [string]: number }? } = {} -- uid -> the latest supporter values seen (Supporters / Supporters_W)
 local passLegacy: { [number]: boolean } = {} -- uid -> this session seeded the pass ledger without credit
 
 local function adminConfig(): any
@@ -146,11 +146,21 @@ end
 local function rollWeek(profile: any, now: number)
 	local lb = lbOf(profile)
 	local week = LeaderboardConfig.IsoWeek(now)
+	-- Code Bot v175: TOP SUPPORTERS this week = RobuxSpent - SupWBase (RobuxSpent at the week's start). Seeded once from
+	-- the saved purchase record: every purchase this ISO week (FirstPurchaseUnix inside it) counts, else the week starts
+	-- at the current total (never a guess, so a mixed old / new history under-counts, never over-counts)
+	local m = if typeof(profile.Monetization) == "table" then profile.Monetization else {}
+	local spentNow = math.floor(tonumber(m.RobuxSpent) or 0)
+	if lb.SupWBase == nil then
+		local first = math.floor(tonumber(m.FirstPurchaseUnix) or 0)
+		lb.SupWBase = if first > 0 and LeaderboardConfig.IsoWeek(first) == week then 0 else spentNow
+	end
 	if lb.Week ~= week then
 		lb.Week = week
 		lb.KillsW = 0
 		lb.ArmyKillsW = 0 -- claude-bud JOB 38: ARMY KILLS this week
 		lb.PlazaBase = math.floor(tonumber(profile.Stats and profile.Stats.PlazaCaptures) or 0)
+		lb.SupWBase = spentNow -- v175: the supporter week restarts from the total so far
 	end
 	if lb.Seeded ~= true then
 		lb.Seeded = true -- the all-time kill board starts from the kills already on the profile (PvP kills)
@@ -181,15 +191,39 @@ local function valuesOf(player: Player, profile: any): { [string]: number }
 	local spent = math.floor(tonumber(typeof(profile.Monetization) == "table" and profile.Monetization.RobuxSpent) or 0)
 	if spent > 0 and settings.SupporterBoardOptOut ~= true then
 		out.Supporters = spent
+		local wk = spent - math.floor(tonumber(lb.SupWBase) or spent) -- v175: this ISO week's Robux
+		if wk > 0 then
+			out.Supporters_W = wk
+		end
 	end
 	return out
 end
 
-local function budgetOk(kind: Enum.DataStoreRequestType): boolean
+--[[ Code Bot v175: the budget check asks Roblox's MODERN request type first (OrderedList for GetSortedAsync, OrderedWrite
+	for an OrderedDataStore SetAsync: Roblox says the legacy values "should not be used" since the 2026 limits rollout and
+	documents GetRequestBudgetForRequestType(OrderedList) as returning 0), then the legacy one when the modern answer is 0 /
+	unavailable. A reported budget under MinBudget skips the call (logged for TOP SUPPORTERS); no answer at all = unknown =
+	allowed (our own pacing stays inside 5 + 2 x players / min and every call is pcall'd with the doubling backoff). ]]
+local MODERN_BUDGET: { [string]: string } = { GetSortedAsync = "OrderedList", SetIncrementSortedAsync = "OrderedWrite" }
+local function budgetOf(kind: any): number?
 	local ok, n = pcall(function()
 		return DataStoreService:GetRequestBudgetForRequestType(kind)
 	end)
-	return not ok or (tonumber(n) or 0) >= LB.MinBudget
+	return if ok then tonumber(n) else nil
+end
+local function budgetOk(kind: any): boolean
+	local legacy = if typeof(kind) == "EnumItem" then (kind :: any).Name else tostring(kind)
+	local okM, modern = pcall(function()
+		return (Enum.DataStoreRequestType :: any)[MODERN_BUDGET[legacy] or legacy]
+	end)
+	local b = if okM and modern ~= nil then budgetOf(modern) else nil
+	if b == nil or b <= 0 then
+		b = budgetOf(kind)
+	end
+	if b == nil then
+		return true
+	end
+	return b >= LB.MinBudget
 end
 
 local function fail(which: string)
@@ -224,7 +258,8 @@ local function writeScores(player: Player, force: boolean?)
 	local unix = os.time()
 	rollWeek(profile, unix)
 	local vals = valuesOf(player, profile)
-	supporterSeen[player.UserId] = vals.Supporters -- v163: the leave flush can write it without the profile
+	-- v163: the leave flush can write it without the profile (v175: all-time + this week)
+	supporterSeen[player.UserId] = if vals.Supporters then { Supporters = vals.Supporters, Supporters_W = vals.Supporters_W } else nil
 	local prev = lastWritten[player.UserId] or {}
 	lastWritten[player.UserId] = prev
 	for key, v in pairs(vals) do
@@ -263,49 +298,73 @@ end
 	    that first session (never a double count; nothing is ever invented). Admin / owner accounts are never credited
 	    or written (isBoardExcluded), Studio never credits. ]]
 
-local function supporterValue(profile: any): number?
+-- Code Bot v175: the player's supporter values right now: { Supporters = all-time, Supporters_W = this ISO week } (nil = none)
+local function supporterValue(profile: any): { [string]: number }?
 	if typeof(profile) ~= "table" then
 		return nil
 	end
 	local settings = if typeof(profile.Settings) == "table" then profile.Settings else {}
 	local spent = math.floor(tonumber(typeof(profile.Monetization) == "table" and profile.Monetization.RobuxSpent) or 0)
 	if spent > 0 and settings.SupporterBoardOptOut ~= true then
-		return spent
+		pcall(rollWeek, profile, os.time())
+		local lb = lbOf(profile)
+		local wk = spent - math.floor(tonumber(lb.SupWBase) or spent)
+		return { Supporters = spent, Supporters_W = if wk > 0 then wk else nil }
 	end
 	return nil
 end
 
--- write this player's TOP SUPPORTERS value now (no throttle); profile = nil uses the last value seen this session
-local function writeSupporters(player: Player, profile: any?): boolean
+-- Code Bot v175: "[SUPPORTERS]" instrumentation (server output): every supporter write, skip and failure, with the reason
+local function supLog(fmt: string, ...: any)
+	print("[SUPPORTERS] " .. string.format(fmt, ...))
+end
+
+-- write this player's TOP SUPPORTERS values now (all-time + this week; no throttle); profile = nil uses the last values
+-- seen this session. why = what triggered it (grant / pass / join / leave), for the log.
+local function writeSupporters(player: Player, profile: any?, why: string?): boolean
 	local uid = player.UserId
 	if isBoardExcluded(uid) then
 		return false
 	end
-	local v: number?
+	local vals: { [string]: number }?
 	if profile ~= nil then
-		v = supporterValue(profile)
-		supporterSeen[uid] = v
+		vals = supporterValue(profile)
+		supporterSeen[uid] = vals
 	else
-		v = supporterSeen[uid]
+		vals = supporterSeen[uid]
 	end
-	if v == nil or v <= 0 then
+	if vals == nil or (vals.Supporters or 0) <= 0 then
 		return false
 	end
 	local prev = lastWritten[uid] or {}
 	lastWritten[uid] = prev
-	pcall(function()
-		player:SetAttribute("WE_LBVal_Supporters", v)
-	end)
-	if prev.Supporters == v or not budgetOk(Enum.DataStoreRequestType.SetIncrementSortedAsync) then
-		return false
+	local wroteAny = false
+	local unix = os.time()
+	for _, key in ipairs({ "Supporters", "Supporters_W" }) do
+		local v = vals[key]
+		if v ~= nil and v > 0 then
+			pcall(function()
+				player:SetAttribute("WE_LBVal_" .. key, v)
+			end)
+			if prev[key] ~= v then
+				if not budgetOk(Enum.DataStoreRequestType.SetIncrementSortedAsync) then
+					supLog("skip %s uid=%d %s=%d (DataStore write budget low)", tostring(why), uid, key, v)
+				else
+					local ok, err = pcall(function()
+						storeFor(key, unix):SetAsync(tostring(uid), v)
+					end)
+					if ok then
+						prev[key] = v
+						wroteAny = true
+						supLog("write %s uid=%d %s=%d -> %s", tostring(why), uid, key, v, LeaderboardConfig.StoreName("Supporters", key == "Supporters_W", unix))
+					else
+						supLog("FAILED %s uid=%d %s=%d: %s", tostring(why), uid, key, v, tostring(err))
+					end
+				end
+			end
+		end
 	end
-	local ok = pcall(function()
-		storeFor("Supporters", os.time()):SetAsync(tostring(uid), v)
-	end)
-	if ok then
-		prev.Supporters = v
-	end
-	return ok
+	return wroteAny
 end
 EngagementService.WriteSupporters = writeSupporters
 
@@ -353,7 +412,7 @@ function EngagementService.OnPassOwned(player: Player, passKey: string, reason: 
 	if reason == "purchase" then
 		ledger[passKey] = true -- MonetizationService just added its price to RobuxSpent (confirmPassPurchase)
 		deps.DataService.MarkDirty(player)
-		writeSupporters(player, profile)
+		writeSupporters(player, profile, "pass_purchase:" .. passKey)
 		return
 	end
 	-- "join" / "refresh": owned on Roblox but maybe never counted
@@ -392,21 +451,30 @@ function EngagementService.OnPassOwned(player: Player, passKey: string, reason: 
 		profile.Monetization = {}
 	end
 	local m = profile.Monetization
+	pcall(rollWeek, profile, os.time())
 	m.RobuxSpent = math.floor(tonumber(m.RobuxSpent) or 0) + price
 	m.Purchases = math.floor(tonumber(m.Purchases) or 0) + 1
+	-- v175: a pass bought at an unknown time (website / an older session) counts all-time only, not this week
+	local lbw = lbOf(profile)
+	lbw.SupWBase = math.floor(tonumber(lbw.SupWBase) or 0) + price
 	deps.DataService.MarkDirty(player)
+	supLog("pass credit uid=%d %s +%d R$ (owned on Roblox, never counted; ledger LB.PassCredit)", player.UserId, passKey, price)
 	local A = deps.AnalyticsService
 	if A and A.Log then
 		pcall(A.Log, "SUPPORTER_PASS_CREDIT", player.UserId, { key = passKey, price = price, reason = reason })
 	end
-	writeSupporters(player, profile)
+	writeSupporters(player, profile, "pass_backfill")
 end
 
 -- MonetizationService.OnGranted(player, productKey, event): a dev product grant was SAVED (RobuxSpent already holds it)
-function EngagementService.OnGranted(player: Player, _productKey: string, _event: any)
+function EngagementService.OnGranted(player: Player, productKey: string, event: any)
 	local profile = deps.DataService and deps.DataService.GetProfile(player)
 	if profile then
-		writeSupporters(player, profile)
+		local spent = if typeof(event) == "table" then tonumber(event.CurrencySpent) else nil
+		supLog("grant uid=%d %s receipt=%s CurrencySpent=%s RobuxSpent=%s excluded=%s", player.UserId, tostring(productKey),
+			tostring(typeof(event) == "table" and event.ReceiptId or "?"), tostring(spent),
+			tostring(typeof(profile.Monetization) == "table" and profile.Monetization.RobuxSpent), tostring(isBoardExcluded(player.UserId)))
+		writeSupporters(player, profile, "grant:" .. tostring(productKey))
 	end
 end
 
@@ -510,7 +578,28 @@ local function crownNote(p: Player, label: string, unix: number)
 	end
 end
 
--- ONE server-wide fetch per board, published for every client; ranks for the players in this server
+--[[ ONE server-wide fetch per board, published for every client; ranks for the players in this server.
+	Code Bot v175: the reads go round-robin from where the last pass stopped (readCursor). Before, every pass restarted at
+	board 1 and returned at the first low budget / failed read, so the later boards (TOP SUPPORTERS is the 4th key) were
+	the first to go stale while MOST KILLS kept refreshing. The weekly #1 crowns are kept per board (leaderOf), so a
+	partial pass never drops a crown. ]]
+local readCursor = 1
+local leaderOf: { [string]: { U: number, Title: string } } = {}
+local lastSupLog: { [string]: string } = {}
+local function boardKeys(): { { Key: string, Board: any } }
+	local out = {}
+	for _, b in ipairs(LB.Boards) do
+		if b.AllTime then
+			table.insert(out, { Key = b.Id, Board = b })
+		end
+		if b.Weekly then
+			table.insert(out, { Key = b.Id .. "_W", Board = b })
+		end
+	end
+	return out
+end
+EngagementService._BoardKeys = boardKeys
+
 local function readBoards()
 	if os.clock() < backoff.ReadUntil then
 		return
@@ -523,58 +612,78 @@ local function readBoards()
 		folder = f
 	end
 	local unix = os.time()
-	local leaders: { [number]: string } = {}
-	for _, b in ipairs(LB.Boards) do
-		local keys = {}
-		if b.AllTime then
-			table.insert(keys, b.Id)
+	local keys = boardKeys()
+	local n = #keys
+	if readCursor > n then
+		readCursor = 1
+	end
+	local start = readCursor
+	local done = 0
+	for step = 0, n - 1 do
+		local idx = ((start - 1 + step) % n) + 1
+		local key, b = keys[idx].Key, keys[idx].Board
+		readCursor = idx -- a stop here resumes at this key next pass
+		if not budgetOk(Enum.DataStoreRequestType.GetSortedAsync) then
+			break
 		end
-		if b.Weekly then
-			table.insert(keys, b.Id .. "_W")
+		local ok, page = pcall(function()
+			return storeFor(key, unix):GetSortedAsync(false, LB.FetchN):GetCurrentPage()
+		end)
+		if not ok or typeof(page) ~= "table" then
+			fail("Read")
+			if string.sub(key, 1, 10) == "Supporters" then
+				supLog("read %s FAILED: %s", key, tostring(page))
+			end
+			break
 		end
-		for _, key in ipairs(keys) do
-			if not budgetOk(Enum.DataStoreRequestType.GetSortedAsync) then
-				return
-			end
-			local ok, page = pcall(function()
-				return storeFor(key, unix):GetSortedAsync(false, LB.FetchN):GetCurrentPage()
-			end)
-			if not ok or typeof(page) ~= "table" then
-				fail("Read")
-				return
-			end
-			local rows = {}
-			local rankOf: { [number]: number } = {}
-			local shown = 0
-			for i, entry in ipairs(page) do
-				local uid = tonumber(entry.key)
-				if uid and not isBoardExcluded(uid) then
-					rankOf[uid] = i
-					if shown < LB.TopN then
-						shown += 1
-						table.insert(rows, { U = uid, N = nameOf(uid), V = entry.value })
-					end
+		done += 1
+		local rows = {}
+		local rankOf: { [number]: number } = {}
+		local shown = 0
+		for i, entry in ipairs(page) do
+			local uid = tonumber(entry.key)
+			if uid and not isBoardExcluded(uid) then
+				rankOf[uid] = i
+				if shown < LB.TopN then
+					shown += 1
+					table.insert(rows, { U = uid, N = nameOf(uid), V = entry.value })
 				end
 			end
-			if string.sub(key, -2) == "_W" and rows[1] then
-				local u = rows[1].U
-				leaders[u] = if leaders[u] then leaders[u] .. " + " .. b.Title else b.Title
+		end
+		if string.sub(key, -2) == "_W" then
+			leaderOf[key] = if rows[1] then { U = rows[1].U, Title = b.Title } else nil
+		end
+		for _, p in ipairs(Players:GetPlayers()) do
+			p:SetAttribute("WE_LBRank_" .. key, rankOf[p.UserId] or 0)
+		end
+		local sv = (folder :: Instance):FindFirstChild(key)
+		if sv == nil then
+			local v = Instance.new("StringValue")
+			v.Name = key
+			v.Parent = folder
+			sv = v
+		end
+		(sv :: StringValue).Value = HttpService:JSONEncode({ Title = b.Title, Unit = b.Unit, Money = b.Money == true, Weekly = string.sub(key, -2) == "_W", Rows = rows, At = unix })
+		if string.sub(key, 1, 10) == "Supporters" then
+			-- v175 instrumentation: what the board shows, logged when it changes
+			local sig = tostring(#page) .. ":" .. (if rows[1] then tostring(rows[1].U) .. "=" .. tostring(rows[1].V) else "-")
+			if lastSupLog[key] ~= sig then
+				lastSupLog[key] = sig
+				supLog("read %s: %d stored, %d shown, top %s", key, #page, #rows, if rows[1] then tostring(rows[1].N) .. " " .. tostring(rows[1].V) else "none")
 			end
-			for _, p in ipairs(Players:GetPlayers()) do
-				p:SetAttribute("WE_LBRank_" .. key, rankOf[p.UserId] or 0)
-			end
-			local sv = (folder :: Instance):FindFirstChild(key)
-			if sv == nil then
-				local v = Instance.new("StringValue")
-				v.Name = key
-				v.Parent = folder
-				sv = v
-			end
-			(sv :: StringValue).Value = HttpService:JSONEncode({ Title = b.Title, Unit = b.Unit, Money = b.Money == true, Weekly = string.sub(key, -2) == "_W", Rows = rows, At = unix })
 		end
 	end
-	backoff.ReadStep = 0
+	if done == n then
+		readCursor = (start % n) + 1 -- a full pass: the next one starts one board later
+		backoff.ReadStep = 0
+	elseif done > 0 then
+		backoff.ReadStep = 0
+	end
 	-- the weekly #1 of each weekly board wears the crown while in game
+	local leaders: { [number]: string } = {}
+	for _, l in pairs(leaderOf) do
+		leaders[l.U] = if leaders[l.U] then leaders[l.U] .. " + " .. l.Title else l.Title
+	end
 	crowned = leaders
 	for _, p in ipairs(Players:GetPlayers()) do
 		pcall(setCrown, p, crowned[p.UserId])
@@ -583,6 +692,7 @@ local function readBoards()
 		end
 	end
 end
+EngagementService._ReadBoards = readBoards
 
 -- a real PvP kill (the server's creator tag): counts for the kill boards unless self / clan mate / farmed
 local killCounted = false -- claude-bud JOB 38: the last onKill passed the kill rules (the ARMY KILLS credit reuses them)
@@ -674,13 +784,18 @@ local function onBoardSetting(player: Player, hide: any)
 	local prev = lastWritten[player.UserId]
 	if prev then
 		prev.Supporters = nil -- showing again rewrites it on the next write
+		prev.Supporters_W = nil
 	end
 	if hide then
 		task.spawn(function()
-			pcall(function()
-				storeFor("Supporters", os.time()):RemoveAsync(tostring(player.UserId))
-			end)
+			for _, key in ipairs({ "Supporters", "Supporters_W" }) do -- v175: the weekly entry too
+				pcall(function()
+					storeFor(key, os.time()):RemoveAsync(tostring(player.UserId))
+				end)
+			end
 		end)
+	else
+		task.spawn(writeSupporters, player, profile, "shown_again")
 	end
 end
 
@@ -833,6 +948,14 @@ function EngagementService.Init(d: { [string]: any })
 			local st = if typeof(profile.Settings) == "table" then profile.Settings else {}
 			player:SetAttribute("WE_SupporterOptOut", st.SupporterBoardOptOut == true)
 			pcall(rollWeek, profile, os.time())
+			-- Code Bot v175: a saved purchase that never reached the board (an earlier session left / a write was dropped)
+			-- is written on join, from the saved Monetization.RobuxSpent (never invented)
+			local pw = lastWritten[player.UserId]
+			if pw then
+				pw.Supporters = nil -- a new session re-asserts the saved value (one write per supporter per join)
+				pw.Supporters_W = nil
+			end
+			pcall(writeSupporters, player, profile, "join")
 			player.CharacterAdded:Connect(function()
 				task.wait(1)
 				pcall(setCrown, player, crowned[player.UserId])
@@ -875,7 +998,7 @@ function EngagementService.Init(d: { [string]: any })
 		writeScores(p, false)
 		-- Code Bot v163: a changed supporter value is always written on leave (it only moves with a paid purchase)
 		local leaving = deps.DataService and deps.DataService.GetProfile(p)
-		pcall(writeSupporters, p, leaving)
+		pcall(writeSupporters, p, leaving, "leave")
 		supporterSeen[p.UserId] = nil
 		passLegacy[p.UserId] = nil
 		friendsOf[p.UserId] = nil
@@ -912,7 +1035,8 @@ function EngagementService.Init(d: { [string]: any })
 							local amount = math.min(room, E.FriendsCashPerTick * n)
 							if amount > 0 then
 								prof.FriendsPaid = (tonumber(prof.FriendsPaid) or 0) + amount
-								pay(p, amount, "friends_bonus")
+								-- v175: pcall'd, so a failing payout can never stop this loop (the board writes + reads run here)
+								pcall(pay, p, amount, "friends_bonus")
 								deps.DataService.MarkDirty(p)
 							end
 						end

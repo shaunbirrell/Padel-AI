@@ -654,10 +654,16 @@ local MonetizationConfig = {
 			Owned = Color3.fromRGB(80, 210, 110),
 			SpinSeconds = 6, -- one hologram turn (client)
 			PulseSeconds = 1.6, -- ring pulse (client)
+			-- Code Bot v175: ONE physical sign per stand (PurchaseStands.BuildSign, a SurfaceGui panel): never wider than
+			-- Depot.Step minus a 5-stud gap, so neighbouring signs can never overlap (Code Bot v175)
+			SignW = 6.4,
+			SignH = 3.4,
+			SignPixelsPerStud = 60,
+			SignBack = Color3.fromRGB(26, 30, 26), -- dark military panel (the gold edge is Gold)
 		},
 		-- the Supply Depot corner (plot-local): the stands in one row (front-left, off the gate road and the ATM), the sign
 		-- behind them facing the plot
-		Depot = { X0 = -78, Step = 12, Z = 146, SignZ = 153, Sign = "SUPPLY DEPOT" },
+		Depot = { X0 = -78, Step = 12, Z = 146, SignZ = 153, Sign = "SUPPLY DEPOT", SignLift = 11 }, -- Code Bot v175: SignLift (board centre height)
 		Slots = {
 			{
 				Id = "AutoCollect",

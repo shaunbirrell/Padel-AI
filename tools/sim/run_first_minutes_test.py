@@ -374,7 +374,9 @@ G.Enabled = true
 -- ── 11. claude-bud JOB 48: THE HOOK ──
 G.Hook.Enabled = HOOK_ENABLED
 local Hk = G.Hook
-check(Hk.Enabled == true and Hk.OwnerFirst == true, "Hook flags: Enabled = true, OwnerFirst = true (Code Bot flips it after the phone test)")
+local hookLaunched = Hk.OwnerFirst
+check(Hk.Enabled == true and Hk.OwnerFirst == false, "codebot_v175: Hook flags: Enabled = true, OwnerFirst = false (live for everyone)")
+Hk.OwnerFirst = true -- codebot_v175: the owner-first rule is still proved with OwnerFirst = true (restored below)
 local function soldierRecruit(p, n) PROFILES[p.UserId].Soldiers = (PROFILES[p.UserId].Soldiers or 0) + n; for _, cb in ipairs(DEPS.SoldierService.listeners) do cb(p) end end
 local function playToReward(p, extra)
   local q = newProfile(p, extra)
@@ -515,6 +517,11 @@ runTo(NOW + 601)
 local secs = {}
 for _, e in ipairs(LOG.ev) do if e.ev == "SESSION_MILESTONE" then table.insert(secs, e.props.sec) end end
 check(table.concat(secs, ",") == "60,120,180,300,600", "SessionMilestone once each at 60/120/180/300/600 s, only for the player the Hook is live for (" .. table.concat(secs, ",") .. ")")
+Hk.OwnerFirst = hookLaunched
+-- codebot_v175: launched for everyone: a new non-owner profile now plays the Hook order 5
+local pl = newProfile(OTHER)
+TS, GS = boot(); clearLog(); load(OTHER)
+check(hookLaunched == false and TC.HookLiveFor(OTHER.UserId) and pl.TutorialOrderVersion == Hk.OrderVersion, "codebot_v175: Hook live for everyone: a new non-owner profile plays order 5 (" .. tostring(pl.TutorialOrderVersion) .. ")")
 
 print(string.format("FIRST MINUTES TEST: %d failed", fails))
 if fails > 0 then error("failed") end
