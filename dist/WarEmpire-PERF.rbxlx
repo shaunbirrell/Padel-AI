@@ -793,6 +793,10 @@ local AnalyticsConfig = {
 			GUIDED_SKIPPED = { Name = "GuidedSkipped", Field = "step" },
 			GUIDED_STUCK = { Name = "GuidedStuck", Field = "step" },
 			RECRUIT_PACK_OFFERED = { Name = "RecruitPackOffered", Field = "trigger" }, -- claude-bud JOB 41 B
+			-- claude-bud JOB 48: the Hook (TutorialConfig.Guided.Hook): the 3-minute wall + time to the first fight win
+			SESSION_MILESTONE = { Name = "SessionMilestone", Value = "sec", Field = "sec" },
+			FTUE_TIME_TO_FIGHT = { Name = "FtueTimeToFight", Value = "seconds" },
+			GOAL_FALLBACK = { Name = "GoalFallback", Field = "reason" }, -- the raid goal fell back (no rival allowed)
 			-- claude-bud JOB 41 C: rival targets (PvP rate = RivalSendTapped per session)
 			RIVAL_LIST_OPENED = { Name = "RivalListOpened" },
 			RIVAL_SEND_TAPPED = { Name = "RivalSendTapped", Field = "verdict" },
@@ -16602,6 +16606,9 @@ local TutorialConfig = {
 		[3] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Outpost", "Jeep" },
 		-- claude-bud JOB 41: the Guided order (only while TutorialConfig.Guided is live for a NEW player; see GuidedSteps)
 		[4] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "FirstFight", "Outpost", "Reward", "Barracks", "Jeep" },
+		-- claude-bud JOB 48: the Hook order (Guided.Hook live): v4 + RAID A RIVAL BASE after the reward + Open MISSIONS last
+		[5] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "FirstFight", "Outpost", "Reward", "RaidRival",
+			"Barracks", "Jeep", "Missions" },
 	} :: { [number]: { string } },
 	-- Lane Z: the steps whose finish is carried (DoneAhead) when a new order puts them after the step a save moves to:
 	-- the Outpost / 4x4 pair the Home Outpost switch reorders. Any other done step after it is asked again (K2's "first
@@ -16904,10 +16911,55 @@ TutorialConfig.Guided = {
 		Steps = { "Spawned", "FirstBuild", "Collected", "Recruited", "FightStarted", "FirstKill", "Captured", "Reward",
 			"NextBuilding", "Offered", "Bought" },
 	},
+	--[[ claude-bud JOB 48 (2026-10-01): THE HOOK, the end of the Guided chain (owner-first; OFF == today's v4 chain).
+		Live (Enabled + RetentionConfig.Live, on top of Guided being live) a Guided player plays OrderVersion 5
+		(SavedOrders[5]): after the REWARD the next goal is RAID A RIVAL BASE (SEND ARMY on a TARGETS row, the JOB 38
+		path; ArmySendRules decide), then the Barracks, the 4x4 and Open MISSIONS. ]]
+	Hook = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 48): Code Bot flips it after Shaun's phone test
+		OrderVersion = 5,
+		-- free soldiers at the REWARD through the normal recruit path (SoldierService.GrantFree: within the army cap,
+		-- never above it; no cash, no Robux). 0 = off
+		RewardSoldiers = 2,
+		-- the one REAL timer: a raid won within FastRaidSeconds of the reward pays FastRaidBonus once (reason
+		-- "onboarding"); FastRaidBonus = 0 -> no bonus and no countdown on screen
+		FastRaidSeconds = 300,
+		FastRaidBonus = 2000,
+		-- no rival may be raided right now (empty server, all shielded, his army too weak): the goal falls back to
+		-- clearing FallbackKills hostile NPCs (any CombatService NPC he kills, the server's own camps / Ops sites); after
+		-- FallbackMaxSeconds the chain moves on to the Barracks anyway (never a soft-lock)
+		FallbackKills = 2,
+		FallbackMaxSeconds = 180,
+		RecheckSeconds = 15, -- while the raid goal is open: re-check that a rival is still allowed
+		FallbackTitle = "Clear hostiles", -- <= 18 characters
+		FallbackHint = "Beat 2 enemies: send your army to ATTACK.", -- <= 42 characters, no key names
+		FastRaidText = "Fast raid bonus!",
+		-- funnel steps 12-16 of FirstMinutes (appended after Funnel.Steps 1-11, which never change). "GoalFallbackWon"
+		-- is logged at the RaidWon index (15) when the fallback goal was won instead
+		FunnelSteps = { "ArmyGrew", "GoalRaidShown", "RaidSent", "RaidWon", "NextGoal" },
+		FallbackWonName = "GoalFallbackWon",
+		-- custom event SessionMilestone { sec } once each per session at these play seconds (the 3-minute wall)
+		Milestones = { 60, 120, 180, 300, 600 },
+	},
 }
 
 function TutorialConfig.GuidedLiveFor(userId: any): boolean
 	return (require(script.Parent.RetentionConfig) :: any).Live(TutorialConfig.Guided, userId)
+end
+
+-- claude-bud JOB 48: the Hook (OrderVersion 5) is live only on top of a live Guided
+function TutorialConfig.HookLiveFor(userId: any): boolean
+	local H: any = TutorialConfig.Guided.Hook
+	return typeof(H) == "table" and TutorialConfig.GuidedLiveFor(userId)
+		and (require(script.Parent.RetentionConfig) :: any).Live(H, userId)
+end
+
+-- true for both Guided orders (4 and the Hook's 5)
+function TutorialConfig.IsGuidedVersion(version: any): boolean
+	local v = tonumber(version)
+	local H: any = TutorialConfig.Guided.Hook
+	return v ~= nil and (v == TutorialConfig.Guided.OrderVersion or (typeof(H) == "table" and v == H.OrderVersion))
 end
 
 -- the two new steps of the Guided order (the other seven are the owner's steps above, unchanged)
@@ -16931,11 +16983,34 @@ local GUIDED_NEW: { [string]: TutorialStepDef } = {
 		CtaLabel = "OK",
 		AdvanceOn = { "GuidedReward" },
 	},
+	-- claude-bud JOB 48: the Hook's two steps (OrderVersion 5)
+	RaidRival = {
+		Id = "RaidRival",
+		Title = "Raid a rival base",
+		Hint = "Tap SEND ARMY on a TARGETS row.",
+		MarkerName = "",
+		HighlightHint = "Targets",
+		CtaAction = "OpenTargets",
+		CtaLabel = "TARGETS",
+		-- RaidWon: a SEND (or an in-person ATM raid) looted; GoalFallbackWon: the fallback hostiles cleared;
+		-- GoalFallbackDone: the fallback timed out (the chain moves on, never a soft-lock)
+		AdvanceOn = { "RaidWon", "GoalFallbackWon", "GoalFallbackDone" },
+	},
+	Missions = {
+		Id = "Missions",
+		Title = "Open Missions",
+		Hint = "Daily jobs pay cash. Open MISSIONS.",
+		MarkerName = "",
+		HighlightHint = "Missions",
+		CtaAction = "OpenMissions",
+		CtaLabel = "MISSIONS",
+		AdvanceOn = { "MissionsOpened", "ClaimMission" },
+	},
 }
 
-local function buildGuided(): { TutorialStepDef }
+local function buildGuided(version: number?): { TutorialStepDef }
 	local list: { TutorialStepDef } = {}
-	for _, id in ipairs(TutorialConfig.SavedOrders[4]) do
+	for _, id in ipairs(TutorialConfig.SavedOrders[version or 4]) do
 		local def = GUIDED_NEW[id]
 		if def == nil then
 			for _, d in ipairs(OWNER_STEPS) do
@@ -16949,11 +17024,16 @@ local function buildGuided(): { TutorialStepDef }
 	return list
 end
 TutorialConfig.GuidedSteps = buildGuided()
+TutorialConfig.HookSteps = buildGuided(5) -- claude-bud JOB 48
 
--- the step list a saved order version plays (4 = GuidedSteps; anything else = today's Steps)
+-- the step list a saved order version plays (4 = GuidedSteps, 5 = HookSteps; anything else = today's Steps)
 function TutorialConfig.StepsFor(version: any): { TutorialStepDef }
 	if tonumber(version) == TutorialConfig.Guided.OrderVersion then
 		return TutorialConfig.GuidedSteps
+	end
+	local H: any = TutorialConfig.Guided.Hook
+	if typeof(H) == "table" and tonumber(version) == H.OrderVersion then
+		return TutorialConfig.HookSteps
 	end
 	return TutorialConfig.Steps
 end
@@ -30520,7 +30600,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 173)
+		player:SetAttribute("WE_Build", 174)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -32052,6 +32132,9 @@ function ArmyCommand.Send(player: Player, raw: any): (boolean, string?)
 			return false, text
 		end
 		push(player)
+		pcall(function() -- claude-bud JOB 48: the Guided raid goal's RaidSent funnel step (only while that goal is open)
+			(require(script.Parent.Parent.Services.GuidedService) :: any).OnRaidSent(player)
+		end)
 		return true, nil
 	end
 	local ok, text = deps.Plan.StartTravel(player, target, st)
@@ -35290,6 +35373,9 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 				RS.OnRaidWon(player, plan.PlotId, n)
 				local RP = require(script.Parent.Parent.Services.RatePromptService) :: any
 				RP.Trigger(player, "RaidWin")
+			end)
+			pcall(function() -- claude-bud JOB 48: the Guided "RAID A RIVAL BASE" goal is won (only while it is open)
+				(require(script.Parent.Parent.Services.GuidedService) :: any).OnRaidWon(player)
 			end)
 			pcall(function() -- claude-bud JOB 39: the Intel Office's "win a SEND ARMY raid" contract
 				(require(script.Parent.Parent.Services.EndgameService) :: any).NoteContract(player, "WinSend", 1)
@@ -48956,6 +49042,16 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 			RewardDone = g.RewardDone == true or nil,
 			RecruitTopUp = if g.RecruitTopUp ~= nil then nonNegInt(g.RecruitTopUp) else nil,
 			Funnel = funnel,
+			-- claude-bud JOB 48: the Hook (raid goal, fallback, fast-raid bonus, reward soldiers, time to the first fight)
+			SoldiersAtCamp = if g.SoldiersAtCamp ~= nil then nonNegInt(g.SoldiersAtCamp) else nil,
+			TimeToFight = if g.TimeToFight ~= nil then nonNegInt(g.TimeToFight) else nil,
+			RewardAt = if g.RewardAt ~= nil then nonNegInt(g.RewardAt) else nil,
+			FastRaidPaid = g.FastRaidPaid == true or nil,
+			GoalMode = if g.GoalMode == "Raid" or g.GoalMode == "Fallback" then g.GoalMode else nil,
+			FallbackKills = if g.FallbackKills ~= nil then nonNegInt(g.FallbackKills) else nil,
+			RewardSoldiers = if typeof(g.RewardSoldiers) == "table"
+				then { Before = nonNegInt(g.RewardSoldiers.Before), After = nonNegInt(g.RewardSoldiers.After) }
+				else nil,
 		}
 	else
 		profile.Guided = nil
@@ -68242,6 +68338,11 @@ function AchievementService.Init(d: { [string]: any })
 			if d.RateLimitService and not d.RateLimitService.Allow(player, "achievements", 1, 3) then
 				return
 			end
+			-- claude-bud JOB 48: the Missions panel sends this on every open; the Guided Hook's last step ("Open
+			-- Missions") finishes on it (TutorialService only advances the ACTIVE step, so it is a no-op otherwise)
+			if d.TutorialService and d.TutorialService.Notify then
+				pcall(d.TutorialService.Notify, player, "MissionsOpened")
+			end
 			if live(player.UserId) then
 				AchievementService.Check(player)
 				pushState(player)
@@ -74006,7 +74107,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 173)
+			player:SetAttribute("WE_Build", 174)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -82525,7 +82626,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 173)
+		player:SetAttribute("WE_Build", 174)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -82667,7 +82768,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=173",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=174",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -90324,6 +90425,20 @@ return GateDefenseService
 	    "StarterPayout" (the coin burst), then TutorialService.Notify "GuidedReward" -> the Barracks goal.
 	  * FUNNEL: a separate Roblox funnel "FirstMinutes" (one session per profile: Guided.SessionId), each step once,
 	    plus the custom events GuidedStepSeconds / GuidedSkipped / GuidedStuck (AnalyticsConfig.Roblox.Custom).
+
+	claude-bud JOB 48 (2026-10-01): THE HOOK (TutorialConfig.Guided.Hook, owner-first; OFF == the v4 chain above). A
+	player it is live for plays OrderVersion 5 (OrderFor):
+	  * REWARD + Hook.RewardSoldiers free soldiers (SoldierService.GrantFree: the normal recruit state, within the cap).
+	  * RAID A RIVAL BASE (step RaidRival): when it opens, RivalService.Candidates (the JOB 38 verdict, ArmySendRules)
+	    says whether any rival may be raided now. Yes: the raid goal (FeaturePush "GuidedGoal" {Goal = "Raid"}: the
+	    TARGETS card is outlined); a SEND accepted -> RaidSent (ArmyCommand), a SEND / ATM raid that loots -> RaidWon
+	    (ArmyPlan / MoneyCollectorService) -> TutorialService.Notify "RaidWon". No: the FALLBACK goal (clear
+	    Hook.FallbackKills hostile NPCs: CombatService.OnNPCDeath with him as the killer) -> "GoalFallbackWon"; after
+	    Hook.FallbackMaxSeconds -> "GoalFallbackDone" (the chain moves on). Re-checked every Hook.RecheckSeconds.
+	  * FAST RAID: a raid won within Hook.FastRaidSeconds of the reward pays Hook.FastRaidBonus once (reason
+	    "onboarding"); the countdown is only pushed while that bonus is > 0 (no fake timer).
+	  * FUNNEL steps 12-16 (Hook.FunnelSteps) after the unchanged 1-11, once each per profile; the custom events
+	    SessionMilestone { sec } (once each per session) and FtueTimeToFight (seconds from spawn to the first kill).
 ]]
 
 local Players = game:GetService("Players")
@@ -90389,7 +90504,21 @@ local function notify(player: Player, text: string, kind: string?)
 end
 
 local function isGuided(profile: any): boolean
-	return profile ~= nil and tonumber(profile.TutorialOrderVersion) == G.OrderVersion
+	return profile ~= nil and TutorialConfig.IsGuidedVersion(profile.TutorialOrderVersion)
+end
+
+-- claude-bud JOB 48: a Hook (OrderVersion 5) profile
+local H: any = G.Hook
+local function isHook(profile: any): boolean
+	return profile ~= nil and typeof(H) == "table" and tonumber(profile.TutorialOrderVersion) == H.OrderVersion
+end
+
+-- the Guided order this player plays: 5 while the Hook is live for him, else 4
+function GuidedService.OrderFor(player: Player): number
+	if TutorialConfig.HookLiveFor(player.UserId) then
+		return H.OrderVersion
+	end
+	return G.OrderVersion
 end
 
 -- Code Bot v163: an owner / admin test-mode replay (TutorialService.ReplayGuided): no cash, no funnel / analytics
@@ -90427,7 +90556,15 @@ end
 
 -- ── funnel ─────────────────────────────────────────────────────────────────────────────────────────────────────
 function GuidedService.FunnelIndex(name: string): number?
-	return table.find(G.Funnel.Steps, name)
+	local i = table.find(G.Funnel.Steps, name)
+	if i == nil and typeof(H) == "table" then
+		-- claude-bud JOB 48: steps 12.. after the live 1-11 (the fallback win is logged at the RaidWon index)
+		local j = table.find(H.FunnelSteps, if name == H.FallbackWonName then "RaidWon" else name)
+		if j then
+			i = #G.Funnel.Steps + j
+		end
+	end
+	return i
 end
 
 function GuidedService.Funnel(player: Player, profile: any, name: string)
@@ -90435,11 +90572,15 @@ function GuidedService.Funnel(player: Player, profile: any, name: string)
 		return
 	end
 	local idx = GuidedService.FunnelIndex(name)
+	if idx and idx > #G.Funnel.Steps and not isHook(profile) then
+		return -- the Hook's steps only for a Hook profile (OFF == the v4 funnel)
+	end
 	local g = rec(profile)
-	if idx == nil or g.Funnel[name] then
+	local key = if typeof(H) == "table" and name == H.FallbackWonName then "RaidWon" else name -- one index, logged once
+	if idx == nil or g.Funnel[key] then
 		return
 	end
-	g.Funnel[name] = true
+	g.Funnel[key] = true
 	if isReplay(profile) then
 		return -- Code Bot v163: a test-mode replay never reaches the FirstMinutes funnel
 	end
@@ -90511,6 +90652,7 @@ local function finishCamp(player: Player, profile: any, auto: boolean)
 		return
 	end
 	g.CampDone = true
+	g.SoldiersAtCamp = tonumber(profile.Soldiers) or 0 -- claude-bud JOB 48: ArmyGrew counts from here
 	dirty(player)
 	if auto then
 		notify(player, G.CampSkipText, "Info")
@@ -90609,8 +90751,14 @@ function GuidedService.Blocking(territoryId: any): boolean
 	return false
 end
 
+-- claude-bud JOB 48: the fallback goal counts hostile NPCs HE kills (never the Guided camp); set below
+local fallbackKill: (info: any) -> () = function(_info: any) end
+
 -- CombatService.OnNPCDeath
 function GuidedService.OnNPCDeath(info: any)
+	if typeof(info) == "table" and (typeof(info.GroupId) ~= "string" or string.sub(info.GroupId, 1, 7) ~= "Guided.") then
+		fallbackKill(info)
+	end
 	if typeof(info) ~= "table" or typeof(info.GroupId) ~= "string" or string.sub(info.GroupId, 1, 7) ~= "Guided." then
 		return
 	end
@@ -90626,6 +90774,16 @@ function GuidedService.OnNPCDeath(info: any)
 		return
 	end
 	GuidedService.Funnel(player, profile, "FirstKill")
+	local gk = rec(profile)
+	if isHook(profile) and gk.TimeToFight == nil and not isReplay(profile) then
+		-- claude-bud JOB 48: FtueTimeToFight = seconds from this session's spawn to the first camp kill, once per profile
+		gk.TimeToFight = math.floor((GuidedService._clock() - (spawnAt[player.UserId] or GuidedService._clock())) + 0.5)
+		dirty(player)
+		local A = deps.AnalyticsService
+		if A and A.Log then
+			pcall(A.Log, "FTUE_TIME_TO_FIGHT", player.UserId, { seconds = gk.TimeToFight })
+		end
+	end
 	for _, alive in pairs(c.Alive) do
 		if alive then
 			return
@@ -90684,6 +90842,19 @@ local function reward(player: Player, profile: any)
 		if cash > 0 then
 			push(player, "StarterPayout", { Cash = cash, Text = G.RewardText })
 		end
+		-- claude-bud JOB 48: the army grows at the reward (free soldiers, the normal recruit state, within the cap)
+		local n = if isHook(profile) and not isReplay(profile) then math.max(0, math.floor(tonumber(H.RewardSoldiers) or 0)) else 0
+		local SS = deps.SoldierService
+		if n > 0 and SS and SS.GrantFree then
+			local before = tonumber(profile.Soldiers) or 0
+			pcall(SS.GrantFree, player, n, "onboarding")
+			local after = tonumber(profile.Soldiers) or 0
+			g.RewardSoldiers = { Before = before, After = after }
+			print(string.format("[GUIDED] %s reward soldiers %d -> %d (asked %d, within the cap)", player.Name, before, after, n))
+		end
+		if isHook(profile) then
+			g.RewardAt = GuidedService._unix()
+		end
 	end
 	local TS = deps.TutorialService
 	if TS and TS.Notify then
@@ -90694,6 +90865,191 @@ local function reward(player: Player, profile: any)
 		end)
 	end
 end
+
+-- ── claude-bud JOB 48: RAID A RIVAL BASE (or the fallback) ──────────────────────────────────────────────────────
+local function notifyTS(player: Player, ev: string)
+	local TS = deps.TutorialService
+	if TS and TS.Notify then
+		pcall(TS.Notify, player, ev)
+	end
+end
+
+local function rivalsAllowed(player: Player): number
+	local RS = deps.RivalService
+	if RS == nil then
+		local ok, m = pcall(function(): any
+			return (require :: any)(script.Parent.RivalService) -- dynamic: keeps RivalService out of this module's type graph
+		end)
+		RS = if ok then m else nil
+	end
+	if RS == nil or RS.Candidates == nil then
+		return 0
+	end
+	local ok, rows = pcall(RS.Candidates, player)
+	return if ok and typeof(rows) == "table" then #rows else 0
+end
+
+local function goalOpen(player: Player): boolean
+	local cur = stepAt[player.UserId]
+	return cur ~= nil and cur.Id == "RaidRival"
+end
+
+-- the goal text the tutorial chip shows for RaidRival (TutorialService's push reads it): nil = the step's own copy
+function GuidedService.GoalText(profile: any): (string?, string?)
+	local g = if typeof(profile) == "table" then profile.Guided else nil
+	if isHook(profile) and typeof(g) == "table" and g.GoalMode == "Fallback" then
+		return H.FallbackTitle, H.FallbackHint
+	end
+	return nil, nil
+end
+
+local function setGoal(player: Player, profile: any, mode: string)
+	local g = rec(profile)
+	if g.GoalMode == mode then
+		return
+	end
+	g.GoalMode = mode
+	dirty(player)
+	local left = nil
+	if mode == "Raid" and (tonumber(H.FastRaidBonus) or 0) > 0 and g.FastRaidPaid ~= true and typeof(g.RewardAt) == "number" then
+		left = math.max(0, (tonumber(H.FastRaidSeconds) or 0) - (GuidedService._unix() - g.RewardAt))
+	end
+	push(player, "GuidedGoal", { Goal = mode, FastRaidLeft = left, Bonus = if left then H.FastRaidBonus else nil })
+	local TS = deps.TutorialService
+	if TS and TS.Push then
+		pcall(TS.Push, player)
+	end
+	if mode == "Raid" then
+		GuidedService.Funnel(player, profile, "GoalRaidShown")
+	else
+		local A = deps.AnalyticsService
+		if A and A.Log and not isReplay(profile) then
+			pcall(A.Log, "GOAL_FALLBACK", player.UserId, { reason = "no_rival" })
+		end
+		print(string.format("[GUIDED] %s raid goal -> FALLBACK (no rival may be raided now)", player.Name))
+	end
+end
+
+local function openGoal(player: Player, profile: any)
+	local g = rec(profile)
+	if typeof(g.RewardAt) ~= "number" then
+		g.RewardAt = GuidedService._unix()
+	end
+	g.FallbackKills = tonumber(g.FallbackKills) or 0
+	g.GoalMode = nil
+	local mark = stepAt[player.UserId]
+	local function decide()
+		if stepAt[player.UserId] ~= mark or not player.Parent then
+			return
+		end
+		local P = deps.ArmyPlan
+		if P == nil then
+			local okP, m = pcall(function(): any
+				return require(script.Parent.Parent.Modules.ArmyPlan)
+			end)
+			P = if okP then m else nil
+		end
+		local sending = if P and P.Status then P.Status(player.UserId) else nil
+		if rivalsAllowed(player) > 0 then
+			setGoal(player, profile, "Raid")
+		elseif not (typeof(sending) == "table" and sending.Kind == "Send") then
+			setGoal(player, profile, "Fallback") -- a SEND already marching keeps the raid goal until it ends
+		end
+		GuidedService._delay(math.max(5, tonumber(H.RecheckSeconds) or 15), decide)
+	end
+	decide()
+	GuidedService._delay(math.max(30, tonumber(H.FallbackMaxSeconds) or 180), function()
+		if stepAt[player.UserId] == mark and player.Parent and rec(profile).GoalMode == "Fallback" then
+			print(string.format("[GUIDED] %s fallback goal timed out -> next goal (never a soft-lock)", player.Name))
+			notifyTS(player, "GoalFallbackDone")
+		end
+	end)
+end
+
+fallbackKill = function(info: any)
+	local killer = info.Killer
+	if killer == nil then
+		return
+	end
+	local player = killer :: Player
+	if not goalOpen(player) then
+		return
+	end
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if not isHook(profile) then
+		return
+	end
+	local g = rec(profile)
+	if g.GoalMode ~= "Fallback" then
+		return
+	end
+	g.FallbackKills = (tonumber(g.FallbackKills) or 0) + 1
+	dirty(player)
+	if g.FallbackKills >= math.max(1, tonumber(H.FallbackKills) or 2) then
+		GuidedService.Funnel(player, profile, H.FallbackWonName)
+		notifyTS(player, "GoalFallbackWon")
+	end
+end
+
+-- ArmyCommand: a SEND to a base was accepted (the JOB 38 verdict passed)
+function GuidedService.OnRaidSent(player: Player)
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if isHook(profile) and goalOpen(player) then
+		GuidedService.Funnel(player, profile, "RaidSent")
+	end
+end
+
+-- ArmyPlan (a SEND looted) / MoneyCollectorService (an in-person ATM raid moved cash): the raid goal is won
+function GuidedService.OnRaidWon(player: Player)
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if not isHook(profile) or not goalOpen(player) then
+		return
+	end
+	local g = rec(profile)
+	GuidedService.Funnel(player, profile, "RaidWon")
+	local bonus = math.max(0, math.floor(tonumber(H.FastRaidBonus) or 0))
+	local inTime = typeof(g.RewardAt) == "number" and GuidedService._unix() - g.RewardAt <= (tonumber(H.FastRaidSeconds) or 0)
+	if bonus > 0 and inTime and g.FastRaidPaid ~= true and not isReplay(profile) then
+		g.FastRaidPaid = true
+		dirty(player)
+		local E = deps.EconomyService
+		if E and E.AddCash then
+			pcall(E.AddCash, player, bonus, "onboarding")
+		end
+		push(player, "StarterPayout", { Cash = bonus, Text = H.FastRaidText })
+	end
+	notifyTS(player, "RaidWon")
+end
+
+-- SoldierService.OnArmyChanged: the army count went up after the fight -> ArmyGrew (once)
+function GuidedService.OnArmyChanged(player: Player)
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if not isHook(profile) then
+		return
+	end
+	local g = rec(profile)
+	if g.CampDone == true and (tonumber(profile.Soldiers) or 0) > (tonumber(g.SoldiersAtCamp) or math.huge) then
+		GuidedService.Funnel(player, profile, "ArmyGrew")
+	end
+end
+
+-- SessionMilestone { sec }: once each per session at Hook.Milestones play seconds (Hook live for him)
+local function milestones(player: Player)
+	if typeof(H) ~= "table" or not TutorialConfig.HookLiveFor(player.UserId) then
+		return
+	end
+	for _, sec in ipairs(H.Milestones or {}) do
+		GuidedService._delay(sec, function()
+			if player.Parent then
+				local A = deps.AnalyticsService
+				if A and A.Log then
+					pcall(A.Log, "SESSION_MILESTONE", player.UserId, { sec = sec })
+				end
+			end
+		end)
+	end
+end
+GuidedService._Milestones = milestones
 
 -- ── TutorialService hooks ──────────────────────────────────────────────────────────────────────────────────────
 local function openStep(player: Player, profile: any, def: any)
@@ -90719,6 +91075,8 @@ local function openStep(player: Player, profile: any, def: any)
 		GuidedService.SpawnCamp(player, profile)
 	elseif id == "Reward" then
 		reward(player, profile)
+	elseif id == "RaidRival" and isHook(profile) then
+		openGoal(player, profile)
 	end
 end
 
@@ -90741,6 +91099,10 @@ function GuidedService.OnStepDone(player: Player, profile: any, def: any)
 	local f = FUNNEL_OF_STEP[def.Id]
 	if f then
 		GuidedService.Funnel(player, profile, f)
+	end
+	if def.Id == "RaidRival" and isHook(profile) then
+		GuidedService.Funnel(player, profile, "NextGoal") -- claude-bud JOB 48: the goal after the raid is up
+		push(player, "GuidedGoal", { Goal = nil })
 	end
 end
 
@@ -90781,6 +91143,10 @@ function GuidedService.Init(d: { [string]: any })
 	if CS and CS.OnNPCDeath then
 		CS.OnNPCDeath(GuidedService.OnNPCDeath)
 	end
+	local SS = deps.SoldierService -- claude-bud JOB 48: ArmyGrew
+	if SS and SS.OnArmyChanged then
+		SS.OnArmyChanged(GuidedService.OnArmyChanged)
+	end
 	local function hook(player: Player)
 		player.CharacterAdded:Connect(function(char: Model)
 			local hum = char:WaitForChild("Humanoid", 10)
@@ -90794,6 +91160,10 @@ function GuidedService.Init(d: { [string]: any })
 	Players.PlayerAdded:Connect(hook)
 	for _, p in ipairs(Players:GetPlayers()) do
 		hook(p)
+	end
+	Players.PlayerAdded:Connect(milestones) -- claude-bud JOB 48: SessionMilestone
+	for _, p in ipairs(Players:GetPlayers()) do
+		milestones(p)
 	end
 	Players.PlayerRemoving:Connect(function(player: Player)
 		GuidedService.ClearCamp(player)
@@ -93623,6 +93993,9 @@ function MissionService.Init(deps: { [string]: any })
 			return
 		end
 		MissionService.ClaimDailyMission(player, missionId)
+		pcall(function() -- claude-bud JOB 48: the Hook's "Open Missions" step also finishes on a claim
+			(require(script.Parent.TutorialService) :: any).Notify(player, "ClaimMission")
+		end)
 	end)
 
 	local dailyRemote = RemoteSetup.Get(Constants.RemoteNames.RequestClaimDailyReward) :: RemoteEvent
@@ -96837,6 +97210,9 @@ function MoneyCollectorService._RaidDone(thief: Player, victim: Player, vProfile
 	if moved > 0 then
 		pcall(function() -- claude-bud JOB 41 part D: an in-person raid win may bring the (no-reward) rate card forward once
 			(require(script.Parent.RatePromptService) :: any).Trigger(thief, "RaidWin")
+		end)
+		pcall(function() -- claude-bud JOB 48: an in-person ATM raid also wins the Guided raid goal
+			(require(script.Parent.GuidedService) :: any).OnRaidWon(thief)
 		end)
 	end
 	markDirty(victim)
@@ -109688,6 +110064,31 @@ function SoldierService.Recruit(player: Player, amount: any): (boolean, string?)
 	return true, nil
 end
 
+--[[ claude-bud JOB 48: free soldiers (the Guided Hook's reward: TutorialConfig.Guided.Hook.RewardSoldiers). The same
+	state Recruit writes (profile.Soldiers, within maxSoldiers, the state push + army listeners), no cash taken. Server
+	only (no remote calls this); returns how many were added (0 at the cap). ]]
+function SoldierService.GrantFree(player: Player, amount: number, reason: string?): number
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 0
+	end
+	local current = tonumber(profile.Soldiers) or 0
+	local n = math.clamp(math.floor(tonumber(amount) or 0), 0, math.max(0, maxSoldiers(profile) - current))
+	if n <= 0 then
+		return 0
+	end
+	profile.Soldiers = current + n
+	DataService.MarkDirty(player)
+	pushState(player)
+	if NotificationService then
+		NotificationService.Notify(player, string.format("+%d soldiers joined · Army %d/%d", n, profile.Soldiers, maxSoldiers(profile)), "Success")
+	end
+	if AnalyticsService and AnalyticsService.Log then
+		AnalyticsService.Log("SOLDIER_GRANT", player.UserId, { amount = n, reason = reason or "grant", total = profile.Soldiers })
+	end
+	return n
+end
+
 function SoldierService.Dismiss(player: Player, amount: any): (boolean, string?)
 	local n, serr = sanitizeAmount(amount)
 	if not n then
@@ -118157,14 +118558,22 @@ local function pushTutorial(player: Player)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.TutorialStateUpdate) :: RemoteEvent
 	local stepIndex = profile.TutorialStep
 	local stepDef = if not profile.TutorialComplete then getStep(profile, stepIndex) else nil
+	-- claude-bud JOB 48: the raid goal's fallback copy ("Clear hostiles") while no rival may be raided
+	local goalTitle, goalHint = nil, nil
+	if stepDef and stepDef.Id == "RaidRival" and GuidedService and GuidedService.GoalText then
+		local okG, t, h = pcall(GuidedService.GoalText, profile)
+		if okG then
+			goalTitle, goalHint = t, h
+		end
+	end
 	remote:FireClient(player, {
 		Step = stepIndex,
 		Complete = profile.TutorialComplete == true,
 		Total = stepCount(profile),
 		OrderVersion = tonumber(profile.TutorialOrderVersion) or 1, -- claude-bud JOB 41: 4 = the Guided list
 		Id = if stepDef then stepDef.Id else nil,
-		Title = if stepDef then stepDef.Title else nil,
-		Hint = if stepDef then stepDef.Hint else nil,
+		Title = goalTitle or (if stepDef then stepDef.Title else nil),
+		Hint = goalHint or (if stepDef then stepDef.Hint else nil),
 		MarkerName = if stepDef then stepDef.MarkerName else nil,
 		HighlightHint = if stepDef then stepDef.HighlightHint else nil,
 		PadStructureId = if stepDef then stepDef.PadStructureId else nil,
@@ -118500,7 +118909,7 @@ function TutorialService.ReplayGuided(player: Player): (boolean, string)
 	end
 	profile.GuidedReplay = { Fields = fields, At = os.time() }
 	profile.Guided = { Replay = true, Funnel = {} }
-	profile.TutorialOrderVersion = G.OrderVersion
+	profile.TutorialOrderVersion = if GuidedService.OrderFor then GuidedService.OrderFor(player) else G.OrderVersion -- JOB 48: 5 with the Hook
 	profile.TutorialDoneAhead = nil
 	profile.TutorialComplete = false
 	profile.TutorialStep = skipOwnedBuySteps(profile, STEP_CLAIM)
@@ -118610,7 +119019,17 @@ function TutorialService.Init(deps: { [string]: any })
 			local okW, wants = pcall(GuidedService.Wants, player, profile)
 			if okW and wants == true then
 				current = TutorialConfig.Guided.OrderVersion
-				if tonumber(profile.TutorialOrderVersion) ~= current then
+				if typeof(GuidedService.OrderFor) == "function" then
+					local okO, v = pcall(GuidedService.OrderFor, player)
+					current = if okO and typeof(v) == "number" then v else current -- claude-bud JOB 48: 5 with the Hook
+				end
+				local saved = tonumber(profile.TutorialOrderVersion)
+				if saved ~= current then
+					-- claude-bud JOB 48: a Guided save moving between 4 and 5 (the Hook switched on / off) keeps its place:
+					-- the first step of the new order it has not done (steps 1-7 share an index in both orders)
+					if TutorialConfig.IsGuidedVersion(saved) and profile.TutorialComplete ~= true then
+						profile.TutorialStep = TutorialConfig.MigrateLegacyStep(profile.TutorialStep, TutorialConfig.StepsFor(current), saved)
+					end
 					profile.TutorialOrderVersion = current
 					DataService.MarkDirty(player)
 				end
@@ -137874,6 +138293,11 @@ local function pulseTile(id: string, scale: number)
 	end
 end
 
+-- claude-bud JOB 48: a rail tile's press pulse for other modules (Juice: the Army tile on every +1 soldier)
+function HUDController.PulseRail(id: string)
+	pulseTile(id, 1.25)
+end
+
 --[[ Rail badge: "!" (gold ready style), a count ("3"), or nil to clear. Anyone else calls HudLayout.SetBadge. ]]
 function HUDController.SetRailBadge(id: string, text: string?)
 	HudLayout.SetBadge(id, text)
@@ -152324,6 +152748,10 @@ local rows: { any } = {}
 local why: string? = nil -- v163: the server's one-line reason when the list is empty
 local open = false
 local emptyLabel: TextLabel? = nil
+-- claude-bud JOB 48: the Guided "RAID A RIVAL BASE" goal outlines the card (FeaturePush "GuidedGoal" {Goal = "Raid"});
+-- a REAL fast-raid bonus window (server: Hook.FastRaidSeconds, only while Hook.FastRaidBonus > 0) shows as a countdown
+local goalRaid = false
+local goalEndsAt: number? = nil
 
 local updatePillLater: () -> () = function() end -- v163: set once updatePill exists (setOpen is defined first)
 
@@ -152586,6 +153014,14 @@ local function refresh()
 	local st = pillStroke
 	if st then
 		st.Color = accent
+		st.Thickness = if goalRaid then 4 else 2 -- claude-bud JOB 48: the raid goal's outline
+	end
+	local ends = goalEndsAt
+	if t and goalRaid and ends then
+		local left = math.max(0, math.floor(ends - os.clock()))
+		if left > 0 then
+			t.Text = string.format("RAID · %d:%02d", left // 60, left % 60) -- the real fast-raid bonus window
+		end
 	end
 	local ring = crossRing
 	if ring then
@@ -152741,11 +153177,37 @@ local function build()
 	refresh()
 end
 
+-- claude-bud JOB 48: the tutorial chip's TARGETS button opens the list (the same as tapping the card)
+function RivalController.Open()
+	if pill == nil or open then
+		return
+	end
+	setOpen(true)
+	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestRivalAction, "open", nil)
+end
+
 function RivalController.Init()
 	if RivalConfig.Enabled ~= true or not RivalConfig.LiveFor(player.UserId) then
 		return -- OFF / not live: no pill, nothing pushed
 	end
 	task.spawn(build)
+	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if kind ~= "GuidedGoal" or typeof(data) ~= "table" then
+			return
+		end
+		goalRaid = data.Goal == "Raid"
+		local left = tonumber(data.FastRaidLeft)
+		goalEndsAt = if goalRaid and left and left > 0 then os.clock() + left else nil
+		refresh()
+		if goalEndsAt then
+			task.spawn(function() -- 1 Hz while the bonus window runs (UI refresh well under the 10 Hz cap)
+				while goalRaid and goalEndsAt and os.clock() < goalEndsAt + 1 do
+					task.wait(1)
+					refresh()
+				end
+			end)
+		end
+	end)
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if kind ~= "RivalTargets" or typeof(data) ~= "table" or typeof(data.Rows) ~= "table" then
 			return
@@ -157602,6 +158064,21 @@ local function runCta()
 		end)
 		if ok and VehicleController and VehicleController.Open then
 			VehicleController.Open()
+		end
+	elseif action == "OpenTargets" then
+		-- claude-bud JOB 48: RAID A RIVAL BASE: the TARGETS list (each row's SEND ARMY is the JOB 38 path)
+		local ok, RivalController = pcall(function()
+			return require(script.Parent.RivalController)
+		end)
+		if ok and RivalController and RivalController.Open then
+			RivalController.Open()
+		end
+	elseif action == "OpenMissions" then
+		local ok, MissionController = pcall(function()
+			return require(script.Parent.MissionController)
+		end)
+		if ok and MissionController and MissionController.Open then
+			MissionController.Open()
 		end
 	elseif action == "OpenArmy" then
 		local ok, ArmyController = pcall(function()
@@ -170990,6 +171467,29 @@ function Juice.Init()
 			burst(J)
 		end
 	end)
+	-- claude-bud JOB 48: "see his army grow": every +1 soldier pulses the Army tile and rings the burst at his feet
+	-- (only while the Guided Hook is live for him; owner-first)
+	local TC = require((Shared :: any).Configs.TutorialConfig) :: any
+	if TC.HookLiveFor and TC.HookLiveFor(Players.LocalPlayer.UserId) then
+		local lastCount: number? = nil
+		Remotes.BindEvent(Constants.RemoteNames.SoldierStateUpdate, function(payload: any)
+			local n = if typeof(payload) == "table" then tonumber(payload.Soldiers) else nil
+			if n == nil then
+				return
+			end
+			local before = lastCount
+			lastCount = n
+			if before ~= nil and n > before then
+				burst(J)
+				local okH, HUD = pcall(function(): any
+					return require(script.Parent.Parent.Controllers.HUDController)
+				end)
+				if okH and HUD and HUD.PulseRail then
+					pcall(HUD.PulseRail, "Army")
+				end
+			end
+		end)
+	end
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if kind == "Rebirth" then
 			celebrate(J, data)

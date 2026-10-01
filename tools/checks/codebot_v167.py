@@ -30,12 +30,12 @@ def check(cond, label):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 173)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 173)'),
-    (S + "Services/DataService.luau", "WE_Build=173"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 173)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 174)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 174)'),
+    (S + "Services/DataService.luau", "WE_Build=174"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 174)'),
 ):
-    check(needle in read(rel), "CODEBOT v167: WE_Build=173 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v167: WE_Build=174 " + rel.rsplit("/", 1)[-1])
 
 MC = read(C + "MonetizationConfig.luau")
 WANT = {
