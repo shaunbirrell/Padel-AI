@@ -1,4 +1,11 @@
 <!-- Q2-START -->
+## v177 PUBLISHED (Code Bot Roblox, 2026-10-01 17:03 Dublin): Open Cloud place version 175. claude-bud JOB 49 A+B flipped to EVERYONE (Shaun approved)
+- **Commit:** `2ed90ae` (code + dist + checks) pushed to phase-7-polish (FF from `008c529`). Bud merge `205f2d6` into claude/desktop-bud. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; no price / Id change.
+- **Flip:** `DailyRewardConfig.Grace` / `.Day7Scale` / `.Calendar` + `EconomyConfig.OfflineEarnings.Card` OwnerFirst true→false (live for all players).
+- **Untouched:** `OfflineEarnings.CapBoost` Enabled=false; `MonetizationConfig.DevProducts.OfflineCap2x` / `MissionReroll` Id 0 + no price; all prices / product Ids; `TutorialConfig.Guided.Hook.OwnerFirst = false`.
+- **Checks:** BuyPathStatic **PASS=7954 FAIL=0**; new `tools/checks/codebot_v177.py`; `claude_bud_job49.py` + `codebot_v176.py` now assert OwnerFirst=false; `run_daily_return_test.py` 0 failed (now proves grace live for a non-owner, owner-first rule still proved with OwnerFirst=true); `run_offline_test.py` 0 failed.
+- **Publish:** HTTP 200, versionNumber **175**, universe 10767159222 / place 97112936860418. Servers NOT restarted (~25 players live): Migrate to Latest Update when convenient.
+- **Still owed:** JOB 49 part C (missions / MissionReroll) not started on Claude; JOB 44 Studio 2-player siege/march still owed.
 ## v176 PUBLISHED (Code Bot Roblox, 2026-10-01 16:54 Dublin): Open Cloud place version 174. claude-bud JOB 49 A+B daily streak grace + welcome-back collect card (owner-first)
 - **Cherry-pick:** `d4672cd` → `32720f8` (JOB 49 A) + `febd2a8` → `2d695b1` (JOB 49 B) onto phase-7 `f1e5707`. Code+dist+checks: `574b455` on `codebot/v176-job49` (FF into phase-7-polish). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; no price / Id change. OfflineCap2x / MissionReroll stay Id 0 + CapBoost Enabled=false.
 - **JOB 49 A (NEW-OWNER-FIRST):** `DailyRewardConfig.Grace` / `.Day7Scale` / `.Calendar` OwnerFirst=true — 1 missed day per 7-day cycle (SAVED), Day 7 = max(table, 60 min income), real UTC countdown on card + Missions panel, first card after Guided reward or 150 s.
