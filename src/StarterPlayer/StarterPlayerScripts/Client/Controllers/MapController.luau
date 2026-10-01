@@ -122,6 +122,12 @@ local goBtn: TextButton? = nil
 local clearBtn: TextButton? = nil
 local sendBtn: TextButton? = nil -- claude-bud JOB 38: SEND ARMY on an enemy base card (ArmyOrdersConfig live)
 local selected: { Kind: string, Id: string, X: number, Z: number }? = nil
+--[[ Code Bot army command bug (2026-10-01): the map's mode. "Normal" = tap-to-pin (GO pins a place for HIM: the gold
+	line; nothing moves him). "ArmySend" = opened by the Army panel's SEND (MapController.OpenForArmySend): the card's
+	button reads SEND ARMY and fires RequestArmySend with the target id ("A:<area>" / "S:<site>" / "B:<plot>"); it
+	never pins, open ground is not a target. Read before the map closes, back to Normal on every close. ]]
+local mapMode: string = "Normal"
+local hintLabel: TextLabel? = nil
 
 local function isLive(): boolean
 	return RetentionConfig.Live(MapConfig, player.UserId)
@@ -720,6 +726,11 @@ local function paint()
 			mark("Pin", t.X, t.Z, C.Pin, I.Pin, "pin", nil)
 		end
 	end
+	-- Code Bot army command bug: where HIS ARMY is going (the server's WE_ArmyDest), apart from his own pin
+	local ad = player:GetAttribute("WE_ArmyDest")
+	if typeof(ad) == "Vector3" then
+		mark("ArmyDest", ad.X, ad.Z, C.OutpostMine, I.Job, "circle", "ARMY")
+	end
 	local root = myRoot()
 	if root then
 		local p = root.Position
@@ -786,15 +797,34 @@ local function showCard(title: string?, lines: { string }, canGo: boolean)
 	end
 	if goBtn then
 		goBtn.Visible = canGo
+		goBtn.Text = if mapMode == "ArmySend" then "SEND ARMY" else "GO" -- Code Bot: the army mode's button says what it does
 	end
 	if sendBtn then
 		sendBtn.Visible = false -- claude-bud JOB 38: only selectBase shows it
 	end
 end
 
+-- Code Bot: the target id the ArmySend GO sends (the server resolves it: ArmyTargets)
+local function armyTargetId(s: { Kind: string, Id: string, X: number, Z: number }?): string?
+	if s == nil then
+		return nil
+	end
+	if s.Kind == "Area" then
+		return "A:" .. s.Id
+	elseif s.Kind == "Site" then
+		return "S:" .. s.Id
+	elseif s.Kind == "Base" then
+		return "B:" .. s.Id
+	elseif s.Kind == "Bank" then
+		local a = MapAreas.At(s.X, s.Z)
+		return if a then "A:" .. a.Id else nil
+	end
+	return nil
+end
+
 local function selectArea(a: MapAreas.Area, x: number, z: number)
 	selected = { Kind = "Area", Id = a.Id, X = x, Z = z }
-	ArmyLog.Line(player, "ARMY SEND", string.format("tap -> Area %s %q card: GO only (SEND ARMY hidden: selectBase only)", a.Id, a.Name))
+	ArmyLog.Line(player, "ARMY SEND", string.format("tap -> Area %s %q MapMode=%s card button=%s", a.Id, a.Name, mapMode, if mapMode == "ArmySend" then "SEND ARMY (RequestArmySend A:" .. a.Id .. ")" else "GO (pin)"))
 	local lines: { string } = {}
 	table.insert(lines, MapConfig.KindInfo[a.Kind] or "Area")
 	local owner, mine = outpostState(a.Territory)
@@ -840,7 +870,8 @@ end
 local function selectBase(b: any)
 	selected = { Kind = "Base", Id = tostring(b.P), X = b.X, Z = b.Z }
 	local title = if b.Mine then "Your base" elseif typeof(b.N) == "string" then b.N else "Unclaimed base"
-	showCard(title, { if b.Mine then "Home: build, collect, recruit" else "Player base" }, true)
+	-- (ArmySend mode: your own / an empty plot is not a target - RECALL / RETREAT bring the army home)
+	showCard(title, { if b.Mine then "Home: build, collect, recruit" else "Player base" }, mapMode ~= "ArmySend")
 	-- claude-bud JOB 38: another player's base: SEND ARMY + the server's fairness verdict (the server re-checks on send)
 	local AOC = require(Shared.Configs.ArmyOrdersConfig) :: any
 	local sb = sendBtn
@@ -848,6 +879,9 @@ local function selectBase(b: any)
 		sb.Visible = true
 		sb.Text = "SEND ARMY"
 		sb:SetAttribute("Ok", false)
+		if goBtn and mapMode == "ArmySend" then
+			goBtn.Visible = false -- one SEND ARMY button: the base's own (it carries the fairness verdict)
+		end
 		if clearBtn then
 			clearBtn.Visible = false
 		end
@@ -948,8 +982,8 @@ local function onTap(pos: Vector2)
 	end
 	local x, z = toWorld(u, v)
 	local pxPerStud = as.X / (E.X1 - E.X0)
-	-- 1. the pin
-	if ObjectiveMarker.Pinned() then
+	-- 1. the pin (Normal mode only: the army mode never touches his pin)
+	if mapMode ~= "ArmySend" and ObjectiveMarker.Pinned() then
 		local t = ObjectiveMarker.Current()
 		if t and math.sqrt((t.X - x) ^ 2 + (t.Z - z) ^ 2) * pxPerStud <= MapConfig.PinTapPx then
 			ObjectiveMarker.ClearPin()
@@ -1002,10 +1036,15 @@ local function onTap(pos: Vector2)
 		showFocus()
 		return
 	end
-	-- 6. open ground: a pin at once
+	-- 6. open ground: a pin at once (Code Bot: ArmySend mode - not a target, no pin)
 	selected = nil
 	selectedItem = nil
 	showFocus()
+	if mapMode == "ArmySend" then
+		ArmyLog.Line(player, "ARMY SEND", string.format("tap open ground (%.0f,%.0f) MapMode=ArmySend: not a target (no pin)", x, z))
+		showCard("Not a target", { "Tap a zone, a site or an enemy base" }, false)
+		return
+	end
 	pinAt(x, z)
 	showCard("Pin set", { "Follow the gold line" }, false)
 end
@@ -1030,9 +1069,13 @@ local function fetch()
 	end)
 end
 
-local function setOpen(v: boolean)
+local function setOpen(v: boolean, mode: string?)
 	if v and not isLive() then
 		return
+	end
+	mapMode = if v then (mode or "Normal") else "Normal" -- Code Bot: every close ends the army mode
+	if hintLabel then
+		hintLabel.Text = if mapMode == "ArmySend" then "ARMY SEND · tap a zone or an enemy base" else "Pinch or + to zoom · tap to pin"
 	end
 	open = v
 	local p = panel
@@ -1053,7 +1096,11 @@ local function setOpen(v: boolean)
 	selectedItem = nil
 	fitLayout()
 	layoutLabels()
-	showCard("Tap a place", { "See what is there", "Tap open ground to pin" }, false)
+	if mapMode == "ArmySend" then
+		showCard("Send your army", { "Tap a zone, a site or an enemy base", "then SEND ARMY (the army walks there)" }, false)
+	else
+		showCard("Tap a place", { "See what is there", "Tap open ground to pin" }, false)
+	end
 	local my = loopToken
 	task.spawn(function()
 		while open and loopToken == my do
@@ -1078,6 +1125,16 @@ end
 
 function MapController.IsOpen(): boolean
 	return open
+end
+
+-- Code Bot army command bug: the Army panel's SEND - the map in ArmySend mode (its GO sends the ARMY, never pins)
+function MapController.OpenForArmySend()
+	setOpen(true, "ArmySend")
+	ArmyLog.Line(player, "ARMY SEND", "map opened MapMode=" .. mapMode)
+end
+
+function MapController.Mode(): string
+	return mapMode
 end
 
 -- claude-bud JOB 41 part C: open the map on one base's card (TARGETS' VIEW; tap-to-pin only, nothing moves the player)
@@ -1416,6 +1473,7 @@ function MapController.Init()
 		t.ZIndex = 4
 	end
 	local hint = text(card, "Pinch or + to zoom · tap to pin", 15, C.Muted, Enum.Font.GothamMedium)
+	hintLabel = hint
 	hint.TextXAlignment = Enum.TextXAlignment.Left
 	hint.TextStrokeTransparency = 1
 	hint.TextTruncate = Enum.TextTruncate.AtEnd
@@ -1426,6 +1484,18 @@ function MapController.Init()
 
 	goB.Activated:Connect(function()
 		local s = selected
+		local mode = mapMode -- (read BEFORE the close resets it)
+		if mode == "ArmySend" then
+			-- Code Bot army command bug: the ARMY command (the server validates and moves the army); his pin untouched
+			local tid = armyTargetId(s)
+			ArmyLog.Line(player, "ARMY SEND", string.format("GO pressed MapMode=ArmySend ArmyId=%d BaseId=%s Position=%s Firing remote=%s",
+				player.UserId, tostring(tid), if s then string.format("(%.0f,%.0f)", s.X, s.Z) else "nil", if tid then "RequestArmySend" else "none (no target)"))
+			if tid then
+				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySend, tid)
+				setOpen(false)
+			end
+			return
+		end
 		ArmyLog.Line(player, "ARMY SEND", string.format("GO pressed MapMode=Normal ArmyId=nil BaseId=%s Position=%s Firing remote=none (pinAt: the PLAYER pin)",
 			if s then s.Kind .. ":" .. s.Id else "nil", if s then string.format("(%.0f,%.0f)", s.X, s.Z) else "nil"))
 		if s then

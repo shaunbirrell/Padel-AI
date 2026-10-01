@@ -1,0 +1,50 @@
+[ArmyController] v115 Follow3 TrailBlock controller started (true, all, debug false)
+[WAR EMPIRE] ArmyPlan Init
+S_WARM Following
+S_BEFORE Following
+[SERVER ARMY] received player=shaunie6 command=Send target=A:Town
+[SERVER ARMY] shaunie6 command=Send target=A:Town (Crossroads Town) kind=Area state=Following
+[ARMY DESTINATION] shaunie6 old=nil new=(-100,1,0) source=ArmyPlan.Travel/March
+[ARMY PATH] shaunie6 start=(-546,3,-0) dest=(-100,1,0) distance=446 status=Success waypoints=56
+[ARMY STATE] shaunie6 Following -> TravellingToBase SOURCE=SEND A:Town mode=Attack target=Crossroads Town
+[ARMY MOVE] shaunie6 travel started -> A:Town (Crossroads Town) approach=(-100,1,0) objective=(0,1,0) distance=446 units=75
+S_AFTER_SEND TravellingToBase
+S_DEST -100,0
+S_DESTATTR table: 0x00005601c26335b0
+S_ROUTE 56
+[ARMY MOVE] shaunie6 Travel/March block=(-548,3,0) lead=(-494,0,-0) to dest 448 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-515,3,-0) lead=(-460,0,-0) to dest 415 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-481,3,-0) lead=(-427,0,-0) to dest 381 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-447,3,-0) lead=(-393,0,-0) to dest 347 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-414,3,-0) lead=(-360,0,-0) to dest 314 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-380,3,-0) lead=(-326,0,-0) to dest 280 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-346,3,-0) lead=(-292,0,-0) to dest 246 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-313,3,-0) lead=(-259,0,-0) to dest 213 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-279,3,-0) lead=(-225,0,-0) to dest 179 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-246,3,-0) lead=(-192,0,-0) to dest 146 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-212,3,-0) lead=(-158,0,-0) to dest 112 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-178,3,-0) lead=(-124,0,-0) to dest 78 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 arrived at A:Town (Crossroads Town) block=(-145,3,-0)
+[ARMY STATE] shaunie6 TravellingToBase -> EngagingTarget SOURCE=ArmyPlan Travel/Engage mode=Attack target=Crossroads Town
+[ARMY MOVE] shaunie6 clear at Crossroads Town: HOLD
+[ARMY STATE] shaunie6 EngagingTarget -> Holding SOURCE=ArmyPlan.finish Travel mode=Hold
+[ARMY MOVE] shaunie6 plan Travel ended -> Holding
+S_DISTS 2,58,114,170,226,282,338,386,451,481,444,444,444,444,444,444,444,444,444,444
+S_D0 46
+S_FOLLOW_TAKEOVER 0
+S_ENGAGED true
+S_HELD true
+S_FINAL Holding
+S_FINALPOS -56,-2
+S_SPREAD 41.9
+S_TELEPORTS 0
+S_MAXSTEP 1.42
+S_SLOTLAG 3.7
+S_DEPTH 81.0
+S_WIDTH 17.0
+S_SNAPS 0
+S_MAXWS 28.4
+S_SPREAD_OTHER 47.2
+notify	Army sent to Crossroads Town
+notify	Arrived at Crossroads Town
+notify	Crossroads Town clear: your army holds it. Stand in the zone to capture

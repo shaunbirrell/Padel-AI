@@ -33,7 +33,7 @@ SOURCES["Client/Modules/PanelShell"] = function()
   return setmetatable({ Text = function(n) return n end, TouchMinV = function() return 44 end,
     Attach = function() return { Sync = function() end, TapThrough = function() return false end } end,
     CloseButton = function(parent) local b = Instance.new("TextButton"); b.Parent = parent; return b end,
-    Screen = function() return any end }, { __index = function() return any end })
+    Screen = function() return { Scale = 1 } end }, { __index = function() return any end })
 end
 SOURCES["Client/Modules/HudLayout"] = function()
   return setmetatable({ Scale = function() return 1 end, GetRect = function() return Vector2.new(0, 0), Vector2.new(0, 0) end,

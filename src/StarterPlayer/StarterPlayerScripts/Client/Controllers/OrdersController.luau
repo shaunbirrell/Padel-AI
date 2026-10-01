@@ -131,24 +131,38 @@ local function refresh()
 	end
 end
 
+-- Code Bot army command bug: the server's ArmyState -> the lit Army button
+local STATE_BUTTON: { [string]: string } = {
+	Idle = "Follow",
+	Following = "Follow",
+	Regrouping = "Follow",
+	Holding = "Hold",
+	Attacking = "Attack",
+	EngagingTarget = "Attack",
+	Capturing = "Attack",
+	Retreating = "Retreat",
+	TravellingToBase = "Send",
+	Recalling = "Recall",
+}
+
 local function fireOrder(orderId: string): boolean
 	if orderId == "Send" then
 		-- claude-bud JOB 38: SEND = pick an enemy base on the world map (its card has SEND ARMY + the verdict)
-		NotificationController.Show("Tap an enemy base on the map", "Info", 3)
-		ArmyLog.Line(player, "ARMY SEND", string.format("SEND pressed: MapController.Open() MapMode=Normal (no army mode) ArmyId=%d", player.UserId))
+		-- Code Bot army command bug: the map opens in ArmySend mode (its GO sends the ARMY to the tapped zone / site /
+		-- base; the old plain Open() made GO pin a place for HIM and the army never got an order)
+		NotificationController.Show("Tap a zone or an enemy base, then SEND ARMY", "Info", 3)
+		ArmyLog.Line(player, "ARMY SEND", string.format("SEND pressed: MapController.OpenForArmySend() MapMode=ArmySend ArmyId=%d", player.UserId))
 		local okM, MC = pcall(function(): any
 			return require(script.Parent.MapController)
 		end)
-		if okM and MC and MC.Open then
-			pcall(MC.Open)
+		if okM and MC and MC.OpenForArmySend then
+			pcall(MC.OpenForArmySend)
 		end
 		return true
 	end
 	if orderId == "Recall" then
 		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestSquadOrder, "Recall") -- claude-bud JOB 38
-		currentOrder = "Follow"
-		refresh()
-		return true
+		return true -- (the highlight follows the server's state push: Recalling, then Following)
 	end
 	local flags = OrdersConfig.Orders
 	if typeof(flags) == "table" and (flags :: any)[orderId] == false then
@@ -157,8 +171,8 @@ local function fireOrder(orderId: string): boolean
 	end
 	-- RequestSquadOrder via the non-blocking helper (polls ≤ 3 s for the remote, never waits forever)
 	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestSquadOrder, orderId)
-	currentOrder = orderId
-	refresh()
+	-- Code Bot army command bug: no optimistic highlight - the button lights when the SERVER says the state changed
+	-- (SquadOrderStateUpdate.State); a refused order ("No enemies near") leaves the real state lit
 	return true
 end
 
@@ -564,7 +578,9 @@ function OrdersController.Init()
 		if typeof(payload) ~= "table" then
 			return
 		end
-		if typeof(payload.Order) == "string" then
+		if typeof(payload.State) == "string" and STATE_BUTTON[payload.State] then
+			currentOrder = STATE_BUTTON[payload.State] -- Code Bot: the server's ArmyState drives the highlight
+		elseif typeof(payload.Order) == "string" then
 			currentOrder = payload.Order
 		end
 		soldierCount = tonumber(payload.Soldiers) or soldierCount

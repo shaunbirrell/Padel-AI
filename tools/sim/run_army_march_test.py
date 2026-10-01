@@ -49,6 +49,8 @@ function AF.HoldVia(plotId, upos, goal) return goal end
 return AF
 ''',
 }
+from army_cmd_mods import army_cmd_mods  # Code Bot army command: ArmyState / ArmyTargets / ArmyCommand + configs
+MODS = {**army_cmd_mods(), **MODS}
 EXTRA = r'''
 NOW = 1000
 task = { spawn = function(fn, ...) fn(...) end, wait = function(s) NOW += (s or 0) end, delay = function() end, defer = function(fn, ...) fn(...) end }

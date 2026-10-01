@@ -1,8 +1,8 @@
 --!strict
 --[[
 	Code Bot (army command bug, 2026-10-01; owner recording: "ATTACK says No enemies near; SEND -> Crossroads -> GO and the
-	army stays beside me"). THE command path of a live ArmyOrders owner (ArmyOrdersConfig.LiveFor: OwnerFirst = UserId
-	470626172 + Studio). Every army button lands here, on the server:
+	army stays beside me"). THE command path of a live ArmyOrders owner (ArmyOrdersConfig.LiveFor: OwnerFirst = the owner +
+	Studio). Every army button lands here, on the server:
 	  RequestSquadOrder Follow / Hold / Attack / Retreat / Recall  -> SquadOrdersService.SetOrder -> ArmyCommand.Order
 	  RequestArmySend <target id>  (the map's ArmySend GO / SEND ARMY) -> ArmyCommand.Send
 	Each command is validated (a rejection is a warn with its reason + a toast, and the state is pushed again so the

@@ -39,6 +39,8 @@ MODS = {
     "Modules/ArmyRoute": SV / "Modules/ArmyRoute.luau",
     "Modules/ArmyPlan": SV / "Modules/ArmyPlan.luau",
 }
+from army_cmd_mods import army_cmd_mods  # Code Bot army command: ArmyState / ArmyTargets / ArmyCommand + configs
+MODS = {**army_cmd_mods(), **MODS}
 
 EXTRA = r'''
 NOW = 1000
