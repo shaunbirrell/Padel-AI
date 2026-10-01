@@ -618,11 +618,21 @@ local function kText(v: number): string
 	return string.format("$%d.%dK", tenths // 10, tenths % 10)
 end
 
---[[ Prices: "$600", "$1,240", "$12.5K", "$25K", "$1.9M" (close to the console price label's rules). tight = true
-	(the 2.3-stud console screen) abbreviates from $1,000: "$3.2K". ]]
+--[[ Prices: "$600", "$1,240", "$12.5K", "$25K", "$1.9M", "$2.7B", "$1.2T" (close to the console price label's rules).
+	tight = true (the 2.3-stud console screen, the 7-day strip tiles) abbreviates from $1,000: "$3.2K".
+	Code Bot (2026-10-01): B / T added (was "$2749.8M" past a billion; the D7 tile showed "$624953.3k" from its own
+	k-only formatter, now this one). ]]
+local function bigText(v: number, unit: number, suffix: string): string
+	return "$" .. (string.gsub(string.format("%.1f", v / unit), "%.0$", "")) .. suffix
+end
+
 function TycoonMath.ShortCash(n: number, tight: boolean?): string
 	local v = math.max(0, math.floor(num(n)))
-	if v >= 1_000_000 then
+	if v >= 999_950_000_000 then
+		return bigText(v, 1e12, "T")
+	elseif v >= 999_950_000 then
+		return bigText(v, 1e9, "B")
+	elseif v >= 1_000_000 then
 		return "$" .. (string.gsub(string.format("%.1f", v / 1_000_000), "%.0$", "")) .. "M"
 	elseif v >= 10_000 or (tight == true and v >= 1000) then
 		return kText(v)

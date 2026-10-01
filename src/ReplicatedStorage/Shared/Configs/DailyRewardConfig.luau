@@ -2,6 +2,7 @@
 --[[ 7-day login streak; day 7 resets streak after claim. Field names match MissionService. ]]
 
 local AdminConfig = require(script.Parent.AdminConfig)
+local OfflineConfig = require(script.Parent.OfflineConfig) -- Code Bot: Day 7 = one full offline cap (2 h x 10 %)
 
 local DailyRewardConfig = {
 	Rewards = {
@@ -57,7 +58,10 @@ local DailyRewardConfig = {
 	Day7Scale = {
 		Enabled = true,
 		OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
-		IncomeMinutes = 60,
+		-- Code Bot (Shaun 2026-10-01): was 60 (an hour of income: $624,953.3k on the D7 tile at ~$174k/s). Now the
+		-- same worth as one FULL offline cap: OfflineConfig.MaxSeconds x OfflineConfig.Rate / 60 = 7200 x 0.10 / 60
+		-- = 12 min of income, so the D7 star and "Away 2 h: earn up to $X" agree. The table's Day 7 cash stays the floor.
+		IncomeMinutes = OfflineConfig.MaxSeconds * OfflineConfig.Rate / 60,
 	},
 	Calendar = {
 		Enabled = true,

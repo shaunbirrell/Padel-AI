@@ -124,10 +124,9 @@ local EconomyConfig = {
 	OfflineEarnings = {
 		Enabled = true,
 		OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
-		Share = 0.25,
-		CapSeconds = 8 * 3600,
+		-- Code Bot v201 (Shaun 2026-10-01): the cap and the rate moved to OfflineConfig (MaxSeconds 7200 = 2 h, Rate 0.10;
+		-- was CapSeconds 8 h, Share 0.25, PremiumBonus 0.10). Only the switches stay here.
 		MinSeconds = 300,
-		PremiumBonus = 0.10,
 		ShowDelaySeconds = 6, -- the card: after the save loads (and after the onboarding hold)
 		--[[ claude-bud JOB 49 part B (2026-10-01): "Welcome back! Collect $X". Owner-first; OFF = the JOB 29 card. The
 			card shows the real server amount, the time away and "(capped at N h)"; COLLECT draws the gold line to his
@@ -138,12 +137,12 @@ local EconomyConfig = {
 		},
 		--[[ claude-bud JOB 49 B: the Robux SIDEGRADE. Code Bot v180 (Shaun approved 2026-10-01): owning the
 			MonetizationConfig.GamePasses.OfflineCap2x pass ("2x Offline Cash", 2002664894, 149 R$) makes the cap TIME
-			CapMult x CapSeconds (8 h -> 16 h). It never raises Share and gives no combat stat. ]]
+			OfflineConfig.PassCapMult x OfflineConfig.MaxSeconds (now 2 h -> 4 h). It never raises the Rate and gives no combat stat. ]]
 		CapBoost = {
 			Enabled = true, -- Code Bot v180: live (was false)
 			OwnerFirst = false, -- Code Bot v180: everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
 			ProductKey = "OfflineCap2x", -- the GamePasses key (ownership: MonetizationService pass cache)
-			CapMult = 2,
+			-- the multiplier is OfflineConfig.PassCapMult (Code Bot: one central offline config)
 		},
 	},
 }

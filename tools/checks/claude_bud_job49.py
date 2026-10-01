@@ -59,8 +59,10 @@ _j49("MS.PassivePerMin, player, profile, true" in _d7 and "math.max(floorCash" i
 _EC = _j49_src(_CF + "EconomyConfig.luau")
 _cb = _j49_block(_EC, "CapBoost")
 # Code Bot v180 (Shaun approved 2026-10-01): the hook is live for everyone (was Enabled = false, OwnerFirst = true)
-_j49("Enabled = true," in _cb and "OwnerFirst = false," in _cb and 'ProductKey = "OfflineCap2x"' in _cb and "CapMult = 2" in _cb,
-     "B: the OfflineCap2x sidegrade is live for everyone (Code Bot v180), cap time x2 only")
+# Code Bot (Shaun 2026-10-01, offline cap): retired, superseded in tools/checks/codebot_v201.py (OfflineConfig MaxSeconds 7200 / Rate 0.10): #_j49(... "CapMult = 2" in _cb ...)
+_OFC49 = _j49_src(_CF + "OfflineConfig.luau")
+_j49("Enabled = true," in _cb and "OwnerFirst = false," in _cb and 'ProductKey = "OfflineCap2x"' in _cb and "PassCapMult = 2," in _OFC49,
+     "B: the OfflineCap2x sidegrade is live for everyone (Code Bot v180), cap time x2 only (OfflineConfig.PassCapMult)")
 _j49("Enabled = true," in _j49_block(_EC, "Card") and "OwnerFirst = false," in _j49_block(_EC, "Card"), "B: the Welcome back / COLLECT card is live for everyone (codebot_v177 flip)")
 _MC = _j49_src(_CF + "MonetizationConfig.luau")
 # Code Bot v180: both created + priced by Shaun (OfflineCap2x is a Game Pass); still no stat keys (sidegrades only)

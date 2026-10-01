@@ -52,8 +52,10 @@ _MC = _j29_code("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Missi
 # ── kill switches + owner-first (RetentionConfig.Live: Enabled, OwnerFirst) ──────────────────────────────────────────
 _OWN = "OwnerFirst = false, -- codebot_v136 launch"  # v136 (Code Bot Roblox): was "OwnerFirst = true, -- only UserId 470626172"; launched for everyone, superseded in tools/checks/codebot_v136.py
 _j29("TutorialConfig.FastStart = {\n\tEnabled = true,\n\t" + _OWN in _TC, "kill switch TutorialConfig.FastStart.Enabled, owner-first")
-_j29("\tOfflineEarnings = {\n\t\tEnabled = true,\n\t\t" + _OWN in _EC and "\t\tShare = 0.25,\n\t\tCapSeconds = 8 * 3600," in _EC,
-     "kill switch EconomyConfig.OfflineEarnings.Enabled, owner-first: 25 % of income, capped at 8 h")
+# Code Bot (Shaun 2026-10-01, offline cap): retired, superseded in tools/checks/codebot_v201.py (OfflineConfig MaxSeconds 7200 / Rate 0.10): #_j29(... "\t\tShare = 0.25,\n\t\tCapSeconds = 8 * 3600," in _EC, "... 25 % of income, capped at 8 h")
+_OFC = _j29_code("src/ReplicatedStorage/Shared/Configs/OfflineConfig.luau")
+_j29("\tOfflineEarnings = {\n\t\tEnabled = true,\n\t\t" + _OWN in _EC and "MaxSeconds = 7200," in _OFC and "Rate = 0.10," in _OFC,
+     "kill switch EconomyConfig.OfflineEarnings.Enabled; OfflineConfig: 10 % of income, capped at 2 h")
 _j29("DoubleWithRobux" not in _EC and "ProductId" not in _EC[_EC.find("OfflineEarnings = {"):], "no Robux option on offline earnings (no new Robux items)")
 _j29("\tShowTomorrow = true,\n\tStreakCard = {\n\t\tEnabled = true,\n\t\t" + _OWN in _DC and "Day7Boost = { Enabled = true," in _DC,
      "kill switch DailyRewardConfig.ShowTomorrow; streak card + day-7 boost owner-first (no Robux)")
@@ -80,8 +82,9 @@ _j29("(profile :: any).LastSeenUnix = os.time()" in _DS and "(profile :: any).Pr
      "LastSeenUnix (os.time) stamped on every save; the load keeps the previous one for the payout")
 _PS = _j29_src("src/ServerScriptService/Server/Modules/ProfileSchema.luau")
 _j29("profile.LastSeenUnix = nonNegInt(profile.LastSeenUnix)" in _PS, "LastSeenUnix is an additive, migrated profile field")
-_j29("if prevSeen <= 0 or perSec <= 0" in _RS and "local counted = math.min(away, math.max(0, tonumber(o.CapSeconds) or 0))" in _RS,
-     "first join pays nothing; the cap is enforced")
+# Code Bot (Shaun 2026-10-01, offline cap): retired, superseded in tools/checks/codebot_v201.py (OfflineConfig MaxSeconds 7200 / Rate 0.10): #_j29(... "local counted = math.min(away, math.max(0, tonumber(o.CapSeconds) or 0))" in _RS ...)
+_j29("if prevSeen <= 0 or perSec <= 0" in _RS and "return OfflineConfig.Earnings(away, perSec, cap, mult)" in _RS and "return math.min(away, cap)" in _OFC,
+     "first join pays nothing; the cap is enforced (OfflineConfig.Earnings)")
 _j29('BaseService.ComputePassiveIncomePerTick, profile, player)' in _RS and 'EconomyService.GetCashMult, player, "passive")' in _RS,
      "same formula as the live passive tick (per-tick income x the passive cash multiplier)")
 _j29('EconomyService.AccruePendingCash(player, cash, "offline")' in _RS and 'push(player, "WelcomeBack"' in _RS and "profile.PrevSeenUnix = nil" in _RS,

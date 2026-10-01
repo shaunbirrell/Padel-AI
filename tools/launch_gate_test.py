@@ -21,7 +21,8 @@ CFG = ROOT / "src/ReplicatedStorage/Shared/Configs"
 OWNER, OTHER = 470626172, 1234567
 
 MODULES = ["AdminConfig", "MonetizationConfig", "SupplyDropConfig", "DailyRewardConfig", "PlazaBountyConfig",
-           "ArmyUpgradeConfig", "QualityConfig", "JuiceConfig", "BalanceConfig", "BaseConfig", "EconomyConfig"]
+           "ArmyUpgradeConfig", "QualityConfig", "JuiceConfig", "BalanceConfig", "BaseConfig", "EconomyConfig",
+           "OfflineConfig"]  # Code Bot: DailyRewardConfig requires OfflineConfig (Day 7 = one full offline cap)
 
 STUBS = r'''
 local function ctor(...) return { ... } end

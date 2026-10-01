@@ -10,6 +10,10 @@
 	Days before today show a tick, today is lit gold, the big days carry a gold border and a star. No input, no loops.
 ]]
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60) :: any -- Bootstrap already waited for it; bounded anyway
+local TycoonMath = require(Shared.Util.TycoonMath) -- Code Bot: the shared short money formatter (K/M/B/T)
+
 local StreakStrip = {}
 
 local GOLD = Color3.fromRGB(255, 205, 60)
@@ -30,17 +34,22 @@ function StreakStrip.NextText(data: any, receivedAt: number?): string?
 	return if h > 0 then string.format("Next in %dh %02dm", h, m) else string.format("Next in %dm", math.max(1, m))
 end
 
--- "$1k", "$3.5k", "$20k", "$750"
+-- "$750", "$1K", "$3.5K", "$20K", "$125M", "$2.7B": the SHARED short formatter (TycoonMath.ShortCash, tight; K/M/B/T).
+-- Code Bot (2026-10-01): was a k-only formatter here ("$624953.3k" on D7 spilled into D6 on phones).
 function StreakStrip.ShortCash(n: number): string
-	local v = math.floor(tonumber(n) or 0)
-	if v >= 1000 then
-		local k = v / 1000
-		if k == math.floor(k) then
-			return string.format("$%dk", k)
-		end
-		return string.format("$%.1fk", k)
-	end
-	return "$" .. tostring(v)
+	return TycoonMath.ShortCash(tonumber(n) or 0, true)
+end
+
+-- a tile label that always fits its tile: TextScaled, capped at the panel's text size (never bigger than before),
+-- shrinks down to MIN_TEXT on a narrow phone; no wrapping, so a long value scales instead of spilling
+local MIN_TEXT = 6
+local function fitText(label: TextLabel, maxSize: number)
+	label.TextScaled = true
+	label.TextWrapped = false
+	local c = Instance.new("UITextSizeConstraint")
+	c.MaxTextSize = math.max(MIN_TEXT, math.floor(maxSize))
+	c.MinTextSize = MIN_TEXT
+	c.Parent = label
 end
 
 --[[ A horizontal strip of `data.Days` tiles, each tileW x tileH (in the parent's units), text `textSize`. Returns the
@@ -53,6 +62,7 @@ function StreakStrip.Build(parent: Instance, data: any, tileW: number, tileH: nu
 	local strip = Instance.new("Frame")
 	strip.Name = "StreakStrip"
 	strip.BackgroundTransparency = 1
+	-- the strip's natural size; a caller may give it a scale width (Missions panel on a phone): the tiles share it
 	strip.Size = UDim2.fromOffset(days * tileW + (days - 1) * gap, tileH)
 	local list = Instance.new("UIListLayout")
 	list.FillDirection = Enum.FillDirection.Horizontal
@@ -66,7 +76,10 @@ function StreakStrip.Build(parent: Instance, data: any, tileW: number, tileH: nu
 		local tile = Instance.new("Frame")
 		tile.Name = "Day" .. tostring(d)
 		tile.LayoutOrder = d
-		tile.Size = UDim2.fromOffset(tileW, tileH)
+		-- Code Bot (2026-10-01): an equal share of the strip (was a fixed tileW: a narrow panel pushed D7 out) and
+		-- ClipsDescendants, so no label can ever draw over the neighbouring tile
+		tile.Size = UDim2.new(1 / days, -gap * (days - 1) / days, 1, 0)
+		tile.ClipsDescendants = true
 		tile.BackgroundColor3 = if isToday then GOLD elseif done then DONE else DIM
 		tile.BorderSizePixel = 0
 		local c = Instance.new("UICorner")
@@ -80,25 +93,27 @@ function StreakStrip.Build(parent: Instance, data: any, tileW: number, tileH: nu
 		end
 		local top = Instance.new("TextLabel")
 		top.BackgroundTransparency = 1
-		top.Size = UDim2.new(1, 0, 0.5, 0)
+		top.Position = UDim2.fromScale(0.04, 0.04)
+		top.Size = UDim2.fromScale(0.92, 0.44)
 		top.Font = Enum.Font.GothamBlack
 		top.TextSize = textSize
+		fitText(top, textSize)
 		top.TextColor3 = if isToday then Color3.fromRGB(30, 26, 10) else TEXT
 		top.Text = (if done and not isToday then "✓" else "D" .. tostring(d)) .. (if big then "★" else "")
 		top.Parent = tile
 		local bottom = Instance.new("TextLabel")
 		bottom.BackgroundTransparency = 1
-		bottom.Position = UDim2.fromScale(0, 0.5)
-		bottom.Size = UDim2.new(1, 0, 0.5, 0)
+		bottom.Position = UDim2.fromScale(0.04, 0.52)
+		bottom.Size = UDim2.fromScale(0.92, 0.44)
 		bottom.Font = Enum.Font.GothamBold
 		bottom.TextSize = textSize
+		fitText(bottom, textSize)
 		bottom.TextColor3 = top.TextColor3
 		local cash = if typeof(data.Cash) == "table" then tonumber(data.Cash[d]) or 0 else 0
 		bottom.Text = StreakStrip.ShortCash(cash)
 		if tonumber(data.GraceDay) == d then
 			bottom.Text = "SAVED" -- claude-bud JOB 49 A: the missed day the grace rule kept
 		end
-		bottom.TextScaled = false
 		bottom.Parent = tile
 		tile.Parent = strip
 	end

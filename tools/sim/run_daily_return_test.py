@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SH = ROOT / "src/ReplicatedStorage/Shared"
 SV = ROOT / "src/ServerScriptService/Server"
 CFG = ["MissionConfig", "DailyRewardConfig", "AchievementConfig", "DailyOpsConfig", "AnalyticsConfig", "BankRaidConfig",
-       "AdminConfig", "RetentionConfig", "EconomyConfig", "TutorialConfig", "TerritoryConfig", "MonetizationConfig",
+       "AdminConfig", "RetentionConfig", "EconomyConfig", "OfflineConfig", "TutorialConfig", "TerritoryConfig", "MonetizationConfig",
        "BaseConfig", "BaseLayoutConfig", "BusinessConfig", "SoldierConfig", "CombatConfig", "CombatFairnessConfig",
        "GameConfig", "DevConfig", "WeaponConfig", "VehicleConfig", "SeasonConfig", "NationConfig", "CheckpointGuardConfig",
        "ShopOverhaulConfig", "RaidConfig", "MapConfig", "WorldConfig", "OpsConfig", "HudConfig", "ArmyOrdersConfig",
@@ -266,8 +266,10 @@ check(tOff >= 97 and tOff <= 99, string.format("Calendar OFF: the JOB 29 timing 
 -- ── B. OFFLINE ──
 local EC = require(node("Configs/EconomyConfig"))
 local O = EC.OfflineEarnings
-check(O.Card.OwnerFirst == false and O.CapBoost.Enabled == true and O.CapBoost.OwnerFirst == false and O.CapBoost.CapMult == 2,
-  "B flags: the Welcome back card is live for everyone (codebot_v177); CapBoost live for everyone (Code Bot v180: Enabled, OwnerFirst = false)")
+-- Code Bot (Shaun 2026-10-01): the cap + rate live in OfflineConfig (2 h, 10 %, pass 2x the time, no Premium bonus)
+local OC = require(node("Configs/OfflineConfig"))
+check(O.Card.OwnerFirst == false and O.CapBoost.Enabled == true and O.CapBoost.OwnerFirst == false and OC.PassCapMult == 2 and OC.MaxSeconds == 7200 and OC.Rate == 0.10 and O.Share == nil and O.CapSeconds == nil,
+  "B flags: the Welcome back card is live for everyone (codebot_v177); CapBoost live for everyone (Code Bot v180: Enabled, OwnerFirst = false); OfflineConfig 7200 s x 0.10, pass x2 time")
 local MC = require(node("Configs/MonetizationConfig"))
 local row = MC.GamePasses.OfflineCap2x
 check(row ~= nil and row.Id == 2002664894 and row.RobuxPrice == 149 and row.HideFromShop == nil and MC.DevProducts.OfflineCap2x == nil
@@ -287,8 +289,8 @@ local function offlineLoad(p, gap, extra)
 end
 PER_MIN = 600 -- $10/s
 local perSec = PER_MIN / 60
-local capS = O.CapSeconds
-local function want(sec) return math.floor(perSec * math.min(sec, capS) * O.Share) end
+local capS = OC.MaxSeconds
+local function want(sec) return math.floor(perSec * math.min(sec, capS) * OC.Rate) end
 local p1 = offlineLoad(OWNER, 4 * 60)
 check(p1 == 0, "4 min away (< MinSeconds " .. O.MinSeconds .. " s): nothing")
 local p2, c2 = offlineLoad(OWNER, 3600)
@@ -312,7 +314,7 @@ check(offlineLoad(OWNER, 120) == 0, "a rejoin after 2 min (server hop / spam) pa
 OWNER.MembershipType = "Premium"
 local pp = offlineLoad(OWNER, 3600)
 OWNER.MembershipType = "None"
-check(pp == math.floor(perSec * 3600 * O.Share * (1 + O.PremiumBonus)), "Premium: +" .. math.floor(O.PremiumBonus * 100) .. "% once ($" .. pp .. ")")
+check(pp == math.floor(perSec * 3600 * OC.Rate * (1 + OC.PremiumBonus)), "Premium: +" .. math.floor(OC.PremiumBonus * 100) .. "% once ($" .. pp .. ")")
 -- CapBoost: off (kill switch, test only) = today's cap even with the pass; live (Code Bot v180) = 2x with the pass
 O.CapBoost.Enabled = false
 PASSES[OWNER.UserId] = { OfflineCap2x = true }
@@ -322,30 +324,30 @@ check(pOff == want(capS), "CapBoost OFF (kill switch): the pass / entitlement ch
 local pOn, cOn = offlineLoad(OWNER, 30 * 3600)
 PASSES[OWNER.UserId] = nil
 local pOnNo = offlineLoad(OWNER, 30 * 3600)
-check(pOn == math.floor(perSec * capS * 2 * O.Share) and cOn and cOn.CapHours == 2 * capS // 3600 and pOnNo == want(capS),
+check(pOn == math.floor(perSec * capS * OC.PassCapMult * OC.Rate) and cOn and cOn.CapHours == OC.PassCapMult * capS // 3600 and pOnNo == want(capS),
   "CapBoost live: 2x the cap TIME with the 2x Offline Cash pass ($" .. pOn .. "), Share unchanged; without it the normal cap")
 PASSES[OTHER.UserId] = { OfflineCap2x = true }
 local pOther, cOther = offlineLoad(OTHER, 30 * 3600)
 PASSES[OTHER.UserId] = nil
 local pOtherNo = offlineLoad(OTHER, 30 * 3600)
-check(pOther == math.floor(perSec * capS * 2 * O.Share) and cOther and cOther.CapHours == 2 * capS // 3600 and pOtherNo == want(capS),
-  "CapBoost live for EVERYONE: a non-owner with the pass gets 16 h ($" .. pOther .. "), without it 8 h ($" .. pOtherNo .. ")")
+check(pOther == math.floor(perSec * capS * OC.PassCapMult * OC.Rate) and cOther and cOther.CapHours == OC.PassCapMult * capS // 3600 and pOtherNo == want(capS),
+  "CapBoost live for EVERYONE: a non-owner with the pass gets 2x the cap time ($" .. pOther .. "), without it the 2 h cap ($" .. pOtherNo .. ")")
 local p12 = offlineLoad(OTHER, 12 * 3600)
 PASSES[OTHER.UserId] = { OfflineCap2x = true }
 local p12p = offlineLoad(OTHER, 12 * 3600)
 PASSES[OTHER.UserId] = nil
-check(p12 == want(capS) and p12p == math.floor(perSec * 12 * 3600 * O.Share),
-  "12 h away: 8 h paid without the pass, all 12 h with it (never more than the time away)")
+check(p12 == want(capS) and p12p == math.floor(perSec * math.min(12 * 3600, capS * OC.PassCapMult) * OC.Rate),
+  "12 h away: the 2 h cap without the pass, the 4 h pass cap with it (never more than the time away)")
 -- the card OFF == the JOB 29 card
 O.Card.Enabled = false
 local _, cOld = offlineLoad(OWNER, 3600)
 O.Card.Enabled = true
 check(cOld ~= nil and cOld.Collect == nil and cOld.CapHours == nil, "Card OFF: the JOB 29 payload exactly (no Collect / CapHours)")
 check(evCount("OFFLINE_EARNED") == 1, "OfflineEarned logged once per payout")
--- the maths at 3 income levels (8 h cap x Share)
+-- the maths at 3 income levels (OfflineConfig: 2 h cap x 10 %)
 local lines = {}
 for _, pm in ipairs({ 60, 1000, 20000 }) do
-  table.insert(lines, string.format("$%d/min -> 1 h $%d, cap (%d h) $%d", pm, math.floor(pm / 60 * 3600 * O.Share), capS // 3600, math.floor(pm / 60 * capS * O.Share)))
+  table.insert(lines, string.format("$%d/min -> 1 h $%d, cap (%d h) $%d", pm, math.floor(pm / 60 * 3600 * OC.Rate), capS // 3600, math.floor(pm / 60 * capS * OC.Rate)))
 end
 print("MATHS offline: " .. table.concat(lines, " | "))
 PER_MIN = 0

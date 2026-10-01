@@ -41,6 +41,7 @@ local TutorialConfig = require(Shared.Configs.TutorialConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
 local RetentionConfig = require(Shared.Configs.RetentionConfig)
+local OfflineConfig = require(Shared.Configs.OfflineConfig) -- Code Bot: THE offline cap + rate (2 h, 10 %)
 local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 
 local RetentionService = {}
@@ -232,11 +233,13 @@ local function premiumMult(player: Player): number
 	pcall(function()
 		isPremium = player.MembershipType == Enum.MembershipType.Premium
 	end)
-	return if isPremium then 1 + math.max(0, tonumber(offlineCfg().PremiumBonus) or 0) else 1
+	return if isPremium then 1 + math.max(0, tonumber(OfflineConfig.PremiumBonus) or 0) else 1
 end
 
---[[ Pure: the offline payout for the gap prevSeen -> now at `perSec` income, `mult` (Premium), with config `o`.
-	Returns (cash, secondsCounted). First join (prevSeen <= 0), negative or short gaps -> 0. ]]
+--[[ Pure: the offline payout for the gap prevSeen -> now at `perSec` income, `mult` (Premium), with config `o`
+	(MinSeconds; CapSeconds = this player's cap, OfflineConfig.MaxSeconds by default). The pay itself is
+	OfflineConfig.Earnings: min(away, cap) x perSec x OfflineConfig.Rate. Returns (cash, secondsCounted).
+	First join (prevSeen <= 0), negative or short gaps -> 0. ]]
 function RetentionService.ComputeOffline(prevSeen: number, now: number, perSec: number, mult: number, o: any): (number, number)
 	if prevSeen <= 0 or perSec <= 0 or perSec ~= perSec then
 		return 0, 0
@@ -245,9 +248,8 @@ function RetentionService.ComputeOffline(prevSeen: number, now: number, perSec: 
 	if away ~= away or away < math.max(0, tonumber(o.MinSeconds) or 0) then
 		return 0, 0
 	end
-	local counted = math.min(away, math.max(0, tonumber(o.CapSeconds) or 0))
-	local share = math.clamp(tonumber(o.Share) or 0, 0, 1)
-	return math.floor(perSec * counted * share * mult), math.floor(counted)
+	local cap = math.max(0, tonumber(o.CapSeconds) or OfflineConfig.MaxSeconds)
+	return OfflineConfig.Earnings(away, perSec, cap, mult), math.floor(OfflineConfig.CountedSeconds(away, cap))
 end
 
 -- Code Bot v180: the 2x Offline Cash GAME PASS (MonetizationConfig.GamePasses.OfflineCap2x) is owned. Server-only:
@@ -279,27 +281,27 @@ local function ownsCapBoost(player: Player, profile: any, key: any, fresh: boole
 	return false
 end
 
--- claude-bud JOB 49 B: this player's cap in seconds: CapSeconds, x CapBoost.CapMult only with the OfflineCap2x
--- game pass while CapBoost is live (Code Bot v180: live for everyone). Never touches Share.
+-- claude-bud JOB 49 B: this player's cap in seconds: OfflineConfig.MaxSeconds, x OfflineConfig.PassCapMult only with
+-- the OfflineCap2x game pass while CapBoost is live (Code Bot v180: live for everyone). Never touches the Rate.
 local function capSecondsFor(player: Player, profile: any, fresh: boolean?): number
 	local o = offlineCfg()
-	local cap = math.max(0, tonumber(o.CapSeconds) or 0)
+	local cap = math.max(0, tonumber(OfflineConfig.MaxSeconds) or 0)
 	local b = o.CapBoost
 	if typeof(b) == "table" and RetentionConfig.Live(b, player.UserId) and ownsCapBoost(player, profile, b.ProductKey or CAP_BOOST_PASS, fresh) then
-		cap *= math.max(1, tonumber(b.CapMult) or 1)
+		cap *= math.max(1, tonumber(OfflineConfig.PassCapMult) or 1)
 	end
 	return cap
 end
 
 function RetentionService.OfflineCapSeconds(player: Player): number
 	local profile = DataService and DataService.GetProfile(player)
-	return if profile then capSecondsFor(player, profile) else math.max(0, tonumber(offlineCfg().CapSeconds) or 0)
+	return if profile then capSecondsFor(player, profile) else math.max(0, tonumber(OfflineConfig.MaxSeconds) or 0)
 end
 
 -- what a full cap pays at this player's income now (the Missions "tomorrow" line and the sender state)
 local function offlineCapCash(player: Player, profile: any): number
-	local o = offlineCfg()
-	return math.floor(incomePerSecond(player, profile) * capSecondsFor(player, profile) * math.clamp(tonumber(o.Share) or 0, 0, 1) * premiumMult(player))
+	-- OfflineConfig.Earnings: min(cap, cap) x income/s x Rate (x Premium, 1 while PremiumBonus = 0): the same rule as the grant
+	return OfflineConfig.Earnings(capSecondsFor(player, profile), incomePerSecond(player, profile), capSecondsFor(player, profile), premiumMult(player))
 end
 
 function RetentionService.OfflineCapCash(player: Player): number
@@ -446,7 +448,6 @@ end
 --[[ docs/NOTIFICATIONS.md: the record an external sender reads, written once when an opted-in player leaves. Fields are
 	os.time() seconds (0 = never / not applicable). LastSentDay belongs to the sender (it writes it back). ]]
 function RetentionService.NotifyState(player: Player, profile: any, now: number): { [string]: any }
-	local o = offlineCfg()
 	local live = RetentionConfig.OfflineLiveFor(player.UserId)
 	local perSec = incomePerSecond(player, profile)
 	local daily = if typeof(profile.DailyLogin) == "table" then profile.DailyLogin else {}
@@ -454,7 +455,7 @@ function RetentionService.NotifyState(player: Player, profile: any, now: number)
 	return {
 		UserId = player.UserId,
 		LastSeen = now,
-		OfflineCapFullAt = if live and perSec > 0 then now + math.floor(tonumber(o.CapSeconds) or 0) else 0,
+		OfflineCapFullAt = if live and perSec > 0 then now + math.floor(capSecondsFor(player, profile)) else 0,
 		OfflineCapCash = if live then offlineCapCash(player, profile) else 0,
 		LastRaidedAt = math.max(0, math.floor(tonumber(profile.LastRaidedAt) or 0)),
 		StreakDay = streak,

@@ -44,12 +44,12 @@ S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 200)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 200)'),
-    (S + "Services/DataService.luau", "WE_Build=200"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 200)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 201)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 201)'),
+    (S + "Services/DataService.luau", "WE_Build=201"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 201)'),
 ):
-    check(needle in read(rel), "CODEBOT v176: WE_Build=200 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v176: WE_Build=201 " + rel.rsplit("/", 1)[-1])
 
 # JOB 49 A — DailyRewardConfig Grace / Day7Scale / Calendar owner-first
 DR = read(C + "DailyRewardConfig.luau")
@@ -70,8 +70,7 @@ check("Enabled = false," in cb and "OwnerFirst = true," in cb and 'ProductKey = 
       "CODEBOT v176: CapBoost Enabled=false (sidegrade hook off) + OwnerFirst=true")
 # CapSeconds stays 8h
 oe = EC.split("OfflineEarnings = {")[1].split("\n\t},")[0] if "OfflineEarnings = {" in EC else ""
-check("CapSeconds = 8 * 3600" in oe or "CapSeconds = 28800" in oe,
-      "CODEBOT v176: OfflineEarnings CapSeconds = 8 h")
+# Code Bot (Shaun 2026-10-01, offline cap): retired, superseded in tools/checks/codebot_v201.py (OfflineConfig MaxSeconds 7200 / Rate 0.10): #check("CapSeconds = 8 * 3600" in oe ..., "CODEBOT v176: OfflineEarnings CapSeconds = 8 h")
 
 MC = shipped_v180(C + "MonetizationConfig.luau", "574b455")  # Code Bot v180: as shipped
 for key in ("OfflineCap2x", "MissionReroll"):

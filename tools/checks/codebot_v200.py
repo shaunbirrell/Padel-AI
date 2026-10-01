@@ -36,12 +36,12 @@ def _v200(cond, label):
 
 
 for _rel, _needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 200)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 200)'),
-    (S + "Services/DataService.luau", "WE_Build=200"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 200)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 201)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 201)'),
+    (S + "Services/DataService.luau", "WE_Build=201"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 201)'),
 ):
-    _v200(_needle in _v200_read(_rel), "WE_Build=200 " + _rel.rsplit("/", 1)[-1])
+    _v200(_needle in _v200_read(_rel), "WE_Build=201 " + _rel.rsplit("/", 1)[-1])
 
 _VA = _v200_read(C + "VisualAssetConfig.luau")
 _j = _VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in _VA else ""
@@ -85,11 +85,14 @@ _v200('"StreamingEnabled": true' not in _v200_read("default.project.json"), "Str
 _r = subprocess.run(["git", "diff", "--name-only", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
 _names = (_r.stdout or "").splitlines()
 _v200(_r.returncode == 0 and not [n for n in _names if "WE_Building" in n], "no WE_Building* diffs vs " + PREV)
+# Code Bot v201: the src-scope + DataService pins below are v200's own ship scope (vs its PREV); a later build changes
+# other files, so they apply only while WE_Build is 200 (superseded in tools/checks/codebot_v201.py)
+_v200_later = 'SetAttribute("WE_Build", 200)' not in _v200_read(S + "Services/DataService.luau")
 _allowed = {C + "VisualAssetConfig.luau", S + "Services/GateDefenseService.luau", S + "Services/BaseService.luau",
             S + "Services/DataService.luau", S + "EarlyRemotes.server.luau"}
-_v200(_r.returncode == 0 and (_v200_bud or set(_names) <= _allowed), "src diff vs %s only the tier config + GateDefense + WE_Build (%s)" % (PREV, ",".join(sorted(set(_names) - _allowed)) or "ok"))
+_v200(_r.returncode == 0 and (_v200_bud or _v200_later or set(_names) <= _allowed), "src diff vs %s only the tier config + GateDefense + WE_Build (%s)" % (PREV, ",".join(sorted(set(_names) - _allowed)) or "ok"))
 _ds = _v200_read(S + "Services/DataService.luau")
 _pds = _v200_shipped(S + "Services/DataService.luau", PREV) or ""
-_v200(_v200_bud or _pds.replace("WE_Build\", 199)", "WE_Build\", 200)").replace("WE_Build=199", "WE_Build=200") == _ds,
+_v200(_v200_bud or _v200_later or _pds.replace("WE_Build\", 199)", "WE_Build\", 200)").replace("WE_Build=199", "WE_Build=200") == _ds,
       "DataService: only the WE_Build number changed (save keys kept)")
 _v200(_v200_bud or "ExperienceNotifyService" not in _v200_read(S + "Bootstrap.server.luau"), "ExperienceNotify (JOB 62) still NOT shipped")

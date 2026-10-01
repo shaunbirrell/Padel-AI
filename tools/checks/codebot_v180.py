@@ -78,12 +78,12 @@ def _cb180_skus(src):
 
 # ── build pins ──
 for _rel, _needle in (
-    (_cb180_S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 200)'),
-    (_cb180_S + "Services/DataService.luau", 'SetAttribute("WE_Build", 200)'),
-    (_cb180_S + "Services/DataService.luau", "WE_Build=200"),
-    (_cb180_S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 200)'),
+    (_cb180_S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 201)'),
+    (_cb180_S + "Services/DataService.luau", 'SetAttribute("WE_Build", 201)'),
+    (_cb180_S + "Services/DataService.luau", "WE_Build=201"),
+    (_cb180_S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 201)'),
 ):
-    _cb180_check(_needle in _cb180_read(_rel), "CODEBOT v180: WE_Build=200 " + _rel.rsplit("/", 1)[-1])
+    _cb180_check(_needle in _cb180_read(_rel), "CODEBOT v180: WE_Build=201 " + _rel.rsplit("/", 1)[-1])
 
 # ── the two new SKUs: Ids + display prices ──
 _cb180_MON = _cb180_read(_cb180_C + "MonetizationConfig.luau")
@@ -141,12 +141,16 @@ _cb180_ECO = _cb180_read(_cb180_C + "EconomyConfig.luau")
 _cb180_cb = _cb180_re.search(r"\n\t\tCapBoost = \{(.*?)\n\t\t\},", _cb180_ECO, _cb180_re.S)
 _cb180_cbb = _cb180_code(_cb180_cb.group(1)) if _cb180_cb else ""
 _cb180_check(_cb180_re.search(r"Enabled = true,", _cb180_cbb) and _cb180_re.search(r"OwnerFirst = false,", _cb180_cbb)
-             and 'ProductKey = "OfflineCap2x"' in _cb180_cbb and _cb180_re.search(r"CapMult = 2,", _cb180_cbb),
-             "CODEBOT v180: EconomyConfig CapBoost Enabled=true, OwnerFirst=false (everyone), OfflineCap2x, CapMult 2")
+             and 'ProductKey = "OfflineCap2x"' in _cb180_cbb
+             # Code Bot (Shaun 2026-10-01): CapMult moved to OfflineConfig.PassCapMult (superseded in codebot_v201.py)
+             and "PassCapMult = 2," in _cb180_read(_cb180_C + "OfflineConfig.luau"),
+             "CODEBOT v180: EconomyConfig CapBoost Enabled=true, OwnerFirst=false (everyone), OfflineCap2x, OfflineConfig.PassCapMult 2")
 _cb180_oe = _cb180_re.search(r"\n\tOfflineEarnings = \{(.*?)\n\t\tCard = \{", _cb180_ECO, _cb180_re.S)
 _cb180_check(bool(_cb180_oe) and "Enabled = true," in _cb180_oe.group(1) and "OwnerFirst = false," in _cb180_oe.group(1)
-             and "CapSeconds = 8 * 3600," in _cb180_oe.group(1) and "Share = 0.25," in _cb180_oe.group(1),
-             "CODEBOT v180: OfflineEarnings live for everyone; CapSeconds 8 h and Share 0.25 unchanged")
+             # Code Bot (Shaun 2026-10-01): retired "CapSeconds = 8 * 3600," / "Share = 0.25," (superseded in codebot_v201.py:
+             # OfflineConfig MaxSeconds 7200 / Rate 0.10)
+             and "CapSeconds" not in _cb180_code(_cb180_oe.group(1)) and "Share = " not in _cb180_code(_cb180_oe.group(1)),
+             "CODEBOT v180: OfflineEarnings live for everyone (cap + rate now in OfflineConfig)")
 _cb180_MCF = _cb180_shipped(_cb180_C + "MissionConfig.luau")  # Code Bot v182: as v180 shipped it (Core live since v182)
 _cb180_core = _cb180_MCF.split("\tCore = {")[1].split("\n\t},\n\n")[0] if "\tCore = {" in _cb180_MCF else ""
 _cb180_check("Enabled = true," in _cb180_core and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _cb180_core,

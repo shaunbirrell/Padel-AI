@@ -31,6 +31,7 @@ local Remotes = require(Shared.Remotes)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local StreakStrip = require(script.Parent.Parent.Modules.StreakStrip)
+local OfflineConfig = require(Shared.Configs.OfflineConfig) -- Code Bot: the Welcome back card's cap hours (2 h)
 local NotifOptIn = require(script.Parent.Parent.Modules.NotifOptIn)
 
 local RetentionController = {}
@@ -257,10 +258,11 @@ local function welcomeBackCard(data: any, onClosed: (() -> ())?)
 	local amt = label(card, if cash > 0 then "+" .. money(cash) else "+" .. money(comeback), 32, GOLD, Enum.Font.GothamBlack)
 	amt.Position = UDim2.fromOffset(14, 66)
 	amt.Size = UDim2.new(1, -28, 0, 38)
-	local capH = math.floor(tonumber(data.CapHours) or 8)
-	local sub = awayText(tonumber(data.Seconds) or 0) .. (if data.Capped == true then (if newCard then string.format(" (capped at %d h)", capH) else " (8 h max)") else "") .. " · in your ATM"
-	if data.Premium == true then
-		sub ..= " · Premium +10%"
+	-- Code Bot: the cap's hours come from the server (CapHours) or OfflineConfig (2 h); the old " (8 h max)" text is gone
+	local capH = math.max(1, math.floor(tonumber(data.CapHours) or (OfflineConfig.MaxSeconds / 3600)))
+	local sub = awayText(tonumber(data.Seconds) or 0) .. (if data.Capped == true then (if newCard then string.format(" (capped at %d h)", capH) else string.format(" (%d h max)", capH)) else "") .. " · in your ATM"
+	if data.Premium == true and (tonumber(OfflineConfig.PremiumBonus) or 0) > 0 then
+		sub ..= string.format(" · Premium +%d%%", math.floor((tonumber(OfflineConfig.PremiumBonus) or 0) * 100 + 0.5))
 	end
 	if comeback > 0 then
 		sub = if cash > 0 then sub .. " · + Comeback " .. money(comeback) else "Comeback bonus for returning" -- claude-bud JOB 49 D

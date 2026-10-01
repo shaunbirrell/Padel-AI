@@ -26,6 +26,7 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
+local OfflineConfig = require(Shared.Configs.OfflineConfig) -- Code Bot: the Away line's fallback hours (2 h cap)
 local HudConfig = require(Shared.Configs.HudConfig)
 local MissionConfig = require(Shared.Configs.MissionConfig)
 local OpsConfig = require(Shared.Configs.OpsConfig)
@@ -713,8 +714,10 @@ local function refresh()
 		end
 		local cap = tonumber(s7.OfflineCap) or 0
 		if cap > 0 then
-			-- claude-bud JOB 49 B: the cap's real hours (the server sends them; 8 when an older server does not)
-			table.insert(lines, string.format("Away %d h: earn up to $%s", math.floor(tonumber(s7.OfflineCapHours) or 8), commas(cap)))
+			-- claude-bud JOB 49 B: the cap's real hours (the server sends them). Code Bot: the fallback is OfflineConfig's
+			-- cap (2 h), and the amount is the server's min(cap, away) x income/s x OfflineConfig.Rate (10 %) worth
+			local hrs = tonumber(s7.OfflineCapHours) or (OfflineConfig.MaxSeconds / 3600)
+			table.insert(lines, string.format("Away %d h: earn up to $%s", math.max(1, math.floor(hrs)), commas(cap)))
 		end
 		local row = Instance.new("Frame")
 		row.Name = "Streak7Row"
@@ -726,6 +729,13 @@ local function refresh()
 		corner(row, 8)
 		local strip = StreakStrip.Build(row, s7, tileW, tileH, tSize)
 		strip.Position = UDim2.fromOffset(10, 6)
+		-- Code Bot (2026-10-01): the strip takes the row's width (the tiles share it, so D7 never runs off a phone
+		-- panel), never wider than its natural size on desktop
+		local natural = strip.Size.X.Offset
+		strip.Size = UDim2.new(1, -20, 0, tileH)
+		local cap = Instance.new("UISizeConstraint")
+		cap.MaxSize = Vector2.new(natural, tileH)
+		cap.Parent = strip
 		for i, text in ipairs(lines) do
 			local l = Instance.new("TextLabel")
 			l.BackgroundTransparency = 1
