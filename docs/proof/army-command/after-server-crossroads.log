@@ -10,7 +10,7 @@ S_BEFORE Following
 [ARMY MOVE] shaunie6 travel started -> A:Town (Crossroads Town) approach=(-100,1,0) objective=(0,1,0) distance=446 units=75
 S_AFTER_SEND TravellingToBase
 S_DEST -100,0
-S_DESTATTR table: 0x0000555f372c0100
+S_DESTATTR table: 0x0000558806f11820
 S_ROUTE 56
 [ARMY MOVE] shaunie6 Travel/March block=(-548,3,0) lead=(-494,0,-0) to dest 448 studs, lead 14 studs/s, lost 0
 [ARMY MOVE] shaunie6 Travel/March block=(-515,3,-0) lead=(-460,0,-0) to dest 415 studs, lead 14 studs/s, lost 0
