@@ -38,6 +38,32 @@ local DailyRewardConfig = {
 	BigDays = { [3] = true, [7] = true } :: { [number]: boolean },
 	CardSeconds = 6,
 	Day7Boost = { Enabled = true, Mult = 1.25, Minutes = 30, Label = "ARMY BOOST" },
+	--[[ claude-bud JOB 49 part A (2026-10-01): reasons to come back. Each block is owner-first (RetentionConfig.Live);
+		OFF == the streak exactly as above.
+		Grace: ONE missed UTC day per 7-day cycle keeps the streak (the strip marks that day SAVED); a second miss in
+		the cycle, or a gap longer than MissedDaysAllowed, resets to Day 1 as before. Saved: DailyLogin.Cycle /
+		GraceUsedCycle / GraceDay.
+		Day7Scale: Day 7 pays max(the table's cash, IncomeMinutes x his income per minute), on the server at the claim
+		(MonetizationService.PassivePerMin, the time-pack formula, timed boosts excluded); the table stays the floor.
+		Calendar: the strip carries the REAL time to the next UTC claim day (the server's clock with the payload) and
+		the SAVED mark; a new player's first streak card comes after the Guided chain's reward or at the latest at
+		FirstCardSeconds of play (and the client still waits out combat / driving / panels). ]]
+	Grace = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): Code Bot flips it after Shaun's phone test
+		MissedDaysAllowed = 1,
+		PerCycle = 1,
+	},
+	Day7Scale = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+		IncomeMinutes = 60,
+	},
+	Calendar = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49)
+		FirstCardSeconds = 150, -- the latest a new player's first streak card waits for the onboarding hold
+	},
 }
 
 -- claude-bud: is auto-claim live for this player (fail closed)
@@ -52,6 +78,17 @@ function DailyRewardConfig.AutoClaimLiveFor(userId: any): boolean
 		return AdminConfig.IsPlaytestOwner(userId)
 	end
 	return false
+end
+
+-- claude-bud JOB 49: is a JOB 49 streak block ("Grace" | "Day7Scale" | "Calendar") live for this player
+function DailyRewardConfig.Live(block: string, userId: any): boolean
+	local b = (DailyRewardConfig :: any)[block]
+	return typeof(b) == "table" and (require(script.Parent.RetentionConfig) :: any).Live(b, userId)
+end
+
+-- claude-bud JOB 49: the UTC unix time of the next claim day (the next 00:00 UTC after `now`)
+function DailyRewardConfig.NextClaimUnix(now: number): number
+	return (math.floor(now / 86400) + 1) * 86400
 end
 
 -- claude-bud JOB 29: is the streak card / strip / day-7 boost live for this player (fail closed)

@@ -14,6 +14,36 @@
 - **Publish:** HTTP 200, versionNumber **172**, universe 10767159222 / place 97112936860418. Servers not restarted (Migrate to Latest Update as needed).
 - **Phone tests (owed — Shaun):** (1) fresh test account ~2 min: first fight won, army grows +2 at BASE SECURED!, gold line on every step. (2) raid goal "Raid a rival base" with TARGETS outlined + SEND ARMY, or "Clear hostiles" on empty server. (3) owner returning account never sees the chain (REPLAY GUIDED in Settings > ADMIN for test mode). After phone OK: flip `TutorialConfig.Guided.Hook.OwnerFirst = true -> false`.
 - **Still owed / not this ship:** JOB 44 Studio 2-player siege/march still owed (skipped per Shaun for queue progress). JOB 49 (reasons to come back) not started.
+## claude-bud JOB 49 part A (2026-10-01): DAILY STREAK: GRACE, INCOME-SCALED DAY 7, REAL COUNTDOWN (branch `claude/desktop-bud`)
+**Flags to flip:** `DailyRewardConfig.Grace` / `.Day7Scale` / `.Calendar` OwnerFirst = true -> false (each tagged
+NEW-OWNER-FIRST). Enabled = false == today's streak (pinned).
+
+**Root cause (sim, real code):**
+- A missed UTC day hard-reset the streak.
+- Day 7 was a flat $20,000 (nothing at mid / late game).
+- The card said "Come back tomorrow" with no time.
+- A new player's first card came after an 8 s delay + a 90 s hold cap, so mid-chain on a slow run.
+- No D1 numbers are claimed here (see JOB 49 D for the Creator Hub queries).
+
+**Built (extends ClaimDailyLogin / StreakStrip, no second system):**
+- **Grace:** one missed day per 7-day cycle keeps the streak (DailyLogin.Cycle / GraceUsedCycle / GraceDay, sanitised in
+  ProfileSchema). The strip shows SAVED on that day; a 2nd miss or a 2-day gap resets.
+- **Day 7:** max(the table $20,000, 60 min x his income per minute), on the server
+  (MonetizationService.PassivePerMin, the time-pack formula, timed boosts excluded). At $900/min it pays $54,000.
+- **The countdown:** the strip carries ServerNow + NextClaimUnix (the next 00:00 UTC). The card and the Missions panel
+  show "Next in 5h 12m". There is no countdown when Calendar is off.
+- **First session:** the first card waits for the Guided hold (it ends at the chain's reward), at the latest 150 s of
+  play. The client still waits out combat / driving / panels.
+- **Analytics:** StreakClaimed {day, grace}, StreakReset {lastDay}.
+
+**Checks:**
+- run_daily_return_test part A, 19 checks, 0 failed (docs/proof/job49/daily-return-sim.txt).
+- BuyPathStatic FAIL=0; claude_bud_job29's literal "WaitOnboarding(player, 90)" pin is retired with a replacement.
+
+**Test ON HIS PHONE:**
+- Day 1 card + calendar with "Next in ...".
+- The next day: Day 2.
+- Skip one day: the streak is kept and the day shows SAVED.
 
 ## claude-bud JOB 48 (2026-10-01): THE FIRST 2 MINUTES HOOK (branch `claude/desktop-bud`)
 JOB 44's Studio run was skipped on Shaun's word ("start all the jobs forget studio run").

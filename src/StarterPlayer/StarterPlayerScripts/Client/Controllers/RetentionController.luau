@@ -276,7 +276,9 @@ local function streakCard(data: any)
 		y += 24
 	end
 	local tomorrow = tonumber(data.TomorrowCash) or 0
-	local foot = label(card, if tomorrow > 0 then "Come back tomorrow for " .. money(tomorrow) else "Come back tomorrow!", 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
+	local nextText = StreakStrip.NextText(data, data._ReceivedAt) -- claude-bud JOB 49 A: the real countdown (nil = none)
+	local foot = label(card, (if tomorrow > 0 then "Come back tomorrow for " .. money(tomorrow) else "Come back tomorrow!")
+		.. (if nextText then " · " .. nextText else ""), 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold)
 	foot.Position = UDim2.fromOffset(10, y)
 	foot.Size = UDim2.new(1, -20, 0, 22)
 	card.Activated:Connect(function()
@@ -368,6 +370,7 @@ function RetentionController.Init()
 				welcomeBackCard(data)
 			end)
 		elseif kind == "Streak" and typeof(data) == "table" then
+			data._ReceivedAt = os.clock() -- claude-bud JOB 49 A: the countdown keeps counting while the card waits
 			whenFree(function()
 				streakCard(data)
 			end)

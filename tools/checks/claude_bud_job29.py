@@ -73,7 +73,8 @@ _j29('profile.StarterPayoutDone == true or profile.TutorialComplete == true' in 
 _j29("retentionStep(player, step, complete == true)" in _TS and "setHold(player, false)" in _RS and "HoldMaxSeconds" in _RS,
      "the onboarding hold (WE_Onboarding) ends after the Command Center step or HoldMaxSeconds")
 _j29('player:GetAttribute("WE_Onboarding") == true' in _NC, "the nation picker waits for the onboarding hold")
-_j29("RS.WaitOnboarding(player, 90)" in _MS, "the daily-streak card waits for the onboarding hold")
+# claude-bud JOB 49 A: retired the literal 90 s (Calendar waits up to FirstCardSeconds; OFF keeps 90). Replacement:
+_j29("RS.WaitOnboarding(player, holdMax)" in _MS and "local holdMax = 90" in _MS, "the daily-streak card waits for the onboarding hold (90 s, or Calendar's FirstCardSeconds)")
 # ── offline earnings ──────────────────────────────────────────────────────────────────────────────────────────────
 _j29("(profile :: any).LastSeenUnix = os.time()" in _DS and "(profile :: any).PrevSeenUnix = (profile :: any).LastSeenUnix" in _DS,
      "LastSeenUnix (os.time) stamped on every save; the load keeps the previous one for the payout")

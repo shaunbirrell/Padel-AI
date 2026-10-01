@@ -79,7 +79,8 @@ local function streakStrip(player: Player, profile: any, claimedToday: boolean):
 	end
 	-- tomorrow's day: the day after today's claim, or the day after the one he could claim today
 	local last = tonumber(profile.DailyLogin and profile.DailyLogin.LastClaimDay) or 0
-	if not claimedToday and DailyRewardConfig.MissedDayResetsStreak and last ~= 0 and last ~= yyyymmdd(os.time() - 86400) then
+	if not claimedToday and DailyRewardConfig.MissedDayResetsStreak and last ~= 0 and last ~= yyyymmdd(os.time() - 86400)
+		and not MissionService.GraceCovers(player, profile.DailyLogin, os.time()) then -- claude-bud JOB 49: grace keeps it
 		streak = 0 -- a missed day: the next claim starts again at day 1
 	end
 	local nextToClaim = (streak % days) + 1
@@ -93,8 +94,18 @@ local function streakStrip(player: Player, profile: any, claimedToday: boolean):
 		offlineCap = if okC and typeof(v) == "number" then math.floor(v) else 0
 	end
 	local boost = DailyRewardConfig.Day7Boost
+	-- claude-bud JOB 49 A: the income-scaled Day 7, the SAVED (grace) day and the real countdown
+	if DailyRewardConfig.Live("Day7Scale", player.UserId) then
+		cash[days] = MissionService.Day7Cash(player, profile)
+	end
+	local cal = DailyRewardConfig.Live("Calendar", player.UserId)
+	local dl = profile.DailyLogin or {}
+	local now = os.time()
 	return {
 		Days = days,
+		GraceDay = if cal and tonumber(dl.GraceUsedCycle) ~= nil and tonumber(dl.GraceUsedCycle) == tonumber(dl.Cycle) then tonumber(dl.GraceDay) else nil,
+		ServerNow = if cal then now else nil,
+		NextClaimUnix = if cal then DailyRewardConfig.NextClaimUnix(now) else nil,
 		Today = if claimedToday then (if streak == 0 then 1 else streak) else nextToClaim,
 		Claimed = claimedToday,
 		Cash = cash,
@@ -102,6 +113,7 @@ local function streakStrip(player: Player, profile: any, claimedToday: boolean):
 		TomorrowDay = tomorrowDay,
 		TomorrowCash = cash[tomorrowDay] or 0,
 		OfflineCap = offlineCap,
+		OfflineCapHours = if okR and RS and RS.OfflineCapSeconds then math.floor((tonumber(RS.OfflineCapSeconds(player)) or 0) / 3600) else nil, -- claude-bud JOB 49 B
 		Day7Boost = if boost.Enabled == true then boost.Label else nil,
 	}
 end
@@ -945,6 +957,47 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 	return true, nil
 end
 
+--[[ claude-bud JOB 49 A: true when the grace rule keeps this streak across the gap to `now`: Grace live, the last claim
+	was 2 .. MissedDaysAllowed + 1 UTC days ago, and no grace used in this 7-day cycle yet (PerCycle 1). Pure reads. ]]
+function MissionService.GraceCovers(player: Player, daily: any, now: number): boolean
+	if typeof(daily) ~= "table" or not DailyRewardConfig.Live("Grace", player.UserId) then
+		return false
+	end
+	local G: any = (DailyRewardConfig :: any).Grace
+	local last = tonumber(daily.LastClaimDay) or 0
+	if last == 0 or (tonumber(daily.Streak) or 0) <= 0 then
+		return false
+	end
+	if (tonumber(G.PerCycle) or 1) <= 0 or tonumber(daily.GraceUsedCycle) == (tonumber(daily.Cycle) or 0) then
+		return false -- already used in this cycle
+	end
+	for k = 2, 1 + math.max(0, math.floor(tonumber(G.MissedDaysAllowed) or 1)) do
+		if last == yyyymmdd(now - k * 86400) then
+			return true
+		end
+	end
+	return false
+end
+
+-- claude-bud JOB 49 A: Day 7's cash: max(the table floor, Day7Scale.IncomeMinutes x income per minute) while live
+function MissionService.Day7Cash(player: Player, profile: any): number
+	local days = DailyRewardConfig.StreakResetsAfterDay
+	local floorCash = (DailyRewardConfig.Rewards[days] or { Cash = 0 }).Cash
+	if not DailyRewardConfig.Live("Day7Scale", player.UserId) then
+		return floorCash
+	end
+	local okM, MS = pcall(function(): any
+		return (require :: any)(script.Parent.MonetizationService) -- dynamic: keeps it out of this module's type graph
+	end)
+	local perMin = 0
+	if okM and MS and MS.PassivePerMin then
+		local okP, v = pcall(MS.PassivePerMin, player, profile, true)
+		perMin = if okP and typeof(v) == "number" and v == v and v > 0 then v else 0
+	end
+	local mins = math.max(0, tonumber((DailyRewardConfig :: any).Day7Scale.IncomeMinutes) or 0)
+	return math.max(floorCash, math.floor(perMin * mins))
+end
+
 -- quiet (claude-bud JOB 29): no "Day N reward" toast (the caller shows the streak card instead)
 function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boolean, string?)
 	local profile = DataService.GetProfile(player)
@@ -961,18 +1014,36 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 	end
 
 	local yesterday = yyyymmdd(os.time() - 86400)
+	local graced = false
+	local lastDay = daily.Streak
 	if DailyRewardConfig.MissedDayResetsStreak and daily.LastClaimDay ~= 0 and daily.LastClaimDay ~= yesterday then
-		daily.Streak = 0
+		if MissionService.GraceCovers(player, daily, os.time()) then
+			-- claude-bud JOB 49 A: one missed day per cycle keeps the streak; the missed day is marked SAVED
+			graced = true
+			daily.GraceUsedCycle = tonumber(daily.Cycle) or 0
+			daily.GraceDay = (daily.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1
+		else
+			daily.Streak = 0
+			if AnalyticsService and lastDay > 0 then
+				AnalyticsService.Log("STREAK_RESET", player.UserId, { lastDay = lastDay }) -- claude-bud JOB 49
+			end
+		end
 	end
 
 	daily.Streak = (daily.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1
 	daily.LastClaimDay = today
 	daily.LastClaimUnix = os.time()
+	if daily.Streak == 1 then
+		daily.Cycle = (tonumber(daily.Cycle) or 0) + 1 -- claude-bud JOB 49 A: a new 7-day cycle (its own grace)
+		daily.GraceDay = nil
+	end
 
 	local reward = DailyRewardConfig.Rewards[daily.Streak]
 	if reward then
-		if reward.Cash > 0 then
-			EconomyService.AddCash(player, reward.Cash, "daily")
+		-- claude-bud JOB 49 A: Day 7 scales with his income (the table is the floor)
+		local cashPaid = if daily.Streak == DailyRewardConfig.StreakResetsAfterDay then MissionService.Day7Cash(player, profile) else reward.Cash
+		if cashPaid > 0 then
+			EconomyService.AddCash(player, cashPaid, "daily")
 		end
 		if reward.Gold > 0 then
 			EconomyService.AddGold(player, reward.Gold, "daily")
@@ -986,7 +1057,7 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 			NotificationService.Notify(
 				player,
 				if DailyRewardConfig.ShowTomorrow == true and nextReward
-					then string.format("Day %d: +$%s. Tomorrow: $%s", daily.Streak, commas(reward.Cash), commas(nextReward.Cash))
+					then string.format("Day %d: +$%s. Tomorrow: $%s", daily.Streak, commas(cashPaid), commas(nextReward.Cash))
 					else string.format("Day %d reward: $%d", daily.Streak, reward.Cash),
 				"Reward"
 			)
@@ -994,6 +1065,7 @@ function MissionService.ClaimDailyLogin(player: Player, quiet: boolean?): (boole
 		if AnalyticsService then
 			AnalyticsService.Log(AnalyticsConfig.Events.DAILY_REWARD_CLAIMED, player.UserId, { day = daily.Streak })
 			AnalyticsService.Log("STREAK_DAY", player.UserId, { day = daily.Streak }) -- claude-bud JOB 29
+			AnalyticsService.Log("STREAK_CLAIMED", player.UserId, { day = daily.Streak, grace = if graced then "yes" else "no", cash = cashPaid }) -- claude-bud JOB 49
 		end
 		-- claude-bud JOB 29: day 7 = an army damage boost for a while (no Robux; SquadOrdersService reads it)
 		local boost = DailyRewardConfig.Day7Boost
@@ -1175,7 +1247,13 @@ function MissionService.Init(deps: { [string]: any })
 				local okR, RS = pcall(function(): any
 					return require(script.Parent.RetentionService)
 				end)
-				if okR and RS and RS.WaitOnboarding and not RS.WaitOnboarding(player, 90) then
+				-- claude-bud JOB 49 A (Calendar): wait out the Guided chain (the hold ends at its reward), at the latest
+				-- until FirstCardSeconds of play; OFF = the JOB 29 90 s
+				local holdMax = 90
+				if DailyRewardConfig.Live("Calendar", player.UserId) then
+					holdMax = math.max(0, (tonumber((DailyRewardConfig :: any).Calendar.FirstCardSeconds) or 150) - DailyRewardConfig.AutoClaim.DelaySeconds)
+				end
+				if okR and RS and RS.WaitOnboarding and not RS.WaitOnboarding(player, holdMax) then
 					return
 				end
 				local prof = DataService.GetProfile(player)

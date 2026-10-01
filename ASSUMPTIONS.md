@@ -10038,3 +10038,8 @@ ds_territories.luau T3):
 - **Funnel:** GoalFallbackWon is logged at the RaidWon index (15), so the funnel keeps one step per index.
 - **The Missions step:** it finishes on the panel open. That rides on the RequestAchievements remote the panel already
   sends on every open, so no new remote was added. A mission claim also finishes it.
+
+## 2026-10-01 — claude-bud JOB 49 part A: streak
+- **Cycles:** a "cycle" starts each time the streak lands on Day 1, and grace is once per cycle.
+- **What SAVED marks:** it marks the day claimed after the miss (the missed date is not a strip slot).
+- **Day7Scale.IncomeMinutes = 60:** a first guess, in config. The table stays the floor.

@@ -64,6 +64,9 @@ local AnalyticsConfig = {
 			SESSION_MILESTONE = { Name = "SessionMilestone", Value = "sec", Field = "sec" },
 			FTUE_TIME_TO_FIGHT = { Name = "FtueTimeToFight", Value = "seconds" },
 			GOAL_FALLBACK = { Name = "GoalFallback", Field = "reason" }, -- the raid goal fell back (no rival allowed)
+			-- claude-bud JOB 49: reasons to come back (streak / offline / missions / the return day)
+			STREAK_CLAIMED = { Name = "StreakClaimed", Value = "day", Field = "grace" },
+			STREAK_RESET = { Name = "StreakReset", Field = "lastDay" },
 			-- claude-bud JOB 41 C: rival targets (PvP rate = RivalSendTapped per session)
 			RIVAL_LIST_OPENED = { Name = "RivalListOpened" },
 			RIVAL_SEND_TAPPED = { Name = "RivalSendTapped", Field = "verdict" },

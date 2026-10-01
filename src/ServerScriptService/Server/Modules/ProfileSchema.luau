@@ -263,6 +263,13 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	end
 	-- claude-bud JOB 41 part B: the Recruit Pack card was shown (once per profile)
 	profile.RecruitPackOffered = if profile.RecruitPackOffered == true then true else nil
+	-- claude-bud JOB 49 A: the streak's grace bookkeeping (missing = no cycle yet / no grace used)
+	if typeof(profile.DailyLogin) == "table" then
+		local dl = profile.DailyLogin
+		dl.Cycle = if dl.Cycle ~= nil then nonNegInt(dl.Cycle) else nil
+		dl.GraceUsedCycle = if dl.GraceUsedCycle ~= nil then nonNegInt(dl.GraceUsedCycle) else nil
+		dl.GraceDay = if dl.GraceDay ~= nil then math.clamp(nonNegInt(dl.GraceDay), 1, 7) else nil
+	end
 	-- claude-bud JOB 41: the Guided first minutes record (missing -> nil; each flag only ever turns on)
 	if typeof(profile.Guided) == "table" then
 		local g = profile.Guided

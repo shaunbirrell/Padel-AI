@@ -132,8 +132,9 @@ end
 -- whole chain up to the Reward (Guided.HoldMaxSeconds); everyone else exactly as JOB 29 (HoldPopupsUntilStep, 60 s).
 local function holdUntil(profile: any): (number, number)
 	local G: any = (TutorialConfig :: any).Guided
-	if G and profile and tonumber(profile.TutorialOrderVersion) == G.OrderVersion then
-		local r = TutorialConfig.IndexOf("Reward", (TutorialConfig :: any).GuidedSteps)
+	-- claude-bud JOB 48: both Guided orders (4, and the Hook's 5) hold up to their own Reward step
+	if G and profile and TutorialConfig.IsGuidedVersion(profile.TutorialOrderVersion) then
+		local r = TutorialConfig.IndexOf("Reward", TutorialConfig.StepsFor(profile.TutorialOrderVersion))
 		if r then
 			return r + 1, math.max(5, tonumber(G.HoldMaxSeconds) or 300)
 		end

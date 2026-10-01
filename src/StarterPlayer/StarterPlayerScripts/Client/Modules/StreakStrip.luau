@@ -17,6 +17,19 @@ local DONE = Color3.fromRGB(70, 150, 90)
 local DIM = Color3.fromRGB(40, 44, 50)
 local TEXT = Color3.fromRGB(235, 235, 235)
 
+--[[ claude-bud JOB 49 A: the REAL time to the next claim day, from the server's clock in the payload (ServerNow /
+	NextClaimUnix) and the local clock since it arrived (receivedAt = os.clock() then). nil when the server sent none
+	(Calendar off) -> no countdown at all (no fake timer). "Next in 5h 12m" / "Next in 12m". ]]
+function StreakStrip.NextText(data: any, receivedAt: number?): string?
+	local nowS, nextS = tonumber(data and data.ServerNow), tonumber(data and data.NextClaimUnix)
+	if nowS == nil or nextS == nil then
+		return nil
+	end
+	local left = math.max(0, math.floor(nextS - nowS - (os.clock() - (receivedAt or os.clock()))))
+	local h, m = left // 3600, (left % 3600) // 60
+	return if h > 0 then string.format("Next in %dh %02dm", h, m) else string.format("Next in %dm", math.max(1, m))
+end
+
 -- "$1k", "$3.5k", "$20k", "$750"
 function StreakStrip.ShortCash(n: number): string
 	local v = math.floor(tonumber(n) or 0)
@@ -82,6 +95,9 @@ function StreakStrip.Build(parent: Instance, data: any, tileW: number, tileH: nu
 		bottom.TextColor3 = top.TextColor3
 		local cash = if typeof(data.Cash) == "table" then tonumber(data.Cash[d]) or 0 else 0
 		bottom.Text = StreakStrip.ShortCash(cash)
+		if tonumber(data.GraceDay) == d then
+			bottom.Text = "SAVED" -- claude-bud JOB 49 A: the missed day the grace rule kept
+		end
 		bottom.TextScaled = false
 		bottom.Parent = tile
 		tile.Parent = strip

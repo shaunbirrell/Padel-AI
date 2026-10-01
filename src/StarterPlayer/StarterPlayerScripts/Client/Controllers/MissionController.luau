@@ -54,6 +54,7 @@ local dailyInfo: TextLabel? = nil
 local spinBtn: TextButton? = nil
 local spinInfo: TextLabel? = nil
 local state: Types.MissionStatePayload? = nil
+local stateReceivedAt = os.clock() -- claude-bud JOB 49: when the last state arrived (the countdowns)
 
 -- spinner (SpinnerStateUpdate: Ready, CooldownRemaining seconds)
 local spinnerReady = false
@@ -703,9 +704,14 @@ local function refresh()
 		if tc > 0 then
 			table.insert(lines, string.format("Tomorrow: Day %d reward $%s", tonumber(s7.TomorrowDay) or 1, commas(tc)))
 		end
+		local nextText = StreakStrip.NextText(s7, stateReceivedAt) -- claude-bud JOB 49 A: the real countdown
+		if nextText then
+			table.insert(lines, nextText)
+		end
 		local cap = tonumber(s7.OfflineCap) or 0
 		if cap > 0 then
-			table.insert(lines, string.format("Away 8 h: earn up to $%s", commas(cap)))
+			-- claude-bud JOB 49 B: the cap's real hours (the server sends them; 8 when an older server does not)
+			table.insert(lines, string.format("Away %d h: earn up to $%s", math.floor(tonumber(s7.OfflineCapHours) or 8), commas(cap)))
 		end
 		local row = Instance.new("Frame")
 		row.Name = "Streak7Row"
@@ -1193,6 +1199,7 @@ function MissionController.Init()
 			return
 		end
 		state = payload
+		stateReceivedAt = os.clock()
 		if menuOpen then
 			refresh()
 		end
