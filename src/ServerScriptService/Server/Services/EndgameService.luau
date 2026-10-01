@@ -910,9 +910,80 @@ function EndgameService.NoteContract(player: Player?, kind: string, n: number?)
 	if h and h.Kind == kind and h.Have < h.Need then
 		h.Have = math.min(h.Need, h.Have + add)
 		changed = true
+		if h.Have >= h.Need then
+			notify(player, "Weekly target done: claim it at the Intel Office", "Success") -- Code Bot v168
+		end
 	end
 	if changed and deps.DataService and deps.DataService.MarkDirty then
 		deps.DataService.MarkDirty(player)
+	end
+	if changed then
+		-- Code Bot v168: the Intel Office guidance (WE_IntelGuide) appears with the toast, not on the next 5 s sweep
+		pcall(EndgameService.SyncIntelGuide, player)
+	end
+end
+
+--[[ Code Bot v168 (Shaun 2026-10-01: after "Contract done: claim it at the Intel Office" the game should guide him
+	there). READ ONLY (never resets the day / week like contractsOf): true while today's daily rows or this week's HVT
+	hold a done-but-unpaid contract. ]]
+function EndgameService.IntelClaimable(profile: any): boolean
+	local e = if typeof(profile) == "table" then profile.Endgame else nil
+	local c = if typeof(e) == "table" then e.Contracts else nil
+	if typeof(c) ~= "table" then
+		return false
+	end
+	if c.Day == dayIndex() and typeof(c.Rows) == "table" then
+		for _, r in ipairs(c.Rows) do
+			if typeof(r) == "table" and r.Paid ~= true and nonNeg(r.Have) >= math.max(1, nonNeg(r.Need)) then
+				return true
+			end
+		end
+	end
+	local h = c.Hvt
+	if c.Week == EndgameConfig.WeekIndex(nowUnix()) and typeof(h) == "table" and h.Paid ~= true and nonNeg(h.Have) >= math.max(1, nonNeg(h.Need)) then
+		return true
+	end
+	return false
+end
+
+--[[ Code Bot v168: the player attribute WE_IntelGuide = the Intel Office's NPC point (the world has ONE Intel Office,
+	PlazaServicesConfig.Stations.Intel in NW_W1, so it is the nearest) while a contract waits to be claimed, else nil.
+	The client (Modules/IntelGuide) points the ONE tracker (ObjectiveMarker: the compass pill + the world marker, the
+	same system as BASE / AIRDROP) at it. Set on completion (NoteContract), cleared after the claim (Purchase ->
+	SyncAttributes), kept right by the 5 s SyncAttributes sweep (a new day, a rejoin). ]]
+function EndgameService.SyncIntelGuide(player: Player)
+	local profile = getProfile(player)
+	local at: Vector3? = nil
+	if profile ~= nil and EndgameConfig.LiveFor(player.UserId, "Contracts") and EndgameService.IntelClaimable(profile) then
+		at = EndgameService.StationPoint("Intel")
+	end
+	if player:GetAttribute("WE_IntelGuide") ~= at then
+		player:SetAttribute("WE_IntelGuide", at)
+	end
+end
+
+--[[ Code Bot v168: PrestigeService.AdminSetRebirth (the owner's /setrebirth): the endgame side of a rebirth count
+	change, at once instead of on the next sweep. Lowering the count clears only the endgame unlock FLAGS above it. ]]
+function EndgameService.AdminSyncRebirth(player: Player, prestige: number)
+	local profile = getProfile(player)
+	if profile == nil then
+		return
+	end
+	local e = if typeof(profile.Endgame) == "table" then profile.Endgame else nil
+	local u = if e and typeof(e.Unlocks) == "table" then e.Unlocks else nil
+	if u then
+		for _, row in ipairs(EndgameConfig.RebirthUnlocks) do
+			if prestige < row.At then
+				u[row.Flag] = nil
+			end
+		end
+	end
+	pcall(EndgameService.SyncUnlocks, player)
+	pcall(EndgameService.SyncAttributes, player)
+	pcall(EndgameService.SyncBaseTier, player)
+	local bss = deps.BaseSignService
+	if bss and bss.Refresh then
+		pcall(bss.Refresh, profile.BasePlotId)
 	end
 end
 
@@ -988,6 +1059,7 @@ function EndgameService.SyncAttributes(player: Player)
 		end
 	end
 	setAttr(player, "WE_ParadeCF", parade)
+	pcall(EndgameService.SyncIntelGuide, player) -- Code Bot v168: the Intel Office guidance (after a claim / a new day)
 end
 
 -- the station frame for a station kind, or nil until the world registered it

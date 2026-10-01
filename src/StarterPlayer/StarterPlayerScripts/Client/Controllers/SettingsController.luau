@@ -426,6 +426,32 @@ function SettingsController.Init()
 			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAdminCommand, "replaytutorial")
 		end)
 		y += TAP + 14
+		-- Code Bot v168: SET REBIRTH (= /setrebirth N): [-] REBIRTH N [+] [SET]; the server re-checks the allowlist and
+		-- sets the count through PrestigeService.AdminSetRebirth (cash and items kept, saved)
+		local rebirthN = 10
+		local minus = button("RebirthMinus", "-", UDim.new(0, 16), UDim.new(0.15, -16))
+		local nLabel = button("RebirthValue", "REBIRTH 10", UDim.new(0.15, GAP / 2), UDim.new(0.35, -GAP), Constants.Colors.Background)
+		nLabel.AutoButtonColor = false
+		local plus = button("RebirthPlus", "+", UDim.new(0.5, GAP / 2), UDim.new(0.15, -GAP))
+		local setBtn = button("SetRebirth", "SET REBIRTH", UDim.new(0.65, GAP / 2), UDim.new(0.35, -16 - GAP / 2), Color3.fromRGB(150, 60, 170))
+		local function showN()
+			nLabel.Text = "REBIRTH " .. tostring(rebirthN)
+		end
+		minus.Activated:Connect(function()
+			AudioController.PlayClick()
+			rebirthN = math.max(0, rebirthN - 1)
+			showN()
+		end)
+		plus.Activated:Connect(function()
+			AudioController.PlayClick()
+			rebirthN = math.min(50, rebirthN + 1)
+			showN()
+		end)
+		setBtn.Activated:Connect(function()
+			AudioController.PlayClick()
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAdminCommand, "setrebirth", rebirthN)
+		end)
+		y += TAP + 14
 	end
 
 	-- Supply spinner (the Missions panel has the same claim row; this section stays per spec §3.7)

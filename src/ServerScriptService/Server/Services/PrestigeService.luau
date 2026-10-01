@@ -658,6 +658,75 @@ function PrestigeService.AdminGiveKeepBase(player: Player, n: number): (boolean,
 	return true, nil
 end
 
+--[[ Code Bot v168 (Shaun 2026-10-01: "/setrebirth N"; admin allowlist ONLY: AdminService chat + Settings > ADMIN, never a
+	remote of its own). Sets profile.Prestige (the rebirth count) to n (0..MaxPrestige) WITHOUT the reset table: Cash,
+	Level, XP, BaseUpgrades, Gold, Vehicles, Weapons and Endgame are untouched. Then the same follow-ups a real rebirth
+	(DoPrestige) runs, so everything derived from the count is right at once:
+	  * applyUnlocks (the PrestigeConfig.RebirthUnlocks flags and their granted vehicles / guns, additive); lowering n
+	    clears only the FLAGS above n (an item already granted is kept: "don't reset his items");
+	  * RebirthZoneService.Refresh (the zones / rank / +2 soldiers per rebirth army bonus), the outpost stacks, the
+	    cash / XP / base / prestige pushes (the cash multiplier + rebirth-scaled prices are read from profile.Prestige);
+	  * EndgameService.SyncUnlocks / SyncAttributes / SyncBaseTier (the endgame rebirth unlocks, WE_BaseCostScale) and
+	    the base sign;
+	  * MarkDirty + an immediate DataService.SaveProfile.
+	No gold, no rebirth toast / celebration / achievements / analytics funnel (it is not a rebirth). Leaderboards: the
+	admin is excluded at write and read (EngagementService.isBoardExcluded), so his Rebirths value never reaches a board. ]]
+function PrestigeService.AdminSetRebirth(player: Player, n: number): (boolean, string?)
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return false, "NoProfile"
+	end
+	local want = math.clamp(math.floor(tonumber(n) or 0), 0, PrestigeConfig.MaxPrestige)
+	local before = nonNegInt(profile.Prestige)
+	profile.Prestige = want
+	if typeof(profile.RebirthUnlocks) ~= "table" then
+		profile.RebirthUnlocks = {}
+	end
+	for _, u in ipairs(PrestigeConfig.RebirthUnlocks or {}) do
+		if u.AtPrestige > want then
+			profile.RebirthUnlocks[u.Flag] = nil -- the flag only; a granted vehicle / gun stays owned
+		end
+	end
+	applyUnlocks(player, profile, want)
+	do
+		local okE, EG = pcall(function(): any
+			return require(script.Parent.EndgameService)
+		end)
+		if okE and EG and EG.AdminSyncRebirth then
+			pcall(EG.AdminSyncRebirth, player, want)
+		end
+	end
+	DataService.MarkDirty(player)
+	do
+		local okRZ, RZ = pcall(function(): any
+			return require(script.Parent.RebirthZoneService)
+		end)
+		if okRZ and RZ and RZ.Refresh then
+			task.defer(RZ.Refresh, player)
+		end
+	end
+	if EconomyService and EconomyService.SyncOutpostIncomeStacks then
+		pcall(EconomyService.SyncOutpostIncomeStacks, player)
+	end
+	if EconomyService and EconomyService.Push then
+		pcall(EconomyService.Push, player)
+	end
+	if XPService and XPService.Push then
+		pcall(XPService.Push, player)
+	end
+	if BaseService and BaseService.PushState then
+		pcall(BaseService.PushState, player)
+	end
+	pushState(player)
+	if DataService.SaveProfile then
+		task.spawn(function()
+			pcall(DataService.SaveProfile, player)
+		end)
+	end
+	print(string.format("[AdminRebirth] %s setrebirth %d -> %d (cash/items kept)", player.Name, before, want))
+	return true, nil
+end
+
 function PrestigeService.Init(deps: { [string]: any })
 	-- claude-bud JOB 33: this life's play time (banked into profile.LifePlaySeconds every minute and on leave)
 	task.spawn(function()

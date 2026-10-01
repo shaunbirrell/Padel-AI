@@ -33,6 +33,11 @@ local WorldLabelConfig = {
 	-- F1/F4/F9 (owner's 11 features): every BillboardGui at a base (premium pads, the gold pump pad, the producer
 	-- label, the NEXT tag, business pops) carries this CollectionService tag (WorldLabel.Create opts.BaseLabel).
 	BaseLabelTag = "WE_BaseLabel",
+	-- Code Bot v168 (Shaun 2026-10-01 screenshot: "EAST YARD / Unlocks at Rebirth 5" under "AIRDROP 1.8km"): a world sign
+	-- with this CollectionService tag makes the ONE AlwaysOnTop objective marker's label (ObjectiveMarker: AIRDROP, a
+	-- mission, INTEL OFFICE) step aside while the two overlap on screen; the GO line and the compass pill stay
+	ObjectiveYieldTag = "WE_ObjectiveYield",
+	ObjectiveYieldPadPx = 6, -- real px of clearance between the two boxes
 	-- The client LabelGovernor makes "at most 3 labels on screen at a base" true: Hz times a second it keeps the
 	-- MaxOnScreen tagged labels nearest the camera (within their own MaxDistance) enabled and disables the rest.
 	-- It never touches a label whose RoleAttribute is "objective". On since lane Z (reversible).

@@ -13838,7 +13838,31 @@ local RivalConfig = {
 	ToastEverySeconds = 300,
 	ToastText = "A rich target is nearby: TARGETS",
 	-- the pill (real px): top-right under the top-bar pills (the Army tile is in the left rail's thumbstick band)
-	Pill = { Width = 128, Height = 48, Top = 64, Right = 16 },
+	-- Code Bot v168 (Shaun 2026-10-01: "isn't very clear and in depth"; a dark pill with small dim yellow text): a
+	-- 64 px CARD instead: a crosshair icon, "TARGETS" + the count, then the suggested rival (the server's top pick:
+	-- most loot, then nearest) on two lines: the name, "500m · $100k+"; with no target "No target now" + the short
+	-- reason. Placed in the CONTENT rect (below the 58 px topbar row where the compass / BASE pill sits), Top px under
+	-- it, Right px from the safe right edge. Its width leaves the centred top stack (toasts / objective card,
+	-- HudConfig.TopStack.MaxWidthScale 0.62 of the content width) a StackGap: Width = clamp(content x
+	-- (1 - 0.62) / 2 - Right - StackGap, MinWidth, MaxWidth) = 180 px on a 1024 x 471 phone (146 on 844 x 390). From
+	-- BigIconMinWidth the crosshair is a 30 px icon left of the three lines; narrower, an 18 px icon in the title row
+	-- and the two rival lines use the full width.
+	Pill = { Top = 8, Right = 8, Height = 64, MinWidth = 142, MaxWidth = 260, StackGap = 6, TopStackScale = 0.62, Icon = 30, SmallIcon = 18, BigIconMinWidth = 172, Badge = 30 },
+	-- the list under the card (real px): one 64 px row per target (name + level / army + verdict chip / loot +
+	-- distance, SEND ARMY + VIEW), a 36 px header; on a short screen it slides up over the card (it must end above
+	-- the content bottom: asserted by the v168 test)
+	List = { Width = 400, Gap = 6, Header = 36, RowHeight = 64, RowGap = 4, SendWidth = 112, ViewWidth = 60, ButtonHeight = 48 },
+	-- the card's short empty-state reasons (<= 16 chars at 14 px in the card's 126 px text column); the list keeps the full WhyText
+	ShortWhy = {
+		Held = "Finish the guide",
+		Alone = "No rivals here",
+		NoArmy = "Recruit soldiers",
+		Protected = "Rivals shielded",
+		Busy = "Army busy",
+		Poor = "No rich rivals",
+		Strong = "Too strong",
+	},
+	ShortWhyDefault = "Check back soon",
 	-- Code Bot v163: the pill is ALWAYS shown for a live player; with 0 targets it is dimmed and the list says this,
 	-- plus the server's one-line reason (Why) under it
 	EmptyText = "No targets right now — rivals appear when other players have cash to raid",
@@ -13853,6 +13877,94 @@ local RivalConfig = {
 		Strong = "Their defences are too strong for your army right now.",
 	},
 }
+
+-- ── Code Bot v168: the TARGETS card / list text (pure; RivalController draws exactly these strings) ──
+
+-- "95m" under 1 km, "1.2km" above (the compass pill's format; 1 stud = 1 m)
+function RivalConfig.DistText(studs: any): string
+	local n = math.max(0, tonumber(studs) or 0)
+	if n ~= n then
+		n = 0
+	end
+	if n < 1000 then
+		return string.format("%dm", math.floor(n + 0.5))
+	end
+	return string.format("%.1fkm", n / 1000)
+end
+
+-- the short reason for the card from the server's full one-line Why (RivalConfig.WhyText value)
+function RivalConfig.ShortWhyFor(why: string?): string
+	if type(why) == "string" then
+		for key, full in pairs(RivalConfig.WhyText) do
+			if full == why then
+				return RivalConfig.ShortWhy[key] or RivalConfig.ShortWhyDefault
+			end
+		end
+	end
+	return RivalConfig.ShortWhyDefault
+end
+
+--[[ The card's three lines for the pushed rows (rows[1] = the server's suggested rival) and the empty reason:
+	{ Title = "TARGETS", Count = n, Name = line 2, Detail = line 3, Has = n > 0 } ]]
+function RivalConfig.PillLines(rows: { any }?, why: string?): { [string]: any }
+	local list = rows or {}
+	local top = list[1]
+	if top == nil then
+		return { Title = "TARGETS", Count = 0, Name = "No target now", Detail = RivalConfig.ShortWhyFor(why), Has = false }
+	end
+	local loot = if type(top.Loot) == "string" then top.Loot else "$1k+"
+	local far = tonumber(top.Dist) or 0
+	return {
+		Title = "TARGETS",
+		Count = #list,
+		Name = tostring(top.Name or "Rival"),
+		Detail = if far > 0 then RivalConfig.DistText(far) .. " · " .. loot else loot .. " loot",
+		Has = true,
+	}
+end
+
+--[[ One list row's text: Name, Level ("Lv 23"), Army ("Army 12"), Loot ("$100k+ loot"), Dist ("500m away"),
+	Chip (the verdict, upper case). ]]
+function RivalConfig.RowLines(r: any): { [string]: string }
+	local lv = math.floor(tonumber(r and r.Level) or 0)
+	return {
+		Name = tostring(r and r.Name or "Rival"),
+		Level = if lv > 0 then "Lv " .. tostring(lv) else "Lv ?",
+		Army = "Army " .. tostring(math.floor(tonumber(r and r.Army) or 0)),
+		Loot = (if r and type(r.Loot) == "string" then r.Loot else "$1k+") .. " loot",
+		Dist = RivalConfig.DistText(r and r.Dist),
+		Chip = string.upper(tostring(r and r.Verdict or RivalConfig.VerdictText.Even)),
+	}
+end
+
+--[[ The card + list rectangles in the content rect's px (x, y = top-left; w, h) for a content size and a row count.
+	RivalController places by exactly these numbers; the v168 test checks them against the 1024 x 471 HUD. ]]
+function RivalConfig.Layout(contentW: number, contentH: number, nRows: number): { [string]: any }
+	local P, L = RivalConfig.Pill, RivalConfig.List
+	local side = contentW * (1 - P.TopStackScale) / 2
+	local w = math.clamp(math.floor(side - P.Right - P.StackGap), P.MinWidth, P.MaxWidth)
+	local big = w >= P.BigIconMinWidth
+	local pill = {
+		X = contentW - P.Right - w,
+		Y = P.Top,
+		W = w,
+		H = P.Height,
+		Icon = if big then P.Icon else P.SmallIcon,
+		IconX = 8,
+		IconY = if big then math.floor((P.Height - P.Icon) / 2) else 5,
+		TitleX = if big then 8 + P.Icon + 8 else 8 + P.SmallIcon + 4,
+		TextX = if big then 8 + P.Icon + 8 else 8,
+	}
+	pill.TextW = w - pill.TextX - 8
+	pill.TitleW = w - pill.TitleX - P.Badge
+	local body = if nRows <= 0 then RivalConfig.EmptyHeight else nRows * (L.RowHeight + L.RowGap)
+	local listH = L.Header + body + 4
+	-- under the card; on a short screen as far up as needed (over the card, never above the content top + Top)
+	local listTop = math.max(P.Top, math.min(P.Top + P.Height + L.Gap, contentH - P.Right - listH))
+	listH = math.min(listH, contentH - listTop - P.Right)
+	local lw = math.min(L.Width, contentW - 2 * P.Right)
+	return { Pill = pill, List = { X = contentW - P.Right - lw, Y = listTop, W = lw, H = listH } }
+end
 
 function RivalConfig.LiveFor(userId: any): boolean
 	return (require(script.Parent.RetentionConfig) :: any).Live(RivalConfig, userId)
@@ -13904,6 +14016,7 @@ function RivalConfig.Pick(rows: { any }): { any }
 			PlotId = r.PlotId,
 			Name = r.Name,
 			Army = r.Army,
+			Level = math.max(0, math.floor(tonumber(r.Level) or 0)), -- Code Bot v168 (display only)
 			Verdict = r.Verdict,
 			Loot = RivalConfig.Bucket(r.Loot),
 			Dist = math.floor((tonumber(r.Dist) or 0) + 0.5),
@@ -22448,6 +22561,11 @@ local WorldLabelConfig = {
 	-- F1/F4/F9 (owner's 11 features): every BillboardGui at a base (premium pads, the gold pump pad, the producer
 	-- label, the NEXT tag, business pops) carries this CollectionService tag (WorldLabel.Create opts.BaseLabel).
 	BaseLabelTag = "WE_BaseLabel",
+	-- Code Bot v168 (Shaun 2026-10-01 screenshot: "EAST YARD / Unlocks at Rebirth 5" under "AIRDROP 1.8km"): a world sign
+	-- with this CollectionService tag makes the ONE AlwaysOnTop objective marker's label (ObjectiveMarker: AIRDROP, a
+	-- mission, INTEL OFFICE) step aside while the two overlap on screen; the GO line and the compass pill stay
+	ObjectiveYieldTag = "WE_ObjectiveYield",
+	ObjectiveYieldPadPx = 6, -- real px of clearance between the two boxes
 	-- The client LabelGovernor makes "at most 3 labels on screen at a base" true: Hz times a second it keeps the
 	-- MaxOnScreen tagged labels nearest the camera (within their own MaxDistance) enabled and disables the rest.
 	-- It never touches a label whose RoleAttribute is "objective". On since lane Z (reversible).
@@ -30246,7 +30364,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 167)
+		player:SetAttribute("WE_Build", 168)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -50116,6 +50234,10 @@ function RebirthZoneBuilder.Locked(zoneId: string, tier: number, frame: CFrame, 
 	local z = RebirthConfig.Zones[zoneId]
 	t.Text = string.format("%s\nUnlocks at Rebirth %d", string.upper(z and z.DisplayName or zoneId), tier)
 	t.Parent = bb
+	-- Code Bot v168: the objective marker (AIRDROP / INTEL OFFICE, AlwaysOnTop) yields its label while it covers this sign
+	pcall(function()
+		game:GetService("CollectionService"):AddTag(bb, "WE_ObjectiveYield") -- = WorldLabelConfig.ObjectiveYieldTag
+	end)
 	bb.Parent = board
 	finish(cl, parent)
 end
@@ -68004,6 +68126,32 @@ local function replayGuided(deps: { [string]: any }, player: Player): string
 end
 AdminService._ReplayGuided = replayGuided -- test hook
 
+-- Code Bot v168 (Shaun 2026-10-01): /setrebirth N (and Settings > ADMIN > SET REBIRTH): the caller's own rebirth count
+-- through PrestigeService.AdminSetRebirth (no reset: cash and items kept; unlocks / zones / multipliers / prices follow;
+-- saved). Reached only through the allowlist checks (AdminService.IsAdmin; NOT a MoneyCommands entry, so never
+-- Studio-open, never another player). Admins stay off every leaderboard (EngagementService.isBoardExcluded).
+local function setRebirth(deps: { [string]: any }, player: Player, raw: any): string
+	local PS = deps.PrestigeService
+	if PS == nil or typeof(PS.AdminSetRebirth) ~= "function" then
+		return "setrebirth: not built yet"
+	end
+	local n = tonumber(raw)
+	if n == nil or n ~= n or n < 0 then
+		return "Usage: /setrebirth N (0-50)"
+	end
+	local ok, res, err = pcall(PS.AdminSetRebirth, player, math.floor(n))
+	if not ok then
+		warn("[AdminService] setrebirth failed:", res)
+		return "setrebirth failed (see Output)"
+	end
+	if res ~= true then
+		return "setrebirth refused: " .. tostring(err)
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	return string.format("Admin: rebirth set to %d (cash and items kept, saved)", tonumber(profile and profile.Prestige) or math.floor(n))
+end
+AdminService._SetRebirth = setRebirth -- test hook
+
 function AdminService.Init(deps: { [string]: any })
 	EconomyService = deps.EconomyService
 	XPService = deps.XPService
@@ -68122,6 +68270,12 @@ function AdminService.Init(deps: { [string]: any })
 			return
 		elseif cmd == "replaytutorial" or cmd == "replayguided" then
 			replayGuided(deps, player) -- Code Bot v163: Settings > ADMIN > REPLAY GUIDED TUTORIAL
+		elseif cmd == "setrebirth" then
+			-- Code Bot v168: Settings > ADMIN > SET REBIRTH (allowlist checked above; never a MoneyCommands entry)
+			local reply = setRebirth(deps, player, arg1)
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, reply, if string.sub(reply, 1, 6) == "Admin:" then "Success" else "Warn", 6)
+			end
 		elseif cmd == "resettutorial" then
 			if deps.TutorialService and deps.TutorialService.Reset then
 				deps.TutorialService.Reset(player)
@@ -68261,7 +68415,8 @@ function AdminService.Init(deps: { [string]: any })
 		local isArmyDebugCmd = cmd == "armydebug" -- v115: the owner's army-follow debug overlay (ArmyConfig.Follow3.Debug)
 		local isMoveDebugCmd = cmd == "movedebug" -- v123: the player-movement investigation (Modules/MoveDebug + MoveDebugClient)
 		local isReplayCmd = cmd == "replaytutorial" or cmd == "replayguided" -- Code Bot v163: test-mode Guided replay
-		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd then
+		local isSetRebirthCmd = cmd == "setrebirth" -- Code Bot v168: the owner's own rebirth count (no reset)
+		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd and not isSetRebirthCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -68314,6 +68469,15 @@ function AdminService.Init(deps: { [string]: any })
 		if isReplayCmd then
 			replayGuided(deps, player)
 			AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_replaytutorial" })
+			return
+		end
+		-- Code Bot v168: /setrebirth N
+		if isSetRebirthCmd then
+			local reply = setRebirth(deps, player, rest)
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, reply, if string.sub(reply, 1, 6) == "Admin:" then "Success" else "Warn", 6)
+			end
+			AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_setrebirth", arg = string.sub(tostring(rest), 1, 8) })
 			return
 		end
 		-- F7: owner playtest — /givekeepbase [1-5] (Keep-Base Rebirth tokens; admin allowlist only, see above)
@@ -68424,9 +68588,9 @@ function AdminService.Init(deps: { [string]: any })
 				end
 			end)
 			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
-			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" }, { "WE_ReplayTutorial", "/replaytutorial", "/replayguided" } }) do
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" }, { "WE_ReplayTutorial", "/replaytutorial", "/replayguided" }, { "WE_SetRebirth", "/setrebirth" } }) do
 				local c = ensureCommand(spec[1], spec[2], spec[3])
-				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" or spec[1] == "WE_ReplayTutorial" then
+				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" or spec[1] == "WE_ReplayTutorial" or spec[1] == "WE_SetRebirth" then
 					-- nations: never offered in chat autocomplete (lead decision 6: nothing of the feature shows for
 					-- non-admins before the flag art is live); the admin still types it
 					local cmdAny: any = c
@@ -68465,6 +68629,7 @@ function AdminService.Init(deps: { [string]: any })
 					or string.sub(lower, 1, 10) == "/movedebug"
 					or string.sub(lower, 1, 15) == "/replaytutorial"
 					or string.sub(lower, 1, 13) == "/replayguided"
+					or string.sub(lower, 1, 11) == "/setrebirth"
 				if not isAdminLine then
 					return
 				end
@@ -73412,7 +73577,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 167)
+			player:SetAttribute("WE_Build", 168)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -81931,7 +82096,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 167)
+		player:SetAttribute("WE_Build", 168)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -82073,7 +82238,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=167",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=168",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -83881,9 +84046,80 @@ function EndgameService.NoteContract(player: Player?, kind: string, n: number?)
 	if h and h.Kind == kind and h.Have < h.Need then
 		h.Have = math.min(h.Need, h.Have + add)
 		changed = true
+		if h.Have >= h.Need then
+			notify(player, "Weekly target done: claim it at the Intel Office", "Success") -- Code Bot v168
+		end
 	end
 	if changed and deps.DataService and deps.DataService.MarkDirty then
 		deps.DataService.MarkDirty(player)
+	end
+	if changed then
+		-- Code Bot v168: the Intel Office guidance (WE_IntelGuide) appears with the toast, not on the next 5 s sweep
+		pcall(EndgameService.SyncIntelGuide, player)
+	end
+end
+
+--[[ Code Bot v168 (Shaun 2026-10-01: after "Contract done: claim it at the Intel Office" the game should guide him
+	there). READ ONLY (never resets the day / week like contractsOf): true while today's daily rows or this week's HVT
+	hold a done-but-unpaid contract. ]]
+function EndgameService.IntelClaimable(profile: any): boolean
+	local e = if typeof(profile) == "table" then profile.Endgame else nil
+	local c = if typeof(e) == "table" then e.Contracts else nil
+	if typeof(c) ~= "table" then
+		return false
+	end
+	if c.Day == dayIndex() and typeof(c.Rows) == "table" then
+		for _, r in ipairs(c.Rows) do
+			if typeof(r) == "table" and r.Paid ~= true and nonNeg(r.Have) >= math.max(1, nonNeg(r.Need)) then
+				return true
+			end
+		end
+	end
+	local h = c.Hvt
+	if c.Week == EndgameConfig.WeekIndex(nowUnix()) and typeof(h) == "table" and h.Paid ~= true and nonNeg(h.Have) >= math.max(1, nonNeg(h.Need)) then
+		return true
+	end
+	return false
+end
+
+--[[ Code Bot v168: the player attribute WE_IntelGuide = the Intel Office's NPC point (the world has ONE Intel Office,
+	PlazaServicesConfig.Stations.Intel in NW_W1, so it is the nearest) while a contract waits to be claimed, else nil.
+	The client (Modules/IntelGuide) points the ONE tracker (ObjectiveMarker: the compass pill + the world marker, the
+	same system as BASE / AIRDROP) at it. Set on completion (NoteContract), cleared after the claim (Purchase ->
+	SyncAttributes), kept right by the 5 s SyncAttributes sweep (a new day, a rejoin). ]]
+function EndgameService.SyncIntelGuide(player: Player)
+	local profile = getProfile(player)
+	local at: Vector3? = nil
+	if profile ~= nil and EndgameConfig.LiveFor(player.UserId, "Contracts") and EndgameService.IntelClaimable(profile) then
+		at = EndgameService.StationPoint("Intel")
+	end
+	if player:GetAttribute("WE_IntelGuide") ~= at then
+		player:SetAttribute("WE_IntelGuide", at)
+	end
+end
+
+--[[ Code Bot v168: PrestigeService.AdminSetRebirth (the owner's /setrebirth): the endgame side of a rebirth count
+	change, at once instead of on the next sweep. Lowering the count clears only the endgame unlock FLAGS above it. ]]
+function EndgameService.AdminSyncRebirth(player: Player, prestige: number)
+	local profile = getProfile(player)
+	if profile == nil then
+		return
+	end
+	local e = if typeof(profile.Endgame) == "table" then profile.Endgame else nil
+	local u = if e and typeof(e.Unlocks) == "table" then e.Unlocks else nil
+	if u then
+		for _, row in ipairs(EndgameConfig.RebirthUnlocks) do
+			if prestige < row.At then
+				u[row.Flag] = nil
+			end
+		end
+	end
+	pcall(EndgameService.SyncUnlocks, player)
+	pcall(EndgameService.SyncAttributes, player)
+	pcall(EndgameService.SyncBaseTier, player)
+	local bss = deps.BaseSignService
+	if bss and bss.Refresh then
+		pcall(bss.Refresh, profile.BasePlotId)
 	end
 end
 
@@ -83959,6 +84195,7 @@ function EndgameService.SyncAttributes(player: Player)
 		end
 	end
 	setAttr(player, "WE_ParadeCF", parade)
+	pcall(EndgameService.SyncIntelGuide, player) -- Code Bot v168: the Intel Office guidance (after a claim / a new day)
 end
 
 -- the station frame for a station kind, or nil until the world registered it
@@ -104263,6 +104500,75 @@ function PrestigeService.AdminGiveKeepBase(player: Player, n: number): (boolean,
 	return true, nil
 end
 
+--[[ Code Bot v168 (Shaun 2026-10-01: "/setrebirth N"; admin allowlist ONLY: AdminService chat + Settings > ADMIN, never a
+	remote of its own). Sets profile.Prestige (the rebirth count) to n (0..MaxPrestige) WITHOUT the reset table: Cash,
+	Level, XP, BaseUpgrades, Gold, Vehicles, Weapons and Endgame are untouched. Then the same follow-ups a real rebirth
+	(DoPrestige) runs, so everything derived from the count is right at once:
+	  * applyUnlocks (the PrestigeConfig.RebirthUnlocks flags and their granted vehicles / guns, additive); lowering n
+	    clears only the FLAGS above n (an item already granted is kept: "don't reset his items");
+	  * RebirthZoneService.Refresh (the zones / rank / +2 soldiers per rebirth army bonus), the outpost stacks, the
+	    cash / XP / base / prestige pushes (the cash multiplier + rebirth-scaled prices are read from profile.Prestige);
+	  * EndgameService.SyncUnlocks / SyncAttributes / SyncBaseTier (the endgame rebirth unlocks, WE_BaseCostScale) and
+	    the base sign;
+	  * MarkDirty + an immediate DataService.SaveProfile.
+	No gold, no rebirth toast / celebration / achievements / analytics funnel (it is not a rebirth). Leaderboards: the
+	admin is excluded at write and read (EngagementService.isBoardExcluded), so his Rebirths value never reaches a board. ]]
+function PrestigeService.AdminSetRebirth(player: Player, n: number): (boolean, string?)
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return false, "NoProfile"
+	end
+	local want = math.clamp(math.floor(tonumber(n) or 0), 0, PrestigeConfig.MaxPrestige)
+	local before = nonNegInt(profile.Prestige)
+	profile.Prestige = want
+	if typeof(profile.RebirthUnlocks) ~= "table" then
+		profile.RebirthUnlocks = {}
+	end
+	for _, u in ipairs(PrestigeConfig.RebirthUnlocks or {}) do
+		if u.AtPrestige > want then
+			profile.RebirthUnlocks[u.Flag] = nil -- the flag only; a granted vehicle / gun stays owned
+		end
+	end
+	applyUnlocks(player, profile, want)
+	do
+		local okE, EG = pcall(function(): any
+			return require(script.Parent.EndgameService)
+		end)
+		if okE and EG and EG.AdminSyncRebirth then
+			pcall(EG.AdminSyncRebirth, player, want)
+		end
+	end
+	DataService.MarkDirty(player)
+	do
+		local okRZ, RZ = pcall(function(): any
+			return require(script.Parent.RebirthZoneService)
+		end)
+		if okRZ and RZ and RZ.Refresh then
+			task.defer(RZ.Refresh, player)
+		end
+	end
+	if EconomyService and EconomyService.SyncOutpostIncomeStacks then
+		pcall(EconomyService.SyncOutpostIncomeStacks, player)
+	end
+	if EconomyService and EconomyService.Push then
+		pcall(EconomyService.Push, player)
+	end
+	if XPService and XPService.Push then
+		pcall(XPService.Push, player)
+	end
+	if BaseService and BaseService.PushState then
+		pcall(BaseService.PushState, player)
+	end
+	pushState(player)
+	if DataService.SaveProfile then
+		task.spawn(function()
+			pcall(DataService.SaveProfile, player)
+		end)
+	end
+	print(string.format("[AdminRebirth] %s setrebirth %d -> %d (cash/items kept)", player.Name, before, want))
+	return true, nil
+end
+
 function PrestigeService.Init(deps: { [string]: any })
 	-- claude-bud JOB 33: this life's play time (banked into profile.LifePlaySeconds every minute and on leave)
 	task.spawn(function()
@@ -106782,12 +107088,20 @@ function RivalService.Candidates(viewer: Player): ({ any }, { [string]: number }
 					local okU, u = pcall(sqs.UnitPower, victim)
 					army = if okU then math.floor(tonumber(u) or 0) else 0
 				end
+				-- Code Bot v168: the victim's level for the redesigned list row (display only)
+				local level = 0
+				local ds = deps.DataService
+				if ds and ds.GetProfile then
+					local okP, prof = pcall(ds.GetProfile, victim)
+					level = if okP and typeof(prof) == "table" then math.floor(tonumber(prof.Level) or 0) else 0
+				end
 				local there = plotCentre(plotId)
 				local dist = if mine and there then Vector3.new(there.X - mine.X, 0, there.Z - mine.Z).Magnitude else 0
 				table.insert(rows, {
 					PlotId = plotId,
 					Name = victim.DisplayName,
 					Army = army,
+					Level = level,
 					Verdict = RivalConfig.VerdictWord(v.Bully == true, tonumber(v.Ratio) or 1, ArmyOrdersConfig.Fairness.RiskyRatio),
 					Loot = loot,
 					Dist = dist,
@@ -135031,6 +135345,15 @@ function EndgameController.Init()
 	end
 	buildPanels(pg)
 	makeHudButtons(pg)
+	-- Code Bot v168: a done contract points the tracker (compass pill + world marker) at the Intel Office until claimed
+	do
+		local okG, IG = pcall(function(): any
+			return require(script.Parent.Parent.Modules.IntelGuide)
+		end)
+		if okG and IG and IG.Start then
+			pcall(IG.Start)
+		end
+	end
 	task.spawn(function()
 		while true do
 			task.wait(2)
@@ -150575,6 +150898,13 @@ return RetentionController
 	(RivalConfig.EmptyText + the server's one-line reason, RivalTargets.Why). It steps aside (hidden) only while a
 	full-screen panel is open (HudLayout "Modal", except its own list), while dead, and while the Recruit Pack card
 	(WE_RecruitPack, the same top-right corner) is on screen.
+	Code Bot v168 (Shaun 2026-10-01: the pill "isn't very clear and in depth": small dim yellow text on a dark pill):
+	the pill is now a 64 px CARD (RivalConfig.Pill / RivalConfig.Layout, real px in the safe content rect, right under
+	the topbar row that holds the compass / BASE pill): a crosshair icon, "TARGETS" + the count badge, then the
+	server's suggested rival (rows[1]: most loot, then nearest) as its name and "500m · $100k+"; with nothing to raid
+	"No target now" + the short reason (RivalConfig.ShortWhy). Full opacity, white / bright gold text >= 14 px.
+	The list rows are bigger too: the name + "Lv 23", "Army 12" + the verdict chip, "$100k+ loot · 500m", SEND
+	ARMY (the same JOB 38 remote) and VIEW (the map; tap-to-pin, no travel). Visibility rules unchanged (v163).
 ]]
 
 local Players = game:GetService("Players")
@@ -150594,13 +150924,27 @@ local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local RivalController = {}
 
 local player = Players.LocalPlayer
-local GOLD = Color3.fromRGB(255, 205, 60)
-local PLATE = Color3.fromRGB(22, 24, 20)
-local CHIP = { easy = Color3.fromRGB(70, 160, 80), even = Color3.fromRGB(150, 130, 60), risky = Color3.fromRGB(170, 70, 60) }
+local GOLD = Color3.fromRGB(255, 214, 72)
+local WHITE = Color3.fromRGB(255, 255, 255)
+local PLATE = Color3.fromRGB(16, 18, 14)
+local ROW = Color3.fromRGB(36, 40, 32)
+local HOT = Color3.fromRGB(255, 72, 56) -- the crosshair / stroke while a target is listed
+local LOOT = Color3.fromRGB(150, 235, 120)
+local MUTED = Color3.fromRGB(225, 225, 215)
+local AMBER = Color3.fromRGB(255, 176, 80)
+local CHIP = { easy = Color3.fromRGB(60, 150, 70), even = Color3.fromRGB(150, 125, 45), risky = Color3.fromRGB(175, 60, 50) }
 local PANEL_ID = "RivalTargets"
 
+local gui: ScreenGui? = nil
 local pill: TextButton? = nil
 local badge: TextLabel? = nil
+local pillStroke: UIStroke? = nil
+local crossParts: { GuiObject } = {}
+local crossRing: UIStroke? = nil
+local crossBox: Frame? = nil
+local lineTitle: TextLabel? = nil
+local lineName: TextLabel? = nil
+local lineDetail: TextLabel? = nil
 local panel: Frame? = nil
 local rows: { any } = {}
 local why: string? = nil -- v163: the server's one-line reason when the list is empty
@@ -150613,6 +150957,30 @@ local function corner(p: Instance, r: number)
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, r)
 	c.Parent = p
+end
+
+local function label(parent: Instance, name: string, x: number, y: number, w: number, h: number, px: number, font: Enum.Font, color: Color3): TextLabel
+	local l = Instance.new("TextLabel")
+	l.Name = name
+	l.BackgroundTransparency = 1
+	l.Position = UDim2.fromOffset(x, y)
+	l.Size = UDim2.fromOffset(w, h)
+	l.Font = font
+	l.TextSize = px
+	l.TextColor3 = color
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.TextYAlignment = Enum.TextYAlignment.Center
+	l.TextTruncate = Enum.TextTruncate.AtEnd
+	l.Active = false
+	l.Text = ""
+	l.Parent = parent
+	local st = Instance.new("UIStroke") -- a thin dark outline: readable over bright sand / sky
+	st.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	st.Color = Color3.new(0, 0, 0)
+	st.Transparency = 0.45
+	st.Thickness = 1
+	st.Parent = l
+	return l
 end
 
 local function setOpen(on: boolean)
@@ -150629,18 +150997,110 @@ local function setOpen(on: boolean)
 	updatePillLater()
 end
 
-local function button(parent: Instance, text: string, color: Color3, x: UDim, w: number): TextButton
+local function button(parent: Instance, text: string, color: Color3, x: number, y: number, w: number, h: number): TextButton
 	local b = Instance.new("TextButton")
-	b.Position = UDim2.new(x.Scale, x.Offset, 0, 30)
-	b.Size = UDim2.fromOffset(w, 48)
+	b.Position = UDim2.fromOffset(x, y)
+	b.Size = UDim2.fromOffset(w, h)
 	b.BackgroundColor3 = color
-	b.TextColor3 = Color3.new(1, 1, 1)
-	b.Font = Enum.Font.GothamBold
+	b.TextColor3 = WHITE
+	b.Font = Enum.Font.GothamBlack
 	b.TextSize = 15
 	b.Text = text
 	corner(b, 8)
 	b.Parent = parent
 	return b
+end
+
+-- the crosshair icon (Frames only): a ring, four ticks, a centre dot
+local function crosshair(parent: Instance, x: number, y: number, size: number)
+	local box = Instance.new("Frame")
+	box.Name = "Crosshair"
+	box.BackgroundTransparency = 1
+	box.Position = UDim2.fromOffset(x, y)
+	box.Size = UDim2.fromOffset(size, size)
+	box.Active = false
+	box.Parent = parent
+	crossBox = box
+	local ring = Instance.new("Frame")
+	ring.Name = "Ring"
+	ring.AnchorPoint = Vector2.new(0.5, 0.5)
+	ring.Position = UDim2.fromScale(0.5, 0.5)
+	ring.Size = UDim2.fromScale(0.72, 0.72)
+	ring.BackgroundTransparency = 1
+	ring.Parent = box
+	local rc = Instance.new("UICorner")
+	rc.CornerRadius = UDim.new(0.5, 0)
+	rc.Parent = ring
+	local rs = Instance.new("UIStroke")
+	rs.Thickness = 2.5
+	rs.Color = GOLD
+	rs.Parent = ring
+	crossRing = rs
+	table.clear(crossParts)
+	local t = 2
+	for _, spec in ipairs({
+		{ 0.5, 0, UDim2.new(0, t, 0.32, 0), Vector2.new(0.5, 0) },
+		{ 0.5, 1, UDim2.new(0, t, 0.32, 0), Vector2.new(0.5, 1) },
+		{ 0, 0.5, UDim2.new(0.32, 0, 0, t), Vector2.new(0, 0.5) },
+		{ 1, 0.5, UDim2.new(0.32, 0, 0, t), Vector2.new(1, 0.5) },
+	}) do
+		local f = Instance.new("Frame")
+		f.BorderSizePixel = 0
+		f.AnchorPoint = spec[5]
+		f.Position = UDim2.fromScale(spec[1], spec[2])
+		f.Size = spec[3]
+		f.BackgroundColor3 = GOLD
+		f.Parent = box
+		table.insert(crossParts, f)
+	end
+	local dot = Instance.new("Frame")
+	dot.BorderSizePixel = 0
+	dot.AnchorPoint = Vector2.new(0.5, 0.5)
+	dot.Position = UDim2.fromScale(0.5, 0.5)
+	dot.Size = UDim2.fromOffset(4, 4)
+	dot.BackgroundColor3 = GOLD
+	dot.Parent = box
+	corner(dot, 4)
+	table.insert(crossParts, dot)
+end
+
+local function contentSize(): Vector2
+	local g = gui
+	local v = if g then g.AbsoluteSize else Vector2.zero
+	if v.X < 2 or v.Y < 2 then
+		local cam = workspace.CurrentCamera
+		v = if cam then Vector2.new(cam.ViewportSize.X, cam.ViewportSize.Y - 58) else Vector2.new(1024, 413)
+	end
+	return v
+end
+
+-- the card and the list at RivalConfig.Layout's numbers (re-run when the screen size or the row count changes)
+local function layout()
+	local pl, p = pill, panel
+	if pl == nil or p == nil then
+		return
+	end
+	local cs = contentSize()
+	local L = RivalConfig.Layout(cs.X, cs.Y, #rows)
+	local C = L.Pill
+	pl.Position = UDim2.fromOffset(C.X, C.Y)
+	pl.Size = UDim2.fromOffset(C.W, C.H)
+	local ic = crossBox
+	if ic then
+		ic.Position = UDim2.fromOffset(C.IconX, C.IconY)
+		ic.Size = UDim2.fromOffset(C.Icon, C.Icon)
+	end
+	local t, n, d = lineTitle, lineName, lineDetail
+	if t and n and d then
+		t.Position = UDim2.fromOffset(C.TitleX, 5)
+		t.Size = UDim2.fromOffset(C.TitleW, 18)
+		n.Position = UDim2.fromOffset(C.TextX, 24)
+		n.Size = UDim2.fromOffset(C.TextW, 17)
+		d.Position = UDim2.fromOffset(C.TextX, 42)
+		d.Size = UDim2.fromOffset(C.TextW, 16)
+	end
+	p.Position = UDim2.fromOffset(L.List.X, L.List.Y)
+	p.Size = UDim2.fromOffset(L.List.W, L.List.H)
 end
 
 local function rebuildList()
@@ -150653,44 +151113,47 @@ local function rebuildList()
 			c:Destroy()
 		end
 	end
+	local L = RivalConfig.List
+	local cs = contentSize()
+	local lw = RivalConfig.Layout(cs.X, cs.Y, #rows).List.W
+	local rowW = lw - 16
+	local textW = rowW - 10 - L.SendWidth - L.ViewWidth - 3 * 8
 	for i, r in ipairs(rows) do
+		local t = RivalConfig.RowLines(r)
 		local row = Instance.new("Frame")
 		row.Name = "Row"
-		row.Position = UDim2.fromOffset(8, 40 + (i - 1) * 86)
-		row.Size = UDim2.new(1, -16, 0, 82)
-		row.BackgroundColor3 = Color3.fromRGB(34, 37, 30)
+		row.Position = UDim2.fromOffset(8, L.Header + (i - 1) * (L.RowHeight + L.RowGap))
+		row.Size = UDim2.fromOffset(rowW, L.RowHeight)
+		row.BackgroundColor3 = ROW
 		row.Parent = p
 		corner(row, 8)
-		local name = Instance.new("TextLabel")
-		name.BackgroundTransparency = 1
-		name.Position = UDim2.fromOffset(8, 4)
-		name.Size = UDim2.new(1, -86, 0, 22)
-		name.Font = Enum.Font.GothamBold
-		name.TextSize = 15
-		name.TextXAlignment = Enum.TextXAlignment.Left
-		name.TextTruncate = Enum.TextTruncate.AtEnd
-		name.TextColor3 = Color3.new(1, 1, 1)
-		name.Text = string.format("%s  ·  Army %d  ·  Loot %s", tostring(r.Name), math.floor(tonumber(r.Army) or 0), tostring(r.Loot))
-		name.Parent = row
+		label(row, "Name", 10, 3, textW - 52, 20, 16, Enum.Font.GothamBold, WHITE).Text = t.Name
+		local lv = label(row, "Level", 10 + textW - 50, 3, 50, 20, 14, Enum.Font.GothamBold, GOLD)
+		lv.TextXAlignment = Enum.TextXAlignment.Right
+		lv.Text = t.Level
+		label(row, "Army", 10, 23, textW - 64, 18, 14, Enum.Font.GothamBold, MUTED).Text = t.Army
 		local chip = Instance.new("TextLabel")
-		chip.Position = UDim2.new(1, -74, 0, 4)
-		chip.Size = UDim2.fromOffset(66, 22)
+		chip.Name = "Verdict"
+		chip.Position = UDim2.fromOffset(10 + textW - 60, 23)
+		chip.Size = UDim2.fromOffset(60, 18)
 		chip.BackgroundColor3 = CHIP[tostring(r.Verdict)] or CHIP.even
-		chip.TextColor3 = Color3.new(1, 1, 1)
+		chip.TextColor3 = WHITE
 		chip.Font = Enum.Font.GothamBold
 		chip.TextSize = 14
-		chip.Text = string.upper(tostring(r.Verdict))
+		chip.Text = t.Chip
 		chip.Parent = row
 		corner(chip, 6)
+		label(row, "LootDist", 10, 42, textW, 18, 14, Enum.Font.GothamBold, LOOT).Text = t.Loot .. " · " .. t.Dist
 		local plotId = tonumber(r.PlotId) or 0
-		local send = button(row, "SEND ARMY", Color3.fromRGB(150, 60, 50), UDim.new(0, 8), 150)
+		local by = math.floor((L.RowHeight - L.ButtonHeight) / 2)
+		local send = button(row, "SEND ARMY", Color3.fromRGB(170, 55, 45), rowW - 8 - L.ViewWidth - 8 - L.SendWidth, by, L.SendWidth, L.ButtonHeight)
 		send.Activated:Connect(function()
 			-- the SAME JOB 38 send path as the map's SEND ARMY (the server re-checks every fairness rule)
 			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySend, plotId)
 			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestRivalAction, "send", plotId)
 			setOpen(false)
 		end)
-		local view = button(row, "VIEW", Color3.fromRGB(55, 60, 50), UDim.new(1, -118), 110)
+		local view = button(row, "VIEW", Color3.fromRGB(60, 66, 54), rowW - 8 - L.ViewWidth, by, L.ViewWidth, L.ButtonHeight)
 		view.Activated:Connect(function()
 			setOpen(false)
 			local okM, MC = pcall(function(): any
@@ -150706,7 +151169,7 @@ local function rebuildList()
 		e.Visible = #rows == 0
 		e.Text = if why and why ~= "" then RivalConfig.EmptyText .. "\n" .. why else RivalConfig.EmptyText
 	end
-	p.Size = UDim2.fromOffset(330, if #rows == 0 then 40 + RivalConfig.EmptyHeight else 44 + #rows * 86)
+	layout()
 end
 
 -- v163: the pill is always there for a live player; it only steps aside for a full-screen panel (not its own list),
@@ -150734,10 +151197,29 @@ local function refresh()
 	if pl == nil or b == nil then
 		return
 	end
-	local n = #rows
-	b.Text = tostring(n)
-	b.Visible = n > 0
-	pl.TextTransparency = if n > 0 then 0 else 0.35 -- dimmed (still readable, still tappable) with nothing to raid
+	local lines = RivalConfig.PillLines(rows, why)
+	b.Text = tostring(lines.Count)
+	b.Visible = lines.Has
+	local t, n, d = lineTitle, lineName, lineDetail
+	if t and n and d then
+		t.Text = lines.Title
+		n.Text = lines.Name
+		n.TextColor3 = if lines.Has then WHITE else MUTED
+		d.Text = lines.Detail
+		d.TextColor3 = if lines.Has then LOOT else AMBER
+	end
+	local accent = if lines.Has then HOT else GOLD
+	local st = pillStroke
+	if st then
+		st.Color = accent
+	end
+	local ring = crossRing
+	if ring then
+		ring.Color = accent
+	end
+	for _, f in ipairs(crossParts) do
+		f.BackgroundColor3 = accent
+	end
 	updatePill()
 	rebuildList()
 end
@@ -150751,84 +151233,86 @@ local function build()
 	g.Name = "WE_RivalTargets"
 	g.ResetOnSpawn = false
 	g.DisplayOrder = 30
+	-- v168: explicit: the safe content rect (below the 58 px topbar row with the compass / BASE pill, inside notches)
+	g.IgnoreGuiInset = false
+	pcall(function()
+		g.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	end)
 	g.Parent = pg
+	gui = g
 	local P = RivalConfig.Pill
 	local b = Instance.new("TextButton")
 	b.Name = "TargetsPill"
-	b.AnchorPoint = Vector2.new(1, 0)
-	b.Position = UDim2.new(1, -P.Right, 0, P.Top)
-	b.Size = UDim2.fromOffset(P.Width, P.Height)
 	b.BackgroundColor3 = PLATE
-	b.BackgroundTransparency = 0.15
-	b.TextColor3 = GOLD
-	b.Font = Enum.Font.GothamBlack
-	b.TextSize = 16
-	b.Text = "TARGETS"
-	b.Visible = true -- v163: always there for a live player (dimmed with no targets)
-	b.TextTransparency = 0.35
+	b.BackgroundTransparency = 0.05
+	b.AutoButtonColor = true
+	b.Text = ""
+	b.Visible = true -- v163: always there for a live player
 	b.Parent = g
-	corner(b, 24)
+	corner(b, 12)
 	local st = Instance.new("UIStroke")
+	st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	st.Color = GOLD
-	st.Thickness = 1.5
+	st.Thickness = 2
 	st.Parent = b
+	pillStroke = st
+	crosshair(b, 8, math.floor((P.Height - P.Icon) / 2), P.Icon) -- layout() places / sizes it (RivalConfig.Layout)
+	lineTitle = label(b, "Title", 46, 5, 100, 18, 16, Enum.Font.GothamBlack, GOLD)
+	lineName = label(b, "Rival", 46, 24, 100, 17, 15, Enum.Font.GothamBold, WHITE)
+	lineDetail = label(b, "Detail", 46, 42, 100, 16, 14, Enum.Font.GothamBold, LOOT)
 	local bd = Instance.new("TextLabel")
-	bd.AnchorPoint = Vector2.new(0.5, 0.5)
-	bd.Position = UDim2.new(0, 2, 0, 4)
-	bd.Size = UDim2.fromOffset(24, 24)
-	bd.BackgroundColor3 = Color3.fromRGB(235, 40, 52)
-	bd.TextColor3 = Color3.new(1, 1, 1)
-	bd.Font = Enum.Font.GothamBold
+	bd.Name = "Count"
+	bd.AnchorPoint = Vector2.new(1, 0)
+	bd.Position = UDim2.new(1, -6, 0, 4)
+	bd.Size = UDim2.fromOffset(24, 20)
+	bd.BackgroundColor3 = Color3.fromRGB(225, 40, 50)
+	bd.TextColor3 = WHITE
+	bd.Font = Enum.Font.GothamBlack
 	bd.TextSize = 14
 	bd.Text = "0"
 	bd.Visible = false
 	bd.Parent = b
-	corner(bd, 12)
+	corner(bd, 10)
 	pill = b
 	badge = bd
 	local f = Instance.new("Frame")
 	f.Name = "TargetsList"
-	f.AnchorPoint = Vector2.new(1, 0)
-	f.Position = UDim2.new(1, -P.Right, 0, P.Top + P.Height + 6)
-	f.Size = UDim2.fromOffset(330, 130)
 	f.BackgroundColor3 = PLATE
-	f.BackgroundTransparency = 0.05
+	f.BackgroundTransparency = 0.03
 	f.Visible = false
+	f.ZIndex = 3 -- on a short screen the list slides up over the card (RivalConfig.Layout); X closes it
 	f.Parent = g
 	corner(f, 12)
-	local title = Instance.new("TextLabel")
-	title.BackgroundTransparency = 1
-	title.Position = UDim2.fromOffset(12, 6)
-	title.Size = UDim2.new(1, -70, 0, 28)
-	title.Font = Enum.Font.GothamBlack
-	title.TextSize = 17
-	title.TextColor3 = GOLD
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.Text = "TARGETS"
-	title.Parent = f
+	local fs = Instance.new("UIStroke")
+	fs.Color = GOLD
+	fs.Thickness = 1.5
+	fs.Parent = f
+	local title = label(f, "Title", 12, 4, 280, 28, 18, Enum.Font.GothamBlack, GOLD)
+	title.Text = "RIVAL TARGETS"
 	-- v163: the empty state (shown while the server lists 0 targets)
 	local empty = Instance.new("TextLabel")
 	empty.Name = "Empty"
 	empty.BackgroundTransparency = 1
-	empty.Position = UDim2.fromOffset(12, 40)
+	empty.Position = UDim2.fromOffset(12, RivalConfig.List.Header)
 	empty.Size = UDim2.new(1, -24, 0, RivalConfig.EmptyHeight - 8)
 	empty.Font = Enum.Font.GothamMedium
 	empty.TextSize = 15
 	empty.TextWrapped = true
 	empty.TextXAlignment = Enum.TextXAlignment.Left
 	empty.TextYAlignment = Enum.TextYAlignment.Top
-	empty.TextColor3 = Color3.fromRGB(225, 225, 215)
+	empty.TextColor3 = MUTED
 	empty.Text = RivalConfig.EmptyText
 	empty.Parent = f
 	emptyLabel = empty
 	local x = Instance.new("TextButton")
+	x.Name = "Close"
 	x.AnchorPoint = Vector2.new(1, 0)
-	x.Position = UDim2.new(1, -4, 0, -4)
+	x.Position = UDim2.new(1, -2, 0, -2)
 	x.Size = UDim2.fromOffset(48, 48)
 	x.BackgroundTransparency = 1
-	x.TextColor3 = Color3.new(1, 1, 1)
+	x.TextColor3 = WHITE
 	x.Font = Enum.Font.GothamBold
-	x.TextSize = 18
+	x.TextSize = 20
 	x.Text = "X"
 	x.Parent = f
 	panel = f
@@ -150863,6 +151347,9 @@ local function build()
 		if c.Name == "WE_RecruitPack" then
 			updatePill()
 		end
+	end)
+	g:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() -- v168: rotate / resize: the card keeps its slot
+		rebuildList()
 	end)
 	refresh()
 end
@@ -151315,6 +151802,32 @@ function SettingsController.Init()
 			AudioController.PlayClick()
 			setOpen(false)
 			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAdminCommand, "replaytutorial")
+		end)
+		y += TAP + 14
+		-- Code Bot v168: SET REBIRTH (= /setrebirth N): [-] REBIRTH N [+] [SET]; the server re-checks the allowlist and
+		-- sets the count through PrestigeService.AdminSetRebirth (cash and items kept, saved)
+		local rebirthN = 10
+		local minus = button("RebirthMinus", "-", UDim.new(0, 16), UDim.new(0.15, -16))
+		local nLabel = button("RebirthValue", "REBIRTH 10", UDim.new(0.15, GAP / 2), UDim.new(0.35, -GAP), Constants.Colors.Background)
+		nLabel.AutoButtonColor = false
+		local plus = button("RebirthPlus", "+", UDim.new(0.5, GAP / 2), UDim.new(0.15, -GAP))
+		local setBtn = button("SetRebirth", "SET REBIRTH", UDim.new(0.65, GAP / 2), UDim.new(0.35, -16 - GAP / 2), Color3.fromRGB(150, 60, 170))
+		local function showN()
+			nLabel.Text = "REBIRTH " .. tostring(rebirthN)
+		end
+		minus.Activated:Connect(function()
+			AudioController.PlayClick()
+			rebirthN = math.max(0, rebirthN - 1)
+			showN()
+		end)
+		plus.Activated:Connect(function()
+			AudioController.PlayClick()
+			rebirthN = math.min(50, rebirthN + 1)
+			showN()
+		end)
+		setBtn.Activated:Connect(function()
+			AudioController.PlayClick()
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAdminCommand, "setrebirth", rebirthN)
 		end)
 		y += TAP + 14
 	end
@@ -168816,6 +169329,124 @@ return HudLayout
           </Item>
           <Item class="ModuleScript" referent="349">
             <Properties>
+              <string name="Name">IntelGuide</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Code Bot v168 (Shaun 2026-10-01): after the toast "Contract done: claim it at the Intel Office" the game guides the
+	player there with the EXISTING tracker (Modules/ObjectiveMarker: the yellow compass pill top-right reads
+	"INTEL OFFICE 1.4km" with its arrow, the GO line and the one world marker), the same system as BASE / AIRDROP.
+	No fast travel: it only points.
+	  * the server publishes WE_IntelGuide (Vector3: the Intel Office NPC; EndgameService.SyncIntelGuide) while a done
+	    contract (daily row or the weekly HVT) is unclaimed, and clears it after the claim (or a new day);
+	  * attribute set -> ShowWith({ Short = LABEL, X, Y, Z }) (a manual map pin still wins: ObjectiveMarker ignores us);
+	  * the marker clears itself on arrival (ArriveStuds, inside the NPC's 12-stud prompt). If he walks off without
+	    claiming (> ReshowStuds) or another objective (an airdrop, a mission GO) ended, it comes back while the
+	    attribute is still set: it never fights a LIVE other target, it only fills a free tracker;
+	  * attribute cleared -> our marker (Short == LABEL) is cleared; anybody else's is left alone.
+	Cost: one attribute signal + a 1 Hz check while a guide is set (nothing otherwise).
+]]
+
+local Players = game:GetService("Players")
+
+local IntelGuide = {}
+
+IntelGuide.LABEL = "INTEL OFFICE"
+IntelGuide.ATTR = "WE_IntelGuide"
+IntelGuide.ArriveStuds = 10
+IntelGuide.ReshowStuds = 40
+IntelGuide.TimeoutSeconds = 1800
+IntelGuide.CheckSeconds = 1
+
+type Target = { Short: string, X: number, Y: number, Z: number }
+
+--[[ Pure: what to do now. guide = the server's point (nil = nothing to claim), current = ObjectiveMarker.Current(),
+	pos = the character's position (nil while respawning), fresh = the attribute just changed (the completion moment).
+	"show" = ShowWith the Intel Office; "clear" = Clear our own marker; nil = leave the tracker alone. ]]
+function IntelGuide.Decide(guide: Vector3?, current: Target?, pos: Vector3?, fresh: boolean): string?
+	if guide == nil then
+		if current ~= nil and current.Short == IntelGuide.LABEL then
+			return "clear"
+		end
+		return nil
+	end
+	if current ~= nil then
+		if current.Short == IntelGuide.LABEL then
+			local dx, dz = current.X - guide.X, current.Z - guide.Z
+			return if dx * dx + dz * dz > 1 then "show" else nil -- the office point moved (a re-publish)
+		end
+		return if fresh then "show" else nil -- the completion moment wins once; later never over a live target
+	end
+	if fresh then
+		return "show"
+	end
+	-- the tracker is free (arrived and walked off, timed out, an airdrop ended): back on once he is away from it
+	if pos == nil then
+		return nil
+	end
+	local dx, dz = pos.X - guide.X, pos.Z - guide.Z
+	return if dx * dx + dz * dz > IntelGuide.ReshowStuds * IntelGuide.ReshowStuds then "show" else nil
+end
+
+local started = false
+
+function IntelGuide.Start()
+	if started then
+		return
+	end
+	started = true
+	local player = Players.LocalPlayer
+	local ObjectiveMarker = require(script.Parent.ObjectiveMarker)
+	local function guide(): Vector3?
+		local v = player:GetAttribute(IntelGuide.ATTR)
+		return if typeof(v) == "Vector3" then v else nil
+	end
+	local function apply(fresh: boolean)
+		local g = guide()
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		local pos = if hrp and hrp:IsA("BasePart") then hrp.Position else nil
+		local what = IntelGuide.Decide(g, ObjectiveMarker.Current(), pos, fresh)
+		if what == "show" and g then
+			ObjectiveMarker.ShowWith(
+				{ Short = IntelGuide.LABEL, X = g.X, Y = g.Y, Z = g.Z },
+				{ ArriveStuds = IntelGuide.ArriveStuds, TimeoutSeconds = IntelGuide.TimeoutSeconds }
+			)
+		elseif what == "clear" then
+			ObjectiveMarker.Clear()
+		end
+	end
+	local loopOn = false
+	local function loop()
+		if loopOn then
+			return
+		end
+		loopOn = true
+		task.spawn(function()
+			while guide() ~= nil and player.Parent do
+				task.wait(IntelGuide.CheckSeconds)
+				pcall(apply, false)
+			end
+			loopOn = false
+		end)
+	end
+	player:GetAttributeChangedSignal(IntelGuide.ATTR):Connect(function()
+		pcall(apply, true)
+		if guide() ~= nil then
+			loop()
+		end
+	end)
+	if guide() ~= nil then
+		pcall(apply, true)
+		loop()
+	end
+end
+
+return IntelGuide
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="350">
+            <Properties>
               <string name="Name">Juice</string>
               <string name="Source"><![CDATA[--!strict
 --[[
@@ -168985,7 +169616,7 @@ return Juice
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="350">
+          <Item class="ModuleScript" referent="351">
             <Properties>
               <string name="Name">LabelGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -169227,7 +169858,7 @@ return LabelGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="351">
+          <Item class="ModuleScript" referent="352">
             <Properties>
               <string name="Name">MoveDebugClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -169601,7 +170232,7 @@ return MoveDebugClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="352">
+          <Item class="ModuleScript" referent="353">
             <Properties>
               <string name="Name">NextPadChevrons</string>
               <string name="Source"><![CDATA[--!strict
@@ -170088,7 +170719,7 @@ return NextPadChevrons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="353">
+          <Item class="ModuleScript" referent="354">
             <Properties>
               <string name="Name">NotifOptIn</string>
               <string name="Source"><![CDATA[--!strict
@@ -170179,7 +170810,7 @@ return NotifOptIn
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="354">
+          <Item class="ModuleScript" referent="355">
             <Properties>
               <string name="Name">ObjectiveMarker</string>
               <string name="Source"><![CDATA[--!strict
@@ -170239,6 +170870,7 @@ Additive (claude-bud JOB 30, the world map's tap-to-pin; the SAME marker, line a
 	three objective-only numbers are OBJ below (they move to OpsConfig.Ui with Phase B lane O, ASSUMPTIONS U0-1).
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -170247,6 +170879,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
 
 export type Target = { Short: string, X: number, Y: number, Z: number }
 export type Opts = { ArriveStuds: number?, TimeoutSeconds: number?, Pin: boolean? }
@@ -170279,6 +170912,7 @@ local lastAttemptAt = -math.huge
 local stepConn: RBXScriptConnection? = nil
 local stepAcc = 0
 local yielded = false
+local covered = false -- Code Bot v168: the label overlaps a WorldLabelConfig.ObjectiveYieldTag sign on screen
 local stepKey = -1 -- distKey of the distance text on screen
 
 -- visuals (all client-only)
@@ -170388,9 +171022,78 @@ local function applyEnabled()
 	if b and b.Enabled ~= on then
 		b.Enabled = on
 	end
-	if m and m.Enabled ~= on then
-		m.Enabled = on
+	local mOn = on and not covered -- Code Bot v168: only the label steps aside for a sign; the GO line stays
+	if m and m.Enabled ~= mOn then
+		m.Enabled = mOn
 	end
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- Code Bot v168 (owner screenshot 2026-10-01: "EAST YARD / Unlocks at Rebirth 5" under "AIRDROP 1.8km"): this label
+-- is AlwaysOnTop, so a far objective drew straight over a near world sign. A sign BillboardGui tagged
+-- WorldLabelConfig.ObjectiveYieldTag (the rebirth-zone "Unlocks at Rebirth N" signs) makes the label step aside while
+-- the two boxes overlap on screen (the compass pill keeps the name + distance, the GO line stays). Tagged signs are
+-- tracked by the tag's added / removed signals (no tree scan, no per-step allocation); checked at the step rate.
+---------------------------------------------------------------------------------------------------------------
+
+-- Pure: do two screen boxes (centre x / y, width, height; real px) overlap with `pad` px of clearance?
+function ObjectiveMarker.BoxesOverlap(ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number, pad: number): boolean
+	return math.abs(ax - bx) * 2 < aw + bw + pad * 2 and math.abs(ay - by) * 2 < ah + bh + pad * 2
+end
+
+local yieldSigns: { [Instance]: boolean } = {}
+local yieldWired = false
+local function wireYieldSigns()
+	if yieldWired then
+		return
+	end
+	yieldWired = true
+	local tag = WorldLabelConfig.ObjectiveYieldTag
+	if type(tag) ~= "string" then
+		return
+	end
+	pcall(function()
+		for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+			yieldSigns[inst] = true
+		end
+		CollectionService:GetInstanceAddedSignal(tag):Connect(function(inst: Instance)
+			yieldSigns[inst] = true
+		end)
+		CollectionService:GetInstanceRemovedSignal(tag):Connect(function(inst: Instance)
+			yieldSigns[inst] = nil
+		end)
+	end)
+end
+
+-- true while the marker's label box overlaps an enabled, in-range, on-screen tagged sign
+local function coversSign(): boolean
+	local cam = Workspace.CurrentCamera
+	local m, a = marker, anchor
+	if cam == nil or m == nil or a == nil or next(yieldSigns) == nil then
+		return false
+	end
+	local mp, onM = cam:WorldToViewportPoint(a.WorldPosition)
+	if not onM then
+		return false
+	end
+	local camPos = cam.CFrame.Position
+	local mw, mh = m.Size.X.Offset, m.Size.Y.Offset
+	local pad = (tonumber(WorldLabelConfig.ObjectiveYieldPadPx) or 6) + (if covered then 6 else 0) -- hysteresis
+	for inst in pairs(yieldSigns) do
+		if inst:IsA("BillboardGui") and inst.Enabled and inst.Parent ~= nil then
+			local host = inst.Adornee or inst.Parent
+			if host and host:IsA("BasePart") then
+				local wp = host.Position + inst.StudsOffset
+				if (wp - camPos).Magnitude <= inst.MaxDistance then
+					local sp, onS = cam:WorldToViewportPoint(wp)
+					if onS and ObjectiveMarker.BoxesOverlap(mp.X, mp.Y, mw, mh, sp.X, sp.Y, inst.Size.X.Offset, inst.Size.Y.Offset, pad) then
+						return true
+					end
+				end
+			end
+		end
+	end
+	return false
 end
 
 -- the line's start on the (current) character; nil while respawning
@@ -170502,6 +171205,7 @@ local function clearNow(reason: string)
 		ended = reason
 	end
 	yielded = false
+	covered = false
 end
 
 local function step(dt: number)
@@ -170550,6 +171254,11 @@ local function step(dt: number)
 	if yielded or hrp == nil then
 		return
 	end
+	local cv = coversSign()
+	if cv ~= covered then
+		covered = cv
+		applyEnabled()
+	end
 	local p = (hrp :: BasePart).Position
 	local dx, dz = p.X - c.X, p.Z - c.Z
 	local metres = math.floor(math.sqrt(dx * dx + dz * dz))
@@ -170589,6 +171298,8 @@ function ObjectiveMarker.ShowWith(target: Target, opts: Opts?)
 	ended = nil
 	startedAt = os.clock()
 	yielded = consoleGuiding()
+	covered = false
+	wireYieldSigns() -- Code Bot v168
 	build() -- the line starts at once (or after a respawn: step() retries)
 	stepAcc = math.huge -- first step runs on the next Heartbeat (distance text)
 	stepConn = RunService.Heartbeat:Connect(step)
@@ -170665,7 +171376,7 @@ return ObjectiveMarker
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="355">
+          <Item class="ModuleScript" referent="356">
             <Properties>
               <string name="Name">OpsJobs</string>
               <string name="Source"><![CDATA[--!strict
@@ -171289,7 +172000,7 @@ return OpsJobs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="356">
+          <Item class="ModuleScript" referent="357">
             <Properties>
               <string name="Name">PanelShell</string>
               <string name="Source"><![CDATA[--!strict
@@ -171535,7 +172246,7 @@ return PanelShell
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="357">
+          <Item class="ModuleScript" referent="358">
             <Properties>
               <string name="Name">PremiumWeaponsClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -171949,7 +172660,7 @@ return PremiumWeaponsClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="358">
+          <Item class="ModuleScript" referent="359">
             <Properties>
               <string name="Name">ProducerLabels</string>
               <string name="Source"><![CDATA[--!strict
@@ -172382,7 +173093,7 @@ return ProducerLabels
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="359">
+          <Item class="ModuleScript" referent="360">
             <Properties>
               <string name="Name">ProductionFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -173636,7 +174347,7 @@ return ProductionFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="360">
+          <Item class="ModuleScript" referent="361">
             <Properties>
               <string name="Name">ProgressPill</string>
               <string name="Source"><![CDATA[--!strict
@@ -173815,7 +174526,7 @@ return ProgressPill
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="361">
+          <Item class="ModuleScript" referent="362">
             <Properties>
               <string name="Name">QualityGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -174161,7 +174872,7 @@ return QualityGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="362">
+          <Item class="ModuleScript" referent="363">
             <Properties>
               <string name="Name">RebirthConfirm</string>
               <string name="Source"><![CDATA[--!strict
@@ -175056,7 +175767,7 @@ return RebirthConfirm
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="363">
+          <Item class="ModuleScript" referent="364">
             <Properties>
               <string name="Name">RigAnimator</string>
               <string name="Source"><![CDATA[--!strict
@@ -176084,7 +176795,7 @@ return RigAnimator
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="364">
+          <Item class="ModuleScript" referent="365">
             <Properties>
               <string name="Name">Scope</string>
               <string name="Source"><![CDATA[--!strict
@@ -176289,7 +177000,7 @@ return Scope
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="365">
+          <Item class="ModuleScript" referent="366">
             <Properties>
               <string name="Name">StandFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -176370,7 +177081,7 @@ return StandFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="366">
+          <Item class="ModuleScript" referent="367">
             <Properties>
               <string name="Name">StreakStrip</string>
               <string name="Source"><![CDATA[--!strict
@@ -176469,7 +177180,7 @@ return StreakStrip
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="367">
+          <Item class="ModuleScript" referent="368">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -176534,7 +177245,7 @@ return StudioSmokeClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="368">
+          <Item class="ModuleScript" referent="369">
             <Properties>
               <string name="Name">VehicleCombatClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -177224,7 +177935,7 @@ return VehicleCombatClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="369">
+          <Item class="ModuleScript" referent="370">
             <Properties>
               <string name="Name">VehicleDriveClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -180992,7 +181703,7 @@ return VehicleDriveClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="370">
+          <Item class="ModuleScript" referent="371">
             <Properties>
               <string name="Name">WeaponVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -183220,7 +183931,7 @@ return WeaponVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="371">
+          <Item class="ModuleScript" referent="372">
             <Properties>
               <string name="Name">WorldSpinners</string>
               <string name="Source"><![CDATA[--!strict
@@ -183361,7 +184072,7 @@ return WorldSpinners
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="372">
+  <Item class="Workspace" referent="373">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

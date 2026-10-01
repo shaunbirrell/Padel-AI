@@ -203,6 +203,10 @@ function RebirthZoneBuilder.Locked(zoneId: string, tier: number, frame: CFrame, 
 	local z = RebirthConfig.Zones[zoneId]
 	t.Text = string.format("%s\nUnlocks at Rebirth %d", string.upper(z and z.DisplayName or zoneId), tier)
 	t.Parent = bb
+	-- Code Bot v168: the objective marker (AIRDROP / INTEL OFFICE, AlwaysOnTop) yields its label while it covers this sign
+	pcall(function()
+		game:GetService("CollectionService"):AddTag(bb, "WE_ObjectiveYield") -- = WorldLabelConfig.ObjectiveYieldTag
+	end)
 	bb.Parent = board
 	finish(cl, parent)
 end

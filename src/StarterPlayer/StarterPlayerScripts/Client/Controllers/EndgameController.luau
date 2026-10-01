@@ -1667,6 +1667,15 @@ function EndgameController.Init()
 	end
 	buildPanels(pg)
 	makeHudButtons(pg)
+	-- Code Bot v168: a done contract points the tracker (compass pill + world marker) at the Intel Office until claimed
+	do
+		local okG, IG = pcall(function(): any
+			return require(script.Parent.Parent.Modules.IntelGuide)
+		end)
+		if okG and IG and IG.Start then
+			pcall(IG.Start)
+		end
+	end
 	task.spawn(function()
 		while true do
 			task.wait(2)

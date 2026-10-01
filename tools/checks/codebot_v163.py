@@ -40,12 +40,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 167)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 167)'),
-    (S + "Services/DataService.luau", "WE_Build=167"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 167)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 168)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 168)'),
+    (S + "Services/DataService.luau", "WE_Build=168"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 168)'),
 ):
-    check(needle in read(rel), "CODEBOT v163: WE_Build=167 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v163: WE_Build=168 " + rel.rsplit("/", 1)[-1])
 
 _RC = read(C + "RivalConfig.luau")
 _RCTL = read(CL + "RivalController.luau")
@@ -56,18 +56,20 @@ check('EmptyText = "No targets right now — rivals appear when other players ha
 check("b.Visible = true" in _RCTL and "pl.Visible = #rows > 0" not in _RCTL, "CODEBOT v163: TARGETS pill always visible (not hidden when empty)")
 check('GetFlag("Modal") and not open' in _RCTL and "WE_RecruitPack" in _RCTL, "CODEBOT v163: the pill steps aside for other panels / the Recruit Pack card")
 check("function RivalService.WhyEmpty" in _RS and "Why = if #rows == 0 then why else nil" in _RS, "CODEBOT v163: an empty push carries the reason")
-# phone 1024x471 geometry (real px; topbar inset 58): the pill clears the top-centre stack and the touch FIRE button
-_P = re.search(r"Pill = \{ Width = (\d+), Height = (\d+), Top = (\d+), Right = (\d+) \}", _RC)
-check(_P is not None, "CODEBOT v163: RivalConfig.Pill geometry")
-if _P:
-    w, h, top, right = (int(x) for x in _P.groups())
-    W, H, INSET, S07 = 1024, 471, 58, 0.70
-    pill = (W - right - w, INSET + top, W - right, INSET + top + h)
-    stack_right = W / 2 + (W * 0.62) / 2  # HudConfig.TopStack.MaxWidthScale
-    fire_top = H - (152 + 88) * S07  # HudConfig.TouchCombat.Fire (content bottom = screen bottom)
-    check(pill[0] > stack_right, "CODEBOT v163: 1024x471 the pill (x %d) is right of the top-centre stack (x %.0f)" % (pill[0], stack_right))
-    check(pill[3] + 16 <= fire_top, "CODEBOT v163: 1024x471 the pill (bottom %d) is clear of FIRE (top %.0f)" % (pill[3], fire_top))
-    check(pill[1] >= INSET + 8, "CODEBOT v163: 1024x471 the pill sits under the topbar row (compass)")
+# v168 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v168.py (the TARGETS card: RivalConfig.Layout,
+# the same 1024x471 checks on the new geometry):
+## phone 1024x471 geometry (real px; topbar inset 58): the pill clears the top-centre stack and the touch FIRE button
+#_P = re.search(r"Pill = \{ Width = (\d+), Height = (\d+), Top = (\d+), Right = (\d+) \}", _RC)
+#check(_P is not None, "CODEBOT v163: RivalConfig.Pill geometry")
+#if _P:
+#    w, h, top, right = (int(x) for x in _P.groups())
+#    W, H, INSET, S07 = 1024, 471, 58, 0.70
+#    pill = (W - right - w, INSET + top, W - right, INSET + top + h)
+#    stack_right = W / 2 + (W * 0.62) / 2  # HudConfig.TopStack.MaxWidthScale
+#    fire_top = H - (152 + 88) * S07  # HudConfig.TouchCombat.Fire (content bottom = screen bottom)
+#    check(pill[0] > stack_right, "CODEBOT v163: 1024x471 the pill (x %d) is right of the top-centre stack (x %.0f)" % (pill[0], stack_right))
+#    check(pill[3] + 16 <= fire_top, "CODEBOT v163: 1024x471 the pill (bottom %d) is clear of FIRE (top %.0f)" % (pill[3], fire_top))
+#    check(pill[1] >= INSET + 8, "CODEBOT v163: 1024x471 the pill sits under the topbar row (compass)")
 
 _TS = read(S + "Services/TutorialService.luau")
 _GS = read(S + "Services/GuidedService.luau")

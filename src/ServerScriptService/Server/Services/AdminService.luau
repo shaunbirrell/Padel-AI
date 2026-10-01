@@ -268,6 +268,32 @@ local function replayGuided(deps: { [string]: any }, player: Player): string
 end
 AdminService._ReplayGuided = replayGuided -- test hook
 
+-- Code Bot v168 (Shaun 2026-10-01): /setrebirth N (and Settings > ADMIN > SET REBIRTH): the caller's own rebirth count
+-- through PrestigeService.AdminSetRebirth (no reset: cash and items kept; unlocks / zones / multipliers / prices follow;
+-- saved). Reached only through the allowlist checks (AdminService.IsAdmin; NOT a MoneyCommands entry, so never
+-- Studio-open, never another player). Admins stay off every leaderboard (EngagementService.isBoardExcluded).
+local function setRebirth(deps: { [string]: any }, player: Player, raw: any): string
+	local PS = deps.PrestigeService
+	if PS == nil or typeof(PS.AdminSetRebirth) ~= "function" then
+		return "setrebirth: not built yet"
+	end
+	local n = tonumber(raw)
+	if n == nil or n ~= n or n < 0 then
+		return "Usage: /setrebirth N (0-50)"
+	end
+	local ok, res, err = pcall(PS.AdminSetRebirth, player, math.floor(n))
+	if not ok then
+		warn("[AdminService] setrebirth failed:", res)
+		return "setrebirth failed (see Output)"
+	end
+	if res ~= true then
+		return "setrebirth refused: " .. tostring(err)
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	return string.format("Admin: rebirth set to %d (cash and items kept, saved)", tonumber(profile and profile.Prestige) or math.floor(n))
+end
+AdminService._SetRebirth = setRebirth -- test hook
+
 function AdminService.Init(deps: { [string]: any })
 	EconomyService = deps.EconomyService
 	XPService = deps.XPService
@@ -386,6 +412,12 @@ function AdminService.Init(deps: { [string]: any })
 			return
 		elseif cmd == "replaytutorial" or cmd == "replayguided" then
 			replayGuided(deps, player) -- Code Bot v163: Settings > ADMIN > REPLAY GUIDED TUTORIAL
+		elseif cmd == "setrebirth" then
+			-- Code Bot v168: Settings > ADMIN > SET REBIRTH (allowlist checked above; never a MoneyCommands entry)
+			local reply = setRebirth(deps, player, arg1)
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, reply, if string.sub(reply, 1, 6) == "Admin:" then "Success" else "Warn", 6)
+			end
 		elseif cmd == "resettutorial" then
 			if deps.TutorialService and deps.TutorialService.Reset then
 				deps.TutorialService.Reset(player)
@@ -525,7 +557,8 @@ function AdminService.Init(deps: { [string]: any })
 		local isArmyDebugCmd = cmd == "armydebug" -- v115: the owner's army-follow debug overlay (ArmyConfig.Follow3.Debug)
 		local isMoveDebugCmd = cmd == "movedebug" -- v123: the player-movement investigation (Modules/MoveDebug + MoveDebugClient)
 		local isReplayCmd = cmd == "replaytutorial" or cmd == "replayguided" -- Code Bot v163: test-mode Guided replay
-		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd then
+		local isSetRebirthCmd = cmd == "setrebirth" -- Code Bot v168: the owner's own rebirth count (no reset)
+		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd and not isSetRebirthCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -578,6 +611,15 @@ function AdminService.Init(deps: { [string]: any })
 		if isReplayCmd then
 			replayGuided(deps, player)
 			AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_replaytutorial" })
+			return
+		end
+		-- Code Bot v168: /setrebirth N
+		if isSetRebirthCmd then
+			local reply = setRebirth(deps, player, rest)
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, reply, if string.sub(reply, 1, 6) == "Admin:" then "Success" else "Warn", 6)
+			end
+			AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_setrebirth", arg = string.sub(tostring(rest), 1, 8) })
 			return
 		end
 		-- F7: owner playtest — /givekeepbase [1-5] (Keep-Base Rebirth tokens; admin allowlist only, see above)
@@ -688,9 +730,9 @@ function AdminService.Init(deps: { [string]: any })
 				end
 			end)
 			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
-			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" }, { "WE_ReplayTutorial", "/replaytutorial", "/replayguided" } }) do
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" }, { "WE_ReplayTutorial", "/replaytutorial", "/replayguided" }, { "WE_SetRebirth", "/setrebirth" } }) do
 				local c = ensureCommand(spec[1], spec[2], spec[3])
-				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" or spec[1] == "WE_ReplayTutorial" then
+				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" or spec[1] == "WE_ReplayTutorial" or spec[1] == "WE_SetRebirth" then
 					-- nations: never offered in chat autocomplete (lead decision 6: nothing of the feature shows for
 					-- non-admins before the flag art is live); the admin still types it
 					local cmdAny: any = c
@@ -729,6 +771,7 @@ function AdminService.Init(deps: { [string]: any })
 					or string.sub(lower, 1, 10) == "/movedebug"
 					or string.sub(lower, 1, 15) == "/replaytutorial"
 					or string.sub(lower, 1, 13) == "/replayguided"
+					or string.sub(lower, 1, 11) == "/setrebirth"
 				if not isAdminLine then
 					return
 				end

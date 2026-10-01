@@ -98,12 +98,20 @@ function RivalService.Candidates(viewer: Player): ({ any }, { [string]: number }
 					local okU, u = pcall(sqs.UnitPower, victim)
 					army = if okU then math.floor(tonumber(u) or 0) else 0
 				end
+				-- Code Bot v168: the victim's level for the redesigned list row (display only)
+				local level = 0
+				local ds = deps.DataService
+				if ds and ds.GetProfile then
+					local okP, prof = pcall(ds.GetProfile, victim)
+					level = if okP and typeof(prof) == "table" then math.floor(tonumber(prof.Level) or 0) else 0
+				end
 				local there = plotCentre(plotId)
 				local dist = if mine and there then Vector3.new(there.X - mine.X, 0, there.Z - mine.Z).Magnitude else 0
 				table.insert(rows, {
 					PlotId = plotId,
 					Name = victim.DisplayName,
 					Army = army,
+					Level = level,
 					Verdict = RivalConfig.VerdictWord(v.Bully == true, tonumber(v.Ratio) or 1, ArmyOrdersConfig.Fairness.RiskyRatio),
 					Loot = loot,
 					Dist = dist,

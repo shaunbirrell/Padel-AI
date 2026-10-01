@@ -55,6 +55,7 @@ Additive (claude-bud JOB 30, the world map's tap-to-pin; the SAME marker, line a
 	three objective-only numbers are OBJ below (they move to OpsConfig.Ui with Phase B lane O, ASSUMPTIONS U0-1).
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -63,6 +64,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
 
 export type Target = { Short: string, X: number, Y: number, Z: number }
 export type Opts = { ArriveStuds: number?, TimeoutSeconds: number?, Pin: boolean? }
@@ -95,6 +97,7 @@ local lastAttemptAt = -math.huge
 local stepConn: RBXScriptConnection? = nil
 local stepAcc = 0
 local yielded = false
+local covered = false -- Code Bot v168: the label overlaps a WorldLabelConfig.ObjectiveYieldTag sign on screen
 local stepKey = -1 -- distKey of the distance text on screen
 
 -- visuals (all client-only)
@@ -204,9 +207,78 @@ local function applyEnabled()
 	if b and b.Enabled ~= on then
 		b.Enabled = on
 	end
-	if m and m.Enabled ~= on then
-		m.Enabled = on
+	local mOn = on and not covered -- Code Bot v168: only the label steps aside for a sign; the GO line stays
+	if m and m.Enabled ~= mOn then
+		m.Enabled = mOn
 	end
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- Code Bot v168 (owner screenshot 2026-10-01: "EAST YARD / Unlocks at Rebirth 5" under "AIRDROP 1.8km"): this label
+-- is AlwaysOnTop, so a far objective drew straight over a near world sign. A sign BillboardGui tagged
+-- WorldLabelConfig.ObjectiveYieldTag (the rebirth-zone "Unlocks at Rebirth N" signs) makes the label step aside while
+-- the two boxes overlap on screen (the compass pill keeps the name + distance, the GO line stays). Tagged signs are
+-- tracked by the tag's added / removed signals (no tree scan, no per-step allocation); checked at the step rate.
+---------------------------------------------------------------------------------------------------------------
+
+-- Pure: do two screen boxes (centre x / y, width, height; real px) overlap with `pad` px of clearance?
+function ObjectiveMarker.BoxesOverlap(ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number, pad: number): boolean
+	return math.abs(ax - bx) * 2 < aw + bw + pad * 2 and math.abs(ay - by) * 2 < ah + bh + pad * 2
+end
+
+local yieldSigns: { [Instance]: boolean } = {}
+local yieldWired = false
+local function wireYieldSigns()
+	if yieldWired then
+		return
+	end
+	yieldWired = true
+	local tag = WorldLabelConfig.ObjectiveYieldTag
+	if type(tag) ~= "string" then
+		return
+	end
+	pcall(function()
+		for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+			yieldSigns[inst] = true
+		end
+		CollectionService:GetInstanceAddedSignal(tag):Connect(function(inst: Instance)
+			yieldSigns[inst] = true
+		end)
+		CollectionService:GetInstanceRemovedSignal(tag):Connect(function(inst: Instance)
+			yieldSigns[inst] = nil
+		end)
+	end)
+end
+
+-- true while the marker's label box overlaps an enabled, in-range, on-screen tagged sign
+local function coversSign(): boolean
+	local cam = Workspace.CurrentCamera
+	local m, a = marker, anchor
+	if cam == nil or m == nil or a == nil or next(yieldSigns) == nil then
+		return false
+	end
+	local mp, onM = cam:WorldToViewportPoint(a.WorldPosition)
+	if not onM then
+		return false
+	end
+	local camPos = cam.CFrame.Position
+	local mw, mh = m.Size.X.Offset, m.Size.Y.Offset
+	local pad = (tonumber(WorldLabelConfig.ObjectiveYieldPadPx) or 6) + (if covered then 6 else 0) -- hysteresis
+	for inst in pairs(yieldSigns) do
+		if inst:IsA("BillboardGui") and inst.Enabled and inst.Parent ~= nil then
+			local host = inst.Adornee or inst.Parent
+			if host and host:IsA("BasePart") then
+				local wp = host.Position + inst.StudsOffset
+				if (wp - camPos).Magnitude <= inst.MaxDistance then
+					local sp, onS = cam:WorldToViewportPoint(wp)
+					if onS and ObjectiveMarker.BoxesOverlap(mp.X, mp.Y, mw, mh, sp.X, sp.Y, inst.Size.X.Offset, inst.Size.Y.Offset, pad) then
+						return true
+					end
+				end
+			end
+		end
+	end
+	return false
 end
 
 -- the line's start on the (current) character; nil while respawning
@@ -318,6 +390,7 @@ local function clearNow(reason: string)
 		ended = reason
 	end
 	yielded = false
+	covered = false
 end
 
 local function step(dt: number)
@@ -366,6 +439,11 @@ local function step(dt: number)
 	if yielded or hrp == nil then
 		return
 	end
+	local cv = coversSign()
+	if cv ~= covered then
+		covered = cv
+		applyEnabled()
+	end
 	local p = (hrp :: BasePart).Position
 	local dx, dz = p.X - c.X, p.Z - c.Z
 	local metres = math.floor(math.sqrt(dx * dx + dz * dz))
@@ -405,6 +483,8 @@ function ObjectiveMarker.ShowWith(target: Target, opts: Opts?)
 	ended = nil
 	startedAt = os.clock()
 	yielded = consoleGuiding()
+	covered = false
+	wireYieldSigns() -- Code Bot v168
 	build() -- the line starts at once (or after a respawn: step() retries)
 	stepAcc = math.huge -- first step runs on the next Heartbeat (distance text)
 	stepConn = RunService.Heartbeat:Connect(step)
