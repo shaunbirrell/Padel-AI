@@ -5,9 +5,9 @@ run_kit_detail_test.PRELUDE; the services around RecruitPackService are recordin
    the boost is 10 minutes, repeatable; no damage / health / armour / raid / protection key.
 2. CASH: about 2.5 min of his early income, at least 750 and at most 20,000.
 3. PUBLIC (Code Bot v207, Shaun approved): Starter5.OwnerFirst = false, SkuLiveFor follows the switch (owner AND others).
-4. OFFER: for the owner the one-time card is the 5 R$ offer at 5 min of play (its own title / lines / product key and
+4. OFFER: for the owner the one-time card is the 5 R$ offer at 2 min of play (its own title / lines / product key and
    its own saved flag); never before 5 min, never on hold / in combat; once shown never again. v207: every other player
-   gets the same one-time 5 R$ card at the same 300 s delay, once (its own saved flag), never again after.
+   gets the same one-time 5 R$ card at the same 120 s delay, once (its own saved flag), never again after.
 Run: LUAU=path/to/luau(.exe) python tools/sim/run_starter5_test.py   (exit 1 on any failure; VERBOSE=1 prints all)"""
 import os
 import subprocess
@@ -46,7 +46,7 @@ local OWNER, OTHER = 470626172, 9
 local P, B = MC.DevProducts.StarterRecruit5, MC.DevProducts.Boost2x10m
 check(P.RobuxPrice == 5 and B.RobuxPrice == 5 and P.Id == 3715888533 and B.Id == 3715888566, "both 5 R$, the Creator Hub Ids 3715888533 / 3715888566")
 local D = MC.Starter5.OfferAfterPlaySeconds
-check(D == 300, "the Starter5 pop-up delay is ONE value, 300 s (live; Code Bot v206: back from the 60 s phone test)")
+check(D == 120, "the Starter5 pop-up delay is ONE value, 120 s (live; Code Bot v209: Shaun approved)")
 check(P.OneTime == true and P.GrantSoldiers == 3 and P.StarterCash == true and B.OneTime ~= true and B.GrantsCashBoostMinutes == 10, "pack: one-time, 3 soldiers + starter cash; boost: 10 min, repeatable")
 local p2w = false
 for _, row in ipairs({ P, B }) do for k in pairs(row) do local l = string.lower(k); if string.find(l, "damage") or string.find(l, "health") or string.find(l, "armor") or string.find(l, "armour") or string.find(l, "raid") or string.find(l, "protect") then p2w = true end end end
@@ -95,12 +95,12 @@ check(#PUSH == n, "once shown, never again")
 T += 100000
 PROF[OTHER].Stats.PlayTimeSeconds = D - 10
 RP.Step(X)
-check(#PUSH == n, "another player 10 s before the 300 s delay: no card yet")
+check(#PUSH == n, "another player 10 s before the 120 s delay: no card yet")
 PROF[OTHER].Stats.PlayTimeSeconds = D + 1
 local okX = RP.Step(X)
 local c2 = PUSH[#PUSH]
 check(okX and #PUSH == n + 1 and c2 and c2.uid == OTHER and c2.d.ProductKey == "StarterRecruit5" and c2.d.Title == MC.Starter5.Title and c2.d.RobuxPrice == 5,
-  "another player 1 s past the 300 s delay: the same 5 R$ ONE-TIME OFFER (public, Code Bot v207)")
+  "another player 1 s past the 120 s delay: the same 5 R$ ONE-TIME OFFER (public, Code Bot v209)")
 RP.Result(X, "shown")
 check(PROF[OTHER].Starter5Offered == true, "another player shown: his own saved once-ever flag")
 T += 100000

@@ -41,12 +41,12 @@ def pass_block(t):
 BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 208)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 208)'),
-    (S + "Services/DataService.luau", "WE_Build=208"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 208)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 209'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 209'),
+    (S + "Services/DataService.luau", "WE_Build=209"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 209'),
 ):
-    check(BUD or needle in read(rel), "CODEBOT v203: WE_Build=208 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
+    check(BUD or needle in read(rel), "CODEBOT v203: WE_Build=209 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
 
 MON = read(C + "MonetizationConfig.luau")
 blk = pass_block(MON)

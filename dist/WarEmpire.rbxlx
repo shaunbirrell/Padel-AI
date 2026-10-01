@@ -9390,7 +9390,7 @@ end
 (MonetizationConfig :: any).Starter5 = {
 	Enabled = true,
 	OwnerFirst = false, -- PUBLIC (Code Bot v207, Shaun approved): both 5 R$ rows + the one-time offer for every player (was NEW-OWNER-FIRST, claude-bud JOB 66)
-	OfferAfterPlaySeconds = 300, -- THE Starter5 pop-up delay (one value): LIVE VALUE 300 (Code Bot v206: back from the 60 s phone test, Shaun's test passed). The "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
+	OfferAfterPlaySeconds = 120, -- THE Starter5 pop-up delay (one value): LIVE VALUE 120 (Code Bot v209: Shaun approved the 2-minute delay). The "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
 	CashIncomeMinutes = 2.5, -- the Recruit Starter Pack's cash = about 2-3 minutes of his early income ...
 	CashMin = 750, -- ... at least this (a brand-new base earns about $300 / min)
 	CashMax = 20000, -- ... and never more (a starter pack, not a cash pack)
@@ -31882,7 +31882,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 208)
+		player:SetAttribute("WE_Build", 209)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -77915,7 +77915,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 208)
+			player:SetAttribute("WE_Build", 209)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -86622,7 +86622,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 208)
+		player:SetAttribute("WE_Build", 209)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -86764,7 +86764,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=208",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=209",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)

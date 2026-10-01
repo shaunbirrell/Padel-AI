@@ -35,7 +35,8 @@ def _c(cond, label):
             raise SystemExit(1)
 
 
-_bud = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
+_bud = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file() or \
+      'SetAttribute("WE_Build", 208)' not in _r(S + "Services/DataService.luau")  # later build: ship-only pins skip
 if not _bud:
     for _rel, _needle in (
         (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 208)'),

@@ -64,14 +64,15 @@ def prices(src):
 
 BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
 OWN = 'SetAttribute("WE_Build", 207)' in read(S + "Services/DataService.luau")  # this build's own scope  # Code Bot v208: stays 207 (v207 scope only)
+CURRENT_BUILD = int((re.search(r'WE_Build", (\d+)\)', read(S + "Services/DataService.luau")) or [0, "0"])[1])
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 208)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 208)'),
-    (S + "Services/DataService.luau", "WE_Build=208"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 208)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 209'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 209'),
+    (S + "Services/DataService.luau", "WE_Build=209"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 209'),
 ):
-    check(BUD or needle in read(rel), "CODEBOT v207: WE_Build=208 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
+    check(BUD or needle in read(rel), "CODEBOT v207: WE_Build=209 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
 
 # ── 2. the two 5 R$ offers public ──
 MON = read(C + "MonetizationConfig.luau")
@@ -79,7 +80,7 @@ s5 = MON.split("(MonetizationConfig :: any).Starter5 = {")[1].split("\n}\n")[0] 
 check("Enabled = true," in s5 and re.search(r"\n\tOwnerFirst = false, -- PUBLIC \(Code Bot v207", "\n" + s5) is not None
       and "OwnerFirst = true" not in s5, "CODEBOT v207: Starter5 Enabled, OwnerFirst = false (public for every player)")
 m = re.findall(r"\n\tOfferAfterPlaySeconds = (\d+),", "\n" + s5)
-check(len(m) == 1 and int(m[0]) == 300, "CODEBOT v207: Starter5 pop-up delay stays ONE value, 300 s")
+check(len(m) == 1 and int(m[0]) == (120 if CURRENT_BUILD >= 209 else 300), "CODEBOT v207: Starter5 pop-up delay is 120 s in v209 (300 s through v208)")
 check('StarterRecruit5 = { Id = 3715888533, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' in MON
       and 'Boost2x10m = { Id = 3715888566, DisplayName = "2x Income 10 min", RobuxPrice = 5,' in MON
       and MON.count('LiveBlock = "Starter5"') == 2, "CODEBOT v207: both rows keep Id, 5 R$ and LiveBlock Starter5 (follow the public switch)")
@@ -134,7 +135,7 @@ if prev_mon is not None:
         check(r.returncode == 0 and set(_ch) <= _allowed, "CODEBOT v207: src diff vs " + PREV + " only config / shop / WE_Build pins: " + ", ".join(n.rsplit("/", 1)[-1] for n in _ch))
         for rel in (S + "Services/BaseService.luau", S + "Services/DataService.luau", S + "EarlyRemotes.server.luau"):
             _p = shipped(rel, PREV) or ""
-            check(_p.replace('WE_Build", 206)', 'WE_Build", 208)').replace("WE_Build=206", "WE_Build=208") == read(rel),
+            check(_p.replace('WE_Build", 206)', 'WE_Build", 208)').replace("WE_Build=206", "WE_Build=209") == read(rel),
                   "CODEBOT v207: " + rel.rsplit("/", 1)[-1] + ": only the WE_Build number changed")
         # no other OwnerFirst flag anywhere in src
         r = subprocess.run(["git", "diff", "-U0", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
@@ -156,9 +157,9 @@ r = subprocess.run([sys.executable, "tools/sim/run_starter5_test.py"], capture_o
 o5 = r.stdout or ""
 check(r.returncode == 0 and "STARTER5 TEST: 0 failed" in o5, "CODEBOT v207: run_starter5_test 0 failed")
 check("ok    public: the owner AND every other player can see / buy them" in o5
-      and "ok    another player 1 s past the 300 s delay: the same 5 R$ ONE-TIME OFFER" in o5
+      and ("ok    another player 1 s past the 120 s delay: the same 5 R$ ONE-TIME OFFER" if CURRENT_BUILD >= 209 else "ok    another player 1 s past the 300 s delay: the same 5 R$ ONE-TIME OFFER") in o5
       and "ok    another player: once shown, never again (one time per player)" in o5,
-      "CODEBOT v207: sim: non-owner gets the 5 R$ card at 300 s, once")
+      "CODEBOT v207: sim: non-owner gets the 5 R$ card at the live delay, once")
 
 check("PreferMesh = true" not in read(C + "VisualAssetConfig.luau"), "CODEBOT v207: PreferMesh stays OFF")
 check("PreferMeshWhenAssetIdSet = false" in read(C + "StructureVisualConfig.luau"), "CODEBOT v207: PreferMeshWhenAssetIdSet false")
