@@ -38,12 +38,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 199)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 199)'),
-    (S + "Services/DataService.luau", "WE_Build=199"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 199)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 200)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 200)'),
+    (S + "Services/DataService.luau", "WE_Build=200"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 200)'),
 ):
-    check(needle in read(rel), "CODEBOT v199: WE_Build=199 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v199: WE_Build=200 " + rel.rsplit("/", 1)[-1])
 
 VA = read(C + "VisualAssetConfig.luau")
 j67 = VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in VA else ""
@@ -55,8 +55,9 @@ check(
     "CODEBOT v199: VisualAssetConfig.Job67 OwnerFirst + TurretTierAt",
 )
 check(
-    all(("AutoGunT%d = { ModelAssetId = 0, PendingAssetId = 109072907337393" % i) in VA for i in range(1, 6)),
-    "CODEBOT v199: AutoGunT1..T5 PENDING (ModelAssetId 0) until WE_CHECK2 promote",
+    all(("AutoGunT%d = { ModelAssetId = 0, PendingAssetId = 109072907337393" % i) in VA for i in range(1, 6))
+    or all(("AutoGunT%d = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = " % i) in VA for i in range(1, 6)),  # v200 promote
+    "CODEBOT v199: AutoGunT1..T5 PENDING (ModelAssetId 0) until WE_CHECK2 promote (v200: promoted)",
 )
 check("function VisualAssetConfig.TurretTierFor(" in VA, "CODEBOT v199: TurretTierFor helper")
 

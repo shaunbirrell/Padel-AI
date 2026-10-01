@@ -2,6 +2,27 @@
  "about": "undo journal of tools/wire-asset-ids.py (demote); edit only through the tool",
  "created_by_tool": true,
  "promoted": {
+  "109072907337393": {
+   "hunks": {
+    "docs/ASSET_LICENSES.md": [
+     [
+      "",
+      "| [109072907337393](https://create.roblox.com/store/asset/109072907337393) | Minigun Turret Pack (Lvl 1-10) | Hoshizora_N1 (User 8723125177) | Model | GOT list (offline), 2026-10-01 | 26,380 | 1 (stripped) | `GateDefense.AutoGunT1`, `GateDefense.AutoGunT2`, `GateDefense.AutoGunT3`, `GateDefense.AutoGunT4`, `GateDefense.AutoGunT5` | owner list 2026-09-25 (Minigun Turret Pack); Get Model by the game owner; WE_CHECK2 loader=40 humanoids=0 |\n"
+     ]
+    ],
+    "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau": [
+     [
+      "\t\tAutoGunT1 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 180, ChildName = \"minigun_l01\", LongAxisStuds = 5.5, AimHitbox = true, Note = \"Minigun Turret Pack Lvl 1 (paid, shaunie6) - JOB 67 T1\" } :: AssetRef,\n\t\tAutoGunT2 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 180, ChildName = \"minigun_l03\", LongAxisStuds = 5.8, AimHitbox = true, Note = \"Minigun Turret Pack Lvl 3 - JOB 67 T2\" } :: AssetRef,\n\t\tAutoGunT3 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 180, ChildName = \"minigun_l05\", LongAxisStuds = 6.1, AimHitbox = true, Note = \"Minigun Turret Pack Lvl 5 - JOB 67 T3\" } :: AssetRef,\n\t\tAutoGunT4 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 180, ChildName = \"minigun_l08\", LongAxisStuds = 6.5, AimHitbox = true, Note = \"Minigun Turret Pack Lvl 8 - JOB 67 T4\" } :: AssetRef,\n\t\tAutoGunT5 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 180, ChildName = \"minigun_l10\", LongAxisStuds = 7.0, AimHitbox = true, Note = \"Minigun Turret Pack Lvl 10 - JOB 67 T5\" } :: AssetRef,\n",
+      "\t\tAutoGunT1 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = \"minigun_l01\", LongAxisStuds = 5.5, AimHitbox = true, Note = \"owner pick: Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1 (promoted 2026-10-01 by tools/wire-asset-ids.py)\" } :: AssetRef,\n\t\tAutoGunT2 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = \"minigun_l03\", LongAxisStuds = 5.8, AimHitbox = true, Note = \"owner pick: Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1 (promoted 2026-10-01 by tools/wire-asset-ids.py)\" } :: AssetRef,\n\t\tAutoGunT3 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = \"minigun_l05\", LongAxisStuds = 6.1, AimHitbox = true, Note = \"owner pick: Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1 (promoted 2026-10-01 by tools/wire-asset-ids.py)\" } :: AssetRef,\n\t\tAutoGunT4 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = \"minigun_l08\", LongAxisStuds = 6.5, AimHitbox = true, Note = \"owner pick: Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1 (promoted 2026-10-01 by tools/wire-asset-ids.py)\" } :: AssetRef,\n\t\tAutoGunT5 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = \"minigun_l10\", LongAxisStuds = 7.0, AimHitbox = true, Note = \"owner pick: Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1 (promoted 2026-10-01 by tools/wire-asset-ids.py)\" } :: AssetRef,\n"
+     ]
+    ]
+   },
+   "keys": [
+    "MinigunTurretPack"
+   ],
+   "moves": [],
+   "utc": "2026-10-01T22:28:43Z"
+  },
   "114570602": {
    "hunks": {
     "docs/ASSET_LICENSES.md": [

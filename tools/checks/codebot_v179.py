@@ -44,12 +44,12 @@ def block(src, name):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 199)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 199)'),
-    (S + "Services/DataService.luau", "WE_Build=199"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 199)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 200)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 200)'),
+    (S + "Services/DataService.luau", "WE_Build=200"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 200)'),
 ):
-    check(needle in read(rel), "CODEBOT v179: WE_Build=199 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v179: WE_Build=200 " + rel.rsplit("/", 1)[-1])
 
 # JOB 49 D: ReturnSequence owner-first
 RCF = shipped_v180(C + "RetentionConfig.luau", "75bd8b4")  # Code Bot v182: as shipped (ReturnSequence live since v182)

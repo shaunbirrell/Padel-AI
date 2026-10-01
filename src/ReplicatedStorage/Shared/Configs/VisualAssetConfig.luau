@@ -104,6 +104,8 @@ export type AssetRef = {
 	Yaw: number?, -- Fit: degrees from the piece's front (-Z) to the kit's front (-Z); GateDefense.AutoGun: degrees that
 	-- turn the model's barrel onto -Z (turned once in the template at load)
 	HideKit: boolean?, -- Fit: hide the Part-kit visuals under the body (physics, seats and hitboxes unchanged)
+	LongAxisStuds: number?, -- Code Bot v200: GateDefense.AutoGunT1..T5 only: the tier gun's long side (4..7.5; nil = AutoGunLongAxisStuds)
+	AimHitbox: boolean?, -- Code Bot v200: GateDefense.AutoGunT1..T5 only: an invisible -Z box over the piece is the aim part / Turret HP hitbox
 	KeepVisible: { string }?, -- HideKit: kit part names that stay visible (the Armed 4x4 keeps its Part turret)
 	-- vscale (owner: the avatar sat above the buggy / through the jeep roof): Fit bodies at a set scale over the same kit
 	BodyScale: number?, -- Fit: body scale (1 = Roblox size); nil = as long as the kit chassis. The kit still drives
@@ -1479,11 +1481,14 @@ local VisualAssetConfig = {
 		-- one script is stripped by the loader). Pack levels 1 / 3 / 5 / 8 / 10 = T1..T5 (ChildName = the pack's model
 		-- name for that level, read from the WE_CHECK2 probe). PendingAssetId until tools/wire-asset-ids.py promotes it
 		-- (WE_CHECK2: <= 40 parts per piece, <= 20k tris); a tier with ModelAssetId 0 = the AutoGun above (today).
-		AutoGunT1 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 1 (paid, shaunie6) - JOB 67 T1" } :: AssetRef,
-		AutoGunT2 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 3 - JOB 67 T2" } :: AssetRef,
-		AutoGunT3 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 5 - JOB 67 T3" } :: AssetRef,
-		AutoGunT4 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 8 - JOB 67 T4" } :: AssetRef,
-		AutoGunT5 = { ModelAssetId = 0, PendingAssetId = 109072907337393, Yaw = 0, ChildName = nil, Note = "Minigun Turret Pack Lvl 10 - JOB 67 T5" } :: AssetRef,
+		-- Code Bot v200 WE_CHECK2 (Open Cloud Luau, place v197, docs/we_check2_minigun_v200.txt): pack = Folder of 10 Models
+		-- minigun_l01..l10, 4 MeshParts each (Base > TurretYaw > GunPitch > BarrelRotation), 1 Script "README" (stripped),
+		-- 0 Humanoids; every part faces -Z with the barrel on +Z, so Yaw 180 + AimHitbox; LongAxisStuds grows per tier.
+		AutoGunT1 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l01", LongAxisStuds = 5.5, AimHitbox = true, Note = "JOB 67 T1 = Lvl 1 of Shaun's paid Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1, 4 MeshParts (promoted 2026-10-01 by tools/wire-asset-ids.py)" } :: AssetRef,
+		AutoGunT2 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l03", LongAxisStuds = 5.8, AimHitbox = true, Note = "JOB 67 T2 = Lvl 3 of Shaun's paid Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1, 4 MeshParts (promoted 2026-10-01 by tools/wire-asset-ids.py)" } :: AssetRef,
+		AutoGunT3 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l05", LongAxisStuds = 6.1, AimHitbox = true, Note = "JOB 67 T3 = Lvl 5 of Shaun's paid Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1, 4 MeshParts (promoted 2026-10-01 by tools/wire-asset-ids.py)" } :: AssetRef,
+		AutoGunT4 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l08", LongAxisStuds = 6.5, AimHitbox = true, Note = "JOB 67 T4 = Lvl 8 of Shaun's paid Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1, 4 MeshParts (promoted 2026-10-01 by tools/wire-asset-ids.py)" } :: AssetRef,
+		AutoGunT5 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l10", LongAxisStuds = 7.0, AimHitbox = true, Note = "JOB 67 T5 = Lvl 10 of Shaun's paid Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1, 4 MeshParts (promoted 2026-10-01 by tools/wire-asset-ids.py)" } :: AssetRef,
 		-- L2 elevated ONLY (not door flanks):
 		AutoGunElevated = { ModelAssetId = 0, Note = "W1 CFG drop (uploader not the author) — unused key" } :: AssetRef,
 		AutoGunElevatedAlt = { ModelAssetId = 10354803684, Note = "Military turret — L2/corner only" } :: AssetRef,

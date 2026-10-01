@@ -37,12 +37,12 @@ def code(src):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 199)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 199)'),
-    (S + "Services/DataService.luau", "WE_Build=199"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 199)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 200)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 200)'),
+    (S + "Services/DataService.luau", "WE_Build=200"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 200)'),
 ):
-    check(needle in read(rel), "CODEBOT v172: WE_Build=199 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v172: WE_Build=200 " + rel.rsplit("/", 1)[-1])
 
 # 1. the v171 trim is still there (walls, posts, finials) and is built at ANY tier from the saved entitlement
 BT = read(S + "Modules/BaseTierBuilder.luau")

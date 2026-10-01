@@ -360,6 +360,7 @@ STORE = {
     94690081: ('MESH_BattleGameRocketLauncherAmmo', 'Roblox', 1, 'User', 4, '2012-10-09', None, None),
     112426091: ('Gas Can', 'Maximum_ADHD', 2032622, 'User', 10, '2013-04-11', 250, 0),
     114570602: ('Tripod Mounted Machine Gun', 'GuestCapone', 33412864, 'User', 10, '2013-05-04', None, 0),
+    109072907337393: ('Minigun Turret Pack (Lvl 1-10)', 'Hoshizora_N1', 8723125177, 'User', 10, '2026-09-13', 26380, 1),  # PAID (USD 2.99, Shaun bought it; JOB 67)
     115528226: ('Platnus Research Lab', 'MiinhJi', 14603785, 'User', 10, '2013-05-11', 3504, 0),
     122160708: ('Flood Light', 'Stickmasterluke', 80254, 'User', 10, '2013-07-15', 192, 0),
     123041248: ('Instant Campfire Campfire and Log Model', 'Roblox', 1, 'User', 10, '2013-07-18', 1856, 5),

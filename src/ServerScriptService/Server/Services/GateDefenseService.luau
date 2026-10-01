@@ -301,7 +301,9 @@ local function loadCatalogModel(assetId: number): Model?
 	return if ok then model else nil
 end
 
-local function scaleModelLongAxis(model: Model, targetStuds: number)
+-- relative = true (Code Bot v200, the JOB 67 tier pieces): scale from the model's own scale (the Minigun pack's pieces
+-- carry GetScale() ~0.02 from their import, so an absolute ScaleTo(factor) would blow them up ~50x)
+local function scaleModelLongAxis(model: Model, targetStuds: number, relative: boolean?)
 	local ok, size = pcall(function()
 		return model:GetExtentsSize()
 	end)
@@ -315,7 +317,7 @@ local function scaleModelLongAxis(model: Model, targetStuds: number)
 	local factor = targetStuds / longest
 	factor = math.clamp(factor, 0.05, 40)
 	pcall(function()
-		model:ScaleTo(factor)
+		model:ScaleTo(if relative == true then model:GetScale() * factor else factor)
 	end)
 end
 
@@ -789,7 +791,10 @@ end
 	aim part must stand upright with its front on the barrel. Once per template: turn every part by the ref's Yaw
 	(degrees about +Y, barrel onto -Z; baked, so later PivotTo / aims keep it), then mark as the aim part (PrimaryPart)
 	the largest upright part whose front is -Z. None (a wrong Yaw, a tilted model) → refused and never tried again: the
-	Part kit stays instead of a gun that aims sideways or lies on its side. ]]
+	Part kit stays instead of a gun that aims sideways or lies on its side.
+	Code Bot v200 (JOB 67 turret tiers): a template marked WE_AimHitbox (a tier ref's AimHitbox) gets one invisible box over the whole
+	piece, facing -Z after the Yaw, as the aim part (the Minigun pack's parts all face -Z with the barrel on +Z, so Yaw 180
+	leaves no part facing -Z). It is the gun's hitbox for Turret HP (GateAutoGunPart) and never collides. ]]
 local function prepareAimTemplate(template: Model, assetId: number, yawDeg: number): boolean
 	if template:GetAttribute("WE_AimReady") == true then
 		return true
@@ -810,6 +815,32 @@ local function prepareAimTemplate(template: Model, assetId: number, yawDeg: numb
 		for _, p in ipairs(parts) do
 			p.CFrame = turn * p.CFrame
 		end
+	end
+	if template:GetAttribute("WE_AimHitbox") == true and #parts > 0 then
+		local lo, hi = parts[1].Position, parts[1].Position
+		for _, p in ipairs(parts) do
+			local cf, sz = p.CFrame, p.Size * 0.5
+			for _, c in ipairs({ Vector3.new(1, 1, 1), Vector3.new(-1, 1, 1), Vector3.new(1, -1, 1), Vector3.new(1, 1, -1),
+				Vector3.new(-1, -1, 1), Vector3.new(-1, 1, -1), Vector3.new(1, -1, -1), Vector3.new(-1, -1, -1) }) do
+				local w = cf:PointToWorldSpace(sz * c)
+				lo, hi = lo:Min(w), hi:Max(w)
+			end
+		end
+		local box = Instance.new("Part")
+		box.Name = "WE_AimHitbox"
+		box.Size = (hi - lo):Max(Vector3.new(0.2, 0.2, 0.2))
+		box.CFrame = CFrame.new((lo + hi) * 0.5) -- upright, front on -Z (the barrel after the Yaw)
+		box.Transparency = 1
+		box.CanCollide = false
+		box.CanTouch = false
+		box.CanQuery = true -- the Turret HP hitbox (LosRule.HitCast stops on GateAutoGunPart)
+		box.CastShadow = false
+		box.Anchored = true
+		box.Parent = template
+		box:SetAttribute("WE_AimPart", true)
+		template.PrimaryPart = box
+		template:SetAttribute("WE_AimReady", true)
+		return true
 	end
 	local best: BasePart? = nil
 	local bestVol = -1
@@ -894,6 +925,8 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder, tier: numb
 	end
 	-- claude-bud JOB 67: the owner's turret tier, when that tier's model is promoted (else today's AutoGun)
 	local tierTemplate: Model? = nil
+	local tierLong: number? = nil -- Code Bot v200: a tier ref's LongAxisStuds (bigger per tier)
+	local tierHitbox = false -- Code Bot v200: a tier ref's AimHitbox (prepareAimTemplate)
 	local J: any = (VisualAssetConfig :: any).Job67
 	if tier and J and gd then
 		local ref = gd[J.TurretTierKeys[tier] or ""]
@@ -903,6 +936,8 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder, tier: numb
 			if tierTemplate then
 				assetId = id
 				yawDeg = tonumber(ref.Yaw) or 0
+				tierLong = tonumber(ref.LongAxisStuds)
+				tierHitbox = ref.AimHitbox == true
 			end
 		end
 	end
@@ -910,6 +945,9 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder, tier: numb
 	local groundY = groundYAt(at, parent)
 	local base = at - Vector3.new(0, at.Position.Y - groundY, 0)
 	local template = tierTemplate or loadCatalogModel(assetId)
+	if tierTemplate and tierHitbox then
+		tierTemplate:SetAttribute("WE_AimHitbox", true) -- Code Bot v200: prepareAimTemplate adds the -Z hitbox aim part
+	end
 	if template and not prepareAimTemplate(template, assetId, yawDeg) then
 		template = nil
 	end
@@ -924,7 +962,7 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder, tier: numb
 				break
 			end
 		end
-		scaleModelLongAxis(model, GateDefenseConfig.AutoGunLongAxisStuds or 5.5)
+		scaleModelLongAxis(model, if tierTemplate ~= nil and tierLong then math.clamp(tierLong, 4, 7.5) else (GateDefenseConfig.AutoGunLongAxisStuds or 5.5), tierTemplate ~= nil)
 		model.Name = "GateAutoGun_" .. tostring(slot)
 		if not model.PrimaryPart then
 			local pp = model:FindFirstChildWhichIsA("BasePart", true)

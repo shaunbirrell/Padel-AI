@@ -693,7 +693,7 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 
 | Item | Decision | Live id | Pending id | Owned | Gate |
 |---|---|---|---|---|---|
-| Minigun Turret Pack | owner pick, waits for promote | 0 | 109072907337393 | yes | Studio check, batch P1 |
+| Minigun Turret Pack | owner pick, waits for promote | 109072907337393 | – | yes | promoted (live) |
 | Ammo Works | wired (Roblox-owned) | 41324890 | – | Roblox (no Get) | Roblox Conveyor Belt as the Ammo Works belt (takes the kit belt's place) |
 | Arms Crate Line | wired (Roblox-owned) | 41324890 | – | Roblox (no Get) | Roblox Conveyor Belt as the Arms Crate Line belt (same load as Ammo Works) |
 | Armor Plate Press | owner pick, waits for promote | 0 | 4362642898 | yes | check passed (28 parts); OmitParts + the P4 second check (part names: its bounds box, and one piece for the Signature role; 28 parts > 3 roles), batch P4 |
