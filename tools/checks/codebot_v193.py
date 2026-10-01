@@ -56,12 +56,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 205)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 205)'),
-    (S + "Services/DataService.luau", "WE_Build=205"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 205)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/DataService.luau", "WE_Build=206"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 206)'),
 ):
-    check(needle in read(rel), "CODEBOT v193: WE_Build=205 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v193: WE_Build=206 " + rel.rsplit("/", 1)[-1])
 
 RC = read(C + "RaidConfig.luau")
 ac = RC.split("(RaidConfig :: any).AntiCamp = {")[1].split("\n}\n")[0] if "(RaidConfig :: any).AntiCamp = {" in RC else ""

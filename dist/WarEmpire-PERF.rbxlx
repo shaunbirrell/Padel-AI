@@ -9179,7 +9179,7 @@ end
 (MonetizationConfig :: any).Starter5 = {
 	Enabled = true,
 	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 66): only Shaun until his phone test
-	OfferAfterPlaySeconds = 60, -- THE Starter5 pop-up delay (one value): 60 s for Shaun's phone test; LIVE VALUE IS 300 (set back to 300 after the test). The "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
+	OfferAfterPlaySeconds = 300, -- THE Starter5 pop-up delay (one value): LIVE VALUE 300 (Code Bot v206: back from the 60 s phone test, Shaun's test passed). The "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
 	CashIncomeMinutes = 2.5, -- the Recruit Starter Pack's cash = about 2-3 minutes of his early income ...
 	CashMin = 750, -- ... at least this (a brand-new base earns about $300 / min)
 	CashMax = 20000, -- ... and never more (a starter pack, not a cash pack)
@@ -31669,7 +31669,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 205)
+		player:SetAttribute("WE_Build", 206)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -77673,7 +77673,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 205)
+			player:SetAttribute("WE_Build", 206)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -86380,7 +86380,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 205)
+		player:SetAttribute("WE_Build", 206)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -86522,7 +86522,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=205",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=206",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -162482,6 +162482,56 @@ function ShopController.Init()
 		refreshPacks()
 	end
 
+	-- Code Bot v206 (Shaun): the SUPPLY · R$ tab is sorted by Robux price, cheapest first, so the 5 R$ rows are on top
+	-- (was: the JOB 36 overhaul order, the 5 R$ rows below the expensive ones). DISPLAY ORDER ONLY: the price is read from
+	-- MonetizationConfig RobuxPrice; no price, Id, prompt or rollout gate changes (owner-only rows stay owner-only: they
+	-- are still never built for anyone else). Rows with no Robux price (the FREE rows, Favorite WAR EMPIRE, the locked
+	-- Supply Crate) go to the bottom; at the same price an OWNED one-time product / pass goes after the unowned ones;
+	-- ties keep the build (overhaul) order.
+	local SORT_NO_PRICE = 1e9
+	local function rowRobuxPrice(rowKey: string): number
+		local def: any
+		if string.sub(rowKey, 1, 5) == "Pass_" then
+			def = (MonetizationConfig.GamePasses :: any)[string.sub(rowKey, 6)]
+		else
+			def = (MonetizationConfig.DevProducts :: any)[rowKey]
+		end
+		local p = if typeof(def) == "table" then tonumber(def.RobuxPrice) else nil
+		return if p and p > 0 then p else SORT_NO_PRICE
+	end
+	local rowBuildOrder: { [Frame]: number } = {}
+	for _, r in ipairs(builtRows) do
+		rowBuildOrder[r.Row] = r.Row.LayoutOrder
+	end
+	local function applyPriceOrder()
+		local items: { { Row: Frame, Price: number, Owned: boolean, Base: number } } = {}
+		for _, r in ipairs(builtRows) do
+			local owned = false
+			if string.sub(r.Key, 1, 5) == "Pass_" then
+				local passKey = string.sub(r.Key, 6)
+				owned = passRows[passKey] ~= nil and offerOwned("GamePass", passKey)
+			elseif oneTimeRows[r.Key] ~= nil then
+				owned = isOneTimeOwned(r.Key)
+			end
+			table.insert(items, { Row = r.Row, Price = rowRobuxPrice(r.Key), Owned = owned, Base = rowBuildOrder[r.Row] or 0 })
+		end
+		table.sort(items, function(a, b): boolean
+			if a.Price ~= b.Price then
+				return a.Price < b.Price
+			end
+			if a.Owned ~= b.Owned then
+				return not a.Owned
+			end
+			return a.Base < b.Base
+		end)
+		for i, it in ipairs(items) do
+			if it.Row.LayoutOrder ~= i then
+				it.Row.LayoutOrder = i -- 1.. (the tab note keeps LayoutOrder 0, above every row)
+			end
+		end
+	end
+	applyPriceOrder()
+
 	-- v69: WEAPONS tab — one row per WeaponConfig weapon in the shared order (UnlockLevel, price, id)
 	local weaponRows: { { Id: string, Row: Frame, Sub: TextLabel, Btn: TextButton, Action: string? } } = {}
 	local weaponBusy: { [string]: { Until: number, Text: string } } = {}
@@ -162586,6 +162636,7 @@ function ShopController.Init()
 	end
 
 	local function refreshOwnedRows()
+		applyPriceOrder() -- Code Bot v206: an OWNED row moves after the unowned rows at its price
 		for key, r in pairs(oneTimeRows) do
 			if isOneTimeOwned(key) then
 				setRowButton(r.Btn, "OWNED", "owned")

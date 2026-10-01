@@ -35,12 +35,12 @@ def _v198(cond, label):
 
 
 for _rel, _needle in (
-    (_v198_S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 205)'),
-    (_v198_S + "Services/DataService.luau", 'SetAttribute("WE_Build", 205)'),
-    (_v198_S + "Services/DataService.luau", "WE_Build=205"),
-    (_v198_S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 205)'),
+    (_v198_S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 206)'),
+    (_v198_S + "Services/DataService.luau", 'SetAttribute("WE_Build", 206)'),
+    (_v198_S + "Services/DataService.luau", "WE_Build=206"),
+    (_v198_S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 206)'),
 ):
-    _v198(_needle in _v198_read(_rel), "WE_Build=205 " + _rel.rsplit("/", 1)[-1])
+    _v198(_needle in _v198_read(_rel), "WE_Build=206 " + _rel.rsplit("/", 1)[-1])
 
 _v198_ECO = _v198_read(_v198_S + "Services/EconomyService.luau")
 _v198_ac = _v198_ECO.split("function EconomyService.AddCash(")[1].split("\nend\n")[0]

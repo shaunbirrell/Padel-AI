@@ -1225,6 +1225,56 @@ function ShopController.Init()
 		refreshPacks()
 	end
 
+	-- Code Bot v206 (Shaun): the SUPPLY · R$ tab is sorted by Robux price, cheapest first, so the 5 R$ rows are on top
+	-- (was: the JOB 36 overhaul order, the 5 R$ rows below the expensive ones). DISPLAY ORDER ONLY: the price is read from
+	-- MonetizationConfig RobuxPrice; no price, Id, prompt or rollout gate changes (owner-only rows stay owner-only: they
+	-- are still never built for anyone else). Rows with no Robux price (the FREE rows, Favorite WAR EMPIRE, the locked
+	-- Supply Crate) go to the bottom; at the same price an OWNED one-time product / pass goes after the unowned ones;
+	-- ties keep the build (overhaul) order.
+	local SORT_NO_PRICE = 1e9
+	local function rowRobuxPrice(rowKey: string): number
+		local def: any
+		if string.sub(rowKey, 1, 5) == "Pass_" then
+			def = (MonetizationConfig.GamePasses :: any)[string.sub(rowKey, 6)]
+		else
+			def = (MonetizationConfig.DevProducts :: any)[rowKey]
+		end
+		local p = if typeof(def) == "table" then tonumber(def.RobuxPrice) else nil
+		return if p and p > 0 then p else SORT_NO_PRICE
+	end
+	local rowBuildOrder: { [Frame]: number } = {}
+	for _, r in ipairs(builtRows) do
+		rowBuildOrder[r.Row] = r.Row.LayoutOrder
+	end
+	local function applyPriceOrder()
+		local items: { { Row: Frame, Price: number, Owned: boolean, Base: number } } = {}
+		for _, r in ipairs(builtRows) do
+			local owned = false
+			if string.sub(r.Key, 1, 5) == "Pass_" then
+				local passKey = string.sub(r.Key, 6)
+				owned = passRows[passKey] ~= nil and offerOwned("GamePass", passKey)
+			elseif oneTimeRows[r.Key] ~= nil then
+				owned = isOneTimeOwned(r.Key)
+			end
+			table.insert(items, { Row = r.Row, Price = rowRobuxPrice(r.Key), Owned = owned, Base = rowBuildOrder[r.Row] or 0 })
+		end
+		table.sort(items, function(a, b): boolean
+			if a.Price ~= b.Price then
+				return a.Price < b.Price
+			end
+			if a.Owned ~= b.Owned then
+				return not a.Owned
+			end
+			return a.Base < b.Base
+		end)
+		for i, it in ipairs(items) do
+			if it.Row.LayoutOrder ~= i then
+				it.Row.LayoutOrder = i -- 1.. (the tab note keeps LayoutOrder 0, above every row)
+			end
+		end
+	end
+	applyPriceOrder()
+
 	-- v69: WEAPONS tab — one row per WeaponConfig weapon in the shared order (UnlockLevel, price, id)
 	local weaponRows: { { Id: string, Row: Frame, Sub: TextLabel, Btn: TextButton, Action: string? } } = {}
 	local weaponBusy: { [string]: { Until: number, Text: string } } = {}
@@ -1329,6 +1379,7 @@ function ShopController.Init()
 	end
 
 	local function refreshOwnedRows()
+		applyPriceOrder() -- Code Bot v206: an OWNED row moves after the unowned rows at its price
 		for key, r in pairs(oneTimeRows) do
 			if isOneTimeOwned(key) then
 				setRowButton(r.Btn, "OWNED", "owned")

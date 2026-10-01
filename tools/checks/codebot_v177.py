@@ -44,12 +44,12 @@ def block(src, name):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 205)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 205)'),
-    (S + "Services/DataService.luau", "WE_Build=205"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 205)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/DataService.luau", "WE_Build=206"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 206)'),
 ):
-    check(needle in read(rel), "CODEBOT v177: WE_Build=205 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v177: WE_Build=206 " + rel.rsplit("/", 1)[-1])
 
 # JOB 49 A flipped: DailyRewardConfig Grace / Day7Scale / Calendar live for everyone
 DR = read(C + "DailyRewardConfig.luau")

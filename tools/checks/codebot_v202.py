@@ -51,20 +51,22 @@ def check(cond, label):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 205)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 205)'),
-    (S + "Services/DataService.luau", "WE_Build=205"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 205)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/DataService.luau", "WE_Build=206"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 206)'),
 ):
-    check(needle in read(rel), "CODEBOT v202: WE_Build=205 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v202: WE_Build=206 " + rel.rsplit("/", 1)[-1])
 
 MON = read(C + "MonetizationConfig.luau")
 # v204: Id 0 pins superseded in codebot_v204.py (Creator Hub Ids filled)
 check('StarterRecruit5 = { Id = 3715888533, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' in MON, "CODEBOT v202: StarterRecruit5 is 5 R$ (Id filled v204)")
 check('Boost2x10m = { Id = 3715888566, DisplayName = "2x Income 10 min", RobuxPrice = 5,' in MON, "CODEBOT v202: Boost2x10m is 5 R$ (Id filled v204)")
 s5 = MON.split("Starter5 = {")[1].split("\n}\n")[0] if "Starter5 = {" in MON else ""
-check("Enabled = true," in s5 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in s5 and "OfferAfterPlaySeconds = 60," in s5,
-      "CODEBOT v202: Starter5 owner-first; offer at 60 s test value (live 300; v204)")
+# Code Bot v206: the 60 s test value was v204 / v205 scope; live (v206+) is 300
+_v202_test60 = any('SetAttribute("WE_Build", %d)' % _n in read(S + "Services/DataService.luau") for _n in (204, 205))
+check("Enabled = true," in s5 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in s5 and ("OfferAfterPlaySeconds = %d," % (60 if _v202_test60 else 300)) in s5,
+      "CODEBOT v202: Starter5 owner-first; offer at " + ("60 s test value (v204/v205)" if _v202_test60 else "300 s (live; v206)"))
 check("if row and typeof(row.LiveBlock) == \"string\" then" in MON, "CODEBOT v202: SkuLiveFor LiveBlock for Starter5")
 
 MS = read(S + "Services/MonetizationService.luau")

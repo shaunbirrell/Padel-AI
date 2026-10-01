@@ -46,7 +46,7 @@ local OWNER, OTHER = 470626172, 9
 local P, B = MC.DevProducts.StarterRecruit5, MC.DevProducts.Boost2x10m
 check(P.RobuxPrice == 5 and B.RobuxPrice == 5 and P.Id == 3715888533 and B.Id == 3715888566, "both 5 R$, the Creator Hub Ids 3715888533 / 3715888566")
 local D = MC.Starter5.OfferAfterPlaySeconds
-check(D == 60, "the Starter5 pop-up delay is ONE value, 60 s for the phone test (live 300)")
+check(D == 300, "the Starter5 pop-up delay is ONE value, 300 s (live; Code Bot v206: back from the 60 s phone test)")
 check(P.OneTime == true and P.GrantSoldiers == 3 and P.StarterCash == true and B.OneTime ~= true and B.GrantsCashBoostMinutes == 10, "pack: one-time, 3 soldiers + starter cash; boost: 10 min, repeatable")
 local p2w = false
 for _, row in ipairs({ P, B }) do for k in pairs(row) do local l = string.lower(k); if string.find(l, "damage") or string.find(l, "health") or string.find(l, "armor") or string.find(l, "armour") or string.find(l, "raid") or string.find(l, "protect") then p2w = true end end end

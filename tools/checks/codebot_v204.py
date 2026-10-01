@@ -34,15 +34,17 @@ def check(cond, label):
 
 
 BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
-OWN = 'SetAttribute("WE_Build", 205)' in read(S + "Services/DataService.luau")  # this build's own scope
+# Code Bot v206: the 60 s test delay + the byte-identical pins are v204's own ship scope (v204 / v205 shipped them);
+# v206 put the delay back to 300 (codebot_v206.py carries the live delay + price guard)
+OWN = any('SetAttribute("WE_Build", %d)' % n in read(S + "Services/DataService.luau") for n in (204, 205))  # this build's own scope
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 205)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 205)'),
-    (S + "Services/DataService.luau", "WE_Build=205"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 205)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 206)'),
+    (S + "Services/DataService.luau", "WE_Build=206"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 206)'),
 ):
-    check(BUD or needle in read(rel), "CODEBOT v204: WE_Build=205 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
+    check(BUD or needle in read(rel), "CODEBOT v204: WE_Build=206 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
 
 MON = read(C + "MonetizationConfig.luau")
 check(('StarterRecruit5 = { Id = %d, DisplayName = "Recruit Starter Pack", RobuxPrice = 5,' % SR5_ID) in MON,
@@ -52,9 +54,9 @@ check(('Boost2x10m = { Id = %d, DisplayName = "2x Income 10 min", RobuxPrice = 5
 s5 = MON.split("(MonetizationConfig :: any).Starter5 = {")[1].split("\n}\n")[0] if "(MonetizationConfig :: any).Starter5 = {" in MON else ""
 check("Enabled = true," in s5 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in s5, "CODEBOT v204: Starter5 Enabled + OwnerFirst = true kept")
 m = re.findall(r"\n\tOfferAfterPlaySeconds = (\d+), (--[^\n]*)", "\n" + s5)
-check(len(m) == 1 and int(m[0][0]) == DELAY and "LIVE VALUE IS 300" in m[0][1],
-      "CODEBOT v204: Starter5 pop-up delay is ONE value, 60 s (test; comment says live 300)")
-check(MON.count("OfferAfterPlaySeconds = 60,") == 1, "CODEBOT v204: only the Starter5 delay is 60 (RecruitPackOffer keeps its own)")
+check(len(m) == 1 and ((int(m[0][0]) == DELAY and "LIVE VALUE IS 300" in m[0][1]) if OWN else True),
+      "CODEBOT v204: Starter5 pop-up delay is ONE value" + (", 60 s (test; comment says live 300)" if OWN else " [60 s pin: v204/v205 scope]"))
+check((MON.count("OfferAfterPlaySeconds = 60,") == 1) if OWN else True, "CODEBOT v204: only the Starter5 delay is 60 (RecruitPackOffer keeps its own)" + ("" if OWN else " [v204/v205 scope]"))
 RP = read(S + "Services/RecruitPackService.luau")
 check("AfterSeconds = if s5 then MC.Starter5.OfferAfterPlaySeconds else nil" in RP and "300" not in RP.split("local row5")[1].split("Decide({")[0] if "local row5" in RP else False,
       "CODEBOT v204: the offer reads the one config value (no hard-coded 300)")

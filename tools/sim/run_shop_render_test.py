@@ -120,15 +120,44 @@ else
   local function btnT(r) for _, c in ipairs(r:GetChildren()) do if c.ClassName == "TextButton" then return tostring(P(c, "Text")) end end return "" end
   local want = { Cash4h = { "BEST VALUE · 4 HOURS OF CASH", "$200,000 (minimum)", "279 R$" }, Cash2h = { "2 HOURS OF CASH", "$100,000 (minimum)", "159 R$" },
     Cash1h = { "1 HOUR OF CASH", "$50,000 (minimum)", "89 R$" }, Cash30m = { "30 MIN OF CASH", "$25,000 (minimum)", "49 R$" }, Cash15m = { "15 MIN OF CASH", "$10,000 (minimum)", "25 R$" } }
-  local lastOrder = -math.huge
+  local lastOrder = math.huge -- Code Bot v206: the SUPPLY tab is cheapest first, so 15 min (25 R$) sits above 4 h (279 R$)
   for _, k in ipairs(TIMEKEYS) do
     local r = byName["ShopRow_" .. k]
     local w = want[k]
     check(r ~= nil and lblT(r, "Title") == w[1] and lblT(r, "Sub") == w[2] and btnT(r) == w[3],
       k .. " time row: " .. (r and (lblT(r, "Title") .. " | " .. lblT(r, "Sub") .. " | " .. btnT(r)) or "missing"))
-    if r then check(P(r, "LayoutOrder") > lastOrder, k .. " in order (4h first)"); lastOrder = P(r, "LayoutOrder") end
+    if r then check(P(r, "LayoutOrder") < lastOrder, k .. " in price order (cheapest first, Code Bot v206)"); lastOrder = P(r, "LayoutOrder") end
   end
   for _, k in ipairs({ "CashMega", "CashLarge", "CashMedium", "CashSmall" }) do check(byName["ShopRow_" .. k] == nil, k .. ": the old pack is hidden while the time packs are shown") end
+end
+-- Code Bot v206 (Shaun): the SUPPLY · R$ tab sorted by MonetizationConfig RobuxPrice ascending (the 5 R$ rows on top);
+-- rows with no price (FREE rows, Favorite WAR EMPIRE, the locked Supply Crate) at the bottom
+do
+  local function cfgPrice(name)
+    local key = string.gsub(name, "ShopRow_", "")
+    local def
+    if string.sub(key, 1, 5) == "Pass_" then def = MCx.GamePasses[string.sub(key, 6)] else def = MCx.DevProducts[key] end
+    local p = if type(def) == "table" then tonumber(def.RobuxPrice) else nil
+    return if p and p > 0 then p else math.huge
+  end
+  local prev, sorted, seq = -math.huge, true, {}
+  for _, r in ipairs(rows) do
+    local p = cfgPrice(r.Name)
+    if p < prev then sorted = false end
+    prev = p
+    table.insert(seq, (string.gsub(r.Name, "ShopRow_", "")) .. "=" .. (if p == math.huge then "-" else tostring(p)))
+  end
+  print("        PRICE ORDER uid " .. TEST_UID .. ": " .. table.concat(seq, " > "))
+  check(#rows > 5 and sorted, "uid " .. TEST_UID .. ": SUPPLY rows sorted by Robux price ascending, no-price rows last (Code Bot v206)")
+  local fav = byName["ShopRow_fr_favorite"]
+  if fav then check(cfgPrice(rows[#rows].Name) == math.huge and P(fav, "LayoutOrder") > P(rows[1], "LayoutOrder"), "Favorite WAR EMPIRE in the no-price block at the bottom") end
+  local s5 = MCx.Starter5LiveFor(TEST_UID)
+  local a, b = byName["ShopRow_StarterRecruit5"], byName["ShopRow_Boost2x10m"]
+  check((a ~= nil) == s5 and (b ~= nil) == s5, "uid " .. TEST_UID .. ": the 5 R$ rows only where Starter5 is live (owner-only): " .. tostring(s5))
+  if s5 and a and b then
+    local top = { [string.gsub(rows[1].Name, "ShopRow_", "")] = true, [string.gsub(rows[2].Name, "ShopRow_", "")] = true }
+    check(top.StarterRecruit5 == true and top.Boost2x10m == true, "uid " .. TEST_UID .. ": the two 5 R$ rows are the top two rows")
+  end
 end
 -- codebot_v142: ShopOverhaulConfig.Live.OwnerFirst = false -> the new shop for everyone (owner and uid 9 alike)
 local live = true
