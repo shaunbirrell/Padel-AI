@@ -39,6 +39,9 @@ local ArmyOrdersConfig = {
 	RouteRetries = 3, -- failed plans before "No route" (the army holds; no teleport fallback)
 	PathBudgetPerSecond = 2, -- route computes per second, server-wide (PathfindingService)
 	StuckSeconds = 6, -- the lead point without block progress this long: re-plan the leg
+	RoutingTimeoutSeconds = 20, -- vNNN: a path request still outstanding this long is asked again (the march never hangs)
+	MarchAnswerStuds = 60, -- vNNN: on the march only a player who hurt him / his soldiers, within this of the block, is answered
+	MarchAnswerSeconds = 10, -- ... in the last this many seconds (CombatService.RecentlyHurtBy)
 	LostStuds = 90, -- a unit this far from the block for LostSeconds is marked LOST (reported, never moved)
 	LostSeconds = 15,
 

@@ -219,6 +219,9 @@ local function setDest(plan: Plan, dest: Vector3)
 	plan.RouteIdx = 1
 	plan.Routing = true
 	plan.RoutedAt = clock()
+	local pa: any = plan
+	local seq = (pa.RouteSeq or 0) + 1
+	pa.RouteSeq = seq -- vNNN: a re-plan (the routing watchdog) supersedes a slow path request
 	local g = plan.Gen
 	local st = plan.Squad
 	local c = blockCentre(st)
@@ -227,7 +230,7 @@ local function setDest(plan: Plan, dest: Vector3)
 	task.spawn(function()
 		local route, why = ArmyRoute.Plan(start, dest)
 		local cur = plans[plan.Uid]
-		if cur ~= plan or plan.Gen ~= g then
+		if cur ~= plan or plan.Gen ~= g or (plan :: any).RouteSeq ~= seq then
 			return
 		end
 		plan.Routing = false
@@ -252,6 +255,12 @@ local function advance(plan: Plan, centre: Vector3, dt: number)
 	local route = plan.Route
 	if route == nil or plan.Routing then
 		plan.LeadVel = Vector3.zero
+		-- vNNN (owner report: "MARCHING" but stopped): advance() returned here for ever while a path request never came
+		-- back, so the stuck re-plan below never ran. A path still outstanding after RoutingTimeout is asked again.
+		if plan.Routing and plan.Dest and clock() - plan.RoutedAt >= (C.RoutingTimeoutSeconds or 20) then
+			ArmyLog.Line(plan.Owner, "ARMY MOVE", string.format("%s stalled: path request %.0fs old, re-plan", plan.Owner.Name, clock() - plan.RoutedAt))
+			setDest(plan, plan.Dest :: Vector3)
+		end
 		return
 	end
 	-- Code Bot v145: "behind" = past the block's own formation spot (its centre sits Standoff behind the lead by design),
@@ -263,6 +272,15 @@ local function advance(plan: Plan, centre: Vector3, dt: number)
 	end
 	if flatDist(plan.Lead, centre) > C.LeadMaxGap then
 		plan.LeadVel = Vector3.zero -- wait for the block
+		local now0 = clock()
+		local pm: any = plan
+		if now0 - (pm.WaitLogAt or 0) >= 3 then
+			pm.WaitLogAt = now0
+			local tg = plan.Squad and plan.Squad._acTarget
+			ArmyLog.Line(plan.Owner, "ARMY MOVE", string.format("%s lead waiting for the block: gap %.0f (max %d) block=%s engaging=%s",
+				plan.Owner.Name, flatDist(plan.Lead, centre), C.LeadMaxGap, ArmyLog.Vec(blockAt),
+				if tg then tostring(tg.Kind) .. ":" .. (if tg.Player then tg.Player.Name else "?") else "none"))
+		end
 	else
 		local pos, idx, dir = ArmyRoute.Advance(plan.Lead, route, plan.RouteIdx, C.MarchSpeed, dt)
 		plan.Lead, plan.RouteIdx = pos, idx
@@ -575,6 +593,50 @@ end
 local function pickWith(pick: any, player: Player, st: any, proot: BasePart?, opts: { [string]: any }): any
 	local ok = pcall(pick, player, st, proot, opts)
 	return if ok then st._acTarget else nil
+end
+
+--[[ Code Bot v163 (owner phone bug "ARMY: SIEGE gate 100% guns 0", the army stood against the wall). PROVEN
+	(tools/sim/run_army_siege_test.py, docs/proof/army-siege/): the siege pick took ANY hostile within ReachStuds of the
+	block - the victim standing in his yard, a guard inside - ahead of the gate (players first, then Siege.Priority).
+	Behind the wall none of them can be seen: every unit's line of sight hit the wall (no shot; the gate fallback only
+	fires when the ray hits a gate leaf), and the block steered AttackStandoff from that target - into the wall, away from
+	the gate - for the whole SiegeMaxSeconds. Rule now: until the gate is breached, a player / guard / turret INSIDE the
+	victim's walled plot is not a siege target (the gate is); after the breach they are, as before. ]]
+local function behindWalls(info: any, pos: Vector3): boolean
+	local c, h = info.PadCenter, tonumber(info.PadHalf)
+	if typeof(c) ~= "Vector3" or h == nil then
+		return false
+	end
+	return math.abs(pos.X - c.X) <= h and math.abs(pos.Z - c.Z) <= h
+end
+
+--[[ vNNN (owner report 3: "ARMY: MARCHING ->" but the army stood still against another base's wall / around a player
+	by a runway): on the march the pick took ANY hostile player within 120 studs as the target, and ArmyController
+	steered the whole block at him. A player in his own yard behind his wall cannot be shot (every ray hits the wall), so
+	the block pressed against that wall, the lead waited for it (gap > LeadMaxGap) and the status still said MARCHING.
+	On the march only a player who has HURT him or his soldiers in the last MarchAnswerSeconds is answered, only within
+	MarchAnswerStuds of the block, and never one behind the walls of a walled plot; anyone else is ignored. ]]
+local function marchAnswer(pick: any, player: Player, st: any, proot: BasePart?, centre: Vector3, leash: number): any
+	local t = pickWith(pick, player, st, proot, { Centre = centre, Reach = C.MarchAnswerStuds or 60, LeashFrom = centre, Leash = leash })
+	if t == nil or t.Kind ~= "Player" or t.Player == nil then
+		return nil
+	end
+	local cs = deps.CombatService
+	local okH, hurt = pcall(function()
+		return cs ~= nil and cs.RecentlyHurtBy ~= nil and cs.RecentlyHurtBy(player, t.Player, C.MarchAnswerSeconds or 10)
+	end)
+	if not (okH and hurt) then
+		return nil
+	end
+	local gd = deps.GateDefenseService
+	local root = t.Root
+	if gd and gd.WalledPlotAt and root then
+		local okP, pid = pcall(gd.WalledPlotAt, root.Position)
+		if okP and pid ~= nil then
+			return nil
+		end
+	end
+	return t
 end
 
 -- ── ATTACK auto-clear ────────────────────────────────────────────────────────────────────────────────────────────
@@ -974,8 +1036,7 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 		return
 	end
 	if plan.Phase == "March" then
-		local t = pickWith(pick, player, st, proot, { Centre = centre, Reach = 120, LeashFrom = centre, Leash = C.Siege.ReachStuds + 40 })
-		st._acTarget = if t and t.Kind == "Player" then t else nil
+		st._acTarget = marchAnswer(pick, player, st, proot, centre, C.Siege.ReachStuds + 40)
 		local dest = plan.Dest or centre
 		setStatus(plan, string.format(T.Marching, plan.VictimName .. "'s base", math.floor(flatDist(centre, dest) * 0.28)))
 		if routeDone(plan) and flatDist(centre, dest) <= C.ArriveStuds + standoffOf(st) then
@@ -1013,6 +1074,9 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 			plan.NoLoot = tostring(why or "no loot")
 		elseif info.CollectorPos then
 			setDest(plan, info.CollectorPos)
+			-- Code Bot v163: the lead walks in through the broken gate (advance runs for Loot; in Siege it stood still,
+			-- so after a breach the block never went in)
+			plan.Phase = "Loot"
 		end
 	end
 	if plan.NoLoot then
@@ -1024,13 +1088,18 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 	-- the siege target, in Siege.Priority order (a player shooting back always first: players first)
 	local t = pickWith(pick, player, st, proot, { Centre = centre, Reach = C.Siege.ReachStuds, LeashFrom = centre, Leash = C.Siege.ReachStuds + 40 })
 	local pickT: any = nil
+	local shut = not info.Breached -- (the walls still stand: only what the block can see from outside counts)
+	if t and shut and t.Root and behindWalls(info, t.Root.Position) then
+		t = nil -- Code Bot v163: behind the walls: the gate first
+	end
 	if t and t.Kind == "Player" then
 		pickT = t
 	else
 		for _, kind in ipairs(C.Siege.Priority) do
 			if kind == "Turret" then
 				for _, tu in ipairs(info.Turrets) do
-					if pickT == nil and not tu.Offline and tu.Hp > 0 and tu.Part and flatDist(tu.Part.Position, centre) <= C.Siege.ReachStuds then
+					if pickT == nil and not tu.Offline and tu.Hp > 0 and tu.Part and flatDist(tu.Part.Position, centre) <= C.Siege.ReachStuds
+						and not (shut and behindWalls(info, tu.Part.Position)) then
 						pickT = structureTarget(tu.Part, tu.Hp)
 					end
 				end
@@ -1051,9 +1120,21 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 		end
 	end
 	local gatePct = if info.GateMax > 0 then math.floor(100 * info.GateHp / info.GateMax) else 0
-	dbg(player, "ArmySiege", string.format("target %s gate %d%% turrets %d units %d/%d breached %s", if pickT then pickT.Kind else "none", gatePct, turretsUp, #living, plan.Total, tostring(info.Breached)))
+	-- Code Bot v163: how many of HIS soldiers fired in the last 2 s (the cooldown is spent on a shot, hit or miss)
+	local firing = 0
+	for _, u in ipairs(living) do
+		if now - (tonumber(u.LastFireAt) or -math.huge) <= 2 then
+			firing += 1
+		end
+	end
+	dbg(player, "ArmySiege", string.format("target %s gate %d%% turrets %d units %d/%d firing %d breached %s", if pickT then pickT.Kind else "none", gatePct, turretsUp, #living, plan.Total, firing, tostring(info.Breached)))
+	if ArmyLog.On(player) and now - (plan.MoveLogAt or -math.huge) >= 2 then
+		plan.MoveLogAt = now
+		ArmyLog.Line(player, "ARMY SIEGE", string.format("%s target=%s gate=%d%% enemy turrets=%d firing=%d/%d breached=%s", player.Name,
+			if pickT then tostring(pickT.Kind) .. " at " .. ArmyLog.Vec(pickT.Root and pickT.Root.Position) else "none", gatePct, turretsUp, firing, #living, tostring(info.Breached)))
+	end
 	if not plan.Breached then
-		setStatus(plan, string.format(T.Sieging, string.format("gate %d%% guns %d", gatePct, turretsUp)))
+		setStatus(plan, string.format(T.Sieging, string.format("gate %d%% · firing %d · enemy guns %d", gatePct, firing, turretsUp)))
 		return
 	end
 	-- breached: march to the ATM, hold it RaidConfig.Raid.HoldSeconds with the nearest unit, never hit
@@ -1115,8 +1196,7 @@ local function thinkTravel(plan: Plan, player: Player, st: any, proot: BasePart?
 	local tg = plan.Target
 	local cfg = travelCfg()
 	if plan.Phase == "March" then
-		local t = pickWith(pick, player, st, proot, { Centre = centre, Reach = 120, LeashFrom = centre, Leash = 160 })
-		st._acTarget = if t and t.Kind == "Player" then t else nil
+		st._acTarget = marchAnswer(pick, player, st, proot, centre, 160)
 		local dest = plan.Dest or centre
 		setStatus(plan, string.format(T.Travelling, tg.Name, math.floor(flatDist(centre, dest) * 0.28)))
 		if routeDone(plan) and flatDist(centre, dest) <= C.ArriveStuds + standoffOf(st) then

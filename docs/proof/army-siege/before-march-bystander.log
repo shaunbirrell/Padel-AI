@@ -1,0 +1,126 @@
+[ArmyController] v115 Follow3 TrailBlock controller started (true, all, debug false)
+[WAR EMPIRE] ArmyPlan Init
+[ARMY DESTINATION] shaunie6 old=nil new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(182,0,-0) dest=(506,0,0) distance=324 status=Success waypoints=41
+[ARMY STATE] shaunie6 Following -> TravellingToBase SOURCE=SEND base 9 mode=Attack target=Chaplin606's base
+[ARMY MOVE] shaunie6 travel started -> plot 9 dest=(506,0,0) units=24
+S_SEND	true	Your army 60,000 vs defences 2,500: much stronger: half loot
+[ARMY MOVE] shaunie6 Send/March block=(182,0,-0) lead=(205,0,-0) to dest 324 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(213,0,-0) lead=(239,0,-0) to dest 293 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(247,0,-0) lead=(272,0,-0) to dest 259 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(280,0,-0) lead=(306,0,-0) to dest 226 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(314,0,-0) lead=(339,0,-0) to dest 192 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(331,0,9) lead=(367,0,-0) to dest 175 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(347,0,40) lead=(367,0,-0) to dest 164 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,75) lead=(367,0,-0) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(367,0,-0) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(367,0,-0) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=21
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(390,0,60) to dest 160 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=21
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=21
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(380,0,65) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(390,0,60) to dest 160 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(380,0,65) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(390,0,60) to dest 159 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(381,0,65) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(391,0,60) to dest 159 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(400,0,55) to dest 160 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(400,0,55) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=160 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(381,0,65) to dest 160 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(364,0,74) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(364,0,74) dest=(506,0,0) distance=159 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(391,0,60) to dest 159 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(365,0,74) dest=(506,0,0) distance=159 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(401,0,55) to dest 159 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(365,0,74) dest=(506,0,0) distance=159 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(381,0,65) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(365,0,74) dest=(506,0,0) distance=159 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(391,0,60) to dest 159 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(365,0,74) dest=(506,0,0) distance=159 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(401,0,55) to dest 159 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,73) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(365,0,73) dest=(506,0,0) distance=159 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,73) lead=(381,0,65) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,73) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,73) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(365,0,73) dest=(506,0,0) distance=159 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(391,0,60) to dest 159 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,73) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,73) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(365,0,73) dest=(506,0,0) distance=159 status=Success waypoints=20
+[ARMY MOVE] shaunie6 Send/March block=(365,0,74) lead=(401,0,55) to dest 159 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(365,0,73) lead=(401,0,55) to dest 159 studs, lead 0 studs/s, lost 0
+S_GATE_SERIES 100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100
+S_GATE_END 100
+S_BREACHED false
+S_ENTERED false
+S_LOOTED 0
+S_KILLS 0
+S_TARGETS 
+S_SHOTS fired=0 gatehits=0 nolos=2661 outofband=413
+S_CENTRE 365,73
+S_TELEPORTS 0
+S_MARCH_MAXSTILL 131.6
+S_PHASE_END March
+S_STATUS March: MARCHING -> Chaplin606's base 44 m
+notify	shaunie6	Army left for Chaplin606's base
+notify	Chaplin606	⚠ shaunie6's ARMY is marching on your base, ETA 0:29
+

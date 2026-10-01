@@ -1,0 +1,35 @@
+[ArmyController] v115 Follow3 TrailBlock controller started (true, all, debug false)
+[WAR EMPIRE] ArmyPlan Init
+[ARMY DESTINATION] shaunie6 old=nil new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(182,0,-0) dest=(506,0,0) distance=324 status=Success waypoints=41
+[ARMY STATE] shaunie6 Following -> TravellingToBase SOURCE=SEND base 9 mode=Attack target=Chaplin606's base
+[ARMY MOVE] shaunie6 travel started -> plot 9 dest=(506,0,0) units=24
+S_SEND	true	Your army 60,000 vs defences 2,500: much stronger: half loot
+[ARMY MOVE] shaunie6 Send/March block=(182,0,-0) lead=(205,0,-0) to dest 324 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(213,0,-0) lead=(239,0,-0) to dest 293 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(247,0,-0) lead=(272,0,-0) to dest 259 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(280,0,-0) lead=(306,0,-0) to dest 226 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(314,0,-0) lead=(339,0,-0) to dest 192 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(348,0,-0) lead=(373,0,-0) to dest 158 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(381,0,-0) lead=(407,0,-0) to dest 125 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(415,0,-0) lead=(440,0,-0) to dest 91 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(449,0,-0) lead=(474,0,-0) to dest 57 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(482,0,-0) lead=(506,0,0) to dest 24 studs, lead 14 studs/s, lost 0
+[ARMY STATE] shaunie6 TravellingToBase -> EngagingTarget SOURCE=ArmyPlan Send/Siege mode=Attack target=Chaplin606's base
+S_GATE_SERIES 100,100,100,100,100,87,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73,73
+S_GATE_END 73
+S_BREACHED false
+S_ENTERED false
+S_LOOTED 0
+S_KILLS 0
+S_TARGETS Player=312,Structure=7,none=1
+S_SHOTS fired=33 gatehits=33 nolos=0 outofband=7557
+S_CENTRE 540,-4
+S_TELEPORTS 0
+S_MARCH_MAXSTILL 0.0
+S_PHASE_END Siege
+S_STATUS Siege: SIEGE gate 73% guns 0
+notify	shaunie6	Army left for Chaplin606's base
+notify	Chaplin606	⚠ shaunie6's ARMY is marching on your base, ETA 0:29
+notify	shaunie6	Arrived at Chaplin606's base
+
