@@ -56,8 +56,63 @@ local function guidedHook(name: string, ...: any)
 	end
 end
 
+--[[ Code Bot v163 (Shaun 2026-10-01: "I'm not a new player so can't see the guided tutorial"): an owner / admin-only
+	REPLAY of the Guided first minutes in TEST MODE (AdminService "/replaytutorial" or Settings > ADMIN > REPLAY GUIDED
+	TUTORIAL). ReplayGuided snapshots the tutorial fields into profile.GuidedReplay (saved, so a leave mid-replay is
+	restored on the next load), then plays the Guided order (OrderVersion 4) from step 1 with a fresh profile.Guided
+	{ Replay = true }. Nothing else in the save changes: steps the save cannot redo are skipped as for anyone (a
+	building already owned: Command Center / Barracks; the Home Outpost already taken), the training camp fight is
+	replayed, GuidedService grants NO cash in a replay (no recruit top-up, no reward cash; the banner still shows) and
+	sends NO funnel / analytics events. The end (last step, SKIP, or the next profile load) puts the snapshot back
+	exactly, without the end-of-tutorial follow-ups (no Starter Pack offer, no "tutorial complete" toast). ]]
+local REPLAY_FIELDS = { "TutorialComplete", "TutorialStep", "TutorialOrderVersion", "TutorialDoneAhead", "Guided" }
+
+local function isReplay(profile: any): boolean
+	return typeof(profile) == "table" and typeof(profile.GuidedReplay) == "table"
+end
+
+local function deepCopy(v: any): any
+	if typeof(v) ~= "table" then
+		return v
+	end
+	local out = {}
+	for k, x in pairs(v) do
+		out[k] = deepCopy(x)
+	end
+	return out
+end
+
+-- put the snapshot back (the save is exactly what it was before the replay); true when a replay was ended
+local function restoreReplay(player: Player, profile: any): boolean
+	if not isReplay(profile) then
+		return false
+	end
+	local snap = profile.GuidedReplay
+	for _, k in ipairs(REPLAY_FIELDS) do
+		local saved = snap.Fields and snap.Fields[k]
+		if saved == "__nil" then
+			profile[k] = nil
+		else
+			profile[k] = deepCopy(saved)
+		end
+	end
+	profile.GuidedReplay = nil
+	if DataService then
+		DataService.MarkDirty(player)
+	end
+	return true
+end
+
+function TutorialService.IsReplay(player: Player): boolean
+	local profile = DataService and DataService.GetProfile(player)
+	return isReplay(profile)
+end
+
 -- claude-bud JOB 29: seconds-since-join marks (analytics only) and the FastStart hold; never breaks the tutorial
 local function onboard(player: Player, step: string)
+	if TutorialService.IsReplay(player) then
+		return -- Code Bot v163: a test-mode replay sends no onboarding analytics
+	end
 	if AnalyticsService and AnalyticsService.Onboard then
 		pcall(AnalyticsService.Onboard, player, step)
 	end
@@ -250,7 +305,8 @@ local function stepAlreadyDone(profile: any, def: TutorialConfig.TutorialStepDef
 	-- claude-bud JOB 41: the Guided fight / reward are done once (profile.Guided)
 	local g = profile.Guided
 	if def.Id == "FirstFight" then
-		return (typeof(g) == "table" and g.CampDone == true) or profile.StarterOutpostTaken == true
+		-- Code Bot v163: a replay fights the camp again even though the Home Outpost was taken long ago
+		return (typeof(g) == "table" and g.CampDone == true) or (profile.StarterOutpostTaken == true and not isReplay(profile))
 	elseif def.Id == "Reward" then
 		return typeof(g) == "table" and g.RewardDone == true
 	end
@@ -326,6 +382,14 @@ local function setStep(player: Player, step: number, complete: boolean?)
 	DataService.MarkDirty(player)
 	pushTutorial(player)
 	guidedHook("OnStep", player, profile, getStep(profile, step), complete == true) -- claude-bud JOB 41
+	if complete and restoreReplay(player, profile) then
+		-- Code Bot v163: the end of a test-mode replay: the save is back as it was, no end-of-tutorial follow-ups
+		pushTutorial(player)
+		if NotificationService then
+			NotificationService.Notify(player, "Guided replay finished (test mode). Your progress is unchanged.", "Success")
+		end
+		return
+	end
 	retentionStep(player, step, complete == true) -- claude-bud JOB 29
 	if complete then
 		onboard(player, "TutorialDone") -- claude-bud JOB 29
@@ -390,6 +454,14 @@ function TutorialService.Complete(player: Player)
 	DataService.MarkDirty(player)
 	pushTutorial(player)
 	guidedHook("OnSkip", player, profile, skippedAt) -- claude-bud JOB 41: clears the camp at once, GuidedSkipped
+	if restoreReplay(player, profile) then
+		-- Code Bot v163: SKIP during a test-mode replay ends it: the snapshot goes back, nothing else runs
+		pushTutorial(player)
+		if NotificationService then
+			NotificationService.Notify(player, "Guided replay ended (test mode). Your progress is unchanged.", "Info", 3)
+		end
+		return
+	end
 	if NotificationService then
 		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
@@ -398,6 +470,49 @@ function TutorialService.Complete(player: Player)
 	firstAttackHint(player, TutorialConfig.FirstMinutes.AttackHintDelaySeconds) -- claude-bud JOB 7
 	endNoviceShield(player) -- F6: SKIP ends the novice shield too
 	scheduleStarterOffer(player, true) -- v71 money (M1): the Starter Pack offer 3 s after the tutorial
+end
+
+-- Code Bot v163: start the test-mode Guided replay (AdminService checks the caller is the owner / an admin first)
+function TutorialService.ReplayGuided(player: Player): (boolean, string)
+	if not DataService or not tutorialEnabled() then
+		return false, "Tutorial is off in this build"
+	end
+	local G: any = (TutorialConfig :: any).Guided
+	if GuidedService == nil or typeof(G) ~= "table" or G.Enabled ~= true then
+		return false, "Guided first minutes are off in this build"
+	end
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return false, "Profile not loaded yet"
+	end
+	if isReplay(profile) then
+		return false, "A guided replay is already running (SKIP ends it)"
+	end
+	if profile.TutorialComplete ~= true then
+		return false, "Finish or skip the current tutorial first"
+	end
+	local fields = {}
+	for _, k in ipairs(REPLAY_FIELDS) do
+		local v = profile[k]
+		fields[k] = if v == nil then "__nil" else deepCopy(v)
+	end
+	profile.GuidedReplay = { Fields = fields, At = os.time() }
+	profile.Guided = { Replay = true, Funnel = {} }
+	profile.TutorialOrderVersion = G.OrderVersion
+	profile.TutorialDoneAhead = nil
+	profile.TutorialComplete = false
+	profile.TutorialStep = skipOwnedBuySteps(profile, STEP_CLAIM)
+	lastAdvanceAt[player.UserId] = nil
+	lastAdvanceStep[player.UserId] = nil
+	DataService.MarkDirty(player)
+	pushTutorial(player)
+	guidedHook("OnResume", player, profile, getStep(profile, profile.TutorialStep))
+	task.defer(function()
+		if profile.BasePlotId then
+			TutorialService.Notify(player, "PlotAssigned")
+		end
+	end)
+	return true, "Guided replay started (test mode): no cash, no analytics, your save is restored at the end. SKIP ends it."
 end
 
 function TutorialService.Reset(player: Player)
@@ -523,6 +638,8 @@ function TutorialService.Init(deps: { [string]: any })
 	end
 
 	local function onProfileLoaded(player: Player, profile: any)
+		-- Code Bot v163: a test-mode Guided replay never outlives its session (left mid-replay: the snapshot goes back)
+		restoreReplay(player, profile)
 		if not tutorialEnabled() then
 			profile.TutorialComplete = true
 			pushTutorial(player)

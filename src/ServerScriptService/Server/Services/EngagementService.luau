@@ -23,6 +23,9 @@ local E: any = EngagementConfig
 local deps: { [string]: any } = {}
 local friendsOf: { [number]: { [number]: boolean } } = {}
 local nameCache: { [number]: string } = {}
+-- Code Bot v163: TOP SUPPORTERS (see writeSupporters)
+local supporterSeen: { [number]: number } = {} -- uid -> the latest supporter value seen this session
+local passLegacy: { [number]: boolean } = {} -- uid -> this session seeded the pass ledger without credit
 
 local function adminConfig(): any
 	local ok, AC = pcall(require, Shared.Configs.AdminConfig)
@@ -221,6 +224,7 @@ local function writeScores(player: Player, force: boolean?)
 	local unix = os.time()
 	rollWeek(profile, unix)
 	local vals = valuesOf(player, profile)
+	supporterSeen[player.UserId] = vals.Supporters -- v163: the leave flush can write it without the profile
 	local prev = lastWritten[player.UserId] or {}
 	lastWritten[player.UserId] = prev
 	for key, v in pairs(vals) do
@@ -238,6 +242,172 @@ local function writeScores(player: Player, force: boolean?)
 		end
 	end
 	backoff.WriteStep = 0
+end
+
+--[[ Code Bot v163 (Shaun 2026-10-01: "someone bought a cash pack but they haven't come up on the leaderboard as a
+	contributor"). Root cause: TOP SUPPORTERS only ever got the new RobuxSpent through the THROTTLED writer above
+	(once per WriteMinSeconds = 90 s; the v107 leave flush respects that throttle too, and by the time the leave
+	handler runs DataService may already have dropped the profile), so a buyer who left within ~90 s of the last
+	periodic write was never written until a later session; and a game pass bought OUTSIDE the in-game prompt (the
+	website / store page, or an in-game purchase whose ~37 s ownership confirm ran out or that left first) was never
+	added to RobuxSpent at all. Now:
+	  * every saved Robux grant (MonetizationService.OnGranted: dev products, after ProcessReceipt saved it) and every
+	    confirmed pass purchase (OnPassOwned "purchase") writes TOP SUPPORTERS AT ONCE (no throttle: the value only
+	    moves with a real, paid, saved purchase, so this cannot be spammed);
+	  * the leave flush always writes a changed supporter value, from the profile or from the last value seen
+	    (supporterSeen) when the profile is already gone;
+	  * a pass the save never counted (OnPassOwned "join" / "refresh": owned on Roblox, directly, not through a bundle)
+	    is added once at its real price (PriceInRobux, the config price as a fallback) and remembered in
+	    profile.LB.PassCredit. A profile that already counted an in-game pass before this ledger existed
+	    (Monetization.Purchases > #ProcessedReceipts) has its owned passes recorded in the ledger WITHOUT a credit on
+	    that first session (never a double count; nothing is ever invented). Admin / owner accounts are never credited
+	    or written (isBoardExcluded), Studio never credits. ]]
+
+local function supporterValue(profile: any): number?
+	if typeof(profile) ~= "table" then
+		return nil
+	end
+	local settings = if typeof(profile.Settings) == "table" then profile.Settings else {}
+	local spent = math.floor(tonumber(typeof(profile.Monetization) == "table" and profile.Monetization.RobuxSpent) or 0)
+	if spent > 0 and settings.SupporterBoardOptOut ~= true then
+		return spent
+	end
+	return nil
+end
+
+-- write this player's TOP SUPPORTERS value now (no throttle); profile = nil uses the last value seen this session
+local function writeSupporters(player: Player, profile: any?): boolean
+	local uid = player.UserId
+	if isBoardExcluded(uid) then
+		return false
+	end
+	local v: number?
+	if profile ~= nil then
+		v = supporterValue(profile)
+		supporterSeen[uid] = v
+	else
+		v = supporterSeen[uid]
+	end
+	if v == nil or v <= 0 then
+		return false
+	end
+	local prev = lastWritten[uid] or {}
+	lastWritten[uid] = prev
+	pcall(function()
+		player:SetAttribute("WE_LBVal_Supporters", v)
+	end)
+	if prev.Supporters == v or not budgetOk(Enum.DataStoreRequestType.SetIncrementSortedAsync) then
+		return false
+	end
+	local ok = pcall(function()
+		storeFor("Supporters", os.time()):SetAsync(tostring(uid), v)
+	end)
+	if ok then
+		prev.Supporters = v
+	end
+	return ok
+end
+EngagementService.WriteSupporters = writeSupporters
+
+local function passDef(passKey: string): any?
+	local okM, MC = pcall(function(): any
+		return require(Shared.Configs.MonetizationConfig)
+	end)
+	local def = if okM and MC and typeof(MC.GamePasses) == "table" then MC.GamePasses[passKey] else nil
+	return if typeof(def) == "table" then def else nil
+end
+
+local function receiptCount(profile: any): number
+	local n = 0
+	if typeof(profile.ProcessedReceipts) == "table" then
+		for _ in pairs(profile.ProcessedReceipts) do
+			n += 1
+		end
+	end
+	return n
+end
+
+EngagementService._MarketplaceService = nil :: any -- tests replace it
+local function market(): any
+	return EngagementService._MarketplaceService or game:GetService("MarketplaceService")
+end
+
+-- MonetizationService.OnPassOwned(player, passKey, reason)
+function EngagementService.OnPassOwned(player: Player, passKey: string, reason: string)
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil or typeof(passKey) ~= "string" then
+		return
+	end
+	local lb = lbOf(profile)
+	local fresh = typeof(lb.PassCredit) ~= "table"
+	if fresh then
+		lb.PassCredit = {}
+		local m = if typeof(profile.Monetization) == "table" then profile.Monetization else {}
+		-- an in-game pass was already counted before the ledger existed: this session only records, never credits
+		passLegacy[player.UserId] = (math.floor(tonumber(m.Purchases) or 0) - receiptCount(profile)) > 0
+	end
+	local ledger = lb.PassCredit
+	if ledger[passKey] == true then
+		return
+	end
+	if reason == "purchase" then
+		ledger[passKey] = true -- MonetizationService just added its price to RobuxSpent (confirmPassPurchase)
+		deps.DataService.MarkDirty(player)
+		writeSupporters(player, profile)
+		return
+	end
+	-- "join" / "refresh": owned on Roblox but maybe never counted
+	local def = passDef(passKey)
+	local passId = def and tonumber(def.Id)
+	if def == nil or passId == nil or passId == 0 then
+		return
+	end
+	local okO, owns = pcall(function()
+		return market():UserOwnsGamePassAsync(player.UserId, passId)
+	end)
+	if not okO or owns ~= true then
+		return -- implied by a bundle (not bought itself) or the check failed: nothing recorded, asked again next join
+	end
+	if player.Parent == nil or deps.DataService.GetProfile(player) ~= profile or ledger[passKey] == true then
+		return
+	end
+	ledger[passKey] = true
+	local RunService = game:GetService("RunService")
+	if passLegacy[player.UserId] == true or isBoardExcluded(player.UserId) or RunService:IsStudio() then
+		deps.DataService.MarkDirty(player)
+		return
+	end
+	local price = math.max(0, math.floor(tonumber(def.RobuxPrice) or 0))
+	local okP, info = pcall(function()
+		return market():GetProductInfo(passId, Enum.InfoType.GamePass)
+	end)
+	if okP and typeof(info) == "table" and tonumber((info :: any).PriceInRobux) then
+		price = math.max(0, math.floor(tonumber((info :: any).PriceInRobux) or 0))
+	end
+	if price <= 0 then
+		deps.DataService.MarkDirty(player)
+		return
+	end
+	if typeof(profile.Monetization) ~= "table" then
+		profile.Monetization = {}
+	end
+	local m = profile.Monetization
+	m.RobuxSpent = math.floor(tonumber(m.RobuxSpent) or 0) + price
+	m.Purchases = math.floor(tonumber(m.Purchases) or 0) + 1
+	deps.DataService.MarkDirty(player)
+	local A = deps.AnalyticsService
+	if A and A.Log then
+		pcall(A.Log, "SUPPORTER_PASS_CREDIT", player.UserId, { key = passKey, price = price, reason = reason })
+	end
+	writeSupporters(player, profile)
+end
+
+-- MonetizationService.OnGranted(player, productKey, event): a dev product grant was SAVED (RobuxSpent already holds it)
+function EngagementService.OnGranted(player: Player, _productKey: string, _event: any)
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile then
+		writeSupporters(player, profile)
+	end
 end
 
 local function nameOf(uid: number): string
@@ -692,9 +862,22 @@ function EngagementService.Init(d: { [string]: any })
 	if ev then
 		ev.OnServerEvent:Connect(onBoardSetting)
 	end
+	-- Code Bot v163: TOP SUPPORTERS credits every Robux purchase at once (dev products + passes, see writeSupporters)
+	local MS = d.MonetizationService
+	if MS and typeof(MS.OnGranted) == "function" then
+		MS.OnGranted(EngagementService.OnGranted)
+	end
+	if MS and typeof(MS.OnPassOwned) == "function" then
+		MS.OnPassOwned(EngagementService.OnPassOwned)
+	end
 	Players.PlayerRemoving:Connect(function(p)
 		-- v107: flush on leave but still respect WriteDue (leave/rejoin spam cannot flood stores)
 		writeScores(p, false)
+		-- Code Bot v163: a changed supporter value is always written on leave (it only moves with a paid purchase)
+		local leaving = deps.DataService and deps.DataService.GetProfile(p)
+		pcall(writeSupporters, p, leaving)
+		supporterSeen[p.UserId] = nil
+		passLegacy[p.UserId] = nil
 		friendsOf[p.UserId] = nil
 		for _, set in pairs(friendsOf) do
 			set[p.UserId] = nil

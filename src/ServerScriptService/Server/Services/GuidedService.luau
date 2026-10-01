@@ -86,6 +86,12 @@ local function isGuided(profile: any): boolean
 	return profile ~= nil and tonumber(profile.TutorialOrderVersion) == G.OrderVersion
 end
 
+-- Code Bot v163: an owner / admin test-mode replay (TutorialService.ReplayGuided): no cash, no funnel / analytics
+local function isReplay(profile: any): boolean
+	return typeof(profile) == "table" and typeof(profile.GuidedReplay) == "table"
+end
+GuidedService.IsReplay = isReplay
+
 local function anyBuilding(profile: any): boolean
 	if typeof(profile.BaseUpgrades) ~= "table" then
 		return false
@@ -128,6 +134,9 @@ function GuidedService.Funnel(player: Player, profile: any, name: string)
 		return
 	end
 	g.Funnel[name] = true
+	if isReplay(profile) then
+		return -- Code Bot v163: a test-mode replay never reaches the FirstMinutes funnel
+	end
 	if typeof(g.SessionId) ~= "string" then
 		g.SessionId = HttpService:GenerateGUID(false)
 	end
@@ -346,7 +355,7 @@ local function recruitTopUp(player: Player, profile: any)
 	if g.RecruitTopUp ~= nil then
 		return
 	end
-	local gap = GuidedService.RecruitGap(tonumber(profile.Cash) or 0)
+	local gap = if isReplay(profile) then 0 else GuidedService.RecruitGap(tonumber(profile.Cash) or 0) -- v163: no cash in a replay
 	g.RecruitTopUp = gap
 	dirty(player)
 	local E = deps.EconomyService
@@ -360,7 +369,7 @@ local function reward(player: Player, profile: any)
 	if g.RewardDone ~= true then
 		g.RewardDone = true
 		dirty(player)
-		local cash = math.max(0, math.floor(tonumber(G.GuidedRewardCash) or 0))
+		local cash = if isReplay(profile) then 0 else math.max(0, math.floor(tonumber(G.GuidedRewardCash) or 0)) -- v163: banner only in a replay
 		local E = deps.EconomyService
 		if cash > 0 and E and E.AddCash then
 			pcall(E.AddCash, player, cash, "onboarding")
@@ -391,7 +400,7 @@ local function openStep(player: Player, profile: any, def: any)
 	local mark = { Id = id :: string, At = GuidedService._clock() }
 	stepAt[uid] = mark
 	GuidedService._delay(G.StuckSeconds, function()
-		if stepAt[uid] == mark and player.Parent then
+		if stepAt[uid] == mark and player.Parent and not isReplay(profile) then
 			local A = deps.AnalyticsService
 			if A and A.Log then
 				pcall(A.Log, "GUIDED_STUCK", uid, { step = id })
@@ -443,7 +452,7 @@ end
 function GuidedService.OnSkip(player: Player, profile: any, def: any)
 	GuidedService.ClearCamp(player)
 	stepAt[player.UserId] = nil
-	if not isGuided(profile) then
+	if not isGuided(profile) or isReplay(profile) then
 		return
 	end
 	local A = deps.AnalyticsService

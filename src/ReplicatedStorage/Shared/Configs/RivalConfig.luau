@@ -33,6 +33,19 @@ local RivalConfig = {
 	ToastText = "A rich target is nearby: TARGETS",
 	-- the pill (real px): top-right under the top-bar pills (the Army tile is in the left rail's thumbstick band)
 	Pill = { Width = 128, Height = 48, Top = 64, Right = 16 },
+	-- Code Bot v163: the pill is ALWAYS shown for a live player; with 0 targets it is dimmed and the list says this,
+	-- plus the server's one-line reason (Why) under it
+	EmptyText = "No targets right now — rivals appear when other players have cash to raid",
+	EmptyHeight = 96, -- px of the empty-state text block (up to 5 lines at 15 px in the 330 px list)
+	WhyText = {
+		Held = "Finish the guided first minutes first.",
+		Alone = "No other players with a base in this server yet.",
+		NoArmy = "Recruit soldiers to send an army.",
+		Protected = "Everyone here is shielded or new-player protected right now.",
+		Busy = "Your army is out or resting.",
+		Poor = "Nobody here has $10k+ in their ATM yet.",
+		Strong = "Their defences are too strong for your army right now.",
+	},
 }
 
 function RivalConfig.LiveFor(userId: any): boolean

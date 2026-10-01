@@ -413,6 +413,21 @@ function SettingsController.Init()
 		y += TAP + 14
 	end
 
+	-- Code Bot v163 (Shaun: "I'm not a new player so can't see the guided tutorial"): owner / admin only. Replays the
+	-- Guided first minutes in TEST MODE (server: AdminService "replaytutorial" -> TutorialService.ReplayGuided: the save
+	-- is snapshotted and put back at the end, no cash, no analytics). The server re-checks the allowlist; nobody else
+	-- ever sees this row. Same as typing /replaytutorial in chat.
+	if table.find(AdminConfig.UserIds, player.UserId) ~= nil then
+		section("ADMIN")
+		local replayGuidedBtn = button("ReplayGuided", "REPLAY GUIDED TUTORIAL (test)", UDim.new(0, 16), UDim.new(1, -32))
+		replayGuidedBtn.Activated:Connect(function()
+			AudioController.PlayClick()
+			setOpen(false)
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAdminCommand, "replaytutorial")
+		end)
+		y += TAP + 14
+	end
+
 	-- Supply spinner (the Missions panel has the same claim row; this section stays per spec §3.7)
 	section("SUPPLY SPINNER")
 	local spinnerBtn = button("SpinnerClaim", "SUPPLY SPINNER — Claim free Cash/Gold", UDim.new(0, 16), UDim.new(1, -32))

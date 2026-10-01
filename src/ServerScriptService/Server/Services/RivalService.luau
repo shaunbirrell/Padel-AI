@@ -52,12 +52,15 @@ local function stealFraction(): number
 	return if ok and RC and RC.Raid then tonumber(RC.Raid.StealFraction) or 0.1 else 0.1
 end
 
--- the candidate rows for one viewer (every ALLOWED base, exact loot; Pick buckets it)
-function RivalService.Candidates(viewer: Player): { any }
+-- the candidate rows for one viewer (every ALLOWED base, exact loot; Pick buckets it). Code Bot v163: the 2nd return
+-- counts what kept the other online bases off the list (verdict reasons + "Poor" for an allowed base under
+-- MinLootToShow), so an empty list can say why (RivalService.WhyEmpty)
+function RivalService.Candidates(viewer: Player): ({ any }, { [string]: number })
 	local P = plan()
 	local bs = deps.BaseService
+	local reasons: { [string]: number } = {}
 	if P == nil or P.CheckSend == nil or bs == nil or bs.GetOwnerUserId == nil then
-		return {}
+		return {}, reasons
 	end
 	local myPlot = bs.GetOwnedPlotId and bs.GetOwnedPlotId(viewer) or nil
 	local mine = if myPlot then plotCentre(myPlot) else nil
@@ -74,6 +77,10 @@ function RivalService.Candidates(viewer: Player): { any }
 		local victim = if typeof(ownerId) == "number" and ownerId ~= viewer.UserId then Players:GetPlayerByUserId(ownerId) else nil
 		if victim then
 			local okV, v = pcall(P.CheckSend, viewer, plotId)
+			reasons.Others = (reasons.Others or 0) + 1
+			if okV and typeof(v) == "table" and v.Ok ~= true and typeof(v.Reason) == "string" then
+				reasons[v.Reason] = (reasons[v.Reason] or 0) + 1
+			end
 			if okV and typeof(v) == "table" and v.Ok == true then
 				local ms = deps.MoneyCollectorService
 				local bal = 0
@@ -82,6 +89,9 @@ function RivalService.Candidates(viewer: Player): { any }
 					bal = if okM then tonumber(b) or 0 else 0
 				end
 				local loot = math.floor(bal * ArmyOrdersConfig.LootFraction(stealFraction(), v.Bully == true))
+				if loot < RivalConfig.MinLootToShow then
+					reasons.Poor = (reasons.Poor or 0) + 1
+				end
 				local army = 0
 				local sqs = deps.SquadOrdersService
 				if sqs and sqs.UnitPower then
@@ -101,14 +111,41 @@ function RivalService.Candidates(viewer: Player): { any }
 			end
 		end
 	end
-	return rows
+	return rows, reasons
 end
 
-local function push(player: Player, rows: { any })
+--[[ Code Bot v163: the one-line reason an EMPTY list shows under RivalConfig.EmptyText (the most common blocker
+	among the other online bases; nil = the generic text alone). Pure on the reason counts. ]]
+function RivalService.WhyEmpty(held: boolean, reasons: { [string]: number }?): string?
+	local W = RivalConfig.WhyText
+	if held then
+		return W.Held
+	end
+	local r = reasons or {}
+	if (r.Others or 0) == 0 then
+		return W.Alone
+	end
+	if (r.NoArmy or 0) > 0 then
+		return W.NoArmy -- the viewer's own state: every base says the same
+	end
+	if (r.Active or 0) > 0 or (r.Cooldown or 0) > 0 then
+		return W.Busy
+	end
+	local protected = (r.Shielded or 0) + (r.NewPlayer or 0) + (r.Novice or 0) + (r.Protected or 0) + (r.Ally or 0)
+	local best, bestN = nil, 0
+	for key, n in pairs({ Protected = protected, Poor = r.Poor or 0, Strong = r.TooWeak or 0 }) do
+		if n > bestN then
+			best, bestN = key, n
+		end
+	end
+	return if best then W[best] else nil
+end
+
+local function push(player: Player, rows: { any }, why: string?)
 	local rs = deps.RemoteSetup
 	local ev = rs and rs.Get(Constants.RemoteNames.FeaturePush)
 	if ev and ev:IsA("RemoteEvent") then
-		(ev :: RemoteEvent):FireClient(player, "RivalTargets", { Rows = rows })
+		(ev :: RemoteEvent):FireClient(player, "RivalTargets", { Rows = rows, Why = if #rows == 0 then why else nil })
 	end
 end
 
@@ -119,14 +156,18 @@ function RivalService.Tick()
 			-- nothing during the Guided / onboarding hold (the chain first); no soldiers = the verdict lists nothing
 			local held = deps.RetentionService and deps.RetentionService.IsOnboarding and deps.RetentionService.IsOnboarding(p) == true
 			local list = {}
+			local reasons = nil
 			if not held then
-				local ok, rows = pcall(function()
-					return RivalConfig.Pick(RivalService.Candidates(p))
+				local ok, rows, rs = pcall(function()
+					local cand, why = RivalService.Candidates(p)
+					return RivalConfig.Pick(cand), why
 				end)
 				list = if ok then rows else {}
+				reasons = if ok then rs else nil
 			end
 			lastRows[p.UserId] = list
-			push(p, list)
+			local okW, why = pcall(RivalService.WhyEmpty, held, reasons)
+			push(p, list, if okW then why else nil)
 		end
 	end
 end

@@ -249,6 +249,25 @@ local function grantAdminPlaytestCashFloor(player: Player): (boolean, number)
 	return true, target
 end
 
+-- Code Bot v163: the owner / admin test-mode replay of the Guided first minutes (TutorialService.ReplayGuided keeps
+-- the save: it snapshots the tutorial fields and restores them at the end). Reached only through the allowlist checks.
+local function replayGuided(deps: { [string]: any }, player: Player): string
+	local TS = deps.TutorialService
+	if TS == nil or typeof(TS.ReplayGuided) ~= "function" then
+		return "Guided replay: not built yet"
+	end
+	local ok, started, text = pcall(TS.ReplayGuided, player)
+	if not ok then
+		warn("[AdminService] ReplayGuided failed:", started)
+		return "Guided replay failed"
+	end
+	if deps.NotificationService then
+		deps.NotificationService.Notify(player, tostring(text), if started then "Success" else "Warn", 6)
+	end
+	return tostring(text)
+end
+AdminService._ReplayGuided = replayGuided -- test hook
+
 function AdminService.Init(deps: { [string]: any })
 	EconomyService = deps.EconomyService
 	XPService = deps.XPService
@@ -365,6 +384,8 @@ function AdminService.Init(deps: { [string]: any })
 			end)
 			player:Kick("Progress wiped — please rejoin")
 			return
+		elseif cmd == "replaytutorial" or cmd == "replayguided" then
+			replayGuided(deps, player) -- Code Bot v163: Settings > ADMIN > REPLAY GUIDED TUTORIAL
 		elseif cmd == "resettutorial" then
 			if deps.TutorialService and deps.TutorialService.Reset then
 				deps.TutorialService.Reset(player)
@@ -503,7 +524,8 @@ function AdminService.Init(deps: { [string]: any })
 		local isNationResetCmd = cmd == "nationreset"
 		local isArmyDebugCmd = cmd == "armydebug" -- v115: the owner's army-follow debug overlay (ArmyConfig.Follow3.Debug)
 		local isMoveDebugCmd = cmd == "movedebug" -- v123: the player-movement investigation (Modules/MoveDebug + MoveDebugClient)
-		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd then
+		local isReplayCmd = cmd == "replaytutorial" or cmd == "replayguided" -- Code Bot v163: test-mode Guided replay
+		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -550,6 +572,12 @@ function AdminService.Init(deps: { [string]: any })
 			return
 		end
 		if not RemoteGuard.RequireProfile(DataService, player) then
+			return
+		end
+		-- Code Bot v163: /replaytutorial (alias /replayguided): the Guided first minutes again, test mode, save kept
+		if isReplayCmd then
+			replayGuided(deps, player)
+			AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_replaytutorial" })
 			return
 		end
 		-- F7: owner playtest — /givekeepbase [1-5] (Keep-Base Rebirth tokens; admin allowlist only, see above)
@@ -660,9 +688,9 @@ function AdminService.Init(deps: { [string]: any })
 				end
 			end)
 			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
-			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" } }) do
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" }, { "WE_ReplayTutorial", "/replaytutorial", "/replayguided" } }) do
 				local c = ensureCommand(spec[1], spec[2], spec[3])
-				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" then
+				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" or spec[1] == "WE_ReplayTutorial" then
 					-- nations: never offered in chat autocomplete (lead decision 6: nothing of the feature shows for
 					-- non-admins before the flag art is live); the admin still types it
 					local cmdAny: any = c
@@ -699,6 +727,8 @@ function AdminService.Init(deps: { [string]: any })
 					or string.sub(lower, 1, 12) == "/nationreset"
 					or string.sub(lower, 1, 10) == "/armydebug"
 					or string.sub(lower, 1, 10) == "/movedebug"
+					or string.sub(lower, 1, 15) == "/replaytutorial"
+					or string.sub(lower, 1, 13) == "/replayguided"
 				if not isAdminLine then
 					return
 				end

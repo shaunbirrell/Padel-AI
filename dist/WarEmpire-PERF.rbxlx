@@ -13795,6 +13795,19 @@ local RivalConfig = {
 	ToastText = "A rich target is nearby: TARGETS",
 	-- the pill (real px): top-right under the top-bar pills (the Army tile is in the left rail's thumbstick band)
 	Pill = { Width = 128, Height = 48, Top = 64, Right = 16 },
+	-- Code Bot v163: the pill is ALWAYS shown for a live player; with 0 targets it is dimmed and the list says this,
+	-- plus the server's one-line reason (Why) under it
+	EmptyText = "No targets right now — rivals appear when other players have cash to raid",
+	EmptyHeight = 96, -- px of the empty-state text block (up to 5 lines at 15 px in the 330 px list)
+	WhyText = {
+		Held = "Finish the guided first minutes first.",
+		Alone = "No other players with a base in this server yet.",
+		NoArmy = "Recruit soldiers to send an army.",
+		Protected = "Everyone here is shielded or new-player protected right now.",
+		Busy = "Your army is out or resting.",
+		Poor = "Nobody here has $10k+ in their ATM yet.",
+		Strong = "Their defences are too strong for your army right now.",
+	},
 }
 
 function RivalConfig.LiveFor(userId: any): boolean
@@ -30189,7 +30202,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 162)
+		player:SetAttribute("WE_Build", 163)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -67700,6 +67713,25 @@ local function grantAdminPlaytestCashFloor(player: Player): (boolean, number)
 	return true, target
 end
 
+-- Code Bot v163: the owner / admin test-mode replay of the Guided first minutes (TutorialService.ReplayGuided keeps
+-- the save: it snapshots the tutorial fields and restores them at the end). Reached only through the allowlist checks.
+local function replayGuided(deps: { [string]: any }, player: Player): string
+	local TS = deps.TutorialService
+	if TS == nil or typeof(TS.ReplayGuided) ~= "function" then
+		return "Guided replay: not built yet"
+	end
+	local ok, started, text = pcall(TS.ReplayGuided, player)
+	if not ok then
+		warn("[AdminService] ReplayGuided failed:", started)
+		return "Guided replay failed"
+	end
+	if deps.NotificationService then
+		deps.NotificationService.Notify(player, tostring(text), if started then "Success" else "Warn", 6)
+	end
+	return tostring(text)
+end
+AdminService._ReplayGuided = replayGuided -- test hook
+
 function AdminService.Init(deps: { [string]: any })
 	EconomyService = deps.EconomyService
 	XPService = deps.XPService
@@ -67816,6 +67848,8 @@ function AdminService.Init(deps: { [string]: any })
 			end)
 			player:Kick("Progress wiped — please rejoin")
 			return
+		elseif cmd == "replaytutorial" or cmd == "replayguided" then
+			replayGuided(deps, player) -- Code Bot v163: Settings > ADMIN > REPLAY GUIDED TUTORIAL
 		elseif cmd == "resettutorial" then
 			if deps.TutorialService and deps.TutorialService.Reset then
 				deps.TutorialService.Reset(player)
@@ -67954,7 +67988,8 @@ function AdminService.Init(deps: { [string]: any })
 		local isNationResetCmd = cmd == "nationreset"
 		local isArmyDebugCmd = cmd == "armydebug" -- v115: the owner's army-follow debug overlay (ArmyConfig.Follow3.Debug)
 		local isMoveDebugCmd = cmd == "movedebug" -- v123: the player-movement investigation (Modules/MoveDebug + MoveDebugClient)
-		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd then
+		local isReplayCmd = cmd == "replaytutorial" or cmd == "replayguided" -- Code Bot v163: test-mode Guided replay
+		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd and not isArmyDebugCmd and not isMoveDebugCmd and not isReplayCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -68001,6 +68036,12 @@ function AdminService.Init(deps: { [string]: any })
 			return
 		end
 		if not RemoteGuard.RequireProfile(DataService, player) then
+			return
+		end
+		-- Code Bot v163: /replaytutorial (alias /replayguided): the Guided first minutes again, test mode, save kept
+		if isReplayCmd then
+			replayGuided(deps, player)
+			AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_replaytutorial" })
 			return
 		end
 		-- F7: owner playtest — /givekeepbase [1-5] (Keep-Base Rebirth tokens; admin allowlist only, see above)
@@ -68111,9 +68152,9 @@ function AdminService.Init(deps: { [string]: any })
 				end
 			end)
 			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
-			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" } }) do
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" }, { "WE_ArmyDebug", "/armydebug" }, { "WE_MoveDebug", "/movedebug" }, { "WE_ReplayTutorial", "/replaytutorial", "/replayguided" } }) do
 				local c = ensureCommand(spec[1], spec[2], spec[3])
-				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" then
+				if spec[1] == "WE_NationReset" or spec[1] == "WE_ArmyDebug" or spec[1] == "WE_MoveDebug" or spec[1] == "WE_ReplayTutorial" then
 					-- nations: never offered in chat autocomplete (lead decision 6: nothing of the feature shows for
 					-- non-admins before the flag art is live); the admin still types it
 					local cmdAny: any = c
@@ -68150,6 +68191,8 @@ function AdminService.Init(deps: { [string]: any })
 					or string.sub(lower, 1, 12) == "/nationreset"
 					or string.sub(lower, 1, 10) == "/armydebug"
 					or string.sub(lower, 1, 10) == "/movedebug"
+					or string.sub(lower, 1, 15) == "/replaytutorial"
+					or string.sub(lower, 1, 13) == "/replayguided"
 				if not isAdminLine then
 					return
 				end
@@ -73097,7 +73140,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 162)
+			player:SetAttribute("WE_Build", 163)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -81554,7 +81597,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 162)
+		player:SetAttribute("WE_Build", 163)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -81696,7 +81739,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=162",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=163",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -85103,6 +85146,9 @@ local E: any = EngagementConfig
 local deps: { [string]: any } = {}
 local friendsOf: { [number]: { [number]: boolean } } = {}
 local nameCache: { [number]: string } = {}
+-- Code Bot v163: TOP SUPPORTERS (see writeSupporters)
+local supporterSeen: { [number]: number } = {} -- uid -> the latest supporter value seen this session
+local passLegacy: { [number]: boolean } = {} -- uid -> this session seeded the pass ledger without credit
 
 local function adminConfig(): any
 	local ok, AC = pcall(require, Shared.Configs.AdminConfig)
@@ -85301,6 +85347,7 @@ local function writeScores(player: Player, force: boolean?)
 	local unix = os.time()
 	rollWeek(profile, unix)
 	local vals = valuesOf(player, profile)
+	supporterSeen[player.UserId] = vals.Supporters -- v163: the leave flush can write it without the profile
 	local prev = lastWritten[player.UserId] or {}
 	lastWritten[player.UserId] = prev
 	for key, v in pairs(vals) do
@@ -85318,6 +85365,172 @@ local function writeScores(player: Player, force: boolean?)
 		end
 	end
 	backoff.WriteStep = 0
+end
+
+--[[ Code Bot v163 (Shaun 2026-10-01: "someone bought a cash pack but they haven't come up on the leaderboard as a
+	contributor"). Root cause: TOP SUPPORTERS only ever got the new RobuxSpent through the THROTTLED writer above
+	(once per WriteMinSeconds = 90 s; the v107 leave flush respects that throttle too, and by the time the leave
+	handler runs DataService may already have dropped the profile), so a buyer who left within ~90 s of the last
+	periodic write was never written until a later session; and a game pass bought OUTSIDE the in-game prompt (the
+	website / store page, or an in-game purchase whose ~37 s ownership confirm ran out or that left first) was never
+	added to RobuxSpent at all. Now:
+	  * every saved Robux grant (MonetizationService.OnGranted: dev products, after ProcessReceipt saved it) and every
+	    confirmed pass purchase (OnPassOwned "purchase") writes TOP SUPPORTERS AT ONCE (no throttle: the value only
+	    moves with a real, paid, saved purchase, so this cannot be spammed);
+	  * the leave flush always writes a changed supporter value, from the profile or from the last value seen
+	    (supporterSeen) when the profile is already gone;
+	  * a pass the save never counted (OnPassOwned "join" / "refresh": owned on Roblox, directly, not through a bundle)
+	    is added once at its real price (PriceInRobux, the config price as a fallback) and remembered in
+	    profile.LB.PassCredit. A profile that already counted an in-game pass before this ledger existed
+	    (Monetization.Purchases > #ProcessedReceipts) has its owned passes recorded in the ledger WITHOUT a credit on
+	    that first session (never a double count; nothing is ever invented). Admin / owner accounts are never credited
+	    or written (isBoardExcluded), Studio never credits. ]]
+
+local function supporterValue(profile: any): number?
+	if typeof(profile) ~= "table" then
+		return nil
+	end
+	local settings = if typeof(profile.Settings) == "table" then profile.Settings else {}
+	local spent = math.floor(tonumber(typeof(profile.Monetization) == "table" and profile.Monetization.RobuxSpent) or 0)
+	if spent > 0 and settings.SupporterBoardOptOut ~= true then
+		return spent
+	end
+	return nil
+end
+
+-- write this player's TOP SUPPORTERS value now (no throttle); profile = nil uses the last value seen this session
+local function writeSupporters(player: Player, profile: any?): boolean
+	local uid = player.UserId
+	if isBoardExcluded(uid) then
+		return false
+	end
+	local v: number?
+	if profile ~= nil then
+		v = supporterValue(profile)
+		supporterSeen[uid] = v
+	else
+		v = supporterSeen[uid]
+	end
+	if v == nil or v <= 0 then
+		return false
+	end
+	local prev = lastWritten[uid] or {}
+	lastWritten[uid] = prev
+	pcall(function()
+		player:SetAttribute("WE_LBVal_Supporters", v)
+	end)
+	if prev.Supporters == v or not budgetOk(Enum.DataStoreRequestType.SetIncrementSortedAsync) then
+		return false
+	end
+	local ok = pcall(function()
+		storeFor("Supporters", os.time()):SetAsync(tostring(uid), v)
+	end)
+	if ok then
+		prev.Supporters = v
+	end
+	return ok
+end
+EngagementService.WriteSupporters = writeSupporters
+
+local function passDef(passKey: string): any?
+	local okM, MC = pcall(function(): any
+		return require(Shared.Configs.MonetizationConfig)
+	end)
+	local def = if okM and MC and typeof(MC.GamePasses) == "table" then MC.GamePasses[passKey] else nil
+	return if typeof(def) == "table" then def else nil
+end
+
+local function receiptCount(profile: any): number
+	local n = 0
+	if typeof(profile.ProcessedReceipts) == "table" then
+		for _ in pairs(profile.ProcessedReceipts) do
+			n += 1
+		end
+	end
+	return n
+end
+
+EngagementService._MarketplaceService = nil :: any -- tests replace it
+local function market(): any
+	return EngagementService._MarketplaceService or game:GetService("MarketplaceService")
+end
+
+-- MonetizationService.OnPassOwned(player, passKey, reason)
+function EngagementService.OnPassOwned(player: Player, passKey: string, reason: string)
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil or typeof(passKey) ~= "string" then
+		return
+	end
+	local lb = lbOf(profile)
+	local fresh = typeof(lb.PassCredit) ~= "table"
+	if fresh then
+		lb.PassCredit = {}
+		local m = if typeof(profile.Monetization) == "table" then profile.Monetization else {}
+		-- an in-game pass was already counted before the ledger existed: this session only records, never credits
+		passLegacy[player.UserId] = (math.floor(tonumber(m.Purchases) or 0) - receiptCount(profile)) > 0
+	end
+	local ledger = lb.PassCredit
+	if ledger[passKey] == true then
+		return
+	end
+	if reason == "purchase" then
+		ledger[passKey] = true -- MonetizationService just added its price to RobuxSpent (confirmPassPurchase)
+		deps.DataService.MarkDirty(player)
+		writeSupporters(player, profile)
+		return
+	end
+	-- "join" / "refresh": owned on Roblox but maybe never counted
+	local def = passDef(passKey)
+	local passId = def and tonumber(def.Id)
+	if def == nil or passId == nil or passId == 0 then
+		return
+	end
+	local okO, owns = pcall(function()
+		return market():UserOwnsGamePassAsync(player.UserId, passId)
+	end)
+	if not okO or owns ~= true then
+		return -- implied by a bundle (not bought itself) or the check failed: nothing recorded, asked again next join
+	end
+	if player.Parent == nil or deps.DataService.GetProfile(player) ~= profile or ledger[passKey] == true then
+		return
+	end
+	ledger[passKey] = true
+	local RunService = game:GetService("RunService")
+	if passLegacy[player.UserId] == true or isBoardExcluded(player.UserId) or RunService:IsStudio() then
+		deps.DataService.MarkDirty(player)
+		return
+	end
+	local price = math.max(0, math.floor(tonumber(def.RobuxPrice) or 0))
+	local okP, info = pcall(function()
+		return market():GetProductInfo(passId, Enum.InfoType.GamePass)
+	end)
+	if okP and typeof(info) == "table" and tonumber((info :: any).PriceInRobux) then
+		price = math.max(0, math.floor(tonumber((info :: any).PriceInRobux) or 0))
+	end
+	if price <= 0 then
+		deps.DataService.MarkDirty(player)
+		return
+	end
+	if typeof(profile.Monetization) ~= "table" then
+		profile.Monetization = {}
+	end
+	local m = profile.Monetization
+	m.RobuxSpent = math.floor(tonumber(m.RobuxSpent) or 0) + price
+	m.Purchases = math.floor(tonumber(m.Purchases) or 0) + 1
+	deps.DataService.MarkDirty(player)
+	local A = deps.AnalyticsService
+	if A and A.Log then
+		pcall(A.Log, "SUPPORTER_PASS_CREDIT", player.UserId, { key = passKey, price = price, reason = reason })
+	end
+	writeSupporters(player, profile)
+end
+
+-- MonetizationService.OnGranted(player, productKey, event): a dev product grant was SAVED (RobuxSpent already holds it)
+function EngagementService.OnGranted(player: Player, _productKey: string, _event: any)
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile then
+		writeSupporters(player, profile)
+	end
 end
 
 local function nameOf(uid: number): string
@@ -85772,9 +85985,22 @@ function EngagementService.Init(d: { [string]: any })
 	if ev then
 		ev.OnServerEvent:Connect(onBoardSetting)
 	end
+	-- Code Bot v163: TOP SUPPORTERS credits every Robux purchase at once (dev products + passes, see writeSupporters)
+	local MS = d.MonetizationService
+	if MS and typeof(MS.OnGranted) == "function" then
+		MS.OnGranted(EngagementService.OnGranted)
+	end
+	if MS and typeof(MS.OnPassOwned) == "function" then
+		MS.OnPassOwned(EngagementService.OnPassOwned)
+	end
 	Players.PlayerRemoving:Connect(function(p)
 		-- v107: flush on leave but still respect WriteDue (leave/rejoin spam cannot flood stores)
 		writeScores(p, false)
+		-- Code Bot v163: a changed supporter value is always written on leave (it only moves with a paid purchase)
+		local leaving = deps.DataService and deps.DataService.GetProfile(p)
+		pcall(writeSupporters, p, leaving)
+		supporterSeen[p.UserId] = nil
+		passLegacy[p.UserId] = nil
 		friendsOf[p.UserId] = nil
 		for _, set in pairs(friendsOf) do
 			set[p.UserId] = nil
@@ -89081,6 +89307,12 @@ local function isGuided(profile: any): boolean
 	return profile ~= nil and tonumber(profile.TutorialOrderVersion) == G.OrderVersion
 end
 
+-- Code Bot v163: an owner / admin test-mode replay (TutorialService.ReplayGuided): no cash, no funnel / analytics
+local function isReplay(profile: any): boolean
+	return typeof(profile) == "table" and typeof(profile.GuidedReplay) == "table"
+end
+GuidedService.IsReplay = isReplay
+
 local function anyBuilding(profile: any): boolean
 	if typeof(profile.BaseUpgrades) ~= "table" then
 		return false
@@ -89123,6 +89355,9 @@ function GuidedService.Funnel(player: Player, profile: any, name: string)
 		return
 	end
 	g.Funnel[name] = true
+	if isReplay(profile) then
+		return -- Code Bot v163: a test-mode replay never reaches the FirstMinutes funnel
+	end
 	if typeof(g.SessionId) ~= "string" then
 		g.SessionId = HttpService:GenerateGUID(false)
 	end
@@ -89341,7 +89576,7 @@ local function recruitTopUp(player: Player, profile: any)
 	if g.RecruitTopUp ~= nil then
 		return
 	end
-	local gap = GuidedService.RecruitGap(tonumber(profile.Cash) or 0)
+	local gap = if isReplay(profile) then 0 else GuidedService.RecruitGap(tonumber(profile.Cash) or 0) -- v163: no cash in a replay
 	g.RecruitTopUp = gap
 	dirty(player)
 	local E = deps.EconomyService
@@ -89355,7 +89590,7 @@ local function reward(player: Player, profile: any)
 	if g.RewardDone ~= true then
 		g.RewardDone = true
 		dirty(player)
-		local cash = math.max(0, math.floor(tonumber(G.GuidedRewardCash) or 0))
+		local cash = if isReplay(profile) then 0 else math.max(0, math.floor(tonumber(G.GuidedRewardCash) or 0)) -- v163: banner only in a replay
 		local E = deps.EconomyService
 		if cash > 0 and E and E.AddCash then
 			pcall(E.AddCash, player, cash, "onboarding")
@@ -89386,7 +89621,7 @@ local function openStep(player: Player, profile: any, def: any)
 	local mark = { Id = id :: string, At = GuidedService._clock() }
 	stepAt[uid] = mark
 	GuidedService._delay(G.StuckSeconds, function()
-		if stepAt[uid] == mark and player.Parent then
+		if stepAt[uid] == mark and player.Parent and not isReplay(profile) then
 			local A = deps.AnalyticsService
 			if A and A.Log then
 				pcall(A.Log, "GUIDED_STUCK", uid, { step = id })
@@ -89438,7 +89673,7 @@ end
 function GuidedService.OnSkip(player: Player, profile: any, def: any)
 	GuidedService.ClearCamp(player)
 	stepAt[player.UserId] = nil
-	if not isGuided(profile) then
+	if not isGuided(profile) or isReplay(profile) then
 		return
 	end
 	local A = deps.AnalyticsService
@@ -106141,12 +106376,15 @@ local function stealFraction(): number
 	return if ok and RC and RC.Raid then tonumber(RC.Raid.StealFraction) or 0.1 else 0.1
 end
 
--- the candidate rows for one viewer (every ALLOWED base, exact loot; Pick buckets it)
-function RivalService.Candidates(viewer: Player): { any }
+-- the candidate rows for one viewer (every ALLOWED base, exact loot; Pick buckets it). Code Bot v163: the 2nd return
+-- counts what kept the other online bases off the list (verdict reasons + "Poor" for an allowed base under
+-- MinLootToShow), so an empty list can say why (RivalService.WhyEmpty)
+function RivalService.Candidates(viewer: Player): ({ any }, { [string]: number })
 	local P = plan()
 	local bs = deps.BaseService
+	local reasons: { [string]: number } = {}
 	if P == nil or P.CheckSend == nil or bs == nil or bs.GetOwnerUserId == nil then
-		return {}
+		return {}, reasons
 	end
 	local myPlot = bs.GetOwnedPlotId and bs.GetOwnedPlotId(viewer) or nil
 	local mine = if myPlot then plotCentre(myPlot) else nil
@@ -106163,6 +106401,10 @@ function RivalService.Candidates(viewer: Player): { any }
 		local victim = if typeof(ownerId) == "number" and ownerId ~= viewer.UserId then Players:GetPlayerByUserId(ownerId) else nil
 		if victim then
 			local okV, v = pcall(P.CheckSend, viewer, plotId)
+			reasons.Others = (reasons.Others or 0) + 1
+			if okV and typeof(v) == "table" and v.Ok ~= true and typeof(v.Reason) == "string" then
+				reasons[v.Reason] = (reasons[v.Reason] or 0) + 1
+			end
 			if okV and typeof(v) == "table" and v.Ok == true then
 				local ms = deps.MoneyCollectorService
 				local bal = 0
@@ -106171,6 +106413,9 @@ function RivalService.Candidates(viewer: Player): { any }
 					bal = if okM then tonumber(b) or 0 else 0
 				end
 				local loot = math.floor(bal * ArmyOrdersConfig.LootFraction(stealFraction(), v.Bully == true))
+				if loot < RivalConfig.MinLootToShow then
+					reasons.Poor = (reasons.Poor or 0) + 1
+				end
 				local army = 0
 				local sqs = deps.SquadOrdersService
 				if sqs and sqs.UnitPower then
@@ -106190,14 +106435,41 @@ function RivalService.Candidates(viewer: Player): { any }
 			end
 		end
 	end
-	return rows
+	return rows, reasons
 end
 
-local function push(player: Player, rows: { any })
+--[[ Code Bot v163: the one-line reason an EMPTY list shows under RivalConfig.EmptyText (the most common blocker
+	among the other online bases; nil = the generic text alone). Pure on the reason counts. ]]
+function RivalService.WhyEmpty(held: boolean, reasons: { [string]: number }?): string?
+	local W = RivalConfig.WhyText
+	if held then
+		return W.Held
+	end
+	local r = reasons or {}
+	if (r.Others or 0) == 0 then
+		return W.Alone
+	end
+	if (r.NoArmy or 0) > 0 then
+		return W.NoArmy -- the viewer's own state: every base says the same
+	end
+	if (r.Active or 0) > 0 or (r.Cooldown or 0) > 0 then
+		return W.Busy
+	end
+	local protected = (r.Shielded or 0) + (r.NewPlayer or 0) + (r.Novice or 0) + (r.Protected or 0) + (r.Ally or 0)
+	local best, bestN = nil, 0
+	for key, n in pairs({ Protected = protected, Poor = r.Poor or 0, Strong = r.TooWeak or 0 }) do
+		if n > bestN then
+			best, bestN = key, n
+		end
+	end
+	return if best then W[best] else nil
+end
+
+local function push(player: Player, rows: { any }, why: string?)
 	local rs = deps.RemoteSetup
 	local ev = rs and rs.Get(Constants.RemoteNames.FeaturePush)
 	if ev and ev:IsA("RemoteEvent") then
-		(ev :: RemoteEvent):FireClient(player, "RivalTargets", { Rows = rows })
+		(ev :: RemoteEvent):FireClient(player, "RivalTargets", { Rows = rows, Why = if #rows == 0 then why else nil })
 	end
 end
 
@@ -106208,14 +106480,18 @@ function RivalService.Tick()
 			-- nothing during the Guided / onboarding hold (the chain first); no soldiers = the verdict lists nothing
 			local held = deps.RetentionService and deps.RetentionService.IsOnboarding and deps.RetentionService.IsOnboarding(p) == true
 			local list = {}
+			local reasons = nil
 			if not held then
-				local ok, rows = pcall(function()
-					return RivalConfig.Pick(RivalService.Candidates(p))
+				local ok, rows, rs = pcall(function()
+					local cand, why = RivalService.Candidates(p)
+					return RivalConfig.Pick(cand), why
 				end)
 				list = if ok then rows else {}
+				reasons = if ok then rs else nil
 			end
 			lastRows[p.UserId] = list
-			push(p, list)
+			local okW, why = pcall(RivalService.WhyEmpty, held, reasons)
+			push(p, list, if okW then why else nil)
 		end
 	end
 end
@@ -115990,8 +116266,63 @@ local function guidedHook(name: string, ...: any)
 	end
 end
 
+--[[ Code Bot v163 (Shaun 2026-10-01: "I'm not a new player so can't see the guided tutorial"): an owner / admin-only
+	REPLAY of the Guided first minutes in TEST MODE (AdminService "/replaytutorial" or Settings > ADMIN > REPLAY GUIDED
+	TUTORIAL). ReplayGuided snapshots the tutorial fields into profile.GuidedReplay (saved, so a leave mid-replay is
+	restored on the next load), then plays the Guided order (OrderVersion 4) from step 1 with a fresh profile.Guided
+	{ Replay = true }. Nothing else in the save changes: steps the save cannot redo are skipped as for anyone (a
+	building already owned: Command Center / Barracks; the Home Outpost already taken), the training camp fight is
+	replayed, GuidedService grants NO cash in a replay (no recruit top-up, no reward cash; the banner still shows) and
+	sends NO funnel / analytics events. The end (last step, SKIP, or the next profile load) puts the snapshot back
+	exactly, without the end-of-tutorial follow-ups (no Starter Pack offer, no "tutorial complete" toast). ]]
+local REPLAY_FIELDS = { "TutorialComplete", "TutorialStep", "TutorialOrderVersion", "TutorialDoneAhead", "Guided" }
+
+local function isReplay(profile: any): boolean
+	return typeof(profile) == "table" and typeof(profile.GuidedReplay) == "table"
+end
+
+local function deepCopy(v: any): any
+	if typeof(v) ~= "table" then
+		return v
+	end
+	local out = {}
+	for k, x in pairs(v) do
+		out[k] = deepCopy(x)
+	end
+	return out
+end
+
+-- put the snapshot back (the save is exactly what it was before the replay); true when a replay was ended
+local function restoreReplay(player: Player, profile: any): boolean
+	if not isReplay(profile) then
+		return false
+	end
+	local snap = profile.GuidedReplay
+	for _, k in ipairs(REPLAY_FIELDS) do
+		local saved = snap.Fields and snap.Fields[k]
+		if saved == "__nil" then
+			profile[k] = nil
+		else
+			profile[k] = deepCopy(saved)
+		end
+	end
+	profile.GuidedReplay = nil
+	if DataService then
+		DataService.MarkDirty(player)
+	end
+	return true
+end
+
+function TutorialService.IsReplay(player: Player): boolean
+	local profile = DataService and DataService.GetProfile(player)
+	return isReplay(profile)
+end
+
 -- claude-bud JOB 29: seconds-since-join marks (analytics only) and the FastStart hold; never breaks the tutorial
 local function onboard(player: Player, step: string)
+	if TutorialService.IsReplay(player) then
+		return -- Code Bot v163: a test-mode replay sends no onboarding analytics
+	end
 	if AnalyticsService and AnalyticsService.Onboard then
 		pcall(AnalyticsService.Onboard, player, step)
 	end
@@ -116184,7 +116515,8 @@ local function stepAlreadyDone(profile: any, def: TutorialConfig.TutorialStepDef
 	-- claude-bud JOB 41: the Guided fight / reward are done once (profile.Guided)
 	local g = profile.Guided
 	if def.Id == "FirstFight" then
-		return (typeof(g) == "table" and g.CampDone == true) or profile.StarterOutpostTaken == true
+		-- Code Bot v163: a replay fights the camp again even though the Home Outpost was taken long ago
+		return (typeof(g) == "table" and g.CampDone == true) or (profile.StarterOutpostTaken == true and not isReplay(profile))
 	elseif def.Id == "Reward" then
 		return typeof(g) == "table" and g.RewardDone == true
 	end
@@ -116260,6 +116592,14 @@ local function setStep(player: Player, step: number, complete: boolean?)
 	DataService.MarkDirty(player)
 	pushTutorial(player)
 	guidedHook("OnStep", player, profile, getStep(profile, step), complete == true) -- claude-bud JOB 41
+	if complete and restoreReplay(player, profile) then
+		-- Code Bot v163: the end of a test-mode replay: the save is back as it was, no end-of-tutorial follow-ups
+		pushTutorial(player)
+		if NotificationService then
+			NotificationService.Notify(player, "Guided replay finished (test mode). Your progress is unchanged.", "Success")
+		end
+		return
+	end
 	retentionStep(player, step, complete == true) -- claude-bud JOB 29
 	if complete then
 		onboard(player, "TutorialDone") -- claude-bud JOB 29
@@ -116324,6 +116664,14 @@ function TutorialService.Complete(player: Player)
 	DataService.MarkDirty(player)
 	pushTutorial(player)
 	guidedHook("OnSkip", player, profile, skippedAt) -- claude-bud JOB 41: clears the camp at once, GuidedSkipped
+	if restoreReplay(player, profile) then
+		-- Code Bot v163: SKIP during a test-mode replay ends it: the snapshot goes back, nothing else runs
+		pushTutorial(player)
+		if NotificationService then
+			NotificationService.Notify(player, "Guided replay ended (test mode). Your progress is unchanged.", "Info", 3)
+		end
+		return
+	end
 	if NotificationService then
 		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
@@ -116332,6 +116680,49 @@ function TutorialService.Complete(player: Player)
 	firstAttackHint(player, TutorialConfig.FirstMinutes.AttackHintDelaySeconds) -- claude-bud JOB 7
 	endNoviceShield(player) -- F6: SKIP ends the novice shield too
 	scheduleStarterOffer(player, true) -- v71 money (M1): the Starter Pack offer 3 s after the tutorial
+end
+
+-- Code Bot v163: start the test-mode Guided replay (AdminService checks the caller is the owner / an admin first)
+function TutorialService.ReplayGuided(player: Player): (boolean, string)
+	if not DataService or not tutorialEnabled() then
+		return false, "Tutorial is off in this build"
+	end
+	local G: any = (TutorialConfig :: any).Guided
+	if GuidedService == nil or typeof(G) ~= "table" or G.Enabled ~= true then
+		return false, "Guided first minutes are off in this build"
+	end
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return false, "Profile not loaded yet"
+	end
+	if isReplay(profile) then
+		return false, "A guided replay is already running (SKIP ends it)"
+	end
+	if profile.TutorialComplete ~= true then
+		return false, "Finish or skip the current tutorial first"
+	end
+	local fields = {}
+	for _, k in ipairs(REPLAY_FIELDS) do
+		local v = profile[k]
+		fields[k] = if v == nil then "__nil" else deepCopy(v)
+	end
+	profile.GuidedReplay = { Fields = fields, At = os.time() }
+	profile.Guided = { Replay = true, Funnel = {} }
+	profile.TutorialOrderVersion = G.OrderVersion
+	profile.TutorialDoneAhead = nil
+	profile.TutorialComplete = false
+	profile.TutorialStep = skipOwnedBuySteps(profile, STEP_CLAIM)
+	lastAdvanceAt[player.UserId] = nil
+	lastAdvanceStep[player.UserId] = nil
+	DataService.MarkDirty(player)
+	pushTutorial(player)
+	guidedHook("OnResume", player, profile, getStep(profile, profile.TutorialStep))
+	task.defer(function()
+		if profile.BasePlotId then
+			TutorialService.Notify(player, "PlotAssigned")
+		end
+	end)
+	return true, "Guided replay started (test mode): no cash, no analytics, your save is restored at the end. SKIP ends it."
 end
 
 function TutorialService.Reset(player: Player)
@@ -116457,6 +116848,8 @@ function TutorialService.Init(deps: { [string]: any })
 	end
 
 	local function onProfileLoaded(player: Player, profile: any)
+		-- Code Bot v163: a test-mode Guided replay never outlives its session (left mid-replay: the snapshot goes back)
+		restoreReplay(player, profile)
 		if not tutorialEnabled() then
 			profile.TutorialComplete = true
 			pushTutorial(player)
@@ -149761,6 +150154,13 @@ return RetentionController
 	    "Loot $10k+" and the verdict chip; SEND ARMY = the same JOB 38 RequestArmySend remote the map uses (the server
 	    re-checks everything; the army WALKS: ArmyPlan), VIEW = the world map on that base card (tap-to-pin, no travel).
 	No exact loot number ever reaches this client.
+	Code Bot v163 (Shaun 2026-10-01: "I can't figure out where we can see the rival players for raids"): the pill was
+	hidden whenever the server listed 0 targets, which is nearly always for the owner (his server rarely has another
+	player past new-player protection, with $10k+ in the ATM, beatable by his army). The pill now ALWAYS shows for
+	everyone RivalConfig is live for; with no targets it is dimmed with no badge, and the list opens on an empty state
+	(RivalConfig.EmptyText + the server's one-line reason, RivalTargets.Why). It steps aside (hidden) only while a
+	full-screen panel is open (HudLayout "Modal", except its own list), while dead, and while the Recruit Pack card
+	(WE_RecruitPack, the same top-right corner) is on screen.
 ]]
 
 local Players = game:GetService("Players")
@@ -149789,7 +150189,11 @@ local pill: TextButton? = nil
 local badge: TextLabel? = nil
 local panel: Frame? = nil
 local rows: { any } = {}
+local why: string? = nil -- v163: the server's one-line reason when the list is empty
 local open = false
+local emptyLabel: TextLabel? = nil
+
+local updatePillLater: () -> () = function() end -- v163: set once updatePill exists (setOpen is defined first)
 
 local function corner(p: Instance, r: number)
 	local c = Instance.new("UICorner")
@@ -149808,6 +150212,7 @@ local function setOpen(on: boolean)
 	else
 		HudLayout.PanelClosed(PANEL_ID)
 	end
+	updatePillLater()
 end
 
 local function button(parent: Instance, text: string, color: Color3, x: UDim, w: number): TextButton
@@ -149882,7 +150287,32 @@ local function rebuildList()
 			end
 		end)
 	end
-	p.Size = UDim2.fromOffset(330, 44 + #rows * 86)
+	local e = emptyLabel
+	if e then
+		e.Visible = #rows == 0
+		e.Text = if why and why ~= "" then RivalConfig.EmptyText .. "\n" .. why else RivalConfig.EmptyText
+	end
+	p.Size = UDim2.fromOffset(330, if #rows == 0 then 40 + RivalConfig.EmptyHeight else 44 + #rows * 86)
+end
+
+-- v163: the pill is always there for a live player; it only steps aside for a full-screen panel (not its own list),
+-- death, and the Recruit Pack card that slides into the same corner
+local function recruitCardUp(): boolean
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	return pg ~= nil and pg:FindFirstChild("WE_RecruitPack") ~= nil
+end
+
+local function updatePill()
+	local pl = pill
+	if pl == nil then
+		return
+	end
+	local modalOther = HudLayout.GetFlag("Modal") and not open
+	pl.Visible = not modalOther and not HudLayout.GetFlag("Dead") and not recruitCardUp()
+end
+
+updatePillLater = function()
+	updatePill()
 end
 
 local function refresh()
@@ -149890,11 +150320,11 @@ local function refresh()
 	if pl == nil or b == nil then
 		return
 	end
-	pl.Visible = #rows > 0
-	b.Text = tostring(#rows)
-	if #rows == 0 and open then
-		setOpen(false)
-	end
+	local n = #rows
+	b.Text = tostring(n)
+	b.Visible = n > 0
+	pl.TextTransparency = if n > 0 then 0 else 0.35 -- dimmed (still readable, still tappable) with nothing to raid
+	updatePill()
 	rebuildList()
 end
 
@@ -149920,7 +150350,8 @@ local function build()
 	b.Font = Enum.Font.GothamBlack
 	b.TextSize = 16
 	b.Text = "TARGETS"
-	b.Visible = false
+	b.Visible = true -- v163: always there for a live player (dimmed with no targets)
+	b.TextTransparency = 0.35
 	b.Parent = g
 	corner(b, 24)
 	local st = Instance.new("UIStroke")
@@ -149936,6 +150367,7 @@ local function build()
 	bd.Font = Enum.Font.GothamBold
 	bd.TextSize = 14
 	bd.Text = "0"
+	bd.Visible = false
 	bd.Parent = b
 	corner(bd, 12)
 	pill = b
@@ -149960,6 +150392,21 @@ local function build()
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Text = "TARGETS"
 	title.Parent = f
+	-- v163: the empty state (shown while the server lists 0 targets)
+	local empty = Instance.new("TextLabel")
+	empty.Name = "Empty"
+	empty.BackgroundTransparency = 1
+	empty.Position = UDim2.fromOffset(12, 40)
+	empty.Size = UDim2.new(1, -24, 0, RivalConfig.EmptyHeight - 8)
+	empty.Font = Enum.Font.GothamMedium
+	empty.TextSize = 15
+	empty.TextWrapped = true
+	empty.TextXAlignment = Enum.TextXAlignment.Left
+	empty.TextYAlignment = Enum.TextYAlignment.Top
+	empty.TextColor3 = Color3.fromRGB(225, 225, 215)
+	empty.Text = RivalConfig.EmptyText
+	empty.Parent = f
+	emptyLabel = empty
 	local x = Instance.new("TextButton")
 	x.AnchorPoint = Vector2.new(1, 0)
 	x.Position = UDim2.new(1, -4, 0, -4)
@@ -149987,6 +150434,23 @@ local function build()
 	end, function()
 		setOpen(false)
 	end)
+	-- v163: visibility follows the HUD flags and the Recruit Pack card
+	HudLayout.FlagChanged:Connect(function(name: string)
+		if name == "Modal" or name == "Dead" then
+			updatePill()
+		end
+	end)
+	pg.ChildAdded:Connect(function(c: Instance)
+		if c.Name == "WE_RecruitPack" then
+			updatePill()
+		end
+	end)
+	pg.ChildRemoved:Connect(function(c: Instance)
+		if c.Name == "WE_RecruitPack" then
+			updatePill()
+		end
+	end)
+	refresh()
 end
 
 function RivalController.Init()
@@ -149999,6 +150463,7 @@ function RivalController.Init()
 			return
 		end
 		rows = data.Rows
+		why = if typeof(data.Why) == "string" then string.sub(data.Why, 1, 120) else nil
 		refresh()
 	end)
 end
@@ -150421,6 +150886,21 @@ function SettingsController.Init()
 			AudioController.PlayClick()
 			setOpen(false)
 			require(script.Parent.Parent.Modules.NotifOptIn).Ask("settings")
+		end)
+		y += TAP + 14
+	end
+
+	-- Code Bot v163 (Shaun: "I'm not a new player so can't see the guided tutorial"): owner / admin only. Replays the
+	-- Guided first minutes in TEST MODE (server: AdminService "replaytutorial" -> TutorialService.ReplayGuided: the save
+	-- is snapshotted and put back at the end, no cash, no analytics). The server re-checks the allowlist; nobody else
+	-- ever sees this row. Same as typing /replaytutorial in chat.
+	if table.find(AdminConfig.UserIds, player.UserId) ~= nil then
+		section("ADMIN")
+		local replayGuidedBtn = button("ReplayGuided", "REPLAY GUIDED TUTORIAL (test)", UDim.new(0, 16), UDim.new(1, -32))
+		replayGuidedBtn.Activated:Connect(function()
+			AudioController.PlayClick()
+			setOpen(false)
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAdminCommand, "replaytutorial")
 		end)
 		y += TAP + 14
 	end
