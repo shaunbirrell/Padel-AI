@@ -254,6 +254,11 @@ local EndgameConfig = {
 		RatePerSec = 2,
 		Burst = 4,
 		CloseRange = 22, -- the client closes the panel when you walk this far from the station
+		--[[ claude-bud JOB A (2026-10-01, P0 "the Recruitment Office closes by itself ~0.5 s after it opens"): the
+			Recruitment Office opens from TWO interaction points: the plaza NPC (prompt 12 studs) and the DRILL kiosk on
+			the player's own Elite Barracks zone (prompt 10 studs, JOB 46). The walk-away close is measured from the
+			point it was OPENED from, with hysteresis: open inside the prompt range, close only past RecruitCloseRange. ]]
+		RecruitCloseRange = 17,
 	},
 
 	Text = {
@@ -565,6 +570,15 @@ function EndgameConfig.BlackMarketStock(week: number): { Cash: { string }, Gold:
 	end
 	local gi = (w % #B.GoldPool) + 1
 	return { Cash = out, Gold = B.GoldPool[gi], GoldPrice = B.GoldPrices[gi] or B.GoldPrices[1] }
+end
+
+-- claude-bud JOB A: the Recruitment Office's walk-away rule (pure): close only past RecruitCloseRange from the point it
+-- was opened from (the hysteresis band between the prompt's 10-12 studs and 17)
+function EndgameConfig.RecruitShouldClose(distFromAnchor: number?): boolean
+	if distFromAnchor == nil or distFromAnchor ~= distFromAnchor then
+		return false -- no anchor known (state still loading): never a close
+	end
+	return distFromAnchor > (tonumber(EndgameConfig.Station.RecruitCloseRange) or 17)
 end
 
 return EndgameConfig

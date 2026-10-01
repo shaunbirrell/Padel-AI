@@ -43,6 +43,7 @@ local Dressing: any = nil -- claude-bud JOB 46: Modules/RebirthZoneDressing (the
 local ZC: any = RebirthZonesConfig
 local apronOk: { [number]: { [string]: boolean } } = {} -- plotId -> zoneId -> the front apron is free (checked once)
 local sweepAt: { [number]: number } = {} -- userId -> clock of the last drone sweep
+local kioskOf: { [number]: { [string]: BasePart } } = {} -- claude-bud JOB A: userId -> zoneId -> his activity kiosk
 local Z = RebirthZonesConfig
 
 local plotOf: { [number]: number } = {} -- userId -> the plot his zones are built on
@@ -368,6 +369,22 @@ end
 	ship = Shipment.Minutes of this zone's own flat income once every Shipment.CooldownMinutes (profile.ZoneShipAt,
 	saved); sweep = the drones empty the ATM now; drill / strike = open the Elite Training / missile panel (FeaturePush
 	"ZoneOpen"); nuke = NukeService.OpenPanel. Returns (ok, why). ]]
+-- claude-bud JOB A: the position of HIS built kiosk for an activity ("drill" = the Recruitment Office's second
+-- interaction point), or nil. Another player's kiosk is never returned (keyed by his UserId).
+function RebirthZoneService.KioskPoint(player: Player, activity: string): Vector3?
+	local mine = kioskOf[player.UserId]
+	if mine == nil then
+		return nil
+	end
+	for zoneId, panel in pairs(mine) do
+		local info = ZC.Info[zoneId]
+		if info and info.Activity == activity and panel.Parent then
+			return panel.Position
+		end
+	end
+	return nil
+end
+
 function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: number?): (boolean, string)
 	local profile = deps.DataService and deps.DataService.GetProfile(player)
 	local info = ZC.Info[zoneId]
@@ -420,7 +437,9 @@ function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: nu
 		local rs = deps.RemoteSetup
 		local ev = rs and rs.Get(require(Shared.Constants).RemoteNames.FeaturePush)
 		if ev and ev:IsA("RemoteEvent") then
-			(ev :: RemoteEvent):FireClient(player, "ZoneOpen", { Panel = if kind == "drill" then "Recruits" else "Missile", Zone = zoneId })
+			local kp = kioskOf[player.UserId] and kioskOf[player.UserId][zoneId] -- claude-bud JOB A: the client's anchor point
+			;(ev :: RemoteEvent):FireClient(player, "ZoneOpen", { Panel = if kind == "drill" then "Recruits" else "Missile", Zone = zoneId,
+				Point = if kp and kp.Parent then kp.Position else nil })
 		end
 		return true, "opened"
 	elseif kind == "nuke" then
@@ -434,6 +453,8 @@ function RebirthZoneService.Activity(player: Player, zoneId: string, nowUnix: nu
 end
 
 local function addActivityPrompt(player: Player, zoneId: string, panel: BasePart)
+	kioskOf[player.UserId] = kioskOf[player.UserId] or {}
+	kioskOf[player.UserId][zoneId] = panel -- claude-bud JOB A: his kiosk (the Recruitment Office's second interaction point)
 	local info = ZC.Info[zoneId]
 	local z = Z.Zones[zoneId]
 	local p = Instance.new("ProximityPrompt")
@@ -713,6 +734,7 @@ function RebirthZoneService.Init(d: { [string]: any })
 		plotOf[p.UserId] = nil
 		lastCollect[p.UserId] = nil
 		sweepAt[p.UserId] = nil
+		kioskOf[p.UserId] = nil -- claude-bud JOB A
 		if plotId then
 			local pf = zonesFolder():FindFirstChild("Plot" .. plotId)
 			if pf then

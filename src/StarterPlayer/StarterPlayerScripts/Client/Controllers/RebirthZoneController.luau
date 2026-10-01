@@ -167,8 +167,10 @@ function RebirthZoneController.Init()
 			local ok, EC = pcall(function(): any
 				return require(script.Parent.EndgameController)
 			end)
-			if ok and EC and EC.OpenStation then
-				EC.OpenStation("Recruits")
+			-- claude-bud JOB A: the kiosk on HIS zone opens the Recruitment Office anchored at that kiosk (the server sends
+			-- its point), so the walk-away close measures from where he stands, not from the plaza
+			if ok and EC and EC.OpenRecruitmentOffice then
+				EC.OpenRecruitmentOffice("Zone", if typeof(data.Point) == "Vector3" then data.Point else nil)
 			end
 		elseif data.Panel == "Missile" then
 			local ok, MC = pcall(function(): any

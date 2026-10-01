@@ -10063,3 +10063,7 @@ ds_territories.luau T3):
   server timings stay as they were.
 - **The missions toast:** it shows only when 3 untouched core missions are offered (part C live), once per session.
 - **Comeback with no offline pay:** it still gets the Welcome back card (Cash 0 + Comeback).
+
+## 2026-10-01 — claude-bud JOB A: Recruitment Office
+- **What "the office" is:** "beside my office" is taken to be the DRILL kiosk on his own Elite Barracks zone. That is the only Recruitment Office path that closes at 0.5 s; the plaza path was in range.
+- **Damage:** a damage scratch no longer closes this panel. Buying while hurt is still blocked server-side (HurtLock).

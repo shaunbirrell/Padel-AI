@@ -615,6 +615,11 @@ local function refreshStation()
 	end
 end
 
+-- claude-bud JOB A: where the Recruitment Office was opened from ("Plaza" NPC / "Zone" kiosk on his own base) and that
+-- point (the walk-away close is measured from it). Set only by OpenRecruitmentOffice.
+local recruitSource: string? = nil
+local recruitAnchor: Vector3? = nil
+
 local function stationPoint(kind: string): Vector3?
 	if kind == "HQ" then
 		local c = hqConsole
@@ -1064,14 +1069,61 @@ function setListOpen(kind: string?)
 				if tick % 4 == 0 then
 					refreshList() -- the ETAs (every 2 s; a buy's push refreshes at once)
 				end
-				local pt = stationPoint(kind)
 				local c = player.Character
 				local r = c and c:FindFirstChild("HumanoidRootPart")
-				if pt and r and r:IsA("BasePart") and (r.Position - pt).Magnitude > EndgameConfig.Station.CloseRange then
-					setListOpen(nil)
+				if kind == "Recruits" then
+					-- claude-bud JOB A: ROOT CAUSE of "closes by itself ~0.5 s later": this loop measured the distance to
+					-- the PLAZA office (stationPoint) even when the panel was opened from the DRILL kiosk on his own Elite
+					-- Barracks zone, so the first tick (0.5 s) was always past CloseRange and called setListOpen(nil).
+					-- Now: from the point it was opened from, with hysteresis (RecruitShouldClose).
+					local pt = recruitAnchor or stationPoint(kind)
+					if pt and r and r:IsA("BasePart") and EndgameConfig.RecruitShouldClose((r.Position - pt).Magnitude) then
+						EndgameController.CloseRecruitmentOffice("WalkAway")
+					end
+				else
+					local pt = stationPoint(kind)
+					if pt and r and r:IsA("BasePart") and (r.Position - pt).Magnitude > EndgameConfig.Station.CloseRange then
+						setListOpen(nil)
+					end
 				end
 			end
 		end)
+	end
+end
+
+--[[ claude-bud JOB A: THE one way to open / close the Recruitment Office. Every path goes through these two (the plaza
+	prompt, the zone kiosk's ZoneOpen push, X, walk-away, death, another menu). A second open while it is open only
+	re-points the anchor (no second loop, no second connection). ]]
+function EndgameController.OpenRecruitmentOffice(source: string, point: Vector3?)
+	warn("[RECRUITMENT OPEN]", source, os.clock())
+	if listOpen == "Recruits" then
+		recruitSource, recruitAnchor = source, point or recruitAnchor
+		return
+	end
+	recruitSource, recruitAnchor = source, point
+	setListOpen("Recruits")
+end
+
+-- where the open Recruitment Office was opened from ("Plaza" / "Zone"), nil when closed (debug / tests)
+function EndgameController.RecruitmentSource(): string?
+	return recruitSource
+end
+
+function EndgameController.CloseRecruitmentOffice(reason: string)
+	if listOpen ~= "Recruits" then
+		return
+	end
+	warn("[RECRUITMENT CLOSE] Reason:", reason, os.clock())
+	recruitSource, recruitAnchor = nil, nil
+	setListOpen(nil)
+end
+
+-- the list panel's own closers: the Recruitment Office goes through CloseRecruitmentOffice (with its reason)
+local function closeList(reason: string)
+	if listOpen == "Recruits" then
+		EndgameController.CloseRecruitmentOffice(reason)
+	else
+		setListOpen(nil)
 	end
 end
 
@@ -1249,6 +1301,8 @@ function EndgameController.OpenStation(kind: string)
 	end
 	if kind == "Command" then
 		setStationOpen(kind)
+	elseif kind == "Recruits" then
+		EndgameController.OpenRecruitmentOffice("Plaza", stationPoint("Recruits")) -- claude-bud JOB A
 	elseif LIST_TITLES[kind] then
 		setListOpen(kind)
 	end
@@ -1374,7 +1428,7 @@ local function buildPanels(pg: PlayerGui)
 	listPanel = lp
 	listTitle = PanelShell.Title(lp, "ENGINEERING BUREAU")
 	PanelShell.CloseButton(lp, function()
-		setListOpen(nil)
+		closeList("X") -- claude-bud JOB A
 	end)
 	local lsub = Instance.new("TextLabel")
 	lsub.BackgroundTransparency = 1
@@ -1410,7 +1464,7 @@ local function buildPanels(pg: PlayerGui)
 			return listOpen ~= nil
 		end,
 		Close = function()
-			setListOpen(nil)
+			closeList("OtherMenu") -- claude-bud JOB A: another major menu opened
 		end,
 	})
 
@@ -1734,6 +1788,7 @@ local function watchDamage(char: Model)
 	local last = hum.Health
 	syncMed(hum)
 	hum.Died:Connect(function()
+		EndgameController.CloseRecruitmentOffice("Death") -- claude-bud JOB A
 		local ub = upBtn
 		if ub and player:GetAttribute("WE_Revive") == true then
 			ub.Visible = true
@@ -1753,8 +1808,8 @@ local function watchDamage(char: Model)
 		if h < last and stationOpen ~= nil then
 			setStationOpen(nil) -- the plaza is contested PvP: taking damage closes the shop
 		end
-		if h < last and listOpen ~= nil then
-			setListOpen(nil)
+		if h < last and listOpen ~= nil and listOpen ~= "Recruits" then
+			setListOpen(nil) -- claude-bud JOB A: the Recruitment Office closes on death, not on a scratch (the server's HurtLock still blocks buys)
 		end
 		syncMed(hum)
 		last = h

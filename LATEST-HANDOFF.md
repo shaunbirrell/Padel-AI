@@ -7,6 +7,31 @@
 - **Publish:** HTTP 200, versionNumber **176**, universe 10767159222 / place 97112936860418. Servers NOT restarted: Migrate to Latest Update when convenient.
 - **Phone tests (owed — Shaun):** (1) Missions shows "TODAY'S 3 MISSIONS · new in Xh Ym" with 3 different types; each GO goes to the right place. (2) Reroll once; second reroll refused. (3) Finish all 3; chest pays once. (4) After shown reset time, 3 new missions. Also: CapBoost/OfflineCap2x/MissionReroll Id 0 still off. After phone OK: flip MissionConfig.Core.OwnerFirst true→false. **Question for Shaun:** should Daily Ops below the 3 core missions be hidden?
 - **Still owed:** JOB 44 Studio 2-player siege/march still owed.
+## claude-bud JOB A (2026-10-01, P0): RECRUITMENT OFFICE CLOSED ITSELF ~0.5 s AFTER OPENING (branch `claude/desktop-bud`)
+**Root cause (proved; docs/proof/recruitment-office/REPORT.md + sim.txt):**
+- The DRILL kiosk on his Elite Barracks zone (JOB 46) opens the Recruitment Office panel.
+- `EndgameController.setListOpen`'s 0.5 s loop measured his distance to the **plaza** office (`stationPoint`), not
+  the kiosk he pressed.
+- From any plot that is >= 531 studs against CloseRange 22, so the first tick closed it every time.
+- The server's `AtStation("Recruits")` was plaza-only too, so kiosk buys were refused.
+
+**Fix:**
+- One `OpenRecruitmentOffice(source, point)` / `CloseRecruitmentOffice(reason)` pair with the `[RECRUITMENT OPEN]` /
+  `[RECRUITMENT CLOSE] Reason:` warns.
+- The walk-away close is measured from the point it was opened from, with hysteresis: open at 10-12 studs, close past
+  17 (`EndgameConfig.Station.RecruitCloseRange`).
+- It closes only on X / WalkAway / Death / OtherMenu; the prompt hiding never closes it; a scratch no longer closes it.
+- The server accepts his own kiosk (`RebirthZoneService.KioskPoint`) for buys.
+- No delay / debounce / teleport; the plaza path behaves as before.
+
+**Checks:** run_recruitment_office_test 0 failed; claude_bud_jobA pin; BuyPathStatic FAIL=0.
+
+**Test ON HIS PHONE:**
+1. Press DRILL at your Elite Barracks once: it stays open until X. Repeat 10 times.
+2. Walk a few steps: it stays open. Walk away (~18+ studs): it closes.
+3. Buy an upgrade from it: it works.
+4. The plaza Recruitment Office still opens and closes as before.
+
 ## claude-bud JOB 49 part D (2026-10-01): ONE RETURN SEQUENCE + ANALYTICS (JOB 49 COMPLETE) (branch `claude/desktop-bud`)
 **Flags to flip:**
 - `RetentionConfig.ReturnSequence.OwnerFirst = true -> false` (NEW-OWNER-FIRST).

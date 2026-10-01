@@ -1080,6 +1080,18 @@ end
 
 -- (true) when the player stands within BuyRange of the station's NPC
 function EndgameService.AtStation(player: Player, kind: string): boolean
+	if kind == "Recruits" then
+		-- claude-bud JOB A: the Recruitment Office's second interaction point: the DRILL kiosk on HIS own built Elite
+		-- Barracks zone (JOB 46). Without this a buy from the kiosk was refused even with the panel open.
+		local okK, kp = pcall(function(): any
+			return (require :: any)(script.Parent.RebirthZoneService).KioskPoint(player, "drill")
+		end)
+		local c0 = player.Character
+		local r0 = c0 and c0:FindFirstChild("HumanoidRootPart")
+		if okK and typeof(kp) == "Vector3" and r0 and r0:IsA("BasePart") and (r0.Position - kp).Magnitude <= EndgameConfig.Station.BuyRange then
+			return true
+		end
+	end
 	local p = EndgameService.StationPoint(kind)
 	local c = player.Character
 	local r = c and c:FindFirstChild("HumanoidRootPart")
