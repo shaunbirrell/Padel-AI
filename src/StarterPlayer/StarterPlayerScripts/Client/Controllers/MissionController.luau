@@ -738,6 +738,27 @@ local function refresh()
 		end
 	end
 
+	-- claude-bud JOB 49 C: the core missions' header: the REAL time to the next reset (the server's clock), rerolls left
+	local coreState: any = (state :: any).Core
+	if typeof(coreState) == "table" and tonumber(coreState.ResetUnix) and tonumber(coreState.ServerNow) then
+		local tSize = PanelShell.Text(13)
+		local left = math.max(0, math.floor(coreState.ResetUnix - coreState.ServerNow - (os.clock() - stateReceivedAt)))
+		local hdr = Instance.new("TextLabel")
+		hdr.Name = "CoreHeader"
+		hdr.LayoutOrder = -90
+		hdr.BackgroundTransparency = 1
+		hdr.Size = UDim2.new(1, -8, 0, tSize + 10)
+		hdr.Font = Enum.Font.GothamBlack
+		hdr.TextSize = tSize
+		hdr.TextXAlignment = Enum.TextXAlignment.Left
+		hdr.TextColor3 = Constants.Colors.Gold
+		hdr.Text = string.format("TODAY'S 3 MISSIONS · new in %dh %02dm%s%s", left // 3600, (left % 3600) // 60,
+			if (tonumber(coreState.RerollsLeft) or 0) > 0 then string.format(" · %d reroll", coreState.RerollsLeft) else "",
+			if coreState.ChestDone == true then " · CHEST OPENED" else " · all 3 = chest")
+		hdr.TextTruncate = Enum.TextTruncate.AtEnd
+		hdr.Parent = listFrame
+	end
+
 	-- claude-bud JOB 31: ACTIVITIES rows (one right-hand button each: START / GO; cooldowns show the time)
 	if activitiesLive() and typeof(actState) == "table" and typeof(actState.List) == "table" and #actState.List > 0 then
 		local tS, dS = PanelShell.Text(14), PanelShell.Text(11)
@@ -938,10 +959,28 @@ local function refresh()
 			end)
 		else
 			local goEntry: any = mission
-			if MissionController.GoTarget(goEntry, nil) ~= nil then
+			local goDef: any = if type(goEntry.Go) == "string" then MissionConfig.Go[goEntry.Go] else nil
+			if goDef and goDef.Client == true then
+				-- claude-bud JOB 49 C: a core mission's GO acts here (the TARGETS card / the Army panel / his next console)
+				local btn = rowButton(row, "GoButton", "GO", Constants.Colors.XP, Constants.Colors.TextDark, btnW, btnH)
+				btn.Activated:Connect(function()
+					pcall(AudioController.PlayClick)
+					MissionController.ClientGo(goEntry)
+				end)
+			elseif MissionController.GoTarget(goEntry, nil) ~= nil then
 				local btn = rowButton(row, "GoButton", "GO", Constants.Colors.XP, Constants.Colors.TextDark, btnW, btnH)
 				btn.Activated:Connect(function()
 					onGo(goEntry)
+				end)
+			end
+			if goEntry.CanReroll == true then
+				-- claude-bud JOB 49 C: reroll (server-checked; a different mission, never a reward). 48 px real square.
+				local rr = rowButton(row, "RerollButton", "↻", Color3.fromRGB(60, 66, 74), Constants.Colors.Text, TAP, TAP)
+				rr.Position = UDim2.new(1, -(btnW + 16), 0.5, 0)
+				local missionId = goEntry.Id
+				rr.Activated:Connect(function()
+					pcall(AudioController.PlayClick)
+					fire(Constants.RemoteNames.RequestMissionReroll, missionId)
 				end)
 			end
 		end
@@ -1008,6 +1047,31 @@ end
 
 closePanel = function()
 	setOpen(false)
+end
+
+-- claude-bud JOB 49 C: a client-side GO: Raid -> the TARGETS list, Recruit -> the Army panel, Build -> the gold line
+-- to his next console (ConsoleWaypoint; the server picked the structure). The panel closes first.
+function MissionController.ClientGo(entry: any)
+	local go = if type(entry) == "table" then entry.Go else nil
+	if closePanel then
+		closePanel()
+	end
+	if go == "Targets" then
+		pcall(function()
+			local RC: any = (require :: any)(script.Parent.RivalController)
+			RC.Open()
+		end)
+	elseif go == "Army" then
+		pcall(function()
+			local AC: any = (require :: any)(script.Parent.ArmyController)
+			AC.Open()
+		end)
+	elseif go == "Build" and type(entry.GoStructure) == "string" then
+		pcall(function()
+			local CW: any = (require :: any)(script.Parent.Parent.Modules.ConsoleWaypoint)
+			CW.Show(entry.GoStructure, tonumber(player:GetAttribute("WE_PlotId")))
+		end)
+	end
 end
 
 -- GO: point the one objective marker at the nearest target, then get the panel out of the way

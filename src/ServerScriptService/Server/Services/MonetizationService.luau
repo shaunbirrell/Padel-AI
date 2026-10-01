@@ -1905,6 +1905,16 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 			return Enum.ProductPurchaseDecision.NotProcessedYet
 		end
 	end
+	-- claude-bud JOB 49 C: the Robux mission reroll (DevProducts.MissionReroll: Id 0, no price = never sold until Shaun
+	-- approves one). A token only; MissionService.Reroll spends it (never a reward).
+	if (product :: any).GrantsMissionReroll == true then
+		local okR, granted = pcall(function(): any
+			return (require :: any)(script.Parent.MissionService).GrantRerollToken(player)
+		end)
+		if not okR or granted ~= true then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+	end
 	if cashGrant > 0 then
 		EconomyService.AddCash(player, cashGrant, "devproduct")
 	end

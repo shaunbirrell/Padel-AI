@@ -10050,3 +10050,10 @@ ds_territories.luau T3):
   ATM.
 - **OfflineCap2x:** a permanent entitlement through the existing GrantEntitlement receipt path. It stays disabled
   with Id 0 until Shaun approves a price.
+
+## 2026-10-01 — claude-bud JOB 49 part C: core missions
+- **Raid availability:** decided once at the day's first build, so the list never reshuffles. The NPC fallback
+  from JOB 48 is not used for the Raid mission; WinFights covers fights.
+- **The reset hour:** Core.ResetHourUtc moves the reset for the whole daily list (it is 0, so no change today).
+- **The Build GO target:** the cheapest next upgrade by BaseConfig cost. A reroll picks the first loop type not
+  already offered (Pool order).

@@ -33,4 +33,28 @@ ok    CapBoost ON (test only): 2x the cap TIME with the entitlement ($144000), S
 ok    Card OFF: the JOB 29 payload exactly (no Collect / CapHours)
 ok    OfflineEarned logged once per payout
 MATHS offline: $60/min -> 1 h $900, cap (8 h) $7200 | $1000/min -> 1 h $15000, cap (8 h) $120000 | $20000/min -> 1 h $300000, cap (8 h) $2400000
+ok    C flags: Core is owner-first; the Robux reroll hook is DISABLED
+ok    C: DevProducts.MissionReroll Id 0, no price (never prompted)
+ok    3 core missions of 3 different loop types on top: CoreRecruit1, CoreBuild1, CoreWinFights1
+ok    the Daily Ops stay below the core missions (3)
+ok    a level-5 player gets tier-1 targets (finishable in one session)
+ok    the payload carries the real reset time and 1 free reroll
+ok    stable within the day (even after a level-up)
+ok    no raid possible: the Raid mission is not offered (CoreRecruit1, CoreBuild1, CoreWinFights1)
+ok    a day with the Raid mission (CoreRaid1)
+ok    a raid win (TrackProgress Raid, from the ArmyPlan / ATM raid hooks) counts
+ok    progress + the day's list survive a rejoin (save + Migrate + a fresh server)
+ok    all 3 claimed -> the chest once ($12000); MissionDone x3
+ok    each core mission pays max(floor, 10 min of income): $18000
+ok    claiming again pays nothing (idempotent), no second chest
+ok    ResetHourUtc 6: the day rolls at 06:00 UTC, not before (progress reset)
+ok    the next reset is 24 h after 06:00
+ok    the free reroll swaps a mission for another loop type not already offered (CoreRaid1 -> CoreBuild1)
+ok    a second reroll the same day is refused (NoRerolls)
+ok    Robux reroll hook OFF: tokens do nothing (never sold while Id 0)
+ok    Robux hook ON (test only): a token rerolls and is spent; a reroll never pays
+ok    the receipt grant path adds a token (MissionService.GrantRerollToken)
+ok    the free reroll comes back the next day
+ok    Core OFF: today's rotation exactly (no core rows, no Core payload)
+ok    owner-first: another player still gets today's rotation
 DAILY RETURN TEST: 0 failed

@@ -138,13 +138,30 @@ local function ensureDaily(profile: Types.PlayerProfile)
 		dm.ActiveTimed = {}
 	end
 
-	local today = yyyymmdd(os.time())
+	local today = yyyymmdd(os.time() - MissionService.ResetOffsetSeconds()) -- claude-bud JOB 49 C: Core.ResetHourUtc (0 = 00:00 UTC)
 	if MissionConfig.RefreshOnUtcDayChange and dm.DayKey ~= today then
 		dm.DayKey = today
 		dm.Progress = {}
 		dm.Claimed = {}
 		-- Keep ActiveTimed; they can finish across midnight
+		local d: any = dm
+		d.Core, d.CoreChest, d.RerollsUsed = nil, nil, nil -- claude-bud JOB 49 C: a fresh core list / chest / free reroll each day
 	end
+end
+
+-- claude-bud JOB 49 C: the daily reset hour as an offset (Core.ResetHourUtc while Core is enabled; 0 = 00:00 UTC)
+function MissionService.ResetOffsetSeconds(): number
+	local core: any = (MissionConfig :: any).Core
+	if typeof(core) ~= "table" or core.Enabled ~= true then
+		return 0
+	end
+	return math.clamp(math.floor(tonumber(core.ResetHourUtc) or 0), 0, 23) * 3600
+end
+
+-- the unix time of the next daily reset after `now`
+function MissionService.NextResetUnix(now: number): number
+	local off = MissionService.ResetOffsetSeconds()
+	return (math.floor((now - off) / 86400) + 1) * 86400 + off
 end
 
 -- Timed missions share DailyMissions.Claimed (reset on UTC day change) under a prefixed key.
@@ -580,6 +597,73 @@ local function pickMissions(level: number, userId: number, dayIndex: number, roo
 	return out
 end
 
+-- ── claude-bud JOB 49 C: the 3 CORE missions ───────────────────────────────────────────────────────────────────────
+local SALT_CORE = 15485863
+local CORE: any = (MissionConfig :: any).Core
+
+local function coreLive(userId: number): boolean
+	return typeof(CORE) == "table" and MissionConfig.CoreLiveFor(userId)
+end
+
+-- a raid is possible for him right now (the JOB 38 verdicts: RivalService lists at least one allowed base)
+function MissionService.RaidPossible(player: Player?): boolean
+	if player == nil then
+		return false
+	end
+	local ok, RS = pcall(function(): any
+		return (require :: any)(script.Parent.RivalService)
+	end)
+	if not ok or RS == nil or RS.Candidates == nil then
+		return false
+	end
+	local okC, rows = pcall(RS.Candidates, player)
+	return okC and typeof(rows) == "table" and #rows > 0
+end
+
+local function coreTypeOf(id: string): string?
+	return string.match(id, "^Core(%a+)%d$")
+end
+
+-- today's core ids (saved in DailyMissions.Core on the first build of the day: the list never reshuffles)
+local function coreList(userId: number, profile: Types.PlayerProfile): { string }
+	local dm: any = profile.DailyMissions
+	if typeof(dm.Core) == "table" and #dm.Core > 0 then
+		return dm.Core
+	end
+	local player = Players:GetPlayerByUserId(userId)
+	local raidOk = MissionService.RaidPossible(player)
+	local pool: { string } = {}
+	for _, t in ipairs(CORE.Pool) do
+		if CORE.Types[t] ~= nil and (t ~= "Raid" or raidOk) then
+			table.insert(pool, t)
+		end
+	end
+	local tier = MissionConfig.CoreTier(levelOf(profile))
+	local picks = rotatePick(pool, math.max(1, math.floor(tonumber(CORE.Count) or 3)), userId, dayIndexOf(tonumber(dm.DayKey) or 0), SALT_CORE)
+	local out: { string } = {}
+	for _, t in ipairs(picks) do
+		table.insert(out, "Core" .. t .. tostring(math.min(tier, #CORE.Types[t].Targets)))
+	end
+	dm.Core = out
+	if DataService and player then
+		DataService.MarkDirty(player)
+	end
+	return out
+end
+
+-- the cash a core mission / the chest pays: max(the floor, minutes x his income per minute)
+local function incomeScaled(player: Player, profile: any, floorCash: number, minutes: number): number
+	local okM, MS = pcall(function(): any
+		return (require :: any)(script.Parent.MonetizationService)
+	end)
+	local perMin = 0
+	if okM and MS and MS.PassivePerMin then
+		local okP, v = pcall(MS.PassivePerMin, player, profile, true)
+		perMin = if okP and typeof(v) == "number" and v == v and v > 0 then v else 0
+	end
+	return math.max(math.floor(floorCash), math.floor(perMin * math.max(0, minutes)))
+end
+
 --[[ Today's offered ids for this player (ops first). Deterministic in (UserId, DayKey, level) plus today's progress:
 	any mission with progress today stays offered, taking the place of the last pick of its kind that has none. ]]
 local function offerFor(userId: number, profile: Types.PlayerProfile): { string }
@@ -591,6 +675,14 @@ local function offerFor(userId: number, profile: Types.PlayerProfile): { string 
 	local dayIndex = dayIndexOf(dayKey)
 	local level = levelOf(profile)
 	local ops = pickOps(level, userId, dayIndex)
+	if coreLive(userId) then
+		-- claude-bud JOB 49 C: the 3 core missions on top, the Daily Ops below (unchanged)
+		local out: { string } = table.clone(coreList(userId, profile))
+		for _, id in ipairs(ops) do
+			table.insert(out, id)
+		end
+		return out
+	end
 	local room = math.max(0, (MissionConfig.MaxActiveDaily or 6) - #ops)
 	local missions = pickMissions(level, userId, dayIndex, room)
 	while #missions > room do
@@ -671,10 +763,28 @@ local function buildPayload(player: Player, profile: Types.PlayerProfile): (Type
 				RewardXP = def.RewardXP,
 				RewardGold = def.RewardGold or 0,
 			}
+			if coreTypeOf(id) and coreLive(player.UserId) then
+				-- claude-bud JOB 49 C: a core row: the real (income-scaled) reward, client GO, reroll allowed
+				local e: any = entry
+				e.Core = true
+				e.RewardCash = incomeScaled(player, profile, def.RewardCash, tonumber(CORE.RewardIncomeMinutes) or 0)
+				e.CanReroll = not claimed and not complete and MissionService.RerollsLeft(player, profile) > 0
+				if def.Go == "Build" then
+					e.GoStructure = MissionService.NextBuild(profile)
+				end
+			end
 			-- W3 step 2: GO while incomplete. Extra fields ride on the entry without a Types edit (Types is in flight)
 			local go = def.Go
 			local goBit = ""
-			if type(go) == "string" and not complete and not claimed and MissionConfig.Go[go] ~= nil then
+			local goDef: any = if type(go) == "string" then MissionConfig.Go[go] else nil
+			if goDef and goDef.Client == true then
+				-- claude-bud JOB 49 C: a client-side GO (the TARGETS card / Army panel / next console): no world target
+				if not complete and not claimed then
+					local e: any = entry
+					e.Go = go
+					goBit = go
+				end
+			elseif type(go) == "string" and not complete and not claimed and MissionConfig.Go[go] ~= nil then
 				local targets = goTargets(go)
 				goBit = go .. "@" .. tostring(goRev[go] or 0)
 				if #targets > 0 then
@@ -704,6 +814,18 @@ local function buildPayload(player: Player, profile: Types.PlayerProfile): (Type
 		},
 	}
 	table.insert(sig, if already then "L1" else "L0")
+	if coreLive(player.UserId) then
+		-- claude-bud JOB 49 C: the real time to the next reset, the free rerolls left, the chest
+		local now = os.time()
+		local dm: any = profile.DailyMissions
+		;(payload :: any).Core = {
+			ServerNow = now,
+			ResetUnix = MissionService.NextResetUnix(now),
+			RerollsLeft = MissionService.RerollsLeft(player, profile),
+			ChestDone = dm.CoreChest == true,
+		}
+		table.insert(sig, "C" .. tostring(MissionService.RerollsLeft(player, profile)) .. (if dm.CoreChest == true then "X" else ""))
+	end
 	-- claude-bud JOB 29: the 7-day strip + tomorrow goals ride on the payload (nil while ShowTomorrow is off)
 	local strip = streakStrip(player, profile, already)
 	if strip then
@@ -930,11 +1052,18 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 	profile.Stats.MissionsCompleted += 1
 
 	local cash = def.RewardCash
+	local isCore = coreTypeOf(missionId) ~= nil and coreLive(player.UserId)
+	if isCore then
+		cash = incomeScaled(player, profile, def.RewardCash, tonumber(CORE.RewardIncomeMinutes) or 0) -- claude-bud JOB 49 C
+	end
 	if TerritoryService and TerritoryService.GetMissionCashMult then
 		cash = math.floor(cash * TerritoryService.GetMissionCashMult(player))
 	end
 	if cash > 0 then
 		EconomyService.AddCash(player, cash, "mission")
+	end
+	if isCore then
+		MissionService.CoreClaimed(player, profile, missionId)
 	end
 	if (def.RewardGold or 0) > 0 then
 		EconomyService.AddGold(player, def.RewardGold :: number, "mission")
@@ -996,6 +1125,151 @@ function MissionService.Day7Cash(player: Player, profile: any): number
 	end
 	local mins = math.max(0, tonumber((DailyRewardConfig :: any).Day7Scale.IncomeMinutes) or 0)
 	return math.max(floorCash, math.floor(perMin * mins))
+end
+
+-- ── claude-bud JOB 49 C: chest, reroll, next build ─────────────────────────────────────────────────────────────────
+-- a core mission was claimed: MissionDone, and the chest once all of today's core missions are claimed
+function MissionService.CoreClaimed(player: Player, profile: any, missionId: string)
+	local dm: any = profile.DailyMissions
+	if AnalyticsService then
+		AnalyticsService.Log("MISSION_DONE", player.UserId, { type = coreTypeOf(missionId) or "?" })
+	end
+	if dm.CoreChest == true or typeof(dm.Core) ~= "table" then
+		return
+	end
+	for _, id in ipairs(dm.Core) do
+		if dm.Claimed[id] ~= true then
+			return
+		end
+	end
+	dm.CoreChest = true
+	local chest = CORE.Chest
+	local cash = incomeScaled(player, profile, tonumber(chest.Cash) or 0, tonumber(chest.IncomeMinutes) or 0)
+	if cash > 0 then
+		EconomyService.AddCash(player, cash, "mission_chest")
+	end
+	if (tonumber(chest.Gold) or 0) > 0 then
+		EconomyService.AddGold(player, math.floor(chest.Gold), "mission_chest")
+	end
+	if NotificationService then
+		NotificationService.Notify(player, "All 3 missions done! Chest +$" .. commas(cash), "Reward")
+	end
+	if AnalyticsService then
+		AnalyticsService.Log("MISSIONS_ALL_DONE", player.UserId, { cash = cash })
+	end
+end
+
+-- free rerolls left today (+ Robux reroll tokens only while that DISABLED hook is live)
+function MissionService.RerollsLeft(player: Player, profile: any): number
+	if typeof(CORE) ~= "table" or not coreLive(player.UserId) then
+		return 0
+	end
+	local dm: any = profile.DailyMissions
+	local free = math.max(0, math.floor(tonumber(CORE.Reroll.FreePerDay) or 0) - math.floor(tonumber(dm.RerollsUsed) or 0))
+	local robux = 0
+	if (require(Shared.Configs.RetentionConfig) :: any).Live(CORE.Reroll.Robux, player.UserId) then
+		robux = math.max(0, math.floor(tonumber(profile.MissionRerollTokens) or 0))
+	end
+	return free + robux
+end
+
+--[[ Reroll one of today's core missions (server-checked; never gives a reward): it must be offered, not claimed and
+	not complete. The free reroll first (saved per day), then a Robux token (only while that hook is live). The new
+	mission is another loop type at the same tier that is not already in today's list (Raid only when a raid is
+	possible). ]]
+function MissionService.Reroll(player: Player, missionId: any): (boolean, string?)
+	if not RemoteGuard.IsIdString(missionId, 48) or not coreLive(player.UserId) then
+		return false, "Off"
+	end
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return false, "NoProfile"
+	end
+	ensureDaily(profile)
+	local dm: any = profile.DailyMissions
+	local list = coreList(player.UserId, profile)
+	local slot = table.find(list, missionId)
+	local def = resolveMissionDef(missionId)
+	if slot == nil or def == nil then
+		return false, "NotOffered"
+	end
+	if dm.Claimed[missionId] == true or (dm.Progress[missionId] or 0) >= def.Target then
+		return false, "Done"
+	end
+	local free = math.max(0, math.floor(tonumber(CORE.Reroll.FreePerDay) or 0) - math.floor(tonumber(dm.RerollsUsed) or 0))
+	local useToken = false
+	if free <= 0 then
+		if MissionService.RerollsLeft(player, profile) <= 0 then
+			return false, "NoRerolls"
+		end
+		useToken = true
+	end
+	local have: { [string]: boolean } = {}
+	for _, id in ipairs(list) do
+		local t = coreTypeOf(id)
+		if t then
+			have[t] = true
+		end
+	end
+	local raidOk = MissionService.RaidPossible(player)
+	local tier = string.match(missionId, "(%d)$") or "1"
+	local pick: string? = nil
+	for _, t in ipairs(CORE.Pool) do
+		if not have[t] and CORE.Types[t] ~= nil and (t ~= "Raid" or raidOk) then
+			pick = t
+			break
+		end
+	end
+	if pick == nil then
+		return false, "NoOther"
+	end
+	local newId = "Core" .. pick .. tostring(math.min(tonumber(tier) or 1, #CORE.Types[pick].Targets))
+	list[slot] = newId
+	dm.Core = list
+	dm.Progress[missionId] = nil
+	if useToken then
+		profile.MissionRerollTokens = math.max(0, (tonumber(profile.MissionRerollTokens) or 0) - 1)
+	else
+		dm.RerollsUsed = (tonumber(dm.RerollsUsed) or 0) + 1
+	end
+	DataService.MarkDirty(player)
+	if AnalyticsService then
+		AnalyticsService.Log("MISSION_REROLL", player.UserId, { kind = if useToken then "robux" else "free" })
+	end
+	MissionService.Push(player)
+	return true, nil
+end
+
+-- the Robux reroll's grant (MonetizationService ProcessReceipt; the product is Id 0 = never sold until Shaun approves)
+function MissionService.GrantRerollToken(player: Player): boolean
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return false
+	end
+	profile.MissionRerollTokens = math.max(0, math.floor(tonumber(profile.MissionRerollTokens) or 0)) + 1
+	DataService.MarkDirty(player)
+	MissionService.Push(player)
+	return true
+end
+
+-- the Build mission's GO: his cheapest next base upgrade (the console the gold line goes to)
+function MissionService.NextBuild(profile: any): string?
+	local okB, BC = pcall(function(): any
+		return require(Shared.Configs.BaseConfig)
+	end)
+	if not okB or typeof(BC) ~= "table" or typeof(BC.Structures) ~= "table" then
+		return nil
+	end
+	local best, bestCost = nil, math.huge
+	for id, s in pairs(BC.Structures) do
+		local lv = if typeof(profile.BaseUpgrades) == "table" then math.floor(tonumber(profile.BaseUpgrades[id]) or 0) else 0
+		local costs = if typeof(s) == "table" then s.Costs else nil
+		local cost = if typeof(costs) == "table" then tonumber(costs[lv + 1]) else nil
+		if cost and cost < bestCost then
+			best, bestCost = id, cost
+		end
+	end
+	return best
 end
 
 -- quiet (claude-bud JOB 29): no "Day N reward" toast (the caller shows the streak card instead)
@@ -1220,6 +1494,18 @@ function MissionService.Init(deps: { [string]: any })
 		pcall(function() -- claude-bud JOB 48: the Hook's "Open Missions" step also finishes on a claim
 			(require(script.Parent.TutorialService) :: any).Notify(player, "ClaimMission")
 		end)
+	end)
+
+	-- claude-bud JOB 49 C: reroll one of today's core missions (the mission id only; every rule is checked here)
+	local rerollRemote = RemoteSetup.Get(Constants.RemoteNames.RequestMissionReroll) :: RemoteEvent
+	rerollRemote.OnServerEvent:Connect(function(player: Player, missionId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestMissionReroll", missionId) then
+			return
+		end
+		if not RateLimitService.Allow(player, "mission_reroll", 1, 2) then
+			return
+		end
+		MissionService.Reroll(player, missionId)
 	end)
 
 	local dailyRemote = RemoteSetup.Get(Constants.RemoteNames.RequestClaimDailyReward) :: RemoteEvent

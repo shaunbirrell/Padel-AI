@@ -1210,6 +1210,9 @@ local function thinkSend(plan: Plan, player: Player, st: any, proot: BasePart?, 
 			pcall(function() -- claude-bud JOB 48: the Guided "RAID A RIVAL BASE" goal is won (only while it is open)
 				(require(script.Parent.Parent.Services.GuidedService) :: any).OnRaidWon(player)
 			end)
+			pcall(function() -- claude-bud JOB 49 C: the core "Raid a Base" daily mission
+				(require(script.Parent.Parent.Services.MissionService) :: any).TrackProgress(player, "Raid", 1)
+			end)
 			pcall(function() -- claude-bud JOB 39: the Intel Office's "win a SEND ARMY raid" contract
 				(require(script.Parent.Parent.Services.EndgameService) :: any).NoteContract(player, "WinSend", 1)
 			end)

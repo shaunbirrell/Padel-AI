@@ -75,6 +75,26 @@ _j49("profile.Entitlements[b.ProductKey] == true" in _cs and "Share" not in _cs,
 _j49("os.time()" in _j49_fn(_RS, "local function onLoadOffline") and "profile.PrevSeenUnix = nil" in _RS,
      "B: offline time is the server's os.time() vs the saved LastSeen, paid once per load")
 
+# ── C ──
+_MCF = _j49_src(_CF + "MissionConfig.luau")
+_core = _MCF.split("\tCore = {")[1].split("\n\t},\n\n")[0] if "\tCore = {" in _MCF else ""
+_j49("Enabled = true," in _core and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _core and "Count = 3," in _core and "ResetHourUtc = 0," in _core,
+     "C: MissionConfig.Core is owner-first, 3 a day, reset at 00:00 UTC by default")
+_j49("Robux = { Enabled = false, OwnerFirst = true, ProductKey = \"MissionReroll\" }" in _core and "FreePerDay = 1," in _core,
+     "C: 1 free reroll a day; the Robux reroll hook is DISABLED")
+_j49("Raid = true," in _MCF.split("LiveObjectives = {")[1].split("}")[0], "C: Raid is a live ObjectiveType")
+_AP = _j49_src(_SV + "Modules/ArmyPlan.luau")
+_MCS = _j49_src(_SV + "Services/MoneyCollectorService.luau")
+_j49('TrackProgress(player, "Raid", 1)' in _AP and 'TrackProgress(thief, "Raid", 1)' in _MCS,
+     "C: Raid progress comes from the SAME two raid-win hooks (ArmyPlan SEND loot, MoneyCollectorService ATM raid)")
+_rr = _j49_fn(_MS, "function MissionService.Reroll(")
+_j49("RemoteGuard.IsIdString(missionId, 48)" in _rr and "AddCash" not in _rr and "NoRerolls" in _rr,
+     "C: the reroll takes only a mission id, checks everything on the server, and never pays")
+_SC = _j49_src(_CF + "SecurityConfig.luau")
+_j49('RequestMissionReroll = { "string:48" }' in _SC, "C: RequestMissionReroll's schema = one short string (no client time / amount)")
+_MON = _j49_src(_SV + "Services/MonetizationService.luau")
+_j49("GrantsMissionReroll == true" in _MON and "GrantRerollToken(player)" in _MON, "C: the Robux reroll grant exists in ProcessReceipt (product Id 0 = never sold)")
+
 #@@C@@
 
 _luau = _j49_os.environ.get("LUAU")

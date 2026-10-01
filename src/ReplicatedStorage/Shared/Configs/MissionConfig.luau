@@ -39,6 +39,7 @@ export type DailyMissionDef = {
 
 export type GoDef = {
 	Short: string, -- objective marker / compass label: 2-7 capitals, device-neutral ("BANK")
+	Client: boolean?, -- claude-bud JOB 49 C: GO acts on the client (a panel / the console line), no world target
 	-- server only: the WE_ActivityAnchor id to point at once it exists (lane BK stamps the bank's)
 	Anchor: string?,
 	-- a mission that uses this Go is offered only while the key is served (the job is on): the old resolver has a
@@ -85,6 +86,7 @@ local MissionConfig = {
 		SpawnVehicle = true,
 		RecruitSoldiers = true,
 		Heist = true, -- BankRaidService: a bank job done (lane F)
+		Raid = true, -- claude-bud JOB 49 C: a raid win (ArmyPlan SEND loot / MoneyCollectorService ATM raid); only the Core missions use it
 	} :: { [string]: boolean },
 
 	-- Objective types only OpsService reports (W3 step 2 Phase B). Live ONLY while its hook's ObjectiveLive(type) is
@@ -113,6 +115,10 @@ local MissionConfig = {
 		Job = { Short = "JOB", Required = true }, -- any Open job
 		Cargo = { Short = "CARGO", Required = true }, -- the heist yards and the black box (Delivery)
 		Hostiles = { Short = "HOSTILE" }, -- the nearest Open checkpoint or camp (KillNPC); no hook = no GO button
+		-- claude-bud JOB 49 C: client-side GO (no world target): the TARGETS card / the Army panel / his next console
+		Targets = { Short = "TARGETS", Client = true },
+		Army = { Short = "ARMY", Client = true },
+		Build = { Short = "BUILD", Client = true },
 	} :: { [string]: GoDef },
 	GoMaxTargets = 16, -- GO targets sent per entry: the nearest to the player (MissionController reads at most 16)
 	GoRefreshSeconds = 30, -- while OpsService's hook is set: re-send a player's list when its targets change (0 = off)
@@ -206,6 +212,35 @@ local MissionConfig = {
 		},
 	} :: { [string]: DailyMissionDef },
 
+	--[[ claude-bud JOB 49 part C (2026-10-01): 3 CORE daily missions tied to the loop (owner-first; OFF = the rotation
+		above exactly). While live, the Missions panel's top section is exactly Count missions of Count DIFFERENT loop
+		types (Pool), picked once per day per player (seeded by UserId + day, saved in DailyMissions.Core so the list
+		never reshuffles), the target set by his level tier so all 3 fit in one session; the Daily Ops stay below.
+		Raid is offered only when a raid is possible for him (RivalService has a target), else WinFights takes its place.
+		Rewards: max(the mission's RewardCash floor, RewardIncomeMinutes x his income per minute); all 3 claimed -> the
+		Chest once a day. Reroll: FreePerDay free (server-checked, saved per day); the Robux reroll is DISABLED (Id 0). ]]
+	Core = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): Code Bot flips it after Shaun's phone test
+		Count = 3,
+		ResetHourUtc = 0, -- the daily reset (0 = 00:00 UTC, today's behaviour)
+		Pool = { "Raid", "Recruit", "Build", "WinFights" },
+		TierMaxLevel = { 10, 40 }, -- tier 1 up to level 10, tier 2 up to 40, tier 3 above
+		RewardIncomeMinutes = 10,
+		Chest = { Cash = 10000, Gold = 3, IncomeMinutes = 20 },
+		Reroll = {
+			FreePerDay = 1,
+			Robux = { Enabled = false, OwnerFirst = true, ProductKey = "MissionReroll" }, -- NEW-OWNER-FIRST (claude-bud JOB 49): DISABLED (Id 0, no price)
+		},
+		-- per loop type: the ObjectiveType, GO key, the floor reward and the target per tier (1 / 2 / 3)
+		Types = {
+			Raid = { Objective = "Raid", Go = "Targets", Name = "Raid a Base", Desc = "Win %d raid(s) on a rival base.", Targets = { 1, 1, 2 }, Cash = 4000, XP = 120 },
+			Recruit = { Objective = "RecruitSoldiers", Go = "Army", Name = "Grow the Army", Desc = "Recruit %d soldiers.", Targets = { 3, 5, 10 }, Cash = 2000, XP = 60 },
+			Build = { Objective = "PurchaseUpgrade", Go = "Build", Name = "Build Up", Desc = "Buy %d base upgrade(s).", Targets = { 1, 2, 3 }, Cash = 3000, XP = 100 },
+			WinFights = { Objective = "KillNPC", Go = "Hostiles", Name = "Win Fights", Desc = "Beat %d enemies.", Targets = { 5, 10, 20 }, Cash = 2500, XP = 80 },
+		},
+	},
+
 	-- Display order, and the order of the rotation pool (MissionService)
 	DailyMissionOrder = {
 		"DailyUpgrade", -- v37: first 5-min completable
@@ -253,5 +288,43 @@ local MissionConfig = {
 		},
 	} :: { [string]: MissionDef },
 }
+
+-- claude-bud JOB 49 C: the Core mission defs (Core<Type><tier>), built from Core.Types into DailyMissions (never in the
+-- rotation pool: DailyMissionOrder does not list them)
+do
+	local core: any = (MissionConfig :: any).Core
+	for typeId, t in pairs(core.Types) do
+		for tier, target in ipairs(t.Targets) do
+			local id = "Core" .. typeId .. tostring(tier)
+			MissionConfig.DailyMissions[id] = {
+				Id = id,
+				DisplayName = t.Name,
+				Description = string.format(t.Desc, target),
+				ObjectiveType = t.Objective,
+				Target = target,
+				RewardCash = t.Cash,
+				RewardXP = t.XP,
+				RewardGold = 0,
+				MinLevel = 1,
+				Go = t.Go,
+			}
+		end
+	end
+end
+
+-- claude-bud JOB 49 C: the Core tier for a level (1, 2 or 3)
+function MissionConfig.CoreTier(level: number): number
+	local caps = (MissionConfig :: any).Core.TierMaxLevel
+	for i, cap in ipairs(caps) do
+		if level <= cap then
+			return i
+		end
+	end
+	return #caps + 1
+end
+
+function MissionConfig.CoreLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live((MissionConfig :: any).Core, userId)
+end
 
 return MissionConfig

@@ -79,6 +79,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestRatePromptAnswer, -- claude-bud JOB 40 part D
 	Constants.RemoteNames.RequestRecruitPackResult, -- claude-bud JOB 41 part B
 	Constants.RemoteNames.RequestRivalAction, -- claude-bud JOB 41 part C
+	Constants.RemoteNames.RequestMissionReroll, -- claude-bud JOB 49 part C
 	Constants.RemoteNames.CodeStateUpdate,
 	Constants.RemoteNames.NationColorUpdate,
 	Constants.RemoteNames.RequestSetNation,

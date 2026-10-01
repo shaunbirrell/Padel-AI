@@ -860,6 +860,9 @@ function MoneyCollectorService._RaidDone(thief: Player, victim: Player, vProfile
 		pcall(function() -- claude-bud JOB 48: an in-person ATM raid also wins the Guided raid goal
 			(require(script.Parent.GuidedService) :: any).OnRaidWon(thief)
 		end)
+		pcall(function() -- claude-bud JOB 49 C: and counts for the core "Raid a Base" daily mission
+			(require(script.Parent.MissionService) :: any).TrackProgress(thief, "Raid", 1)
+		end)
 	end
 	markDirty(victim)
 	markDirty(thief)

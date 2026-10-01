@@ -103,6 +103,8 @@ DEPS = {
   AnalyticsService = { Log = function(ev, uid, props) table.insert(LOG.ev, { ev = ev, uid = uid, props = props }) end, Onboard = function() end },
   BaseService = { ComputePassiveIncomePerTick = function() return PER_MIN / 60 * 5 end, GetUpgradeChangedEvent = function() return { Event = signal() } end },
 }
+RIVALS = 1 -- the stub rival count (RivalService.Candidates: the JOB 38 verdicts)
+SOURCES["Services/RivalService"] = function(script) return { Candidates = function() local r = {}; for i = 1, RIVALS do r[i] = { PlotId = i } end; return r, {} end } end
 -- MonetizationService.PassivePerMin stand-in (the real one reads BaseService / EconomyService the same way)
 SOURCES["Services/MonetizationService"] = function(script) return { PassivePerMin = function() return PER_MIN end } end
 function boot()
@@ -328,6 +330,127 @@ print("MATHS offline: " .. table.concat(lines, " | "))
 PER_MIN = 0
 
 --@@B@@
+
+-- ── C. MISSIONS ──
+local MCfg = require(node("Configs/MissionConfig"))
+local Core = MCfg.Core
+check(Core.Enabled == true and Core.OwnerFirst == true and Core.Reroll.Robux.Enabled == false and Core.Reroll.Robux.OwnerFirst == true,
+  "C flags: Core is owner-first; the Robux reroll hook is DISABLED")
+check(MC.DevProducts.MissionReroll.Id == 0 and MC.DevProducts.MissionReroll.RobuxPrice == nil, "C: DevProducts.MissionReroll Id 0, no price (never prompted)")
+local function state(p)
+  clearLog(); MS.Push(p)
+  local st = nil
+  for _, e in ipairs(LOG.push) do if e.kind == "State" and type(e.data) == "table" and e.data.Daily then st = e.data end end
+  return st
+end
+local function coreIds(st) local out = {}; for _, e in ipairs(st.Daily) do if e.Core then table.insert(out, e.Id) end end; return out end
+local function typeOf(id) return string.match(id, "^Core(%a+)%d$") end
+MS, RS = boot()
+RIVALS = 1
+local cp = newProfile(OWNER, { Level = 5 })
+local st = state(OWNER)
+local ids = coreIds(st)
+local types = {}
+for _, id in ipairs(ids) do types[typeOf(id)] = true end
+local ntypes = 0
+for _ in pairs(types) do ntypes += 1 end
+check(#ids == 3 and ntypes == 3 and st.Daily[1].Core and st.Daily[2].Core and st.Daily[3].Core, "3 core missions of 3 different loop types on top: " .. table.concat(ids, ", "))
+local opsBelow = 0
+for i = 4, #st.Daily do if not st.Daily[i].Core then opsBelow += 1 end end
+check(opsBelow >= 1, "the Daily Ops stay below the core missions (" .. opsBelow .. ")")
+check(string.match(ids[1], "1$") ~= nil, "a level-5 player gets tier-1 targets (finishable in one session)")
+check(st.Core ~= nil and st.Core.ResetUnix == MS.NextResetUnix(CLOCK) and st.Core.ServerNow == CLOCK and st.Core.RerollsLeft == 1, "the payload carries the real reset time and 1 free reroll")
+-- stable within the day (a level-up mid-day does not reshuffle)
+cp.Level = 50
+local ids2 = coreIds(state(OWNER))
+check(table.concat(ids2, ",") == table.concat(ids, ","), "stable within the day (even after a level-up)")
+cp.Level = 5
+-- raid swapped when no raid is possible (decided at the day's first build)
+RIVALS = 0
+local np = newProfile(OWNER, { Level = 5 })
+local idsNo = coreIds(state(OWNER))
+local hasRaid = false
+for _, id in ipairs(idsNo) do if typeOf(id) == "Raid" then hasRaid = true end end
+check(#idsNo == 3 and not hasRaid, "no raid possible: the Raid mission is not offered (" .. table.concat(idsNo, ", ") .. ")")
+RIVALS = 1
+-- find a day whose picks include Raid, then: Raid counts, progress survives a rejoin, the chest once
+local rp = newProfile(OWNER, { Level = 5 })
+local tries = 0
+local cids = coreIds(state(OWNER))
+local function hasType(list, t) for _, id in ipairs(list) do if typeOf(id) == t then return id end end end
+while not hasType(cids, "Raid") and tries < 10 do
+  tries += 1; day(1); rp.DailyMissions.Core = nil; cids = coreIds(state(OWNER))
+end
+local raidId = hasType(cids, "Raid")
+check(raidId ~= nil, "a day with the Raid mission (" .. tostring(raidId) .. ")")
+MS.TrackProgress(OWNER, "Raid", 1)
+check((rp.DailyMissions.Progress[raidId] or 0) == 1, "a raid win (TrackProgress Raid, from the ArmyPlan / ATM raid hooks) counts")
+local saved2 = PS.Migrate(rp)
+PROFILES[OWNER.UserId] = saved2
+MS, RS = boot()
+local after = coreIds(state(OWNER))
+check(table.concat(after, ",") == table.concat(cids, ",") and (saved2.DailyMissions.Progress[raidId] or 0) == 1, "progress + the day's list survive a rejoin (save + Migrate + a fresh server)")
+rp = saved2
+PER_MIN = 600
+for _, id in ipairs(cids) do
+  local def = MCfg.DailyMissions[id]
+  MS.TrackProgress(OWNER, def.ObjectiveType, def.Target)
+end
+clearLog()
+for _, id in ipairs(cids) do MS.ClaimDailyMission(OWNER, id) end
+local missionCash, chestCash = cashBy("mission"), cashBy("mission_chest")
+check(chestCash == math.max(Core.Chest.Cash, 600 * Core.Chest.IncomeMinutes) and evCount("MISSIONS_ALL_DONE") == 1 and evCount("MISSION_DONE") == 3,
+  string.format("all 3 claimed -> the chest once ($%d); MissionDone x3", chestCash))
+check(missionCash == 3 * math.max(0, 600 * Core.RewardIncomeMinutes) or missionCash >= 3 * 2000, "each core mission pays max(floor, " .. Core.RewardIncomeMinutes .. " min of income): $" .. missionCash)
+for _, id in ipairs(cids) do MS.ClaimDailyMission(OWNER, id) end
+check(cashBy("mission_chest") == chestCash and cashBy("mission") == missionCash, "claiming again pays nothing (idempotent), no second chest")
+PER_MIN = 0
+-- the reset at ResetHourUtc
+Core.ResetHourUtc = 6
+local hp = newProfile(OWNER, { Level = 5 })
+CLOCK = CLOCK - (CLOCK % 86400) + 5 * 3600 + 3599 -- 05:59:59 UTC
+state(OWNER)
+local k1 = hp.DailyMissions.DayKey
+MS.TrackProgress(OWNER, "RecruitSoldiers", 1)
+CLOCK += 1 -- 06:00:00 UTC
+state(OWNER)
+check(hp.DailyMissions.DayKey ~= k1 and next(hp.DailyMissions.Progress) == nil, "ResetHourUtc 6: the day rolls at 06:00 UTC, not before (progress reset)")
+check(MS.NextResetUnix(CLOCK) - CLOCK == 86400, "the next reset is 24 h after 06:00")
+Core.ResetHourUtc = 0
+CLOCK += 6 * 3600
+-- rerolls: free once a day, then none; Robux tokens only while that hook is live
+local fp2 = newProfile(OWNER, { Level = 5 })
+local l0 = coreIds(state(OWNER))
+local okR1 = MS.Reroll(OWNER, l0[1])
+local l1 = fp2.DailyMissions.Core
+check(okR1 == true and l1[1] ~= l0[1] and typeOf(l1[1]) ~= typeOf(l0[2]) and typeOf(l1[1]) ~= typeOf(l0[3]) and evCount("MISSION_REROLL") >= 1,
+  "the free reroll swaps a mission for another loop type not already offered (" .. l0[1] .. " -> " .. tostring(l1[1]) .. ")")
+local okR2, why2 = MS.Reroll(OWNER, l1[2])
+check(okR2 == false and why2 == "NoRerolls", "a second reroll the same day is refused (" .. tostring(why2) .. ")")
+fp2.MissionRerollTokens = 2
+check(MS.RerollsLeft(OWNER, fp2) == 0, "Robux reroll hook OFF: tokens do nothing (never sold while Id 0)")
+Core.Reroll.Robux.Enabled = true
+local okR3 = MS.Reroll(OWNER, l1[2])
+Core.Reroll.Robux.Enabled = false
+check(okR3 == true and fp2.MissionRerollTokens == 1, "Robux hook ON (test only): a token rerolls and is spent; a reroll never pays")
+check(MS.GrantRerollToken(OWNER) == true and fp2.MissionRerollTokens == 2, "the receipt grant path adds a token (MissionService.GrantRerollToken)")
+day(1); state(OWNER)
+check(MS.RerollsLeft(OWNER, fp2) == 1, "the free reroll comes back the next day")
+local cpass = MS.Reroll(OWNER, "CoreRaid1")
+-- OFF == OLD
+Core.Enabled = false
+newProfile(OWNER, { Level = 5 })
+local off = state(OWNER)
+local anyCore = false
+for _, e in ipairs(off.Daily) do if e.Core or string.match(e.Id, "^Core") then anyCore = true end end
+check(not anyCore and off.Core == nil, "Core OFF: today's rotation exactly (no core rows, no Core payload)")
+Core.Enabled = true
+-- owner-first
+newProfile(OTHER, { Level = 5 })
+local o = state(OTHER)
+local oc = false
+for _, e in ipairs(o.Daily) do if e.Core then oc = true end end
+check(not oc, "owner-first: another player still gets today's rotation")
 
 --@@C@@
 

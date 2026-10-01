@@ -270,6 +270,24 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 		dl.GraceUsedCycle = if dl.GraceUsedCycle ~= nil then nonNegInt(dl.GraceUsedCycle) else nil
 		dl.GraceDay = if dl.GraceDay ~= nil then math.clamp(nonNegInt(dl.GraceDay), 1, 7) else nil
 	end
+	-- claude-bud JOB 49 C: the core missions' per-day state + the (disabled) Robux reroll tokens
+	if typeof(profile.DailyMissions) == "table" then
+		local dm = profile.DailyMissions
+		if typeof(dm.Core) == "table" then
+			local ids = {}
+			for _, id in ipairs(dm.Core) do
+				if typeof(id) == "string" and #id <= 48 and #ids < 6 then
+					table.insert(ids, id)
+				end
+			end
+			dm.Core = if #ids > 0 then ids else nil
+		else
+			dm.Core = nil
+		end
+		dm.RerollsUsed = if dm.RerollsUsed ~= nil then nonNegInt(dm.RerollsUsed) else nil
+		dm.CoreChest = dm.CoreChest == true or nil
+	end
+	profile.MissionRerollTokens = if profile.MissionRerollTokens ~= nil then nonNegInt(profile.MissionRerollTokens) else nil
 	-- claude-bud JOB 41: the Guided first minutes record (missing -> nil; each flag only ever turns on)
 	if typeof(profile.Guided) == "table" then
 		local g = profile.Guided

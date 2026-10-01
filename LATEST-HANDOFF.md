@@ -1,4 +1,49 @@
 <!-- Q2-START -->
+## claude-bud JOB 49 part C (2026-10-01): 3 CORE DAILY MISSIONS + RAID + REROLL (branch `claude/desktop-bud`)
+**Flags to flip:**
+- `MissionConfig.Core.OwnerFirst = true -> false` (NEW-OWNER-FIRST).
+- `Core.Reroll.Robux` stays **Enabled = false** (DevProducts.MissionReroll Id 0, no price) until Shaun approves one.
+
+**Root cause:** the old daily list is 3 Daily Ops + 3 rotating missions of any type, and two problems follow:
+- nothing ties them to the core loop;
+- a raid win never reached TrackProgress (there was no "Raid" type).
+The rewards were flat ($1,500-$5,000), which is worthless after the first hour.
+
+**Built (extends MissionConfig / MissionService; the Daily Ops stay as they are, below):**
+- **The 3 core missions:**
+  - **Picks:** 3 missions of 3 different loop types (Raid / Recruit / Build / WinFights), picked once per day per
+    player (seeded like today, saved in DailyMissions.Core: never reshuffles).
+  - **Raid:** offered only when RivalService has an allowed base for him; otherwise another type replaces it.
+  - **Targets by level tier** (<= 10 / <= 40 / above): Raid 1/1/2, Recruit 3/5/10, Build 1/2/3, Win fights 5/10/20.
+    All 3 fit one session.
+  - **"Raid" ObjectiveType:** reported from the SAME two raid-win hooks (the ArmyPlan SEND loot, the
+    MoneyCollectorService ATM raid).
+- **Rewards:**
+  - Each mission pays max(its floor, 10 min of his income).
+  - All 3 claimed: a chest once a day, max($10,000, 20 min of income) + 3 Gold.
+  - The claim stays server-side and idempotent.
+- **Reset:** at `Core.ResetHourUtc` (0 = today). The Missions panel header shows the REAL time to the reset from the
+  server's clock.
+- **GO:** Raid opens the TARGETS list; Recruit opens the Army panel; Build draws the gold line to his cheapest next
+  console (the server picks it); WinFights uses the existing Hostiles marker.
+- **Reroll:**
+  - 1 free a day (saved), with a "↻" button (48 px) on each open core row. The new remote RequestMissionReroll takes
+    the mission id only (SecurityConfig schema).
+  - A reroll never pays, and the new mission is another type at the same tier.
+  - The Robux reroll grant exists in ProcessReceipt (GrantsMissionReroll -> a token) but is never sold while Id 0.
+- **Analytics:** MissionDone {type}, MissionsAllDone, MissionReroll {free/robux}.
+
+**Question for Shaun:** should the Daily Ops below the 3 core missions be hidden? They are kept for now.
+
+**Checks:**
+- run_daily_return_test part C (24 checks) 0 failed.
+- remote_audit OK; BuyPathStatic FAIL=0.
+
+**Test ON HIS PHONE:**
+1. Missions shows "TODAY'S 3 MISSIONS · new in Xh Ym" with 3 different types. Each GO goes to the right place.
+2. Reroll once: the second reroll is refused.
+3. Finish all 3: the chest pays once.
+4. After the shown time, 3 new missions.
 ## v177 PUBLISHED (Code Bot Roblox, 2026-10-01 17:03 Dublin): Open Cloud place version 175. claude-bud JOB 49 A+B flipped to EVERYONE (Shaun approved)
 - **Commit:** `2ed90ae` (code + dist + checks) pushed to phase-7-polish (FF from `008c529`). Bud merge `205f2d6` into claude/desktop-bud. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; no price / Id change.
 - **Flip:** `DailyRewardConfig.Grace` / `.Day7Scale` / `.Calendar` + `EconomyConfig.OfflineEarnings.Card` OwnerFirst true→false (live for all players).
