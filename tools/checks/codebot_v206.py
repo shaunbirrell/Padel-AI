@@ -64,12 +64,12 @@ BUD = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/d
 OWN = 'SetAttribute("WE_Build", 206)' in read(S + "Services/DataService.luau")  # this build's own scope
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 207)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 207)'),
-    (S + "Services/DataService.luau", "WE_Build=207"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 207)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 208)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 208)'),
+    (S + "Services/DataService.luau", "WE_Build=208"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 208)'),
 ):
-    check(BUD or needle in read(rel), "CODEBOT v206: WE_Build=207 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
+    check(BUD or needle in read(rel), "CODEBOT v206: WE_Build=208 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
 
 # ── the 300 s delay (one value) ──
 MON = read(C + "MonetizationConfig.luau")

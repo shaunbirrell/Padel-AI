@@ -879,6 +879,10 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			existing:Destroy()
 			print("[StructureKitBuilder] SyncPerimeterWalls CLEARED (level=0) plot=", plotId)
 		end
+		local j67old = plotFolder:FindFirstChild("WE_J67WallDress") -- Code Bot JOB 67: the wall dressing goes with the walls
+		if j67old then
+			j67old:Destroy()
+		end
 		return
 	end
 
@@ -1225,6 +1229,26 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 					end
 				end
 			end)
+		end)
+	end
+
+	-- Code Bot JOB 67 remainder: sandbag -> Hesco wall tiers (Job67DressConfig.Walls, owner-first by the plot owner;
+	-- decoration only: these Part walls stay the colliders). Deferred: the pack load never blocks the wall build.
+	do
+		local padTop = pad.Position.Y + pad.Size.Y * 0.5
+		local centre = Vector3.new(cx, padTop, cz)
+		task.defer(function()
+			local okJ, errJ = pcall(function()
+				if folder.Parent ~= plotFolder then
+					return
+				end
+				local bs = require(script.Parent.Parent.Services.BaseService)
+				local j67 = require(script.Parent.Parent.Services.Job67DressService)
+				j67.DressWalls(plotId, plotFolder, folder, lv, padTop, centre, bs.GetOwnerUserId(plotId))
+			end)
+			if not okJ then
+				warn("[StructureKitBuilder] Job67 wall dress failed", errJ)
+			end
 		end)
 	end
 

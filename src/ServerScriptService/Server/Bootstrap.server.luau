@@ -96,6 +96,7 @@ local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAsse
 local GateDefenseService = safeRequire("GateDefenseService", Services.GateDefenseService)
 local SpawnTerminalService = safeRequire("SpawnTerminalService", Services.SpawnTerminalService) -- claude-bud JOB 56
 local BaseLifeService = safeRequire("BaseLifeService", Services.BaseLifeService) -- claude-bud JOB 57
+local Job67DressService = safeRequire("Job67DressService", Services.Job67DressService) -- Code Bot JOB 67 remainder
 local HangarDockDisplayService = safeRequire("HangarDockDisplayService", Services.HangarDockDisplayService) -- claude-bud JOB 58
 local AntiCampService = safeRequire("AntiCampService", Services.AntiCampService) -- claude-bud JOB 63
 local ResearchService = safeRequire("ResearchService", Services.ResearchService) -- v69 Research Lab upgrades
@@ -630,6 +631,7 @@ safeInit("BankRaidService", BankRaidService, deps)
 safeInit("GateDefenseService", GateDefenseService, deps)
 safeInit("SpawnTerminalService", SpawnTerminalService, deps) -- claude-bud JOB 56: helipad + dock spawn terminals (owner-first)
 safeInit("BaseLifeService", BaseLifeService, deps) -- claude-bud JOB 57: base props + ambient soldiers (owner-first)
+safeInit("Job67DressService", Job67DressService, deps) -- Code Bot JOB 67 remainder: owned-asset walls + base props (owner-first)
 safeInit("HangarDockDisplayService", HangarDockDisplayService, deps) -- claude-bud JOB 58: real aircraft / boat bodies in the hangar + dock (owner-first)
 safeInit("AntiCampService", AntiCampService, deps) -- claude-bud JOB 63: anti-spawn-camping (owner-first)
 safeInit("PlotOilPumpService", PlotOilPumpService, deps)

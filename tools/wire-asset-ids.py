@@ -110,6 +110,10 @@ LIC_REPLACED_END = "<!-- wire-asset-ids:replaced:end -->"
 # key, group, decision, owner id, used id, flags, load phase, batch, config targets, extra edits, where, reason
 REGISTRY_ROWS = [
     ('MinigunTurretPack', 'GATE DEFENSE', 'PENDING-GET', 109072907337393, 109072907337393, 'STUDIO', 'PLOT', 'P1', ['GateDefense.AutoGunT1', 'GateDefense.AutoGunT2', 'GateDefense.AutoGunT3', 'GateDefense.AutoGunT4', 'GateDefense.AutoGunT5'], [], '', 'claude-bud JOB 67: Shaun\'s paid Minigun Turret Pack (Lvl 1-10, 1 script: stripped); pack pieces Lvl 1/3/5/8/10 = turret tiers T1-T5 (set each ref\'s ChildName from the WE_CHECK2 probe; <= 40 parts per piece)'),
+    ('J67HescoPBR', 'WALLS / BARRIERS', 'DRESS-LIVE', 116015230898207, 116015230898207, '', 'PLOT', '', [], [], 'Job67DressConfig.Pieces.HescoBlock', 'PAID (shaunie6); 1 MeshPart, 17,247 tris, 0 scripts; wall tiers L3-L5 (Code Bot JOB 67 batch 1)'),
+    ('J67TrenchSandbags', 'WALLS / BARRIERS', 'DRESS-LIVE', 71112106874796, 71112106874796, '', 'PLOT', '', [], [], 'Job67DressConfig.Pieces.TrenchLine', 'PAID (shaunie6); 26 MeshParts, 149,263 tris (pack), 0 scripts; corner nests + base prop nests (Code Bot JOB 67 batch 1)'),
+    ('J67MilitarySupplies', 'PROPS / DECORATION', 'DRESS-LIVE', 70726960831586, 70726960831586, '', 'PLOT', '', [], [], 'Job67DressConfig.Pieces.SandbagLine', 'PAID (shaunie6); 204 MeshParts, store tris not published, 0 scripts; wall sandbag runs + base props (Code Bot JOB 67 batch 1)'),
+    ('J67TexturedCrates', 'PROPS / DECORATION', 'DRESS-LIVE', 87282634781307, 87282634781307, '', 'PLOT', '', [], [], 'Job67DressConfig.Pieces.TexCrateA', 'PAID (shaunie6); 25 MeshParts, 10,914 tris (pack), 0 scripts; base prop crates (Code Bot JOB 67 batch 1)'),
     ('AmmoWorks', 'DROPPERS / PRODUCERS', 'LIVE-NOW', 41324890, 41324890, '', 'PLOT', '', ['Businesses.AmmoWorks'], [], '', 'Roblox Conveyor Belt as the Ammo Works belt (takes the kit belt\'s place)'),
     ('ArmsCrateLine', 'DROPPERS / PRODUCERS', 'LIVE-NOW', 41324890, 41324890, '', 'PLOT', '', ['Businesses.ArmsCrateLine'], [], '', 'Roblox Conveyor Belt as the Arms Crate Line belt (same load as Ammo Works)'),
     ('ArmorPlatePress', 'DROPPERS / PRODUCERS', 'PENDING-GET', 4362642898, 4362642898, 'STUDIO OMIT', 'PLOT', 'P4', ['Businesses.ArmorPlatePress'], [], '', '4,810 tris; big semi-transparent bounds box (OmitParts after the WE_CHECK); Smoke stripped (StripEffectsAssetIds); its parts must fit the kit roles it replaces (PartsPerBusinessL5)'),
@@ -361,6 +365,10 @@ STORE = {
     112426091: ('Gas Can', 'Maximum_ADHD', 2032622, 'User', 10, '2013-04-11', 250, 0),
     114570602: ('Tripod Mounted Machine Gun', 'GuestCapone', 33412864, 'User', 10, '2013-05-04', None, 0),
     109072907337393: ('Minigun Turret Pack (Lvl 1-10)', 'Hoshizora_N1', 8723125177, 'User', 10, '2026-09-13', 26380, 1),  # PAID (USD 2.99, Shaun bought it; JOB 67)
+    116015230898207: ('Modular Concrete Hesco Barrier PBR', 'proloxSimba', 1604634021, 'User', 10, '', 17247, 0),  # PAID (Shaun bought it; JOB 67 b1)
+    71112106874796: ('Realistic Trench Sandbags Pack', 'Hyper_verse', 3940233615, 'User', 10, '', 149263, 0),  # PAID (JOB 67 b1)
+    70726960831586: ('Military Supplies Props Pack', 'NyrexBLX', 1083083110, 'User', 10, '2026-02-25', None, 0),  # PAID (JOB 67 b1)
+    87282634781307: ('Realistic Textured Crates and Boxes', 'Hyper_verse', 3940233615, 'User', 10, '', 10914, 0),  # PAID (JOB 67 b1)
     115528226: ('Platnus Research Lab', 'MiinhJi', 14603785, 'User', 10, '2013-05-11', 3504, 0),
     122160708: ('Flood Light', 'Stickmasterluke', 80254, 'User', 10, '2013-07-15', 192, 0),
     123041248: ('Instant Campfire Campfire and Log Model', 'Roblox', 1, 'User', 10, '2013-07-18', 1856, 5),
@@ -560,6 +568,7 @@ DECISION_LABEL = {
     "NO-FIELD": "needs new code first",
     "DEFERRED": "waits on another job's file",
     "RIG": "animated-rig job",
+    "DRESS-LIVE": "wired in Job67DressConfig (Code Bot JOB 67, owner-first)",
 }
 
 

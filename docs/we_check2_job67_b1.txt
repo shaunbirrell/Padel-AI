@@ -1,0 +1,92 @@
+# Code Bot JOB 67 batch 1: Open Cloud Luau Execution on the live place (v203 / v204), 2026-10-02 ~00:20 Dublin
+# tools/probes/j67_packs_audit.luau (P1), j67_fidelity_write.luau (P2), j67_hesco_shape.luau (P3), j67_b1_harness.py (J67B1: the real service on a fake ring + plot 1)
+ENV ver=203
+P1 70726960831586 CLASSES MeshPart=204 Model=7 SurfaceAppearance=204
+P1 71112106874796 CLASSES Camera=1 MeshPart=26 Model=4 Part=1 SurfaceAppearance=26
+P1 87282634781307 CLASSES Camera=1 MeshPart=25 Model=7 Part=1 SurfaceAppearance=25
+P1 116015230898207 CLASSES MeshPart=1 Model=1 SurfaceAppearance=1
+P1 119390702773907 CLASSES Camera=1 Decal=2 Folder=6 MeshPart=482 Model=118 Part=1 SurfaceAppearance=427 SurfaceLight=2
+P1 16365964601 CLASSES Camera=1 Decal=80 MeshPart=129 Model=16 Part=151 PointLight=5 SurfaceAppearance=6 SurfaceLight=5 UnionOperation=27 WedgePart=10
+P1 70726960831586 Military Props Pack c=Model parts=204 ext=178.9,13.9,136.7 sc=1.000
+P1 71112106874796 Model c=Model parts=27 ext=88.0,16.0,88.0 sc=1.000
+P1 87282634781307 Model c=Model parts=26 ext=59.8,5.8,59.8 sc=1.000
+P1 116015230898207 Modular Concrete Hesco Barrier c=Model parts=1 ext=118.0,54.1,55.7 sc=0.621
+P1 119390702773907 Polygon Military Vehicles c=Model parts=483 ext=856.3,71.6,407.5 sc=1.000
+P1 16365964601 Desert house c=Model parts=317 ext=52.4,17.0,26.7 sc=1.000
+P2 setRF false (Plugin capability: RenderFidelity is not script-writable)
+P2 setCF accepted but CollisionFidelity stays Default (no effect at runtime) -> pieces never collide; the Part walls / kits are the Box colliders
+P2 EM CreateEditableMeshAsync: no permission (meshes not forkable) -> triangles from the Creator Store only
+[Job67Dress] pack 70726960831586 loaded scripts=0 stripped=0
+[Job67Dress] walls plot=1 L1 Sandbag Line hesco=0 (0 tris) sandbagLines=12 props=2
+J67B1 WALL L1 name=Sandbag Line hesco=0 hescoTris=0 lines=12 props=2 parts=14 hidden=0 box=301,8,22 lights=0 scripts=0 collide=0 query=0 shadow=0 t=0.06s
+[Job67Dress] walls plot=1 L2 Sandbag Wall hesco=0 (0 tris) sandbagLines=40 props=8
+J67B1 WALL L2 name=Sandbag Wall hesco=0 hescoTris=0 lines=40 props=8 parts=48 hidden=0 box=339,8,346 lights=0 scripts=0 collide=0 query=0 shadow=0 t=0.00s
+[Job67Dress] pack 116015230898207 loaded scripts=0 stripped=0
+[Job67Dress] walls plot=1 L3 Hesco Gate hesco=6 (103482 tris) sandbagLines=28 props=10
+J67B1 WALL L3 name=Hesco Gate hesco=6 hescoTris=103482 lines=28 props=10 parts=44 hidden=4 box=340,16,354 lights=0 scripts=0 collide=0 query=0 shadow=6 t=0.25s
+[Job67Dress] walls plot=1 L4 Hesco Wall hesco=12 (206964 tris) sandbagLines=14 props=14
+J67B1 WALL L4 name=Hesco Wall hesco=12 hescoTris=206964 lines=14 props=14 parts=40 hidden=8 box=396,19,358 lights=0 scripts=0 collide=0 query=0 shadow=12 t=0.00s
+[Job67Dress] pack 71112106874796 loaded scripts=0 stripped=1
+[Job67Dress] walls plot=1 L5 Hesco Fortress hesco=12 (206964 tris) sandbagLines=14 props=20
+J67B1 WALL L5 name=Hesco Fortress hesco=12 hescoTris=206964 lines=14 props=20 parts=46 hidden=8 box=396,22,359 lights=0 scripts=0 collide=0 query=0 shadow=12 t=0.60s
+J67B1 WALLPIECE Mesh_0 at=-120.1,11.8,158.5 size=76.8,21.5,7.5
+J67B1 WALLPIECE Mesh_0 at=-43.4,11.8,158.5 size=76.8,21.5,7.5
+J67B1 WALLPIECE Mesh_0 at=43.4,11.8,158.5 size=76.8,21.5,7.5
+J67B1 WALLPIECE Mesh_0 at=120.1,11.8,158.5 size=76.8,21.5,7.5
+J67B1 WALLPIECE Mesh_0 at=158.5,11.8,118.9 size=79.3,21.5,7.5
+J67B1 WALLPIECE Mesh_0 at=158.5,11.8,39.6 size=79.3,21.5,7.5
+J67B1 PIECE AirDrop parts=1 box=6.0,7.7,6.5
+J67B1 PIECE AmmoCrate parts=1 box=4.5,4.8,5.8
+J67B1 PIECE AmmoCrateB parts=1 box=4.5,4.8,5.8
+J67B1 PIECE BarbedWire parts=1 box=4.8,4.6,11.7
+J67B1 PIECE BarbedWireB parts=1 box=5.8,5.9,10.8
+J67B1 PIECE Barrier parts=1 box=6.4,5.8,5.9
+J67B1 PIECE Blockade parts=1 box=5.0,5.7,10.0
+J67B1 PIECE Drum parts=1 box=3.1,4.5,3.1
+J67B1 PIECE GasBarrel parts=1 box=3.2,4.4,3.2
+J67B1 PIECE GasBarrelB parts=1 box=3.2,4.4,3.2
+J67B1 PIECE Generator parts=1 box=3.4,3.6,5.4
+J67B1 PIECE HescoBlock parts=1 box=118.0,54.1,55.7
+J67B1 PIECE JerryCan parts=1 box=0.7,2.3,1.7
+J67B1 PIECE LargeCrate parts=1 box=5.4,6.0,6.9
+J67B1 PIECE LongCrate parts=1 box=4.4,4.7,10.6
+J67B1 PIECE SandbagLine parts=1 box=5.9,5.0,18.1
+J67B1 PIECE SandbagStack parts=1 box=7.8,7.7,10.8
+J67B1 PIECE SandbagStackLow parts=1 box=7.8,6.8,10.8
+J67B1 PIECE SatComms parts=1 box=4.0,4.6,4.7
+J67B1 PIECE SupplyBox parts=1 box=4.3,4.4,6.7
+[Job67Dress] pack 87282634781307 loaded scripts=0 stripped=1
+J67B1 PIECE TexCrateA parts=1 box=5.8,5.8,2.9
+J67B1 PIECE TexCrateB parts=1 box=4.5,2.8,3.0
+J67B1 PIECE TexCrateC parts=1 box=3.5,3.5,2.3
+J67B1 PIECE TexCrateD parts=1 box=4.6,3.1,2.7
+J67B1 PIECE TrenchCurve parts=1 box=11.7,3.4,4.3
+J67B1 PIECE TrenchLine parts=1 box=13.4,4.2,3.8
+J67B1 PIECE TrenchNest parts=1 box=8.3,11.1,15.3
+J67B1 PIECE WeaponCase parts=1 box=3.7,3.8,9.9
+J67B1 PIECE WoodCrateBig parts=1 box=6.2,6.8,6.2
+[Job67Dress] props plot=1 owner=470626172 levels=1 tier=1 pieces=31
+J67B1 PROPS sum=1 tier=1 ok=true pieces=31 parts=31
+[Job67Dress] props plot=1 owner=470626172 levels=10 tier=2 pieces=67
+J67B1 PROPS sum=10 tier=2 ok=true pieces=67 parts=67
+[Job67Dress] props plot=1 owner=470626172 levels=75 tier=5 pieces=140
+J67B1 PROPS sum=75 tier=5 ok=true pieces=140 parts=140
+[Job67Dress] props plot=1 owner=470626172 levels=22 tier=3 pieces=98
+J67B1 PROPS sum=22 tier=3 ok=true pieces=98 parts=98
+[Job67Dress] props plot=1 owner=470626172 levels=38 tier=4 pieces=134
+J67B1 PROPS sum=38 tier=4 ok=true pieces=134 parts=134
+J67B1 AUDIT 116015230898207 scripts=0 stripped=0
+J67B1 AUDIT 87282634781307 scripts=0 stripped=1
+J67B1 AUDIT 70726960831586 scripts=0 stripped=0
+J67B1 AUDIT 71112106874796 scripts=0 stripped=1
+J67B1 LIVE owner=true other=false
+J67B1 DONE
+P3 topY x=-0.45 z: 54 54 54 54 54 54 54
+P3 topY x=-0.25 z: 53 54 - 54 54 - 17
+P3 topY x=0 z: 54 54 54 54 54 54 54
+P3 topY x=0.25 z: 54 54 54 54 54 54 54
+P3 topY x=0.45 z: 54 54 54 54 54 54 54
+P3 frontZ/backZ y=0.1 : 27/-27 27/-27 27/-27 27/-27 27/-27
+P3 frontZ/backZ y=0.5 : 27/-27 -/- -25/-25 25/25 28/-28
+P3 frontZ/backZ y=0.9 : 28/-27 27/-27 27/-27 27/-27 27/-28
+P3 DONE

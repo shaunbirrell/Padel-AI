@@ -121,7 +121,7 @@ local function plotCf(plotId: number, lx: number, lz: number, yawDeg: number): C
 end
 
 -- the props of one plot; returns the parts added (<= the per-plot allowance)
-function BaseLifeService.BuildProps(plotId: number, parent: Instance): number
+function BaseLifeService.BuildProps(plotId: number, parent: Instance, ownerUserId: number?): number
 	local okW, WorldKits = pcall(function(): any
 		return require(script.Parent.Parent.Modules.WorldKits)
 	end)
@@ -131,11 +131,16 @@ function BaseLifeService.BuildProps(plotId: number, parent: Instance): number
 	local SP = storeProps()
 	local cap = if SP and SP.Budget then tonumber(SP.Budget.MaxBasePartsPerPlot) or 600 else 600
 	local used = 0
+	-- Code Bot JOB 67 remainder: kits the owner's real-model prop clusters replace (Job67DressConfig.BaseProps)
+	local okJ, J67 = pcall(function(): any
+		return require(script.Parent.Job67DressService)
+	end)
 	for i, row in ipairs(C.Props) do
 		local spec = WorldKits.Specs[row.Kit]
 		local hx = if spec then spec.Size.X / 2 else 4
 		local hz = if spec then spec.Size.Z / 2 else 4
-		if not BaseLifeService.InKeepOut(row.X, row.Z, math.max(hx, hz), math.max(hx, hz)) then
+		local replaced = okJ and J67 and J67.ReplacesKit and J67.ReplacesKit(row.Kit, ownerUserId) == true
+		if not replaced and not BaseLifeService.InKeepOut(row.X, row.Z, math.max(hx, hz), math.max(hx, hz)) then
 			local cf = plotCf(plotId, row.X, row.Z, row.Yaw)
 			if cf then
 				local cl = WorldKits.NewCluster("BaseLife_" .. i .. "_" .. row.Kit, { Source = "baselife", Kind = row.Kit, Anchor = "plot", AnchorX = row.X, AnchorZ = row.Z, Tier = 1 })
@@ -262,7 +267,7 @@ function BaseLifeService.Sync(plotId: number, ownerUserId: number?): (number, nu
 	local f = Instance.new("Folder")
 	f.Name = "Plot" .. plotId
 	f.Parent = root()
-	local parts = BaseLifeService.BuildProps(plotId, f)
+	local parts = BaseLifeService.BuildProps(plotId, f, ownerUserId)
 	local list: { Soldier } = {}
 	local room = BaseLifeService.ServerMax() - BaseLifeService.Count()
 	for i, r in ipairs(S.Routes) do

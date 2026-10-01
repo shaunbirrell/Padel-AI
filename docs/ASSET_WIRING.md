@@ -694,6 +694,10 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Item | Decision | Live id | Pending id | Owned | Gate |
 |---|---|---|---|---|---|
 | Minigun Turret Pack | owner pick, waits for promote | 109072907337393 | – | yes | promoted (live) |
+| J67 Hesco PBR | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 116015230898207 (Job67DressConfig) | – | yes | PAID (shaunie6); 1 MeshPart, 17,247 tris, 0 scripts; wall tiers L3-L5 (Code Bot JOB 67… |
+| J67 Trench Sandbags | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 71112106874796 (Job67DressConfig) | – | yes | PAID (shaunie6); 26 MeshParts, 149,263 tris (pack), 0 scripts; corner nests + base prop… |
+| J67 Military Supplies | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 70726960831586 (Job67DressConfig) | – | yes | PAID (shaunie6); 204 MeshParts, store tris not published, 0 scripts; wall sandbag runs… |
+| J67 Textured Crates | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 87282634781307 (Job67DressConfig) | – | yes | PAID (shaunie6); 25 MeshParts, 10,914 tris (pack), 0 scripts; base prop crates (Code Bo… |
 | Ammo Works | wired (Roblox-owned) | 41324890 | – | Roblox (no Get) | Roblox Conveyor Belt as the Ammo Works belt (takes the kit belt's place) |
 | Arms Crate Line | wired (Roblox-owned) | 41324890 | – | Roblox (no Get) | Roblox Conveyor Belt as the Arms Crate Line belt (same load as Ammo Works) |
 | Armor Plate Press | owner pick, waits for promote | 0 | 4362642898 | yes | check passed (28 parts); OmitParts + the P4 second check (part names: its bounds box, and one piece for the Signature role; 28 parts > 3 roles), batch P4 |
