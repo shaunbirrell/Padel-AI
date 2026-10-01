@@ -1,3 +1,16 @@
+## v193 PUBLISHED (Code Bot Roblox, 2026-10-01 ~22:22 Dublin): Open Cloud place version 191. claude-bud JOB 63 AntiCamp OwnerFirst (anti-spawn-camping)
+- **Commits:** cherry-pick `ef384eb` → `5a28190` (JOB 63 AntiCamp; JOB 62 ExperienceNotify intentionally NOT included); code+dist+checks `a42fc12` on phase-7-polish (from v192 `2b8d1c4`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v192 `a38b1af`.
+- **JOB 63 (NEW-OWNER-FIRST):** `RaidConfig.AntiCamp` — AntiCampService through the ONE protection rule (CombatService `pvpBlock` / `InvulnerableUntil`): 5 s defender shield at own base (ends on first shot), 90 s raider limit / loot taken / 3 kills in 60 s → normal respawn home (`LoadCharacter`) with notice, 3 min same-base cooldown (`camp_cooldown`, no base damage, TARGETS WAIT, edge toast). Keyed by base owner.
+- **Held:** JOB 62 ExperienceNotify (`00a76af`) stays on bud until Creator Hub secret `WE_NOTIFY_KEY` exists + Shaun opt-in.
+- **Checks:** BuyPathStatic **PASS=8373 FAIL=0**; `tools/checks/codebot_v193.py`; `claude_bud_job63.py`. PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP 200, versionNumber **191**, universe 10767159222 / place 97112936860418. Servers NOT restarted (players get it on next join).
+- **Phone tests (Shaun — rejoin / new server for WE_Build 193; owner only while OwnerFirst):**
+  1. Alt stands in your base 90 s → respawns home with notice
+  2. Alt walks back → sent home again; TARGETS shows WAIT
+  3. You die and respawn → ~5 s shield bubble that drops when you fire
+  4. Only plot owner while OwnerFirst
+- **Still owed:** After phone OK flip `RaidConfig.AntiCamp` OwnerFirst. Still owed flips: HangarDock, Pass59, DefenceFix, SpawnTerminal, AirRotorDisc, BaseLife, DefenceVisuals, Night2, SharedHostility, AttackRange, Rebuild (JOB 50–59). JOB 62 ready on bud — NOT shipped. JOB 64 referrals next on Claude queue; JOB 65/66 queued as docs. Do NOT reopen JOB 44. Studio 2-player AntiCamp proof still owed (Claude noted).
+
 ## v192 PUBLISHED (Code Bot Roblox, 2026-10-01 ~22:15 Dublin): Open Cloud place version 190. DOUBLE WEEKEND banner -> one-time pop-up + live chip (owner feedback: "banner stuck on screen, ugly and blocking")
 - **Commit:** code+dist+checks `a38b1af` on phase-7-polish (from v191 `67a5bfa`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v191 `a6fa8eb`; no price changes. Event window / Id / EventId / multipliers unchanged.
 - **Removed:** the v185 top-centre banner (DoubleWeekendController no longer uses RegisterTopStack).
