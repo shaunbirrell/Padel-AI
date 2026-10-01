@@ -224,6 +224,70 @@ local function rotorGroups(root: Instance, spec: any): { RotorGroup }
 	return groups
 end
 
+--[[ claude-bud JOB 56: the rotor's own disc. parts = one rotor group, jointRot = the configured joint rotation (chassis
+	x axis spec), hubCentre = the configured centre. Returns { Centre, Rot, Tilt, Offset } when the blades' own disc
+	differs (tilt > MinTiltDeg or the centre > MinOffset away), else nil (keep the configured joint). Pure maths on the
+	parts' CFrame / Size: the thinnest box axis of the biggest blade part is the disc normal (signed like the configured
+	axis), the centre is the single blade part's own centre (a symmetric rotor mesh) or the parts' average. ]]
+function AirBodyRig._DiscFit(parts: { BasePart }, jointRot: CFrame, hubCentre: Vector3): any?
+	local R: any = (VisualAssetConfig :: any).AirRotorDisc
+	if typeof(R) ~= "table" or #parts == 0 then
+		return nil
+	end
+	local big, vol = parts[1], -1
+	for _, p in ipairs(parts) do
+		local v = p.Size.X * p.Size.Y * p.Size.Z
+		if v > vol then
+			big, vol = p, v
+		end
+	end
+	local s = big.Size
+	local axes = {
+		{ d = s.X, v = big.CFrame.RightVector },
+		{ d = s.Y, v = big.CFrame.UpVector },
+		{ d = s.Z, v = big.CFrame.LookVector },
+	}
+	table.sort(axes, function(a, b)
+		return a.d < b.d
+	end)
+	local want = jointRot.UpVector
+	local centre = Vector3.zero
+	if #parts == 1 then
+		centre = big.Position
+	else
+		for _, p in ipairs(parts) do
+			centre += p.Position
+		end
+		centre /= #parts
+	end
+	local offset = (centre - hubCentre).Magnitude
+	local n = want
+	local tilt = 0
+	if axes[1].d < (tonumber(R.ThinRatio) or 0.5) * axes[2].d then
+		n = axes[1].v
+		if n:Dot(want) < 0 then
+			n = -n
+		end
+		tilt = math.deg(math.acos(math.clamp(n:Dot(want), -1, 1)))
+		if tilt > (tonumber(R.MaxCorrectionDeg) or 25) then
+			n, tilt = want, 0 -- the box guess is wrong (a round / chunky part): keep the configured axis
+		end
+	end
+	local fixTilt = tilt > (tonumber(R.MinTiltDeg) or 1)
+	local fixCentre = offset > (tonumber(R.MinOffset) or 0.05)
+	if not fixTilt and not fixCentre then
+		return { Centre = hubCentre, Rot = jointRot, Tilt = tilt, Offset = offset, Changed = false }
+	end
+	local rot = jointRot
+	if fixTilt then
+		local r0 = jointRot.RightVector
+		local right = r0 - n * r0:Dot(n)
+		right = if right.Magnitude > 1e-4 then right.Unit else jointRot.LookVector:Cross(n).Unit
+		rot = CFrame.fromMatrix(Vector3.zero, right, n)
+	end
+	return { Centre = if fixCentre then centre else hubCentre, Rot = rot, Tilt = tilt, Offset = offset, Changed = true }
+end
+
 -- one rotor spec: every part gets a Motor6D to the chassis whose joint frame sits on its group's spin centre (the Hub
 -- inside the group's scope, else the group's average centre) with Y on the axis
 local function rigRotor(hostModel: Model, primary: BasePart, clone: Model, spec: any): number
@@ -260,7 +324,21 @@ local function rigRotor(hostModel: Model, primary: BasePart, clone: Model, spec:
 				end
 				centre /= #parts
 			end
-			local joint = CFrame.new(centre) * (primary.CFrame - primary.CFrame.Position) * (axis :: CFrame)
+			local jointRot = (primary.CFrame - primary.CFrame.Position) * (axis :: CFrame)
+			-- claude-bud JOB 56: spin about the blades' own disc / centre (owner-first by the vehicle owner); always log
+			local R: any = (VisualAssetConfig :: any).AirRotorDisc
+			local owner = hostModel:GetAttribute("OwnerUserId")
+			local fit = AirBodyRig._DiscFit(parts, jointRot, centre)
+			local live = typeof(R) == "table" and (require(ReplicatedStorage.Shared.Configs.RetentionConfig) :: any).Live(R, owner)
+			if fit then
+				print(string.format("[RotorRig] %s %s parts=%d tilt=%.1f deg hubOffset=%.2f studs fixed=%s", hostModel.Name,
+					tostring(spec.Hub or "avg"), #parts, fit.Tilt, fit.Offset, tostring(live and fit.Changed)))
+				if live and fit.Changed then
+					centre = fit.Centre
+					jointRot = fit.Rot
+				end
+			end
+			local joint = CFrame.new(centre) * jointRot
 			for _, p in ipairs(parts) do
 				for _, holder in ipairs({ primary :: Instance, p :: Instance }) do
 					for _, w in ipairs(holder:GetChildren()) do

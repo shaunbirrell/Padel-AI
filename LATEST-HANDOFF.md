@@ -86,6 +86,55 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 56 (2026-10-01): HELIPAD + DOCK SPAWN TERMINALS, ROTOR FIX (branch `claude/desktop-bud`)
+**Flags:** `SpawnTerminalConfig` and `VisualAssetConfig.AirRotorDisc` (both owner-first, NEW-OWNER-FIRST).
+
+**Terminals:** new `Services/SpawnTerminalService` + `Configs/SpawnTerminalConfig`.
+- **What:** a console beside each BUILT helipad ("Spawn aircraft") and dock ("Launch boat") on the owner's plot.
+- **Contract:** the house terminal prompt (`WE_PanelPrompt`, `WE_OpenPanel = Garage`, `WE_OpenTab = Air / Naval`).
+  UIController opens `VehicleController.Open(tab)`, so it is the ONE Garage, filtered.
+- **Spawning:** the normal `RequestSpawnVehicle` → `VehicleService.RequestSpawn`, with every server gate. At home a
+  heli lands on the helipad spots and a boat goes into the dock basin (`chooseHeli` / `chooseBoat`, unchanged).
+- **Safety:** the terminal grants, spawns and moves nothing.
+- **Lifecycle:** built on plot-ready (claim / rejoin / restart) and on a Helipad / Dock upgrade; cleared when the
+  owner leaves.
+- **Positions:** config (`Terminals.Helipad.At` 52,-104, `Dock.At` 88,-70, plot-local). A Studio look is owed; tune
+  them there.
+- **Normal account:** a non-owner still meets every RequestSpawn gate (level / structure / prestige / cooldown /
+  combat lock). Only the owner skips them (VS ~4867). The live check with a normal account is owed: a level-
+  appropriate alt with Helipad L2+ opens the terminal and spawns the Transport Heli, and gets "Needs Helipad Lx" on a
+  locked one.
+
+**Rotor (11240665977, AirBodyRig ~252-276):**
+- **Root cause from the code:** `rigRotor` spun every rotor about the CHASSIS Y axis through the Hub part's box centre
+  ("Thing for Blades"). A blade disc tilted against the chassis wobbles ("tilted rotor"); a hub box that is not on
+  the blades' centre makes them orbit ("detached rotor").
+- **Fix:** the joint now uses the blades' own disc (`AirBodyRig._DiscFit`):
+  - the normal is the thinnest box axis of the biggest blade part, signed like the configured axis, used only when
+    it is clearly flat and within 25 deg;
+  - the centre is the blade mesh's own centre.
+- **Evidence still owed:** the model isn't in the repo (it loads at runtime), so every rotor now logs
+  `[RotorRig] <model> <hub> parts=.. tilt=..deg hubOffset=..studs fixed=..`. The first live spawn shows which cause it
+  was (tilt and / or offset).
+- **No change to the AttackHelicopter config row** (the codebot_v88 pin stays).
+
+**Not done, and why:** the brief asks to vendor SKYtech rotorKit `9961947424` (local copy `96681147793573`) with its
+scripts audited. Downloading and vendoring a Creator Store model's scripts needs the WE_CHECK2 / asset pipeline in
+Studio (origin check, script strip / audit), which this session cannot run. That is left to Code Bot / JOB 59 (A). The
+fix above is our own rig, needs no third-party code, and does not block it.
+
+**Tests:**
+- `tools/sim/run_spawn_terminals_test.py`: wanted from the saved structures; the prompt contract, finger-friendly
+  range, no Neon / lights, phone copy; owner-first; clear; rotor disc fit (6 deg tilt, 0.4 studs off, unchanged when
+  aligned, kept for chunky / wild cases, a tail rotor).
+- `tools/checks/claude_bud_job56.py`.
+
+**Test ON HIS PHONE:**
+1. With Helipad built, walk to the console by the pad and tap "Spawn aircraft": the Garage opens on AIR. Spawn a heli:
+   it sits on the pad.
+2. Same for the dock ("Launch boat" opens NAVAL).
+3. Spawn the attack heli and watch the rotor. Then send Code Bot the `[RotorRig]` line from the server log (F9).
+
 ## claude-bud JOB 55 (2026-10-01): HONEST DEFENCE TEXT + EXPLOIT FIXES (branch `claude/desktop-bud`)
 **Flag:** `EndgameConfig.DefenceFix` (owner-first by the BASE OWNER, NEW-OWNER-FIRST). OFF = the old rules and text.
 

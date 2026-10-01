@@ -10117,3 +10117,10 @@ ds_territories.luau T3):
 - The mid-raid fix keeps the damage taken (new max - damage), not the fraction: a fraction would still heal a
   little on every buy.
 - Base Tier purchases still resync fully. That is out of scope here and reported to Code Bot.
+
+## claude-bud JOB 56 (2026-10-01): spawn terminals + rotor
+- Terminals reuse the Garage (WE_OpenTab) rather than a new spawn menu, so there is one spawn path and one set of
+  server gates.
+- The rotor fix is geometric (the disc normal + centre from the blade parts), so it also helps other store helis.
+  It is guarded by a flatness ratio and a 25 deg cap, and it logs [RotorRig] for proof.
+- The rotorKit vendoring is not done: it needs the asset pipeline (download + script audit) in Studio.

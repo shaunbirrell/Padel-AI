@@ -834,6 +834,19 @@ local VisualAssetConfig = {
 			Refresh = 0.5,
 		},
 	},
+	-- claude-bud JOB 56: the rotor spins about ITS OWN disc, not the chassis Y. rigRotor used the chassis axis through
+	-- the Hub's box centre: a blade disc tilted against the chassis wobbles ("tilted rotor") and a hub box that is not
+	-- on the blades' centre makes them orbit ("detached rotor"). With this on (owner-first by the vehicle owner) the
+	-- spin axis is the blades' thinnest box axis (within MaxCorrectionDeg of the configured axis, only when clearly
+	-- thin: ThinRatio) and the centre is the blades' own centre. Every rotor logs [RotorRig] tilt / offset.
+	AirRotorDisc = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 56): Code Bot flips it after Shaun's phone test
+		MinTiltDeg = 1, -- below this the configured axis is kept
+		MinOffset = 0.05, -- studs: below this the configured centre is kept
+		MaxCorrectionDeg = 25, -- a larger "tilt" means the box guess is wrong: keep the configured axis
+		ThinRatio = 0.5, -- the thinnest box side must be under half the next one (a flat blade disc)
+	},
 	-- air-looks fix1 (2026-09-28): the phone cost of ONE store vehicle body, in Creator Store triangles (the whole model;
 	-- a pack counts in full). tools/wire-asset-ids.py promote refuses a vehicle body above it unless the lead accepts it
 	-- (--heavy-ok / HEAVY_OK); the owner's phone test then checks the frame rate with two or more in view at Graphics
