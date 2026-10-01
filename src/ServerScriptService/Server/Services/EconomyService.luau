@@ -125,6 +125,7 @@ local NEVER_MULTIPLIED: { [string]: boolean } = {
 	collector = true,
 	atm_raid = true,
 	endgame_reward = true, -- claude-bud JOB 39: contract rewards are already sized from the player's own (multiplied) income
+	bank_raid_kit = true, -- Code Bot v197: a heist kit's bank payout is minutes of WE_IncomePerSec (already multiplied)
 }
 
 --[[ F3 Empire Tax (EconomyConfig.OutpostIncomeBuff). A Home Outpost row (TerritoryConfig.Starter, F10) is never a
@@ -252,6 +253,13 @@ local function cashMultFor(player: Player, profile: any, reason: string?): numbe
 		local DE = doubleEvent()
 		if DE then
 			mult *= DE.CashMult(player, reason)
+		end
+	elseif NEVER_MULTIPLIED[reasonKey] ~= true then
+		-- Code Bot v197: DOUBLE WEEKEND on pass-exempt fixed payouts (EventConfig.ExtraCashReasons: oil, jobs, supply drops,
+		-- bank raid without a kit, clan war); the event's CashMult only, the pass / prestige / tax still skip them
+		local DE = doubleEvent()
+		if DE and DE.ExtraCashMult then
+			mult *= DE.ExtraCashMult(player, reason)
 		end
 	end
 	return mult

@@ -52,12 +52,12 @@ def skus(src):
 
 # ── build pins ──
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 196)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 196)'),
-    (S + "Services/DataService.luau", "WE_Build=196"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 196)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 197)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 197)'),
+    (S + "Services/DataService.luau", "WE_Build=197"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 197)'),
 ):
-    check(needle in read(rel), "CODEBOT v182: WE_Build=196 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v182: WE_Build=197 " + rel.rsplit("/", 1)[-1])
 
 # ── the two flips ──
 MCF = read(C + "MissionConfig.luau")

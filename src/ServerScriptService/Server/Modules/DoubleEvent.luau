@@ -127,6 +127,20 @@ function DoubleEvent.CashMult(player: Player, reason: string?): number
 	return clampMult(EventConfig.CashMult)
 end
 
+-- Code Bot v197: cash x for a 2x-pass-EXEMPT `reason` (EconomyService.cashMultFor's exempt branch): CashMult only for
+-- EventConfig.ExtraCashReasons (never a kill / CashExemptReasons reason), else 1
+function DoubleEvent.ExtraCashMult(player: Player, reason: string?): number
+	local key = reason or ""
+	local extra = EventConfig.ExtraCashReasons
+	if extra == nil or extra[key] ~= true or EventConfig.CashExemptReasons[key] or EventConfig.KillReasons[key] then
+		return 1
+	end
+	if not DoubleEvent.ActiveFor(player) then
+		return 1
+	end
+	return clampMult(EventConfig.CashMult)
+end
+
 -- XP x for `reason` (XPService.AddXP, after the pass multiplier's own exemptions): kill reasons -> KillMult
 function DoubleEvent.XPMult(player: Player, reason: string?): number
 	if not DoubleEvent.ActiveFor(player) then

@@ -701,8 +701,15 @@ local function completeRaid(player: Player)
 	inVaultNow[player.UserId] = false
 	underFireNow[player.UserId] = false
 	blockedNow[player.UserId] = nil
-	-- "bank_raid" is exempt from the cash multipliers (MonetizationConfig.CashMultExemptReasons): the toast is exact
-	if EconomyService.AddCash(player, cash, "bank_raid") ~= true then
+	-- "bank_raid" is exempt from the cash multipliers (MonetizationConfig.CashMultExemptReasons): the toast is exact.
+	-- Code Bot v197: the DOUBLE WEEKEND doubles "bank_raid" (EventConfig.ExtraCashReasons); a heist kit's payout is
+	-- minutes of WE_IncomePerSec (already doubled in the window), so it is paid as "bank_raid_kit" (not doubled again)
+	local okK, kit = pcall(function(): any
+		local EGS: any = require(script.Parent.EndgameService)
+		return EGS.HeistKit and EGS.HeistKit(player) or 0
+	end)
+	local raidReason = if okK and (tonumber(kit) or 0) > 0 then "bank_raid_kit" else "bank_raid"
+	if EconomyService.AddCash(player, cash, raidReason) ~= true then
 		pushState(player, { InVault = false, UnderFire = false })
 		return -- no profile: nothing paid, so no cooldown either
 	end

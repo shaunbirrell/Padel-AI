@@ -38,12 +38,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 196)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 196)'),
-    (S + "Services/DataService.luau", "WE_Build=196"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 196)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 197)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 197)'),
+    (S + "Services/DataService.luau", "WE_Build=197"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 197)'),
 ):
-    check(needle in read(rel), "CODEBOT v185: WE_Build=196 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v185: WE_Build=197 " + rel.rsplit("/", 1)[-1])
 
 # --- the config: times and multipliers ---
 EC = code(read(C + "EventConfig.luau"))
@@ -94,8 +94,13 @@ RS = code(read(S + "Services/RetentionService.luau"))
 check("OfflineFactor(" in RS and "mult /= em" in RS, "CODEBOT v185: offline pay doubled only for the in-window span")
 AD = code(read(S + "Services/AdminService.luau"))
 check('cmd == "eventpreview"' in AD and "player.UserId ~= EC.OwnerUserId" in AD, "CODEBOT v185: /eventpreview owner-only")
+# v197 (Code Bot Roblox): superseded in tools/checks/codebot_v197.py: MonetizationService reads DoubleEvent ONLY to divide it
+# out of PassivePerMin(excludeTimed) (no grant hook); was: check("DoubleEvent" not in read(S + rel), ...)
 for rel in ("Services/MonetizationService.luau",):
-    check("DoubleEvent" not in read(S + rel), "CODEBOT v185: no event hook in " + rel)
+    _ms185 = read(S + rel)
+    _ppm185 = re.search(r"function MonetizationService.PassivePerMin.*?\nend\n", _ms185, re.S)
+    check(_ms185.count("DoubleEvent") == (_ppm185.group(0).count("DoubleEvent") if _ppm185 else -1),
+          "CODEBOT v185: no event hook in " + rel + " (v197: only the PassivePerMin excludeTimed divide)")
 
 # --- client banner ---
 UI = code(read(CL + "Controllers/DoubleWeekendController.luau"))

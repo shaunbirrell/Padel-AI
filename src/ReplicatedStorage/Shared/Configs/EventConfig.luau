@@ -18,6 +18,13 @@
 	    XPExemptReasons below.
 	  * KillMult: the kill rewards (KillReasons: their cash AND xp take KillMult instead of CashMult / XPMult, so a kill
 	    pays 2x, not 4x) and the kill COUNT toward missions (KillPlayer / KillNPC) and the MOST KILLS / ARMY KILLS boards.
+	  * ExtraCashReasons (Code Bot v197): fixed payouts that are 2x-pass EXEMPT (MonetizationConfig.CashMultExemptReasons)
+	    but the event still doubles: EconomyService.cashMultFor's exempt branch applies ONLY CashMult for these (no pass,
+	    prestige, tax, ...). Each is doubled once, at its grant: oil pumps at AccruePendingCash (the collect is
+	    "collector", never multiplied), jobs, supply drops / airdrops, a bank raid WITHOUT a heist kit (a kit's payout
+	    is minutes of WE_IncomePerSec, already doubled, so it is paid as "bank_raid_kit", not listed) and clan war cash.
+	    Codes, battle pass, onboarding, invite / friends / comeback, spinner, clicker dropper, Robux, admin and refunds
+	    are NOT listed (never doubled).
 	Stacking: multiplicative on top of everything already there (2x Cash / 2x XP pass, prestige, empire tax, season,
 	code CashBoost, the EngagementConfig weekly event). Robux purchases, refunds, admin grants and sell-backs are exempt.
 ]]
@@ -75,6 +82,15 @@ local EventConfig = {
 		vip_supply = true,
 		studio_smoke_buy = true,
 		studio_smoke_buy_barracks = true,
+	} :: { [string]: boolean },
+	-- Code Bot v197: 2x-pass-exempt cash reasons the event doubles anyway (see the header); the pass still skips them
+	ExtraCashReasons = {
+		plot_oil = true, -- oil pumps (PendingCash, at accrue)
+		ops = true, -- jobs (OpsConfig.Rewards.CashReason)
+		supply_drop = true, -- supply drops + airdrops
+		bank_raid = true, -- bank raid without a heist kit (a kit pays "bank_raid_kit": income-scaled, not listed)
+		clan_war_win = true,
+		clan_war_participate = true,
 	} :: { [string]: boolean },
 	XPExemptReasons = {
 		admin = true,

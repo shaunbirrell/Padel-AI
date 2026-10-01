@@ -743,7 +743,7 @@ local AnalyticsConfig = {
 		SourceSKUs = {
 			passive = "base_income", training = "base_income", plot_oil = "base_income", collector = "base_income",
 			collect = "cash_collect", offline = "offline_cash", daily = "daily_reward", mission = "mission_reward",
-			timed_mission = "mission_reward", bank_raid = "raid_loot", atm_raid = "raid_loot", army_raid = "raid_loot",
+			timed_mission = "mission_reward", bank_raid = "raid_loot", bank_raid_kit = "raid_loot", atm_raid = "raid_loot", army_raid = "raid_loot",
 			endgame_reward = "contract_reward", comeback = "return_sequence", onboarding = "onboarding_reward",
 		},
 		SinkSKUs = {
@@ -5646,6 +5646,13 @@ return EngagementConfig
 	    XPExemptReasons below.
 	  * KillMult: the kill rewards (KillReasons: their cash AND xp take KillMult instead of CashMult / XPMult, so a kill
 	    pays 2x, not 4x) and the kill COUNT toward missions (KillPlayer / KillNPC) and the MOST KILLS / ARMY KILLS boards.
+	  * ExtraCashReasons (Code Bot v197): fixed payouts that are 2x-pass EXEMPT (MonetizationConfig.CashMultExemptReasons)
+	    but the event still doubles: EconomyService.cashMultFor's exempt branch applies ONLY CashMult for these (no pass,
+	    prestige, tax, ...). Each is doubled once, at its grant: oil pumps at AccruePendingCash (the collect is
+	    "collector", never multiplied), jobs, supply drops / airdrops, a bank raid WITHOUT a heist kit (a kit's payout
+	    is minutes of WE_IncomePerSec, already doubled, so it is paid as "bank_raid_kit", not listed) and clan war cash.
+	    Codes, battle pass, onboarding, invite / friends / comeback, spinner, clicker dropper, Robux, admin and refunds
+	    are NOT listed (never doubled).
 	Stacking: multiplicative on top of everything already there (2x Cash / 2x XP pass, prestige, empire tax, season,
 	code CashBoost, the EngagementConfig weekly event). Robux purchases, refunds, admin grants and sell-backs are exempt.
 ]]
@@ -5703,6 +5710,15 @@ local EventConfig = {
 		vip_supply = true,
 		studio_smoke_buy = true,
 		studio_smoke_buy_barracks = true,
+	} :: { [string]: boolean },
+	-- Code Bot v197: 2x-pass-exempt cash reasons the event doubles anyway (see the header); the pass still skips them
+	ExtraCashReasons = {
+		plot_oil = true, -- oil pumps (PendingCash, at accrue)
+		ops = true, -- jobs (OpsConfig.Rewards.CashReason)
+		supply_drop = true, -- supply drops + airdrops
+		bank_raid = true, -- bank raid without a heist kit (a kit pays "bank_raid_kit": income-scaled, not listed)
+		clan_war_win = true,
+		clan_war_participate = true,
 	} :: { [string]: boolean },
 	XPExemptReasons = {
 		admin = true,
@@ -31500,7 +31516,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 196)
+		player:SetAttribute("WE_Build", 197)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -39674,6 +39690,20 @@ function DoubleEvent.CashMult(player: Player, reason: string?): number
 		return clampMult(EventConfig.KillMult)
 	end
 	if EventConfig.CashExemptReasons[key] then
+		return 1
+	end
+	return clampMult(EventConfig.CashMult)
+end
+
+-- Code Bot v197: cash x for a 2x-pass-EXEMPT `reason` (EconomyService.cashMultFor's exempt branch): CashMult only for
+-- EventConfig.ExtraCashReasons (never a kill / CashExemptReasons reason), else 1
+function DoubleEvent.ExtraCashMult(player: Player, reason: string?): number
+	local key = reason or ""
+	local extra = EventConfig.ExtraCashReasons
+	if extra == nil or extra[key] ~= true or EventConfig.CashExemptReasons[key] or EventConfig.KillReasons[key] then
+		return 1
+	end
+	if not DoubleEvent.ActiveFor(player) then
 		return 1
 	end
 	return clampMult(EventConfig.CashMult)
@@ -74702,8 +74732,15 @@ local function completeRaid(player: Player)
 	inVaultNow[player.UserId] = false
 	underFireNow[player.UserId] = false
 	blockedNow[player.UserId] = nil
-	-- "bank_raid" is exempt from the cash multipliers (MonetizationConfig.CashMultExemptReasons): the toast is exact
-	if EconomyService.AddCash(player, cash, "bank_raid") ~= true then
+	-- "bank_raid" is exempt from the cash multipliers (MonetizationConfig.CashMultExemptReasons): the toast is exact.
+	-- Code Bot v197: the DOUBLE WEEKEND doubles "bank_raid" (EventConfig.ExtraCashReasons); a heist kit's payout is
+	-- minutes of WE_IncomePerSec (already doubled in the window), so it is paid as "bank_raid_kit" (not doubled again)
+	local okK, kit = pcall(function(): any
+		local EGS: any = require(script.Parent.EndgameService)
+		return EGS.HeistKit and EGS.HeistKit(player) or 0
+	end)
+	local raidReason = if okK and (tonumber(kit) or 0) > 0 then "bank_raid_kit" else "bank_raid"
+	if EconomyService.AddCash(player, cash, raidReason) ~= true then
 		pushState(player, { InVault = false, UnderFire = false })
 		return -- no profile: nothing paid, so no cooldown either
 	end
@@ -77461,7 +77498,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 196)
+			player:SetAttribute("WE_Build", 197)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -86148,7 +86185,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 196)
+		player:SetAttribute("WE_Build", 197)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -86290,7 +86327,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=196",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=197",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -86610,6 +86647,7 @@ local NEVER_MULTIPLIED: { [string]: boolean } = {
 	collector = true,
 	atm_raid = true,
 	endgame_reward = true, -- claude-bud JOB 39: contract rewards are already sized from the player's own (multiplied) income
+	bank_raid_kit = true, -- Code Bot v197: a heist kit's bank payout is minutes of WE_IncomePerSec (already multiplied)
 }
 
 --[[ F3 Empire Tax (EconomyConfig.OutpostIncomeBuff). A Home Outpost row (TerritoryConfig.Starter, F10) is never a
@@ -86737,6 +86775,13 @@ local function cashMultFor(player: Player, profile: any, reason: string?): numbe
 		local DE = doubleEvent()
 		if DE then
 			mult *= DE.CashMult(player, reason)
+		end
+	elseif NEVER_MULTIPLIED[reasonKey] ~= true then
+		-- Code Bot v197: DOUBLE WEEKEND on pass-exempt fixed payouts (EventConfig.ExtraCashReasons: oil, jobs, supply drops,
+		-- bank raid without a kit, clan war); the event's CashMult only, the pass / prestige / tax still skip them
+		local DE = doubleEvent()
+		if DE and DE.ExtraCashMult then
+			mult *= DE.ExtraCashMult(player, reason)
 		end
 	end
 	return mult
@@ -99450,9 +99495,16 @@ function MonetizationService.PassivePerMin(player: Player, profile: any, exclude
 			local ES: any = require(script.Parent.EngagementService)
 			return ES.CashMult and ES.CashMult(player) or 1
 		end)
+		-- Code Bot v197: the DOUBLE WEEKEND (Modules/DoubleEvent) is timed too: GetCashMult "passive" includes it, so divide
+		-- it out like the code boost and the weekly event (Robux time packs / Recruit Pack must not double in the window;
+		-- income-scaled missions / chest / Day 7 / zone runs apply the event once at grant, not twice)
+		local okD, de = pcall(function()
+			return (require :: any)(script.Parent.Parent.Modules.DoubleEvent).CashMult(player, "passive")
+		end)
 		local b = if okB then tonumber(boost) or 1 else 1
 		local e = if okE then tonumber(ev) or 1 else 1
-		m = m / math.max(1, b) / math.max(1, e)
+		local d = if okD then tonumber(de) or 1 else 1
+		m = m / math.max(1, b) / math.max(1, e) / math.max(1, d)
 	end
 	local v = t * m / tick * 60
 	return if v == v and v > 0 and v < 1e12 then v else 0
@@ -99856,7 +99908,7 @@ function MonetizationService.OfferMoment(player: Player, moment: string)
 				local boost = 200000
 				if ShopOverhaulConfig.LiveFor(player.UserId) then -- claude-bud JOB 36: the live pack amount
 					local prof = DataService and DataService.GetProfile(player)
-					boost = ShopOverhaulConfig.CashPackAmount("CashLarge", MonetizationService.PassivePerMin(player, prof)) or boost
+					boost = ShopOverhaulConfig.CashPackAmount("CashLarge", MonetizationService.PassivePerMin(player, prof, true)) or boost
 				end
 				local s = tostring(math.floor(boost)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
 				kind, key, title, cta = "DevProduct", "CashLarge", "Fresh start boost: $" .. s, LivePrices.Cta("DevProduct", "CashLarge")
@@ -100480,7 +100532,8 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 	-- claude-bud JOB 36: a cash pack scales with the buyer's passive income (ShopOverhaulConfig.CashPacks, owner-first):
 	-- max(Floor, Minutes x $/min). The lookup may yield, so it is here, before any mutation, and re-checked after.
 	if ShopOverhaulConfig.CashPacks[productKey :: string] ~= nil and ShopOverhaulConfig.LiveFor(player.UserId) then
-		local perMin = MonetizationService.PassivePerMin(player, profile)
+		-- Code Bot v197: excludeTimed (code boost, weekly event, DOUBLE WEEKEND left out: the multiplier-exempt pack never doubles)
+		local perMin = MonetizationService.PassivePerMin(player, profile, true)
 		if not player.Parent or DataService.GetProfile(player) ~= profile then
 			return Enum.ProductPurchaseDecision.NotProcessedYet
 		end

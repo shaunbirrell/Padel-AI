@@ -10,7 +10,7 @@ local AnalyticsConfig = {
 		SourceSKUs = {
 			passive = "base_income", training = "base_income", plot_oil = "base_income", collector = "base_income",
 			collect = "cash_collect", offline = "offline_cash", daily = "daily_reward", mission = "mission_reward",
-			timed_mission = "mission_reward", bank_raid = "raid_loot", atm_raid = "raid_loot", army_raid = "raid_loot",
+			timed_mission = "mission_reward", bank_raid = "raid_loot", bank_raid_kit = "raid_loot", atm_raid = "raid_loot", army_raid = "raid_loot",
 			endgame_reward = "contract_reward", comeback = "return_sequence", onboarding = "onboarding_reward",
 		},
 		SinkSKUs = {

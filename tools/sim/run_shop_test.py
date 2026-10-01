@@ -177,7 +177,7 @@ ms = (SV / "Services/MonetizationService.luau").read_text(encoding="utf-8").repl
 pr = ms[ms.index("local function processReceipt"):]
 a = pr.find("cashGrant = nonNegInt(ShopOverhaulConfig.CashPackAmount(productKey :: string, perMin))")
 b = pr.find("EconomyService.AddCash(player, cashGrant, \"devproduct\")")
-c = pr.find("local perMin = MonetizationService.PassivePerMin(player, profile)\n\t\tif not player.Parent or DataService.GetProfile(player) ~= profile then\n\t\t\treturn Enum.ProductPurchaseDecision.NotProcessedYet")
+c = pr.find("local perMin = MonetizationService.PassivePerMin(player, profile, true)\n\t\tif not player.Parent or DataService.GetProfile(player) ~= profile then\n\t\t\treturn Enum.ProductPurchaseDecision.NotProcessedYet")
 print(("ok    " if 0 < a < b and c > 0 else "FAIL  ") + "receipt: the pack lookup (may yield) comes before the first mutation and re-checks the player / profile")
 if not (0 < a < b and c > 0):
     fails.append("receipt order")

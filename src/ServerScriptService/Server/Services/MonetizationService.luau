@@ -825,9 +825,16 @@ function MonetizationService.PassivePerMin(player: Player, profile: any, exclude
 			local ES: any = require(script.Parent.EngagementService)
 			return ES.CashMult and ES.CashMult(player) or 1
 		end)
+		-- Code Bot v197: the DOUBLE WEEKEND (Modules/DoubleEvent) is timed too: GetCashMult "passive" includes it, so divide
+		-- it out like the code boost and the weekly event (Robux time packs / Recruit Pack must not double in the window;
+		-- income-scaled missions / chest / Day 7 / zone runs apply the event once at grant, not twice)
+		local okD, de = pcall(function()
+			return (require :: any)(script.Parent.Parent.Modules.DoubleEvent).CashMult(player, "passive")
+		end)
 		local b = if okB then tonumber(boost) or 1 else 1
 		local e = if okE then tonumber(ev) or 1 else 1
-		m = m / math.max(1, b) / math.max(1, e)
+		local d = if okD then tonumber(de) or 1 else 1
+		m = m / math.max(1, b) / math.max(1, e) / math.max(1, d)
 	end
 	local v = t * m / tick * 60
 	return if v == v and v > 0 and v < 1e12 then v else 0
@@ -1231,7 +1238,7 @@ function MonetizationService.OfferMoment(player: Player, moment: string)
 				local boost = 200000
 				if ShopOverhaulConfig.LiveFor(player.UserId) then -- claude-bud JOB 36: the live pack amount
 					local prof = DataService and DataService.GetProfile(player)
-					boost = ShopOverhaulConfig.CashPackAmount("CashLarge", MonetizationService.PassivePerMin(player, prof)) or boost
+					boost = ShopOverhaulConfig.CashPackAmount("CashLarge", MonetizationService.PassivePerMin(player, prof, true)) or boost
 				end
 				local s = tostring(math.floor(boost)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
 				kind, key, title, cta = "DevProduct", "CashLarge", "Fresh start boost: $" .. s, LivePrices.Cta("DevProduct", "CashLarge")
@@ -1855,7 +1862,8 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 	-- claude-bud JOB 36: a cash pack scales with the buyer's passive income (ShopOverhaulConfig.CashPacks, owner-first):
 	-- max(Floor, Minutes x $/min). The lookup may yield, so it is here, before any mutation, and re-checked after.
 	if ShopOverhaulConfig.CashPacks[productKey :: string] ~= nil and ShopOverhaulConfig.LiveFor(player.UserId) then
-		local perMin = MonetizationService.PassivePerMin(player, profile)
+		-- Code Bot v197: excludeTimed (code boost, weekly event, DOUBLE WEEKEND left out: the multiplier-exempt pack never doubles)
+		local perMin = MonetizationService.PassivePerMin(player, profile, true)
 		if not player.Parent or DataService.GetProfile(player) ~= profile then
 			return Enum.ProductPurchaseDecision.NotProcessedYet
 		end
