@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Current live (Code Bot):** Open Cloud **versionNumber=181** (2026-10-01 Europe/Dublin) — **v183** JOB 51 SharedHostility OwnerFirst + JOB 61 Creator Hub analytics. PreferMesh OFF. `WE_Build=183`.
+- **Current live (Code Bot):** Open Cloud **versionNumber=182** (2026-10-01 Europe/Dublin) — **v184** JOB 52 ARMY ATTACK at range OwnerFirst. PreferMesh OFF. `WE_Build=184`.
 - **Live Published:** Open Cloud **versionNumber=63** (2026-09-21 Europe/Madrid) — **v61 BUY PATH**: `Remotes.FireServer` (≤3s TryGet, no unbounded WaitForChild); WorldPrompt/BaseController toast "Buying…" only after FireServer; EnsureProfile on pad+PurchaseUpgrade; DataService Init before UpgradePad; `WE_Build=63`.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** **Public** since 2026-09-24 17:54 UTC (develop API: privacyType Public, audiences Editors + Public). Under current Roblox rules, Private means only users with Edit permission can play.

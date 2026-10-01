@@ -1,3 +1,14 @@
+## v184 PUBLISHED (Code Bot Roblox, 2026-10-01 ~19:27 Dublin): Open Cloud place version 182. claude-bud JOB 52 ARMY ATTACK at range OwnerFirst
+- **Commits:** cherry-pick `98a9bc2` → `bdd3c32` (JOB 52 AttackRange), `df004e9` → `5726ce1` (pin credit check); code+dist+checks `cc922b8` on phase-7-polish (from `744c18f`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v183 `744c18f`.
+- **JOB 52 (NEW-OWNER-FIRST):** `ArmyOrdersConfig.AttackRange.OwnerFirst = true` — one set of radii for the whole ATTACK order (seek 400 / leash 450 / chain 200), flat distances, existing march; nothing in range → distance + direction card with PIN / SEND ARMY (`N:<npcId>` server-resolved); ARMY KILLS for ordered target group, capped 60/h. Enabled=false is the old 250/300/150.
+- **Checks:** BuyPathStatic **PASS=8107 FAIL=0**; `tools/checks/codebot_v184.py`; `claude_bud_job52.py`; run_army_command_test 0 failed. PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP 200, versionNumber **182**, universe 10767159222 / place 97112936860418. Servers NOT restarted: Migrate to Latest Update when convenient.
+- **Phone tests (Shaun — rejoin / new server for WE_Build 184):**
+  1. Army out, enemies visible ~300 m away: ATTACK. Army marches in formation and fights; ARMY KILLS go up.
+  2. Nothing within range: card shows distance + direction; PIN marks it; SEND ARMY takes army there.
+  3. Shielded/new player nearby never attacked (JOB 51 rule).
+- **Still owed:** flip AttackRange.OwnerFirst after phone OK; JOB 51 SharedHostility still OwnerFirst (phone with Laumartinez26); JOB 50 rebirth zones on bud; queued 53–58, 59, 60, 62, 63, 64. JOB 44 Shaun said DONE 18:58 Dublin — do not reopen.
+
 ## v183 PUBLISHED (Code Bot Roblox, 2026-10-01 ~18:55 Dublin): Open Cloud place version 181. claude-bud JOB 51 SharedHostility OwnerFirst + JOB 61 Creator Hub analytics
 - **Commits:** cherry-pick `b8c2af5` → `07bb90a` (JOB 51), `1373c74` → `fb88365` (JOB 61); code+dist+checks `3df4db5` on phase-7-polish (from `4952138`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v182 `4952138`.
 - **JOB 51 (NEW-OWNER-FIRST):** `CombatConfig.SharedHostility.OwnerFirst = true` — `Server/Modules/Hostility` bound by CombatService; every NPC target pick uses it; CheckpointGuardService.Protected calls it; `/guarddebug` + `[GuardTarget]`/`[GuardShot]`/`[NpcHit]`. Enabled=false is the old brain. Live 2-player proof owed.
