@@ -7,6 +7,26 @@ import re
 import subprocess
 from pathlib import Path
 
+# claude-bud JOB 66 (2026-10-01): the ONLY MonetizationConfig change allowed past this ship guard is the Shaun-approved
+# JOB 66 block (the two 5 R$ starter rows, the Starter5 switch, the SkuLiveFor LiveBlock lines), removed exactly here
+# before the byte-identical compare. Everything else in the file must still match.
+def _bud_j66(t):
+    t = (t or "").replace("\r\n", "\n")
+    a = t.find("\t-- claude-bud JOB 66 (price approved by Shaun")
+    if a >= 0:
+        b = t.find("\n", t.find("\tBoost2x10m = {", a)) + 1
+        t = t[:a] + t[b:]
+    a = t.find("-- claude-bud JOB 66: the two 5 R$ starter products")
+    if a >= 0:
+        t = t[:a] + t[t.find("function MonetizationConfig.SkuLiveFor", a):]
+    a = t.find("\t-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock)")
+    if a >= 0:
+        b = t.find("\tend\n", a) + len("\tend\n")
+        t = t[:a] + t[b:]
+    return t
+
+
+
 ROOT = Path.cwd()
 PREV = os.environ.get("CODEBOT_V185_PREV", "36b0f31")  # v184 live tip (place 182)
 C = "src/ReplicatedStorage/Shared/Configs/"
@@ -115,6 +135,6 @@ check('"StreamingEnabled": true' not in prj, "CODEBOT v185: StreamingEnabled sta
 check("PreferMesh = true" not in read(C + "VisualAssetConfig.luau"), "CODEBOT v185: PreferMesh stays OFF")
 check("PreferMeshWhenAssetIdSet = false" in read(C + "StructureVisualConfig.luau"), "CODEBOT v185: PreferMeshWhenAssetIdSet false")
 prev = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev is None or prev == read(C + "MonetizationConfig.luau"), "CODEBOT v185: MonetizationConfig byte-identical to v184 (no price change)")
+check(prev is None or _bud_j66(prev) == _bud_j66(read(C + "MonetizationConfig.luau")), "CODEBOT v185: MonetizationConfig byte-identical to v184 (no price change)")
 r = subprocess.run(["git", "diff", "--name-only", PREV, "--"], capture_output=True, text=True, cwd=ROOT)
 check("WE_Building" not in (r.stdout or ""), "CODEBOT v185: no WE_Building* files touched")

@@ -116,11 +116,21 @@ local function showCard(data: any)
 	st.Color = GOLD
 	st.Thickness = 2
 	st.Parent = card
-	text(card, "Recruit Pack", 18, GOLD, Enum.Font.GothamBlack, 8, 26)
-	local cash = math.floor(tonumber(data.Cash) or 0)
-	text(card, "$  " .. string.format(O.Lines.Cash, money(cash)), 15, Color3.new(1, 1, 1), Enum.Font.GothamBold, 38, 20)
-	text(card, "x2  " .. O.Lines.Boost, 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 60, 20)
-	text(card, "★  " .. O.Lines.Trim, 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 82, 20)
+	-- claude-bud JOB 66: the server may send its own title / lines (the 5 R$ ONE-TIME OFFER); else the Recruit Pack card
+	if typeof(data.Title) == "string" and typeof(data.Lines) == "table" then
+		text(card, data.Title, 18, GOLD, Enum.Font.GothamBlack, 8, 26)
+		for i, line in ipairs(data.Lines) do
+			if i <= 3 then
+				text(card, tostring(line), 15, if i == 1 then Color3.new(1, 1, 1) else Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 38 + (i - 1) * 22, 20)
+			end
+		end
+	else
+		text(card, "Recruit Pack", 18, GOLD, Enum.Font.GothamBlack, 8, 26)
+		local cash = math.floor(tonumber(data.Cash) or 0)
+		text(card, "$  " .. string.format(O.Lines.Cash, money(cash)), 15, Color3.new(1, 1, 1), Enum.Font.GothamBold, 38, 20)
+		text(card, "x2  " .. O.Lines.Boost, 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 60, 20)
+		text(card, "★  " .. O.Lines.Trim, 15, Color3.fromRGB(215, 205, 170), Enum.Font.GothamBold, 82, 20)
+	end
 	local x = Instance.new("TextButton")
 	x.Position = UDim2.new(1, -54, 0, 6)
 	x.Size = UDim2.fromOffset(48, 48)
@@ -172,7 +182,8 @@ local function showCard(data: any)
 	buy.Activated:Connect(function()
 		local id = tonumber(data.ProductId) or 0
 		if id ~= 0 then
-			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, "RecruitPack", "recruit_offer")
+			local key = if typeof(data.ProductKey) == "string" then data.ProductKey else "RecruitPack" -- claude-bud JOB 66
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, key, "recruit_offer")
 			pcall(function()
 				MarketplaceService:PromptProductPurchase(player, id)
 			end)

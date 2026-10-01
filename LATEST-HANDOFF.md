@@ -231,6 +231,62 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 66 (2026-10-01): THE TWO 5 R$ STARTER PRODUCTS (branch `claude/desktop-bud`)
+**Flag:** `MonetizationConfig.Starter5` (owner-first, NEW-OWNER-FIRST). OFF = today.
+
+**Built:**
+- **A) Recruit Starter Pack** (`DevProducts.StarterRecruit5`): 5 R$, ONE-TIME (entitlement `StarterRecruit5`; the Shop
+  row flips to OWNED).
+  - 3 soldiers join at once through `SoldierService.GrantFree` (within the army cap).
+  - Starter cash = 2.5 min of his income (min $750, max $20,000; `Starter5Cash`), paid as `devproduct`, so never
+    multiplied.
+  - **How it relates to RecruitPackOffer:** the 49 R$ Recruit Pack (cash + 30-min 2x + gold trim, no soldiers) is
+    unchanged. The 5 R$ offer reuses its offer machinery (`RecruitPackService`: the soft-offer slot budget, onboarding
+    / combat / seated guards, the client card with its shown / dropped ack). For a player Starter5 is live for, his
+    one-time card is the "5 R$ ONE-TIME OFFER" at 5 min of play, with its own saved flag `Starter5Offered`. Everyone
+    else gets the 49 R$ card at 10 min exactly as before.
+- **B) 10-Minute 2x Income Boost** (`DevProducts.Boost2x10m`): 5 R$, repeatable. It uses the ONE boost path
+  (`CodesService.GrantCashBoost`, x2, extends a running boost) and the central `cashMultFor`
+  (`EconomyService.CashBoostMult`). Robux grants are never multiplied (`devproduct` is exempt).
+  - A small HUD chip "2x m:ss" (`BoostChip` in the top strip, the same row-fit rules as the other chips) shows while
+    the boost runs, ticking 1 Hz only then.
+- **Both:** in the Shop (Id 0 rows stay hidden until created) and gated by `SkuLiveFor` through the row's `LiveBlock`
+  (owner-first for the Shop and the purchase intent). Granted in `ProcessReceipt` with the existing idempotent pattern
+  (before `markProcessed` / the save).
+
+**Guards touched (please keep when you ship):**
+- **v180-v196:** each pins MonetizationConfig byte-identical to its own previous tip. They now strip ONLY the exact
+  JOB 66 block (`_bud_j66`) before comparing; v180 allows only the two 5 R$ rows. Proven: with RecruitPack set to
+  50 R$ they still FAIL.
+- **v196 (like v193):** the "JOB 62 not shipped" pin also accepts the bud branch while JOB 62 stays owner-first.
+- **`claude_bud_job68.py`:** Code Bot's docs-only queue guard made BuyPathStatic-safe (root = cwd, no SystemExit, no
+  worktree-diff guard).
+
+**Code Bot must do (I have no Open Cloud key here):**
+1. Create the 2 developer products at 5 R$ each: "Recruit Starter Pack" and "2x Income 10 min".
+2. Turn OFF managed / dynamic pricing on both.
+3. Put the ids in `DevProducts.StarterRecruit5.Id` / `Boost2x10m.Id`.
+
+Until then nothing can be bought or offered (Id 0 never prompts).
+
+**Tests:**
+- `tools/sim/run_starter5_test.py`:
+  - rows: 5 R$, Id 0, one-time pack with 3 soldiers + cash, repeatable 10-min boost, no pay-to-win keys;
+  - cash sizing;
+  - owner-first SKU;
+  - the owner's card at 5:01 (not at 4:50) with its own flag, never again;
+  - another player: no 5 R$ card, the Recruit Pack at 10:01 unchanged.
+- `run_recruit_pack_test.py` JOB 66 section (the REAL ProcessReceipt): Starter Pack = +3 soldiers via GrantFree + $1,000
+  devproduct cash at $400/min + the one-time entitlement, a re-delivered receipt grants nothing; the 10-min boost goes
+  through GrantCashBoost (10 min, x2), and 2 buys = 2 grants.
+- `tools/checks/claude_bud_job66.py`.
+- **Owed:** a real purchase test once the ids exist (Studio or live, as Shaun).
+
+**Test ON HIS PHONE (after the ids are in):**
+1. Play 5 min: the "5 R$ ONE-TIME OFFER" card (3 soldiers + $X). Buy: +3 soldiers and +$X.
+2. The Shop row then shows OWNED.
+3. Buy "2x Income 10 min": a green "2x 9:59" chip. Buy again: the timer extends.
+
 ## claude-bud JOB 67 sub-part 1 (2026-10-01): TURRET TIERS WIRED, PENDING THE ASSET CHECK (branch `claude/desktop-bud`)
 **Flag:** `VisualAssetConfig.Job67` (owner-first by the base owner, NEW-OWNER-FIRST).
 

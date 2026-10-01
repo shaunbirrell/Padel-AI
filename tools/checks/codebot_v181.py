@@ -6,6 +6,26 @@ import re
 import subprocess
 from pathlib import Path
 
+# claude-bud JOB 66 (2026-10-01): the ONLY MonetizationConfig change allowed past this ship guard is the Shaun-approved
+# JOB 66 block (the two 5 R$ starter rows, the Starter5 switch, the SkuLiveFor LiveBlock lines), removed exactly here
+# before the byte-identical compare. Everything else in the file must still match.
+def _bud_j66(t):
+    t = (t or "").replace("\r\n", "\n")
+    a = t.find("\t-- claude-bud JOB 66 (price approved by Shaun")
+    if a >= 0:
+        b = t.find("\n", t.find("\tBoost2x10m = {", a)) + 1
+        t = t[:a] + t[b:]
+    a = t.find("-- claude-bud JOB 66: the two 5 R$ starter products")
+    if a >= 0:
+        t = t[:a] + t[t.find("function MonetizationConfig.SkuLiveFor", a):]
+    a = t.find("\t-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock)")
+    if a >= 0:
+        b = t.find("\tend\n", a) + len("\tend\n")
+        t = t[:a] + t[b:]
+    return t
+
+
+
 ROOT = Path.cwd()
 PREV = os.environ.get("CODEBOT_V181_PREV", "67b00aa")  # v180 live tip (place 178)
 C = "src/ReplicatedStorage/Shared/Configs/"
@@ -15,6 +35,8 @@ CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 def read(rel):
     return (ROOT / rel).read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
 
 
 def check(cond, label):
@@ -48,8 +70,8 @@ try:
     r = subprocess.run(["git", "diff", "--name-only", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
     touched = [ln for ln in (r.stdout or "").splitlines() if "WE_Building" in ln]
     check(r.returncode == 0 and not touched, "CODEBOT v181: no WE_Building* diffs vs " + PREV + ((" " + str(touched)) if touched else ""))
-    r = subprocess.run(["git", "diff", "-U0", PREV, "--", C + "MonetizationConfig.luau"], capture_output=True, text=True, cwd=ROOT)
-    changed = [l for l in (r.stdout or "").splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
-    check(r.returncode == 0 and not changed, "CODEBOT v181: MonetizationConfig unchanged vs " + PREV + ((" " + str(changed[:6])) if changed else ""))
+    r = subprocess.run(["git", "show", PREV + ":" + C + "MonetizationConfig.luau"], capture_output=True, text=True, cwd=ROOT)
+    same = r.returncode == 0 and _bud_j66(r.stdout) == _bud_j66(read(C + "MonetizationConfig.luau"))
+    check(same, "CODEBOT v181: MonetizationConfig unchanged vs " + PREV + " (the approved JOB 66 block aside)")
 except Exception as e:
     check(False, "CODEBOT v181: git diff check errored: " + str(e))

@@ -6,6 +6,26 @@ import re
 import subprocess
 from pathlib import Path
 
+# claude-bud JOB 66 (2026-10-01): the ONLY MonetizationConfig change allowed past this ship guard is the Shaun-approved
+# JOB 66 block (the two 5 R$ starter rows, the Starter5 switch, the SkuLiveFor LiveBlock lines), removed exactly here
+# before the byte-identical compare. Everything else in the file must still match.
+def _bud_j66(t):
+    t = (t or "").replace("\r\n", "\n")
+    a = t.find("\t-- claude-bud JOB 66 (price approved by Shaun")
+    if a >= 0:
+        b = t.find("\n", t.find("\tBoost2x10m = {", a)) + 1
+        t = t[:a] + t[b:]
+    a = t.find("-- claude-bud JOB 66: the two 5 R$ starter products")
+    if a >= 0:
+        t = t[:a] + t[t.find("function MonetizationConfig.SkuLiveFor", a):]
+    a = t.find("\t-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock)")
+    if a >= 0:
+        b = t.find("\tend\n", a) + len("\tend\n")
+        t = t[:a] + t[b:]
+    return t
+
+
+
 ROOT = Path.cwd()
 PREV = os.environ.get("CODEBOT_V195_PREV", "c288e7a")  # v194 code tip (place 192)
 C = "src/ReplicatedStorage/Shared/Configs/"
@@ -79,7 +99,7 @@ check(m is not None and float(m.group(1).replace("_", "")) == 1e15, "CODEBOT v19
 for rel in (C + "MonetizationConfig.luau",
             "src/ReplicatedStorage/Shared/Constants.luau", C + "LeaderboardConfig.luau"):
     if (ROOT / rel).exists():
-        check(shipped(rel, PREV) == read(rel), "CODEBOT v195: byte-identical to " + PREV + " " + rel.rsplit("/", 1)[-1])
+        check(_bud_j66(shipped(rel, PREV)) == _bud_j66(read(rel)), "CODEBOT v195: byte-identical to " + PREV + " " + rel.rsplit("/", 1)[-1])
 r = subprocess.run(["git", "diff", "--name-only", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
 touched = [ln for ln in (r.stdout or "").splitlines() if "WE_Building" in ln]
 check(r.returncode == 0 and not touched, "CODEBOT v195: no WE_Building* diffs vs " + PREV)

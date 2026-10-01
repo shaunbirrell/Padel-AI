@@ -476,6 +476,10 @@ local MonetizationConfig = {
 		Cash2h = { Id = 3715776582, DisplayName = "2 Hours of Cash", RobuxPrice = 159, Cash = 100000, Gold = 0 },
 		Cash4h = { Id = 3715776616, DisplayName = "4 Hours of Cash", RobuxPrice = 279, Cash = 200000, Gold = 0 },
 		RecruitPack = { Id = 3715776659, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, CashFromTimePack = "Cash30m", Description = "Cash, 2x cash for 30 min and a gold base trim" }, -- claude-bud JOB 42 C: cash = the 30-min pack while TimePacks is live
+	-- claude-bud JOB 66 (price approved by Shaun 2026-10-01 22:13 Dublin: 5 R$ each). Id 0 until Code Bot creates the
+	-- products (turn OFF managed / dynamic pricing on both so they stay 5 R$). LiveBlock = owner-first switch (cfg.Starter5).
+	StarterRecruit5 = { Id = 0, DisplayName = "Recruit Starter Pack", RobuxPrice = 5, Cash = 0, Gold = 0, GrantEntitlement = "StarterRecruit5", OneTime = true, GrantSoldiers = 3, StarterCash = true, LiveBlock = "Starter5", Description = "3 soldiers join your army + starter cash (one time)" },
+	Boost2x10m = { Id = 0, DisplayName = "2x Income 10 min", RobuxPrice = 5, Cash = 0, Gold = 0, GrantsCashBoostMinutes = 10, LiveBlock = "Starter5", Description = "2x earned income for 10 minutes (buy again to extend)" },
 		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
 		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
 		Nuke = {
@@ -907,7 +911,36 @@ function MonetizationConfig.VIPPerksLiveFor(userId: any): boolean
 end
 
 -- claude-bud: is this SKU key on sale / effective for this player under Rollout. Keys outside RolloutKeys are always live.
+-- claude-bud JOB 66: the two 5 R$ starter products (owner-first; the one-time offer after ~5 min of play)
+(MonetizationConfig :: any).Starter5 = {
+	Enabled = true,
+	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 66): only Shaun until his phone test
+	OfferAfterPlaySeconds = 300, -- the "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
+	CashIncomeMinutes = 2.5, -- the Recruit Starter Pack's cash = about 2-3 minutes of his early income ...
+	CashMin = 750, -- ... at least this (a brand-new base earns about $300 / min)
+	CashMax = 20000, -- ... and never more (a starter pack, not a cash pack)
+	BoostMult = 2, -- the 10-minute boost (CodesService.GrantCashBoost: extends a running one)
+	Title = "5 R$ ONE-TIME OFFER",
+	Lines = { Soldiers = "3 soldiers join your army", Cash = "$%s starter cash", Boost = "2x income 10 min: in the Shop" },
+}
+
+function MonetizationConfig.Starter5LiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live((MonetizationConfig :: any).Starter5, userId)
+end
+
+-- the Recruit Starter Pack cash for an income of perMin (pure)
+function MonetizationConfig.Starter5Cash(perMin: number): number
+	local S = (MonetizationConfig :: any).Starter5
+	return math.clamp(math.floor(S.CashIncomeMinutes * math.max(0, tonumber(perMin) or 0) + 0.5), S.CashMin, S.CashMax)
+end
+
 function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean
+	-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock) follows that switch
+	local row: any = (MonetizationConfig.DevProducts :: any)[key]
+	if row and typeof(row.LiveBlock) == "string" then
+		local block = (MonetizationConfig :: any)[row.LiveBlock]
+		return (require(script.Parent.RetentionConfig) :: any).Live(block, userId)
+	end
 	if not (MonetizationConfig.RolloutKeys :: any)[key] then
 		return true
 	end

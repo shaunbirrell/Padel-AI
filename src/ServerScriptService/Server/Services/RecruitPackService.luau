@@ -26,7 +26,7 @@ local MC: any = MonetizationConfig
 local O: any = MC.RecruitPackOffer
 local deps: { [string]: any } = {}
 
-type Session = { Trigger: string?, Tries: number, NextAt: number, Awaiting: boolean, LastAccrue: number, Slot: any?, ShownAt: number? }
+type Session = { Trigger: string?, Tries: number, NextAt: number, Awaiting: boolean, LastAccrue: number, Slot: any?, ShownAt: number?, Key: string? }
 local sessions: { [number]: Session } = {}
 
 RecruitPackService._clock = os.clock -- tests replace these
@@ -72,7 +72,7 @@ function RecruitPackService.Decide(s: any): (boolean, string)
 	local why: string? = nil
 	if s.Trigger == "capture" then
 		why = "capture"
-	elseif (tonumber(s.PlaySeconds) or 0) >= O.OfferAfterPlaySeconds then
+	elseif (tonumber(s.PlaySeconds) or 0) >= (tonumber(s.AfterSeconds) or O.OfferAfterPlaySeconds) then
 		why = "playtime"
 	end
 	if why == nil then
@@ -140,11 +140,18 @@ function RecruitPackService.Step(player: Player): (boolean, string)
 		return false, "wait"
 	end
 	local RS = deps.RetentionService
+	-- claude-bud JOB 66: where the 5 R$ starter offer is live for him, THAT is his one-time offer (at ~5 min of play);
+	-- everyone else keeps the Recruit Pack offer exactly as before
+	-- (only once the 5 R$ product exists: with Id 0 he keeps the Recruit Pack offer, never no offer at all)
+	local row5: any = MC.DevProducts.StarterRecruit5
+	local s5 = (tonumber(row5 and row5.Id) or 0) ~= 0 and MC.Starter5LiveFor(player.UserId)
+	s.Key = if s5 then "StarterRecruit5" else "RecruitPack"
 	local offer, why = RecruitPackService.Decide({
-		Live = MC.RecruitPackLiveFor(player.UserId),
-		ProductId = productId(),
-		Offered = profile.RecruitPackOffered == true,
-		Owned = hasPack(player, profile),
+		Live = if s5 then true else MC.RecruitPackLiveFor(player.UserId),
+		ProductId = if s5 then (tonumber(row5.Id) or 0) else productId(),
+		Offered = if s5 then profile.Starter5Offered == true else profile.RecruitPackOffered == true,
+		Owned = if s5 then player:GetAttribute("WE_Ent_StarterRecruit5") == true else hasPack(player, profile),
+		AfterSeconds = if s5 then MC.Starter5.OfferAfterPlaySeconds else nil,
 		Tries = s.Tries,
 		Trigger = s.Trigger,
 		PlaySeconds = if typeof(profile.Stats) == "table" then profile.Stats.PlayTimeSeconds else 0,
@@ -182,7 +189,18 @@ function RecruitPackService.Step(player: Player): (boolean, string)
 	end
 	local rs = deps.RemoteSetup
 	local ev = rs and rs.Get(Constants.RemoteNames.FeaturePush)
-	if ev and ev:IsA("RemoteEvent") then
+	if s5 and ev and ev:IsA("RemoteEvent") then -- claude-bud JOB 66: the 5 R$ card (same card, its own lines)
+		local L = MC.Starter5.Lines
+		local perMin5 = if MS.PassivePerMin then MS.PassivePerMin(player, profile, true) else 0
+		(ev :: RemoteEvent):FireClient(player, "RecruitPackOffer", {
+			ProductKey = "StarterRecruit5",
+			ProductId = tonumber(row5.Id) or 0,
+			RobuxPrice = row5.RobuxPrice,
+			Title = MC.Starter5.Title,
+			Lines = { L.Soldiers, string.format(L.Cash, tostring(MC.Starter5Cash(perMin5))), L.Boost },
+			Trigger = why,
+		})
+	elseif ev and ev:IsA("RemoteEvent") then
 		(ev :: RemoteEvent):FireClient(player, "RecruitPackOffer", {
 			ProductKey = "RecruitPack",
 			ProductId = productId(),
@@ -220,7 +238,11 @@ function RecruitPackService.Result(player: Player, result: any): boolean
 	end
 	if result == "shown" then
 		s.ShownAt = RecruitPackService._clock()
-		profile.RecruitPackOffered = true
+		if s.Key == "StarterRecruit5" then
+			profile.Starter5Offered = true -- claude-bud JOB 66: its own once-ever flag
+		else
+			profile.RecruitPackOffered = true
+		end
 		deps.DataService.MarkDirty(player)
 		guidedFunnel(player, profile, "Offered")
 	else

@@ -51,6 +51,7 @@ local HudConfig = require(Shared.Configs.HudConfig)
 local LevelConfig = require(Shared.Configs.LevelConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
+local MonetizationConfig: any = require(Shared.Configs.MonetizationConfig) -- claude-bud JOB 66 (the boost chip switch)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local TycoonMath = require(Shared.Util.TycoonMath)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
@@ -84,6 +85,9 @@ local goalLabel: TextLabel? = nil
 local rebirthLabel: TextLabel? = nil
 local tipToken = 0
 local shieldChip: Frame? = nil
+local boostChip: Frame? = nil -- claude-bud JOB 66
+local boostText: TextLabel? = nil
+local boostLoop = false
 local shieldText: TextLabel? = nil
 local shieldLoop = false
 
@@ -664,6 +668,30 @@ local function buildTopStrip()
 		refreshEmpireTax()
 	end)
 
+	-- claude-bud JOB 66: the 2x income boost chip ("2x 9:59") while WE_CashBoostUntil runs (owner-first: Starter5)
+	local bc = Instance.new("Frame")
+	bc.Name = "BoostChip"
+	bc.LayoutOrder = 6
+	bc.Size = UDim2.fromOffset(0, TS.Height)
+	bc.AutomaticSize = Enum.AutomaticSize.X
+	bc.Active = false
+	bc.Visible = false
+	chipBase(bc)
+	padding(bc, 12, 12)
+	hList(bc, 6)
+	local bt = label(bc, "BoostText", Fonts.Display, SH.TextSize, Color3.fromRGB(120, 255, 140), "")
+	bt.Size = UDim2.new(0, 0, 1, 0)
+	bt.AutomaticSize = Enum.AutomaticSize.X
+	bt.LayoutOrder = 1
+	UIUtil.TextOutline(bt, TS.TextStroke)
+	bc.Parent = group
+	boostChip = bc
+	boostText = bt
+	table.insert(leftRows, { Chip = bc :: GuiObject, PadL = 12, PadR = 12, Gap = 6, Parts = { bt } })
+	bc:GetPropertyChangedSignal("Visible"):Connect(function()
+		refreshEmpireTax()
+	end)
+
 	tip.Parent = area
 	group.Parent = area
 	HudLayout.SetRect("LevelChip", chip)
@@ -783,6 +811,49 @@ end
 local function shieldLeft(): number
 	local v = tonumber(player:GetAttribute(TS.Shield.Attribute)) or 0
 	return math.max(0, v - serverNow())
+end
+
+-- claude-bud JOB 66: the boost chip (1 Hz only while a boost runs; hidden otherwise)
+local function boostLeft(): number
+	local u = tonumber(player:GetAttribute("WE_CashBoostUntil")) or 0
+	return u - os.time()
+end
+
+function HUDController.BoostText(left: number): string
+	local s = math.max(0, math.ceil(left))
+	return string.format("2x %d:%02d", s // 60, s % 60)
+end
+
+local function refreshBoost()
+	local chip, txt = boostChip, boostText
+	if not chip or not txt then
+		return
+	end
+	local live = (MonetizationConfig :: any).Starter5LiveFor and (MonetizationConfig :: any).Starter5LiveFor(player.UserId)
+	if not live or boostLeft() <= 0 then
+		chip.Visible = false
+		return
+	end
+	txt.Text = HUDController.BoostText(boostLeft())
+	chip.Visible = true
+	if boostLoop then
+		return
+	end
+	boostLoop = true
+	task.spawn(function()
+		while boostLeft() > 0 do
+			task.wait(1)
+			local t = boostText
+			if t then
+				t.Text = HUDController.BoostText(boostLeft())
+			end
+		end
+		boostLoop = false
+		local c = boostChip
+		if c then
+			c.Visible = false
+		end
+	end)
 end
 
 local function refreshShield()
@@ -1431,6 +1502,8 @@ function HUDController.Init()
 	-- F3: the Empire Tax chip follows the server's WE_EmpireTaxPct (display only) and re-fits on a layout change
 	player:GetAttributeChangedSignal(TAX_ATTR):Connect(refreshEmpireTax)
 	refreshEmpireTax()
+	player:GetAttributeChangedSignal("WE_CashBoostUntil"):Connect(refreshBoost) -- claude-bud JOB 66
+	refreshBoost()
 
 	HudLayout.LayoutChanged:Connect(layoutRail)
 	HudLayout.LayoutChanged:Connect(function()

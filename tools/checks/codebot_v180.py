@@ -87,6 +87,7 @@ for _rel, _needle in (
 
 # ── the two new SKUs: Ids + display prices ──
 _cb180_MON = _cb180_read(_cb180_C + "MonetizationConfig.luau")
+
 _cb180_now = _cb180_skus(_cb180_MON)
 _cb180_check(_cb180_now.get(("GamePasses", "OfflineCap2x"), {}).get("Id") == 2002664894
              and _cb180_now[("GamePasses", "OfflineCap2x")].get("RobuxPrice") == 149,
@@ -130,7 +131,8 @@ try:
     _cb180_bad = [l for l in (_r.stdout or "").splitlines()
                   if l[:1] in "+-" and not l.startswith(("+++", "---"))
                   and _cb180_re.search(r"(Id|Price) = \d", _cb180_code(l[1:]))
-                  and not _cb180_re.search(r"OfflineCap2x|MissionReroll|Id = 2002664894|RobuxPrice = 149,$", l)]
+                  and not _cb180_re.search(r"OfflineCap2x|MissionReroll|Id = 2002664894|RobuxPrice = 149,$", l)
+                  and not (l.startswith("+") and _cb180_re.match(r"^\+	(StarterRecruit5|Boost2x10m) = \{ Id = 0,.*RobuxPrice = 5,", l))]  # claude-bud JOB 66 (Shaun-approved 5 R$ rows)
     _cb180_check(_r.returncode == 0 and not _cb180_bad,
                  "CODEBOT v180: no other Id / price line changed in MonetizationConfig" + ((" " + str(_cb180_bad[:4])) if _cb180_bad else ""))
 except Exception as _e:

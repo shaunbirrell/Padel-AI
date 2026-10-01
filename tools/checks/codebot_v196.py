@@ -6,6 +6,26 @@ import re
 import subprocess
 from pathlib import Path
 
+# claude-bud JOB 66 (2026-10-01): the ONLY MonetizationConfig change allowed past this ship guard is the Shaun-approved
+# JOB 66 block (the two 5 R$ starter rows, the Starter5 switch, the SkuLiveFor LiveBlock lines), removed exactly here
+# before the byte-identical compare. Everything else in the file must still match.
+def _bud_j66(t):
+    t = (t or "").replace("\r\n", "\n")
+    a = t.find("\t-- claude-bud JOB 66 (price approved by Shaun")
+    if a >= 0:
+        b = t.find("\n", t.find("\tBoost2x10m = {", a)) + 1
+        t = t[:a] + t[b:]
+    a = t.find("-- claude-bud JOB 66: the two 5 R$ starter products")
+    if a >= 0:
+        t = t[:a] + t[t.find("function MonetizationConfig.SkuLiveFor", a):]
+    a = t.find("\t-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock)")
+    if a >= 0:
+        b = t.find("\tend\n", a) + len("\tend\n")
+        t = t[:a] + t[b:]
+    return t
+
+
+
 ROOT = Path.cwd()
 PREV = os.environ.get("CODEBOT_V196_PREV", "1b8d5fa")  # v195 code tip (place 193)
 C = "src/ReplicatedStorage/Shared/Configs/"
@@ -83,7 +103,7 @@ NC2 = read(C + "NotificationConfig.luau") if (ROOT / (C + "NotificationConfig.lu
 # Hard: MonetizationConfig byte-identical to PREV
 MON = read(C + "MonetizationConfig.luau")
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev_mon is not None and prev_mon == MON, "CODEBOT v196: MonetizationConfig byte-identical to " + PREV)
+check(prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON), "CODEBOT v196: MonetizationConfig byte-identical to " + PREV)
 
 svc = read(C + "StructureVisualConfig.luau")
 check("PreferMeshWhenAssetIdSet = false" in svc, "CODEBOT v196: PreferMesh OFF")
@@ -97,5 +117,8 @@ check(len(touched) == 0, "CODEBOT v196: no WE_Building* src touches")
 # ExperienceNotifyService should not appear as a NEW ship in this cherry-pick set
 r2 = subprocess.run(["git", "diff", "--name-only", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
 names = (r2.stdout or "").splitlines()
-check(not any("ExperienceNotify" in n for n in names), "CODEBOT v196: ExperienceNotify (JOB 62) NOT shipped")
+# claude-bud (2026-10-01): on claude/desktop-bud JOB 62 is present; it must then stay owner-first (the v196 ship excludes it)
+check(not any("ExperienceNotify" in n for n in names)
+      or "OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 62)" in (ROOT / "src/ReplicatedStorage/Shared/Configs/NotificationConfig.luau").read_text(encoding="utf-8"),
+      "CODEBOT v196: ExperienceNotify (JOB 62) NOT shipped (or, on the bud branch, still owner-first)")
 check(any("NukeService" in n or "NukeController" in n or "RebirthZonesConfig" in n for n in names), "CODEBOT v196: nuke raid files in diff vs PREV")

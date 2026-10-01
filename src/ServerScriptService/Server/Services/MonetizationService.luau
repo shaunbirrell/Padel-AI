@@ -1952,6 +1952,33 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 	for _, ent in ipairs(entitlements) do
 		MonetizationService.GrantEntitlement(player, ent)
 	end
+	-- claude-bud JOB 66: the 5 R$ products. Soldiers through SoldierService.GrantFree (within the army cap, no yield),
+	-- the starter cash (worked out from his income, "devproduct": never multiplied), the 10-minute 2x boost through the
+	-- ONE boost path (CodesService.GrantCashBoost: extends a running boost). All before markProcessed, like every grant.
+	if product.GrantSoldiers then
+		local okS, SS = pcall(function(): any
+			return require(script.Parent.SoldierService)
+		end)
+		if okS and SS and SS.GrantFree then
+			local okG, n = pcall(SS.GrantFree, player, math.floor(tonumber(product.GrantSoldiers) or 0), "starter_pack")
+			print(string.format("[STARTER5] %s soldiers +%s", player.Name, tostring(if okG then n else "FAILED")))
+		end
+	end
+	if product.StarterCash then
+		local perMin = if MonetizationService.PassivePerMin then MonetizationService.PassivePerMin(player, profile, true) else 0
+		local cash = (MonetizationConfig :: any).Starter5Cash(perMin)
+		EconomyService.AddCash(player, cash, "devproduct")
+		print(string.format("[STARTER5] %s cash +%d (perMin %d)", player.Name, cash, math.floor(perMin)))
+	end
+	if typeof(product.GrantsCashBoostMinutes) == "number" and product.GrantsCashBoostMinutes > 0 then
+		local okC, CS = pcall(function(): any
+			return require(script.Parent.CodesService)
+		end)
+		if okC and CS and CS.GrantCashBoost then
+			local okB, untilUnix = pcall(CS.GrantCashBoost, player, product.GrantsCashBoostMinutes, (MonetizationConfig :: any).Starter5.BoostMult)
+			print(string.format("[STARTER5] %s boost %s (until %s)", player.Name, if okB then "granted" else "FAILED", tostring(untilUnix)))
+		end
+	end
 	-- claude-bud JOB 41 part B: the Recruit Pack's 2x cash boost through the ONE boost path (CodesService.GrantCashBoost:
 	-- stacks like codes, capped at CashBoostMaxMinutes; it only mutates the profile, no yield)
 	if productKey == "RecruitPack" then

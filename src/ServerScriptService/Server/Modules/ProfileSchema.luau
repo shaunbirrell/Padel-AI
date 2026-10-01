@@ -275,6 +275,7 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	end
 	-- claude-bud JOB 41 part B: the Recruit Pack card was shown (once per profile)
 	profile.RecruitPackOffered = if profile.RecruitPackOffered == true then true else nil
+	profile.Starter5Offered = if profile.Starter5Offered == true then true else nil -- claude-bud JOB 66: the 5 R$ card was shown
 	-- claude-bud JOB 50 A: the zone runs (cooldowns / bests / first clears per zone id), the bunker banner, the title
 	for _, key in ipairs({ "ZoneRunAt", "ZoneBest", "ZoneFirstClear" }) do
 		local t = profile[key]

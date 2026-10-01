@@ -10170,3 +10170,8 @@ ds_territories.luau T3):
 - "Turret level" = the owner's Turret Guns Defence level (0..10): the gun is the turret's weapon.
 - The pack is wired PENDING (Id 0): the asset rules forbid using a model before WE_CHECK2, and the pack's per-level
   model names are only known from that probe.
+
+## claude-bud JOB 66 (2026-10-01): 5 R$ starter products
+- Built with Id 0: creating the products needs the Open Cloud key (Code Bot). The 5 R$ price is Shaun-approved.
+- The 5 R$ offer replaces the 49 R$ card only for players Starter5 is live for (one soft-offer slot, never two cards).
+- The boost chip shows any running cash boost (codes, Recruit Pack, the 5 R$ boost) for those players.

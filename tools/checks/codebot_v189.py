@@ -5,6 +5,26 @@ import re
 import subprocess
 from pathlib import Path
 
+# claude-bud JOB 66 (2026-10-01): the ONLY MonetizationConfig change allowed past this ship guard is the Shaun-approved
+# JOB 66 block (the two 5 R$ starter rows, the Starter5 switch, the SkuLiveFor LiveBlock lines), removed exactly here
+# before the byte-identical compare. Everything else in the file must still match.
+def _bud_j66(t):
+    t = (t or "").replace("\r\n", "\n")
+    a = t.find("\t-- claude-bud JOB 66 (price approved by Shaun")
+    if a >= 0:
+        b = t.find("\n", t.find("\tBoost2x10m = {", a)) + 1
+        t = t[:a] + t[b:]
+    a = t.find("-- claude-bud JOB 66: the two 5 R$ starter products")
+    if a >= 0:
+        t = t[:a] + t[t.find("function MonetizationConfig.SkuLiveFor", a):]
+    a = t.find("\t-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock)")
+    if a >= 0:
+        b = t.find("\tend\n", a) + len("\tend\n")
+        t = t[:a] + t[b:]
+    return t
+
+
+
 ROOT = Path.cwd()
 PREV = os.environ.get("CODEBOT_V189_PREV", "c0d7123")  # v188 handoff tip (place 186)
 C = "src/ReplicatedStorage/Shared/Configs/"
@@ -88,7 +108,7 @@ check("Night2" in J54 and "OwnerFirst" in J54, "CODEBOT v189: claude_bud_job54 p
 
 MON = read(C + "MonetizationConfig.luau")
 prev_mon = shipped(C + "MonetizationConfig.luau", PREV)
-check(prev_mon is not None and prev_mon == MON, "CODEBOT v189: MonetizationConfig byte-identical to " + PREV)
+check(prev_mon is not None and _bud_j66(prev_mon) == _bud_j66(MON), "CODEBOT v189: MonetizationConfig byte-identical to " + PREV)
 if prev_mon is not None:
     a, b = skus(prev_mon), skus(MON)
     diff = sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))

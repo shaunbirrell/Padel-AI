@@ -30,6 +30,9 @@ EXTRA = r'''
 -- the boost path (CodesService.GrantCashBoost) records its calls
 BOOSTS = {}
 SOURCES["Server/Services/CodesService"] = function() return { GrantCashBoost = function(p, minutes, mult) table.insert(BOOSTS, { P = p, Min = minutes, Mult = mult }); return 1 end } end
+-- claude-bud JOB 66: the soldier grant path records its calls
+SOLDIERS = {}
+SOURCES["Server/Services/SoldierService"] = function() return { GrantFree = function(p, n, why) table.insert(SOLDIERS, { P = p, N = n, Why = why }); return n end } end
 '''
 
 TEST = r'''
@@ -226,6 +229,27 @@ for _, inc in ipairs({ 0, 500, 2000, 9000 }) do
   if inc == 2000 then
     check(#BOOSTS == 1 and BOOSTS[1].Min == 30 and pr.Entitlements.RecruitPack == true, "live: the boost and the trim still grant")
   end
+end
+-- claude-bud JOB 66: the two 5 R$ products through the REAL ProcessReceipt
+do
+  PERMIN = 400
+  local MS, RPS, cash = fresh(999)
+  MC.DevProducts.StarterRecruit5.Id = 777
+  MC.DevProducts.Boost2x10m.Id = 778
+  local p, pr = join(OWNER)
+  BOOSTS, SOLDIERS = {}, {}
+  MS.ProcessReceipt({ PlayerId = OWNER, ProductId = 777, PurchaseId = "s5-1", CurrencySpent = 5 })
+  local paid = 0
+  for _, c in ipairs(cash) do if c.Why == "devproduct" then paid += c.N end end
+  check(#SOLDIERS == 1 and SOLDIERS[1].N == 3 and paid == MC.Starter5Cash(MS.PassivePerMin(p, pr, true)) and pr.Entitlements.StarterRecruit5 == true and #BOOSTS == 0,
+    string.format("JOB 66 Recruit Starter Pack receipt: +3 soldiers (GrantFree), +$%d devproduct cash, one-time entitlement saved", paid))
+  MS.ProcessReceipt({ PlayerId = OWNER, ProductId = 777, PurchaseId = "s5-1", CurrencySpent = 5 })
+  check(#SOLDIERS == 1, "JOB 66: a re-delivered Starter Pack receipt grants nothing")
+  MS.ProcessReceipt({ PlayerId = OWNER, ProductId = 778, PurchaseId = "b10-1", CurrencySpent = 5 })
+  MS.ProcessReceipt({ PlayerId = OWNER, ProductId = 778, PurchaseId = "b10-2", CurrencySpent = 5 })
+  check(#BOOSTS == 2 and BOOSTS[1].Min == 10 and BOOSTS[1].Mult == 2 and #SOLDIERS == 1, "JOB 66 2x Income 10 min: through CodesService.GrantCashBoost (10 min, x2), repeatable (2 buys = 2 grants)")
+  MC.DevProducts.StarterRecruit5.Id = 0
+  MC.DevProducts.Boost2x10m.Id = 0
 end
 check(row.Id == 999 or row.Id == 0 or row.Id == SHIPPED_ID, "the row keeps its Id and 49 R$: " .. tostring(MC.DevProducts.RecruitPack.RobuxPrice))
 -- the card shows the same live number as the 30 MIN OF CASH row
