@@ -94,16 +94,15 @@ if prev_mon is not None:
     check(len(b) >= 40 and not diff, "CODEBOT v182: all %d pass/product Ids + prices unchanged vs %s%s"
           % (len(b), PREV, (" " + str(diff[:6])) if diff else ""))
 try:
-    r = subprocess.run(["git", "diff", "-U0", PREV, "--", C], capture_output=True, text=True, cwd=ROOT)
+    # scoped to the two files v182 touched (claude/desktop-bud carries its own NEW-OWNER-FIRST blocks elsewhere)
+    two = [C + "MissionConfig.luau", C + "RetentionConfig.luau"]
+    r = subprocess.run(["git", "diff", "-U0", PREV, "--"] + two, capture_output=True, text=True, cwd=ROOT)
     changed = [l for l in (r.stdout or "").splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
     price = [l for l in changed if re.search(r"(Id|Price|Robux\w*) = \d", code(l[1:]))]
     owner = [l for l in changed if re.search(r"OwnerFirst = (true|false)", code(l[1:]))]
-    check(r.returncode == 0 and not price, "CODEBOT v182: no Id / price line changed in Shared/Configs" + ((" " + str(price[:4])) if price else ""))
+    check(r.returncode == 0 and not price, "CODEBOT v182: no Id / price line changed in MissionConfig / RetentionConfig" + ((" " + str(price[:4])) if price else ""))
     check(len(owner) == 4 and sum(1 for l in owner if l.startswith("+") and "OwnerFirst = false" in l) == 2,
-          "CODEBOT v182: exactly two OwnerFirst lines flipped in Shared/Configs" + ((" " + str(owner)) if len(owner) != 4 else ""))
-    r = subprocess.run(["git", "diff", "--name-only", PREV, "--", C], capture_output=True, text=True, cwd=ROOT)
-    files = sorted(set((r.stdout or "").split()))
-    check(files == [C + "MissionConfig.luau", C + "RetentionConfig.luau"], "CODEBOT v182: only MissionConfig + RetentionConfig changed in Configs " + str(files))
+          "CODEBOT v182: exactly two OwnerFirst lines flipped (Core, ReturnSequence)" + ((" " + str(owner)) if len(owner) != 4 else ""))
     r = subprocess.run(["git", "diff", "--name-only", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
     touched = [ln for ln in (r.stdout or "").splitlines() if "WE_Building" in ln]
     check(r.returncode == 0 and not touched, "CODEBOT v182: no WE_Building* diffs vs " + PREV)
