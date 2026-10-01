@@ -242,14 +242,42 @@ function RetentionService.ComputeOffline(prevSeen: number, now: number, perSec: 
 	return math.floor(perSec * counted * share * mult), math.floor(counted)
 end
 
+-- Code Bot v180: the 2x Offline Cash GAME PASS (MonetizationConfig.GamePasses.OfflineCap2x) is owned. Server-only:
+-- MonetizationService's pass cache (UserOwnsGamePassAsync on join / after PromptGamePassPurchaseFinished) or a saved
+-- entitlement; `fresh` (its own thread only, it may yield) also asks Roblox once when the join check is still running.
+local CAP_BOOST_PASS = "OfflineCap2x" -- MonetizationConfig.GamePasses key (EconomyConfig CapBoost.ProductKey)
+
+local function ownsCapBoost(player: Player, profile: any, key: any, fresh: boolean?): boolean
+	if typeof(key) ~= "string" then
+		return false
+	end
+	if typeof(profile) == "table" and typeof(profile.Entitlements) == "table" and profile.Entitlements[key] == true then
+		return true
+	end
+	local okM, M = pcall(function(): any
+		return require(script.Parent.MonetizationService)
+	end)
+	if not okM or typeof(M) ~= "table" then
+		return false
+	end
+	if fresh and M.OwnsGamePassNow then
+		local ok, owns = pcall(M.OwnsGamePassNow, player, key)
+		return ok and owns == true
+	end
+	if M.OwnsCached then
+		local ok, owns = pcall(M.OwnsCached, player, key)
+		return ok and owns == true
+	end
+	return false
+end
+
 -- claude-bud JOB 49 B: this player's cap in seconds: CapSeconds, x CapBoost.CapMult only with the OfflineCap2x
--- entitlement while CapBoost is live (it is DISABLED until Shaun approves a price). Never touches Share.
-local function capSecondsFor(player: Player, profile: any): number
+-- game pass while CapBoost is live (Code Bot v180: live for everyone). Never touches Share.
+local function capSecondsFor(player: Player, profile: any, fresh: boolean?): number
 	local o = offlineCfg()
 	local cap = math.max(0, tonumber(o.CapSeconds) or 0)
 	local b = o.CapBoost
-	if typeof(b) == "table" and RetentionConfig.Live(b, player.UserId) and typeof(profile) == "table"
-		and typeof(profile.Entitlements) == "table" and profile.Entitlements[b.ProductKey] == true then
+	if typeof(b) == "table" and RetentionConfig.Live(b, player.UserId) and ownsCapBoost(player, profile, b.ProductKey or CAP_BOOST_PASS, fresh) then
 		cap *= math.max(1, tonumber(b.CapMult) or 1)
 	end
 	return cap
@@ -279,7 +307,12 @@ local function onLoadOffline(player: Player, profile: any)
 		return
 	end
 	local o = offlineCfg()
-	local capSec = capSecondsFor(player, profile) -- claude-bud JOB 49 B: CapSeconds (x CapMult with the disabled hook)
+	-- claude-bud JOB 49 B: CapSeconds (x CapMult with the 2x Offline Cash pass). Code Bot v180: `fresh` = this deferred
+	-- thread may wait for Roblox's ownership answer (the join pass check can still be running when the save loads)
+	local capSec = capSecondsFor(player, profile, true)
+	if not player.Parent or (DataService and DataService.GetProfile(player) ~= profile) then
+		return
+	end
 	local oc = table.clone(o)
 	oc.CapSeconds = capSec
 	local cash, seconds = RetentionService.ComputeOffline(

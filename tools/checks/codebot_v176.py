@@ -14,6 +14,13 @@ def read(rel):
     return (ROOT / rel).read_text(encoding="utf-8").replace("\r\n", "\n")
 
 
+def shipped_v180(rel, rev):
+    # Code Bot v180: the file as this version shipped it (its snapshot checks of CapBoost / OfflineCap2x / MissionReroll
+    # moved on in v180: both items wired + live; the current state is pinned in tools/checks/codebot_v180.py)
+    r = subprocess.run(["git", "show", rev + ":" + rel], capture_output=True, text=True, cwd=ROOT)
+    return (r.stdout or "").replace("\r\n", "\n") if r.returncode == 0 else ""
+
+
 def check(cond, label):
     if "ok" in globals() and "bad" in globals():
         (ok if cond else bad)(label)
@@ -37,12 +44,12 @@ S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 179)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 179)'),
-    (S + "Services/DataService.luau", "WE_Build=179"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 179)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 180)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 180)'),
+    (S + "Services/DataService.luau", "WE_Build=180"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 180)'),
 ):
-    check(needle in read(rel), "CODEBOT v176: WE_Build=179 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v176: WE_Build=180 " + rel.rsplit("/", 1)[-1])
 
 # JOB 49 A — DailyRewardConfig Grace / Day7Scale / Calendar owner-first
 DR = read(C + "DailyRewardConfig.luau")
@@ -58,7 +65,7 @@ EC = read(C + "EconomyConfig.luau")
 card = block(EC, "Card")
 check("Enabled = true," in card and "OwnerFirst = false," in card,
       "CODEBOT v176: OfflineEarnings.Card Enabled (OwnerFirst=false since codebot_v177 flip)")
-cb = block(EC, "CapBoost")
+cb = block(shipped_v180(C + "EconomyConfig.luau", "574b455"), "CapBoost")  # Code Bot v180: as shipped
 check("Enabled = false," in cb and "OwnerFirst = true," in cb and 'ProductKey = "OfflineCap2x"' in cb,
       "CODEBOT v176: CapBoost Enabled=false (sidegrade hook off) + OwnerFirst=true")
 # CapSeconds stays 8h
@@ -66,7 +73,7 @@ oe = EC.split("OfflineEarnings = {")[1].split("\n\t},")[0] if "OfflineEarnings =
 check("CapSeconds = 8 * 3600" in oe or "CapSeconds = 28800" in oe,
       "CODEBOT v176: OfflineEarnings CapSeconds = 8 h")
 
-MC = read(C + "MonetizationConfig.luau")
+MC = shipped_v180(C + "MonetizationConfig.luau", "574b455")  # Code Bot v180: as shipped
 for key in ("OfflineCap2x", "MissionReroll"):
     m = re.search(r"\n\t\t" + key + r" = \{([^\n]*)\}", MC)
     row = m.group(1) if m else ""

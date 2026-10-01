@@ -311,6 +311,16 @@ local MonetizationConfig = {
 			HideFromShop = true,
 			Description = "All 6 premium guns", -- Code Bot v156: plain player text
 		},
+		-- claude-bud JOB 49 B / Code Bot v180 (Shaun approved + created 2026-10-01, universe 10767159222): 2x Offline Cash,
+		-- a permanent Game Pass (was a Developer Product stub at Id 0). Owned = UserOwnsGamePassAsync on join / after
+		-- PromptGamePassPurchaseFinished (WE_Ent_OfflineCap2x display flag); EconomyConfig.OfflineEarnings.CapBoost doubles
+		-- the offline cap TIME (8 h -> 16 h). Never raises Share, no combat stat. Sold in the Shop (SUPPLY pass rows).
+		OfflineCap2x = {
+			Id = 2002664894,
+			DisplayName = "2x Offline Cash",
+			RobuxPrice = 149,
+			Description = "Offline cash builds for 16 h instead of 8 h",
+		},
 		-- v71 money (M1): Rebirth Boost (J13: +15% Cash per Rebirth instead of +10%, 1.5x starting Cash; no Gold x2).
 		-- RebirthConfig.Boost.GamePassKey. Id = 0 until created (OFF sale until the M7b/M7d publish).
 		RebirthBoost = {
@@ -323,9 +333,11 @@ local MonetizationConfig = {
 		},
 	},
 	DevProducts = {
-		-- claude-bud JOB 49 (Robux sidegrades, DISABLED): Id 0 and no RobuxPrice until Shaun approves a price (never prompted / never in the Shop)
-		OfflineCap2x = { Id = 0, DisplayName = "Offline Cap x2", Cash = 0, Gold = 0, GrantEntitlement = "OfflineCap2x", HideFromShop = true },
-		MissionReroll = { Id = 0, DisplayName = "Mission Reroll", Cash = 0, Gold = 0, GrantsMissionReroll = true, HideFromShop = true },
+		-- claude-bud JOB 49 (Robux sidegrade). Code Bot v180 (Shaun approved + created 2026-10-01): the paid reroll after the
+		-- free daily one, 19 R$. Sold from the Missions panel only (the 19 R$ reroll button on a core mission row once the
+		-- free reroll is used); ProcessReceipt grants ONE MissionRerollTokens per receipt (idempotent: ProcessedReceipts).
+		-- OfflineCap2x moved to GamePasses (it is a Game Pass on the Creator Hub, 2002664894).
+		MissionReroll = { Id = 3715836569, DisplayName = "Mission Reroll", RobuxPrice = 19, Cash = 0, Gold = 0, GrantsMissionReroll = true, HideFromShop = true, SoldFrom = "Missions" },
 		CashSmall = { Id = 3713838744, DisplayName = "Cash Pack S", RobuxPrice = 49, Cash = 10000, Gold = 0 },
 		CashMedium = { Id = 3713838815, DisplayName = "Cash Pack M", RobuxPrice = 149, Cash = 50000, Gold = 0 },
 		CashLarge = { Id = 3713838888, DisplayName = "Cash Pack L", RobuxPrice = 399, Cash = 200000, Gold = 0 },
@@ -710,6 +722,7 @@ local MonetizationConfig = {
 		starter_offer = true,
 		death_card = true,
 		pad = true,
+		missions = true, -- Code Bot v180: the Missions panel's paid reroll button
 		bp_panel = true,
 		army_panel = true,
 		army_full = true,

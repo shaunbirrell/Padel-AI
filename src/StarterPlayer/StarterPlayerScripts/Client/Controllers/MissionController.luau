@@ -75,6 +75,9 @@ local function emptyState(parent: Instance, message: string)
 	lab.Font = Enum.Font.GothamMedium
 end
 
+-- Code Bot v180: the mission whose 19 R$ reroll was just prompted (used once when the token arrives)
+local pendingPaidReroll: { Id: string, Until: number }? = nil
+
 local function fire(remoteName: string, ...: any)
 	task.spawn(Remotes.FireServer, remoteName, ...)
 end
@@ -981,6 +984,34 @@ local function refresh()
 				rr.Activated:Connect(function()
 					pcall(AudioController.PlayClick)
 					fire(Constants.RemoteNames.RequestMissionReroll, missionId)
+				end)
+				-- Code Bot v180: the reroll he just paid for: the server granted the token (ProcessReceipt), use it once
+				if pendingPaidReroll ~= nil and pendingPaidReroll.Id == missionId and os.clock() < pendingPaidReroll.Until then
+					pendingPaidReroll = nil
+					fire(Constants.RemoteNames.RequestMissionReroll, missionId)
+				end
+			elseif goEntry.CanBuyReroll == true then
+				-- Code Bot v180: free reroll used: the 19 R$ reroll (DevProducts.MissionReroll). Only the Roblox prompt here;
+				-- the token is granted by the server's ProcessReceipt, the reroll stays server-checked.
+				local price = 19
+				pcall(function()
+					local LP: any = require(Shared.Util.LivePrices)
+					local p = LP.Price("DevProduct", "MissionReroll")
+					if typeof(p) == "number" and p > 0 then
+						price = p
+					end
+				end)
+				local rb = rowButton(row, "RerollBuyButton", "↻ R$" .. tostring(price), Color3.fromRGB(0, 140, 70), Constants.Colors.Text, math.max(TAP, 84), TAP)
+				rb.Position = UDim2.new(1, -(btnW + 16), 0.5, 0)
+				rb.TextScaled = true
+				local missionId = goEntry.Id
+				rb.Activated:Connect(function()
+					pcall(AudioController.PlayClick)
+					pendingPaidReroll = { Id = missionId, Until = os.clock() + 120 }
+					pcall(function()
+						local SC: any = (require :: any)(script.Parent.ShopController)
+						SC.PromptDevProduct("MissionReroll", "missions")
+					end)
 				end)
 			end
 		end

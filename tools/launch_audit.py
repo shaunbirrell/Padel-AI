@@ -74,6 +74,8 @@ def audit():
                 prompt.append("Shop ROBUX row" + (" + Garage" if "VehicleIds" in body else ""))
             if 'SoldFrom = "RebirthPanel"' in body:
                 prompt.append("Rebirth panel")
+            if 'SoldFrom = "Missions"' in body:
+                prompt.append("Missions panel")  # Code Bot v180: the paid mission reroll
             if re.search(r'Key = "' + key + '"', MC):
                 prompt.append("ATM pad / offer")
             grant = []
@@ -85,6 +87,8 @@ def audit():
                 grant.append("entitlement")
             if "GrantsBattlePassPremium" in body:
                 grant.append("battle pass premium")
+            if "GrantsMissionReroll = true" in body:
+                grant.append("mission reroll token")  # Code Bot v180: profile.MissionRerollTokens + 1 per receipt
             for c in counters:
                 if re.search(r"\b" + c + r" = \d+", body):
                     grant.append("saved counter " + c)

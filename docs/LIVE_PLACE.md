@@ -64,6 +64,7 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | PG_Thunderhead | Thunderhead Rocket Launcher | 1999305818 | 399 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
 | PG_Tempest | Tempest Railgun | 2002682646 | 499 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
 | PG_ArmoryPass | Armory Pass | 2002868467 | 1299 | Base armory 7th case + Shop WEAPONS (all six guns; claude-bud JOB 35; live v137) |
+| OfflineCap2x | 2x Offline Cash | 2002664894 | 149 | Shop SUPPLY pass row: offline cash cap 8 h -> 16 h (EconomyConfig CapBoost, live for everyone; Code Bot v180) |
 
 ### DevProducts
 | Key | Name | Id | Robux | Shop |
@@ -92,8 +93,7 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | Cash4h | 4 Hours of Cash | 3715776616 | 279 | claude-bud JOB 42: 240 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
 | Nuke | Nuke | 0 | 19 | hidden |
 | NukeBundle3 | Nuke x3 | 0 | 49 | hidden |
-| OfflineCap2x | Offline Cap x2 | 0 | (no price) | claude-bud JOB 49 B: DISABLED sidegrade (offline cap time x2); Id 0 + no price until Shaun approves one; never prompted |
-| MissionReroll | Mission Reroll | 0 | (no price) | claude-bud JOB 49 C: DISABLED sidegrade (reroll a core mission); Id 0 + no price until Shaun approves one; never prompted |
+| MissionReroll | Mission Reroll | 3715836569 | 19 | Missions panel: the green "↻ R$19" button on an open core mission once the free daily reroll is used; ProcessReceipt grants 1 reroll token per receipt (Code Bot v180; core missions still owner-first) |
 | SoldierRefill | Instant Army Refill | 3715442523 | 49 | Shop / army prompt (owner-only first; Id wired v99) |
 | PlazaAirstrike | Plaza Airstrike | 3715442542 | 79 | Shop / plaza button (owner-only first; Id wired v99) |
 | RebirthKeepBase | Keep-Base Rebirth | 3714663721 | 50 | Rebirth panel only (SoldFrom), never the Shop list; owner-only while Rollout = "owner" |

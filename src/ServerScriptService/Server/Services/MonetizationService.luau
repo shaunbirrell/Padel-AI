@@ -527,6 +527,39 @@ local function ownsCached(player: Player, key: string): boolean
 	return typeof(profile) == "table" and typeof(profile.Entitlements) == "table" and profile.Entitlements[key] == true
 end
 
+-- Code Bot v180: the non-yielding ownership read for other services (RetentionService: the 2x Offline Cash pass)
+function MonetizationService.OwnsCached(player: Player, key: string): boolean
+	return ownsCached(player, key)
+end
+
+--[[ Code Bot v180: a pass is owned NOW. May yield (call it from its own thread, never inside a receipt). The session
+	cache first; when it does not say owned yet (the join check can still be running when the save loads), ONE
+	UserOwnsGamePassAsync for that pass; a confirmed owner goes into the cache + WE_Ent_<key> (display only). ]]
+function MonetizationService.OwnsGamePassNow(player: Player, passKey: string): boolean
+	if ownsCached(player, passKey) then
+		return true
+	end
+	local def = findGamePassByKey(passKey)
+	local passId = if def then tonumber(def.Id) else nil
+	if passId == nil or passId == 0 then
+		return false
+	end
+	local ok, owns = pcall(function()
+		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
+	end)
+	if not (ok and owns == true) or not player.Parent then
+		return false
+	end
+	local cache = gamePassCache[player.UserId]
+	if not cache then
+		cache = {}
+		gamePassCache[player.UserId] = cache
+	end
+	cache[passKey] = true
+	setEntitlementAttr(player, passKey)
+	return true
+end
+
 -- F8: a SKU key (game pass or Developer Product) is owned: its own key, or the entitlement its product grants
 local function ownsSkuCached(player: Player, key: string): boolean
 	if ownsCached(player, key) then

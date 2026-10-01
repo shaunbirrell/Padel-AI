@@ -58,20 +58,28 @@ _j49("MS.PassivePerMin, player, profile, true" in _d7 and "math.max(floorCash" i
 # ── B ──
 _EC = _j49_src(_CF + "EconomyConfig.luau")
 _cb = _j49_block(_EC, "CapBoost")
-_j49("Enabled = false," in _cb and "OwnerFirst = true," in _cb and 'ProductKey = "OfflineCap2x"' in _cb and "CapMult = 2" in _cb,
-     "B: the OfflineCap2x sidegrade hook is DISABLED (Enabled = false, OwnerFirst = true), cap time x2 only")
+# Code Bot v180 (Shaun approved 2026-10-01): the hook is live for everyone (was Enabled = false, OwnerFirst = true)
+_j49("Enabled = true," in _cb and "OwnerFirst = false," in _cb and 'ProductKey = "OfflineCap2x"' in _cb and "CapMult = 2" in _cb,
+     "B: the OfflineCap2x sidegrade is live for everyone (Code Bot v180), cap time x2 only")
 _j49("Enabled = true," in _j49_block(_EC, "Card") and "OwnerFirst = false," in _j49_block(_EC, "Card"), "B: the Welcome back / COLLECT card is live for everyone (codebot_v177 flip)")
 _MC = _j49_src(_CF + "MonetizationConfig.luau")
-for _k in ("OfflineCap2x", "MissionReroll"):
-    _m = _j49_re.search(r"\n\t\t" + _k + r" = \{([^\n]*)\}", _MC)
-    _row = _m.group(1) if _m else ""
-    _j49(_row.strip().startswith("Id = 0,") and "RobuxPrice" not in _row and "HideFromShop = true" in _row
-         and not _j49_re.search(r"Damage|Health|HP|Armou?r|Soldier|ArmyCap|Speed|Raid", _row),
-         "B/C: DevProducts.%s = Id 0, NO price, hidden, no stat keys (never prompted until Shaun approves a price)" % _k)
+# Code Bot v180: both created + priced by Shaun (OfflineCap2x is a Game Pass); still no stat keys (sidegrades only)
+_m = _j49_re.search(r"\n\t\tMissionReroll = \{([^\n]*)\}", _MC)
+_row = _m.group(1) if _m else ""
+_j49(_row.strip().startswith("Id = 3715836569,") and "RobuxPrice = 19," in _row and "HideFromShop = true" in _row
+     and not _j49_re.search(r"Damage|Health|HP|Armou?r|Soldier|ArmyCap|Speed|Raid", _row),
+     "B/C: DevProducts.MissionReroll = 3715836569, 19 R$, sold from Missions only, no stat keys (Code Bot v180)")
+_m = _j49_re.search(r"\n\t\tOfflineCap2x = \{(.*?)\n\t\t\},", _MC, _j49_re.S)
+_row = _m.group(1) if _m else ""
+_j49("Id = 2002664894," in _row and "RobuxPrice = 149," in _row
+     and not _j49_re.search(r"Damage|Health|HP|Armou?r|Soldier|ArmyCap|Speed|Raid|CashMult|XPMult", _row)
+     and not _j49_re.search(r"\n\t\tOfflineCap2x = \{ Id", _MC),
+     "B/C: GamePasses.OfflineCap2x = 2002664894, 149 R$, no stat keys; no Developer Product stub (Code Bot v180)")
 _RS = _j49_src(_SV + "Services/RetentionService.luau")
 _cs = _j49_fn(_RS, "local function capSecondsFor")
-_j49("profile.Entitlements[b.ProductKey] == true" in _cs and "Share" not in _cs,
-     "B: the cap boost only lengthens the cap time (never Share), and only with the entitlement")
+_j49("ownsCapBoost(player, profile, b.ProductKey or CAP_BOOST_PASS, fresh)" in _cs and "Share" not in _cs
+     and "profile.Entitlements[key] == true" in _j49_fn(_RS, "local function ownsCapBoost"),
+     "B: the cap boost only lengthens the cap time (never Share), and only with the pass (Code Bot v180) / entitlement")
 _j49("os.time()" in _j49_fn(_RS, "local function onLoadOffline") and "profile.PrevSeenUnix = nil" in _RS,
      "B: offline time is the server's os.time() vs the saved LastSeen, paid once per load")
 
@@ -80,8 +88,8 @@ _MCF = _j49_src(_CF + "MissionConfig.luau")
 _core = _MCF.split("\tCore = {")[1].split("\n\t},\n\n")[0] if "\tCore = {" in _MCF else ""
 _j49("Enabled = true," in _core and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _core and "Count = 3," in _core and "ResetHourUtc = 0," in _core,
      "C: MissionConfig.Core is owner-first, 3 a day, reset at 00:00 UTC by default")
-_j49("Robux = { Enabled = false, OwnerFirst = true, ProductKey = \"MissionReroll\" }" in _core and "FreePerDay = 1," in _core,
-     "C: 1 free reroll a day; the Robux reroll hook is DISABLED")
+_j49("Robux = { Enabled = true, OwnerFirst = false, ProductKey = \"MissionReroll\" }" in _core and "FreePerDay = 1," in _core,
+     "C: 1 free reroll a day; then the 19 R$ Robux reroll (Code Bot v180: live)")
 _j49("Raid = true," in _MCF.split("LiveObjectives = {")[1].split("}")[0], "C: Raid is a live ObjectiveType")
 _AP = _j49_src(_SV + "Modules/ArmyPlan.luau")
 _MCS = _j49_src(_SV + "Services/MoneyCollectorService.luau")
@@ -93,7 +101,7 @@ _j49("RemoteGuard.IsIdString(missionId, 48)" in _rr and "AddCash" not in _rr and
 _SC = _j49_src(_CF + "SecurityConfig.luau")
 _j49('RequestMissionReroll = { "string:48" }' in _SC, "C: RequestMissionReroll's schema = one short string (no client time / amount)")
 _MON = _j49_src(_SV + "Services/MonetizationService.luau")
-_j49("GrantsMissionReroll == true" in _MON and "GrantRerollToken(player)" in _MON, "C: the Robux reroll grant exists in ProcessReceipt (product Id 0 = never sold)")
+_j49("GrantsMissionReroll == true" in _MON and "GrantRerollToken(player)" in _MON, "C: the Robux reroll grant exists in ProcessReceipt (one token per receipt)")
 
 # ── D ──
 _RCF = _j49_src(_CF + "RetentionConfig.luau")

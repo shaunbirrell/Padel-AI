@@ -15,6 +15,13 @@ def read(rel):
     return (ROOT / rel).read_text(encoding="utf-8").replace("\r\n", "\n")
 
 
+def shipped_v180(rel, rev):
+    # Code Bot v180: the file as this version shipped it (its snapshot checks of CapBoost / OfflineCap2x / MissionReroll
+    # moved on in v180: both items wired + live; the current state is pinned in tools/checks/codebot_v180.py)
+    r = subprocess.run(["git", "show", rev + ":" + rel], capture_output=True, text=True, cwd=ROOT)
+    return (r.stdout or "").replace("\r\n", "\n") if r.returncode == 0 else ""
+
+
 def check(cond, label):
     if "ok" in globals() and "bad" in globals():
         (ok if cond else bad)(label)
@@ -37,12 +44,12 @@ def block(src, name):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 179)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 179)'),
-    (S + "Services/DataService.luau", "WE_Build=179"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 179)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 180)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 180)'),
+    (S + "Services/DataService.luau", "WE_Build=180"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 180)'),
 ):
-    check(needle in read(rel), "CODEBOT v177: WE_Build=179 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v177: WE_Build=180 " + rel.rsplit("/", 1)[-1])
 
 # JOB 49 A flipped: DailyRewardConfig Grace / Day7Scale / Calendar live for everyone
 DR = read(C + "DailyRewardConfig.luau")
@@ -57,12 +64,12 @@ m = re.search(r"\n\t\tCard = \{(.*?)\n\t\t\},", EC, re.S)
 card = m.group(1) if m else ""
 check("Enabled = true," in card and "OwnerFirst = false," in card and "OwnerFirst = true" not in code(card),
       "CODEBOT v177: OfflineEarnings.Card Enabled + OwnerFirst=false (everyone)")
-m = re.search(r"\n\t\tCapBoost = \{(.*?)\n\t\t\},", EC, re.S)
+m = re.search(r"\n\t\tCapBoost = \{(.*?)\n\t\t\},", shipped_v180(C + "EconomyConfig.luau", "2ed90ae"), re.S)  # Code Bot v180: as shipped
 cb = m.group(1) if m else ""
 check("Enabled = false," in cb and 'ProductKey = "OfflineCap2x"' in cb,
       "CODEBOT v177: CapBoost stays Enabled=false (untouched)")
 
-MC = read(C + "MonetizationConfig.luau")
+MC = shipped_v180(C + "MonetizationConfig.luau", "2ed90ae")  # Code Bot v180: as shipped
 for key in ("OfflineCap2x", "MissionReroll"):
     m = re.search(r"\n\t\t" + key + r" = \{([^\n]*)\}", MC)
     row = m.group(1) if m else ""
@@ -86,7 +93,7 @@ try:
     r = subprocess.run(["git", "diff", "--name-only", prev, "--", "src"], capture_output=True, text=True, cwd=ROOT)
     touched = [ln for ln in (r.stdout or "").splitlines() if "WE_Building" in ln]
     check(r.returncode == 0 and not touched, "CODEBOT v177: no WE_Building* diffs vs " + prev + ((" " + str(touched)) if touched else ""))
-    r = subprocess.run(["git", "diff", "-U0", prev, "--", C + "MonetizationConfig.luau"], capture_output=True, text=True, cwd=ROOT)
+    r = subprocess.run(["git", "diff", "-U0", prev, "2ed90ae", "--", C + "MonetizationConfig.luau"], capture_output=True, text=True, cwd=ROOT)
     check(r.returncode == 0 and not [l for l in (r.stdout or "").splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))],
           "CODEBOT v177: MonetizationConfig unchanged vs " + prev + " (prices / product Ids)")
 except Exception as e:

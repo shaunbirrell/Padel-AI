@@ -769,6 +769,9 @@ local function buildPayload(player: Player, profile: Types.PlayerProfile): (Type
 				e.Core = true
 				e.RewardCash = incomeScaled(player, profile, def.RewardCash, tonumber(CORE.RewardIncomeMinutes) or 0)
 				e.CanReroll = not claimed and not complete and MissionService.RerollsLeft(player, profile) > 0
+				-- Code Bot v180: free reroll used and no token: the 19 R$ reroll button (prompts DevProducts.MissionReroll;
+				-- ProcessReceipt grants the token, the reroll itself stays MissionService.Reroll)
+				e.CanBuyReroll = if not claimed and not complete and not e.CanReroll and MissionService.RerollBuyLive(player) then true else nil
 				if def.Go == "Build" then
 					e.GoStructure = MissionService.NextBuild(profile)
 				end
@@ -1159,7 +1162,21 @@ function MissionService.CoreClaimed(player: Player, profile: any, missionId: str
 	end
 end
 
--- free rerolls left today (+ Robux reroll tokens only while that DISABLED hook is live)
+-- Code Bot v180: the paid reroll is on sale to this player (Reroll.Robux live + the product Id set)
+function MissionService.RerollBuyLive(player: Player): boolean
+	if typeof(CORE) ~= "table" or not coreLive(player.UserId) then
+		return false
+	end
+	local robux: any = CORE.Reroll.Robux
+	if not (require(Shared.Configs.RetentionConfig) :: any).Live(robux, player.UserId) then
+		return false
+	end
+	local MC: any = require(Shared.Configs.MonetizationConfig)
+	local def = MC.DevProducts[robux.ProductKey]
+	return typeof(def) == "table" and (tonumber(def.Id) or 0) ~= 0
+end
+
+-- free rerolls left today (+ Robux reroll tokens while Reroll.Robux is live; Code Bot v180: live)
 function MissionService.RerollsLeft(player: Player, profile: any): number
 	if typeof(CORE) ~= "table" or not coreLive(player.UserId) then
 		return 0
@@ -1240,7 +1257,7 @@ function MissionService.Reroll(player: Player, missionId: any): (boolean, string
 	return true, nil
 end
 
--- the Robux reroll's grant (MonetizationService ProcessReceipt; the product is Id 0 = never sold until Shaun approves)
+-- the Robux reroll's grant (MonetizationService ProcessReceipt, once per receipt; Code Bot v180: 3715836569, 19 R$)
 function MissionService.GrantRerollToken(player: Player): boolean
 	local profile = DataService and DataService.GetProfile(player)
 	if not profile then

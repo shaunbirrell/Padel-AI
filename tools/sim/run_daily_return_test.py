@@ -106,7 +106,13 @@ DEPS = {
 RIVALS = 1 -- the stub rival count (RivalService.Candidates: the JOB 38 verdicts)
 SOURCES["Services/RivalService"] = function(script) return { Candidates = function() local r = {}; for i = 1, RIVALS do r[i] = { PlotId = i } end; return r, {} end } end
 -- MonetizationService.PassivePerMin stand-in (the real one reads BaseService / EconomyService the same way)
-SOURCES["Services/MonetizationService"] = function(script) return { PassivePerMin = function() return PER_MIN end } end
+-- Code Bot v180: + the server pass cache read (OwnsCached) and the fresh check (OwnsGamePassNow) for the 2x Offline Cash pass
+PASSES = {} -- [userId] = { [passKey] = true }: what UserOwnsGamePassAsync would answer
+SOURCES["Services/MonetizationService"] = function(script) return {
+  PassivePerMin = function() return PER_MIN end,
+  OwnsCached = function(p, key) return (PASSES[p.UserId] or {})[key] == true end,
+  OwnsGamePassNow = function(p, key) return (PASSES[p.UserId] or {})[key] == true end,
+} end
 function boot()
   for k in pairs(CACHE) do if k:match("^Services/") then CACHE[k] = nil end end
   loaded = {}
@@ -260,12 +266,13 @@ check(tOff >= 97 and tOff <= 99, string.format("Calendar OFF: the JOB 29 timing 
 -- ── B. OFFLINE ──
 local EC = require(node("Configs/EconomyConfig"))
 local O = EC.OfflineEarnings
-check(O.Card.OwnerFirst == false and O.CapBoost.Enabled == false and O.CapBoost.OwnerFirst == true and O.CapBoost.CapMult == 2,
-  "B flags: the Welcome back card is live for everyone (codebot_v177); the CapBoost sidegrade hook is DISABLED (Enabled = false, OwnerFirst = true)")
+check(O.Card.OwnerFirst == false and O.CapBoost.Enabled == true and O.CapBoost.OwnerFirst == false and O.CapBoost.CapMult == 2,
+  "B flags: the Welcome back card is live for everyone (codebot_v177); CapBoost live for everyone (Code Bot v180: Enabled, OwnerFirst = false)")
 local MC = require(node("Configs/MonetizationConfig"))
-local row = MC.DevProducts.OfflineCap2x
-check(row ~= nil and row.Id == 0 and row.RobuxPrice == nil and row.HideFromShop == true and row.GrantEntitlement == "OfflineCap2x",
-  "B: DevProducts.OfflineCap2x has Id 0, NO price, hidden (never prompted / never in the Shop)")
+local row = MC.GamePasses.OfflineCap2x
+check(row ~= nil and row.Id == 2002664894 and row.RobuxPrice == 149 and row.HideFromShop == nil and MC.DevProducts.OfflineCap2x == nil
+  and O.CapBoost.ProductKey == "OfflineCap2x",
+  "B: GamePasses.OfflineCap2x = the 2x Offline Cash pass (2002664894, 149 R$, in the Shop); no Developer Product stub (Code Bot v180)")
 local function offlineLoad(p, gap, extra)
   local op = newProfile(p, extra)
   op.PrevSeenUnix = if gap == nil then nil else CLOCK - gap
@@ -306,15 +313,29 @@ OWNER.MembershipType = "Premium"
 local pp = offlineLoad(OWNER, 3600)
 OWNER.MembershipType = "None"
 check(pp == math.floor(perSec * 3600 * O.Share * (1 + O.PremiumBonus)), "Premium: +" .. math.floor(O.PremiumBonus * 100) .. "% once ($" .. pp .. ")")
--- CapBoost: off = today's cap even with the entitlement; on (test only) = 2x
-local pOff = offlineLoad(OWNER, 30 * 3600, { Entitlements = { OfflineCap2x = true } })
-check(pOff == want(capS), "CapBoost OFF: the entitlement changes nothing (cap " .. capS // 3600 .. " h)")
-O.CapBoost.Enabled = true
-local pOn, cOn = offlineLoad(OWNER, 30 * 3600, { Entitlements = { OfflineCap2x = true } })
-local pOnNo = offlineLoad(OWNER, 30 * 3600)
+-- CapBoost: off (kill switch, test only) = today's cap even with the pass; live (Code Bot v180) = 2x with the pass
 O.CapBoost.Enabled = false
+PASSES[OWNER.UserId] = { OfflineCap2x = true }
+local pOff = offlineLoad(OWNER, 30 * 3600, { Entitlements = { OfflineCap2x = true } })
+O.CapBoost.Enabled = true
+check(pOff == want(capS), "CapBoost OFF (kill switch): the pass / entitlement changes nothing (cap " .. capS // 3600 .. " h)")
+local pOn, cOn = offlineLoad(OWNER, 30 * 3600)
+PASSES[OWNER.UserId] = nil
+local pOnNo = offlineLoad(OWNER, 30 * 3600)
 check(pOn == math.floor(perSec * capS * 2 * O.Share) and cOn and cOn.CapHours == 2 * capS // 3600 and pOnNo == want(capS),
-  "CapBoost ON (test only): 2x the cap TIME with the entitlement ($" .. pOn .. "), Share unchanged; without it the normal cap")
+  "CapBoost live: 2x the cap TIME with the 2x Offline Cash pass ($" .. pOn .. "), Share unchanged; without it the normal cap")
+PASSES[OTHER.UserId] = { OfflineCap2x = true }
+local pOther, cOther = offlineLoad(OTHER, 30 * 3600)
+PASSES[OTHER.UserId] = nil
+local pOtherNo = offlineLoad(OTHER, 30 * 3600)
+check(pOther == math.floor(perSec * capS * 2 * O.Share) and cOther and cOther.CapHours == 2 * capS // 3600 and pOtherNo == want(capS),
+  "CapBoost live for EVERYONE: a non-owner with the pass gets 16 h ($" .. pOther .. "), without it 8 h ($" .. pOtherNo .. ")")
+local p12 = offlineLoad(OTHER, 12 * 3600)
+PASSES[OTHER.UserId] = { OfflineCap2x = true }
+local p12p = offlineLoad(OTHER, 12 * 3600)
+PASSES[OTHER.UserId] = nil
+check(p12 == want(capS) and p12p == math.floor(perSec * 12 * 3600 * O.Share),
+  "12 h away: 8 h paid without the pass, all 12 h with it (never more than the time away)")
 -- the card OFF == the JOB 29 card
 O.Card.Enabled = false
 local _, cOld = offlineLoad(OWNER, 3600)
@@ -334,9 +355,9 @@ PER_MIN = 0
 -- ── C. MISSIONS ──
 local MCfg = require(node("Configs/MissionConfig"))
 local Core = MCfg.Core
-check(Core.Enabled == true and Core.OwnerFirst == true and Core.Reroll.Robux.Enabled == false and Core.Reroll.Robux.OwnerFirst == true,
-  "C flags: Core is owner-first; the Robux reroll hook is DISABLED")
-check(MC.DevProducts.MissionReroll.Id == 0 and MC.DevProducts.MissionReroll.RobuxPrice == nil, "C: DevProducts.MissionReroll Id 0, no price (never prompted)")
+check(Core.Enabled == true and Core.OwnerFirst == true and Core.Reroll.Robux.Enabled == true and Core.Reroll.Robux.OwnerFirst == false,
+  "C flags: Core is owner-first; the Robux reroll is live (Code Bot v180; its only gate = Core.OwnerFirst)")
+check(MC.DevProducts.MissionReroll.Id == 3715836569 and MC.DevProducts.MissionReroll.RobuxPrice == 19, "C: DevProducts.MissionReroll 3715836569, 19 R$")
 local function state(p)
   clearLog(); MS.Push(p)
   local st = nil
@@ -427,13 +448,31 @@ check(okR1 == true and l1[1] ~= l0[1] and typeOf(l1[1]) ~= typeOf(l0[2]) and typ
   "the free reroll swaps a mission for another loop type not already offered (" .. l0[1] .. " -> " .. tostring(l1[1]) .. ")")
 local okR2, why2 = MS.Reroll(OWNER, l1[2])
 check(okR2 == false and why2 == "NoRerolls", "a second reroll the same day is refused (" .. tostring(why2) .. ")")
+do -- Code Bot v180: free reroll used, no token -> the 19 R$ buy button on the open rows (server-decided), no free button
+  local st = state(OWNER)
+  local buy, free = 0, 0
+  for _, e in ipairs(st.Daily) do
+    if e.Core and e.CanBuyReroll == true then buy += 1 end
+    if e.Core and e.CanReroll == true then free += 1 end
+  end
+  check(buy >= 1 and free == 0, "free reroll used, no token: the 19 R$ reroll button shows (" .. buy .. " rows), no free reroll button")
+end
+local cashBefore = cashBy("mission")
 fp2.MissionRerollTokens = 2
-check(MS.RerollsLeft(OWNER, fp2) == 0, "Robux reroll hook OFF: tokens do nothing (never sold while Id 0)")
+check(MS.RerollsLeft(OWNER, fp2) == 2, "Robux reroll live: each paid token is one more reroll after the free one")
+Core.Reroll.Robux.Enabled = false
+check(MS.RerollsLeft(OWNER, fp2) == 0, "Robux reroll OFF (kill switch, test only): tokens do nothing")
 Core.Reroll.Robux.Enabled = true
 local okR3 = MS.Reroll(OWNER, l1[2])
-Core.Reroll.Robux.Enabled = false
-check(okR3 == true and fp2.MissionRerollTokens == 1, "Robux hook ON (test only): a token rerolls and is spent; a reroll never pays")
-check(MS.GrantRerollToken(OWNER) == true and fp2.MissionRerollTokens == 2, "the receipt grant path adds a token (MissionService.GrantRerollToken)")
+check(okR3 == true and fp2.MissionRerollTokens == 1 and cashBy("mission") == cashBefore, "a token rerolls and is spent; a reroll never pays")
+do
+  local st = state(OWNER)
+  local buy = 0
+  for _, e in ipairs(st.Daily) do if e.Core and e.CanBuyReroll == true then buy += 1 end end
+  check(buy == 0, "with a token left the row shows the reroll button, not the buy button")
+end
+check(MS.GrantRerollToken(OWNER) == true and fp2.MissionRerollTokens == 2, "the receipt grant path adds ONE token (MissionService.GrantRerollToken)")
+fp2.MissionRerollTokens = 0
 day(1); state(OWNER)
 check(MS.RerollsLeft(OWNER, fp2) == 1, "the free reroll comes back the next day")
 local cpass = MS.Reroll(OWNER, "CoreRaid1")
@@ -451,6 +490,12 @@ local o = state(OTHER)
 local oc = false
 for _, e in ipairs(o.Daily) do if e.Core then oc = true end end
 check(not oc, "owner-first: another player still gets today's rotation")
+do -- Code Bot v180: while Core.OwnerFirst is true the paid reroll is NOT reachable by a non-owner
+  local ob, oreroll = 0, MS.RerollsLeft(OTHER, PROFILES[OTHER.UserId])
+  for _, e in ipairs(o.Daily) do if e.CanBuyReroll == true or e.CanReroll == true then ob += 1 end end
+  check(ob == 0 and oreroll == 0 and MS.RerollBuyLive(OTHER) == false and MS.RerollBuyLive(OWNER) == true,
+    "owner-first: a non-owner has no reroll / 19 R$ reroll button yet (Core.OwnerFirst); the owner does")
+end
 
 -- ── D. ONE RETURN SEQUENCE (server side; the client queue is a phone test) ──
 local RCf = require(node("Configs/RetentionConfig"))

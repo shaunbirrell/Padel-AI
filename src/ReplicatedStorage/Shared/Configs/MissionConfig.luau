@@ -218,7 +218,7 @@ local MissionConfig = {
 		never reshuffles), the target set by his level tier so all 3 fit in one session; the Daily Ops stay below.
 		Raid is offered only when a raid is possible for him (RivalService has a target), else WinFights takes its place.
 		Rewards: max(the mission's RewardCash floor, RewardIncomeMinutes x his income per minute); all 3 claimed -> the
-		Chest once a day. Reroll: FreePerDay free (server-checked, saved per day); the Robux reroll is DISABLED (Id 0). ]]
+		Chest once a day. Reroll: FreePerDay free (server-checked, saved per day); the Robux reroll (19 R$, Code Bot v180) after it. ]]
 	Core = {
 		Enabled = true,
 		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): Code Bot flips it after Shaun's phone test
@@ -230,7 +230,9 @@ local MissionConfig = {
 		Chest = { Cash = 10000, Gold = 3, IncomeMinutes = 20 },
 		Reroll = {
 			FreePerDay = 1,
-			Robux = { Enabled = false, OwnerFirst = true, ProductKey = "MissionReroll" }, -- NEW-OWNER-FIRST (claude-bud JOB 49): DISABLED (Id 0, no price)
+			-- Code Bot v180 (Shaun approved 2026-10-01): the paid reroll (DevProducts.MissionReroll 3715836569, 19 R$) is live.
+			-- OwnerFirst false here, so the only gate left is Core.OwnerFirst (the core missions themselves).
+			Robux = { Enabled = true, OwnerFirst = false, ProductKey = "MissionReroll" },
 		},
 		-- per loop type: the ObjectiveType, GO key, the floor reward and the target per tier (1 / 2 / 3)
 		Types = {

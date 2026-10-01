@@ -136,13 +136,13 @@ local EconomyConfig = {
 			Enabled = true,
 			OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
 		},
-		--[[ claude-bud JOB 49 B: the Robux SIDEGRADE hook, DISABLED. With the MonetizationConfig.DevProducts.OfflineCap2x
-			entitlement (Id 0 + no price until Shaun approves one: never prompted, never in the Shop) the cap TIME is
-			CapMult x CapSeconds. It never raises Share and gives no combat stat. ]]
+		--[[ claude-bud JOB 49 B: the Robux SIDEGRADE. Code Bot v180 (Shaun approved 2026-10-01): owning the
+			MonetizationConfig.GamePasses.OfflineCap2x pass ("2x Offline Cash", 2002664894, 149 R$) makes the cap TIME
+			CapMult x CapSeconds (8 h -> 16 h). It never raises Share and gives no combat stat. ]]
 		CapBoost = {
-			Enabled = false,
-			OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 49): stays off until Shaun approves a price
-			ProductKey = "OfflineCap2x",
+			Enabled = true, -- Code Bot v180: live (was false)
+			OwnerFirst = false, -- Code Bot v180: everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
+			ProductKey = "OfflineCap2x", -- the GamePasses key (ownership: MonetizationService pass cache)
 			CapMult = 2,
 		},
 	},

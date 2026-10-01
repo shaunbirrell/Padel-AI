@@ -52,12 +52,12 @@ CL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 # build pins
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 179)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 179)'),
-    (S + "Services/DataService.luau", "WE_Build=179"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 179)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 180)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 180)'),
+    (S + "Services/DataService.luau", "WE_Build=180"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 180)'),
 ):
-    check(needle in read(rel), "CODEBOT v156: WE_Build=179 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v156: WE_Build=180 " + rel.rsplit("/", 1)[-1])
 
 # 1. the live price cache
 LP = read("src/ReplicatedStorage/Shared/Util/LivePrices.luau")
@@ -129,6 +129,10 @@ try:
     lines = [l for l in lines if not (l.startswith("+") and (re.search(r"RecruitPack = \{ Id = (0|3715776659),", l) or re.search(r"Cash(15m|30m|1h|2h|4h) = \{ Id = (0|\d{10}),", l)))]
     # claude-bud JOB 49: + the two DISABLED sidegrade rows (OfflineCap2x / MissionReroll: Id 0, no price; pinned in claude_bud_job49.py)
     lines = [l for l in lines if not (l.startswith("+") and re.search(r"(OfflineCap2x|MissionReroll) = \{ Id = 0,", l))]
+    # Code Bot v180: the two wired items (GamePasses.OfflineCap2x 2002664894 / 149, DevProducts.MissionReroll 3715836569 / 19)
+    # + PurchaseSources.missions: the lines v180 added vs its base 5e9649b are left out (pinned in codebot_v180.py)
+    _v180 = set(l for l in subprocess.run(["git", "diff", "-U0", "5e9649b", "--", C + "MonetizationConfig.luau"], capture_output=True, text=True).stdout.splitlines() if l.startswith("+") and not l.startswith("+++"))
+    lines = [l for l in lines if l not in _v180]
     check(not any(re.search(r"(^|[\s{,])Id\s*=\s*\d", l) for l in lines), "CODEBOT v156: no product Id changed since v155 (claude-bud JOB 41: the new RecruitPack row aside)")
     pr = sorted(re.sub(r"\s+", " ", l.split("--")[0]).strip() for l in lines if re.search(r"(?<!Overhaul)RobuxPrice\s*=", l))
     check(pr in ([], sorted(["- RobuxPrice = 149,", "- RobuxPrice = 99,", "+ RobuxPrice = 249,", "+ RobuxPrice = 79,"])),
