@@ -1,3 +1,17 @@
+## v190 PUBLISHED (Code Bot Roblox, 2026-10-01 ~21:17 Dublin): Open Cloud place version 188. claude-bud JOB 55 DefenceFix + JOB 56 SpawnTerminals/Rotor + JOB 57 BaseLife OwnerFirst
+- **Commits:** cherry-pick `3362e25` → `73cfc59` (JOB 55 DefenceFix), `5e46977` → `29f7d53` (JOB 56 SpawnTerminals + AirRotorDisc), `8a90340` → `db90add` (JOB 57 BaseLife); code+dist+checks `8397dc7` on phase-7-polish (from v189 `2c6212f`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v189.
+- **JOB 55 (NEW-OWNER-FIRST):** `EndgameConfig.DefenceFix` — Plating needs Walls L4 (row + refusal), Vault shows both cuts, Turret Guns arms gate/tower guards, Gate & Walls → Gate Armour (no wall HP), BaseGuards 0.12 → Defence.GatePct, mid-raid Defence buy refreshes in place (KeepDamage, no full repair) with [DefenseUpgrade] logs.
+- **JOB 56 (NEW-OWNER-FIRST):** `SpawnTerminalConfig` + `VisualAssetConfig.AirRotorDisc` — helipad/dock SpawnTerminalService (WE_PanelPrompt → Garage Air/Naval; RequestSpawn gates unchanged) + AirBodyRig._DiscFit rotor disc; [RotorRig] tilt/offset logs.
+- **JOB 57 (NEW-OWNER-FIRST):** `BaseLifeConfig` — BaseLifeService 11 part-built WorldKits props per owned plot (600 allowance + keep-out) + 3 unarmed ambient soldiers IDLE/PATROL at 2 Hz, never hostile, CanQuery off, server cap = CombatConfig.MaxActiveNPCs 18.
+- **Checks:** BuyPathStatic **PASS=8264 FAIL=0**; `tools/checks/codebot_v190.py`; `claude_bud_job55.py`; `claude_bud_job56.py`; `claude_bud_job57.py`. PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP 200, versionNumber **188**, universe 10767159222 / place 97112936860418. Servers NOT restarted.
+- **Phone tests (Shaun — rejoin / new server for WE_Build 190; owner only while OwnerFirst):**
+  1. JOB 55: Engineering Bureau — Turret Plating says Needs Walls L4 when walls <4; Vault shows both cuts; mid-raid Gate buy keeps damage (bar doesn't jump to full).
+  2. JOB 56: Helipad console "Spawn aircraft" opens Garage AIR; dock "Launch boat" opens NAVAL; spawn attack heli and note [RotorRig] F9 log.
+  3. JOB 57: Base has tents/crates/drums/sandbags + 3 soldiers idle/patrol; shooting them does nothing (CanQuery off); frame rate OK.
+  4. Only plot owner while OwnerFirst.
+- **Still owed:** After phone OK flip DefenceFix + SpawnTerminal + AirRotorDisc + BaseLife OwnerFirst. Still owed flips: DefenceVisuals, Night2, SharedHostility, AttackRange, Rebuild (JOB 50/51/52/53/54). Do NOT reopen JOB 44. Remaining queue: JOB 58 hangar/dock rebuild, then 59, 60, 62–64. Claude may still be coding JOB 58 on bud.
+
 ## v189 PUBLISHED (Code Bot Roblox, 2026-10-01 ~20:45 Dublin): Open Cloud place version 187. claude-bud JOB 53 Defence visuals + JOB 54 night lighting OwnerFirst
 - **Commits:** cherry-pick `cce3479` → `aa8adc4` (JOB 53 DefenceVisuals), `9894eb8` → `275f0e3` (JOB 54 Night2); code+dist+checks `6740398` on phase-7-polish (from v188 `c0d7123`). PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig byte-identical to v188.
 - **JOB 53 (NEW-OWNER-FIRST):** `EndgameConfig.DefenceVisuals` — turret plating/ammo, gate bands-plates-braces-beam + tier leaf look, vault plating by tier L1/4/7/10 from SAVED levels in syncPlotNow; gate damage states 60%/30%/breached; new-look purchase toast via `DefenceVisuals` module.
