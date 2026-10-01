@@ -33,6 +33,7 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local OrdersConfig = require(Shared.Configs.OrdersConfig)
 local HudConfig = require(Shared.Configs.HudConfig)
+local ArmyLog = require(Shared.Util.ArmyLog)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
@@ -134,6 +135,7 @@ local function fireOrder(orderId: string): boolean
 	if orderId == "Send" then
 		-- claude-bud JOB 38: SEND = pick an enemy base on the world map (its card has SEND ARMY + the verdict)
 		NotificationController.Show("Tap an enemy base on the map", "Info", 3)
+		ArmyLog.Line(player, "ARMY SEND", string.format("SEND pressed: MapController.Open() MapMode=Normal (no army mode) ArmyId=%d", player.UserId))
 		local okM, MC = pcall(function(): any
 			return require(script.Parent.MapController)
 		end)

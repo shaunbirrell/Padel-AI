@@ -62,6 +62,7 @@ local BankRaidConfig = require(Shared.Configs.BankRaidConfig)
 local WaterConfig = require(Shared.Configs.WaterConfig)
 local WorldSitesConfig = require(Shared.Configs.WorldSitesConfig)
 local MapAreas = require(Shared.Util.MapAreas)
+local ArmyLog = require(Shared.Util.ArmyLog)
 local MapLabelLayout = require(Shared.Util.MapLabelLayout)
 local SiteActivityConfig = require(Shared.Configs.SiteActivityConfig) -- claude-bud JOB 31
 
@@ -793,6 +794,7 @@ end
 
 local function selectArea(a: MapAreas.Area, x: number, z: number)
 	selected = { Kind = "Area", Id = a.Id, X = x, Z = z }
+	ArmyLog.Line(player, "ARMY SEND", string.format("tap -> Area %s %q card: GO only (SEND ARMY hidden: selectBase only)", a.Id, a.Name))
 	local lines: { string } = {}
 	table.insert(lines, MapConfig.KindInfo[a.Kind] or "Area")
 	local owner, mine = outpostState(a.Territory)
@@ -1424,6 +1426,8 @@ function MapController.Init()
 
 	goB.Activated:Connect(function()
 		local s = selected
+		ArmyLog.Line(player, "ARMY SEND", string.format("GO pressed MapMode=Normal ArmyId=nil BaseId=%s Position=%s Firing remote=none (pinAt: the PLAYER pin)",
+			if s then s.Kind .. ":" .. s.Id else "nil", if s then string.format("(%.0f,%.0f)", s.X, s.Z) else "nil"))
 		if s then
 			pinAt(s.X, s.Z)
 			setOpen(false)
@@ -1436,6 +1440,8 @@ function MapController.Init()
 	-- claude-bud JOB 38: SEND ARMY (the client sends only the plot id; the army walks, nobody teleports)
 	sendB.Activated:Connect(function()
 		local s = selected
+		ArmyLog.Line(player, "ARMY SEND", string.format("SEND ARMY pressed BaseId=%s Ok=%s Firing remote=%s", if s then s.Kind .. ":" .. s.Id else "nil",
+			tostring(sendB:GetAttribute("Ok")), if s and s.Kind == "Base" and sendB:GetAttribute("Ok") == true then "RequestArmySend" else "none"))
 		if s and s.Kind == "Base" and sendB:GetAttribute("Ok") == true then
 			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestArmySend, tonumber(s.Id))
 			setOpen(false)

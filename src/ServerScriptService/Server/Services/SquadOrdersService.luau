@@ -53,6 +53,7 @@ local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P1-
 local ArmyConfig = require(Shared.Configs.ArmyConfig) -- army fix: Follow (lead + catch-up), Recover
 local BaseConfig = require(Shared.Configs.BaseConfig) -- army fix: plot squares (Recover)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local ArmyLog = require(Shared.Util.ArmyLog) -- Code Bot army command bug: the chain logs
 local PlotFrame = require(Shared.Util.PlotFrame) -- army fix: plot centres (Recover)
 local FormationController = require(Shared.Util.FormationController) -- claude-bud JOB 24: the sticky squad target
 
@@ -3752,6 +3753,7 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 		and st.OrderAt ~= nil
 		and now - (st.OrderAt :: number) < (tonumber(CombatFairnessConfig.UnitRepeatOrderGraceSeconds) or 0)
 	st.OrderAt = now
+	ArmyLog.Line(player, "ARMY STATE", string.format("%s Order %s -> %s SOURCE=SetOrder", player.Name, tostring(st.Order), order))
 	st.Order = order :: OrderId
 	-- claude-bud JOB 24 §10: the Army funnel / custom events (an order = he used the Army; ATTACK = first attack)
 	if AnalyticsService and AnalyticsService.Log then
@@ -4015,7 +4017,11 @@ function SquadOrdersService.Init(deps: { [string]: any })
 		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
+		ArmyLog.Line(player, "SERVER ARMY", string.format("received player=%s command=%s", player.Name, tostring(orderId)))
 		local ok, err = SquadOrdersService.SetOrder(player, orderId)
+		if not ok then
+			ArmyLog.Reject(player, "order " .. tostring(orderId), tostring(err))
+		end
 		if not ok and NotificationService then
 			local msg = "Order failed"
 			if err == "NoSoldiers" then

@@ -34,6 +34,7 @@ local RaidConfig = require(Shared.Configs.RaidConfig)
 local GameConfig = require(Shared.Configs.GameConfig)
 local ArmyRoute = require(script.Parent.ArmyRoute)
 local Rules = require(script.Parent.ArmySendRules)
+local ArmyLog = require(Shared.Util.ArmyLog)
 
 local ArmyPlan = {}
 
@@ -192,6 +193,7 @@ end
 	Once routed, the lead point is placed Standoff studs along the route from the block, so the block's formation spot
 	is where it already stands: nobody walks back, nobody is moved (the lead is a virtual point). ]]
 local function setDest(plan: Plan, dest: Vector3)
+	ArmyLog.Line(plan.Owner, "ARMY DESTINATION", string.format("%s old=%s new=%s source=ArmyPlan.%s/%s", plan.Owner.Name, ArmyLog.Vec(plan.Dest), ArmyLog.Vec(dest), plan.Kind, plan.Phase))
 	plan.Dest = dest
 	plan.Route = nil
 	plan.RouteIdx = 1
@@ -209,6 +211,8 @@ local function setDest(plan: Plan, dest: Vector3)
 			return
 		end
 		plan.Routing = false
+		ArmyLog.Line(plan.Owner, "ARMY PATH", string.format("%s start=%s dest=%s distance=%.0f status=%s waypoints=%d", plan.Owner.Name, ArmyLog.Vec(start), ArmyLog.Vec(dest),
+			flatDist(start, dest), if route then "Success" else tostring(why), if route then #route else 0))
 		if route then
 			plan.Route = route
 			if c then
@@ -627,6 +631,7 @@ function ArmyPlan.StartSend(sender: Player, plotId: number, st: any): (boolean, 
 	notify(sender, string.format(T.Left, victim.Name .. "'s base"), "Info")
 	notify(victim, string.format(T.Incoming, sender.Name, Rules.Clock(eta)), "Warn")
 	dbg(sender, "ArmyPlan", string.format("SEND -> %s plot %d eta %.0fs units %d bully %s", victim.Name, plotId, eta, #living, tostring(v.Bully)), true)
+	ArmyLog.Line(sender, "ARMY MOVE", string.format("%s travel started -> plot %d dest=%s units=%d", sender.Name, plotId, ArmyLog.Vec(dest), #living))
 	local _ = f
 	return true, v.Text
 end
@@ -1024,6 +1029,7 @@ function ArmyPlan.Init(d: { [string]: any })
 	local send = d.RemoteSetup and d.RemoteSetup.Get(Constants.RemoteNames.RequestArmySend)
 	if send and send:IsA("RemoteEvent") then
 		(send :: RemoteEvent).OnServerEvent:Connect(function(player: Player, plotId: any)
+			ArmyLog.Line(player, "SERVER ARMY", string.format("received player=%s command=Send target=%s", player.Name, tostring(plotId)))
 			if not require(script.Parent.RemoteGate).Check(player, "RequestArmySend", plotId) then
 				return
 			end
