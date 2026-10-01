@@ -1,4 +1,12 @@
 <!-- Q2-START -->
+## v181 PUBLISHED (Code Bot Roblox, 2026-10-01 ~18:25 Dublin): Open Cloud place version PLACE_PENDING. claude-bud JOB B TARGETS rival list blacked out (ZIndex Sibling)
+- **Cherry-pick:** `c628c8b` (JOB B) → `0b198b5` onto phase-7 `67b00aa` (v180 tip). Code+dist+checks on this ship. PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; MonetizationConfig unchanged (no price / Id change).
+- **JOB B (P0):** TARGETS rival list looked almost black / unclickable. Root cause: `WE_RivalTargets` ScreenGui used default Global ZIndex ordering, so the list panel (ZIndex 3, 97% opaque) painted over its own ZIndex-1 rows / SEND ARMY / VIEW. Fix: `g.ZIndexBehavior = Enum.ZIndexBehavior.Sibling` (one line). No colours / sizes changed.
+- **Checks:** BuyPathStatic **PASS=8016 FAIL=0**; `tools/checks/codebot_v181.py`; `claude_bud_jobB.py`; `run_targets_list_test.py` 0 failed. PreferMesh OFF; StreamingEnabled OFF.
+- **Publish:** HTTP pending, versionNumber **PLACE_PENDING**, universe 10767159222 / place 97112936860418. Servers NOT restarted: Migrate to Latest Update when convenient.
+- **Phone tests (owed — Shaun, needs a 2nd player online):** open TARGETS — rival name, Lv / Army, EVEN, SEND ARMY and VIEW are bright; both buttons respond to a tap.
+- **Still owed:** flip MissionConfig.Core.OwnerFirst + RetentionConfig.ReturnSequence.OwnerFirst after phone OK; JOB 44 Studio 2-player siege/march; JOB 51 / 50 / 52 queued.
+
 ## claude-bud JOB B (2026-10-01, P0): TARGETS RIVAL LIST BLACKED OUT (branch `claude/desktop-bud`)
 **Root cause (from the source; docs/proof/targets-list/sim.txt):**
 - RivalController's ScreenGui `WE_RivalTargets` never set `ZIndexBehavior`, so it rendered with **Global** ordering.

@@ -30791,7 +30791,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 180)
+		player:SetAttribute("WE_Build", 181)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -74432,7 +74432,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 180)
+			player:SetAttribute("WE_Build", 181)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -82951,7 +82951,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 180)
+		player:SetAttribute("WE_Build", 181)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -83093,7 +83093,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=180",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=181",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -154329,6 +154329,12 @@ local function build()
 	g.Name = "WE_RivalTargets"
 	g.ResetOnSpawn = false
 	g.DisplayOrder = 30
+	-- claude-bud JOB B (2026-10-01, P0 "the TARGETS list is almost black, text barely visible, unclickable"): ROOT CAUSE:
+	-- this ScreenGui never set ZIndexBehavior, so it ran Global ordering (Instance.new's default; every other HUD gui
+	-- here sets Sibling, HudLayout.ApplyScreen too). The list Frame is ZIndex 3 with a 97 %-opaque dark background, and
+	-- every row / label / SEND ARMY / VIEW inside it is the default ZIndex 1, so under Global the panel's own background
+	-- was drawn OVER its rows. Sibling: children always draw above their parent; the list (3) still covers the card (1).
+	g.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	-- v168: explicit: the safe content rect (below the 58 px topbar row with the compass / BASE pill, inside notches)
 	g.IgnoreGuiInset = false
 	pcall(function()

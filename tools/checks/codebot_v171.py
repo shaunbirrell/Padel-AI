@@ -30,12 +30,12 @@ def check(cond, label):
 S = "src/ServerScriptService/Server/"
 CL = "src/StarterPlayer/StarterPlayerScripts/Client/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 180)'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 180)'),
-    (S + "Services/DataService.luau", "WE_Build=180"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 180)'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 181)'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 181)'),
+    (S + "Services/DataService.luau", "WE_Build=181"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 181)'),
 ):
-    check(needle in read(rel), "CODEBOT v171: WE_Build=180 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v171: WE_Build=181 " + rel.rsplit("/", 1)[-1])
 
 RC = read(CL + "Controllers/RivalController.luau")
 check("f.AnchorPoint = spec[5]" not in RC and "f.AnchorPoint = spec[4]" in RC, "CODEBOT v171: TARGETS crosshair reads spec[4] (spec[5] was nil -> build() threw)")
