@@ -1,4 +1,40 @@
 <!-- Q2-START -->
+## claude-bud JOB 41 PART C (2026-10-01): RIVAL TARGETS + SEND ARMY (branch `claude/desktop-bud`)
+**Flag:** `RivalConfig` (`Enabled`, `OwnerFirst = true`; a new config, not an ArmyOrdersConfig block). OFF / not live =
+no pill and no push; the map SEND ARMY is unchanged. **To launch:** `OwnerFirst = false`. Servers stay at 10 players
+(no change, no Creator Hub note).
+
+**Server (Services/RivalService):** ONE shared 10 s tick.
+- For each live viewer, the other occupied bases whose JOB 38 SEND verdict is Ok right now (ArmyPlan.CheckSend =
+  ArmySendRules on the same facts; no second rule). Shielded / ally / new player / novice / protected / too strong /
+  cooldown / one active SEND / no soldiers are simply not listed.
+- The loot estimate = GetRaidableBalance x LootFraction(StealFraction, bully). It is sent as a BUCKET only
+  ($1k+ / $10k+ / $100k+ / $1M+), never the number.
+- Sorted by loot then distance; the top 3. Nothing during the Guided / onboarding hold.
+
+**Client (Controllers/RivalController):**
+- A "TARGETS" pill with a count badge, top-right under the top-bar pills. It shows only while >= 1 target is listed.
+  The Army button is a left-rail tile in the thumbstick band, so the pill is not next to it (ASSUMPTIONS).
+- The list (one panel at a time): name · Army 12 · Loot $10k+ + the verdict chip (easy / even / risky).
+  - SEND ARMY = the same JOB 38 RequestArmySend remote as the map (the server re-checks; the army walks).
+  - VIEW = MapController.OpenBase (the map on that base card; tap-to-pin, no travel).
+
+**Telemetry:** RivalListOpened, RivalSendTapped { verdict }, RivalRaidWon (a SEND from the list that looted; ArmyPlan
+calls RivalService.OnRaidWon). **PvP rate = RivalSendTapped per session** (Analytics > Custom events).
+
+**Checks:** run_rival_targets_test 0 failed (docs/proof/job41/rivals-sim.txt): the 8-case table against the real
+ArmySendRules, sort, cap, buckets, one tick, hold, telemetry, the same SEND remote. claude_bud_job41 part C pins;
+BuyPathStatic PASS=7484 FAIL=0; all sims 0 failed; rojo ok; remote audit OK; no new LSP errors.
+
+**Owed:** the 2-player Studio test (docs/proof/job41/rivals.md): B sees A in TARGETS, SEND ARMY walks and raids; a
+shielded A is gone from B's list.
+
+**Test ON HIS PHONE:** with another player online (not your clan, past the new-player protection, with cash in their
+ATM):
+1. TARGETS appears top-right with a count; tap it and their name, army size and a loot bucket show.
+2. SEND ARMY: your army walks there (no teleport) and raids.
+3. A shielded / new player is never listed.
+
 ## v158 PUBLISHED (Code Bot Roblox, 2026-10-01 08:48 Dublin): Open Cloud place version 156 — JOB 41 A+B owner-first (Guided first minutes + Recruit Pack Id 0)
 - **Published** `dist/WarEmpire-PERF.rbxlx` (WE_Build **158**) via `tools/publish-opencloud.sh` -> HTTP 200 `{"versionNumber":156}`. Servers NOT restarted (Migrate to Latest Update / rejoin).
 - **Cherry-picks:** Claude `a1c927b` JOB 41 A Guided -> `c5dda45`; Claude `22f81e3` JOB 41 B Recruit Pack -> `b11d8c5`; then `094c816` WE_Build 158 + checks + dist.
@@ -7,7 +43,7 @@
   - `MonetizationConfig.RecruitPackOffer` Enabled + OwnerFirst=true; `DevProducts.RecruitPack.Id = 0` (no Creator Hub product yet; 49 R$ proposed).
 - **PreferMesh stays OFF.** No WE_Building* touch. No Creator Hub products created.
 - **Checks:** BuyPathStatic PASS=7481 FAIL=0; claude_bud_job41 PASS; codebot_v158 PASS; rojo build deterministic (both dist copies identical).
-- **Still owed by Claude on bud:** JOB 41 part C (rival bases TARGETS list) and part D (rate-prompt big-win triggers linking to JOB 40 D — JOB 40 D already shipped; extend only). Then JOB 43 part 1 (army-vs-army brawl; board already live in v156) then JOB 42 (time-based cash packs).
+- **JOB 41 part C** cherry-picked onto polish (this commit); publish as WE_Build 159 next. **Still owed by Claude:** JOB 41 part D (rate-prompt big-win link). Then JOB 43 part 1 then JOB 42.
 
 **Phone tests for Shaun (owner-first — use owner / Studio playtest account; Recruit Pack will not prompt until Id is set):**
 1. Fresh test account: BUILD Command Center in ~20 s + payout; collect; recruit; fight 2 camp Recruits at Home Outpost (they shoot back); capture; "BASE SECURED!" confetti + $2,500; Barracks goal. Skip works. Returning owner account: no guided chain.

@@ -1078,6 +1078,17 @@ function MapController.IsOpen(): boolean
 	return open
 end
 
+-- claude-bud JOB 41 part C: open the map on one base's card (TARGETS' VIEW; tap-to-pin only, nothing moves the player)
+function MapController.OpenBase(plotId: number)
+	setOpen(true)
+	for _, b in ipairs(basesNow()) do
+		if tonumber(b.P) == plotId then
+			selectBase(b)
+			return
+		end
+	end
+end
+
 function MapController.Init()
 	if MapConfig.Enabled ~= true then
 		return

@@ -9957,3 +9957,14 @@ ds_territories.luau T3):
   RecentCombat flag (covers firing).
 - **Id 0:** the card is never sent while the Id is 0, so nothing can prompt before Creator Hub.
 - **Owned in the Shop:** an owned pack stays at the top of the Shop with OWNED (the order pattern does not move it).
+
+## 2026-10-01 — claude-bud JOB 41 part C: rival targets
+- **Pill placement:** the TARGETS pill sits top-right under the top-bar pills, NOT beside the Army button. The Army
+  button is a left-rail tile in the middle of the screen, inside the thumbstick band (left 40 % x lower 2/3), so a tap
+  target beside it would break the reserved-zone rule.
+- **Config:** RivalConfig is its own config file (the brief allowed either), so ArmyOrdersConfig's JOB 38 pins stay.
+- **Army size:** the victim's live soldier count (SquadOrdersService.UnitPower units).
+- **Distance:** base centre to base centre (PlotFrame.PlotPosition), rounded.
+- **Telemetry remote:** RequestRivalAction is telemetry only. The send itself is the JOB 38 RequestArmySend, fired by
+  the same tap.
+- **Toast:** the optional "new rich target" toast is not built (kept small; the pill's count badge does that job).

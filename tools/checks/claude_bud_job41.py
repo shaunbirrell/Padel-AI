@@ -98,6 +98,22 @@ _chg = [l for l in _md41.splitlines() if l[:1] in "+-" and not l.startswith(("++
         and _j41_re.search(r"\bRobuxPrice\s*=|(^|[\s{,])Id\s*=\s*\d", l) and "RecruitPack = {" not in l]
 _j41(True, "B: RobuxPrice / Id lines changed since af3a858 other than the RecruitPack row: %d (Code Bot's own v156 display-price edits count here)" % len(_chg))
 
+# ── part C: rival targets ──
+_RC = _j41_src(_CF + "RivalConfig.luau")
+_RVS = _j41_code(_SV + "Services/RivalService.luau")
+_RVC = _j41_code(_CL + "Controllers/RivalController.luau")
+_j41("Enabled = true," in _RC and "OwnerFirst = true," in _RC and "RefreshSeconds = 10," in _RC and "MaxShown = 3," in _RC and "MinLootToShow = 1000," in _RC,
+     "C: RivalConfig owner-first; 10 s, 3 shown, $1k minimum")
+_j41("P.CheckSend, viewer, plotId" in _RVS and "v.Ok == true" in _RVS and "RivalConfig.Pick(" in _RVS,
+     "C: the list is exactly the bases ArmySendRules allows (ArmyPlan.CheckSend: no second rule), bucketed by RivalConfig.Pick")
+_j41("task.wait(RivalConfig.RefreshSeconds)" in _RVS and _RVS.count("task.spawn(") == 1 and "RenderStepped" not in _RVS and "Heartbeat" not in _RVS,
+     "C: one shared tick for every player (no per-player loop, nothing per frame)")
+_j41("Remotes.FireServer, Constants.RemoteNames.RequestArmySend, plotId" in _RVC and "MC.OpenBase(plotId)" in _RVC
+     and "PivotTo" not in _RVC + _RVS and "Teleport" not in _RVC + _RVS,
+     "C: SEND ARMY = the same JOB 38 remote (the army walks); VIEW = the map card (no travel)")
+_j41("MaxPlayersPerServer = 10" in _j41_src(_CF + "GameConfig.luau").replace(" ", " ") or "MaxPlayersPerServer = 10," in _j41_src(_CF + "GameConfig.luau"),
+     "C: servers stay at 10 players (GameConfig.MaxPlayersPerServer unchanged)")
+
 _luau = _j41_os.environ.get("LUAU")
 if _luau is None and _j41_os.environ.get("LUAU_COMPILE"):
     _cand = _j41_os.environ["LUAU_COMPILE"].replace("luau-compile", "luau")
@@ -107,5 +123,7 @@ if _luau:
     _j41(_r.returncode == 0 and "FIRST MINUTES TEST: 0 failed" in _r.stdout, "A: run_first_minutes_test.py (chain, recruit maths, camp, skip, rejoin, returning, OFF == OLD, funnel)")
     _r = _j41_sp.run([_j41_sys.executable, "tools/sim/run_recruit_pack_test.py"], capture_output=True, text=True, env=dict(_j41_os.environ, LUAU=_luau))
     _j41(_r.returncode == 0 and "RECRUIT PACK TEST: 0 failed" in _r.stdout, "B: run_recruit_pack_test.py (when, once, Id 0, the grant, the boost, idempotent, OFF == OLD)")
+    _r = _j41_sp.run([_j41_sys.executable, "tools/sim/run_rival_targets_test.py"], capture_output=True, text=True, env=dict(_j41_os.environ, LUAU=_luau))
+    _j41(_r.returncode == 0 and "RIVAL TARGETS TEST: 0 failed" in _r.stdout, "C: run_rival_targets_test.py (the allowed set, sort, cap, buckets, one tick, hold, telemetry, same SEND path)")
 else:
     print("SKIP CLAUDE-BUD J41: Luau CLI tests (set LUAU)")
