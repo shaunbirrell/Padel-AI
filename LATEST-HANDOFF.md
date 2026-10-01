@@ -86,6 +86,46 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 57 (2026-10-01): BASE LIFE (branch `claude/desktop-bud`)
+**Flag:** `BaseLifeConfig` (owner-first by the PLOT OWNER, NEW-OWNER-FIRST). OFF = today's base.
+
+**Built:** `Services/BaseLifeService` + `Configs/BaseLifeConfig`. Built on plot-ready (claim / rejoin / restart) into
+`Workspace.WE_BaseLife.Plot<N>`, and cleared when the owner leaves.
+- **Props:** 11 part-built WorldKits rows on clear ground (34 parts a base):
+  - a west camp (tent, ammo crates, drums);
+  - a depot yard (tent, crates, drums);
+  - a sandbag nest + ammo by the Command Center;
+  - a container stack in the rear yard;
+  - sandbag lines on both side edges.
+  - They count against the ONE per-plot allowance `StorePropsConfig.Budget.MaxBasePartsPerPlot` (600, JOB 40 C) and
+    never go inside `BaseKeepOut`.
+  - The store-model `BaseRows` stay EMPTY: no candidate passed WE_CHECK2. When one does, Code Bot adds it there and
+    it shares the same 600.
+- **Soldiers:** 3 unarmed ambient soldiers a base (the gate guard's body without the rifle, plus the house R6 look),
+  each on its own patrol loop.
+  - States: IDLE 4-9 s, then PATROL to the next point (arrive or a 14 s timeout), round the loop. One server loop at
+    2 Hz for all of them; no per-frame work.
+  - Never hostile: not CombatService NPCs, no WE_NPC tag, CanQuery off (shots pass through), no weapon.
+  - Server cap = `CombatConfig.MaxActiveNPCs` (18): with 10 owned plots, only the first 6 bases get soldiers.
+
+**Tests:**
+- `tools/sim/run_base_life_test.py`:
+  - every prop row clear of roads / structure sites / kiosks / keep-out;
+  - 34 parts <= 600;
+  - every patrol leg clear;
+  - 3 a base, 18 a server with 10 plots;
+  - CanQuery off / no rifle / Humanoid;
+  - the brain (idle → walk → arrive → idle → next point);
+  - owner-first; clear.
+- `tools/checks/claude_bud_job57.py`.
+- **Owed:** a Studio look. The prop spots and routes come from a conservative grid search of `BaseLayoutConfig`; any
+  that clip a real building are tuned in `BaseLifeConfig`.
+
+**Test ON HIS PHONE:**
+1. Your base has tents / crates / drums / sandbags, and 3 soldiers walking and stopping.
+2. Shoot one: the shots pass through, nothing happens.
+3. The frame rate at your base is the same as before.
+
 ## claude-bud JOB 56 (2026-10-01): HELIPAD + DOCK SPAWN TERMINALS, ROTOR FIX (branch `claude/desktop-bud`)
 **Flags:** `SpawnTerminalConfig` and `VisualAssetConfig.AirRotorDisc` (both owner-first, NEW-OWNER-FIRST).
 

@@ -10124,3 +10124,12 @@ ds_territories.luau T3):
 - The rotor fix is geometric (the disc normal + centre from the blade parts), so it also helps other store helis.
   It is guarded by a flatness ratio and a 25 deg cap, and it logs [RotorRig] for proof.
 - The rotorKit vendoring is not done: it needs the asset pipeline (download + script audit) in Studio.
+
+## claude-bud JOB 57 (2026-10-01): base life
+- The props are part-built WorldKits, not store models: BaseRows needs WE_CHECK2-passed models, and none has passed.
+  They count against the same 600 allowance, so swapping one in later stays in budget.
+- The soldiers are server Humanoids (like the gate guards), not client-only figures. That gives the same look for
+  every viewer and reuses the proven guard body + RigAnimator walk. 3 a base and an 18 server cap keep the cost
+  small.
+- The server cap reuses CombatConfig.MaxActiveNPCs (18) as the job says, but it is a separate count: ambient
+  soldiers never take a hostile NPC slot.
