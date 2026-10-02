@@ -531,7 +531,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantAirstrikes = 1,
-			Description = "1 airstrike on the plaza: hurts, never kills", -- Code Bot v156: plain player text
+			Description = "Airstrike + instant Plaza takeover", -- Code Bot v221 (Shaun): the strike now also takes the Central Plaza
 		},
 		RebirthKeepBase = {
 			Id = 3714663721,
@@ -584,6 +584,23 @@ local MonetizationConfig = {
 		MinHealthLeft = 1,
 		ServerCooldownSeconds = 120,
 		PlayerCooldownSeconds = 300,
+	},
+	--[[ Code Bot v221 (Shaun 2026-10-02): the Plaza Airstrike ALSO hands the buyer the Central Plaza. Server only:
+		the receipt banks the charge (GrantAirstrikes) and is saved; then the OnGranted listener (MonetizationService)
+		spends it at once (Server/Modules/PlazaAirstrike.FireFromPurchase): the strike runs as before (warning, then
+		non-lethal damage to the others in the zone), and when it lands TerritoryService.InstantCapture runs the SAME
+		awardCapture a normal capture uses (previous owner loses it, defenders stand down, bounty / Empire Tax /
+		PlazaCaptures leaderboard / missions / marker), then everyone gets ToastAll. Already the holder: the strike
+		still lands and the buyer is told ToastHeld. Re-capture rules are untouched (others take it back as normal).
+		Public for every player. Enabled = false == the old strike-only charge (banked, AIRSTRIKE button). ]]
+	PlazaAirstrikeTakeover = {
+		Enabled = true,
+		OwnerFirst = false, -- PUBLIC (Code Bot v221, Shaun 2026-10-02 07:54)
+		TerritoryId = "CentralPlaza",
+		FireOnPurchase = true,
+		ToastAll = "AIRSTRIKE! %s took the Plaza",
+		ToastHeld = "AIRSTRIKE! You still hold the Plaza",
+		ToastHeldOthers = "AIRSTRIKE! %s holds the Plaza",
 	},
 	-- v71 money (M1, D2): one-time thank-you for players who bought the old 249 R$ Starter Bundle: Auto Collect on
 	-- their next join. Entitlements[Flag] marks it done (set even when they already owned Auto Collect).

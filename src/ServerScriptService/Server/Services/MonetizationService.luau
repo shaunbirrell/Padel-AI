@@ -1497,6 +1497,15 @@ function MonetizationService.Init(deps: { [string]: any })
 		if productKey == "SoldierRefill" and SoldierService and SoldierService.ConsumeRefills then
 			SoldierService.ConsumeRefills(player)
 		end
+		-- Code Bot v221: the saved airstrike charge drops at once and takes the Central Plaza (PlazaAirstrikeTakeover)
+		if productKey == "PlazaAirstrike" then
+			local okP, pa = pcall(function(): any
+				return require(script.Parent.Parent.Modules.PlazaAirstrike)
+			end)
+			if okP and pa and pa.FireFromPurchase then
+				pa.FireFromPurchase(player)
+			end
+		end
 	end)
 	do
 		local okA, strike = pcall(function(): any

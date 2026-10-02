@@ -111,6 +111,9 @@ added = [l for l in diff.splitlines() if l.startswith("+") and not l.startswith(
 check("WE_Building" not in names, "no WE_Building* file changed")
 check(not any(("Heartbeat" in l or "RenderStepped" in l) for l in added), "no Heartbeat / RenderStepped added")
 check(not any(re.search(r"\b(Price|PriceRobux|Cost)\s*=", l) for l in added), "no price / cost line added")
-check("MonetizationConfig" not in names, "MonetizationConfig untouched")
+# Code Bot v221: scoped to v219's own commit (5893d26): v221 edits MonetizationConfig on purpose (PlazaAirstrikeTakeover,
+# the Plaza Airstrike Description; prices / Ids guarded in codebot_v221.py)
+_v219_own = subprocess.run(["git", "diff", PREV, "5893d26", "--name-only", "--", "src"], capture_output=True, text=True, cwd=ROOT).stdout
+check("MonetizationConfig" not in _v219_own, "MonetizationConfig untouched")
 if globals().get("_V219_FAILED") and "ok" not in globals():
     raise SystemExit(1)

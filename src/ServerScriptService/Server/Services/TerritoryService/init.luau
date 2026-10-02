@@ -1317,6 +1317,39 @@ function TerritoryService.BeginCapture(player: Player, territoryId: any): (boole
 	return true, nil
 end
 
+--[[ Code Bot v221 (Shaun 2026-10-02): a paid instant takeover (the Plaza Airstrike, Server/Modules/PlazaAirstrike).
+	Server only, never reachable from a remote. Runs the SAME awardCapture a normal capture runs (the previous owner
+	loses it with the normal toast, defenders stand down because the zone is held, PlazaBounty, Empire Tax,
+	Stats.PlazaCaptures leaderboard, missions, analytics, the marker / flag), then pushes the new state to everyone.
+	Nothing about re-capture changes: the normal protection period starts and others take it back as normal.
+	Returns "captured" (+ the previous player owner's UserId or 0), "held" (the buyer already holds it: no change)
+	or "failed" (unknown zone, a Home Outpost, no profile, the buyer left). ]]
+function TerritoryService.InstantCapture(player: Player, territoryId: string): (string, number)
+	if typeof(player) ~= "Instance" or not player:IsA("Player") or player.Parent ~= Players then
+		return "failed", 0
+	end
+	if typeof(territoryId) ~= "string" or DataService == nil or DataService.GetProfile(player) == nil then
+		return "failed", 0
+	end
+	ensureRuntime()
+	local rt = territories[territoryId]
+	if rt == nil or isStarterRt(rt) then
+		return "failed", 0
+	end
+	local ot = ownerTypes()
+	if rt.OwnerType == ot.Player and rt.OwnerUserId == player.UserId then
+		return "held", 0
+	end
+	local prev = if rt.OwnerType == ot.Player and rt.OwnerUserId > 0 then rt.OwnerUserId else 0
+	awardCapture(player, rt)
+	if not (rt.OwnerType == ot.Player and rt.OwnerUserId == player.UserId) then
+		return "failed", 0
+	end
+	pushDirty = true
+	TerritoryService.PushAll()
+	return "captured", prev
+end
+
 --[[ Nations B2 (e): redraw every zone this UserId owns or contests (NationColorService calls it after an accepted
 	nation pick while NationConfig.OutpostFlags is on). Never yields. ]]
 function TerritoryService.RefreshOwnerFlags(userId: number)

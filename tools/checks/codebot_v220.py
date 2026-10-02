@@ -121,7 +121,9 @@ for _v220_p in sorted((ROOT / "src").rglob("*.luau")):
 _v220_ck(not _v220_lit, "the owner UserId literal appears only in admin / test / diag files %s" % _v220_lit)
 
 # ---- this ship changes only OwnerFirst + WE_Build lines in src (no prices, no WE_Building*) ----
-_v220_r = subprocess.run(["git", "diff", "-U0", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
+# Code Bot v221: scoped to v220's own commit (64335c8): v221 (Plaza Airstrike takeover) changes other src lines on purpose;
+# codebot_v221.py carries the live no-price / no-Id / WE_Building* guard
+_v220_r = subprocess.run(["git", "diff", "-U0", PREV, "64335c8", "--", "src"], capture_output=True, text=True, cwd=ROOT)
 if _v220_r.returncode == 0:
     _v220_bad = []
     for _v220_l in _v220_r.stdout.split("\n"):

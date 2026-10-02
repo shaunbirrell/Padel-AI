@@ -30,12 +30,12 @@ def check(cond, label):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
-    (S + "Services/DataService.luau", "WE_Build=220"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 221'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 221'),
+    (S + "Services/DataService.luau", "WE_Build=221"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 221'),
 ):
-    check(needle in read(rel), "CODEBOT v167: WE_Build=220 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v167: WE_Build=221 " + rel.rsplit("/", 1)[-1])
 
 MC = read(C + "MonetizationConfig.luau")
 WANT = {
@@ -68,6 +68,9 @@ try:
     # Code Bot v210: the GoldenBoost block (Golden Pumpjacks fix; added lines only, pinned in codebot_v210.py): the lines added vs 29467a2
     _v210 = set(l for l in subprocess.run(["git", "diff", "-U0", "29467a2", "--", C + "MonetizationConfig.luau"], cwd=str(ROOT), capture_output=True, text=True).stdout.splitlines() if l.startswith("+") and not l.startswith("+++"))
     ch = [l for l in ch if l not in _v210]
+    # Code Bot v221: the PlazaAirstrikeTakeover block + the Plaza Airstrike Description (pinned in codebot_v221.py): the lines v221 changed vs f351945
+    _v221 = set(l for l in subprocess.run(["git", "diff", "-U0", "f351945", "--", C + "MonetizationConfig.luau"], cwd=str(ROOT), capture_output=True, text=True).stdout.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---")))
+    ch = [l for l in ch if l not in _v221]
     norm = lambda l: re.sub(r"\bId = \d+,", "Id = X,", l[1:])
     minus = sorted(norm(l) for l in ch if l.startswith("-"))
     plus = sorted(norm(l) for l in ch if l.startswith("+"))

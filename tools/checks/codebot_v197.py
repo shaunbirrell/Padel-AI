@@ -33,12 +33,12 @@ def _v197(cond, label):
 
 
 for _rel, _needle in (
-    (_v197_S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
-    (_v197_S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
-    (_v197_S + "Services/DataService.luau", "WE_Build=220"),
-    (_v197_S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
+    (_v197_S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 221'),
+    (_v197_S + "Services/DataService.luau", 'SetAttribute("WE_Build", 221'),
+    (_v197_S + "Services/DataService.luau", "WE_Build=221"),
+    (_v197_S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 221'),
 ):
-    _v197(_needle in _v197_read(_rel), "WE_Build=220 " + _rel.rsplit("/", 1)[-1])
+    _v197(_needle in _v197_read(_rel), "WE_Build=221 " + _rel.rsplit("/", 1)[-1])
 
 _v197_MS = _v197_read(_v197_S + "Services/MonetizationService.luau")
 _v197_ppm = _v197_re.search(r"function MonetizationService.PassivePerMin.*?\nend\n", _v197_MS, _v197_re.S).group(0)

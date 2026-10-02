@@ -66,12 +66,12 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
-    (S + "Services/DataService.luau", "WE_Build=220"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 221'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 221'),
+    (S + "Services/DataService.luau", "WE_Build=221"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 221'),
 ):
-    check(needle in read(rel), "CODEBOT v187: WE_Build=220 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v187: WE_Build=221 " + rel.rsplit("/", 1)[-1])
 
 ZC = read(C + "RebirthZonesConfig.luau")
 rb = ZC.split("cfg.Rebuild = {")[1].split("\n}")[0] if "cfg.Rebuild = {" in ZC else ""
