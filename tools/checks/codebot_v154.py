@@ -26,8 +26,8 @@ _C154 = "src/ReplicatedStorage/Shared/Configs/"
 _CL154 = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
 
 for _f in (_S154 + "Services/DataService.luau", _S154 + "Services/BaseService.luau", _S154 + "EarlyRemotes.server.luau"):
-	_cb154('SetAttribute("WE_Build", 212' in _rd154(_f), "CODEBOT v154: WE_Build=212 " + _f.rsplit("/", 1)[-1])
-_cb154("WE_Build=212" in _rd154(_S154 + "Services/DataService.luau"), "CODEBOT v154: DataService profile-loaded log says WE_Build=212")
+	_cb154('SetAttribute("WE_Build", 213' in _rd154(_f), "CODEBOT v154: WE_Build=213 " + _f.rsplit("/", 1)[-1])
+_cb154("WE_Build=213" in _rd154(_S154 + "Services/DataService.luau"), "CODEBOT v154: DataService profile-loaded log says WE_Build=213")
 
 _BMC = _rd154(_C154 + "BaseMarkerConfig.luau")
 _BMK = _rd154(_CL154 + "BaseMarkerController.luau")

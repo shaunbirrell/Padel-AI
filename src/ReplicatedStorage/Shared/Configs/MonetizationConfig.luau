@@ -960,7 +960,7 @@ end
 	Was: +50 % on the 2 plot pumps only ($18 / 5 s each, multiplier-exempt) = at most +$3.60/s on any base. ]]
 (MonetizationConfig :: any).GoldenBoost = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot v210): Shaun's phone test; flip to false for everyone
+	OwnerFirst = false, -- Code Bot v213: Shaun approved Golden Pumpjacks for everyone
 	ProductKey = "GoldenPumpjack",
 	IncomePct = 15, -- +15 % of ALL base income per second, permanent (2x Cash 149 R$ = +100 %, VIP 199 R$ = +25 %/+50 %)
 	Reasons = { passive = true, training = true, plot_oil = true } :: { [string]: boolean },

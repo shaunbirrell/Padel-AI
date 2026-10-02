@@ -9440,7 +9440,7 @@ end
 	Was: +50 % on the 2 plot pumps only ($18 / 5 s each, multiplier-exempt) = at most +$3.60/s on any base. ]]
 (MonetizationConfig :: any).GoldenBoost = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot v210): Shaun's phone test; flip to false for everyone
+	OwnerFirst = false, -- Code Bot v213: Shaun approved Golden Pumpjacks for everyone
 	ProductKey = "GoldenPumpjack",
 	IncomePct = 15, -- +15 % of ALL base income per second, permanent (2x Cash 149 R$ = +100 %, VIP 199 R$ = +25 %/+50 %)
 	Reasons = { passive = true, training = true, plot_oil = true } :: { [string]: boolean },
@@ -32086,7 +32086,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 212)
+		player:SetAttribute("WE_Build", 213)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -78184,7 +78184,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 212)
+			player:SetAttribute("WE_Build", 213)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -86891,7 +86891,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 212)
+		player:SetAttribute("WE_Build", 213)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -87033,7 +87033,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=212",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=213",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)

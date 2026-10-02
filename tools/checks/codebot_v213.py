@@ -1,4 +1,4 @@
-# Code Bot Roblox v210 (2026-10-02): Golden Pumpjacks (DevProducts.GoldenPumpjack, 49 R$, one time) did +50 % on the two
+# Code Bot Roblox v213 (2026-10-02): Golden Pumpjacks public rollout (DevProducts.GoldenPumpjack, 49 R$, one time) did +50 % on the two
 # plot oil pumps only ($18 / 5 s each, multiplier-exempt): at most +$3.60/s on any base (Shaun's girlfriend: $2,105/s ->
 # $2,107/s). Now (public, MonetizationConfig.GoldenBoost) it is +IncomePct % on ALL steady base income (passive /
 # training / plot_oil = what WE_IncomePerSec sums), and the Shop row shows the live "+N% ... +$N/s" from the SAME config.
@@ -11,9 +11,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-BUILD = 210
+BUILD = 213
 ROOT = Path.cwd()
-PREV = os.environ.get("CODEBOT_V210_PREV", "7ee7fce")  # v209 handoff tip (place 207)
+PREV = os.environ.get("CODEBOT_V213_PREV", "e4e9a55")  # v212 handoff tip (place 210)
 C = "src/ReplicatedStorage/Shared/Configs/"
 SH = "src/ReplicatedStorage/Shared/"
 S = "src/ServerScriptService/Server/"
@@ -80,6 +80,7 @@ _set = lambda m: set(re.findall(r"(\w+) = true", m.group(1))) if m else set()
 _c(_set(_rs) and _set(_rs) == _set(_ts), "GoldenBoost.Reasons == TycoonGuideConfig.SteadyIncomeReasons %s" % sorted(_set(_rs)))
 _c("function MonetizationConfig.GoldenBoostLiveFor(userId: any): boolean\n\treturn (require(script.Parent.RetentionConfig) :: any).Live((MonetizationConfig :: any).GoldenBoost, userId)" in MON,
    "GoldenBoostLiveFor = RetentionConfig.Live (OwnerFirst is disabled: everyone)")
+_c("\tOwnerFirst = false," in GB and "GoldenBoostLiveFor(OTHER)" not in MON, "public flag is the only rollout gate")
 _gp = re.search(r"\n\t\tGoldenPumpjack = \{(.*?)\n\t\t\},", MON, re.S)
 _c(_gp is not None and "Id = 3714663783," in _gp.group(1) and "RobuxPrice = 49," in _gp.group(1) and 'GrantEntitlement = "GoldenPumpjack",' in _gp.group(1)
    and "OneTime = true," in _gp.group(1) and "LiveBlock" not in _gp.group(1), "GoldenPumpjack row: same Id / 49 R$ / entitlement / one time; still on sale for everyone (no LiveBlock)")
@@ -174,7 +175,7 @@ for _, f in ipairs({ GB.RowFormat, GB.OwnedFormat }) do
 end
 ck(utf8.len(GB.Description) <= 56, "Description fits a phone row / stand line")
 print("ROW@2105 public ")
-print("ROW@2105 " .. string.format(GB.RowFormat, GB.IncomePct, gainText))
+print("ROW@2105 public " .. string.format(GB.RowFormat, GB.IncomePct, gainText))
 print("GOLDEN SIM: " .. fails .. " failed")
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False) as _f:
