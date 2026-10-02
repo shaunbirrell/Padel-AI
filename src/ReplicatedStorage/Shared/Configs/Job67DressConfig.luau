@@ -1,6 +1,6 @@
 --!strict
---[[ Code Bot JOB 67 remainder (2026-10-02): THE central config for the owned-asset upgrade (walls, base props; town /
-	outposts / rebirth zones and Synty vehicles join it in later batches). Server: Services/Job67DressService.
+--[[ Code Bot JOB 67 remainder (2026-10-02): THE central config for the owned-asset upgrade (batch 1 walls + base props, batch 2
+	outlying POI buildings, batch 3 Synty vehicle wrecks). Server: Services/Job67DressService.
 
 	One upgrade source: the wall tier IS the saved DefensiveWalls level (BaseConfig.Structures.DefensiveWalls,
 	profile.BaseUpgrades.DefensiveWalls; the buy UI and gameplay read the same number) -> Walls.Tiers[level]. The base
@@ -35,12 +35,18 @@ local Job67DressConfig = {
 		Hesco = 116015230898207, -- Modular Concrete Hesco Barrier PBR (proloxSimba, PAID): 1 MeshPart, 17,247 tris
 		Synty = 119390702773907, -- Polygon Military Vehicles (syntystudio, PAID): batch 3
 		DesertHouse = 16365964601, -- Desert house (RussianAndRobloxer, free): batch 2 hero building (41,976 tris)
+		PrinzHouses = 10055885754, -- Desert Houses (PrinzAaron, free): 3 houses, 459 parts total, 18,440 tris, 0 scripts (batch 2)
+		CagCamp = 9939040273, -- CAG Desert house Camp (Jhiyandrino, free): 1 house, 164 parts, 46,740 tris, 0 scripts (batch 2)
+		ImpHouse = 15654066038, -- Desert House (ImParadoxial, free): 281 parts, 41,774 tris, 0 scripts (24 FX + 16 lights stripped)
 	},
 	PackTriangles = {
 		Sandbags = 149263,
 		Crates = 10914,
 		Hesco = 17247,
 		DesertHouse = 41976,
+		PrinzHouses = 18440,
+		CagCamp = 46740,
+		ImpHouse = 41774,
 	},
 
 	-- pieces: Name = a descendant name in the pack (FindFirstChild(name, true)), or MeshId = a MeshPart's mesh id (pieces
@@ -171,6 +177,121 @@ local Job67DressConfig = {
 		},
 		-- BaseLayoutConfig.WarzoneSpots i % 3 (MapSetup PlotWarzone): 0 = sandbag berm, 1 = crate + drum, 2 = barrier
 		WarzoneKinds = { [0] = "Nest", [1] = "Crates", [2] = "Barrier" },
+	},
+
+	-- credits (CC-BY needs a visible credit once shipped; the Creator Store models need none but are listed). Shipped =
+	-- false: approved by Shaun for batch 2 but not in the game yet (Sketchfab downloads need a signed-in account /
+	-- API token the box does not have; the CGTrader building is a 201 MB FBX with 4 UDIM 8k texture sets: needs a
+	-- decimate + re-bake pass in Blender before a Roblox mesh import). docs/ASSET_LICENSES.md has the same rows.
+	Credits = {
+		{ Title = "Desert Houses", Author = "PrinzAaron", Source = "Roblox Creator Store 10055885754", License = "Roblox Creator Store", Shipped = true },
+		{ Title = "CAG Desert house Camp", Author = "Jhiyandrino", Source = "Roblox Creator Store 9939040273", License = "Roblox Creator Store", Shipped = true },
+		{ Title = "Desert House", Author = "ImParadoxial", Source = "Roblox Creator Store 15654066038", License = "Roblox Creator Store", Shipped = true },
+		{ Title = "Desert house", Author = "RussianAndRobloxer", Source = "Roblox Creator Store 16365964601", License = "Roblox Creator Store", Shipped = true },
+		{ Title = "Polygon Military Vehicles", Author = "Synty Studios (syntystudio)", Source = "Roblox Creator Store 119390702773907 (paid)", License = "Roblox Creator Store", Shipped = true },
+		{ Title = "Low-poly desert building", Author = "Sketchfab b3179b5b68264806b85441eec1dd8da4", Source = "https://sketchfab.com/3d-models/b3179b5b68264806b85441eec1dd8da4", License = "CC-BY 4.0", Shipped = false },
+		{ Title = "Desert house", Author = "Webster3D", Source = "https://sketchfab.com/3d-models/c50babb583374543b34f9cc2a122c243", License = "CC-BY 4.0", Shipped = false },
+		{ Title = "House", Author = "123a9el", Source = "https://sketchfab.com/3d-models/29c8806ec8794150802a58e582ad44a2", License = "CC-BY 4.0", Shipped = false },
+		{ Title = "Desert house 01", Author = "filthycent", Source = "https://sketchfab.com/3d-models/2f7b88bbcf1b454cad2c3e9dbc9dd18e", License = "CC-BY 4.0", Shipped = false },
+		{ Title = "Shanty", Author = "yadrogames", Source = "https://sketchfab.com/3d-models/64f09376d1a44ffd8716d7cc5f28db9c", License = "CC-BY 4.0", Shipped = false },
+		{ Title = "Fences pack", Author = "yadrogames", Source = "https://sketchfab.com/3d-models/0cbf546419cf499cbabfee3af0916215", License = "CC-BY 4.0", Shipped = false },
+		{ Title = "Free Arab City Building A", Author = "CGTrader", Source = "CGTrader (Royalty Free)", License = "CGTrader Royalty Free", Shipped = false },
+		{ Title = "Arabic Neoclassical Tall Residential (B04)", Author = "CGTrader", Source = "CGTrader (Royalty Free)", License = "CGTrader Royalty Free", Shipped = false },
+	},
+
+	-- Batch 2 (Code Bot JOB 67): detailed desert buildings over the Part TownBlock kits of the outlying places (the POI
+	-- "block" clusters; never the Town's houses, a heist / landmark kit, a gutted cache shell or a metal shed; never
+	-- the owner's hand-built hero models). WORLD dressing, so the owner gate is "a live player is in this server" (the JOB 40 ReplaceRows rule):
+	-- once Shaun is in a server it is dressed for everyone there. Enabled = false = the kits come back on the next
+	-- apply (ClearBuildings restores every hidden kit part). The kit parts go invisible AND stop colliding / being hit
+	-- (Transparency 1, CanCollide / CanQuery off, their lights / guis off; restored exactly); the model takes over as
+	-- the collider (its parts >= CollideMinStuds: CanCollide + CanQuery on, Box-shaped Parts; small parts and every
+	-- detail stay non-colliding), fitted to the kit footprint (x Grow, ScaleMin floor so doors stay player-sized), its
+	-- bottom on the kit floor. Anchors, jobs and NPC posts never move (the probe checks each one stays outside the
+	-- model box). Models: anchored, scripts / lights / FX stripped, CastShadow only on parts >= ShadowMinStuds.
+	-- Batch 3 (Code Bot JOB 67): Shaun's paid Synty Polygon Military Vehicles pack (119390702773907, 0 scripts) over the
+	-- outlying places' Part vehicle wrecks (WorldKits "Wreck" truck / car / tank kits and the camp HeliWreck; never a
+	-- gun-pit wreck). Same world rule and code path as Buildings (live once a player it is live for is in the server).
+	-- Collide = "Kit": the Part wreck stays the collider / cover (invisible), the Synty wreck (1 MeshPart, its own
+	-- SurfaceAppearance) is visual only, so cover, anchors and NPC posts are exactly as before. Boxes = each kit's
+	-- footprint in its own frame (probed: tools/probes/j67_b3_harness.py builds the real kits).
+	Wrecks = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST
+		Tag = "Wrecks",
+		Collide = "Kit",
+		Grow = 1.3, -- a wreck may read a little bigger than the old Part kit (the kit stays the collider)
+		ScaleMin = 0.4,
+		ScaleMax = 1.0,
+		ShadowMinStuds = 8,
+		MaxModels = 14,
+		MaxPerPoi = 2,
+		Boxes = {
+			Wreck = { truck = { -7.9, 8.0, -1.1, 5.5 }, car = { -4.1, 4.0, 0.1, 5.4 }, tank = { -8.2, 5.2, -0.9, 7.4 } },
+			HeliWreck = { default = { -6.1, 6.9, -12.0, 12.0 } },
+		},
+		-- Turn 90: the Synty wreck's long side (Z) along the kit's long side (X); the heli kit is long in Z
+		Models = {
+			TruckWreck = { Pack = "Synty", Name = "SM_Veh_Truck_01_Destroyed", Turn = 90 },
+			TechnicalWreck = { Pack = "Synty", Name = "SM_Veh_Pickup_Technical_Destroyed_01", Turn = 90 },
+			PickupWreck = { Pack = "Synty", Name = "SM_Veh_Pickup_Small_Destroyed_01", Turn = 90 },
+			VanWreck = { Pack = "Synty", Name = "SM_Veh_Van_Destroyed_01", Turn = 90 },
+			CarWreck = { Pack = "Synty", Name = "SM_Veh_Car_Medium_Destroyed_01", Turn = 90 },
+			SmallCarWreck = { Pack = "Synty", Name = "SM_Veh_Car_Small_Destroyed_01", Turn = 90 },
+			SUVWreck = { Pack = "Synty", Name = "SM_Veh_SUV_Destroyed_01", Turn = 90 },
+			TankWreckA = { Pack = "Synty", Name = "SM_Veh_Tank_USA_Destroyed_01", Turn = 90 },
+			TankWreckB = { Pack = "Synty", Name = "SM_Veh_Light_Tank_01_Destroyed", Turn = 90 },
+			HeliWreck = { Pack = "Synty", Name = "SM_Veh_Helicopter_Attack_02_Destroyed", Turn = 0 },
+		},
+		Rows = {
+			{ Poi = "Airstrip", Cluster = "N_Bowser", Kit = "Wreck", Model = "TruckWreck" },
+			{ Poi = "FortI", Cluster = "Tank", Kit = "Wreck", Model = "TankWreckA" },
+			{ Poi = "FortS", Cluster = "Tank", Kit = "Wreck", Model = "TankWreckB" },
+			{ Poi = "Depot", Cluster = "N_Trucks", Kit = "Wreck", KitIndex = 1, Model = "TruckWreck" },
+			{ Poi = "Depot", Cluster = "N_Trucks", Kit = "Wreck", KitIndex = 2, Model = "TechnicalWreck" },
+			{ Poi = "OilField", Cluster = "YardCover2", Kit = "Wreck", Model = "TruckWreck" },
+			{ Poi = "Ruins", Cluster = "Car_1", Kit = "Wreck", Model = "CarWreck" },
+			{ Poi = "Ruins", Cluster = "Car_2", Kit = "Wreck", Model = "SmallCarWreck" },
+			{ Poi = "Crash", Cluster = "Engine", Kit = "Wreck", Model = "SUVWreck" },
+			{ Poi = "Crash", Cluster = "Recovery", Kit = "Wreck", Model = "TruckWreck" },
+			{ Poi = "Quarry", Cluster = "Dump_1", Kit = "Wreck", Model = "VanWreck" },
+			{ Poi = "Quarry", Cluster = "Dump_2", Kit = "Wreck", Model = "PickupWreck" },
+			{ Poi = "RidgeCamp", Cluster = "Technical", Kit = "Wreck", Model = "TechnicalWreck" },
+			{ Poi = "DuneCamp", Cluster = "Heli", Kit = "HeliWreck", Model = "HeliWreck" },
+		},
+	},
+	Buildings = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST
+		Grow = 1.15, -- the model may stand this much past the kit footprint
+		ScaleMin = 0.6, -- below this the doors get shorter than a player
+		CollideMinStuds = 4,
+		ScaleMax = 1.2,
+		ShadowMinStuds = 8,
+		MaxModels = 12,
+		MaxPerPoi = 2,
+		-- Turn = the model's yaw so its long side runs along the kit Width (local X); Parts = after stripping
+		Models = {
+			PrinzHouse1 = { Pack = "PrinzHouses", Name = "Desert House 1", Turn = 0, Parts = 93 },
+			PrinzHouse2 = { Pack = "PrinzHouses", Name = "Desert House 2", Turn = 0, Parts = 170 },
+			PrinzHouse3 = { Pack = "PrinzHouses", Name = "Desert House 3", Turn = 0, Parts = 210 },
+			CagHouse = { Pack = "CagCamp", Name = "Model", Turn = 0, Parts = 164, Tris = 46740 },
+			ImpHouse = { Pack = "ImpHouse", Name = "Desert House", Turn = 90, Parts = 257, Tris = 41774 },
+			ArcadeHouse = { Pack = "DesertHouse", Name = "Desert house", Turn = 0, Parts = 312, Tris = 41976 },
+		},
+		-- Poi = WorldConfig.POIs Id, Cluster = the POILayouts cluster Id (its TownBlock kit)
+		Rows = {
+			{ Poi = "Port", Cluster = "E_Office", Model = "ImpHouse" }, -- 24 x 18, 3 storeys
+			{ Poi = "Port", Cluster = "E_Block2", Model = "PrinzHouse1" }, -- 22 x 18 damaged
+			{ Poi = "Depot", Cluster = "N_Barracks", Model = "PrinzHouse2" }, -- 30 x 14
+			{ Poi = "Depot", Cluster = "S_Garrison", Model = "ArcadeHouse" }, -- 30 x 16
+			{ Poi = "Armory", Cluster = "N_Barracks", Model = "PrinzHouse2" }, -- 28 x 14
+			{ Poi = "Airstrip", Cluster = "S_Ops", Model = "PrinzHouse3" }, -- 26 x 16
+			{ Poi = "Signal", Cluster = "W_Block", Model = "PrinzHouse1" }, -- 22 x 16 damaged
+			{ Poi = "Ruins", Cluster = "R_2", Model = "PrinzHouse2" }, -- 24 x 18 damaged (not a cache shell)
+			{ Poi = "Ruins", Cluster = "R_8", Model = "CagHouse" }, -- 22 x 18 (not a cache shell)
+			{ Poi = "OilField", Cluster = "Shack_S", Model = "CagHouse" }, -- 20 x 14 damaged
+		},
 	},
 }
 

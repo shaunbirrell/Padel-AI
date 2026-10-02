@@ -114,6 +114,11 @@ REGISTRY_ROWS = [
     ('J67TrenchSandbags', 'WALLS / BARRIERS', 'DRESS-LIVE', 71112106874796, 71112106874796, '', 'PLOT', '', [], [], 'Job67DressConfig.Pieces.TrenchLine', 'PAID (shaunie6); 26 MeshParts, 149,263 tris (pack), 0 scripts; corner nests + base prop nests (Code Bot JOB 67 batch 1)'),
     ('J67MilitarySupplies', 'PROPS / DECORATION', 'DRESS-LIVE', 70726960831586, 70726960831586, '', 'PLOT', '', [], [], 'Job67DressConfig.Pieces.SandbagLine', 'PAID (shaunie6); 204 MeshParts, store tris not published, 0 scripts; wall sandbag runs + base props (Code Bot JOB 67 batch 1)'),
     ('J67TexturedCrates', 'PROPS / DECORATION', 'DRESS-LIVE', 87282634781307, 87282634781307, '', 'PLOT', '', [], [], 'Job67DressConfig.Pieces.TexCrateA', 'PAID (shaunie6); 25 MeshParts, 10,914 tris (pack), 0 scripts; base prop crates (Code Bot JOB 67 batch 1)'),
+    ('J67PrinzDesertHouses', 'BUILDINGS / STRUCTURES', 'DRESS-LIVE', 10055885754, 10055885754, '', 'WORLD', '', [], [], 'Job67DressConfig.Buildings.Models.PrinzHouse1..3', 'FREE (shaunie6 inventory); 3 houses 459 parts, 18,440 tris, 0 scripts (5 PointLights + 2 Cameras stripped); POI TownBlock blocks (Code Bot JOB 67 batch 2)'),
+    ('J67CagDesertCamp', 'BUILDINGS / STRUCTURES', 'DRESS-LIVE', 9939040273, 9939040273, '', 'WORLD', '', [], [], 'Job67DressConfig.Buildings.Models.CagHouse', 'FREE (shaunie6 inventory); 164 parts, 46,740 tris, 0 scripts; POI TownBlock blocks (Code Bot JOB 67 batch 2)'),
+    ('J67ImpDesertHouse', 'BUILDINGS / STRUCTURES', 'DRESS-LIVE', 15654066038, 15654066038, '', 'WORLD', '', [], [], 'Job67DressConfig.Buildings.Models.ImpHouse', 'FREE (shaunie6 inventory); 281 parts, 41,774 tris, 0 scripts (24 ParticleEmitters + 16 PointLights stripped); POI TownBlock blocks (Code Bot JOB 67 batch 2)'),
+    ('J67ArcadeDesertHouse', 'BUILDINGS / STRUCTURES', 'DRESS-LIVE', 16365964601, 16365964601, '', 'WORLD', '', [], [], 'Job67DressConfig.Buildings.Models.ArcadeHouse', 'FREE; 317 parts, 41,976 tris, 0 scripts (lights / Camera stripped); POI TownBlock block (Code Bot JOB 67 batch 2; also a JOB 40 world row)'),
+    ('J67SyntyMilitaryWrecks', 'PROPS / DECORATION', 'DRESS-LIVE', 119390702773907, 119390702773907, '', 'WORLD', '', [], [], 'Job67DressConfig.Wrecks.Models', 'PAID (shaunie6); 10 destroyed-vehicle MeshParts used (1 each, tank 2), store triangles not published, 0 scripts; over the outlying POI Part wrecks, kit stays the collider (Code Bot JOB 67 batch 3)'),
     ('AmmoWorks', 'DROPPERS / PRODUCERS', 'LIVE-NOW', 41324890, 41324890, '', 'PLOT', '', ['Businesses.AmmoWorks'], [], '', 'Roblox Conveyor Belt as the Ammo Works belt (takes the kit belt\'s place)'),
     ('ArmsCrateLine', 'DROPPERS / PRODUCERS', 'LIVE-NOW', 41324890, 41324890, '', 'PLOT', '', ['Businesses.ArmsCrateLine'], [], '', 'Roblox Conveyor Belt as the Arms Crate Line belt (same load as Ammo Works)'),
     ('ArmorPlatePress', 'DROPPERS / PRODUCERS', 'PENDING-GET', 4362642898, 4362642898, 'STUDIO OMIT', 'PLOT', 'P4', ['Businesses.ArmorPlatePress'], [], '', '4,810 tris; big semi-transparent bounds box (OmitParts after the WE_CHECK); Smoke stripped (StripEffectsAssetIds); its parts must fit the kit roles it replaces (PartsPerBusinessL5)'),
@@ -367,6 +372,11 @@ STORE = {
     109072907337393: ('Minigun Turret Pack (Lvl 1-10)', 'Hoshizora_N1', 8723125177, 'User', 10, '2026-09-13', 26380, 1),  # PAID (USD 2.99, Shaun bought it; JOB 67)
     116015230898207: ('Modular Concrete Hesco Barrier PBR', 'proloxSimba', 1604634021, 'User', 10, '', 17247, 0),  # PAID (Shaun bought it; JOB 67 b1)
     71112106874796: ('Realistic Trench Sandbags Pack', 'Hyper_verse', 3940233615, 'User', 10, '', 149263, 0),  # PAID (JOB 67 b1)
+    10055885754: ('Desert Houses', 'PrinzAaron', 118639481, 'User', 10, '', 18440, 0),  # FREE (JOB 67 b2)
+    9939040273: ('CAG Desert house Camp', 'Jhiyandrino', 2656926181, 'User', 10, '', 46740, 0),  # FREE (JOB 67 b2)
+    15654066038: ('Desert House', 'ImParadoxial', 109977207, 'User', 10, '', 41774, 0),  # FREE (JOB 67 b2)
+    16365964601: ('Desert house', 'RussianAndRobloxer', 1318967339, 'User', 10, '', 41976, 0),  # FREE (JOB 67 b2)
+    119390702773907: ('Polygon Military Vehicles', 'syntystudio', 673636437, 'User', 10, '2026-04-26', 0, 0),  # PAID (JOB 67 b3)
     70726960831586: ('Military Supplies Props Pack', 'NyrexBLX', 1083083110, 'User', 10, '2026-02-25', None, 0),  # PAID (JOB 67 b1)
     87282634781307: ('Realistic Textured Crates and Boxes', 'Hyper_verse', 3940233615, 'User', 10, '', 10914, 0),  # PAID (JOB 67 b1)
     115528226: ('Platnus Research Lab', 'MiinhJi', 14603785, 'User', 10, '2013-05-11', 3504, 0),

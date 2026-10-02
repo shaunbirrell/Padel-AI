@@ -8,7 +8,10 @@
 	audited (scripts, lights, sounds, FX, prompts, GUIs, values, humanoids stripped) and kept in nil (never parented, so no
 	script inside can ever run). Every clone: Anchored, CanCollide / CanTouch / CanQuery off (the Part walls and kits stay
 	the colliders), CastShadow off unless the piece says Shadow = true, Massless. No lights, no scripts, no per-frame work.
-	Folders: <plot>/WE_J67WallDress (beside WE_PerimeterWalls, rebuilt with it) and Workspace.WE_J67Props.Plot<N>. ]]
+	Folders: <plot>/WE_J67WallDress (beside WE_PerimeterWalls, rebuilt with it) and Workspace.WE_J67Props.Plot<N>.
+	Batch 2: Workspace.WE_J67Buildings = detailed desert buildings over the outlying places' TownBlock kits (Buildings
+	block; world dressing, live once a player it is live for is in the server). The kit parts go invisible and stop
+	colliding (lights / guis off, all restored by ClearBuildings); the building's large parts are the colliders. ]]
 
 local InsertService = game:GetService("InsertService")
 local Players = game:GetService("Players")
@@ -586,6 +589,347 @@ local function syncOwnerProps(player: Player, plotId: number)
 	end
 end
 
+-- ===== Batch 2 / 3: detailed models over the outlying places' Part kits (Job67DressConfig.Buildings / .Wrecks) =====
+-- One code path for every WORLD block (WorldBlocks): each row = a POI cluster's kit (row.Kit, default TownBlock; the
+-- row.KitIndex-th such kit) -> a pack model fitted to the kit footprint (the kit's Width x Depth, or row.Box in the
+-- kit frame), bottom on the kit floor. Collide = "Model" (default): the kit goes invisible + non-colliding and the
+-- model's big parts collide; Collide = "Kit": the kit only goes invisible and stays the collider (the model is visual).
+local WORLD_BLOCKS = { { Key = "Buildings", Folder = "WE_J67Buildings" }, { Key = "Wrecks", Folder = "WE_J67Wrecks" } }
+local worldTemplates: { [string]: Model | false } = {}
+local hiddenKit: { [string]: { Instance } } = {} -- "<block>/<Poi>/<Cluster>/<kit index>" -> the kit instances hidden
+local worldOn: { [string]: boolean } = {}
+local layoutCache: { [string]: any } = {}
+
+-- a world block is live once a player it is live for is in this server (the JOB 40 rule); OwnerFirst off = everyone
+function Job67DressService.WorldLive(B: any): boolean
+	if typeof(B) ~= "table" or B.Enabled ~= true or C.Enabled ~= true then
+		return false
+	end
+	if B.OwnerFirst ~= true and C.OwnerFirst ~= true then
+		return true
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		if Job67DressService.Live(B, p.UserId) then
+			return true
+		end
+	end
+	return false
+end
+
+function Job67DressService.BuildingsLive(): boolean
+	return Job67DressService.WorldLive(C.Buildings)
+end
+
+function Job67DressService.WorldTemplate(B: any, key: string): Model?
+	local tkey = tostring(B.Tag or "") .. "/" .. key
+	local have = worldTemplates[tkey]
+	if have ~= nil then
+		return if have == false then nil else have :: Model
+	end
+	local ref = B.Models[key]
+	local id = if ref then C.Packs[ref.Pack] else nil
+	local root = if typeof(id) == "number" then loadPack(id) else nil
+	local src = if root and ref then (root :: Instance):FindFirstChild(ref.Name, true) else nil
+	if src == nil or not ((src :: Instance):IsA("Model") or (src :: Instance):IsA("BasePart")) then
+		worldTemplates[tkey] = false
+		warn(C.LogTag, "world model missing", key)
+		return nil
+	end
+	local m: Model
+	if (src :: Instance):IsA("Model") then
+		m = (src :: Model):Clone()
+	else
+		m = Instance.new("Model")
+		;(src :: Instance):Clone().Parent = m
+	end
+	stripInstance(m)
+	m.Name = "J67_" .. key
+	local collideModel = (ref.Collide or B.Collide or "Model") == "Model"
+	local parts = 0
+	local mn, mx = Vector3.one * math.huge, Vector3.one * -math.huge
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local mxs = math.max(d.Size.X, d.Size.Y, d.Size.Z)
+			sanitizePart(d, mxs >= (B.ShadowMinStuds or 8))
+			if collideModel and mxs >= (B.CollideMinStuds or 4) then
+				d.CanCollide = true -- the model is the collider now (the kit under it stops colliding)
+				d.CanQuery = true
+			end
+			parts += 1
+			local cf, s = d.CFrame, d.Size * 0.5
+			local ext = Vector3.new(
+				math.abs(cf.RightVector.X) * s.X + math.abs(cf.UpVector.X) * s.Y + math.abs(cf.LookVector.X) * s.Z,
+				math.abs(cf.RightVector.Y) * s.X + math.abs(cf.UpVector.Y) * s.Y + math.abs(cf.LookVector.Y) * s.Z,
+				math.abs(cf.RightVector.Z) * s.X + math.abs(cf.UpVector.Z) * s.Y + math.abs(cf.LookVector.Z) * s.Z
+			)
+			mn = mn:Min(cf.Position - ext)
+			mx = mx:Max(cf.Position + ext)
+		end
+	end
+	if parts == 0 then
+		worldTemplates[tkey] = false
+		return nil
+	end
+	-- pivot = the bottom centre of the world-axis box, unrotated (the Turn / kit yaw are applied at placement)
+	m.WorldPivot = CFrame.new((mn.X + mx.X) * 0.5, mn.Y, (mn.Z + mx.Z) * 0.5)
+	m:SetAttribute("WE_J67Parts", parts)
+	m:SetAttribute("WE_J67Natural", mx - mn)
+	worldTemplates[tkey] = m
+	return m
+end
+
+function Job67DressService.BuildingTemplate(key: string): Model?
+	return Job67DressService.WorldTemplate(C.Buildings, key)
+end
+
+-- the POILayouts cluster row + its n-th kit of that kind for a POI / cluster id
+local function clusterRow(poiId: string, clusterId: string, kitName: string?, kitIndex: number?): (any, any)
+	local okW, WorldConfig = pcall(function(): any
+		return require(Shared.Configs.WorldConfig)
+	end)
+	if not okW then
+		return nil, nil
+	end
+	local layout: string? = nil
+	for _, p in ipairs(WorldConfig.POIs or {}) do
+		if p.Id == poiId then
+			layout = p.Layout
+		end
+	end
+	if layout == nil then
+		return nil, nil
+	end
+	local group = layoutCache[layout :: string]
+	if group == nil then
+		local mod = script.Parent.Parent:FindFirstChild("Modules")
+		mod = mod and mod:FindFirstChild("POILayouts")
+		mod = mod and mod:FindFirstChild(layout :: string)
+		local ok, got = pcall(function(): any
+			return (require :: any)(mod)
+		end)
+		group = if ok and type(got) == "table" then got else false
+		layoutCache[layout :: string] = group
+	end
+	local l = if group then group[poiId] else nil
+	local want, nth, seen = kitName or "TownBlock", kitIndex or 1, 0
+	for _, c in ipairs(if l then l.Clusters or {} else {}) do
+		if c.Id == clusterId then
+			for _, k in ipairs(c.Kits or {}) do
+				if k.Kit == want then
+					seen += 1
+					if seen == nth then
+						return c, k
+					end
+				end
+			end
+		end
+	end
+	return nil, nil
+end
+
+local function hideKit(key: string, cluster: Instance, kcf: CFrame, hw: number, hd: number, keepCollide: boolean)
+	local list: { Instance } = {}
+	for _, d in ipairs(cluster:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local lp = kcf:PointToObjectSpace(d.Position)
+			if math.abs(lp.X) <= hw + 2 and math.abs(lp.Z) <= hd + 2 then
+				d:SetAttribute("WE_J67T", d.Transparency)
+				d:SetAttribute("WE_J67C", d.CanCollide)
+				d:SetAttribute("WE_J67Q", d.CanQuery)
+				d.Transparency = 1
+				if not keepCollide then
+					d.CanCollide = false -- the model took over
+					d.CanQuery = false
+				end
+				table.insert(list, d)
+				for _, x in ipairs(d:GetDescendants()) do
+					if x:IsA("Decal") then -- Decal + Texture
+						x:SetAttribute("WE_J67T", x.Transparency)
+						x.Transparency = 1
+						table.insert(list, x)
+					elseif x:IsA("Light") or x:IsA("SurfaceGui") or x:IsA("BillboardGui") then
+						x:SetAttribute("WE_J67E", (x :: any).Enabled)
+						;(x :: any).Enabled = false
+						table.insert(list, x)
+					end
+				end
+			end
+		end
+	end
+	hiddenKit[key] = list
+	return #list
+end
+
+local function restoreKit(key: string)
+	for _, x in ipairs(hiddenKit[key] or {}) do
+		if x.Parent ~= nil then
+			local t0 = x:GetAttribute("WE_J67T")
+			if typeof(t0) == "number" then
+				(x :: any).Transparency = t0
+			end
+			local c0, q0 = x:GetAttribute("WE_J67C"), x:GetAttribute("WE_J67Q")
+			if x:IsA("BasePart") then
+				if typeof(c0) == "boolean" then
+					x.CanCollide = c0
+				end
+				if typeof(q0) == "boolean" then
+					x.CanQuery = q0
+				end
+			end
+			x:SetAttribute("WE_J67C", nil)
+			x:SetAttribute("WE_J67Q", nil)
+			local e0 = x:GetAttribute("WE_J67E")
+			if typeof(e0) == "boolean" then
+				(x :: any).Enabled = e0
+			end
+			x:SetAttribute("WE_J67T", nil)
+			x:SetAttribute("WE_J67E", nil)
+		end
+	end
+	hiddenKit[key] = nil
+end
+
+local function clearWorld(blockKey: string, folderName: string)
+	for key in pairs(hiddenKit) do
+		if string.sub(key, 1, #blockKey + 1) == blockKey .. "/" then
+			restoreKit(key)
+		end
+	end
+	local f = Workspace:FindFirstChild(folderName)
+	if f then
+		f:Destroy()
+	end
+	worldOn[blockKey] = false
+end
+
+function Job67DressService.ClearBuildings()
+	clearWorld("Buildings", "WE_J67Buildings")
+end
+
+function Job67DressService.ClearWorld()
+	for _, wb in ipairs(WORLD_BLOCKS) do
+		clearWorld(wb.Key, wb.Folder)
+	end
+end
+
+-- dress one world block (idempotent: clears and rebuilds). Returns the models placed.
+local function syncWorld(blockKey: string, folderName: string): number
+	local B = C[blockKey]
+	clearWorld(blockKey, folderName)
+	if typeof(B) ~= "table" or not Job67DressService.WorldLive(B) then
+		return 0
+	end
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local wd = setup and setup:FindFirstChild("WorldDressing")
+	if wd == nil then
+		return 0
+	end
+	local out = Instance.new("Folder")
+	out.Name = folderName
+	local placed, parts = 0, 0
+	local perPoi: { [string]: number } = {}
+	for _, row in ipairs(B.Rows) do
+		if placed >= (B.MaxModels or 12) or (perPoi[row.Poi] or 0) >= (B.MaxPerPoi or 2) then
+			continue
+		end
+		local poiFolder = (wd :: Instance):FindFirstChild("POI_" .. row.Poi)
+		local cluster = poiFolder and poiFolder:FindFirstChild(row.Cluster)
+		local c, k = clusterRow(row.Poi, row.Cluster, row.Kit, row.KitIndex)
+		local ref = B.Models[row.Model]
+		local t = Job67DressService.WorldTemplate(B, row.Model)
+		if cluster == nil or c == nil or k == nil or ref == nil or t == nil then
+			print(string.format("%s %s %s/%s: skipped (cluster=%s row=%s model=%s)", C.LogTag, blockKey, row.Poi, row.Cluster, tostring(cluster ~= nil), tostring(c ~= nil), tostring(t ~= nil)))
+			continue
+		end
+		-- the kit footprint in its own frame: row.Box (X0, X1, Z0, Z1) or the kit's Width x Depth round its centre
+		local box = row.Box or B.Boxes and B.Boxes[row.Kit or "TownBlock"] and B.Boxes[row.Kit or "TownBlock"][k.Variant or "default"]
+		local bx0, bx1, bz0, bz1
+		if typeof(box) == "table" then
+			bx0, bx1, bz0, bz1 = box[1], box[2], box[3], box[4]
+		else
+			bx0, bx1, bz0, bz1 = -(k.Width or 20) * 0.5, (k.Width or 20) * 0.5, -(k.Depth or 16) * 0.5, (k.Depth or 16) * 0.5
+		end
+		local hw, hd = (bx1 - bx0) * 0.5, (bz1 - bz0) * 0.5
+		local frameK = CFrame.new(c.X, 0, c.Z) * CFrame.Angles(0, math.rad(c.Yaw or 0), 0) * CFrame.new(k.X or 0, 0, k.Z or 0) * CFrame.Angles(0, math.rad(k.Yaw or 0), 0)
+		local frame0 = frameK * CFrame.new((bx0 + bx1) * 0.5, 0, (bz0 + bz1) * 0.5)
+		-- the kit floor: the lowest kit part bottom in the footprint
+		local floorY = math.huge
+		for _, d in ipairs((cluster :: Instance):GetDescendants()) do
+			if d:IsA("BasePart") then
+				local lp = frame0:PointToObjectSpace(Vector3.new(d.Position.X, 0, d.Position.Z))
+				if math.abs(lp.X) <= hw + 2 and math.abs(lp.Z) <= hd + 2 then
+					floorY = math.min(floorY, d.Position.Y - d.Size.Y * 0.5)
+				end
+			end
+		end
+		if floorY == math.huge then
+			continue
+		end
+		local nat = t:GetAttribute("WE_J67Natural") :: Vector3
+		local turned = math.abs((ref.Turn or 0) % 180) == 90
+		local nx, nz = if turned then nat.Z else nat.X, if turned then nat.X else nat.Z
+		local s = math.min((hw * 2) / nx, (hd * 2) / nz) * (ref.Grow or B.Grow or 1)
+		s = math.clamp(s, ref.ScaleMin or B.ScaleMin or 0.45, ref.ScaleMax or B.ScaleMax or 1.2)
+		local m = t:Clone()
+		m:ScaleTo(m:GetScale() * s) -- relative: a pack model can ship at a non-1 scale (Synty models are at 2)
+		local kcf = CFrame.new(frame0.Position.X, floorY, frame0.Position.Z) * (frame0 - frame0.Position)
+		m:PivotTo(kcf * CFrame.Angles(0, math.rad((ref.Turn or 0) + (row.Yaw or 0)), 0))
+		m:SetAttribute("WE_J67Poi", row.Poi)
+		m:SetAttribute("WE_J67Cluster", row.Cluster)
+		m:SetAttribute("WE_J67Scale", s)
+		m.Parent = out
+		local keepCollide = (ref.Collide or B.Collide or "Model") == "Kit"
+		local hid = hideKit(blockKey .. "/" .. row.Poi .. "/" .. row.Cluster .. "/" .. tostring(row.KitIndex or 1), cluster :: Instance, kcf, hw, hd, keepCollide)
+		placed += 1
+		perPoi[row.Poi] = (perPoi[row.Poi] or 0) + 1
+		parts += (t:GetAttribute("WE_J67Parts") :: number) or 0
+		print(string.format("%s %s %s/%s -> %s scale=%.2f kit=%.0fx%.0f hidden=%d", C.LogTag, blockKey, row.Poi, row.Cluster, row.Model, s, hw * 2, hd * 2, hid))
+	end
+	out.Parent = Workspace
+	worldOn[blockKey] = placed > 0
+	out:SetAttribute("WE_J67Models", placed)
+	out:SetAttribute("WE_J67Parts", parts)
+	print(string.format("%s %s: %d models, %d parts", C.LogTag, blockKey, placed, parts))
+	return placed
+end
+
+function Job67DressService.SyncBuildings(): number
+	return syncWorld("Buildings", "WE_J67Buildings")
+end
+
+function Job67DressService.SyncWorld(): number
+	local n = 0
+	for _, wb in ipairs(WORLD_BLOCKS) do
+		n += syncWorld(wb.Key, wb.Folder)
+	end
+	return n
+end
+
+local function anyWorldOn(): boolean
+	for _, v in pairs(worldOn) do
+		if v then
+			return true
+		end
+	end
+	return false
+end
+
+local worldBusy = false
+local function syncWorldSoon()
+	if worldBusy then
+		return
+	end
+	worldBusy = true
+	task.delay(2, function()
+		worldBusy = false
+		local ok, err = pcall(Job67DressService.SyncWorld)
+		if not ok then
+			warn(C.LogTag, "SyncWorld failed", err)
+		end
+	end)
+end
+Job67DressService._syncWorldSoon = syncWorldSoon
+
 function Job67DressService.Init(d: { [string]: any })
 	deps = d
 	if not C.Enabled then
@@ -612,6 +956,32 @@ function Job67DressService.Init(d: { [string]: any })
 			end)
 		end)
 	end
+	-- batches 2 + 3: the world blocks (once a live player is here; a rebuilt POI folder is dressed again)
+	Players.PlayerAdded:Connect(function(p: Player)
+		for _, wb in ipairs(WORLD_BLOCKS) do
+			if not worldOn[wb.Key] and typeof(C[wb.Key]) == "table" and Job67DressService.Live(C[wb.Key], p.UserId) then
+				syncWorldSoon()
+				break
+			end
+		end
+	end)
+	task.defer(function()
+		local setup = Workspace:WaitForChild("WarEmpireSetup", 120)
+		local wd = setup and setup:WaitForChild("WorldDressing", 120)
+		if wd then
+			wd.ChildAdded:Connect(function(ch: Instance)
+				if anyWorldOn() and string.sub(ch.Name, 1, 4) == "POI_" then
+					syncWorldSoon()
+				end
+			end)
+		end
+		for _, wb in ipairs(WORLD_BLOCKS) do
+			if Job67DressService.WorldLive(C[wb.Key]) then
+				syncWorldSoon()
+				break
+			end
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(p: Player)
 		for plotId, uid in pairs(plotOwner) do
 			if uid == p.UserId then
