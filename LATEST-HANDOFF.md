@@ -1,3 +1,173 @@
+## v246 PUBLISHED (Code Bot Roblox, 2026-10-02 20:46 Dublin): Open Cloud place version **244**. Cherry-pick Claude JOB 75 + JOB 76
+
+**COMPLETED**
+- **JOB 75 Scout Helicopter flight** (`VehicleConfig.HeliFlight`, OwnerFirst=true for Shaun + Laumartinez26 `11718087109`): centre-of-mass drive for Heli/Plane (server on seat change + client refresh); camera-relative touch stick; smaller tilts; real SPD; gentle landing; ground skid; righting. OFF for everyone else = old flight. Files: VehicleConfig, VehicleService, VehicleDriveClient; checks/sim `claude_bud_job75` / `run_heli_flight_test`.
+- **JOB 76 ADMIN ABUSE WARLORD finish** (verify + finish v242; public effect on already-public Warlord): HP = max(MinHealth=30000, BaseHealth=0 + HealthPerPlayer=5000 × players); heavy weapon Damage=20 FireRate=1.5 Range=110 AggroRange=140 XPReward=500; NPC CashReward=0; `WorldBossService.StopTest()`; `AdminAbuseService.StopAll` calls it. **Kept live v243–v245**: PlazaSpots / MaxGroundY 8 / Leash 110 / AutoEverySeconds 1200 / PinLabel WARLORD + MegaTank EventVehicles.
+- WE_Build **246**. PreferMesh OFF. No WE_Building* touch. Publish **without** forced restart (players get it on next join / Shaun migrates).
+
+**PHONE TEST (Shaun / Lau — NEW server after migrate or fresh join)**
+1. **Heli (owner-first)**: enter a Scout Helicopter on phone — hover should stay level (not nose-down), SPD shows real speed, stick flies camera-relative, ▲/▼ height, gentle land. Non-owner players still get the old flight until OwnerFirst flipped.
+2. **Warlord**: Admin Abuse → GIANT BOSS — Plaza spawn, HP ~30k (1p) / ~50k (10p), heavy gun, chaos banner, 500K + Boss Slayer to helpers. STOP ALL clears Warlord **and** WORLD BOSS TEST (not the live DW window bosses). Auto WARLORD every 20 min in the Double Weekend window still runs.
+
+**TESTING**: BuyPathStatic PASS=10029 FAIL=0; claude_bud_job75/76 all PASS; codebot_v246 13/13 PASS; heli/warlord/admin_abuse sims 0 failed. codeCommit=`063b2c3` place=244 build=246
+
+---
+
+## v245 — Code Bot (2 Oct 2026 20:24 IST) — place version 243, code 6c5a259
+
+- **DOUBLE WEEKEND auto WARLORD**: `AdminAbuseConfig.Actions.Boss.AutoEverySeconds = 1200`. AdminAbuseService.Init starts one task.wait loop (`autoBossLoop`): slots = EventConfig.StartUnix + k x 1200 until EndUnix (21:00, 21:20, ... Dublin; 144 slots, last Sun 20:40); a slot is due for 60 s (`DueAutoBossSlot`), `AutoBoss()` runs `start.Boss` on THIS server only (never MessagingService), sets the 300 s running timer (despawn), no LIVE chip / cooldown; skipped while a boss lives or the server is empty. Same Plaza spot, chaos banner, 500K world_boss, Boss Slayer badge. A server started mid-window waits for the next slot.
+- BuyPathStatic PASS=9998 FAIL=0. Slot math simulated in Luau (144 spawns, wake-late safe). Not tested in-game. No restart.
+
+## v244 — Code Bot (2 Oct 2026 20:20 IST) — place version 242, code 4f56f8a
+
+Shaun phone test 20:03 (his server was pre-v242: 'GIANT BOSS WAIT 3:36' = the old cooldown; v242+ has Cooldown 0 server-side and ButtonText returns the bare label for Boss).
+- **Boss invisible**: the bosses used the animated R6 rig, scaled after SpawnNPC parented them; client RigAnimator caches limb mesh scales at add() and writes them back on near/far swaps, and a rig attached after its template loads lands 1x on the 4x root (normal-size soldier inside a transparent giant root). SpawnNPC could also refuse it at the NPC cap silently. Fix: `Modules/BossLook.luau` (Part kit NoVisual, ScaleTo, PivotTo onto the ground, Highlight DepthMode AlwaysOnTop, PointLight, name plate MaxDistance 1500), `opts.Boss` skips the NPC cap, WARLORD pin refreshes every 1 s. Same for the Double Weekend bosses.
+- **Airstrike invisible**: CombatFx.Explode = weapon-sized puff on the unreliable WeaponFx lane, one strike near one random player. Fix: FeaturePush `AdminAbuseStrike` {P,W,R} to all within VisibleStuds 600; AdminAbuseController draws red circle (WarnSeconds 1.6), falling lit missile, local visual Explosion (pressure 0, no joint breaks) + fireball + light + CameraFx.Blast; each wave hits near up to PerWave 8 players; damage lands with the missile (STOP ALL cancels). Announce banner on start.
+- **Crates**: the trigger was a fixed 5-stud box inside the crate's solid J67Hull → no Touched. Now wraps the crate bounds +4, 4 Hz server walk-up check (GrabStuds 4), pcall'd AddCash (un-claimed on refusal), "already grabbed" note, crate hidden for the grabber (FeaturePush `AdminAbuseCrateTaken`).
+- **"Defeat the defenders first!"**: OutpostDefenders.Blocking counted every living neutral guard incl. unreachable ones (roof / past leash / under map); holder only spared via PlazaDefenders. Now only reachable guards block (ReachMarginStuds 15 / ReachYStuds 30; unreachable despawned), note says "(N left)", the territory's holder is never blocked.
+- Guard check updates: codebot_v241 accepts BossLook scaling; sim mock AddCash returns (true, n) like the real one. BuyPathStatic PASS=9989 FAIL=0. Not tested in-game. No restart.
+
+## v243 — Code Bot (2 Oct 2026 19:48 IST) — place version 241, code 85634f3
+
+- **FREE MEGA TANK** (Admin Abuse TankDrop): `VehicleConfig.EventVehicles.MegaTank` (TrackedMBT kit Scale 1.45, ~1.5x the 0.95 Light Tank; never in Vehicles = no shop / garage / save; VehicleService getDef falls back). Wears the real Synty tank `SM_Veh_Tank_USA_01` (pack 119390702773907, Fit Kit) via VisualAssetConfig (lines tagged `-- v243`; codebot_v211 / v219 PreferMesh guards now skip `-- v243` lines like `-- v230`). FIRE button = `MegaTankMissile` on the existing AirWeapon missile path (220 dmg, splash 10, 4-mag / 6 s reload, 25° arc around the hull nose, muzzle = kit Barrel). 600 s loan. Ordnance caps unchanged.
+- **WARLORD at the Central Plaza**: `AdminAbuseConfig.Actions.Boss.PlazaSpots` / MaxGroundY 8 / Leash 110; `AdminAbuseService.PlazaSpot()` ground-ray (never a building / roof / StructureId); fallback (0,1,0). Banner + pin point there. Empty servers skip.
+- **Every army fights the bosses**: both boss kinds carry model attribute `WE_Boss`. `CombatService.unitMayHit` returns true for a WE_Boss (no UnitProvokeNeedsOwner owner-near rule — that was why only the owner's army engaged); `escortPickLive` treats a WE_Boss within `ArmyConfig.Escort.BossEngageStuds` (110) as a defend target for every player; hurtNPC stamps the army owner on a WE_Boss's LastHitBy, so army damage pays the 500K + Boss Slayer badge (WorldBossService.PayHelpers and the Admin Abuse boss death both read LastHitBy). BuyPathStatic army A0 / army-fix structural checks updated to the new lines.
+- BuyPathStatic PASS=9972 FAIL=0; admin abuse sim 0 failed. Not tested in-game. Old servers need migrating (Shaun does it).
+
+## v242 PUBLISHED (Code Bot Roblox, 2026-10-02 19:32 Dublin): Open Cloud place version **240**. BOSS SLAYER badge + ADMIN ABUSE WARLORD = world-boss deal
+
+- **Badge** `1033687066360587` (Boss Slayer): `WorldBossConfig.BossBadgeId` (DW world bosses) and `AdminAbuseConfig.Actions.Boss.BadgeId` (WARLORD). BadgeService in pcall, UserHasBadgeAsync first (skip if owned), every helper.
+- **ADMIN ABUSE WARLORD** (`AdminAbuseConfig.Actions.Boss`): Scale 3 -> **4**; HP 4,000 + 1,500/player -> **25,000 + 5,000/player** (1 player 30k, 5 -> 50k, 10 -> 75k); reward $25,000 supply_drop -> **$500,000 flat, reason world_boss** (NEVER_MULTIPLIED, never 2x) to every player who hit it; **Cooldown 300 -> 0** and the panel shows no countdown on GIANT BOSS (a new press replaces the live Warlord on each server); lifetime still 300 s.
+- **Announcement** (config `AnnounceText`): "⚠️ THE ADMIN IS HERE AND HE'S CAUSING CHAOS! A WARLORD has spawned. Help take him down for 500K CASH + BOSS SLAYER BADGE!" to every player on each server (FeaturePush "WorldBoss", big banner 9 s, TAP TO TRACK = pin); death banner too. AA boss bar is a button (tap = pin, `WE_AABossPos` follows him while fought). DW world-boss spawn banner also tap = pin now.
+- **Every server**: GIANT BOSS is a normal published action (MessagingService topic WE_AdminAbuse): each server spawns its OWN Warlord near one of its players, its own banner, pays its own helpers. STOP ALL is published too and clears them everywhere. (WORLD BOSS TEST stays this-server-only.) Servers still on v240/v241 receive the press but run their old Warlord code (v240/241: 3x, ~10k HP, $25k, no banner, 300 s cooldown).
+- Note: comment wording in WorldBossConfig no longer says "WE_Building" (codebot_v151-154/v209 diff guards).
+
+**TESTING**: BuyPathStatic PASS=9954 FAIL=0; run_admin_abuse_test 0 failed; codebot_v242 13/13 PASS. WE_Build 242, **no restart**. Public servers at publish: 6 / 29 players, all pre-v241.
+
+codeCommit=`b483e69` place=240 build=242
+
+---
+
+## v241 PUBLISHED (Code Bot Roblox, 2026-10-02 19:19 Dublin): Open Cloud place version **239**. DOUBLE WEEKEND WORLD BOSSES (Shaun: "at 9pm when the 2x goes live can we spawn bosses around the servers")
+
+**NEW**: `WorldBossConfig` (the one config) + `Server/Services/WorldBossService` + `Client/Controllers/WorldBossController`.
+- **When**: only inside `EventConfig` StartUnix..EndUnix (Fri 2 Oct 21:00 → Sun 4 Oct 21:00 Dublin); no time of its own. Each server: `task.delay` to the start (or 4 s after boot inside the window), despawn at the end. No per-frame loop.
+- **Boss**: giant **WARLORD** = CombatService NPC `HeavyInfantry` (the real soldier rig + shared NPC brain) scaled x3 (same as the ADMIN ABUSE giant boss), 20 dmg x 1.5/s, range 110, aggro 140, leash 90. HP = 15,000 + 2,000 x players on server (cap 45,000).
+- **Spots (1 alive each, 10 min respawn after kill)**: Camp Viper (-470,-600), Anvil Scrapyard (1230,470), Dry Well Village (470,700); >=175 studs from every plot pad, >=420 from captures, far from the spawn town (codebot_v241 proves it).
+- **Reward**: exactly **$500,000 to EVERY player who hit him** (his own shots, rec.LastHitBy; squad-unit-only hits don't count), reason `world_boss` (EconomyService NEVER_MULTIPLIED: never 2x). NPC kill cash 0; killer gets 500 XP. **Badge**: `WorldBossConfig.BadgeId = 0` (skipped) — set it when Shaun sends the id.
+- **Client**: How-to-play card first time a boss is live per session (what / 3 steps / "REWARD: 500K CASH + BADGE for everyone who helps", TRACK BOSS / GOT IT); boss bar for the nearest boss at y=94 (tap = ObjectiveMarker pin, no teleport); banner on spawn/death via FeaturePush "WorldBoss".
+- **Owner preview**: `/boss` in chat (Shaun via AdminConfig.IsPlaytestOwner, Laumartinez26 11718087109) or ADMIN ABUSE panel **WORLD BOSS TEST** (LocalOnly: this server only, never MessagingService). `/boss clear` removes them. Preview bosses pay like real ones and keep respawning on that server until `/boss clear` or a new server.
+- AdminAbuse layout sim updated to 12 controls.
+
+**TESTING**: BuyPathStatic PASS=9941 FAIL=0; codebot_v241 all PASS; rojo build OK. WE_Build 241, **no restart**. At publish: 6 public servers / 32 players, all started before the publish -> they run v240 and will NOT spawn bosses at 21:00 unless they close / are migrated.
+
+codeCommit=`cfee53f` place=239 build=241
+
+---
+
+## v240 PUBLISHED (Code Bot Roblox, 2026-10-02 18:59 Dublin): Open Cloud place version **238**. Plaza defender tanks toned down further (Shaun, after v239)
+
+**CONFIG ONLY** (`PlazaDefenderConfig`): `VehicleDamageMult` 0.75 → **0.4**, `VehicleFireRate` 0.65 → **0.45**/s, `VehicleHealthMult` 2.5 → **1.75**. Range 95 / aggro 120, soldiers, caps 6 + 2, tax unchanged; still public.
+
+| Tank (tier) | HP v239 → v240 | dmg/shot | shots/s | raw DPS | hits to kill 100 HP |
+|---|---|---|---|---|---|
+| Power 160+ | 1,000 → 700 | 23 → 12 | 0.65 → 0.45 | 15 → 5.4 | 5 → 9 |
+| Power 100-159 | 850 → 595 | 20 → 11 | 0.65 → 0.45 | 13 → 4.9 | 5 → 10 |
+| Power 50-99 | 700 → 490 | 18 → 10 | 0.65 → 0.45 | 12 → 4.5 | 6 → 10 |
+(v236 original top tier: 1,200 HP / 45 dmg / 1.0/s / 45 DPS / 3 hits.)
+
+**TESTING**: BuyPathStatic PASS=9920 FAIL=0; plaza sim 0 failed; codebot_v240 all PASS (codebot_v239 top-tier floor loosened to >= 500 HP / 8-30 dmg). WE_Build 240, no restart.
+
+**PHONE TEST (NEW server):** 1) Shaun holds with tanks; Lau attacks: a tank takes ~9 hits (~20 s alone) to kill her. 2) Lau + rifle + a few soldiers kill a 700 HP tank in ~5 s.
+
+codeCommit=`1e14cd5` place=238 build=240
+
+---
+
+## v239 PUBLISHED (Code Bot Roblox, 2026-10-02 18:56 Dublin): Open Cloud place version **237**. Plaza defender TANK nerf (Shaun phone test: "a little too powerful")
+
+**CONFIG ONLY** (`PlazaDefenderConfig`): `VehicleDamageMult` 1.5 → **0.75** (−50 %/shot), `VehicleFireRate` 1.0 → **0.65**/s (−35 %), `VehicleHealthMult` 3 → **2.5**. Range 95 / aggro 120 unchanged (gunner = CombatConfig OilRigGuard 200 HP / 20 dmg). Soldiers, caps (6 + 2), tax unchanged; still public.
+
+| Tank (tier) | HP before → after | dmg/shot before → after | shots/s | raw DPS |
+|---|---|---|---|---|
+| Power 160+ (x2 HP, x1.5 dmg) | 1,200 → 1,000 | 45 → 23 | 1.0 → 0.65 | 45 → 15 |
+| Power 100-159 (x1.7, x1.35) | 1,020 → 850 | 41 → 20 | 1.0 → 0.65 | 41 → 13 |
+| Power 50-99 (x1.4, x1.2) | 840 → 700 | 36 → 18 | 1.0 → 0.65 | 36 → 12 |
+NPC hit chance 75 % ≤ 20 studs → 30 % at 95. Player 100 HP: 3 tank hits before, 5-6 now. Compare: top-tier defender soldier 300 HP / 18 dmg / 2.2/s (~40 DPS); Assault Rifle 22 × 9/s (198 DPS); a squad soldier 150 HP / 12 dmg / 2.2/s.
+
+**TESTING**: BuyPathStatic PASS=9913 FAIL=0; plaza sim 0 failed; codebot_v239 all PASS. WE_Build 239, no restart.
+
+**PHONE TEST (NEW server):** 1) Shaun holds the Plaza with tanks; Lau (or a mid-level account + a few soldiers) attacks: tanks hurt but take ~5 hits to kill her. 2) She can kill a tank with a rifle + squad in roughly 8-10 s of focused fire.
+
+codeCommit=`1df5db7` place=237 build=239
+
+---
+
+## v238 PUBLISHED (Code Bot Roblox, 2026-10-02 ~18:55 Dublin): Open Cloud place version **236**. JOB 74 is PUBLIC (Shaun: "turn on for everyone")
+
+**CHANGE**: `PlazaDefenderConfig.OwnerFirst` true → **false**. This is the one gate (`LiveFor` / `TaxLiveFor`), used by `PlazaDefenders.Step` (defenders + tax holder attribute) and `EconomyService.plazaTax`. Now every PLAYER holder of the Central Plaza gets:
+- defenders (v235/v236): his army-look soldiers + up to 2 real Synty tanks he owns. Caps unchanged at 6 soldiers + 2 tanks, redeploy 90 s, despawn on loss/leave.
+- the 10% PLAZA TAX on other players' passive income (only passive; never Robux/offline; never the holder, his clan allies, novice-shielded players, or with PvP off).
+- the v237 chip + Central Plaza Tax info card (payer and holder).
+Unchanged: neutral guards / normal capture (OutpostDefenders: asleep while held, back 150 s after unheld). Clan holds have no Holder UserId, so no defenders or tax (same as before). Tester list kept, so flipping back to true restores owner-only.
+
+**PERF**: no new loops (server 2 s step, client chip 1 Hz only while showing). Tax is a few table ops per passive tick. Sim proves 20 takeovers in a row never leave more than 6+2 alive.
+
+**FILES**: PlazaDefenderConfig.luau; checks codebot_v235/v236/v237 + claude_bud_job74 J74-01 now assert the gate line `OwnerFirst = false`; sim tests public holder (Rando) defenders/tax/loss, gate-when-flipped-back, 20-takeover cap; tools/checks/codebot_v238.py; WE_Build pins → 238.
+
+**TESTING**: BuyPathStatic PASS=9900 FAIL=0; plaza sim 0 failed; codebot_v238 all PASS.
+
+**PHONE TEST (NEW server, no restart):** 1) a non-tester account (or Lau) captures the Plaza → their soldiers deploy, others see PLAZA TAX 10% / → name chip. 2) Someone else kills them and captures → old defenders vanish, new holder's deploy; leave it empty → red neutral guards return ~2.5 min later.
+
+codeCommit=`ac8378f` place=236 build=238
+
+---
+
+## v237 PUBLISHED (Code Bot Roblox, 2026-10-02 ~18:55 Dublin): Open Cloud place version **235**. Plaza tax chip says WHY + tap info card (owner-first kept)
+
+**WHY**: Shaun's phone test — Lau's chip read "TAXED 10% BY Shaun birrell" with no reason.
+**WHERE THE CHIP IS MADE (proven)**: `Client/Controllers/PlazaTaxController.luau` `ensureGui()` → ScreenGui `WE_PlazaTaxChip` > `Chip`; texts from `PlazaDefenderConfig.Tax`; placed by `PlazaTaxController.Rect` under RivalConfig.Layout's TARGETS pill, one row below every visible `WE_DoubleWeekend` / `WE_AdminAbuseChip` event chip. Bootstrap wires it (`safeInit("PlazaTaxController"`).
+
+**CHANGE**
+- Chip is now a 48 px, 3-line TextButton (fits the 142 px TARGETS column on an 800 px phone, no truncated name): payer `PLAZA TAX 10%` / `→ <holder>` / `TAP FOR INFO` (red edge). Holder: `PLAZA TAX +$X/s` / `10% from N players` / `TAP FOR INFO` (gold edge; N = players whose WE_PlazaTaxedBy is him). % always from `Tax.Rate`.
+- Tap → "Central Plaza Tax" card (HudLayout panel `PlazaTaxInfo`, one panel at a time, raises Modal; tap outside or big red CLOSE closes): payer body "<holder> controls the Central Plaza, so 10% of your passive income goes to them. Capture the Plaza to stop paying and collect tax from everyone else." + blue **SHOW ME THE PLAZA** = the world map's manual pin (`ObjectiveMarker.ShowWith{Pin=true}`, label PLAZA, at TerritoryConfig CentralPlaza, arrives at 40 studs). No teleport. Holder body: "You control the Central Plaza, so you collect 10% of every other player's passive income (N paying now). Keep holding the Plaza to keep earning." (CLOSE only).
+- Server unchanged. OwnerFirst still true (Shaun + Laumartinez26). PreferMesh OFF, StreamingEnabled untouched, no WE_Building*, no prices.
+
+**FILES**: PlazaTaxController.luau, PlazaDefenderConfig.luau (Tax texts), tools/sim/run_plaza_defenders_test.py (+ card texts), tools/checks/claude_bud_job74.py (J74-14 text), tools/checks/codebot_v237.py, WE_Build pins → 237.
+
+**TESTING**: BuyPathStatic PASS=9886 FAIL=0; codebot_v237 all PASS; plaza sim 0 failed; J74-14/16 PASS.
+
+**PHONE TEST (Shaun + Laumartinez26, NEW server — no restart):**
+1. Shaun captures the Plaza. Lau's chip (under TARGETS / 2x WEEKEND) reads PLAZA TAX 10% / → Shaun's name / TAP FOR INFO; Shaun's reads PLAZA TAX +$X/s / 10% from 1 player.
+2. Lau taps the chip → card explains the tax; SHOW ME THE PLAZA closes it and a PLAZA pin + line appears; CLOSE / tap outside closes.
+
+codeCommit=`98dbc91` budMerge=`9396f82` place=235 build=237
+
+---
+
+## v236 PUBLISHED (Code Bot Roblox, 2026-10-02 18:12 Dublin): Open Cloud place version **234**. JOB 74 Plaza defender fixes after Shaun's 17:54 phone test (owner-first kept)
+
+**ROOT CAUSES (proven from code)**
+1. Black block tank: `PlazaDefenders.BuildArmour` used `VehicleService._BuildVehicleModel` (procedural Part kit; every tank body in VisualAssetConfig is ModelAssetId 0), anchored as a dark box with an OilRigGuard gunner on top. → Now a REAL tank from Shaun's owned, audited Synty Polygon Military Vehicles pack (119390702773907, `Job67DressConfig.Packs.Synty`, 0 scripts) via new `Job67DressService.PackModel`; `PlazaDefenders.MountTank` makes the tank part of a Static CombatService NPC (invisible `TankHull` collider), so it shoots with the normal server NPC AI (VehicleFireRate 1.0, damage x1.5, HP x3). Map in `PlazaDefenderConfig.ArmourModels`.
+2. "Red guards respawn while I hold it": those were Shaun's OWN defenders — Infantry/HeavyInfantry/FortGuard NPC types with the hostile red kit colour (RigBuilder tints from it), redeploying every 90s. Real neutral guards already sleep while `Held`; v236 also never wakes them while `PlazaDefenders.HasHolder`.
+3. Not his army: defenders now use `SquadOrdersService.ArmyDefenderLook` (Squad rig 7703684779, `OrdersConfig.UnitColor`, Elite dress + beret, StrongerArmy × research × elite stats; side-effect free) via new SpawnNPC opts `VisualKind`/`KitColor`/`NoVisual`. Named "<Name>'s Soldier" / "<Name>'s Tank".
+4. Holder told "Defeat the defenders first!": `TerritoryService.playersInZone` noted EVERY player in the zone while defenders stood. Now holder/allies are kept (`OutpostDefenders.FriendlyTo` → `PlazaDefenders.FriendlyTo`), only others are blocked/noted. Cap was already 6 soldiers + 2 armour; the camo crowd in the screenshot was his army squad.
+
+**FILES**: CombatService/init.luau, SquadOrdersService.luau, Job67DressService.luau, Modules/PlazaDefenders.luau, Modules/OutpostDefenders.luau, TerritoryService/init.luau, PlazaDefenderConfig.luau, tools/checks/claude_bud_job74.py (J74-03), tools/sim/run_plaza_defenders_test.py, tools/checks/codebot_v236.py, WE_Build pins → 236.
+
+**TESTING**: BuyPathStatic PASS=9868 FAIL=0; codebot_v236 32 PASS; claude_bud_job74 J74-01..17 PASS; plaza sim 0 failed.
+
+**PHONE TEST (Shaun + Laumartinez26, NEW server — no restart):**
+1. Shaun captures the Plaza → up to 6 soldiers in his camo army look + up to 2 Synty tanks (if he owns tanks), no red guards. Shaun gets NO "Defeat the defenders first!".
+2. Laura walks in → soldiers and tanks shoot her; she is blocked until all are dead.
+3. Kill them all → they redeploy ~90s later while Shaun holds. Red neutral guards never appear while he holds.
+4. Shaun leaves / loses it → defenders gone; neutral guards back ~150s after it is unheld.
+Notes: tanks are static (face outward, turret doesn't rotate); first deploy may pause briefly while the Synty pack loads.
+
+codeCommit=`e8f5086` place=234 build=236
+
+---
+
 ## v235 PUBLISHED (Code Bot Roblox, 2026-10-02 17:22 Dublin): Open Cloud place version **233**. JOB 74 Central Plaza DEFENDERS + PLAZA TAX (owner-first)
 
 **COMPLETED**
@@ -625,6 +795,105 @@ codeCommit=`d80d20f` cherry=`e2d9986`/`b8b22dd` place=233 build=235
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 75 Scout Helicopter flight fix (2026-10-02) (branch `claude/desktop-bud`)
+Owner-first: `VehicleConfig.HeliFlight` (`OwnerFirst = true`, NEW-OWNER-FIRST tag), live per VEHICLE OWNER for Shaun +
+Laumartinez26 (11718087109). Anyone else flies the old way exactly. Check: `tools/checks/claude_bud_job75.py` (J75-01..08).
+Sim: `tools/sim/run_heli_flight_test.py` (22 ok).
+
+**ROOT CAUSE (from the code):**
+1. **Tilt at a hover.**
+   - Every heli key wears the attack-heli body 11240665977 (`VisualAssetConfig.heliRef`). It moves DriverSeat /
+     PassengerSeat1 to the cockpit: body seats (∓4, 5.4, -30) × BodyScale 0.45 = 1.8 studs to the side and 13.5 studs
+     forward of the chassis centre.
+   - The seats and the riders keep their mass. But `WE_DriveLV`, which holds the heli up (its Y axis is on in a
+     hover), pushes at `WE_DriveAttach` = the chassis centre (`createMovers`, CFrame.new()).
+   - So gravity on the rider × 13.5 studs is a steady nose-down torque (and × 1.8 a roll torque). That is about the
+     size of `WE_DriveAO.MaxTorque` (mass × |Chassis.Size|² × TorqueScale 3). The `AlignOrientation` (non-rigid) can't
+     cancel it, so the heli hangs nose-down / sideways.
+   - Cars already drive at their centre of mass (`_Ballast` / `_DriveAttachX`); aircraft never did. Fitted plane
+     bodies move their seats the same way.
+2. **"SPD 0".** The HUD showed the COMMANDED speed (`st.Fwd` / `st.Side`), which is 0 until the stick is pushed, not
+   the real speed.
+3. **Steering on a phone.** The default Roblox thumbstick is invisible until touched. In a heli its X yawed and its Y
+   throttled, with no hint that the stick flies at all; strafe was keyboard-only (Z/X).
+4. **Hard landings.** The old law descends at the full 20 studs/s right down to the ground, so ground hits bounce.
+
+**FIX (live owners):**
+- **Centre of mass.** The server marks a live owner's Heli / Plane (`WE_ComDrive`, + `WE_HeliFlight`) and moves
+  `WE_DriveAttach` to `AssemblyCenterOfMass` on every seat change (`VehicleService._AirCom`). The driving client
+  refreshes it every 0.5 s. The lift now adds no torque: a level hover.
+- **Touch.** The stick flies camera-relative: push = fly where the camera looks, sideways = strafe. The nose turns
+  toward the camera while the stick is pushed; a centred stick hovers and the camera looks around freely. ▲/▼ is
+  height. Pure `Laws.HeliCameraInput`. New hint "Stick: fly · camera: turn · ▲▼ height · hold EXIT to leave".
+- **Smaller tilts.** Nose-down at full speed is 9° (was 14); strafe roll 7° (was 12); turn bank is now about 5.6°
+  (was about 9.6°).
+- **SPD** = the real ground speed.
+- **Ground handling.**
+  - Gentle landing: descent is capped at 3 + 1.2 × height studs/s near the ground (5.4 at 2 studs).
+  - At 2.5 studs and not climbing, speed is capped at a 10 studs/s skid, so it never ploughs in or flings.
+  - Tilted past ~60°, it eases itself level (the car flip-recovery's limited spin).
+- **EXIT:** unchanged (hold EXIT in the air; the jump lock rules). An empty heli sinks at IdleSink to the ground, as
+  before.
+- **Other aircraft:**
+  - every heli key shares this controller;
+  - planes (bomber / jet store bodies) only get the centre-of-mass fix: their law is untouched (sim: Plane
+    ComDrive, no Flight).
+- **Layout:** ▲/▼ + EXIT keep their layout. The sim checks they sit clear of the top strip (the compass), the
+  thumbstick zone and the aircraft FIRE buttons at 844x390, 956x440, 800x360, 1024x471 and 1180x820. There is no
+  bottom minimap: the map is the full-screen one opened by tap.
+
+**PHONE RETEST (Shaun / Laumartinez26):**
+1. Spawn the Scout Helicopter at the helipad and press ▲. It should rise LEVEL (no nose-down, no lean) and hover level
+   when you let go. Also try with a passenger.
+2. Push the stick up: it flies where the camera looks and SPD shows real numbers. Swing the camera left while pushing:
+   the nose follows with a slight bank. Push the stick sideways: it strafes. Let go: it slows and hovers.
+3. Hold ▼ from high up: a fast descent that slows near the ground and touches down gently ("LANDED"). Skim the ground
+   fast: it skids slowly, no bounce or fling. Fly into a building: it stops, no flip.
+4. Hold EXIT in the air and on the ground: it works. ▲/▼ never cover the attack heli's FIRE buttons.
+5. Fly a jet / bomber: it flies as before (level, no new lean).
+
+## claude-bud JOB 76 ADMIN ABUSE WARLORD server-wide boss (2026-10-02; verify + finish Code Bot v242) (branch `claude/desktop-bud`)
+Check: `tools/checks/claude_bud_job76.py` (J76-01..10). Sims: `tools/sim/run_warlord_test.py` (13 ok) +
+`run_admin_abuse_test.py`.
+
+**ALREADY WORKING (v241 / v242, verified in code + sim):**
+- **Every server:** GIANT BOSS / WARLORD is a normal published action. One MessagingService message reaches every
+  server, each server applies it once (nonce), and STOP ALL despawns it everywhere.
+- **Announcement:** `AdminAbuseConfig.Actions.Boss.AnnounceText` ("⚠️ THE ADMIN IS HERE AND HE'S CAUSING CHAOS! ...")
+  goes to every player as the world-boss banner with "TAP TO TRACK" (a pin, no teleport). The boss bar is tap-to-pin
+  and reads ReplicatedStorage attributes, so late joiners see the live bar and a cleared one when he's gone.
+- **The boss:** a ×4 HeavyInfantry soldier rig.
+- **Reward:** a flat $500,000 as `world_boss` (EconomyService NEVER_MULTIPLIED, so never 2x) to every player in
+  `rec.LastHitBy`, once each. Plus the Boss Slayer badge 1033687066360587 (pcall, skipped if owned).
+- **No cooldown:** Cooldown 0 on the server and in the panel; a new press replaces the live one.
+- **Timer:** alive after 300 s → despawned by the 1 Hz timer, bar + pin cleared. Server close → STOP ALL.
+- **The panel** stays owner-only (AdminConfig in Request).
+- **Double Weekend world bosses:** 500K `world_boss` + the same badge, how-to card (CardTitle / CardSteps / TRACK),
+  spawn / down banners, start at `EventConfig.StartUnix` (21:00 Fri 2 Oct Dublin) via task.delay and stop at EndUnix.
+- **Cost of all ~10 servers at once:** one message and one NPC per server; the bar refresh is at most 4 Hz.
+
+**FIXED:**
+- **HP** = max(30,000, 5,000 × players) as Shaun asked: 30k up to 6 players, 50k on a full 10. It was 25k + 5k ×
+  players = 75k on a full server, which is about 5 minutes against the 300 s timer.
+- **Heavy weapon:** 20 damage / 1.5 shots a second / 110 studs / 140 aggro (the world-boss numbers). It had the plain
+  HeavyInfantry gun (16 / 1.6 / 85).
+- **Double pay:** NPC kill cash is now 0, so the killer gets the same flat 500K as everyone else. Before, he also got
+  the +$90 NPC kill cash.
+- **STOP ALL** now also clears the owner's WORLD BOSS TEST (`WorldBossService.StopTest`). The live Double Weekend
+  bosses are never removed; inside the window they come back after RespawnSeconds, the same as `/boss clear`.
+- **Pins:** `codebot_v242.py` and `run_admin_abuse_test.py` HP pins accept the new formula.
+- **Note:** the rig's gun is the soldier rig's own rifle scaled ×4. No new weapon model was added (it would need
+  WE_CHECK2).
+
+**PHONE RETEST (two servers):**
+1. Open the Admin Abuse panel and press GIANT BOSS.
+2. On both servers: the red banner "THE ADMIN IS HERE..." with TAP TO TRACK (it pins him), plus the WARLORD bar.
+3. Press it again at once: no WAIT. The old one is replaced.
+4. Fight him: about 30k HP with few players, 50k on a full server. Every hitter gets +$500,000 (not doubled during the
+   Double Weekend), and the Boss Slayer badge on the first kill.
+5. STOP ALL: the Warlord and any WORLD BOSS TEST bosses are gone on every server, and the bar clears. Rejoin: no stale
+   bar.
+
 ## claude-bud JOB 74 Central Plaza DEFENDERS + PLAZA TAX (2026-10-02; done before JOB 73) (branch `claude/desktop-bud`)
 All of it is behind `Shared/Configs/PlazaDefenderConfig.luau` (`OwnerFirst = true`, tagged NEW-OWNER-FIRST): it only
 runs while the HOLDER is Shaun (`AdminConfig.IsPlaytestOwner`) or Laumartinez26 (11718087109). Any other holder gets

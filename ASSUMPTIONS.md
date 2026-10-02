@@ -10222,3 +10222,50 @@ ds_territories.luau T3):
   light physics are the existing ones. Intact piece names are inferred from the recorded _Destroyed names; a miss
   keeps today's body.
 - Tank_USA-named pieces are not used (no real-country vehicles).
+
+## claude-bud JOB 66 Speed Trial (2026-10-02)
+- The product lives in its own SpeedTrialConfig (MonetizationConfig is byte-pinned); MonetizationService routes its id first.
+- The course follows the main road grid (x / z = -800, 0, 800) from the runner, so it always starts near him (never a fixed marker).
+- The prize is paid as "devproduct" (a purchase grant: never doubled by the 2x pass or DOUBLE WEEKEND).
+- The old long-walk pop-up idea from the first JOB 66 text is not built (the new contract is the Shop row + card).
+
+## claude-bud honest shop text (2026-10-02)
+- Hidden dev products (DevProducts AutoCollect / DoubleCash / VIPBoost, HideFromShop) keep their dev text (never shown).
+- Only in-game text changed; the Creator Hub purchase-prompt text is Code Bot's (noted in the handoff).
+
+## claude-bud JOB 71 ADMIN ABUSE (2026-10-02)
+- WE_Build is not bumped here (the brief asks for it; the house rule leaves it to Code Bot).
+- The boss reward goes to every player CombatService recorded as a hitter (rec.LastHitBy): "dealt damage" = hit it.
+- Crate / boss cash is paid as "supply_drop" (an event drop: the 2x pass never doubles it; the DOUBLE WEEKEND doubles it once).
+- The "LIVE" chip also shows while an owner action runs outside the window (until EndUnix; after the event only the banners show).
+- Generalising the DOUBLE WEEKEND code (Shaun's brief) meant scoping codebot_v211 / v205 byte pins on DoubleWeekendController /
+  DoubleEvent to their own builds.
+
+## claude-bud JOB 74 Plaza defenders + tax (2026-10-02)
+- "Soldiers matching their army tier" = a roster scaled by POWER (level, rebirths, army size). The army system has no
+  per-soldier tier to copy, so the tiers use the existing NPC guard types (Infantry -> Heavy -> Fort Guard).
+- "Tanks / armoured vehicles if unlocked" = a parked display of his best OWNED armour (the game's own vehicle model)
+  crewed by a Static heavy gunner NPC. No new vehicle AI: the game has no NPC driving AI to reuse, and a new one would
+  break the "reuse existing AI / no new loops" rule.
+- Alive holder defenders block the capture like the neutral guards: the point of "a captured Plaza is hard to take".
+- The holder's allies = clan allies (CombatService.IsClanAlly), the same rule as turrets and the army.
+- The tax is paid into the holder's ATM (PendingCash), like the passive income it comes from. The AddCash "passive"
+  fallback (only used when AccruePendingCash is missing) is not taxed: one tax point.
+- The tax rate display is cut / TickSeconds per payer, summed (WE_PlazaTaxPerSec). The chip is not tappable (no extra
+  tap target near TARGETS).
+
+## claude-bud JOB 75 heli flight (2026-10-02)
+- "Camera or thumbstick turns it": on touch the camera turns it (the nose follows the camera while the stick is pushed)
+  and the stick strafes. Keyboard and gamepad keep W/S + A/D yaw (Z/X / LB-RB strafe) unchanged.
+- The gate is per vehicle OWNER (the server marks the model), so the same heli flies the same for its pilot and
+  passengers.
+- Planes get only the centre-of-mass drive point (the same seat-shift cause); their flight law is untouched.
+- Ground / building safety = physics collisions + the skid cap + the gentle-landing cap + righting. There is no new
+  obstacle raycast (performance).
+
+## claude-bud JOB 76 Warlord (2026-10-02)
+- "About 50,000 HP (or 5k per player, min 30k)" = max(30,000, 5,000 × players).
+- "Heavy weapon" = the world-boss damage / rate / range on the soldier rig's rifle, not a new gun model (no unchecked
+  asset).
+- STOP ALL clears only a WORLD BOSS TEST, never the live Double Weekend bosses ("World Boss Test should also be
+  cleared").
