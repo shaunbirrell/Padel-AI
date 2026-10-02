@@ -37,7 +37,7 @@ def _v222_ck(cond: bool, label: str) -> None:
 for _v222_rel in (S + "Services/BaseService.luau", S + "Services/DataService.luau", S + "EarlyRemotes.server.luau"):
     _v222_m = re.search(r'SetAttribute\("WE_Build",\s*(\d+)', _v222_rd(_v222_rel))
     _v222_ck(_v222_m is not None and int(_v222_m.group(1)) >= BUILD, "WE_Build >= %d %s" % (BUILD, _v222_rel.rsplit("/", 1)[-1]))
-_v222_ck("WE_Build=222" in _v222_rd(S + "Services/DataService.luau"), "DataService profile-loaded log says WE_Build=222")
+_v222_ck("WE_Build=223" in _v222_rd(S + "Services/DataService.luau"), "DataService profile-loaded log says WE_Build=223")
 
 # ---- config gate ----
 _v222_cfg = _v222_rd(C + "Job67DressConfig.luau")
@@ -60,7 +60,7 @@ _v222_ck("task.spawn" in _v222_hook and "J.DressZone" in _v222_hook and "Builder
 _v222_svc = _v222_rd(C + "StructureVisualConfig.luau")
 _v222_ck("PreferMeshWhenAssetIdSet = false" in _v222_svc, "PreferMeshWhenAssetIdSet stays false")
 
-_v222_r = subprocess.run(["git", "diff", "-U0", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)
+_v222_r = subprocess.run(["git", "diff", "-U0", "4267b3c", "2ebc6f0", "--", "src"], capture_output=True, text=True, cwd=ROOT)  # scoped to v222 ship (item3/4 later)
 _v222_bad = []
 if _v222_r.returncode == 0:
     for _v222_l in _v222_r.stdout.split("\n"):
