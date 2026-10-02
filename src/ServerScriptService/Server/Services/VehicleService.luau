@@ -1875,6 +1875,10 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	pcall(VehicleService._VehicleHealth.ApplySeatAttributes, model, def)
 	-- Optional free Creator Store visual (non-colliding); Part kit stays authoritative
 	pcall(function()
+		-- claude-bud item 4: a Synty body first (SyntyVehicleConfig, owner-first), else today's body
+		if VisualAssetService.TryAttachSyntyVehicleVisual and VisualAssetService.TryAttachSyntyVehicleVisual(model, def.Id or "", family, ownerUserId) then
+			return
+		end
 		VisualAssetService.TryAttachVehicleVisual(model, def.Id or "", family, ownerUserId) -- v87: owner-only bodies (BodyRollout)
 	end)
 	-- owner asset list hook: turret dress on the kit's weapon mount (VisualAssetConfig.VehicleWeapons: each ref names its

@@ -441,6 +441,38 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud DRIVABLE SYNTY VEHICLES (2026-10-02, Shaun item 4) (branch `claude/desktop-bud`)
+**Flag:** `Shared/Configs/SyntyVehicleConfig` (NEW-OWNER-FIRST, by the vehicle owner). OFF = today's bodies.
+
+**Built:** Shaun's paid Synty Polygon Military Vehicles pack (119390702773907, already audited: 0 scripts) now dresses
+the drivable wheeled vehicles:
+
+| Vehicle | First candidate | Note |
+|---|---|---|
+| ArmoredTruck | `SM_Veh_Truck_01` | |
+| ArmedJeep | `SM_Veh_Pickup_Technical_01` | keeps its own gun visible |
+| ScoutCar | `SM_Veh_SUV_01` | |
+
+- **Dress-only,** through the existing store-body path (`VisualAssetService.TryAttachVehicleVisual`, Fit = Kit): the
+  Part-kit chassis still drives (same thumbstick controls, same light hinge physics, same seats), and the body never
+  collides.
+- `VisualAssetService.SyntyRef` tries each vehicle's candidate names in order and uses the first the pack really holds.
+  The pack splitter extracts the candidates via `pieceRefsFor`.
+- None found = today's body exactly; each missing name is logged once.
+- Tanks stay on their Part kits: you declined low-poly tanks earlier, and a hull would hide the kit turret.
+- VisualAssetConfig is untouched (byte-pinned).
+
+**Proof:** `tools/checks/claude_bud_synty_vehicles.py` (config, wiring, fallback, no tanks, the real config's refs in
+Luau).
+
+**Owed (Studio):**
+- The intact piece names: only the `_Destroyed` names are on record, and the intact ones are inferred from them. Code
+  Bot's `/zonereport`-style pack probe can list the real ones; add any to `Candidates`.
+- Yaw 180 (front direction) and seat height.
+
+**Test ON HIS PHONE:** spawn the Armored Truck, the Armed 4x4 and the Scout Car. Each wears the Synty body (or today's
+body if the name did not match). Drive with the thumbstick as before.
+
 ## claude-bud TURRET + WALL LOOKS ON ONE CONFIG (2026-10-02, Shaun item 3) (branch `claude/desktop-bud`)
 **What was there:**
 - Turrets already had 5 looks: the Minigun pack Lvl 1 / 3 / 5 / 8 / 10, by Turret Guns level 0 | 1-3 | 4-6 | 7-9 | 10.
