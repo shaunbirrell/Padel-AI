@@ -35,6 +35,11 @@ local EngagementConfig = {
 		{ Id = "PlazaWarWeek", Name = "PLAZA WAR WEEK", Window = "Week", PlazaBountyMult = 2 },
 		{ Id = "AirdropFrenzy", Name = "AIRDROP FRENZY", Window = "Weekend", AirdropIntervalSeconds = 180 },
 	} :: { { Id: string, Name: string, Window: string, CashMult: number?, PlazaBountyMult: number?, AirdropIntervalSeconds: number? } },
+	-- Code Bot v211 (owner 2026-10-02: "remove the AIRDROP FRENZY · 2d 23h left banner for everyone"): the weekly event's
+	-- top-of-screen banner (Client/Modules/EngagementClient, WE_EventBanner) is not built while this is false. DISPLAY
+	-- ONLY: the rotation, its effects (CashMult / PlazaBountyMult / AirdropIntervalSeconds: AIRDROP FRENZY still drops
+	-- every 180 s on its weekend) and EventAt are unchanged. true = the banner as before.
+	ShowEventBanner = false,
 
 	Boards = {
 		{ Id = "Richest", Title = "RICHEST", Store = "WE_LB_Cash_v1" },

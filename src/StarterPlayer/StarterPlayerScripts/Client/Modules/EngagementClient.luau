@@ -392,6 +392,9 @@ function EngagementClient.Init()
 			return
 		end
 		started = true
+		if E.ShowEventBanner == false then
+			return -- Code Bot v211: EngagementConfig.ShowEventBanner off = no event banner (the event's effects stay server-side)
+		end
 		-- banner
 		local okH, HudLayout = pcall(require, script.Parent.HudLayout)
 		local gui = Instance.new("ScreenGui")
