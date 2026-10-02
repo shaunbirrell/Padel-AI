@@ -152,6 +152,7 @@ safeInit("ArmyNearestController", safeRequire("ArmyNearestController", Controlle
 safeInit("NightExposureController", safeRequire("NightExposureController", Controllers:WaitForChild("NightExposureController", 5) :: Instance)) -- claude-bud JOB 54: the night exposure (owner-first)
 safeInit("AmbienceController", safeRequire("AmbienceController", Controllers:WaitForChild("AmbienceController", 5) :: Instance)) -- claude-bud JOB 59 B: the world ambience (owner-first)
 safeInit("ZoneRunController", safeRequire("ZoneRunController", Controllers:WaitForChild("ZoneRunController", 5) :: Instance)) -- claude-bud JOB 69 B: the zone-run how-to card + tracker
+safeInit("RangeLifeController", safeRequire("RangeLifeController", Controllers:WaitForChild("RangeLifeController", 5) :: Instance)) -- claude-bud JOB 68: the shooting range soldiers fire (client cosmetic, owner-first)
 safeInit("RivalController", safeRequire("RivalController", Controllers:WaitForChild("RivalController", 5) :: Instance)) -- claude-bud JOB 41 part C
 safeInit("NukeController", safeRequire("NukeController", Controllers:WaitForChild("NukeController", 5) :: Instance)) -- claude-bud JOB 33
 safeInit("AchievementController", safeRequire("AchievementController", Controllers:WaitForChild("AchievementController", 5) :: Instance)) -- claude-bud JOB 34

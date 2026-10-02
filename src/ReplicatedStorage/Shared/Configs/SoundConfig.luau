@@ -288,6 +288,11 @@ SoundConfig.Sounds["World.Gate"] = { Id = 9116875342, Volume = 0.45, RollOff = "
 SoundConfig.Sounds["Music.Rebirth"] = { Id = 1845181958, Volume = 0.25, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0, Bus = "Music" } -- Military March cut 1845181958 (menu / rebirth; for the rebirth screen to Loop)
 SoundConfig.Sounds["UI.Click2"] = { Id = 15675032796, Volume = 0.5, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0.05, Priority = 1, Bus = "UI", LengthSeconds = 0.3 } -- UI click 15675032796 (the alternative tap)
 SoundConfig.Sounds["Engine.Boat2"] = { Id = 9126201834, Volume = 0.4, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0, Bus = "Loop" } -- boat 9126201834 (the bigger hull's engine; for the boat engine families)
+-- claude-bud JOB 68: the shooting range soldiers (RangeLifeController; client cosmetic, owner-first). The live rifle /
+-- magazine / sand-impact files, quieter and short-range (3D; nothing heard past the range's 80-stud effect radius)
+SoundConfig.Sounds["World.RangeShot"] = { Id = 9113188870, Volume = 0.3, RollOff = "InverseTapered", MaxDistance = 80, Pitch = 1, CooldownSeconds = 0.05, Priority = 1, Bus = "World", MaxSeconds = 0.9, LengthSeconds = 0.5 } -- [PSE] "Assault Rifle 2 (SFX)" 9113188870
+SoundConfig.Sounds["World.RangeReload"] = { Id = 9113104509, Volume = 0.3, RollOff = "InverseTapered", MaxDistance = 40, Pitch = 1, CooldownSeconds = 0.3, Priority = 1, Bus = "World", LengthSeconds = 1.3 } -- [PSE] "Ammo Magazine 3 (SFX)" 9113104509
+SoundConfig.Sounds["World.RangeHit"] = { Id = 9118768193, Volume = 0.18, RollOff = "InverseTapered", MaxDistance = 40, Pitch = 1.2, CooldownSeconds = 0.08, Priority = 1, Bus = "World", LengthSeconds = 0.7 } -- [PSE] "Sand Impacts 5 (SFX)" 9118768193
 SoundConfig.Pass59 = {
 	Enabled = true,
 	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 59 B): Code Bot flips it after Shaun's phone test

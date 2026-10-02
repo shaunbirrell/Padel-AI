@@ -385,6 +385,47 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 68 (2026-10-02): SHOOTING RANGE LIFE (branch `claude/desktop-bud`)
+**Flag:** `Shared/Configs/RangeLifeConfig` Enabled + `OwnerFirst = true` (live for the viewing owner). OFF = today's
+still statues.
+
+**Built (client-side cosmetic only; nothing replicates, no remote, no damage):**
+- New `Client/Controllers/RangeLifeController`. Every base's Training Yard firing-line soldiers (`YardShooter1..3`:
+  the existing R-RIG statues of Roblox's Soldier with the rifle forward, no new models) fire at their lane's red
+  bullseye board on a loop. Each shot:
+  - a muzzle flash (1 particle, no light);
+  - a short 3D rifle sound;
+  - a sand-impact tick;
+  - a small dust puff;
+  - a bullet hole on the board face (4 per board, pooled).
+- Every 6 shots the soldier reloads: the rifle arm dips 38° for 2.2 s (a local Right Shoulder C0, restored after),
+  with the magazine sound. Statues are anchored, so a track never loads; this is the honest "reload animation" for a
+  base statue.
+- Mobile-light:
+  - one shared 4 Hz `task.wait` loop for every range; no per-NPC Heartbeat, no tree scans (shooters come from the
+    `WE_Rig` tag);
+  - effects only for shooters within 80 studs: the nearest 2 ranges, at most 4 per range, 8 total;
+  - shots 1.1–2.6 s apart.
+- Sound keys (SoundConfig): `World.RangeShot` (max 80 studs), `World.RangeReload` / `World.RangeHit` (40). They reuse
+  the live rifle / magazine / sand-impact files, so no new asset ids.
+
+**Proof:**
+- `tools/sim/run_range_life_test.py`:
+  - near-only pick (2 ranges × 3, nothing when far);
+  - 6 shots then a reload, every time;
+  - shots ≥ 1.1 s apart;
+  - reload ≥ 2.2 s;
+  - holes on the board face toward the shooter, inside the red ring.
+- `tools/checks/claude_bud_job68.py`: config, Bootstrap, no Heartbeat / RenderStepped / GetDescendants / lights /
+  remotes, one loop, the 3 sound keys 3D and short-range.
+
+**Owed (Studio / phone):** the flash position at the real rifle muzzle, the reload dip angle on the Soldier body, and
+the sound levels.
+
+**Test ON HIS PHONE:** walk to your Training Yard. The 3 soldiers at the firing line shoot their targets, you see
+flashes and holes appear on the boards, and now and then one lowers his rifle to reload. Walk 80+ studs away: it
+stops. Frame rate stays steady.
+
 ## claude-bud JOB 69 parts B + C (2026-10-02): HOW TO PLAY EVERYWHERE (branch `claude/desktop-bud`)
 **Flag:** `RebirthZonesConfig.Rebuild.HowTo` (owner-first via Rebuild). OFF = today's kiosks / rows / instant START
 exactly.

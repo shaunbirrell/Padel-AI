@@ -10196,3 +10196,10 @@ ds_territories.luau T3):
 - The jump / fire keep-out is the bottom-right 130 x 130 px (the Roblox jump button ~70 px + 16 px clear + margin).
 - Jobs start at their sites (OpsService prompts), so the job card sits on the menu GO (GO = track the job).
 - Rows generated in loops (e.g. extra checkpoints) without a HowTo keep their old text (HowTo.Line falls back).
+
+## claude-bud JOB 68 (2026-10-02): shooting range life
+- The range already has 3 R-RIG Soldier statues (rifles held forward); they are the shooters (no new models or
+  asset ids; JOB 67 packs not needed). 3 per range sits inside the brief's 3-4.
+- Anchored statues never load animation tracks (RigConfig.AnimateStatic = false), so "reload" is a local
+  shoulder dip + the magazine sound rather than an animation asset.
+- Owner-first by the VIEWER (cosmetic, client-side), like SoundConfig.Pass59.
