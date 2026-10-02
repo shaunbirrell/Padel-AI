@@ -324,6 +324,15 @@ local function pieceRefsFor(assetId: number): { AssetRef }
 		end
 	end
 	visit(VisualAssetConfig, 0)
+	-- claude-bud item 4: the Synty drivable-body candidates are pieces of their pack too (SyntyVehicleConfig)
+	local okS, SV = pcall(function(): any
+		return require(Shared.Configs.SyntyVehicleConfig)
+	end)
+	if okS and type(SV) == "table" and SV.PackId == assetId and SV.Refs then
+		for _, r in ipairs(SV.Refs()) do
+			table.insert(out, r :: AssetRef)
+		end
+	end
 	return out
 end
 
@@ -845,7 +854,15 @@ function VisualAssetService.IsInsertEnabled(): boolean
 end
 
 -- The vehicle's own ref, else its KitFamilyFallback ref (the whole ref: ChildName / Fit travel with the id).
+-- claude-bud item 4: a Synty body handed to resolveVehicleRef for ONE TryAttachVehicleVisual call, keyed by the calling
+-- thread (a concurrent spawn on another thread never sees it); set and cleared by TryAttachSyntyVehicleVisual
+local syntyFor: { [thread]: AssetRef } = setmetatable({}, { __mode = "k" }) :: any
+
 local function resolveVehicleRef(vehicleId: string, kitFamily: string?): AssetRef?
+	local handed = syntyFor[coroutine.running()]
+	if handed ~= nil then
+		return handed -- claude-bud item 4
+	end
 	-- claude-bud JOB 5a: a Robux-only clone (VehicleConfig Premium* rows) wears its base vehicle's body (LookId)
 	do
 		local okV, VC = pcall(function(): any
@@ -1238,6 +1255,46 @@ end
 	Clone catalog visual under hostModel, welded to primary, non-colliding.
 	Returns true if attached. Never destroys host Part kit.
 ]]
+-- claude-bud item 4: the Synty drivable body for this vehicle (SyntyVehicleConfig, owner-first by the vehicle owner): the
+-- first candidate the pack really holds, else nil (today's body). May yield once (the pack's first load).
+function VisualAssetService.SyntyRef(vehicleId: string, ownerUserId: number?): AssetRef?
+	local okS, SV = pcall(function(): any
+		return require(Shared.Configs.SyntyVehicleConfig)
+	end)
+	if not okS or type(SV) ~= "table" or SV.Enabled ~= true then
+		return nil
+	end
+	local okR, live = pcall(function(): boolean
+		return (require(Shared.Configs.RetentionConfig) :: any).Live(SV, ownerUserId) == true
+	end)
+	if not okR or live ~= true then
+		return nil
+	end
+	for _, r in ipairs(SV.RefsFor(vehicleId)) do
+		if templateForRef(r :: AssetRef) ~= nil then
+			return r :: AssetRef
+		end
+	end
+	return nil
+end
+
+-- claude-bud item 4: dress the vehicle with its Synty body (SyntyRef) through the SAME attach path; false = no Synty body
+-- (the caller then runs TryAttachVehicleVisual as before)
+function VisualAssetService.TryAttachSyntyVehicleVisual(hostModel: Model, vehicleId: string, kitFamily: string?, ownerUserId: number?): boolean
+	local ref = VisualAssetService.SyntyRef(vehicleId, ownerUserId)
+	if ref == nil then
+		return false
+	end
+	local co = coroutine.running()
+	syntyFor[co] = ref
+	local ok, res = pcall(VisualAssetService.TryAttachVehicleVisual, hostModel, vehicleId, kitFamily, ownerUserId)
+	syntyFor[co] = nil
+	if not ok then
+		warn("[VisualAssetService] Synty body failed:", vehicleId, res)
+	end
+	return ok and res == true
+end
+
 function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: string, kitFamily: string?, ownerUserId: number?): boolean
 	local ref = resolveVehicleRef(vehicleId, kitFamily)
 	if not ref then

@@ -867,7 +867,11 @@ local function prepareAimTemplate(template: Model, assetId: number, yawDeg: numb
 end
 
 -- claude-bud JOB 67: the turret tier (1..5) for a Turret Guns level (pure; VisualAssetConfig.Job67.TurretTierAt)
+-- claude-bud item 3: read from the ONE turret tier table (EndgameConfig.Defence.TurretTiers; VisualAssetConfig.Job67 mirrors it)
 function GateDefenseService.TurretTier(level: number): number
+	if EndgameConfigMod.TurretTier then
+		return EndgameConfigMod.TurretTier(level)
+	end
 	return (VisualAssetConfig :: any).TurretTierFor(level)
 end
 
@@ -978,7 +982,7 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder, tier: numb
 	local tierHitbox = false -- Code Bot v200: a tier ref's AimHitbox (prepareAimTemplate)
 	local J: any = (VisualAssetConfig :: any).Job67
 	if tier and J and gd then
-		local ref = gd[J.TurretTierKeys[tier] or ""]
+		local ref = gd[(EndgameConfigMod.Defence.TurretTiers and EndgameConfigMod.Defence.TurretTiers.Keys[tier]) or J.TurretTierKeys[tier] or ""] -- claude-bud item 3: the one tier table
 		local id = if ref then tonumber(ref.ModelAssetId) or 0 else 0
 		if id > 0 then
 			tierTemplate = if typeof(ref.ChildName) == "string" then loadCatalogPiece(id, ref.ChildName) else loadCatalogModel(id)

@@ -1,3 +1,15 @@
+## v223 PUBLISHED (Code Bot Roblox, 2026-10-02 09:47 Dublin): Open Cloud place version **221**. Turret+wall looks ONE config + drivable Synty vehicles OWNER-FIRST (Shaun items 3+4)
+- **Source:** cherry-pick `958cb67` + `60a9ded` (claude/desktop-bud) → phase-7-polish. WE_Build **223**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id / save-key / level change. Servers NOT restarted.
+- **COMPLETED (owner-first):**
+  - **Item 3:** `EndgameConfig.Defence.TurretTiers` is the one turret tier table (Mk I–Mk V / AutoGunT1–5). Guns upgrade text + base console wall row name the look (`EndgameConfig.TierText`, OwnerFirst = true). Save keys / levels / prices untouched.
+  - **Item 4:** `SyntyVehicleConfig` (OwnerFirst = true) dresses ArmoredTruck / ArmedJeep / ScoutCar with Shaun's Synty pack 119390702773907 via `VisualAssetService.TryAttachSyntyVehicleVisual`. Part-kit chassis still drives; tanks stay on kits. Missed piece name → today's body.
+- **HELD:** JOB 64 Referral (Creator Hub), JOB 62 notifications (WE_NOTIFY_KEY). DOUBLE WEEKEND proof checks stay on bud only.
+- **FILES:** `EndgameConfig.luau`, `EndgameService.luau`, `GateDefenseService.luau`, `BaseController.luau`, `SyntyVehicleConfig.luau`, `VehicleService.luau`, `VisualAssetService.luau`, `tools/checks/claude_bud_tier_looks.py`, `tools/checks/claude_bud_synty_vehicles.py`, `tools/checks/codebot_v223.py`, WE_Build pins 222 → 223, `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
+- **TESTING:** BuyPathStatic **PASS=9489 FAIL=0**; `claude_bud_tier_looks.py` + `claude_bud_synty_vehicles.py` + `codebot_v223.py`.
+- **Publish:** HTTP 200, versionNumber **221**, universe 10767159222 / place 97112936860418. **Servers NOT restarted** (join a new server for WE_Build 223).
+- **Phone test (Shaun, new server, WE_Build 223, owner-only):** (1) Engineering Bureau: Turret Guns row names the Mk. (2) Base console: Defensive Walls row says next wall look. (3) Upgrade Turret Guns past L1/L4/L7/L10: gun model gets bigger. (4) Spawn Armored Truck, Armed 4x4, Scout Car — each wears Synty body (or today's body if name miss); drive with thumbstick as before.
+- **NEXT:** flip `TierText.OwnerFirst` and `SyntyVehicleConfig.OwnerFirst` to false after phone OK. Studio owed on Synty: confirm intact piece names + yaw/seat height if body looks wrong.
+
 ## v222 PUBLISHED (Code Bot Roblox, 2026-10-02 09:20 Dublin): Open Cloud place version **220**. Rebirth-zone buildings OWNER-FIRST (Shaun item 2)
 - **Source:** cherry-pick `43380f0` (claude/desktop-bud) → phase-7-polish. WE_Build **222**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id / save-key change. Servers NOT restarted.
 - **COMPLETED:** each rebirth zone's MAIN block building becomes a free desert house on every plot still showing the Part build (`Job67DressConfig.ZoneBuildings`, `OwnerFirst = true`, NEW-OWNER-FIRST by the base owner). `Job67DressService.DressZone` runs from `RebirthZoneService` after the Part build, off-thread. Store-model zones left alone. 7 houses = 1,151 parts ≤ MaxPartsPerPlot 1300. Packs: Prinz 10055885754 / CAG 9939040273 / Imp 15654066038.
@@ -441,6 +453,75 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud DRIVABLE SYNTY VEHICLES (2026-10-02, Shaun item 4) (branch `claude/desktop-bud`)
+**Flag:** `Shared/Configs/SyntyVehicleConfig` (NEW-OWNER-FIRST, by the vehicle owner). OFF = today's bodies.
+
+**Built:** Shaun's paid Synty Polygon Military Vehicles pack (119390702773907, already audited: 0 scripts) now dresses
+the drivable wheeled vehicles:
+
+| Vehicle | First candidate | Note |
+|---|---|---|
+| ArmoredTruck | `SM_Veh_Truck_01` | |
+| ArmedJeep | `SM_Veh_Pickup_Technical_01` | keeps its own gun visible |
+| ScoutCar | `SM_Veh_SUV_01` | |
+
+- **Dress-only,** through the existing store-body path (`VisualAssetService.TryAttachVehicleVisual`, Fit = Kit): the
+  Part-kit chassis still drives (same thumbstick controls, same light hinge physics, same seats), and the body never
+  collides.
+- `VisualAssetService.SyntyRef` tries each vehicle's candidate names in order and uses the first the pack really holds.
+  The pack splitter extracts the candidates via `pieceRefsFor`.
+- None found = today's body exactly; each missing name is logged once.
+- Tanks stay on their Part kits: you declined low-poly tanks earlier, and a hull would hide the kit turret.
+- VisualAssetConfig is untouched (byte-pinned).
+
+**Proof:** `tools/checks/claude_bud_synty_vehicles.py` (config, wiring, fallback, no tanks, the real config's refs in
+Luau).
+
+**Owed (Studio):**
+- The intact piece names: only the `_Destroyed` names are on record, and the intact ones are inferred from them. Code
+  Bot's `/zonereport`-style pack probe can list the real ones; add any to `Candidates`.
+- Yaw 180 (front direction) and seat height.
+
+**Test ON HIS PHONE:** spawn the Armored Truck, the Armed 4x4 and the Scout Car. Each wears the Synty body (or today's
+body if the name did not match). Drive with the thumbstick as before.
+
+## claude-bud TURRET + WALL LOOKS ON ONE CONFIG (2026-10-02, Shaun item 3) (branch `claude/desktop-bud`)
+**What was there:**
+- Turrets already had 5 looks: the Minigun pack Lvl 1 / 3 / 5 / 8 / 10, by Turret Guns level 0 | 1-3 | 4-6 | 7-9 | 10.
+- Walls already had 5 looks: L1 Sandbag Line -> L5 Hesco Fortress, on every side since JOB 70.
+
+**The gap (proven):** three separate tables decided the turret tier, and nothing tied them together.
+- `VisualAssetConfig.Job67.TurretTierAt` (the gun model).
+- `EndgameConfig.DefenceVisuals.TierAt` (the extra turret / gate / vault parts).
+- The gameplay `Defence.GunsPct`.
+- The upgrade text never said which look a level gives.
+
+**Built:**
+- **One table, `EndgameConfig.Defence.TurretTiers`** (At / Names Mk I-Mk V / Keys AutoGunT1-5).
+  - `EndgameConfig.TurretTier` / `TurretTierName`, the gun model pick in GateDefenseService (`TurretTier` + the
+    central Keys) and `DefenceVisualTier` all read it.
+  - VisualAssetConfig is byte-pinned (codebot_v211 / v219), so it is untouched: its `Job67.TurretTierAt` / `TurretTierKeys`
+    and `DefenceVisuals.TierAt` stay as mirrors, and the check asserts they equal the central table.
+- **Text** (`EndgameConfig.TierText`, NEW-OWNER-FIRST):
+  - The Engineering Bureau Guns row says e.g. "+42% turret + guard dmg · Mk IV gun".
+  - The base console's Defensive Walls row says "Next look: Hesco Line" (from `Job67DressConfig.Walls.Tiers`, the same
+    saved level the walls are built from).
+  - OFF = today's text.
+- Save keys, levels and prices are untouched (no BaseConfig / MonetizationConfig edit).
+
+**Proof:** `tools/checks/claude_bud_tier_looks.py`, on the real configs in Luau.
+- For Guns L0-10, the gameplay tier = look tier = model key = visual-parts tier.
+- The mirrors equal the central table.
+- Each tier is a bigger, higher Minigun level than the last.
+- Damage rises every level.
+- The text names the Mk, and is today's text when off.
+- Walls L1-5 each have a distinct look on every face.
+
+**Test ON HIS PHONE:**
+1. Engineering Bureau: the Turret Guns row names the gun Mk you get.
+2. Base console: the Defensive Walls row says the next wall look.
+3. Upgrade Turret Guns past L1 / L4 / L7 / L10: the gun model gets bigger each time.
+
 ## claude-bud REBIRTH-ZONE BUILDINGS (2026-10-02, Shaun item 2) (branch `claude/desktop-bud`)
 **Flag:** `Job67DressConfig.ZoneBuildings` (`OwnerFirst = true`, tagged NEW-OWNER-FIRST; by the base owner). OFF =
 today's zones exactly.

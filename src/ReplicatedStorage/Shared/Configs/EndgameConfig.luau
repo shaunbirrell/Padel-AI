@@ -126,6 +126,22 @@ local EndgameConfig = {
 		VaultAtmPerLevel = 0.03, -- ATM raid x (1 - 0.03 x L): L10 = 7 %
 		InstantRebuildSeconds = 30,
 		InstantRebuildMin = 25_000,
+		--[[ claude-bud (Shaun item 3): THE turret tier table. The look (GateDefenseService.TurretTier + Keys: the Minigun pack level per
+			tier; VisualAssetConfig.Job67 keeps a pinned mirror), the extra Defence visual parts (DefenceVisualTier), the
+			gameplay (Guns level x GunsPct damage) and the upgrade text (DefenceText) all read the same Turret Guns level
+			through this one table. At[t] = the first Guns level of tier t + 1 (0 = Mk I, 1-3 Mk II, 4-6 Mk III, 7-9 Mk IV,
+			10 Mk V). Keys = the VisualAssetConfig.GateDefense pieces (Minigun pack Lvl 1 / 3 / 5 / 8 / 10, each bigger and
+			more detailed than the last). ]]
+		TurretTiers = {
+			At = { 1, 4, 7, 10 },
+			Names = { "Mk I", "Mk II", "Mk III", "Mk IV", "Mk V" },
+			Keys = { "AutoGunT1", "AutoGunT2", "AutoGunT3", "AutoGunT4", "AutoGunT5" },
+		},
+	},
+	-- claude-bud (Shaun item 3): the upgrade text names the look you get (turret Mk, wall style). OFF = today's text.
+	TierText = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud item 3): flip after Shaun's phone test
 	},
 	-- claude-bud JOB 55: honest Defence text + the exploit fixes, keyed by the BASE OWNER (OFF = the old rules / text):
 	--   * Turret Plating needs Walls L<AutoGunMinWallsLevel> (no turrets before that: it did nothing)
@@ -314,7 +330,7 @@ local EndgameConfig = {
 
 -- claude-bud JOB 53: the visual tier (0..4) of a Defence level (pure)
 function EndgameConfig.DefenceVisualTier(level: number): number
-	local at: any = EndgameConfig.DefenceVisuals.TierAt
+	local at: any = EndgameConfig.Defence.TurretTiers.At -- claude-bud item 3: the one tier table (DefenceVisuals.TierAt mirrors it)
 	local t = 0
 	for i, l in ipairs(at) do
 		if (tonumber(level) or 0) >= l then
@@ -353,12 +369,35 @@ function EndgameConfig.KeepDamage(oldMax: number, oldHp: number, newMax: number)
 	return math.clamp(newMax - (oldMax - oldHp), 1, newMax)
 end
 
+-- claude-bud item 3: the turret tier 1..5 for a Turret Guns level 0..10 and its name (pure; Defence.TurretTiers)
+function EndgameConfig.TurretTier(level: number): number
+	local t = 1
+	for i, l in ipairs(EndgameConfig.Defence.TurretTiers.At) do
+		if (tonumber(level) or 0) >= l then
+			t = i + 1
+		end
+	end
+	return t
+end
+
+function EndgameConfig.TurretTierName(level: number): string
+	return EndgameConfig.Defence.TurretTiers.Names[EndgameConfig.TurretTier(level)] or "Mk I"
+end
+
+function EndgameConfig.TierTextLive(userId: any): boolean
+	return RetentionConfig.Live(EndgameConfig.TierText, userId)
+end
+
 -- claude-bud JOB 55: what a Defence track gives at level L, honestly (pure; the Engineering Bureau rows + tests)
-function EndgameConfig.DefenceText(track: string, L: number): string
+-- claude-bud item 3: withTier = also name the turret look that level shows ("Mk III gun")
+function EndgameConfig.DefenceText(track: string, L: number, withTier: boolean?): string
 	local D = EndgameConfig.Defence
 	if track == "Plating" then
 		return string.format("+%d%% turret HP", D.PlatingPct * L)
 	elseif track == "Guns" then
+		if withTier == true then
+			return string.format("+%d%% turret + guard dmg · %s gun", D.GunsPct * L, EndgameConfig.TurretTierName(L))
+		end
 		return string.format("+%d%% turret + guard dmg", D.GunsPct * L)
 	elseif track == "Gate" then
 		return string.format("+%d%% gate + guard HP, -%d s rebuild", D.GatePct * L, D.GateRebuildPerLevel * L)

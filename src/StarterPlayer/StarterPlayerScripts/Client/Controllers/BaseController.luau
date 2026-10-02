@@ -325,6 +325,22 @@ local function refreshList(scrollToNext: boolean?)
 			desc.TextXAlignment = Enum.TextXAlignment.Left
 			desc.TextColor3 = Constants.Colors.Muted
 			desc.Text = def.Description
+			-- claude-bud item 3: the walls row names the look its next level builds (Job67DressConfig.Walls.Tiers = the
+			-- same saved DefensiveWalls level the visuals read)
+			if structureId == "DefensiveWalls" then
+				local okT, txt = pcall(function(): string?
+					local EC: any = require(Shared.Configs.EndgameConfig)
+					if not EC.TierTextLive(player.UserId) then
+						return nil
+					end
+					local J: any = require(Shared.Configs.Job67DressConfig)
+					local t = J.WallTier(if nextLevel <= def.MaxLevel then nextLevel else level)
+					return if t then (if nextLevel <= def.MaxLevel then "Next look: " else "Look: ") .. t.Name else nil
+				end)
+				if okT and txt then
+					desc.Text = txt
+				end
+			end
 			desc.TextTruncate = Enum.TextTruncate.AtEnd
 			desc.Parent = row
 
