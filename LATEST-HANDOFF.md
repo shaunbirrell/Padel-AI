@@ -1,3 +1,54 @@
+## v250 PUBLISHED (Code Bot Roblox, 2026-10-02 23:46 Dublin): Open Cloud place version **248**. Cherry-pick Claude code-review `14b4afe` only (not whole desktop-bud)
+
+**COMPLETED** (all PUBLIC — security / bug fixes, no owner-first)
+1. **MegaTank free-buy exploit**: EventVehicles can't be purchased/granted; spawn only as a live loan; tank drop skips seated players; destroy parked loans on expiry / STOP ALL.
+2. **DataService BindToClose** waits for pendingSave leave-saves (no shutdown data loss).
+3. **Clan names/tags** text-filtered; base markers use `ClanService.SafeTag`.
+4. **SPEED FOR ALL** no longer stacks on the Speed Pass (lands at 1.75x).
+5. **Warlord payout** AddCash pcall'd so one failure doesn't strand helpers.
+6. **AntiCamp** skips clan allies.
+7. **RemoteSetup** purchase print removed; BaseService dup-key only short strings.
+8. **AirBodyRig** kitRotor helper restored as `kitNamedParts`.
+
+**FILES**: AirBodyRig, RemoteSetup, AdminAbuseService, AntiCampService, BaseMarkerService, BaseService, ClanService, DataService, VehicleService, tools/sim/run_base_marker_test.py; WE_Build → 250.
+
+**TESTING**: BuyPathStatic / sims / rojo — see commit. PreferMesh OFF. No WE_Building*. No price changes. Publish **without** forced restart (players get it on next join). Deferred held (not included): JOB64 `bbb39ce`, JOB62 `00a76af`, DW-proof `a2864fb`.
+
+**PHONE TEST (NEW server / next join)**
+1. MEGA TANK can't be bought (server refuses); Admin Abuse FREE TANK DROP still works for players on foot; seated players keep their vehicle.
+2. Create clan with normal name/tag OK + tag over base; filtered word refused.
+3. SPEED FOR ALL + Speed Pass → same 1.75x as everyone else; back to pass speed after.
+4. Clan-mate standing in your base >90s is NOT sent home by AntiCamp.
+5. Warlord helpers all get paid even if one AddCash fails.
+
+**OPEN (from Claude handoff — do not implement here):** RemoteGate still observe-mode; mid-raid defence refill; Drone Hangar/Sweep empty ATM without recordAutoIncome; OneTime products not server-enforced; receipt partial-grant reorder; advisory session lock; NPC pool/respawn edge cases.
+
+codeCommit=`37389e9` cherry=`14b4afe` place=248 build=250
+
+---
+
+## v249 — Code Bot (admin 2x CASH + MEGA TANK seat) — place version 247, code 2129f84
+
+- Admin 2x CASH, root cause: EconomyService.cashMultFor joined the ADMIN ABUSE 2x to the DOUBLE WEEKEND with `math.max(DE.CashMult, abuse)` (claude-bud JOB 71, deliberate "no 4x"). With the weekend already at 2x, max(2, 2) = 2, so pressing the button changed nothing for anyone, Laumartinez26 included. Delivery was fine: it is owner-gated on the request, published to every server via MessagingService, and applies to all players (ReplicatedStorage CashBoostUntil). Both were on the same server, so a version mismatch played no part.
+- Fix (chose STACK): `DE.CashMult * abuse` (4x in the weekend) on the earned stack (passive into the ATM, kills, training), and abuse x the weekend's ExtraCashReasons (crates / supply drops, oil, jobs). Never-multiplied transfers are untouched. The server stamps WE_IncomeBoostX, so the HUD reads "+$X/s (4x)". Every server shows a banner: "2x CASH x 2x WEEKEND = 4x CASH for 10 MIN!" (or the plain 2x text outside the weekend). claude_bud_job71 was updated on purpose.
+- MEGA TANK, root cause: the Synty body (VisualAssetConfig MegaTank, Fit = "Kit", no BodyScale) is fitted to the kit chassis length (barrel included) and sits on the wheel bottom, so it is low. The hidden TrackedMBT kit's DriverSeat stays at chassis + 2.6 x 1.45 studs, and placeKitOnBody (which moves seats) only runs with BodyScale. Fix: ref.SeatOnRoof = 1.6. VisualAssetService.seatOnRoof rewelds every kit seat onto the fitted body's top right above it, sunk 1.6 studs (the turret hatch). Physics, kit and camera are unchanged (the camera follows the humanoid).
+- Checks: tools/checks/codebot_v249.py. BuyPathStatic FAIL=0. The codebot_v211 / v219 VisualAssetConfig identity checks skip "Code Bot v249" lines, and the BuyPathStatic vscale branch pin was updated.
+- No restart: servers already running keep the old max() and the old seat until they are replaced. Not tested in-game.
+
+## v248 — Code Bot (chat messages not showing) — place version 246, code d7bb64c
+
+- Symptom: the Roblox chat window (Here / Global / Friends tabs, "Say hi to everyone playing now!") showed typing indicators and an unread badge, but the message list stayed empty.
+- That window is Roblox's own TextChatService UI from the cross-server chat rollout. We have no custom chat GUI, no ShouldDeliverCallback, and nothing hides the chat CoreGui.
+- Root cause: default.project.json had NO TextChatService, so every rojo/Open Cloud publish shipped a place with no TextChatService config children. Without ChannelTabsConfiguration (Enabled), the new tabbed window doesn't attach RBXGeneral, so lines never land in "Here" (per a DevForum report). Secondary risk: FeatureController's global OnIncomingMessage built props for every line with no guard.
+- Fix: TextChatService (ChatVersion TextChatService, default channels/commands) plus ChatWindow, ChatInputBar, ChannelTabs and BubbleChat configurations, all Enabled, in default.project.json. OnIncomingMessage is now pcall-wrapped and returns nil for non-VIP senders.
+- Check: tools/checks/codebot_v248.py. BuyPathStatic FAIL=0. No restart, so players get this on their next join / new servers.
+- Not verified in-game. If it still happens, check the Creator Hub cross-server chat (Global) setting.
+
+## v247 — Code Bot (2 Oct 2026 21:07 IST) — place version 245, code ba1bdbb
+
+- **Two red boss bars mid-screen (Shaun 21:02, live DW)**: two bosses, two UIs: AdminAbuseController's WARLORD bar (360x34 at y 58, the v245 auto WARLORD at the Plaza, WE_AABossHp/Max/Pos) + WorldBossController's world-boss card (360x44 at y 94, the Dry Well DW boss, WE_WB_*).
+- **Fix (public)**: WorldBossController draws ONE 30 px chip for the nearest live boss of both kinds ("☠ WARLORD · 403m", "x2" when more are up), 4 px HP bar, red stroke, plate like the 2x WEEKEND chip; right column at the TARGETS card's x / width, under the lowest visible event chip (WE_DoubleWeekend / WE_AdminAbuseChip), CoreUISafeInsets; tap = ObjectiveMarker pin of the shown boss; 2 s refresh. AdminAbuseController.bossBar only clears an old bar. Mock: docs/proof/v247_boss_chip_mock.png. codebot_v242 check accepts the chip's pin. BuyPathStatic 10041/0. No restart.
+
 ## v246 PUBLISHED (Code Bot Roblox, 2026-10-02 20:46 Dublin): Open Cloud place version **244**. Cherry-pick Claude JOB 75 + JOB 76
 
 **COMPLETED**
@@ -795,6 +846,89 @@ codeCommit=`d80d20f` cherry=`e2d9986`/`b8b22dd` place=233 build=235
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud FULL CODE REVIEW (2026-10-02, at v247) (branch `claude/desktop-bud`)
+Shaun: "run through all the code for any problems or errors".
+
+**Automated sweep, all 402 Luau files (~202k lines):**
+- every file parses;
+- BuyPathStatic FAIL=0;
+- all 75 sims / tests pass;
+- rojo build and remote_audit OK.
+- The whole-project luau-lsp check reports 2,205 type complaints. Nearly all are annotation noise (pcall return
+  counts, untyped config fields). The one real hit: AirBodyRig `namedParts` (fixed below).
+
+Then five read-only reviews of the risky areas:
+- money / purchases / saves;
+- combat / NPCs / bosses;
+- vehicles;
+- bases / territory / raids / army;
+- remotes / client.
+
+Each finding was re-checked in the code before fixing. These are bug fixes, so they are live for everyone (no
+owner-first flag).
+
+**FIXED:**
+1. **CRITICAL: the event-only MEGA TANK could be bought for free and kept forever.** `VehicleService.getDef` also returns
+   `VehicleConfig.EventVehicles`, and the MegaTank row is cost 0 / Lv 1 / not premium, so
+   `RequestPurchaseVehicle("MegaTank")` saved `profile.Vehicles.MegaTank = true`. Now `VehicleService._EventOnly`:
+   Purchase and GrantVehicle refuse it, and RequestSpawn spawns it ONLY as a live event loan (so a save that already
+   owns it can't spawn it either).
+2. **The tank drop destroyed the player's own vehicle, even a heli / plane in flight (he fell).** `SpawnEventVehicle`
+   now skips a player who is seated.
+3. **A loaned tank escaped its 10 min expiry and STOP ALL** when an Extra Garage Slot parked it. Both now also
+   destroy a parked loan.
+4. **Data loss at shutdown.** `DataService` BindToClose returned before the PlayerRemoving leave-saves finished
+   (`UnloadProfile` clears the profile first, so BindToClose saw nothing to save). It now waits (25 s cap) for every
+   `pendingSave`, and never force-releases a lock with a save in flight.
+5. **SPEED FOR ALL gave Speed Pass owners 2.5x** (the pass watcher multiplied the event speed again). It now writes
+   default × 1.75 ÷ the pass rate, so the watcher lands exactly on 1.75x.
+6. **One failed payout stranded the other Warlord helpers.** The payout `AddCash` is now pcall'd (as in
+   WorldBossService), so the rest are paid and the bar clears.
+7. **AntiCamp sent clan allies home** (helping defend) with a 3 min lockout. Allies (`GateDefenseService.IsAlly`) are
+   now skipped.
+8. **Clan names / tags were never text-filtered**, yet tags show over every base to the whole server (Roblox rule).
+   CreateClan now refuses a name or tag the broadcast filter changes. The base marker shows only a filter-passed tag
+   (`ClanService.SafeTag`, cached, never yields), which covers old clans saved before this.
+9. **Log spam / unbounded memory from client strings.**
+   - The RemoteSetup print on every RequestPurchaseUpgrade is removed.
+   - BaseService `lastRemoteBuyAt` keys are now only a string of up to 48 characters.
+10. **AirBodyRig `kitRotor`** called a helper v90 deleted (latent: only the unused BODY_LIGHT_HELI /
+    BODY_TRANSPORT_HELI bodies use it). It is restored as `kitNamedParts` (the AIRLOOKS pin bans the old name).
+    `run_base_marker_test.py`'s fake ClanService gained `SafeTag`.
+
+**OPEN: SHAUN / CODE BOT TO DECIDE (not changed, gameplay or live-config calls):**
+- **RemoteGate is in "observe" mode** (`SecurityConfig.Rollout = "observe"`): no schema check, rate ceiling or flood
+  kick for anyone. Each handler's own checks + rate limits still apply (every one has them). Flip to "all" only after
+  reading the observe logs.
+- **Mid-raid defence refill (JOB 55's exploit) is still open.** Buying a DefensiveWalls level (or Base Tier) mid-raid
+  runs a full `GateDefenseService.SyncPlot`: gate, turrets and guards back at full HP. The $750 gate repair and the
+  HQ instant rebuild have no raid lock either. Options: block those buys while the base is under attack, or re-apply
+  the damage after the sync.
+- **Drone Hangar / Drone Sweep empty the ATM every 25 s without `recordAutoIncome`,** so raids see almost nothing
+  (near raid-immunity, the same reason the AutoCollect pass counts recent income).
+- **`OneTime = true` is not enforced server-side** (RecruitPack 49 R$, StarterRecruit5 5 R$). The flag only hides the
+  Shop row, so a re-prompted product pays again each time. Decide: grant once, or a fallback grant.
+- **A receipt that throws mid-grant** (after cash / soldiers are added, before the marker) answers NotProcessedYet with
+  the partial grant kept: a re-delivery grants twice. Rare; needs a careful reorder in MonetizationService.
+- **Session lock is advisory** (load continues after 12 s): a fast server hop during a slow leave-save can roll a
+  profile back.
+- **NPCs:**
+  - an NPC respawn is dropped when the 18-slot pool is full (camps slowly empty);
+  - an NPC destroyed without Died stays in `npcRecords`.
+- **Smaller ones:**
+  - AntiCamp cooldowns are keyed by plot (they carry to a new owner) and are cleared when the raider rejoins;
+  - a nuke whose launcher left mid-countdown skips the PvP / ally rules;
+  - a checkpoint double-kill can miss contributors;
+  - JOB 64 referral claim edge cases (owner-first, not live);
+  - unfiltered clan names inside the clan panel (members only);
+  - GetPlayerState unthrottled for 20 s after load.
+
+**PHONE TEST:**
+1. MEGA TANK can't be bought (no Garage row; the server refuses). The Admin Abuse FREE TANK DROP still works for
+   players on foot; a player who is driving keeps his vehicle.
+2. Create a clan with a normal name / tag: OK, and the tag shows over your base. A filtered word is refused.
+3. SPEED FOR ALL with the Speed Pass: the same speed as everyone else (1.75x), back to the pass speed after.
+4. A clan-mate standing in your base for more than 90 s is not sent home.
 ## claude-bud JOB 75 Scout Helicopter flight fix (2026-10-02) (branch `claude/desktop-bud`)
 Owner-first: `VehicleConfig.HeliFlight` (`OwnerFirst = true`, NEW-OWNER-FIRST tag), live per VEHICLE OWNER for Shaun +
 Laumartinez26 (11718087109). Anyone else flies the old way exactly. Check: `tools/checks/claude_bud_job75.py` (J75-01..08).
