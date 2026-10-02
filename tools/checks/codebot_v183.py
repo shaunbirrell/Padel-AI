@@ -65,12 +65,12 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 217'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 217'),
-    (S + "Services/DataService.luau", "WE_Build=217"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 217'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 218'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 218'),
+    (S + "Services/DataService.luau", "WE_Build=218"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 218'),
 ):
-    check(needle in read(rel), "CODEBOT v183: WE_Build=217 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v183: WE_Build=218 " + rel.rsplit("/", 1)[-1])
 
 CC = read(C + "CombatConfig.luau")
 blk = CC.split("SharedHostility = {")[1].split("\n}")[0] if "SharedHostility = {" in CC else ""

@@ -47,8 +47,8 @@ SET = read(CL + "Controllers/SettingsController.luau")
 
 # ---- build / the two public switches ----
 for rel in (S + "Services/BaseService.luau", S + "Services/DataService.luau", S + "EarlyRemotes.server.luau"):
-    check(('SetAttribute("WE_Build", 217)' in read(rel)) or (rel.endswith("DataService.luau") and "WE_Build=217" in read(rel)),
-          "WE_Build=217 " + rel.rsplit("/", 1)[-1])
+    check(('SetAttribute("WE_Build", 218)' in read(rel)) or (rel.endswith("DataService.luau") and "WE_Build=218" in read(rel)),
+          "WE_Build=218 " + rel.rsplit("/", 1)[-1])
 
 big = MC[MC.find("\t\tBigSign = {"):MC.find("\t\t},", MC.find("\t\tBigSign = {"))]
 guide = SDC[SDC.find("SupplyDropConfig.GuideHide = {"):SDC.find("\n}", SDC.find("SupplyDropConfig.GuideHide = {"))]

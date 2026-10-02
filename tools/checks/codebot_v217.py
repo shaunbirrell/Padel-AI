@@ -42,8 +42,8 @@ for rel in (
     S + "EarlyRemotes.server.luau",
 ):
     m = re.search(r'SetAttribute\("WE_Build",\s*(\d+)', read(rel))
-    check(m is not None and int(m.group(1)) >= BUILD, "WE_Build >= 217 " + rel.rsplit("/", 1)[-1])
-check("WE_Build=217" in read(S + "Services/DataService.luau"), "DataService profile-loaded log WE_Build=217")
+    check(m is not None and int(m.group(1)) >= BUILD, "WE_Build >= 218 " + rel.rsplit("/", 1)[-1])
+check("WE_Build=218" in read(S + "Services/DataService.luau"), "DataService profile-loaded log WE_Build=218")
 
 # ---- PropCollision LIVE FOR EVERYONE ----
 pc_i = CFG.find("PropCollision = {")
