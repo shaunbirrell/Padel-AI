@@ -915,7 +915,56 @@ local function loadCatalogPiece(assetId: number, childName: string): Model?
 	return model
 end
 
-local function spawnAutoGun(slot: number, at: CFrame, parent: Folder, tier: number?): TurretUnit?
+-- Code Bot v219: one invisible anchored Box hull over a turret (GateDefenseConfig.TurretHull, owner-first by the base
+-- owner). Square footprint centred on the aim part (so the Part-kit gun's PivotTo aim can turn it in place), sized from
+-- the gun's own parts, ground to the gun's top. CanQuery / CanTouch off: shots, LOS rays, the aim hitbox and
+-- groundYAt never see it, so the turret fires and takes hits exactly as before. Built once per gun (no loop).
+function GateDefenseService._AddTurretHull(model: Model, aim: BasePart, groundY: number, ownerUserId: number?): BasePart?
+	local H: any = (GateDefenseConfig :: any).TurretHull
+	if typeof(H) ~= "table" or not (require(ReplicatedStorage.Shared.Configs.RetentionConfig) :: any).Live(H, ownerUserId) then
+		return nil
+	end
+	if model:FindFirstChild("WE_TurretHull") then
+		return nil
+	end
+	local lo, hi = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name ~= "WE_TurretMarker" then
+			local cf, h = d.CFrame, d.Size * 0.5
+			local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
+			local e = Vector3.new(
+				math.abs(r.X) * h.X + math.abs(u.X) * h.Y + math.abs(l.X) * h.Z,
+				math.abs(r.Y) * h.X + math.abs(u.Y) * h.Y + math.abs(l.Y) * h.Z,
+				math.abs(r.Z) * h.X + math.abs(u.Z) * h.Y + math.abs(l.Z) * h.Z
+			)
+			lo, hi = lo:Min(cf.Position - e), hi:Max(cf.Position + e)
+		end
+	end
+	if lo.X == math.huge then
+		return nil
+	end
+	local c = aim.Position
+	local half = math.max(math.abs(hi.X - c.X), math.abs(lo.X - c.X), math.abs(hi.Z - c.Z), math.abs(lo.Z - c.Z))
+	local side = math.clamp(half * 2, tonumber(H.MinSide) or 2.6, tonumber(H.MaxSide) or 6)
+	local top = math.max(hi.Y, groundY + (tonumber(H.MinHeight) or 3))
+	local hull = Instance.new("Part")
+	hull.Name = "WE_TurretHull"
+	hull.Shape = Enum.PartType.Block
+	hull.Size = Vector3.new(side, top - groundY, side)
+	hull.CFrame = CFrame.new(c.X, (groundY + top) * 0.5, c.Z)
+	hull.Transparency = 1
+	hull.Anchored = true -- never welded: the catalog gun's aim turns only its aim part
+	hull.CanCollide = true
+	hull.CanQuery = false
+	hull.CanTouch = false
+	hull.CastShadow = false
+	hull.Massless = true
+	hull:SetAttribute("WE_Hull", true)
+	hull.Parent = model
+	return hull
+end
+
+local function spawnAutoGun(slot: number, at: CFrame, parent: Folder, tier: number?, ownerUserId: number?): TurretUnit?
 	local gd = (VisualAssetConfig :: any).GateDefense
 	local assetId = 0 -- the config decides (a missing key = the Part-built gun)
 	local yawDeg = 0
@@ -1004,6 +1053,7 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder, tier: numb
 	model:SetAttribute("GateAutoGun", true)
 	model:SetAttribute("FriendlyGate", true)
 	attachTurretVisualMarker(model, at - Vector3.new(0, at.Position.Y - groundY, 0)) -- on the ground the gun stands on
+	pcall(GateDefenseService._AddTurretHull, model, yawPart, groundY, ownerUserId) -- Code Bot v219: solid, invisible
 
 	-- Sandbag nest dress under gun
 	if gd and gd.SandbagNest and typeof(gd.SandbagNest.ModelAssetId) == "number" then
@@ -2424,7 +2474,7 @@ local function syncPlotNow(plotId: number)
 				local lvl = if eg and eg.DefenceLevelFor then tonumber(eg.DefenceLevelFor(ownerUserId, "Guns")) or 0 else 0
 				tier = GateDefenseService.TurretTier(lvl)
 			end
-			local t = spawnAutoGun(slot, at, folder, tier)
+			local t = spawnAutoGun(slot, at, folder, tier, ownerUserId)
 			if t then
 				t.Model:SetAttribute("WE_NestBase", at) -- claude-bud JOB 53: where DefenceVisuals plates / arms this nest
 				t.Outside = outside

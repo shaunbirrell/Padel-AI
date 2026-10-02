@@ -85,6 +85,19 @@ local GateDefenseConfig = {
 
 	-- Catalog ScaleTo longest-axis targets (studs)
 	AutoGunLongAxisStuds = 5.5, -- 4–6
+	-- Code Bot v219 (Shaun's phone, 2026-10-02: "base turrets can be walked through"): spawnAutoGun turned EVERY part of
+	-- the gun, its sandbag nest and its bags CanCollide = false (the catalog gun's welded meshes, the Part-kit gun, the
+	-- nest), so nothing of a turret was solid. Live (owner-first by the BASE owner): one invisible anchored Box hull per
+	-- AutoGun ("WE_TurretHull": CanCollide on, CanQuery / CanTouch off, so no shot, LOS ray or hit test ever sees it and
+	-- the turret fires and takes hits exactly as before); the visual meshes stay CanCollide = false (phones stay light).
+	-- Square footprint (it never needs to turn with the aim), Min..Max studs a side, from the ground to the gun's top.
+	TurretHull = {
+		Enabled = true,
+		OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot v219): flip after Shaun's phone test
+		MinSide = 2.6,
+		MaxSide = 6,
+		MinHeight = 3,
+	},
 	SandbagNestDiameterStuds = 8,
 
 	-- Walls level when AutoGuns appear (Design L1)

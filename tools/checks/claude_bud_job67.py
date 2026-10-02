@@ -28,7 +28,7 @@ _W = _j67_src("tools/wire-asset-ids.py")
 (ok if "('MinigunTurretPack', 'GATE DEFENSE', 'PENDING-GET', 109072907337393" in _W else bad)("CLAUDE-BUD J67: the pack has its registry row (promote / reject path)")
 _G = _j67_src("src/ServerScriptService/Server/Services/GateDefenseService.luau")
 (ok if ("local template = tierTemplate or loadCatalogModel(assetId)" in _G and "catalogRefusal(model)" in _G.split("local function loadCatalogPiece")[1].split("\nend\n")[0]
-    and "spawnAutoGun(slot, at, folder, tier)" in _G) else bad)(
+    and "spawnAutoGun(slot, at, folder, tier" in _G) else bad)(
     "CLAUDE-BUD J67: the turret tier model replaces today's gun only when promoted, through the same 40-part refusal (else today's gun)")
 _l = _j67_os.environ.get("LUAU") or (_j67_os.environ.get("LUAU_COMPILE", "").replace("luau-compile", "luau"))
 if _l and _j67_os.path.isfile(_l):

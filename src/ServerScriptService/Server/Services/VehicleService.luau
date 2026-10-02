@@ -1623,7 +1623,13 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		addPart(model, body, "SkidR", Vector3.new(0.25 * s, 0.25 * s, 7 * s), CFrame.new(wid * 0.5 * s, -1.3 * s, 0), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, true)
 		addPart(model, body, "SkidPadL", Vector3.new(0.9 * s, 0.2 * s, 1.2 * s), CFrame.new(-wid * 0.5 * s, -1.45 * s, 2 * s), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil, true)
 		addPart(model, body, "SkidPadR", Vector3.new(0.9 * s, 0.2 * s, 1.2 * s), CFrame.new(wid * 0.5 * s, -1.45 * s, 2 * s), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil, true)
-		addRotorDisc(model, body, s, 2.2, rotor * 0.48, accentCol)
+		-- Code Bot v219: the yellow neon disc read as a ring round the rotor (VehicleConfig.HeliRotorRing, owner-first)
+		local okRing, ringOff = pcall(function(): boolean
+			return (require(Shared.Configs.RetentionConfig) :: any).Live((require(Shared.Configs.VehicleConfig) :: any).HeliRotorRing, ownerUserId) == true
+		end)
+		if not (okRing and ringOff) then
+			addRotorDisc(model, body, s, 2.2, rotor * 0.48, accentCol)
+		end
 		addPart(model, body, "Accent", Vector3.new((wid - 0.4) * s, 0.12 * s, 0.35 * s), CFrame.new(0, 1.2 * s, -1 * s), accentCol, Enum.Material.Neon, nil, false)
 		addPart(model, body, "NavLight", Vector3.new(0.35 * s, 0.35 * s, 0.35 * s), CFrame.new(0, 1.6 * s, len * 0.4 * s), Color3.fromRGB(255, 60, 50), Enum.Material.Neon, Enum.PartType.Ball, false)
 		if attack then

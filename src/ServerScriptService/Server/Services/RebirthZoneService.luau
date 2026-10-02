@@ -53,6 +53,13 @@ local slotOk: { [number]: { [string]: boolean } } = {} -- plotId -> zoneId -> an
 local profileOwner: { [any]: number } = setmetatable({}, { __mode = "k" }) :: any -- profile -> userId
 local lastCollect: { [number]: number } = {}
 
+-- the plot's owner on this server (0 = none); Code Bot v219: the owner-first Slots gate reads it before any check
+local function ownerOfPlot(plotId: number): number
+	local bs = deps.BaseService
+	local owner = if bs and bs.GetOwnerUserId then bs.GetOwnerUserId(plotId) else nil
+	return if typeof(owner) == "number" then owner else 0
+end
+
 local function rotY(d: number): CFrame
 	return CFrame.Angles(0, math.rad(d), 0)
 end
@@ -190,6 +197,16 @@ local function clusterOf(p: Instance): Model?
 	return nil
 end
 
+-- Code Bot v219: something that moves (a parked / driven vehicle, a dropped crate, a ragdoll) is not a reason to give
+-- a zone no slot: the verdict is cached for the plot's life, so a jeep parked there once cost the zone for good
+local function transient(p: BasePart): boolean
+	if not p.Anchored then
+		return true
+	end
+	local m = p:FindFirstAncestorWhichIsA("Model")
+	return m ~= nil and (m:FindFirstChildWhichIsA("VehicleSeat", true) ~= nil or m:GetAttribute("WE_Vehicle") ~= nil)
+end
+
 local function checkSlotAt(plotId: number, zoneId: string, frame: CFrame?, a: any): boolean
 	local cache = slotOk[plotId]
 	if cache == nil then
@@ -224,6 +241,9 @@ local function checkSlotAt(plotId: number, zoneId: string, frame: CFrame?, a: an
 		local m = p:FindFirstAncestorWhichIsA("Model")
 		if m and m:FindFirstChildOfClass("Humanoid") then
 			continue -- a character / NPC standing there
+		end
+		if ZC.RebuildLive(ownerOfPlot(plotId), "Slots") and transient(p) then
+			continue -- Code Bot v219 (owner-first with Rebuild.Slots): a vehicle / loose part is not a blocker
 		end
 		local cl = clusterOf(p)
 		local src = if cl then string.match(tostring(cl:GetAttribute("WE_Cluster")), "^([^:]+)") else nil
@@ -335,6 +355,9 @@ local function checkApronAt(plotId: number, zoneId: string, frame: CFrame?, a: a
 		if m and m:FindFirstChildOfClass("Humanoid") then
 			continue
 		end
+		if ZC.RebuildLive(ownerOfPlot(plotId), "Slots") and transient(p) then
+			continue -- Code Bot v219
+		end
 		local cl = clusterOf(p)
 		local src = if cl then string.match(tostring(cl:GetAttribute("WE_Cluster")), "^([^:]+)") else nil
 		if cl and src and Z.ClearableSources[src] == true then
@@ -357,9 +380,40 @@ local resolved: { [string]: { [string]: any } } = {} -- "<plotId>:<alts>" -> zon
 local warnedBlocked: { [string]: boolean } = {}
 
 local function altsFor(plotId: number): boolean
-	local bs = deps.BaseService
-	local owner = if bs and bs.GetOwnerUserId then bs.GetOwnerUserId(plotId) else nil
-	return typeof(owner) == "number" and ZC.RebuildLive(owner, "Slots")
+	local owner = ownerOfPlot(plotId)
+	return owner ~= 0 and ZC.RebuildLive(owner, "Slots")
+end
+
+-- Code Bot v219: a plot whose last resolve left a zone without a slot is resolved again on the next Refresh (join /
+-- rebirth / upgrade; no loop): only the NEGATIVE verdicts are dropped, so every zone that has a slot keeps it
+local function retryBlocked(plotId: number)
+	if not altsFor(plotId) then
+		return
+	end
+	local key = plotId .. ":1"
+	local res = resolved[key]
+	if res == nil then
+		return
+	end
+	local any = false
+	for _, sl in pairs(res) do
+		if sl == false then
+			any = true
+		end
+	end
+	if not any then
+		return
+	end
+	resolved[key] = nil
+	for _, cache in ipairs({ slotOk[plotId], apronOk[plotId] }) do
+		if cache then
+			for k, v in pairs(cache) do
+				if v == false then
+					cache[k] = nil
+				end
+			end
+		end
+	end
 end
 
 local function slotsOf(plotId: number): { [string]: any }
@@ -804,7 +858,7 @@ local function addActivityPrompt(player: Player, zoneId: string, panel: BasePart
 end
 
 -- claude-bud JOB 69: the ZONE BOARD (a small console in the base, BoardSpots by zone order) carrying the zone's prompts
-function RebirthZoneService._ZoneBoard(player: Player, plotId: number, zoneId: string, lv: number)
+function RebirthZoneService._ZoneBoard(player: Player, plotId: number, zoneId: string, lv: number, locked: boolean?)
 	local idx = table.find(ZC.SlotOrder, zoneId) or 1
 	local spot = ZC.BoardSpots[math.min(idx, #ZC.BoardSpots)]
 	local ok, pos = pcall(PlotFrame.PlotPosition :: any, plotId)
@@ -838,6 +892,12 @@ function RebirthZoneService._ZoneBoard(player: Player, plotId: number, zoneId: s
 	local zc = Z.Zones[zoneId]
 	t.Text = "ZONE BOARD\n" .. string.upper(if zc then zc.Name else zoneId)
 	t.Parent = sg
+	if locked then
+		local rz = RebirthConfig.Zones[zoneId]
+		t.Text ..= string.format("\nUnlocks at Rebirth %d", if rz then rz.Tier or 1 else 1)
+		folder:SetAttribute("WE_ZoneLocked", true)
+		return
+	end
 	addPrompts(player, plotId, zoneId, board, lv)
 end
 
@@ -854,8 +914,9 @@ local function buildZone(player: Player, profile: any, plotId: number, zoneId: s
 	if not checkSlot(plotId, zoneId) then
 		-- claude-bud JOB 69: no slot anywhere (fallbacks on): a ZONE BOARD inside the base so it can still be bought /
 		-- upgraded (the zone's own buy / upgrade prompts on a small board; nothing is ever silently skipped)
-		if altsFor(plotId) and reached(profile, zoneId) then
-			pcall(RebirthZoneService._ZoneBoard, player, plotId, zoneId, levelOf(profile, zoneId))
+		if altsFor(plotId) then
+			-- Code Bot v219: a zone he has not reached yet gets its board too ("Unlocks at Rebirth N"), never nothing
+			pcall(RebirthZoneService._ZoneBoard, player, plotId, zoneId, levelOf(profile, zoneId), not reached(profile, zoneId))
 		end
 		return
 	end
@@ -999,6 +1060,7 @@ function RebirthZoneService.Refresh(player: Player)
 		end
 	end
 	plotOf[player.UserId] = plotId
+	pcall(retryBlocked, plotId) -- Code Bot v219
 	if zonesLive(player.UserId) then
 		for _, zoneId in ipairs(RebirthConfig.ZoneOrder) do
 			local ok, err = pcall(buildZone :: any, player, profile, plotId, zoneId)

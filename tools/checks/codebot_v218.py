@@ -48,7 +48,7 @@ for rel in (
 ):
     m = re.search(r'SetAttribute\("WE_Build",\s*(\d+)', read(rel))
     check(m is not None and int(m.group(1)) >= BUILD, "WE_Build >= 218 " + rel.rsplit("/", 1)[-1])
-check("WE_Build=218" in read(S + "Services/DataService.luau"), "DataService profile-loaded log WE_Build=218")
+check("WE_Build=219" in read(S + "Services/DataService.luau"), "DataService profile-loaded log WE_Build=219")
 
 # ---- Rebuild OwnerFirst + Slots + HowTo ----
 rb_i = RZ.find("cfg.Rebuild = {")

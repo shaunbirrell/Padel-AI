@@ -78,12 +78,12 @@ def _cb180_skus(src):
 
 # ── build pins ──
 for _rel, _needle in (
-    (_cb180_S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 218'),
-    (_cb180_S + "Services/DataService.luau", 'SetAttribute("WE_Build", 218'),
-    (_cb180_S + "Services/DataService.luau", "WE_Build=218"),
-    (_cb180_S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 218'),
+    (_cb180_S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
+    (_cb180_S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
+    (_cb180_S + "Services/DataService.luau", "WE_Build=219"),
+    (_cb180_S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
 ):
-    _cb180_check(_needle in _cb180_read(_rel), "CODEBOT v180: WE_Build=218 " + _rel.rsplit("/", 1)[-1])
+    _cb180_check(_needle in _cb180_read(_rel), "CODEBOT v180: WE_Build=219 " + _rel.rsplit("/", 1)[-1])
 
 # ── the two new SKUs: Ids + display prices ──
 _cb180_MON = _cb180_read(_cb180_C + "MonetizationConfig.luau")

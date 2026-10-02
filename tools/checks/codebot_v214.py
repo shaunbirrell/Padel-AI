@@ -40,7 +40,7 @@ def _c(cond, label):
 
 
 _bud = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
-_own = 'SetAttribute("WE_Build", 218)' in _r(S + "Services/DataService.luau")
+_own = 'SetAttribute("WE_Build", 219)' in _r(S + "Services/DataService.luau")
 if not _bud:
     for _rel, _needle in (
         (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", '),

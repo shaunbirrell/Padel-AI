@@ -57,12 +57,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 218'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 218'),
-    (S + "Services/DataService.luau", "WE_Build=218"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 218'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/DataService.luau", "WE_Build=219"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
 ):
-    check(needle in read(rel), "CODEBOT v199: WE_Build=218 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v199: WE_Build=219 " + rel.rsplit("/", 1)[-1])
 
 VA = read(C + "VisualAssetConfig.luau")
 j67 = VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in VA else ""
@@ -85,7 +85,7 @@ piece = GD.split("local function loadCatalogPiece")[1].split("\nend\n")[0] if "l
 check(
     "local function loadCatalogPiece(" in GD
     and "catalogRefusal(model)" in piece
-    and "spawnAutoGun(slot, at, folder, tier)" in GD
+    and "spawnAutoGun(slot, at, folder, tier" in GD
     and "local template = tierTemplate or loadCatalogModel(assetId)" in GD,
     "CODEBOT v199: GateDefenseService tier pack loader + 40-part refusal fallback",
 )
