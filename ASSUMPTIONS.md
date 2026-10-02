@@ -10175,3 +10175,10 @@ ds_territories.luau T3):
 - Built with Id 0: creating the products needs the Open Cloud key (Code Bot). The 5 R$ price is Shaun-approved.
 - The 5 R$ offer replaces the 49 R$ card only for players Starter5 is live for (one soft-offer slot, never two cards).
 - The boost chip shows any running cash boost (codes, Recruit Pack, the 5 R$ boost) for those players.
+## claude-bud JOB 70 (2026-10-02): collision hulls + one wall style
+- "LIVE FOR EVERYONE" is the JOB 70 fix (PropCollision.OwnerFirst = false); the JOB 67 visual blocks (Walls /
+  BaseProps OwnerFirst) are left to the big flip (reversible: one line each).
+- Hulls are CanQuery = true (the guard asks for it): sandbags / crates are real cover for shots and line of sight.
+- L3 is renamed "Hesco Line" (Hesco on every face; it was "Hesco Gate", gate face only); only the
+  WE_WallTierName attribute shows the name.
+- Hesco may stretch up to 2.6x its natural length (was 2.0) so every face fits the 14-block / 241k-tri budget.

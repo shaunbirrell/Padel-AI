@@ -38,6 +38,7 @@ local Job67DressConfig = {
 		PrinzHouses = 10055885754, -- Desert Houses (PrinzAaron, free): 3 houses, 459 parts total, 18,440 tris, 0 scripts (batch 2)
 		CagCamp = 9939040273, -- CAG Desert house Camp (Jhiyandrino, free): 1 house, 164 parts, 46,740 tris, 0 scripts (batch 2)
 		ImpHouse = 15654066038, -- Desert House (ImParadoxial, free): 281 parts, 41,774 tris, 0 scripts (24 FX + 16 lights stripped)
+		SyntyCity = 6933556508, -- claude-bud JOB 70: Roblox's Synty City pack (creator Roblox; already loads live for VisualAssetConfig): the pallet
 	},
 	PackTriangles = {
 		Sandbags = 149263,
@@ -82,6 +83,33 @@ local Job67DressConfig = {
 		TrenchLine = { Pack = "Sandbags", MeshId = 73339338434094 }, -- 13.4 long trench sandbag run
 		TrenchCurve = { Pack = "Sandbags", MeshId = 99053079683491 }, -- 11.7 long
 		TrenchNest = { Pack = "Sandbags", MeshId = 108744101942786 }, -- 15.3 x 11.1 x 8.3 sandbag emplacement
+		Pallet = { Pack = "SyntyCity", Name = "PolygonCity_Props_SM_Prop_Pallet_01" }, -- claude-bud JOB 70: wooden pallet (Roblox Synty City)
+	},
+
+	--[[ claude-bud JOB 70 (URGENT, LIVE FOR EVERYONE: OwnerFirst = false, owner-approved, no owner test step): no
+		walk-through dressing. Every placed prop / wall visual segment (Job67DressService.Place / FitLine) gets ONE cheap
+		invisible Box hull (createHull): an anchored Part, Shape Block, sized to the visual's bounds, CanCollide + CanQuery
+		on (players, soldiers, shots), CanTouch off, Transparency 1, no shadow. The visual mesh parts stay CanCollide off
+		(no mesh collision). No per-frame physics. Every piece key belongs to exactly one category below
+		(tools/checks/claude_bud_job70.py fails on a piece without one). ]]
+	PropCollision = {
+		Enabled = true,
+		OwnerFirst = false, -- LIVE FOR EVERYONE (Shaun approved JOB 70 straight to live)
+		Hull = "Box", -- Shape Block
+		VisualCanCollide = false,
+		HullCanCollide = true,
+		HullCanQuery = true,
+		MinHullStuds = 0.6, -- a hull is never thinner than this
+		MaxHullsPerFolder = 220, -- safety cap per wall / prop folder (walls ~50, props <= 140)
+		Categories = {
+			Sandbag = { "SandbagLine", "SandbagStack", "SandbagStackLow", "TrenchLine", "TrenchCurve", "TrenchNest" },
+			Hesco = { "HescoBlock" },
+			Concrete = { "Blockade", "Barrier" },
+			Crate = { "AmmoCrate", "AmmoCrateB", "LongCrate", "AirDrop", "WoodCrateBig", "LargeCrate", "SupplyBox", "WeaponCase", "TexCrateA", "TexCrateB", "TexCrateC", "TexCrateD" },
+			Pallet = { "Pallet" },
+			BarbedWire = { "BarbedWire", "BarbedWireB" },
+			Misc = { "Drum", "GasBarrel", "GasBarrelB", "JerryCan", "Generator", "SatComms" },
+		},
 	},
 
 	--[[ Walls: decoration only, around the Part ring StructureKitBuilder.SyncPerimeterWalls builds (the Part walls stay
@@ -95,14 +123,26 @@ local Job67DressConfig = {
 		Enabled = true,
 		OwnerFirst = true, -- NEW-OWNER-FIRST
 		HescoStretch = 2.0,
+		HescoStretchMax = 2.6, -- claude-bud JOB 70: a Hesco run may stretch up to this so EVERY face fits MaxHesco
 		LineStretch = 1.3,
 		GateClear = 32,
+		--[[ claude-bud JOB 70: ONE wall style per tier for EVERY face (front / gate, left side, right side, rear: the
+			"Sides" face is both side walls). WallStyle names the look; Hesco / Lines list the faces it covers, and every tier
+			covers all three face groups, so no side ever keeps the old Part look or a front-only dressing. Progressive:
+			L1 a sandbag line on every face -> L2 a 2-row sandbag wall + corner stacks -> L3 Hesco on every face + wire ->
+			L4 + more wire + blockades -> L5 + more stacks / wire / blockades + trench nests. A Hesco tier that cannot fit
+			MaxHesco even at HescoStretchMax dresses EVERY face with its FallbackStyle instead (never a mix). ]]
+		WallStyle = {
+			Line = { Rows = 1 },
+			Wall = { Rows = 2 },
+			Hesco = { Hesco = true, FallbackStyle = "Wall" },
+		},
 		Tiers = {
-			[1] = { Name = "Sandbag Line", Hesco = {}, Lines = { "Gate" }, GateStacks = 2, CornerStacks = false, Wire = 0, Blockades = 0, Trench = false, MaxHesco = 0 },
-			[2] = { Name = "Sandbag Wall", Hesco = {}, Lines = { "Gate", "Sides" }, GateStacks = 4, CornerStacks = true, Wire = 0, Blockades = 0, Trench = false, MaxHesco = 0 },
-			[3] = { Name = "Hesco Gate", Hesco = { "Gate" }, Lines = { "Sides" }, GateStacks = 4, CornerStacks = true, Wire = 2, Blockades = 0, Trench = false, MaxHesco = 6 },
-			[4] = { Name = "Hesco Wall", Hesco = { "Gate", "Sides" }, Lines = { "Rear" }, GateStacks = 4, CornerStacks = true, Wire = 4, Blockades = 2, Trench = false, MaxHesco = 12 },
-			[5] = { Name = "Hesco Fortress", Hesco = { "Gate", "Sides", "Rear" }, Lines = { "Rear" }, GateStacks = 6, CornerStacks = true, Wire = 6, Blockades = 4, Trench = true, MaxHesco = 14 },
+			[1] = { Name = "Sandbag Line", WallStyle = "Line", Hesco = {}, Lines = { "Gate", "Sides", "Rear" }, GateStacks = 2, CornerStacks = false, Wire = 0, Blockades = 0, Trench = false, MaxHesco = 0 },
+			[2] = { Name = "Sandbag Wall", WallStyle = "Wall", Hesco = {}, Lines = { "Gate", "Sides", "Rear" }, GateStacks = 4, CornerStacks = true, Wire = 0, Blockades = 0, Trench = false, MaxHesco = 0 },
+			[3] = { Name = "Hesco Line", WallStyle = "Hesco", Hesco = { "Gate", "Sides", "Rear" }, Lines = {}, GateStacks = 4, CornerStacks = true, Wire = 2, Blockades = 0, Trench = false, MaxHesco = 14 },
+			[4] = { Name = "Hesco Wall", WallStyle = "Hesco", Hesco = { "Gate", "Sides", "Rear" }, Lines = {}, GateStacks = 4, CornerStacks = true, Wire = 4, Blockades = 2, Trench = false, MaxHesco = 14 },
+			[5] = { Name = "Hesco Fortress", WallStyle = "Hesco", Hesco = { "Gate", "Sides", "Rear" }, Lines = {}, GateStacks = 6, CornerStacks = true, Wire = 6, Blockades = 4, Trench = true, MaxHesco = 14 },
 		},
 	},
 
@@ -136,7 +176,7 @@ local Job67DressConfig = {
 			},
 			Crates = {
 				{ { "TexCrateA", 0, 0, 0 }, { "TexCrateD", 4.6, 0.2, 10 } },
-				{ { "WoodCrateBig", -6.2, 0.4, 0 }, { "TexCrateB", 1.6, 4.2, -15 } },
+				{ { "WoodCrateBig", -6.2, 0.4, 0 }, { "TexCrateB", 1.6, 4.2, -15 }, { "Pallet", -1.4, -5.2, 10 } }, -- claude-bud JOB 70: + a pallet
 				{ { "LongCrate", 6.8, 4.6, 90 }, { "TexCrateC", -2.4, 4.6, 0 } },
 				{ { "SupplyBox", -6.4, 6.4, 0 }, { "AmmoCrate", 0, -4.6, 0 } },
 				{ { "AirDrop", 10.6, -0.6, 0 }, { "LargeCrate", -11.8, 0.4, 0 } },
@@ -313,6 +353,50 @@ function Job67DressConfig.PropTier(levelSum: number): number
 		end
 	end
 	return t
+end
+
+-- claude-bud JOB 70: the ONE wall style of a saved tier, the same for every face (pure; nil at 0)
+function Job67DressConfig.WallStyleFor(level: number): any
+	local t = Job67DressConfig.WallTier(level)
+	if t == nil then
+		return nil
+	end
+	local st = Job67DressConfig.Walls.WallStyle[t.WallStyle]
+	return { Kind = t.WallStyle, Rows = st.Rows or 1, Hesco = st.Hesco == true, FallbackStyle = st.FallbackStyle, Faces = { "Gate", "Sides", "Rear" } }
+end
+
+-- claude-bud JOB 70: the category of a piece key (PropCollision.Categories; nil = not registered)
+function Job67DressConfig.CategoryOf(key: string): string?
+	for cat, keys in pairs(Job67DressConfig.PropCollision.Categories) do
+		for _, k in ipairs(keys) do
+			if k == key then
+				return cat
+			end
+		end
+	end
+	return nil
+end
+
+-- claude-bud JOB 70: Hesco for EVERY run at once within a piece cap (pure): the smallest stretch in
+-- [HescoStretch, HescoStretchMax] (0.05 steps) whose total pieces fit; returns (stretch, { n per run }) or nil
+function Job67DressConfig.HescoPlan(runs: { number }, wallHeight: number, cap: number): (number?, { number }?)
+	local p = Job67DressConfig.Pieces.HescoBlock
+	local natural = p.Natural.X * (wallHeight / p.Natural.Y)
+	local W = Job67DressConfig.Walls
+	local s = W.HescoStretch
+	while s <= W.HescoStretchMax + 1e-9 do
+		local counts: { number } = {}
+		local total = 0
+		for i, len in ipairs(runs) do
+			counts[i] = math.max(1, math.ceil(len / (natural * s) - 1e-6))
+			total += counts[i]
+		end
+		if total <= cap then
+			return s, counts
+		end
+		s += 0.05
+	end
+	return nil, nil
 end
 
 -- Hesco pieces for one wall run at a wall height (pure): the count and each piece's length
