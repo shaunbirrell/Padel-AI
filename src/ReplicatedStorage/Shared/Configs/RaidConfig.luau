@@ -188,7 +188,7 @@ end
 -- claude-bud JOB 63: anti-spawn-camping (Server/Services/AntiCampService), keyed by the BASE OWNER. OFF = today.
 (RaidConfig :: any).AntiCamp = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 63): Code Bot flips it after Shaun's phone test
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 63): Code Bot flips it after Shaun's phone test
 	DefenderShieldSeconds = 5, -- a respawn at his own base: the spawn shield this long (his first shot ends it)
 	RaiderLimitSeconds = 90, -- inside an enemy base this long -> back to his own base (the normal respawn)
 	AfterLootSeconds = 3, -- his raid took the loot -> home this long after

@@ -45,8 +45,8 @@ if not _bud:
         _c(_m is not None and int(_m.group(1)) >= 216, "WE_Build >= 216 " + _rel.rsplit("/", 1)[-1])
 
 HUD = _r(C + "HudConfig.luau")
-_c("AutoDrawGuard = { Enabled = true, OwnerFirst = true, NearStuds = 160, ConfirmSeconds = 0.6 }" in HUD,
-   "HudConfig.Hotbar.AutoDrawGuard Enabled + OwnerFirst (owner's phone test)")
+_c("AutoDrawGuard = { Enabled = true, OwnerFirst = false, NearStuds = 160, ConfirmSeconds = 0.6 }" in HUD,
+   "HudConfig.Hotbar.AutoDrawGuard Enabled + OwnerFirst = false (public since codebot_v220)")
 _c("AutoDrawOnDamage = true" in HUD, "AutoDrawOnDamage itself stays on (being attacked still draws)")
 
 CC = _r(CL)

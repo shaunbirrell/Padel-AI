@@ -6,7 +6,7 @@
 
 local SpawnTerminalConfig = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 56): Code Bot flips it after Shaun's phone test
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 56): Code Bot flips it after Shaun's phone test
 	PromptRange = 10,
 	Panel = "Garage", -- UIController panelOpeners key (the ONE garage)
 	Terminals = {

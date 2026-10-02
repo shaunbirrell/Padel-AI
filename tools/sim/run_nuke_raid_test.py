@@ -52,6 +52,11 @@ game = { GetService = function(_, n)
   if n == "Workspace" then return { GetServerTimeNow = function() return 1000 end } end
   return prevG:GetService(n) end }
 local ZC = require(node("Configs/RebirthZonesConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): ZC.NukeRaid.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = ZC.NukeRaid.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: ZC.NukeRaid.OwnerFirst = false (public for everyone)")
+ZC.NukeRaid.OwnerFirst = true
 local NR = ZC.NukeRaid
 local NS = require(node("Services/NukeService"))
 local OWNER, VICTIM, OTHER = 470626172, 9, 11

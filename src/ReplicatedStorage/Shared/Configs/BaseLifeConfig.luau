@@ -13,7 +13,7 @@ export type Point = { X: number, Z: number }
 
 local BaseLifeConfig = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 57): Code Bot flips it after Shaun's phone test
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 57): Code Bot flips it after Shaun's phone test
 	Props = {
 		-- the west camp, by the facilities row
 		{ Kit = "Tent", X = -80, Z = 22, Yaw = 90 },

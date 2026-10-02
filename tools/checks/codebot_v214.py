@@ -40,7 +40,7 @@ def _c(cond, label):
 
 
 _bud = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
-_own = 'SetAttribute("WE_Build", 219)' in _r(S + "Services/DataService.luau")
+_own = 'SetAttribute("WE_Build", 220)' in _r(S + "Services/DataService.luau")
 if not _bud:
     for _rel, _needle in (
         (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", '),
@@ -52,7 +52,7 @@ if not _bud:
 CFG = _r(C + "Job67DressConfig.luau")
 SVC = _r(S + "Services/Job67DressService.luau")
 _b = CFG[CFG.find("\tBuildings = {"):]
-_c("\tBuildings = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- NEW-OWNER-FIRST" in CFG, "Buildings block Enabled + owner-first")
+_c("\tBuildings = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in CFG, "Buildings block Enabled + public since codebot_v220 (was owner-first)")
 for _id in ("10055885754", "9939040273", "15654066038", "16365964601"):
     _c(_id in CFG, "pack " + _id + " in the central config")
     _c("[" + _id + "](https://create.roblox.com/store/asset/" + _id + ")" in _r("docs/ASSET_LICENSES.md"), "ASSET_LICENSES row " + _id)
@@ -92,7 +92,7 @@ if _own and not _bud and _shipped(C + "MonetizationConfig.luau", PREV) is not No
 
 # ---- batch 3: Wrecks ----
 _w = CFG[CFG.find("\tWrecks = {"):CFG.find("\tBuildings = {")]
-_c("\tWrecks = {\n\t\tEnabled = true,\n\t\tOwnerFirst = true, -- NEW-OWNER-FIRST" in CFG, "Wrecks block Enabled + owner-first")
+_c("\tWrecks = {\n\t\tEnabled = true,\n\t\tOwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in CFG, "Wrecks block Enabled + public since codebot_v220 (was owner-first)")
 _c('Collide = "Kit",' in _w and "if not keepCollide then" in SVC, "Wrecks keep the Part wreck as the collider")
 _c("119390702773907" in CFG and "[119390702773907](https://create.roblox.com/store/asset/119390702773907)" in _r("docs/ASSET_LICENSES.md")
    and "'DRESS-LIVE', 119390702773907" in _r("tools/wire-asset-ids.py"), "Synty pack: config + ASSET_LICENSES + registry")

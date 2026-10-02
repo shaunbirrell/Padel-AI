@@ -45,6 +45,11 @@ game = { GetService = function(_, n)
   return prevG:GetService(n) end }
 local PF = require(node("Util/PlotFrame"))
 local RC = require(node("Configs/RaidConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): RC.AntiCamp.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = RC.AntiCamp.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: RC.AntiCamp.OwnerFirst = false (public for everyone)")
+RC.AntiCamp.OwnerFirst = true
 local A = RC.AntiCamp
 local S = require(node("Services/AntiCampService"))
 local OWNER, RAIDER, OTHER = 470626172, 9, 11

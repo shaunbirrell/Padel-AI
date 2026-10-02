@@ -66,17 +66,17 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", "WE_Build=219"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", "WE_Build=220"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
 ):
-    check(needle in read(rel), "CODEBOT v189: WE_Build=219 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v189: WE_Build=220 " + rel.rsplit("/", 1)[-1])
 
 EC = read(C + "EndgameConfig.luau")
 dv = EC.split("DefenceVisuals = {")[1].split("\n\t},")[0] if "DefenceVisuals = {" in EC else ""
-check("Enabled = true," in dv and "OwnerFirst = true," in dv,
-      "CODEBOT v189: EndgameConfig.DefenceVisuals Enabled + OwnerFirst=true")
+check("Enabled = true," in dv and "OwnerFirst = false," in dv,
+      "CODEBOT v189: EndgameConfig.DefenceVisuals Enabled + OwnerFirst=false [public since codebot_v220]")
 check("TierAt = { 1, 4, 7, 10 }" in dv, "CODEBOT v189: DefenceVisuals.TierAt L1/4/7/10")
 check("function EndgameConfig.DefenceVisualsLive(" in EC, "CODEBOT v189: DefenceVisualsLive present")
 check(Path(S + "Modules/DefenceVisuals.luau").is_file(), "CODEBOT v189: DefenceVisuals.luau present")
@@ -85,8 +85,8 @@ check("function DefenceVisuals.Apply(" in DV, "CODEBOT v189: DefenceVisuals.Appl
 
 LC = read(C + "LightingConfig.luau")
 n2 = LC.split("Night2 = {")[1].split("\n\t},")[0] if "Night2 = {" in LC else ""
-check("Enabled = true," in n2 and "OwnerFirst = true," in n2,
-      "CODEBOT v189: LightingConfig.Night2 Enabled + OwnerFirst=true")
+check("Enabled = true," in n2 and "OwnerFirst = false," in n2,
+      "CODEBOT v189: LightingConfig.Night2 Enabled + OwnerFirst=false [public since codebot_v220]")
 check("PerBaseLights = 4," in n2, "CODEBOT v189: Night2.PerBaseLights = 4")
 check(Path(S + "Modules/NightLights.luau").is_file(), "CODEBOT v189: NightLights.luau present")
 NL = read(S + "Modules/NightLights.luau")

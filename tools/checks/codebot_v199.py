@@ -57,18 +57,18 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", "WE_Build=219"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", "WE_Build=220"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
 ):
-    check(needle in read(rel), "CODEBOT v199: WE_Build=219 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v199: WE_Build=220 " + rel.rsplit("/", 1)[-1])
 
 VA = read(C + "VisualAssetConfig.luau")
 j67 = VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in VA else ""
 check(
     "Enabled = true," in j67
-    and "OwnerFirst = true, -- NEW-OWNER-FIRST" in j67
+    and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in j67
     and "TurretTierAt = { 1, 4, 7, 10 }" in j67
     and '"AutoGunT1"' in j67,
     "CODEBOT v199: VisualAssetConfig.Job67 OwnerFirst + TurretTierAt",

@@ -43,7 +43,7 @@ for rel in (
 ):
     m = re.search(r'SetAttribute\("WE_Build",\s*(\d+)', read(rel))
     check(m is not None and int(m.group(1)) >= BUILD, "WE_Build >= 218 " + rel.rsplit("/", 1)[-1])
-check("WE_Build=219" in read(S + "Services/DataService.luau"), "DataService profile-loaded log WE_Build=219")
+check("WE_Build=220" in read(S + "Services/DataService.luau"), "DataService profile-loaded log WE_Build=220")
 
 # ---- PropCollision LIVE FOR EVERYONE ----
 pc_i = CFG.find("PropCollision = {")
@@ -60,10 +60,10 @@ for cat in ("Sandbag", "Hesco", "Concrete", "Crate", "Pallet", "BarbedWire"):
 # JOB 67 visual blocks stay owner-first (not the JOB 70 flip)
 walls_i = CFG.find("Walls = {")
 walls_blk = CFG[walls_i: walls_i + 400] if walls_i > 0 else ""
-check("OwnerFirst = true" in walls_blk, "Walls block still OwnerFirst = true (big flip later)")
+check("OwnerFirst = false" in walls_blk, "Walls block OwnerFirst = false (the big flip, codebot_v220)")
 props_i = CFG.find("BaseProps = {")
 props_blk = CFG[props_i: props_i + 400] if props_i > 0 else ""
-check("OwnerFirst = true" in props_blk, "BaseProps block still OwnerFirst = true (big flip later)")
+check("OwnerFirst = false" in props_blk, "BaseProps block OwnerFirst = false (the big flip, codebot_v220)")
 
 # ---- createHull / Place / FitLine wiring ----
 check("local function createHull(" in SVC, "createHull helper exists")

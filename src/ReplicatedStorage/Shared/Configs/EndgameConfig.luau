@@ -135,14 +135,14 @@ local EndgameConfig = {
 	--   * a mid-raid Defence purchase keeps the gate's / turrets' damage (it used to rebuild them at full HP)
 	DefenceFix = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 55): Code Bot flips it after Shaun's phone test
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 55): Code Bot flips it after Shaun's phone test
 	},
 	-- claude-bud JOB 53: the Defence levels you can SEE (Server/Modules/DefenceVisuals). Visual tier by level: TierAt[t]
 	-- is the first level of tier t (L1-3 = 1, L4-6 = 2, L7-9 = 3, L10 = 4). Gate damage states at DamageStages (HP
 	-- fraction). OFF = no visuals, the gate's old look exactly.
 	DefenceVisuals = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 53): Code Bot flips it after Shaun's phone test
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 53): Code Bot flips it after Shaun's phone test
 		TierAt = { 1, 4, 7, 10 },
 		DamageStages = { 0.6, 0.3 }, -- <= 60 %: dents + scorch; <= 30 %: sagging bands + smoke
 		SmokeRate = 4, -- one capped emitter on the gate at <= 30 % / breached

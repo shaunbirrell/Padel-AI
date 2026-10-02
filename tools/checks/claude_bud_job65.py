@@ -26,8 +26,8 @@ def _j65_fn(src, head):
 
 _ZC = _j65_src("src/ReplicatedStorage/Shared/Configs/RebirthZonesConfig.luau")
 _nr = _ZC.split("NukeRaid = {")[1].split("\n\t},")[0] if "NukeRaid = {" in _ZC else ""
-(ok if ("Enabled = true," in _nr and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _nr and "CooldownSeconds = 1800," in _nr and "Vfx = true," in _nr and "Targets = {" in _nr) else bad)(
-    "CLAUDE-BUD J65: RebirthZonesConfig.NukeRaid is owner-first: 30 min cooldown, VFX switch, who may be targeted (one config)")
+(ok if ("Enabled = true," in _nr and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _nr and "CooldownSeconds = 1800," in _nr and "Vfx = true," in _nr and "Targets = {" in _nr) else bad)(
+    "CLAUDE-BUD J65: RebirthZonesConfig.NukeRaid is public since codebot_v220 (was owner-first): 30 min cooldown, VFX switch, who may be targeted (one config)")
 _E = _j65_src("src/ServerScriptService/Server/Services/EconomyService.luau")
 _p2c = _j65_fn(_E, "function EconomyService.PendingToCash(")
 _tpc = _j65_fn(_E, "function EconomyService.TransferPendingCash(")

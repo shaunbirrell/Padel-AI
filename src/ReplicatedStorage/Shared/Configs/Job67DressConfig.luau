@@ -24,7 +24,7 @@
 
 local Job67DressConfig = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot JOB 67 remainder): flip with the big public flip
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (Code Bot JOB 67 remainder): flip with the big public flip
 	LogTag = "[Job67Dress]",
 
 	-- the owned packs (InsertService, loaded once per server each, scripts stripped before anything is cloned)
@@ -121,7 +121,7 @@ local Job67DressConfig = {
 		(the AutoGun nests, guards and the road stay clear). ]]
 	Walls = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST
 		HescoStretch = 2.0,
 		HescoStretchMax = 2.6, -- claude-bud JOB 70: a Hesco run may stretch up to this so EVERY face fits MaxHesco
 		LineStretch = 1.3,
@@ -154,7 +154,7 @@ local Job67DressConfig = {
 		the part-built PlotWarzone crates / sandbags / barriers on the owner's plot are hidden (restored on clear). ]]
 	BaseProps = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST
 		TierAt = { 1, 10, 22, 38, 55 },
 		HideWarzone = true,
 		ReplacesKits = { CrateStack = true, DrumGroup = true, SandbagNest = true, SandbagLine = true, ContainerStack = true },
@@ -257,7 +257,7 @@ local Job67DressConfig = {
 	-- footprint in its own frame (probed: tools/probes/j67_b3_harness.py builds the real kits).
 	Wrecks = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST
 		Tag = "Wrecks",
 		Collide = "Kit",
 		Grow = 1.3, -- a wreck may read a little bigger than the old Part kit (the kit stays the collider)
@@ -302,7 +302,7 @@ local Job67DressConfig = {
 	},
 	Buildings = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST
 		Grow = 1.15, -- the model may stand this much past the kit footprint
 		ScaleMin = 0.6, -- below this the doors get shorter than a player
 		CollideMinStuds = 4,

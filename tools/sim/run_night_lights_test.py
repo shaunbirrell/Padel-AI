@@ -62,6 +62,11 @@ local rn = Instance.new
 Instance.new = function(cls) local o = rn(cls); if cls == "Folder" or cls == "Model" then o.FindFirstChild = findIn end; return o end
 
 local LC = require(node("Configs/LightingConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): LC.Night2.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = LC.Night2.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: LC.Night2.OwnerFirst = false (public for everyone)")
+LC.Night2.OwnerFirst = true
 local BC = require(node("Configs/BaseConfig"))
 local PF = require(node("Util/PlotFrame"))
 local NL = require(node("Modules/NightLights"))

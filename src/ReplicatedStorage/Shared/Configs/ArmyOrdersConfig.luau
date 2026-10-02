@@ -76,7 +76,7 @@ local ArmyOrdersConfig = {
 		group count on ARMY KILLS, at most KillCreditPerHour per owner (no AFK farm). OFF == OLD (250 / 300 / 150). ]]
 	AttackRange = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 52): Code Bot flips it after Shaun's 2-player phone test
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 52): Code Bot flips it after Shaun's 2-player phone test
 		SeekStuds = 400,
 		LeashStuds = 450,
 		ChainStuds = 200,

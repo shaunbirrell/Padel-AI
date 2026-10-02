@@ -55,16 +55,16 @@ def _v200(cond, label):
 
 
 for _rel, _needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", "WE_Build=219"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", "WE_Build=220"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
 ):
-    _v200(_needle in _v200_read(_rel), "WE_Build=219 " + _rel.rsplit("/", 1)[-1])
+    _v200(_needle in _v200_read(_rel), "WE_Build=220 " + _rel.rsplit("/", 1)[-1])
 
 _VA = _v200_read(C + "VisualAssetConfig.luau")
 _j = _VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in _VA else ""
-_v200("Enabled = true," in _j and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _j, "Job67 stays Enabled + OwnerFirst")
+_v200("Enabled = true," in _j and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _j, "Job67 Enabled + public since codebot_v220")
 _rows = [l for l in _VA.splitlines() if re.match(r"\s*AutoGunT[1-5] = \{", l)]
 _want = [(1, "minigun_l01", 5.5), (2, "minigun_l03", 5.8), (3, "minigun_l05", 6.1), (4, "minigun_l08", 6.5), (5, "minigun_l10", 7.0)]
 _v200(len(_rows) == 5 and all(

@@ -30,6 +30,12 @@ game.GetService = function(g, n)
   return baseGS(g, n)
 end
 local H = require(node("Util/HowTo"))
+local __V220ZC = require(node("Configs/RebirthZonesConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): __V220ZC.Rebuild.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = __V220ZC.Rebuild.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: __V220ZC.Rebuild.OwnerFirst = false (public for everyone)")
+__V220ZC.Rebuild.OwnerFirst = true
 for _, id in ipairs({ "DailyKillNPC", "SupplyRun", "DailyOpBank", "ClearViper", "Town.Bank", "EastYard", "StrategicYard" }) do
   local h = H.Find(id)
   check(h ~= nil and type(h.What) == "string" and type(h.Steps) == "table" and #h.Steps == 3 and h.Reward ~= nil and h.TimeLimit ~= nil,

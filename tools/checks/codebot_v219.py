@@ -50,7 +50,7 @@ for rel in (S + "Services/BaseService.luau", S + "Services/DataService.luau", S 
 # ---- (1) turret hulls ----
 GDC = read(C + "GateDefenseConfig.luau")
 th = GDC.split("TurretHull = {")[1].split("\n\t},")[0] if "TurretHull = {" in GDC else ""
-check("Enabled = true," in th and "OwnerFirst = true, -- NEW-OWNER-FIRST" in th, "GateDefenseConfig.TurretHull is owner-first")
+check("Enabled = true," in th and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in th, "GateDefenseConfig.TurretHull is public since codebot_v220 (was owner-first)")
 GD = read(S + "Services/GateDefenseService.luau")
 hull = GD.split("function GateDefenseService._AddTurretHull(")[1].split("\nend\n")[0] if "function GateDefenseService._AddTurretHull(" in GD else ""
 for needle in ('hull.Shape = Enum.PartType.Block', "hull.Transparency = 1", "hull.Anchored = true", "hull.CanCollide = true",
@@ -68,7 +68,7 @@ check(GD.count("hull.CanQuery = false") == 1, "the hull never takes a shot / LOS
 # ---- (3) heli rotor ring ----
 VC = read(C + "VehicleConfig.luau")
 hr = VC.split("HeliRotorRing = {")[1].split("\n}")[0] if "HeliRotorRing = {" in VC else ""
-check("Enabled = true," in hr and "OwnerFirst = true, -- NEW-OWNER-FIRST" in hr, "VehicleConfig.HeliRotorRing is owner-first")
+check("Enabled = true," in hr and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in hr, "VehicleConfig.HeliRotorRing is public since codebot_v220 (was owner-first)")
 VS = read(S + "Services/VehicleService.luau")
 kh = VS.split("local function kitHeli(")[1].split("\n\tend\n")[0] if "local function kitHeli(" in VS else ""
 check("if not (okRing and ringOff) then\n\t\t\taddRotorDisc(" in kh, "the yellow RotorDisc is skipped while HeliRotorRing is live for the vehicle owner")
@@ -84,7 +84,7 @@ prev = old(C + "RebirthZonesConfig.luau") or ""
 prows = re.findall(r"\{ X = (-?\d+), Z = (-?\d+), Yaw = (-?\d+) \}", prev.split("AnnexAlt = {")[1].split("} ::")[0]) if "AnnexAlt = {" in prev else []
 check(len(prows) == 24 and rows[:24] == prows, "the 24 v218 fallback rows are kept first, unchanged (a plot that fits keeps its slots)")
 check(len(rows) == 84 and len(set(rows)) == 84, "AnnexAlt = 84 distinct slots (+60)")
-check("Slots = true" in RZ.split("cfg.Rebuild = {")[1][:600] and "OwnerFirst = true" in RZ.split("cfg.Rebuild = {")[1][:300], "Rebuild.Slots stays owner-first")
+check("Slots = true" in RZ.split("cfg.Rebuild = {")[1][:600] and "OwnerFirst = false" in RZ.split("cfg.Rebuild = {")[1][:300], "Rebuild.Slots stays public since codebot_v220 (was owner-first)")
 RZS = read(S + "Services/RebirthZoneService.luau")
 check("local function retryBlocked(plotId: number)" in RZS and "pcall(retryBlocked, plotId) -- Code Bot v219" in RZS, "a plot left with a gap is resolved again on the next Refresh (no loop)")
 check(RZS.count('ZC.RebuildLive(ownerOfPlot(plotId), "Slots") and transient(p)') == 2, "annex + apron checks skip vehicles / loose parts (owner-first)")
@@ -104,7 +104,7 @@ else:
 
 # ---- guards ----
 check('"StreamingEnabled": true' not in read("default.project.json"), "StreamingEnabled stays OFF")
-check(old(C + "VisualAssetConfig.luau") == read(C + "VisualAssetConfig.luau"), "VisualAssetConfig (PreferMesh) byte-identical to v218")
+check([l for l in (old(C + "VisualAssetConfig.luau") or "").split("\n") if "OwnerFirst" not in l] == [l for l in read(C + "VisualAssetConfig.luau").split("\n") if "OwnerFirst" not in l], "VisualAssetConfig (PreferMesh) byte-identical to v218 (OwnerFirst lines aside: codebot_v220 public flip)")
 diff = subprocess.run(["git", "diff", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT).stdout
 names = subprocess.run(["git", "diff", PREV, "--name-only", "--", "src"], capture_output=True, text=True, cwd=ROOT).stdout
 added = [l for l in diff.splitlines() if l.startswith("+") and not l.startswith("+++")]

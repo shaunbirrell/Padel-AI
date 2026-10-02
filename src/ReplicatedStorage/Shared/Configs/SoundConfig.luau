@@ -295,7 +295,7 @@ SoundConfig.Sounds["World.RangeReload"] = { Id = 9113104509, Volume = 0.3, RollO
 SoundConfig.Sounds["World.RangeHit"] = { Id = 9118768193, Volume = 0.18, RollOff = "InverseTapered", MaxDistance = 40, Pitch = 1.2, CooldownSeconds = 0.08, Priority = 1, Bus = "World", LengthSeconds = 0.7 } -- [PSE] "Sand Impacts 5 (SFX)" 9118768193
 SoundConfig.Pass59 = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 59 B): Code Bot flips it after Shaun's phone test
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 59 B): Code Bot flips it after Shaun's phone test
 	Overrides = {
 		["Engine.Heli"] = 9125390124, -- heli 9125390124 (was the takeoff file 9113417759)
 		["Engine.Naval"] = 9112750448, -- boat 9112750448 (was the pitched-down car loop)

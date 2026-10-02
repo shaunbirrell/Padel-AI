@@ -67,16 +67,16 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", "WE_Build=219"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", "WE_Build=220"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
 ):
-    check(needle in read(rel), "CODEBOT v191: WE_Build=219 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v191: WE_Build=220 " + rel.rsplit("/", 1)[-1])
 
 HC = read(C + "HangarDockConfig.luau")
-check("Enabled = true," in HC and "OwnerFirst = true," in HC,
-      "CODEBOT v191: HangarDockConfig Enabled + OwnerFirst=true")
+check("Enabled = true," in HC and "OwnerFirst = false," in HC,
+      "CODEBOT v191: HangarDockConfig Enabled + OwnerFirst=false [public since codebot_v220]")
 check(Path(S + "Services/HangarDockDisplayService.luau").is_file(),
       "CODEBOT v191: HangarDockDisplayService.luau present")
 HDS = read(S + "Services/HangarDockDisplayService.luau")
@@ -88,8 +88,8 @@ check("function VisualAssetService.CloneDisplayBody" in VAS,
 
 SC = read(C + "SoundConfig.luau")
 p59 = SC.split("SoundConfig.Pass59 = {")[1].split("\n}\n")[0] if "SoundConfig.Pass59 = {" in SC else ""
-check("Enabled = true," in p59 and "OwnerFirst = true," in p59,
-      "CODEBOT v191: SoundConfig.Pass59 Enabled + OwnerFirst=true")
+check("Enabled = true," in p59 and "OwnerFirst = false," in p59,
+      "CODEBOT v191: SoundConfig.Pass59 Enabled + OwnerFirst=false [public since codebot_v220]")
 check(Path(CL + "Controllers/AmbienceController.luau").is_file(),
       "CODEBOT v191: AmbienceController.luau present")
 AM = read(CL + "Controllers/AmbienceController.luau")

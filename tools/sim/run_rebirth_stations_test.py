@@ -68,6 +68,11 @@ TEST = r'''
 local fails = 0
 local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if not ok then fails += 1 end end
 local ZC = require(node("Configs/RebirthZonesConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): ZC.Rebuild.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = ZC.Rebuild.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: ZC.Rebuild.OwnerFirst = false (public for everyone)")
+ZC.Rebuild.OwnerFirst = true
 local RC = require(node("Configs/RebirthConfig"))
 local EC = require(node("Configs/EconomyConfig"))
 local TICK = EC.PassiveIncome.TickSeconds

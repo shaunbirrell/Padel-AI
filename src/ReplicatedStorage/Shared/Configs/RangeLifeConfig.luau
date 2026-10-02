@@ -13,7 +13,7 @@
 
 return {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 68): goes public with the big flip after JOB 67
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 68): goes public with the big flip after JOB 67
 
 	NearStuds = 80, -- effects only when the player is within this of a shooter
 	MaxPerYard = 4, -- the brief: at most 3-4 shooters per range (the yard has 3)

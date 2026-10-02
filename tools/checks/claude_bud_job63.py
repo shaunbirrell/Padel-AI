@@ -21,8 +21,8 @@ def _j63_src(p):
 
 _RC = _j63_src("src/ReplicatedStorage/Shared/Configs/RaidConfig.luau")
 _ac = _RC.split("(RaidConfig :: any).AntiCamp = {")[1].split("\n}\n")[0] if "(RaidConfig :: any).AntiCamp = {" in _RC else ""
-(ok if ("Enabled = true," in _ac and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _ac and "DefenderShieldSeconds = 5," in _ac and "RaiderLimitSeconds = 90," in _ac and "SameBaseCooldownSeconds = 180," in _ac) else bad)(
-    "CLAUDE-BUD J63: RaidConfig.AntiCamp is owner-first: 5 s defender shield, 90 s raider limit, 3 min same-base cooldown")
+(ok if ("Enabled = true," in _ac and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _ac and "DefenderShieldSeconds = 5," in _ac and "RaiderLimitSeconds = 90," in _ac and "SameBaseCooldownSeconds = 180," in _ac) else bad)(
+    "CLAUDE-BUD J63: RaidConfig.AntiCamp is public since codebot_v220 (was owner-first): 5 s defender shield, 90 s raider limit, 3 min same-base cooldown")
 _C = _j63_src("src/ServerScriptService/Server/Services/CombatService/init.luau")
 _pb = _C.split("local function pvpBlock(")[1].split("\nend\n")[0] if "local function pvpBlock(" in _C else ""
 (ok if ('return "camp_cooldown"' in _pb and "BlocksHurt(attacker, victim)" in _pb) else bad)(

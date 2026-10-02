@@ -26,8 +26,8 @@ def _src(p):
 _AOC = _src("src/ReplicatedStorage/Shared/Configs/ArmyOrdersConfig.luau")
 _ar = _AOC.split("AttackRange = {")[1].split("\n\t},\n")[0] if "AttackRange = {" in _AOC else ""
 _m = _j52_re.search(r"SeekStuds = (\d+)", _ar)
-_j52("Enabled = true," in _ar and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _ar and _m and 300 <= int(_m.group(1)) <= 500,
-     "AttackRange owner-first with 300 <= SeekStuds <= 500 (%s)" % (_m.group(1) if _m else "?"))
+_j52("Enabled = true," in _ar and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _ar and _m and 300 <= int(_m.group(1)) <= 500,
+     "AttackRange public since codebot_v220 (was owner-first) with 300 <= SeekStuds <= 500 (%s)" % (_m.group(1) if _m else "?"))
 _AP = _src("src/ServerScriptService/Server/Modules/ArmyPlan.luau")
 _j52("local seekR, leashR, chainR = C.AttackRadii(player.UserId)" in _AP and "C.SeekRadius" not in _AP.split("local function thinkClear")[1].split("\nend\n")[0]
      and "Leash = leashR" in _AP, "the running ATTACK plan uses ONE set of radii (seek / chain / leash) for seek, march answer and fight")

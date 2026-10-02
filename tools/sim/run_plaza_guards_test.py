@@ -94,6 +94,11 @@ TEST = r'''
 local fails = 0
 local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if not ok then fails += 1 end end
 local CC = require(node("Configs/CombatConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): CC.SharedHostility.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = CC.SharedHostility.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: CC.SharedHostility.OwnerFirst = false (public for everyone)")
+CC.SharedHostility.OwnerFirst = true
 local OD = require(node("Configs/OutpostDefenderConfig"))
 local RC = require(node("Configs/RetentionConfig"))
 local H = require(node("Modules/Hostility"))

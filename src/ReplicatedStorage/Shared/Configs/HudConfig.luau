@@ -467,7 +467,7 @@ HudConfig.Hotbar = {
 		within NearStuds (or unknown), or a health drop with no Damaged that has another player / a soldier not yours /
 		an NPC within NearStuds (one scan per drop, no loop). Edge flash + RecentCombat stay on every drop. The player's
 		own shooting (FIRE / keys / hotbar) is input and never goes through here. Enabled = false = v214. ]]
-	AutoDrawGuard = { Enabled = true, OwnerFirst = true, NearStuds = 160, ConfirmSeconds = 0.6 }, -- NEW-OWNER-FIRST (v216)
+	AutoDrawGuard = { Enabled = true, OwnerFirst = false, NearStuds = 160, ConfirmSeconds = 0.6 }, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (v216)
 	HideWhen = { "Driving", "Dead", "Modal" },
 }
 

@@ -93,7 +93,7 @@ local GateDefenseConfig = {
 	-- Square footprint (it never needs to turn with the aim), Min..Max studs a side, from the ground to the gun's top.
 	TurretHull = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot v219): flip after Shaun's phone test
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (Code Bot v219): flip after Shaun's phone test
 		MinSide = 2.6,
 		MaxSide = 6,
 		MinHeight = 3,

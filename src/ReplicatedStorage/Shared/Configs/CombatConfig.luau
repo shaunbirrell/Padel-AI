@@ -247,7 +247,7 @@ CombatConfig.LineOfSight = {
 	OwnerFirst by the CANDIDATE player (RetentionConfig.Live); OFF == the old pick exactly. ]]
 ;(CombatConfig :: any).SharedHostility = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 51): Code Bot flips it after Shaun's 2-player phone test
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 51): Code Bot flips it after Shaun's 2-player phone test
 	DebugLogSeconds = 1, -- [GuardTarget] at most once per NPC per this many seconds (only while someone has WE_GuardDebug)
 }
 

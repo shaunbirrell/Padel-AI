@@ -21,8 +21,8 @@ def _j54_src(p):
 
 _LC = _j54_src("src/ReplicatedStorage/Shared/Configs/LightingConfig.luau")
 _n2 = _LC.split("Night2 = {")[1].split("\n\t},")[0] if "Night2 = {" in _LC else ""
-(ok if ("Enabled = true," in _n2 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _n2 and "PerBaseLights = 4," in _n2) else bad)(
-    "CLAUDE-BUD J54: LightingConfig.Night2 is owner-first, 4 more night lights per base")
+(ok if ("Enabled = true," in _n2 and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _n2 and "PerBaseLights = 4," in _n2) else bad)(
+    "CLAUDE-BUD J54: LightingConfig.Night2 is public since codebot_v220 (was owner-first), 4 more night lights per base")
 _m = _j54_re.search(r"MaxLights = (\d+)", _LC)
 (ok if (_m and int(_m.group(1)) <= 120) else bad)("CLAUDE-BUD J54: MaxLights stays <= 120")
 _NL = _j54_src("src/ServerScriptService/Server/Modules/NightLights.luau")

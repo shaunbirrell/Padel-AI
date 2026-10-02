@@ -63,6 +63,11 @@ Instance.new = function(cls)
 end
 
 local HC = require(node("Configs/HangarDockConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): HC.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = HC.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: HC.OwnerFirst = false (public for everyone)")
+HC.OwnerFirst = true
 local HD = require(node("Services/HangarDockDisplayService"))
 local OWNER, OTHER = 470626172, 9
 

@@ -66,17 +66,17 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", "WE_Build=219"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", "WE_Build=220"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
 ):
-    check(needle in read(rel), "CODEBOT v187: WE_Build=219 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v187: WE_Build=220 " + rel.rsplit("/", 1)[-1])
 
 ZC = read(C + "RebirthZonesConfig.luau")
 rb = ZC.split("cfg.Rebuild = {")[1].split("\n}")[0] if "cfg.Rebuild = {" in ZC else ""
-check("Enabled = true," in rb and "OwnerFirst = true," in rb,
-      "CODEBOT v187: RebirthZonesConfig.Rebuild Enabled + OwnerFirst=true")
+check("Enabled = true," in rb and "OwnerFirst = false," in rb,
+      "CODEBOT v187: RebirthZonesConfig.Rebuild Enabled + OwnerFirst=false [public since codebot_v220]")
 check(Path(S + "Modules/ZoneRuns.luau").is_file(), "CODEBOT v187: ZoneRuns.luau present")
 ZR = read(S + "Modules/ZoneRuns.luau")
 check("function ZoneRuns.Step(" in ZR and "insideAnnex" in ZR, "CODEBOT v187: ZoneRuns.Step server-validates")

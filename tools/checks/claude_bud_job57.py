@@ -20,8 +20,8 @@ def _j57_src(p):
 
 
 _BC = _j57_src("src/ReplicatedStorage/Shared/Configs/BaseLifeConfig.luau")
-(ok if ("Enabled = true," in _BC and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _BC and "PerBase = 3," in _BC and "ServerMaxFromCombat = true" in _BC) else bad)(
-    "CLAUDE-BUD J57: BaseLifeConfig is owner-first; 3 soldiers a base, the server cap is CombatConfig.MaxActiveNPCs")
+(ok if ("Enabled = true," in _BC and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _BC and "PerBase = 3," in _BC and "ServerMaxFromCombat = true" in _BC) else bad)(
+    "CLAUDE-BUD J57: BaseLifeConfig is public since codebot_v220 (was owner-first); 3 soldiers a base, the server cap is CombatConfig.MaxActiveNPCs")
 _SP = _j57_src("src/ReplicatedStorage/Shared/Configs/StorePropsConfig.luau")
 (ok if "cfg40.Budget.MaxBasePartsPerPlot = 600" in _SP else bad)("CLAUDE-BUD J57: the per-plot allowance stays 600 (JOB 40 C; BaseLife counts against it)")
 _BS = _j57_src("src/ServerScriptService/Server/Services/BaseLifeService.luau")

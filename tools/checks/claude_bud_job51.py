@@ -25,7 +25,7 @@ def _j51_src(p):
 
 _CC = _j51_src("src/ReplicatedStorage/Shared/Configs/CombatConfig.luau")
 _blk = _CC.split("SharedHostility = {")[1].split("\n}")[0] if "SharedHostility = {" in _CC else ""
-_j51("Enabled = true," in _blk and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _blk, "CombatConfig.SharedHostility present, owner-first")
+_j51("Enabled = true," in _blk and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _blk, "CombatConfig.SharedHostility present, public since codebot_v220 (was owner-first)")
 _N = _j51_src("src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau")
 _calls = _j51_re.findall(r"(?<!function )CombatNPC\.NearestPlayer\(([^\n]*)\)", _N)
 _j51(len(_calls) >= 3 and all(c.rstrip().endswith("rec") for c in _calls), "every NPC target pick calls NearestPlayer with its record (%d calls)" % len(_calls))

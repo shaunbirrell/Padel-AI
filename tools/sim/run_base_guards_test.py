@@ -148,6 +148,11 @@ check(allowed == (GC.Rewards.PairMax or 3), "the kill-credit pair limit (" .. al
 -- ── 4. claude-bud JOB 55: Turret Guns arms the gate / tower guards; the post HP reads Defence.GatePct ──
 do
   local EG = require(node("Configs/EndgameConfig"))
+  -- codebot_v220 (Shaun 2026-10-02 07:51: everything public): EG.DefenceFix.OwnerFirst = false live; the owner-first paths
+  -- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+  local __V220_LAUNCHED = EG.DefenceFix.OwnerFirst
+  check(__V220_LAUNCHED == false, "codebot_v220: EG.DefenceFix.OwnerFirst = false (public for everyone)")
+  EG.DefenceFix.OwnerFirst = true
   local H = { ResearchMult = function() return 1.5 end }
   local GUNS = { [470626172] = 10, [9] = 10 }
   BG.Bind({ CombatService = rule, EndgameService = {

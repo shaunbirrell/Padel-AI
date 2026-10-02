@@ -105,7 +105,7 @@ print("BANNER", tostring(E.ShowEventBanner))
 
 # guards
 _v211('"StreamingEnabled": true' not in _v211_r("default.project.json"), "StreamingEnabled stays OFF")
-_v211(_v211_old(_V211_C + "VisualAssetConfig.luau") == _v211_r(_V211_C + "VisualAssetConfig.luau"), "VisualAssetConfig (PreferMesh) byte-identical to v210")
+_v211([l for l in (_v211_old(_V211_C + "VisualAssetConfig.luau") or "").split("\n") if "OwnerFirst" not in l] == [l for l in _v211_r(_V211_C + "VisualAssetConfig.luau").split("\n") if "OwnerFirst" not in l], "VisualAssetConfig (PreferMesh) byte-identical to v210 (OwnerFirst lines aside: codebot_v220 public flip)")
 _v211_diff = _v211_sp.run(["git", "diff", _V211_PREV, "--name-only", "--", "src"], capture_output=True, text=True, cwd=_V211_ROOT).stdout
 _v211("WE_Building" not in _v211_diff, "no WE_Building* file changed")
 _v211("PreferMeshWhenAssetIdSet = false," in _v211_r(_V211_C + "StructureVisualConfig.luau"), "PreferMesh stays OFF (StructureVisualConfig)")

@@ -66,22 +66,22 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", "WE_Build=219"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", "WE_Build=220"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
 ):
-    check(needle in read(rel), "CODEBOT v190: WE_Build=219 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v190: WE_Build=220 " + rel.rsplit("/", 1)[-1])
 
 EC = read(C + "EndgameConfig.luau")
 df = EC.split("DefenceFix = {")[1].split("\n\t},")[0] if "DefenceFix = {" in EC else ""
-check("Enabled = true," in df and "OwnerFirst = true," in df,
-      "CODEBOT v190: EndgameConfig.DefenceFix Enabled + OwnerFirst=true")
+check("Enabled = true," in df and "OwnerFirst = false," in df,
+      "CODEBOT v190: EndgameConfig.DefenceFix Enabled + OwnerFirst=false [public since codebot_v220]")
 check("function EndgameConfig.DefenceFixLive(" in EC, "CODEBOT v190: DefenceFixLive present")
 
 STC = read(C + "SpawnTerminalConfig.luau")
-check("Enabled = true," in STC and "OwnerFirst = true," in STC,
-      "CODEBOT v190: SpawnTerminalConfig Enabled + OwnerFirst=true")
+check("Enabled = true," in STC and "OwnerFirst = false," in STC,
+      "CODEBOT v190: SpawnTerminalConfig Enabled + OwnerFirst=false [public since codebot_v220]")
 check(Path(S + "Services/SpawnTerminalService.luau").is_file(), "CODEBOT v190: SpawnTerminalService.luau present")
 STS = read(S + "Services/SpawnTerminalService.luau")
 check("function SpawnTerminalService.Init" in STS or "SpawnTerminalService.Init" in STS,
@@ -89,14 +89,14 @@ check("function SpawnTerminalService.Init" in STS or "SpawnTerminalService.Init"
 
 VAC = read(C + "VisualAssetConfig.luau")
 ard = VAC.split("AirRotorDisc = {")[1].split("\n\t},")[0] if "AirRotorDisc = {" in VAC else ""
-check("Enabled = true," in ard and "OwnerFirst = true," in ard,
-      "CODEBOT v190: VisualAssetConfig.AirRotorDisc Enabled + OwnerFirst=true")
+check("Enabled = true," in ard and "OwnerFirst = false," in ard,
+      "CODEBOT v190: VisualAssetConfig.AirRotorDisc Enabled + OwnerFirst=false [public since codebot_v220]")
 AB = read(S + "Modules/AirBodyRig.luau")
 check("_DiscFit" in AB or "DiscFit" in AB, "CODEBOT v190: AirBodyRig disc fit present")
 
 BLC = read(C + "BaseLifeConfig.luau")
-check("Enabled = true," in BLC and "OwnerFirst = true," in BLC,
-      "CODEBOT v190: BaseLifeConfig Enabled + OwnerFirst=true")
+check("Enabled = true," in BLC and "OwnerFirst = false," in BLC,
+      "CODEBOT v190: BaseLifeConfig Enabled + OwnerFirst=false [public since codebot_v220]")
 check(Path(S + "Services/BaseLifeService.luau").is_file(), "CODEBOT v190: BaseLifeService.luau present")
 BLS = read(S + "Services/BaseLifeService.luau")
 check("function BaseLifeService.Init" in BLS or "BaseLifeService.Init" in BLS,

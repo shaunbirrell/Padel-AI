@@ -39,6 +39,11 @@ local prevG = game
 game = { GetService = function(_, n) if n == "RunService" then return { IsStudio = function() return false end } end return prevG:GetService(n) end }
 NumberSequenceKeypoint = { new = function() return {} end }
 local EG = require(node("Configs/EndgameConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): EG.DefenceVisuals.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = EG.DefenceVisuals.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: EG.DefenceVisuals.OwnerFirst = false (public for everyone)")
+EG.DefenceVisuals.OwnerFirst = true
 local DV = require(node("Modules/DefenceVisuals"))
 local OWNER, OTHER = 470626172, 9
 

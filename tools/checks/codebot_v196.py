@@ -57,18 +57,18 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", "WE_Build=219"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", "WE_Build=220"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
 ):
-    check(needle in read(rel), "CODEBOT v196: WE_Build=219 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v196: WE_Build=220 " + rel.rsplit("/", 1)[-1])
 
 ZC = read(C + "RebirthZonesConfig.luau")
 nr = ZC.split("NukeRaid = {")[1].split("\n\t},")[0] if "NukeRaid = {" in ZC else ""
 check(
     "Enabled = true," in nr
-    and "OwnerFirst = true, -- NEW-OWNER-FIRST" in nr
+    and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in nr
     and "CooldownSeconds = 1800," in nr
     and "Vfx = true," in nr
     and "Targets = {" in nr,

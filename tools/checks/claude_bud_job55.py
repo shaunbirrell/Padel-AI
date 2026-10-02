@@ -18,7 +18,7 @@ def _j55_src(p):
 
 _EC = _j55_src("src/ReplicatedStorage/Shared/Configs/EndgameConfig.luau")
 _fx = _EC.split("DefenceFix = {")[1].split("\n\t},")[0] if "DefenceFix = {" in _EC else ""
-(ok if ("Enabled = true," in _fx and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _fx) else bad)("CLAUDE-BUD J55: EndgameConfig.DefenceFix is owner-first")
+(ok if ("Enabled = true," in _fx and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _fx) else bad)("CLAUDE-BUD J55: EndgameConfig.DefenceFix is public since codebot_v220 (was owner-first)")
 _dt = _EC.split("function EndgameConfig.DefenceText")[1].split("\nend\n")[0] if "function EndgameConfig.DefenceText" in _EC else ""
 (ok if ("turret + guard dmg" in _dt and "gate + guard HP" in _dt and "ATM" in _dt and "army raid loot" in _dt and "wall" not in _dt.lower()) else bad)(
     "CLAUDE-BUD J55: the Defence text names what each track really does (both Vault cuts; no wall HP promise)")

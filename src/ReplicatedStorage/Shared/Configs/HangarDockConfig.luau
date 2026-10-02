@@ -7,7 +7,7 @@
 
 local HangarDockConfig = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 58): Code Bot flips it after Shaun's phone test
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 58): Code Bot flips it after Shaun's phone test
 	Hangar = {
 		Anchor = "JetFuselage", -- one per parked jet slot (L1-3: 1, L4+: 2)
 		Bodies = { "FighterJet", "ReconPlane" }, -- slot 1, slot 2 (live refs: every player sees them)

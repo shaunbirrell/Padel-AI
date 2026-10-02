@@ -20,8 +20,8 @@ def _j56_src(p):
 
 
 _SC = _j56_src("src/ReplicatedStorage/Shared/Configs/SpawnTerminalConfig.luau")
-(ok if ("Enabled = true," in _SC and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _SC and 'Tab = "Air"' in _SC and 'Tab = "Naval"' in _SC and 'Panel = "Garage"' in _SC) else bad)(
-    "CLAUDE-BUD J56: SpawnTerminalConfig is owner-first; helipad -> Garage / Air, dock -> Garage / Naval")
+(ok if ("Enabled = true," in _SC and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _SC and 'Tab = "Air"' in _SC and 'Tab = "Naval"' in _SC and 'Panel = "Garage"' in _SC) else bad)(
+    "CLAUDE-BUD J56: SpawnTerminalConfig is public since codebot_v220 (was owner-first); helipad -> Garage / Air, dock -> Garage / Naval")
 _ST = _j56_src("src/ServerScriptService/Server/Services/SpawnTerminalService.luau")
 _STc = "\n".join(l.split("--", 1)[0] for l in _j56_re.sub(r"--\[\[.*?\]\]", "", _ST, flags=_j56_re.S).splitlines())
 (ok if (not _j56_re.search(r"RequestSpawn|PivotTo|Teleport|AddCash|GrantVehicle|profile\.Vehicles|Neon|PointLight|SpotLight", _STc)) else bad)(
@@ -39,7 +39,7 @@ _BS = _j56_src("src/ServerScriptService/Server/Bootstrap.server.luau")
 (ok if 'safeInit("SpawnTerminalService", SpawnTerminalService, deps)' in _BS else bad)("CLAUDE-BUD J56: SpawnTerminalService is started")
 _VA = _j56_src("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau")
 _rd = _VA.split("AirRotorDisc = {")[1].split("\n\t},")[0] if "AirRotorDisc = {" in _VA else ""
-(ok if ("Enabled = true," in _rd and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _rd) else bad)("CLAUDE-BUD J56: VisualAssetConfig.AirRotorDisc is owner-first")
+(ok if ("Enabled = true," in _rd and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _rd) else bad)("CLAUDE-BUD J56: VisualAssetConfig.AirRotorDisc is public since codebot_v220 (was owner-first)")
 _AR = _j56_src("src/ServerScriptService/Server/Modules/AirBodyRig.luau")
 _rr = _AR.split("local function rigRotor")[1].split("\nend\n")[0] if "local function rigRotor" in _AR else ""
 (ok if ("AirBodyRig._DiscFit(parts, jointRot, centre)" in _rr and "[RotorRig]" in _rr and 'hostModel:GetAttribute("OwnerUserId")' in _rr and "local joint = CFrame.new(centre) * jointRot" in _rr) else bad)(

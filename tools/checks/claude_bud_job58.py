@@ -20,7 +20,7 @@ def _j58_src(p):
 
 
 _HC = _j58_src("src/ReplicatedStorage/Shared/Configs/HangarDockConfig.luau")
-(ok if ("Enabled = true," in _HC and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _HC) else bad)("CLAUDE-BUD J58: HangarDockConfig is owner-first")
+(ok if ("Enabled = true," in _HC and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _HC) else bad)("CLAUDE-BUD J58: HangarDockConfig is public since codebot_v220 (was owner-first)")
 (ok if (not _j58_re.search(r"\b\d{6,}\b", _HC)) else bad)("CLAUDE-BUD J58: no new asset ids (the showpieces reuse the vehicles' approved bodies by vehicle id)")
 _V = _j58_src("src/ServerScriptService/Server/Services/VisualAssetService.luau")
 _cd = _V.split("function VisualAssetService.CloneDisplayBody")[1].split("\nend\n")[0] if "function VisualAssetService.CloneDisplayBody" in _V else ""

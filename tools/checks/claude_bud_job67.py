@@ -19,8 +19,8 @@ def _j67_src(p):
 
 _VA = _j67_src("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau")
 _j = _VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in _VA else ""
-(ok if ("Enabled = true," in _j and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _j and "TurretTierAt = { 1, 4, 7, 10 }" in _j) else bad)(
-    "CLAUDE-BUD J67: VisualAssetConfig.Job67 is owner-first; turret tiers at Guns L1 / 4 / 7 / 10")
+(ok if ("Enabled = true," in _j and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _j and "TurretTierAt = { 1, 4, 7, 10 }" in _j) else bad)(
+    "CLAUDE-BUD J67: VisualAssetConfig.Job67 is public since codebot_v220 (was owner-first); turret tiers at Guns L1 / 4 / 7 / 10")
 # Code Bot v200: promoted after WE_CHECK2 (docs/we_check2_minigun_v200.txt): pack pieces minigun_l01 / l03 / l05 / l08 / l10
 (ok if all(('AutoGunT%d = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l%02d"' % (i, l)) in _VA for i, l in zip(range(1, 6), (1, 3, 5, 8, 10))) else bad)(
     "CLAUDE-BUD J67: the 5 turret tiers are promoted (Code Bot v200 WE_CHECK2): pack Lvl 1 / 3 / 5 / 8 / 10")

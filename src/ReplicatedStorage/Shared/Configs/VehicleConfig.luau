@@ -1105,7 +1105,7 @@ end
 -- AirBodyRig spin parts) are untouched, so the rotor still spins. OFF = the disc as before.
 ;(VehicleConfig :: any).HeliRotorRing = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot v219): flip after Shaun's phone test
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (Code Bot v219): flip after Shaun's phone test
 }
 
 return VehicleConfig

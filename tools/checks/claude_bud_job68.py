@@ -34,8 +34,8 @@ _j68_cfg = _j68_rd("src/ReplicatedStorage/Shared/Configs/RangeLifeConfig.luau")
 _j68_ctl = _j68_rd("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/RangeLifeController.luau")
 _j68_snd = _j68_rd("src/ReplicatedStorage/Shared/Configs/SoundConfig.luau")
 _j68_boot = _j68_rd("src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau")
-(ok if ("OwnerFirst = true" in _j68_cfg and "Enabled = true" in _j68_cfg and "NearStuds = 80" in _j68_cfg and "MaxPerYard = 4" in _j68_cfg) else bad)(
-    "CLAUDE-BUD J68: RangeLifeConfig Enabled + OwnerFirst = true, effects within 80 studs, <= 4 shooters per range")
+(ok if ("OwnerFirst = false" in _j68_cfg and "Enabled = true" in _j68_cfg and "NearStuds = 80" in _j68_cfg and "MaxPerYard = 4" in _j68_cfg) else bad)(
+    "CLAUDE-BUD J68: RangeLifeConfig Enabled + OwnerFirst = false (public since codebot_v220), effects within 80 studs, <= 4 shooters per range")
 (ok if ('safeInit("RangeLifeController"' in _j68_boot) else bad)("CLAUDE-BUD J68: RangeLifeController is started by the client Bootstrap")
 for _ph in ("Heartbeat", "RenderStepped", "Stepped", "GetDescendants", "PointLight", "SpotLight", "SurfaceLight", "Neon", "FireServer", "InvokeServer"):
     (ok if _ph not in _j68_ctl else bad)("CLAUDE-BUD J68: RangeLifeController has no `" + _ph + "` (one shared low-rate loop, no lights, cosmetic only)")

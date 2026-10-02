@@ -22,7 +22,7 @@ def _j59_src(p):
 
 _SC = _j59_src("src/ReplicatedStorage/Shared/Configs/SoundConfig.luau")
 _p59 = _SC.split("SoundConfig.Pass59 = {")[1].split("\n}\n")[0] if "SoundConfig.Pass59 = {" in _SC else ""
-(ok if ("Enabled = true," in _p59 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _p59) else bad)("CLAUDE-BUD J59: SoundConfig.Pass59 is owner-first")
+(ok if ("Enabled = true," in _p59 and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _p59) else bad)("CLAUDE-BUD J59: SoundConfig.Pass59 is public since codebot_v220 (was owner-first)")
 _AU = _j59_src("src/StarterPlayer/StarterPlayerScripts/Client/Modules/AudioController.luau")
 (ok if ("RC.Live(P, lp.UserId)" in _AU and "for key, id in pairs(P.Overrides) do" in _AU) else bad)(
     "CLAUDE-BUD J59: the id swaps apply only while Pass59 is live for this player (OFF = today's sounds)")

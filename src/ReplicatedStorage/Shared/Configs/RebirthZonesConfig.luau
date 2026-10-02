@@ -190,7 +190,7 @@ local RebirthZonesConfig = {
 		existing NukeSilo warheads + NukeLastLaunch (no new save keys). Owner-first by the ATTACKER. ]]
 	NukeRaid = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 65): only Shaun until his phone test
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 65): only Shaun until his phone test
 		CooldownSeconds = 1800, -- after a nuke raid (saved: profile.NukeLastLaunch, the silo's one cooldown)
 		UsesWarhead = true, -- spends one ready warhead (profile.NukeSilo.Ready)
 		Vfx = true, -- the missile + blast on the target base (the MissileStrikeFx packet; light, phone-safe)
@@ -257,7 +257,7 @@ cfg.Card = { MaxDistance = 18 } -- the preview card shows while the zone's promp
 	  * Free for everyone; no Robux anywhere in it. ]]
 cfg.Rebuild = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 50): Code Bot flips it after Shaun's phone test
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 50): Code Bot flips it after Shaun's phone test
 	Activities = true,
 	Plaques = true,
 	Signs = true,

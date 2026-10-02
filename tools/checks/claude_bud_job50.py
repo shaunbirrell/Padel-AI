@@ -25,7 +25,7 @@ def _j50_src(p):
 
 _ZC = _j50_src("src/ReplicatedStorage/Shared/Configs/RebirthZonesConfig.luau")
 _rb = _ZC.split("cfg.Rebuild = {")[1].split("\n}")[0] if "cfg.Rebuild = {" in _ZC else ""
-(ok if ("Enabled = true," in _rb and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _rb) else bad)("CLAUDE-BUD J50 A: RebirthZonesConfig.Rebuild owner-first")
+(ok if ("Enabled = true," in _rb and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _rb) else bad)("CLAUDE-BUD J50 A: RebirthZonesConfig.Rebuild public since codebot_v220 (was owner-first)")
 _ZR = _j50_src("src/ServerScriptService/Server/Modules/ZoneRuns.luau")
 _step = _ZR.split("function ZoneRuns.Step(")[1].split("\nend\n")[0] if "function ZoneRuns.Step(" in _ZR else ""
 (ok if ("player.UserId ~= uid" in _step and "run.Order[run.Step] ~= markerIdx" in _step and "insideAnnex(player, run)" in _step and "run.Deadline" in _step) else bad)(

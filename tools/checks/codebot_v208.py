@@ -52,10 +52,10 @@ SKB = _r(S + "Modules/StructureKitBuilder.luau")
 BLS = _r(S + "Services/BaseLifeService.luau")
 BOOT = _r(S + "Bootstrap.server.luau")
 _c(bool(CFG) and bool(SVC), "Job67DressConfig + Job67DressService present")
-_c("\tEnabled = true,\n\tOwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot JOB 67 remainder)" in CFG, "Job67DressConfig owner-first")
+_c("\tEnabled = true,\n\tOwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (Code Bot JOB 67 remainder)" in CFG, "Job67DressConfig public since codebot_v220 (was owner-first)")
 for _blk in ("Walls", "BaseProps"):
     _i = CFG.find("\t" + _blk + " = {")
-    _c(_i > 0 and "OwnerFirst = true, -- NEW-OWNER-FIRST" in CFG[_i:_i + 400], _blk + " block owner-first")
+    _c(_i > 0 and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in CFG[_i:_i + 400], _blk + " block public since codebot_v220 (was owner-first)")
 for _id in ("70726960831586", "71112106874796", "87282634781307", "116015230898207"):
     _c(_id in CFG, "pack " + _id + " in the central config")
     _c("[" + _id + "](https://create.roblox.com/store/asset/" + _id + ")" in _r("docs/ASSET_LICENSES.md"), "ASSET_LICENSES row " + _id)

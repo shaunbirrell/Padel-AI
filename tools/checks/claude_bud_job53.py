@@ -21,8 +21,8 @@ def _j53_src(p):
 
 _EC = _j53_src("src/ReplicatedStorage/Shared/Configs/EndgameConfig.luau")
 _dv = _EC.split("DefenceVisuals = {")[1].split("\n\t},")[0] if "DefenceVisuals = {" in _EC else ""
-(ok if ("Enabled = true," in _dv and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _dv and "TierAt = { 1, 4, 7, 10 }" in _dv) else bad)(
-    "CLAUDE-BUD J53: EndgameConfig.DefenceVisuals is owner-first, tiers at L1 / 4 / 7 / 10")
+(ok if ("Enabled = true," in _dv and "OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST" in _dv and "TierAt = { 1, 4, 7, 10 }" in _dv) else bad)(
+    "CLAUDE-BUD J53: EndgameConfig.DefenceVisuals is public since codebot_v220 (was owner-first), tiers at L1 / 4 / 7 / 10")
 _DV = _j53_src("src/ServerScriptService/Server/Modules/DefenceVisuals.luau")
 _DVc = "\n".join(l.split("--", 1)[0] for l in _j53_re.sub(r"--\[\[.*?\]\]", "", _DV, flags=_j53_re.S).splitlines())
 _pt = _DVc.split("local function part(")[1].split("\nend\n")[0] if "local function part(" in _DVc else ""

@@ -66,17 +66,17 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", "WE_Build=219"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", "WE_Build=220"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
 ):
-    check(needle in read(rel), "CODEBOT v184: WE_Build=219 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v184: WE_Build=220 " + rel.rsplit("/", 1)[-1])
 
 AOC = read(C + "ArmyOrdersConfig.luau")
 ar = AOC.split("AttackRange = {")[1].split("\n\t},\n")[0] if "AttackRange = {" in AOC else ""
-check("Enabled = true," in ar and "OwnerFirst = true," in ar,
-      "CODEBOT v184: ArmyOrdersConfig.AttackRange Enabled + OwnerFirst=true (phone test)")
+check("Enabled = true," in ar and "OwnerFirst = false," in ar,
+      "CODEBOT v184: ArmyOrdersConfig.AttackRange Enabled + OwnerFirst=false [public since codebot_v220] (phone test)")
 check(Path(S + "Modules/ArmyPlan.luau").is_file() and "AttackRadii" in read(S + "Modules/ArmyPlan.luau"),
       "CODEBOT v184: ArmyPlan uses AttackRadii")
 check(Path("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ArmyNearestController.luau").is_file(),

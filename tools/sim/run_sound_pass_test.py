@@ -34,6 +34,11 @@ local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if no
 task = { spawn = function() end, delay = function() end, defer = function() end, wait = function() end }
 Random = { new = function() return { NextNumber = function(_, a, b) return a end } end }
 local SC = require(node("Configs/SoundConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): SC.Pass59.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = SC.Pass59.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: SC.Pass59.OwnerFirst = false (public for everyone)")
+SC.Pass59.OwnerFirst = true
 local LC = require(node("Configs/LightingConfig"))
 local AC = require(node("Controllers/AmbienceController"))
 local have = {}

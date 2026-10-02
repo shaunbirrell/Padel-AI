@@ -69,6 +69,11 @@ local rn = Instance.new
 Instance.new = function(cls) local o = rn(cls); o.FindFirstChild = findIn; return o end
 
 local STC = require(node("Configs/SpawnTerminalConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): STC.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = STC.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: STC.OwnerFirst = false (public for everyone)")
+STC.OwnerFirst = true
 local ST = require(node("Services/SpawnTerminalService"))
 local OWNER, OTHER = 470626172, 9
 

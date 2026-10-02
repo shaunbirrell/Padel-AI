@@ -65,17 +65,17 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 219'),
-    (S + "Services/DataService.luau", "WE_Build=219"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 219'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 220'),
+    (S + "Services/DataService.luau", "WE_Build=220"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 220'),
 ):
-    check(needle in read(rel), "CODEBOT v183: WE_Build=219 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v183: WE_Build=220 " + rel.rsplit("/", 1)[-1])
 
 CC = read(C + "CombatConfig.luau")
 blk = CC.split("SharedHostility = {")[1].split("\n}")[0] if "SharedHostility = {" in CC else ""
-check("Enabled = true," in blk and "OwnerFirst = true," in blk,
-      "CODEBOT v183: CombatConfig.SharedHostility Enabled + OwnerFirst=true (phone test)")
+check("Enabled = true," in blk and "OwnerFirst = false," in blk,
+      "CODEBOT v183: CombatConfig.SharedHostility Enabled + OwnerFirst=false [public since codebot_v220] (phone test)")
 check(Path(S + "Modules/Hostility.luau").is_file(), "CODEBOT v183: Server/Modules/Hostility.luau present")
 I = read(S + "Services/CombatService/init.luau")
 check("Hostility.Bind({" in I and "mayTarget = CombatService.NpcMayTarget" in I,

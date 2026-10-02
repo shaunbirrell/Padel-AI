@@ -74,7 +74,7 @@ local LightingConfig = {
 	-- Exposure: the client lifts ExposureCompensation at night (owner-first; 0 by day = today's look).
 	Night2 = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 54): Code Bot flips it after Shaun's phone test
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 54): Code Bot flips it after Shaun's phone test
 		PerBaseLights = 4, -- the extra night lights per base (the per-base test: 3 + 4 = 7 <= 40)
 		Helipad = { At = { 64, -104 }, Toward = { 40, -125 }, Range = 50, Brightness = 1.5, PadHalf = 12, PadColor = Color3.fromRGB(110, 255, 140) },
 		Dock = { At = { 98, -72 }, Toward = { 128, -112 }, Range = 56, Brightness = 1.5, BollardX = 101, BollardZ = { -140, -122, -104, -86 }, BollardColor = Color3.fromRGB(255, 210, 120) },

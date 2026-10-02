@@ -48,7 +48,7 @@ for rel in (
 ):
     m = re.search(r'SetAttribute\("WE_Build",\s*(\d+)', read(rel))
     check(m is not None and int(m.group(1)) >= BUILD, "WE_Build >= 218 " + rel.rsplit("/", 1)[-1])
-check("WE_Build=219" in read(S + "Services/DataService.luau"), "DataService profile-loaded log WE_Build=219")
+check("WE_Build=220" in read(S + "Services/DataService.luau"), "DataService profile-loaded log WE_Build=220")
 
 # ---- Rebuild OwnerFirst + Slots + HowTo ----
 rb_i = RZ.find("cfg.Rebuild = {")
@@ -56,7 +56,7 @@ check(rb_i > 0, "RebirthZonesConfig.Rebuild block exists")
 rb = RZ[rb_i: RZ.find("\n}", rb_i) + 2] if rb_i > 0 else ""
 # take a bounded slice
 rb = RZ[rb_i: rb_i + 500]
-check("OwnerFirst = true" in rb, "Rebuild.OwnerFirst = true (owner-first ship)")
+check("OwnerFirst = false" in rb, "Rebuild.OwnerFirst = false (public since codebot_v220)")
 check("Slots = true" in rb, "Rebuild.Slots = true")
 check("HowTo = true" in rb, "Rebuild.HowTo = true")
 check("function cfg.RebuildLive(" in RZ, "RebuildLive helper exists")
@@ -72,7 +72,7 @@ check('"ZoneRunIntro"' in ZRC and "CardLayout" in ZRC and "CancelChip" in ZRC, "
 check("ObjectiveMarker" in ZRC, "ZoneRunController objective arrow")
 
 # ---- RangeLife OwnerFirst ----
-check("OwnerFirst = true" in RL and "Enabled = true" in RL, "RangeLifeConfig Enabled + OwnerFirst = true")
+check("OwnerFirst = false" in RL and "Enabled = true" in RL, "RangeLifeConfig Enabled + OwnerFirst = false [public since codebot_v220]")
 check("NearStuds = 80" in RL and "MaxPerYard = 4" in RL, "RangeLife near 80 / max 4 per yard")
 check('safeInit("RangeLifeController"' in read(CL + "Bootstrap.client.luau"), "RangeLifeController bootstrapped")
 for bad_n in ("Heartbeat", "RenderStepped", "Stepped", "GetDescendants", "PointLight", "FireServer", "InvokeServer"):

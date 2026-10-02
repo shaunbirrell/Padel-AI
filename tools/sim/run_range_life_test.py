@@ -27,6 +27,11 @@ local function check(ok, msg) print((ok and "ok    " or "FAIL  ") .. msg); if no
 Random = { new = function() return { NextNumber = function(_, a, b) a = a or 0; b = b or 1; return (a + b) / 2 end, NextInteger = function(_, a) return a end } end }
 local R = require(node("Controllers/RangeLifeController"))
 local cfg = require(node("Configs/RangeLifeConfig"))
+-- codebot_v220 (Shaun 2026-10-02 07:51: everything public): cfg.OwnerFirst = false live; the owner-first paths
+-- below are still proved with OwnerFirst = true, and a non-owner is live once it is restored (end of test)
+local __V220_LAUNCHED = cfg.OwnerFirst
+check(__V220_LAUNCHED == false, "codebot_v220: cfg.OwnerFirst = false (public for everyone)")
+cfg.OwnerFirst = true
 check(cfg.OwnerFirst == true and cfg.Enabled == true, "RangeLifeConfig: Enabled + OwnerFirst = true")
 check(cfg.NearStuds == 80 and cfg.MaxPerYard <= 4, "effects only within 80 studs, <= 4 shooters per range")
 

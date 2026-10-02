@@ -844,7 +844,7 @@ local VisualAssetConfig = {
 	-- claude-bud JOB 67: the asset upgrade switch (owner-first by the BASE OWNER; OFF = today's models)
 	Job67 = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 67): Code Bot flips it with the public flip
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 67): Code Bot flips it with the public flip
 		-- the turret tier by the owner's Turret Guns level (EndgameConfig.Defence, 0..10): 0 = T1, 1-3 = T2, 4-6 = T3,
 		-- 7-9 = T4, 10 = T5
 		TurretTierAt = { 1, 4, 7, 10 }, -- the first level of T2 / T3 / T4 / T5
@@ -852,7 +852,7 @@ local VisualAssetConfig = {
 	},
 	AirRotorDisc = {
 		Enabled = true,
-		OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud JOB 56): Code Bot flips it after Shaun's phone test
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 56): Code Bot flips it after Shaun's phone test
 		MinTiltDeg = 1, -- below this the configured axis is kept
 		MinOffset = 0.05, -- studs: below this the configured centre is kept
 		MaxCorrectionDeg = 25, -- a larger "tilt" means the box guess is wrong: keep the configured axis
