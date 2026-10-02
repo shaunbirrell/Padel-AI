@@ -52,7 +52,7 @@ _jb("isClanAlly(owner, victim)" in _may and "pvpBlock(owner, victim)" in _may
     and all(k in _pvb for k in ("GameConfig.PvPEnabled", "NS.allowsAttack(attacker)", "InvulnerableUntil", '"protected"')),
     "UnitMayHitPlayer keeps PvP, clan, novice and spawn-shield rules (v124: via the shared pvpBlock)")
 _uph = _jb_fn(_CS, "function CombatService.ApplyUnitPlayerHit(")
-_jb("CombatService.UnitMayHitPlayer(owner, victim)" in _uph and 'hurtPlayer(owner, victim, damage, "Squad", { UnitShot = true })' in _uph,
+_jb("CombatService.UnitMayHitPlayer(owner, victim)" in _uph and 'hurtPlayer(owner, victim, damage, "Squad", {\n\t\tUnitShot = true,' in _uph,  # v216 (Code Bot): + FromPos
     "an army hit on a player goes through hurtPlayer (creator tag = the owner: cash, XP, MOST KILLS)")
 _jb("Players:GetPlayerFromCharacter(model) ~= nil then" in _jb_fn(_CS, "function CombatService.ApplyUnitHit("), "ApplyUnitHit (NPC path) unchanged: never a player")
 _jb("function GateDefenseService.ApplyUnitDamage(" in _GD and "local function applyDamageFrom(" in _GD and "function GateDefenseService.ApplyDamage(" in _GD

@@ -3031,7 +3031,7 @@ local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: Base
 			return false
 		end
 		dmg = math.min(dmg, room)
-		local ok, dealt, _killed, why = pcall(CombatService.ApplyUnitPlayerHit, player, tgt.Player, dmg)
+		local ok, dealt, _killed, why = pcall(CombatService.ApplyUnitPlayerHit, player, tgt.Player, dmg, unit.Root.Position) -- v216: shooter pos
 		local d = if ok then tonumber(dealt) or 0 else 0
 		w.Dealt += d
 		hitLog(player, unit, kind, name, dmg, d, if ok then tostring(why) else "error")

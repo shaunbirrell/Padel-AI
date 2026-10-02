@@ -6818,6 +6818,14 @@ HudConfig.Hotbar = {
 	HolsterAutoDrawGraceSeconds = 4, -- v99: AutoDrawOnDamage waits this long after the player holstered by hand
 	DrawnOnSpawn = false, -- you spawn holstered: clicks go to the world (droppers, consoles), not the gun
 	AutoDrawOnDamage = true, -- taking damage from a player/NPC draws the last weapon
+	--[[ codebot v216 (owner 2026-10-02, phone: "my army fights far away and MY gun keeps coming out + I stop walking"):
+		AutoDrawOnDamage drew on ANY health drop / Damaged with no check of where it came from. Live
+		(RetentionConfig.Live: Enabled, then OwnerFirst = owner / playtest owner only, Studio): the draw needs real
+		combat - a gun / blast hit (always), an army / defence hit whose shooter (Damaged.From, now the real unit) is
+		within NearStuds (or unknown), or a health drop with no Damaged that has another player / a soldier not yours /
+		an NPC within NearStuds (one scan per drop, no loop). Edge flash + RecentCombat stay on every drop. The player's
+		own shooting (FIRE / keys / hotbar) is input and never goes through here. Enabled = false = v214. ]]
+	AutoDrawGuard = { Enabled = true, OwnerFirst = true, NearStuds = 160, ConfirmSeconds = 0.6 }, -- NEW-OWNER-FIRST (v216)
 	HideWhen = { "Driving", "Dead", "Modal" },
 }
 
@@ -25261,6 +25269,7 @@ export type CombatHitFeedbackPayload = {
 	TargetKind: string?, -- "Player" | "NPC" | "Vehicle" | "Gate"
 	Pos: Vector3?, -- Hit/Kill: world hit point (damage-number anchor)
 	From: Vector3?, -- Damaged: attacker position (direction cue)
+	Unit: boolean?, -- codebot v216: Damaged from an army / defence shot (From = that shooter, nil = unknown)
 	Assist: boolean?, -- Hit/Kill: the server assist chose this target
 	Splash: boolean?, -- aggregated area damage
 }
@@ -32207,7 +32216,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 215)
+		player:SetAttribute("WE_Build", 216)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -78305,7 +78314,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 215)
+			player:SetAttribute("WE_Build", 216)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -82034,6 +82043,7 @@ type FbOpts = {
 	NoAttackerFb: boolean?, -- no per-target attacker feedback (splash sends one aggregate)
 	NoKillMarker: boolean?, -- no per-NPC "Kill" marker (splash)
 	UnitShot: boolean?,
+	FromPos: Vector3?, -- codebot v216: UnitShot - the real shooter (unit / defence) for the victim's Damaged.From
 	NoCredit: boolean?, -- squadfair: no creator tag and no kill payout from this hit (it still provokes the group)
 }
 
@@ -82589,12 +82599,28 @@ local function hurtPlayer(attacker: Player?, victim: Player, damage: number, wea
 			})
 		end
 	end
+	-- codebot v216 (HudConfig.Hotbar.AutoDrawGuard, live for the VICTIM): an army / defence hit names its real shooter
+	-- (FromPos, nil = unknown), not the far-away owner's character, and says Unit = true - the victim's auto-draw
+	-- judges real combat from it (CombatController onDamaged)
+	local unitSrc = false
+	if fb and fb.UnitShot == true then
+		local okG, liveG = pcall(function(): boolean
+			local RC: any = require(ReplicatedStorage.Shared.Configs.RetentionConfig)
+			local HC: any = require(ReplicatedStorage.Shared.Configs.HudConfig)
+			return RC.Live(HC.Hotbar.AutoDrawGuard, victim.UserId) == true
+		end)
+		if okG and liveG then
+			unitSrc = true
+			from = fb.FromPos
+		end
+	end
 	hitFeedback(victim, {
 		Kind = if killed then "Death" else "Damaged",
 		Damage = dealt,
 		WeaponId = weaponId,
 		From = from, -- W2: direction cue
-	})
+		Unit = if unitSrc then true else nil, -- codebot v216
+	} :: any)
 	pushState(victim)
 	return dealt, killed
 end
@@ -84158,7 +84184,7 @@ end
 	rolled the hit chance; UnitMayHitPlayer is checked again here). Through hurtPlayer like any gun hit: the creator tag
 	credits the OWNER (cash, XP, MOST KILLS, the kill feed), the victim gets the hit / death feedback, the owner a hit
 	marker + damage number. Returns (dealt, killed, reason). ]]
-function CombatService.ApplyUnitPlayerHit(owner: Player, victim: Player, damage: number): (number, boolean, string)
+function CombatService.ApplyUnitPlayerHit(owner: Player, victim: Player, damage: number, fromPos: Vector3?): (number, boolean, string)
 	if typeof(owner) ~= "Instance" or not owner:IsA("Player") or typeof(victim) ~= "Instance" or not victim:IsA("Player") then
 		return 0, false, "bad_args"
 	end
@@ -84169,14 +84195,17 @@ function CombatService.ApplyUnitPlayerHit(owner: Player, victim: Player, damage:
 	if not may then
 		return 0, false, why
 	end
-	local dealt, killed = hurtPlayer(owner, victim, damage, "Squad", { UnitShot = true })
+	local dealt, killed = hurtPlayer(owner, victim, damage, "Squad", {
+		UnitShot = true,
+		FromPos = if typeof(fromPos) == "Vector3" then fromPos else nil, -- codebot v216: the shooting unit
+	})
 	return dealt, killed, if dealt > 0 then "ok" else "no_damage"
 end
 
 -- claude-bud JOB 40 part A: a base defence's hit on a player (post / gate / tower guards, AutoGuns of a live base):
 -- THE same rule as the owner's army (UnitMayHitPlayer, re-checked here) and the same hurtPlayer (the creator tag credits
 -- the base owner; the kill feed names the defence kind). Returns (dealt, killed, reason).
-function CombatService.ApplyDefenceHit(owner: Player, victim: Player, damage: number, kind: string?): (number, boolean, string)
+function CombatService.ApplyDefenceHit(owner: Player, victim: Player, damage: number, kind: string?, fromPos: Vector3?): (number, boolean, string)
 	if typeof(owner) ~= "Instance" or not owner:IsA("Player") or typeof(victim) ~= "Instance" or not victim:IsA("Player") then
 		return 0, false, "bad_args"
 	end
@@ -84187,7 +84216,10 @@ function CombatService.ApplyDefenceHit(owner: Player, victim: Player, damage: nu
 	if not may then
 		return 0, false, why
 	end
-	local dealt, killed = hurtPlayer(owner, victim, damage, if typeof(kind) == "string" then kind else "BaseGuard", { UnitShot = true })
+	local dealt, killed = hurtPlayer(owner, victim, damage, if typeof(kind) == "string" then kind else "BaseGuard", {
+		UnitShot = true,
+		FromPos = if typeof(fromPos) == "Vector3" then fromPos else nil, -- codebot v216 (nil = unknown: the victim draws)
+	})
 	return dealt, killed, if dealt > 0 then "ok" else "no_damage"
 end
 
@@ -87012,7 +87044,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 215)
+		player:SetAttribute("WE_Build", 216)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -87154,7 +87186,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=215",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=216",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -121113,7 +121145,7 @@ local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: Base
 			return false
 		end
 		dmg = math.min(dmg, room)
-		local ok, dealt, _killed, why = pcall(CombatService.ApplyUnitPlayerHit, player, tgt.Player, dmg)
+		local ok, dealt, _killed, why = pcall(CombatService.ApplyUnitPlayerHit, player, tgt.Player, dmg, unit.Root.Position) -- v216: shooter pos
 		local d = if ok then tonumber(dealt) or 0 else 0
 		w.Dealt += d
 		hitLog(player, unit, kind, name, dmg, d, if ok then tostring(why) else "error")
@@ -140790,18 +140822,111 @@ local function showHitMarker(kind: string)
 	end)
 end
 
-local function onDamaged()
+-- codebot v216: HudConfig.Hotbar.AutoDrawGuard (one table: module locals are at Luau's register limit)
+local ADG: any = { LastDamagedAt = -math.huge, Pending = false }
+function ADG.live(): boolean
+	local ok, RC = pcall(function(): any
+		return require(Shared.Configs.RetentionConfig)
+	end)
+	local g = HB_ANY.AutoDrawGuard
+	return ok and RC ~= nil and typeof(g) == "table" and RC.Live(g, player.UserId) == true
+end
+function ADG.near(): number
+	return tonumber(HB_ANY.AutoDrawGuard and HB_ANY.AutoDrawGuard.NearStuds) or 160
+end
+function ADG.myPos(): Vector3?
+	local ch = player.Character
+	local r = ch and ch:FindFirstChild("HumanoidRootPart")
+	return if r and r:IsA("BasePart") then r.Position else nil
+end
+-- another player / a soldier that is not mine / an NPC within NearStuds (once per unconfirmed drop: no loop)
+function ADG.bodyNear(): boolean
+	local me = ADG.myPos()
+	if me == nil then
+		return true -- no body to measure from: the old behaviour
+	end
+	local r = ADG.near()
+	local function close(m: Instance): boolean
+		local root = m:FindFirstChild("HumanoidRootPart")
+		local hum = m:FindFirstChildOfClass("Humanoid")
+		return root ~= nil and root:IsA("BasePart") and hum ~= nil and hum.Health > 0
+			and (root.Position - me).Magnitude <= r
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player and p.Character and close(p.Character) then
+			return true
+		end
+	end
+	local sq = Workspace:FindFirstChild("WarEmpireSquads")
+	if sq then
+		for _, m in ipairs(sq:GetChildren()) do
+			if m:GetAttribute("OwnerUserId") ~= player.UserId and close(m) then
+				return true
+			end
+		end
+	end
+	local npc = Workspace:FindFirstChild("WarEmpireNPCs")
+	if npc then
+		for _, m in ipairs(npc:GetChildren()) do
+			if close(m) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- src: nil = a health drop (HealthChanged / CombatStateUpdate); a table = the server's Damaged feedback
+local function onDamaged(src: any?)
 	if not alive then
 		return
 	end
 	markCombat()
+	if src ~= nil then
+		ADG.LastDamagedAt = clock()
+	end
 	flashEdge()
 	-- ambush: draw the last weapon (not from a seat — combat is hidden there and Q/1-4 belong to the vehicle)
-	if HB.AutoDrawOnDamage and not drawn and not seatedNow() and not HudLayout.GetFlag("Dead")
-		and clock() - Feel.HolsterAt >= (tonumber(HB_ANY.HolsterAutoDrawGraceSeconds) or 4) -- v99: not right after a holster
-	then
-		setDrawn(true)
+	local function mayDraw(): boolean
+		if HB.AutoDrawOnDamage and not drawn and not seatedNow() and not HudLayout.GetFlag("Dead") and alive
+			and clock() - Feel.HolsterAt >= (tonumber(HB_ANY.HolsterAutoDrawGraceSeconds) or 4) -- v99: not right after a holster
+		then
+			return true
+		end
+		return false
 	end
+	if not mayDraw() then
+		return
+	end
+	if not ADG.live() then
+		setDrawn(true) -- v214 behaviour
+		return
+	end
+	if src ~= nil then
+		-- a real hit on ME: draw, unless it is an army / defence shot whose shooter is known and far away
+		local from = src.From
+		local me = ADG.myPos()
+		if src.Unit == true and typeof(from) == "Vector3" and me ~= nil and (from - me).Magnitude > ADG.near() then
+			return
+		end
+		setDrawn(true)
+		return
+	end
+	-- a health drop: the Damaged feedback (same server step) decides; without one, only a body close by draws
+	if ADG.Pending then
+		return
+	end
+	ADG.Pending = true
+	local at = clock()
+	task.delay(tonumber(HB_ANY.AutoDrawGuard.ConfirmSeconds) or 0.6, function()
+		ADG.Pending = false
+		if ADG.LastDamagedAt >= at - 0.5 then
+			return -- the Damaged path already judged this hit
+		end
+		if mayDraw() and ADG.bodyNear() then
+			setDrawn(true)
+		end
+	end)
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -141438,7 +141563,7 @@ local function onHitFeedback(raw: any)
 		markCombat()
 		showHitMarker(kind)
 	elseif kind == "Damaged" then
-		onDamaged()
+		onDamaged(raw) -- codebot v216: the source (From / Unit) goes to the AutoDrawGuard
 		local cf = Feel.CF
 		if cf then
 			pcall(cf.HitTaken, tonumber(raw.Damage) or 0) -- W2: small trauma pulse

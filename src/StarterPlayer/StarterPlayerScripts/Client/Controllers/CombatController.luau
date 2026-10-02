@@ -643,18 +643,111 @@ local function showHitMarker(kind: string)
 	end)
 end
 
-local function onDamaged()
+-- codebot v216: HudConfig.Hotbar.AutoDrawGuard (one table: module locals are at Luau's register limit)
+local ADG: any = { LastDamagedAt = -math.huge, Pending = false }
+function ADG.live(): boolean
+	local ok, RC = pcall(function(): any
+		return require(Shared.Configs.RetentionConfig)
+	end)
+	local g = HB_ANY.AutoDrawGuard
+	return ok and RC ~= nil and typeof(g) == "table" and RC.Live(g, player.UserId) == true
+end
+function ADG.near(): number
+	return tonumber(HB_ANY.AutoDrawGuard and HB_ANY.AutoDrawGuard.NearStuds) or 160
+end
+function ADG.myPos(): Vector3?
+	local ch = player.Character
+	local r = ch and ch:FindFirstChild("HumanoidRootPart")
+	return if r and r:IsA("BasePart") then r.Position else nil
+end
+-- another player / a soldier that is not mine / an NPC within NearStuds (once per unconfirmed drop: no loop)
+function ADG.bodyNear(): boolean
+	local me = ADG.myPos()
+	if me == nil then
+		return true -- no body to measure from: the old behaviour
+	end
+	local r = ADG.near()
+	local function close(m: Instance): boolean
+		local root = m:FindFirstChild("HumanoidRootPart")
+		local hum = m:FindFirstChildOfClass("Humanoid")
+		return root ~= nil and root:IsA("BasePart") and hum ~= nil and hum.Health > 0
+			and (root.Position - me).Magnitude <= r
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player and p.Character and close(p.Character) then
+			return true
+		end
+	end
+	local sq = Workspace:FindFirstChild("WarEmpireSquads")
+	if sq then
+		for _, m in ipairs(sq:GetChildren()) do
+			if m:GetAttribute("OwnerUserId") ~= player.UserId and close(m) then
+				return true
+			end
+		end
+	end
+	local npc = Workspace:FindFirstChild("WarEmpireNPCs")
+	if npc then
+		for _, m in ipairs(npc:GetChildren()) do
+			if close(m) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- src: nil = a health drop (HealthChanged / CombatStateUpdate); a table = the server's Damaged feedback
+local function onDamaged(src: any?)
 	if not alive then
 		return
 	end
 	markCombat()
+	if src ~= nil then
+		ADG.LastDamagedAt = clock()
+	end
 	flashEdge()
 	-- ambush: draw the last weapon (not from a seat — combat is hidden there and Q/1-4 belong to the vehicle)
-	if HB.AutoDrawOnDamage and not drawn and not seatedNow() and not HudLayout.GetFlag("Dead")
-		and clock() - Feel.HolsterAt >= (tonumber(HB_ANY.HolsterAutoDrawGraceSeconds) or 4) -- v99: not right after a holster
-	then
-		setDrawn(true)
+	local function mayDraw(): boolean
+		if HB.AutoDrawOnDamage and not drawn and not seatedNow() and not HudLayout.GetFlag("Dead") and alive
+			and clock() - Feel.HolsterAt >= (tonumber(HB_ANY.HolsterAutoDrawGraceSeconds) or 4) -- v99: not right after a holster
+		then
+			return true
+		end
+		return false
 	end
+	if not mayDraw() then
+		return
+	end
+	if not ADG.live() then
+		setDrawn(true) -- v214 behaviour
+		return
+	end
+	if src ~= nil then
+		-- a real hit on ME: draw, unless it is an army / defence shot whose shooter is known and far away
+		local from = src.From
+		local me = ADG.myPos()
+		if src.Unit == true and typeof(from) == "Vector3" and me ~= nil and (from - me).Magnitude > ADG.near() then
+			return
+		end
+		setDrawn(true)
+		return
+	end
+	-- a health drop: the Damaged feedback (same server step) decides; without one, only a body close by draws
+	if ADG.Pending then
+		return
+	end
+	ADG.Pending = true
+	local at = clock()
+	task.delay(tonumber(HB_ANY.AutoDrawGuard.ConfirmSeconds) or 0.6, function()
+		ADG.Pending = false
+		if ADG.LastDamagedAt >= at - 0.5 then
+			return -- the Damaged path already judged this hit
+		end
+		if mayDraw() and ADG.bodyNear() then
+			setDrawn(true)
+		end
+	end)
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -1291,7 +1384,7 @@ local function onHitFeedback(raw: any)
 		markCombat()
 		showHitMarker(kind)
 	elseif kind == "Damaged" then
-		onDamaged()
+		onDamaged(raw) -- codebot v216: the source (From / Unit) goes to the AutoDrawGuard
 		local cf = Feel.CF
 		if cf then
 			pcall(cf.HitTaken, tonumber(raw.Damage) or 0) -- W2: small trauma pulse

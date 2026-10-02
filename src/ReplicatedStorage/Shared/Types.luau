@@ -291,6 +291,7 @@ export type CombatHitFeedbackPayload = {
 	TargetKind: string?, -- "Player" | "NPC" | "Vehicle" | "Gate"
 	Pos: Vector3?, -- Hit/Kill: world hit point (damage-number anchor)
 	From: Vector3?, -- Damaged: attacker position (direction cue)
+	Unit: boolean?, -- codebot v216: Damaged from an army / defence shot (From = that shooter, nil = unknown)
 	Assist: boolean?, -- Hit/Kill: the server assist chose this target
 	Splash: boolean?, -- aggregated area damage
 }

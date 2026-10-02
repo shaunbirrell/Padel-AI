@@ -460,6 +460,14 @@ HudConfig.Hotbar = {
 	HolsterAutoDrawGraceSeconds = 4, -- v99: AutoDrawOnDamage waits this long after the player holstered by hand
 	DrawnOnSpawn = false, -- you spawn holstered: clicks go to the world (droppers, consoles), not the gun
 	AutoDrawOnDamage = true, -- taking damage from a player/NPC draws the last weapon
+	--[[ codebot v216 (owner 2026-10-02, phone: "my army fights far away and MY gun keeps coming out + I stop walking"):
+		AutoDrawOnDamage drew on ANY health drop / Damaged with no check of where it came from. Live
+		(RetentionConfig.Live: Enabled, then OwnerFirst = owner / playtest owner only, Studio): the draw needs real
+		combat - a gun / blast hit (always), an army / defence hit whose shooter (Damaged.From, now the real unit) is
+		within NearStuds (or unknown), or a health drop with no Damaged that has another player / a soldier not yours /
+		an NPC within NearStuds (one scan per drop, no loop). Edge flash + RecentCombat stay on every drop. The player's
+		own shooting (FIRE / keys / hotbar) is input and never goes through here. Enabled = false = v214. ]]
+	AutoDrawGuard = { Enabled = true, OwnerFirst = true, NearStuds = 160, ConfirmSeconds = 0.6 }, -- NEW-OWNER-FIRST (v216)
 	HideWhen = { "Driving", "Dead", "Modal" },
 }
 

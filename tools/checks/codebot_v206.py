@@ -65,12 +65,12 @@ OWN = 'SetAttribute("WE_Build", 206)' in read(S + "Services/DataService.luau")  
 CURRENT_BUILD = int((re.search(r'WE_Build", (\d+)\)', read(S + "Services/DataService.luau")) or [0, "0"])[1])
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 215'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 215'),
-    (S + "Services/DataService.luau", "WE_Build=215"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 215'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 216'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 216'),
+    (S + "Services/DataService.luau", "WE_Build=216"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 216'),
 ):
-    check(BUD or needle in read(rel), "CODEBOT v206: WE_Build=215 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
+    check(BUD or needle in read(rel), "CODEBOT v206: WE_Build=216 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
 
 # ── the 300 s delay (one value) ──
 MON = read(C + "MonetizationConfig.luau")

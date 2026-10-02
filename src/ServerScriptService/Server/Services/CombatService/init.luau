@@ -205,6 +205,7 @@ type FbOpts = {
 	NoAttackerFb: boolean?, -- no per-target attacker feedback (splash sends one aggregate)
 	NoKillMarker: boolean?, -- no per-NPC "Kill" marker (splash)
 	UnitShot: boolean?,
+	FromPos: Vector3?, -- codebot v216: UnitShot - the real shooter (unit / defence) for the victim's Damaged.From
 	NoCredit: boolean?, -- squadfair: no creator tag and no kill payout from this hit (it still provokes the group)
 }
 
@@ -760,12 +761,28 @@ local function hurtPlayer(attacker: Player?, victim: Player, damage: number, wea
 			})
 		end
 	end
+	-- codebot v216 (HudConfig.Hotbar.AutoDrawGuard, live for the VICTIM): an army / defence hit names its real shooter
+	-- (FromPos, nil = unknown), not the far-away owner's character, and says Unit = true - the victim's auto-draw
+	-- judges real combat from it (CombatController onDamaged)
+	local unitSrc = false
+	if fb and fb.UnitShot == true then
+		local okG, liveG = pcall(function(): boolean
+			local RC: any = require(ReplicatedStorage.Shared.Configs.RetentionConfig)
+			local HC: any = require(ReplicatedStorage.Shared.Configs.HudConfig)
+			return RC.Live(HC.Hotbar.AutoDrawGuard, victim.UserId) == true
+		end)
+		if okG and liveG then
+			unitSrc = true
+			from = fb.FromPos
+		end
+	end
 	hitFeedback(victim, {
 		Kind = if killed then "Death" else "Damaged",
 		Damage = dealt,
 		WeaponId = weaponId,
 		From = from, -- W2: direction cue
-	})
+		Unit = if unitSrc then true else nil, -- codebot v216
+	} :: any)
 	pushState(victim)
 	return dealt, killed
 end
@@ -2329,7 +2346,7 @@ end
 	rolled the hit chance; UnitMayHitPlayer is checked again here). Through hurtPlayer like any gun hit: the creator tag
 	credits the OWNER (cash, XP, MOST KILLS, the kill feed), the victim gets the hit / death feedback, the owner a hit
 	marker + damage number. Returns (dealt, killed, reason). ]]
-function CombatService.ApplyUnitPlayerHit(owner: Player, victim: Player, damage: number): (number, boolean, string)
+function CombatService.ApplyUnitPlayerHit(owner: Player, victim: Player, damage: number, fromPos: Vector3?): (number, boolean, string)
 	if typeof(owner) ~= "Instance" or not owner:IsA("Player") or typeof(victim) ~= "Instance" or not victim:IsA("Player") then
 		return 0, false, "bad_args"
 	end
@@ -2340,14 +2357,17 @@ function CombatService.ApplyUnitPlayerHit(owner: Player, victim: Player, damage:
 	if not may then
 		return 0, false, why
 	end
-	local dealt, killed = hurtPlayer(owner, victim, damage, "Squad", { UnitShot = true })
+	local dealt, killed = hurtPlayer(owner, victim, damage, "Squad", {
+		UnitShot = true,
+		FromPos = if typeof(fromPos) == "Vector3" then fromPos else nil, -- codebot v216: the shooting unit
+	})
 	return dealt, killed, if dealt > 0 then "ok" else "no_damage"
 end
 
 -- claude-bud JOB 40 part A: a base defence's hit on a player (post / gate / tower guards, AutoGuns of a live base):
 -- THE same rule as the owner's army (UnitMayHitPlayer, re-checked here) and the same hurtPlayer (the creator tag credits
 -- the base owner; the kill feed names the defence kind). Returns (dealt, killed, reason).
-function CombatService.ApplyDefenceHit(owner: Player, victim: Player, damage: number, kind: string?): (number, boolean, string)
+function CombatService.ApplyDefenceHit(owner: Player, victim: Player, damage: number, kind: string?, fromPos: Vector3?): (number, boolean, string)
 	if typeof(owner) ~= "Instance" or not owner:IsA("Player") or typeof(victim) ~= "Instance" or not victim:IsA("Player") then
 		return 0, false, "bad_args"
 	end
@@ -2358,7 +2378,10 @@ function CombatService.ApplyDefenceHit(owner: Player, victim: Player, damage: nu
 	if not may then
 		return 0, false, why
 	end
-	local dealt, killed = hurtPlayer(owner, victim, damage, if typeof(kind) == "string" then kind else "BaseGuard", { UnitShot = true })
+	local dealt, killed = hurtPlayer(owner, victim, damage, if typeof(kind) == "string" then kind else "BaseGuard", {
+		UnitShot = true,
+		FromPos = if typeof(fromPos) == "Vector3" then fromPos else nil, -- codebot v216 (nil = unknown: the victim draws)
+	})
 	return dealt, killed, if dealt > 0 then "ok" else "no_damage"
 end
 

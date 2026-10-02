@@ -60,12 +60,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 215'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 215'),
-    (S + "Services/DataService.luau", "WE_Build=215"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 215'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 216'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 216'),
+    (S + "Services/DataService.luau", "WE_Build=216"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 216'),
 ):
-    check(needle in read(rel), "CODEBOT v194: WE_Build=215 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v194: WE_Build=216 " + rel.rsplit("/", 1)[-1])
 
 EC = code(read(C + "EconomyConfig.luau"))
 m = re.search(r"\bMaxCash\s*=\s*([0-9_.eE+]+)\s*,", EC)
