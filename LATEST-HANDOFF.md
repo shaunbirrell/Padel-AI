@@ -1,3 +1,53 @@
+## v235 PUBLISHED (Code Bot Roblox, 2026-10-02 17:22 Dublin): Open Cloud place version **233**. JOB 74 Central Plaza DEFENDERS + PLAZA TAX (owner-first)
+
+**COMPLETED**
+- Cherry-picked Claude `b8b22dd` (JOB 74) onto `phase-7-polish`; WE_Build **235**; published place version **233** (HTTP 200). No server restart.
+- Owner-first only: `PlazaDefenderConfig.OwnerFirst=true` for Shaun (`AdminConfig.IsPlaytestOwner`) + Laumartinez26 (11718087109). Everyone else unchanged.
+- A) PlazaDefenders (driven by OutpostDefenders' existing 2s step): holder roster from POWER, ≤6 soldiers + ≤2 crewed armour (owned only), CombatService TargetFilter + HitFilter, blocks capture while alive, redeploy 90s, despawn on loss/leave, neutral guards back after 150s, billboard + toast.
+- B) PLAZA TAX: 10% of other players' *passive* income to holder's ATM as never-multiplied `plaza_tax`. Skips holder/allies/novice/PvP-off/non-tester holder. Client chips under TARGETS.
+- PreferMesh OFF; WE_Building* untouched; no price/Id/save-key changes. Deferred JOB64/62/DW-proof still unmerged.
+
+**FILES**
+- `src/ReplicatedStorage/Shared/Configs/PlazaDefenderConfig.luau` (new)
+- `src/ServerScriptService/Server/Modules/PlazaDefenders.luau` (new)
+- `src/ServerScriptService/Server/Modules/OutpostDefenders.luau` (hook)
+- `src/ServerScriptService/Server/Services/CombatService/init.luau` (HitFilter)
+- `src/ServerScriptService/Server/Services/EconomyService.luau` (plaza_tax)
+- `src/ServerScriptService/Server/Services/TerritoryService/init.luau` (Holder pass)
+- `src/StarterPlayer/.../Client/Controllers/PlazaTaxController.luau` (new) + Bootstrap wire
+- `tools/checks/claude_bud_job74.py`, `tools/sim/run_plaza_defenders_test.py`, `tools/checks/codebot_v235.py`
+- WE_Build pins: BaseService / DataService / EarlyRemotes → 235
+
+**TESTING**
+- `claude_bud_job74.py` J74-01..17 PASS (with LUAU_COMPILE)
+- `run_plaza_defenders_test.py` 0 failed
+- `BuyPathStatic` PASS=9836 FAIL=0
+- `codebot_v235.py` all PASS
+
+**PHONE TEST (Shaun + Laumartinez26, 2 phones, same server — rejoin for v235):**
+1. Shaun captures Central Plaza → toast "Your troops are defending the Plaza"; within ~2s defenders (+ armour if owned) + "Defended by … · Lv X" billboard.
+2. Laura walks in → defenders shoot her; capture blocked ("Defeat the defenders first!") until all dead. Shaun cannot hurt his own defenders.
+3. Kill them all → capture opens; they redeploy ~90s later if Shaun still holds.
+4. Laura takes Plaza (or Plaza Airstrike) → Shaun's defenders vanish; hers deploy.
+5. Tax: while Shaun holds, Laura sees "TAXED 10% BY … · take the Plaza!"; Shaun sees "PLAZA TAX +$X/s"; ATM grows by 10% of her passive. Dev-product / offline never taxed.
+6. Shaun leaves → defenders + chips gone; neutral guards back ~2.5 min later.
+
+**NEXT**
+- Keep OwnerFirst until Shaun OKs public. JOB 73 map redesign still on hold. JOB 72 Admin Abuse extras parked on `wip/job72-admin-extras`. Deferred: JOB64 (Creator Hub), JOB62 (WE_NOTIFY_KEY), DW-proof (needs JOB64).
+
+codeCommit=`d80d20f` cherry=`e2d9986`/`b8b22dd` place=233 build=235
+
+---
+
+## v234 PUBLISHED (Code Bot Roblox, 2026-10-02 16:18 Dublin): Open Cloud place version **232**. ADMIN ABUSE PROMO HIDDEN UNTIL SUN 4 OCT 21:00 DUBLIN
+- **Source:** Code Bot `eeef33b` on phase-7-polish; bud merge `69bc2f9` + CLAUDE.md note `ed07e73`. WE_Build **234**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change. Servers NOT restarted (new servers get it).
+- **WHAT (Shaun 16:13: "dont promote a pop up banner or anything for the admin abuse event until this event finishes on sunday night"):** `AdminAbuseConfig.PromoStartsAtUtc = 1791144000` (2026-10-04T20:00:00Z = Sun 21:00 Dublin, the DOUBLE WEEKEND end) + `AdminAbuseConfig.PromoOpen(now)`. `DoubleWeekendController.promoHidden(cfg, t)`: for a config with PromoStartsAtUtc (only Admin Abuse) `refresh` hides the chip (countdown AND LIVE), closes any card, and returns BEFORE `popupTick` (pop-up never shown, never marked seen); chip tap ignored. The 1 s loop keeps running, so the chip + one-time RSVP pop-up appear on their own at 21:00 Sun with no publish. `DoubleEvent` ignores `RequestEventPopupSeen` for a config whose promo is not open. EventConfig (DOUBLE WEEKEND) has no PromoStartsAtUtc: unchanged. Owner panel (AdminConfig) unchanged; an owner-pressed ANNOUNCE / action still shows its own effect on every server (that is the owner's choice), but no LIVE chip before Sun 21:00.
+- **OLD SERVERS:** players on servers started before this publish keep build 233's ADMIN ABUSE chip + pop-up (and the pop-up gets marked seen there) until they rejoin a new server. Not restarted per Shaun.
+- **FILES:** `AdminAbuseConfig.luau`, `DoubleWeekendController.luau`, `DoubleEvent.luau`, `tools/checks/codebot_v234.py`, WE_Build pins 233 → 234, `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`). Bud `CLAUDE.md`: do not re-enable promo early.
+- **TESTING:** BuyPathStatic **PASS=9797 FAIL=0**; codebot_v234 17/17 PASS; codebot_v233 all PASS; admin abuse sims 0 failed; event_double_weekend_verify TOTAL FAIL=0.
+- **Publish:** HTTP 200, versionNumber **232**, universe 10767159222 / place 97112936860418. **Servers NOT restarted**.
+- **NEXT:** JOB64 / JOB62 / DW-proof still held on bud. JOB 72 extras: any player-facing promo must respect `AdminAbuseConfig.PromoOpen`.
+
 ## v233 PUBLISHED (Code Bot Roblox, 2026-10-02 15:56 Dublin): Open Cloud place version **231**. JOB 71 ADMIN ABUSE live event (owner panel + public chip/popup)
 - **Source:** Cherry-pick Claude `6c92430` onto phase-7-polish as `d9dde7b` (conflicts resolved: Bootstrap took AdminAbuseService only — ReferralService / JOB 64 held; codebot_v211 keep SupplyDropConfig + DoubleWeekendController exceptions, not EngagementService; job61_pins stayed deleted on live). Code Bot `15ece70` WE_Build **233** + `codebot_v233.py`. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change. Servers NOT restarted (new servers get it).
 - **WHAT:** ADMIN ABUSE live event Sat 10 Oct 2026 20:00–20:30 Dublin (`StartUnix` 1791658800 → `EndUnix` 1791660600). `AdminAbuseConfig` (EventId string `9167160688932684354`, Topic `WE_AdminAbuse`, OwnerFirst=false for public chip/popup). `AdminAbuseService`: RequestAdminAbuse gated on the SERVER by `AdminConfig.IsPlaytestOwner` (+ RemoteGate + rate limit + cooldown); ANNOUNCE filtered for broadcast; one MessagingService topic publishes `{action, args, sentAt, nonce}` (< 900 B); every server applies (nonce once, > 30 s ignored; failed publish applies locally). Actions: CASH RAIN, AIRSTRIKE STORM (visual only, MinHealth 1, no building damage), FREE TANK (loan via SpawnEventVehicle, never saved), 2x CASH (max with Double Weekend, earned only), LOW GRAVITY, SPEED FOR ALL, GIANT BOSS, ANNOUNCE, STOP ALL. Client `AdminAbuseController`: owner panel (Settings > ADMIN), public announce banner + boss bar. `DoubleWeekendController` multi-event chip/details/RSVP for ADMIN ABUSE.
@@ -575,6 +625,82 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 74 Central Plaza DEFENDERS + PLAZA TAX (2026-10-02; done before JOB 73) (branch `claude/desktop-bud`)
+All of it is behind `Shared/Configs/PlazaDefenderConfig.luau` (`OwnerFirst = true`, tagged NEW-OWNER-FIRST): it only
+runs while the HOLDER is Shaun (`AdminConfig.IsPlaytestOwner`) or Laumartinez26 (11718087109). Any other holder gets
+today's behaviour exactly. Check: `tools/checks/claude_bud_job74.py` (exact fail list J74-01..17).
+Sim: `tools/sim/run_plaza_defenders_test.py` (39 ok).
+
+**ROOT CAUSE (proven from the code).** The neutral guards respawn fine while the Plaza is neutral. A HELD Plaza has none,
+by design:
+- `Server/Modules/OutpostDefenders.luau` `step()`, its held branch (lines 208-214 before this job): when a row is `Held`, `sleep(site)` despawns every
+  defender and sets `ClearedAt = now` on every pass. `Held` = `OwnerType == Player or Clan` (TerritoryService
+  `Init` -> `Territories()`, ~line 1531).
+- A capture never passes through Neutral. `awardCapture` (TerritoryService ~1018-1030) calls
+  `releaseOwnership(rt, "captured")` and sets the new owner in the same call, so the "neutral again" branch
+  (`HeldBefore` -> `ClearedAt`, then `RespawnSeconds` 150 s) never runs between two holders. The v221 Plaza Airstrike
+  (`TerritoryService.InstantCapture`) runs the same `awardCapture`; its own comment says "defenders stand down because
+  the zone is held".
+- So `OutpostDefenders.Blocking("CentralPlaza")` is false the whole time anyone holds it. `playersInZone` lets any lone
+  player count, and they flip it in `CaptureTimeSeconds` (x `ProtectedCaptureMult` during protection). The neutral
+  guards only come back after the holder leaves the server (`releaseOwnership(.., "leave")`) and 150 s pass with
+  someone within WakeStuds.
+- JOB 51 SharedHostility and PlazaBountyConfig are not the cause: they decide WHO the guards shoot and the retake pay,
+  not whether a held Plaza has guards.
+
+**A) Defenders** (`Server/Modules/PlazaDefenders.luau`; no loop of its own, driven by OutpostDefenders' existing 2 s step):
+- While a tester holds the Plaza, his defenders stand on the guard ring. They are ordinary CombatService NPCs: same
+  rigs, line of sight, hit chance and kill rewards.
+- Roster from POWER = Level + rebirths x 10 + army / 5. Five tiers run from 3 Infantry (x1 health / damage) up to
+  6 Fort / Heavy (x2 health, x1.5 damage).
+- Caps: at most 6 soldiers and 2 armour.
+- Armour appears only when he OWNS one of `VehicleIds`: a parked display of his best owned armour (the game's own
+  vehicle model, anchored, with no seat / joints / scripts and one Box hull) plus a Static heavy gunner on top. The
+  armour goes when its crew dies.
+- Hostility: `TargetFilter` = `CombatService.UnitMayHitPlayer(holder, p)` (never him, his clan allies, PvP off, a
+  novice or a spawn shield), plus the JOB 51 `NpcMayTarget` pick.
+- New generic NPC option `HitFilter` (CombatService `hurtNPC` + `UnitMayHitNPC`): he, his allies and their squads
+  cannot hurt his defenders.
+- While any of them is alive, the capture is blocked ("Defeat the defenders first!"). Killed ones return 90 s
+  (`RedeploySeconds`) after the last falls, while he still holds it. Asleep when nobody is near (the same Wake / Sleep
+  rule as the neutral guards).
+- Takeover (a normal capture or the Plaza Airstrike), loss, or the holder leaving: his defenders despawn in the same
+  pass. Unheld again: the neutral guards return after `NeutralRespawnSeconds` (150).
+- Billboard "Defended by NAME · Lv X" (MaxDistance 120, not AlwaysOnTop). One toast to him: "Your troops are defending
+  the Plaza".
+
+**B) PLAZA TAX** (EconomyService `plazaTax`, ONE call in `AccruePendingCash`, on reason "passive" only):
+- 10 % of every other player's passive grant (after their own multipliers) goes to the holder's ATM as `plaza_tax`.
+  That reason is in NEVER_MULTIPLIED: never doubled, never taxed again.
+- Never taxed: the holder himself, his clan allies, a novice-shielded player, a server with PvP off, a non-tester
+  holder, and dev-product / offline / any other reason.
+- The holder is published as ReplicatedStorage `WE_PlazaTaxHolder` (OutpostDefenders' step).
+- Chips (`Client/PlazaTaxController`, a label, not a button): "TAXED 10% BY NAME · take the Plaza!" (red edge) /
+  "PLAZA TAX +$X/s" (gold edge). They sit in the event-chip column under the TARGETS pill, one row below any visible
+  DOUBLE WEEKEND / ADMIN ABUSE chip, so nothing overlaps (sim at 1024x471, 956x440, 844x390, 800x360, 1180x820).
+- A 1 Hz placement loop runs only while a chip shows.
+
+**Gate notes:**
+- The pre-existing FAILs at HEAD were scoped:
+  - `claude_bud_job61.py` now also accepts Code Bot's "JOB 61: SHIPPED in v183 — ..." CLAUDE.md line.
+  - `codebot_v233.py` "ReferralService not on live" now also passes while ReferralConfig is still owner-first: the
+    held JOB 64 wiring on desktop-bud, blocked on Creator Hub.
+- JOB 72 (Admin Abuse extras, for next week) is parked, not lost: local branch `wip/job72-admin-extras` + a stash. It
+  resumes after this push.
+
+**PHONE TEST (Shaun + Laumartinez26, 2 phones, same server):**
+1. Shaun captures the Central Plaza. Toast "Your troops are defending the Plaza". Within ~2 s, 6 defenders (+ up to 2
+   crewed tanks if he owns a tank) and the "Defended by shaunie6 · Lv 100" billboard appear.
+2. Laumartinez26 walks in: the defenders shoot her; the capture bar stays blocked ("Defeat the defenders first!") until
+   they are all dead. Shaun shooting his own defenders does nothing.
+3. Kill them all: the capture opens; they come back about 90 s later if Shaun still holds it.
+4. Laumartinez26 takes the Plaza: Shaun's defenders vanish at once; hers (4 soldiers, Lv 24) deploy. Repeat with the
+   Plaza Airstrike: the same swap.
+5. Tax: while Shaun holds it, Laumartinez26 sees "TAXED 10% BY shaunie6 · take the Plaza!" under TARGETS (below the
+   2x Weekend / Admin Abuse chips if they show) and Shaun sees "PLAZA TAX +$X/s". His ATM grows by 10 % of her
+   passive income. Buying cash (dev product) or offline earnings: never taxed.
+6. Shaun leaves the server: his defenders and both chips go; the neutral guards are back about 2.5 min later.
+
 ## claude-bud JOB 71 ADMIN ABUSE live event (2026-10-02; Sat 10 Oct 20:00–20:30 Dublin; deadline Thu 8 Oct) (branch `claude/desktop-bud`)
 Labelled JOB 71 as in Code Bot's handoff / commits (this branch's CLAUDE.md still says "JOB 70"). Its check is
 `tools/checks/claude_bud_job71.py`; `claude_bud_job70.py` stays the shipped JOB 70 collision / walls check.
