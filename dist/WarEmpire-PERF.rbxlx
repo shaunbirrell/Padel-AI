@@ -7469,6 +7469,42 @@ local Job67DressConfig = {
 	},
 }
 
+--[[ claude-bud (Shaun 2026-10-02, item 2): REBIRTH-ZONE BUILDINGS. Root cause of the block buildings: the store-model
+	zone swap (StorePropsConfig.ZoneRows, ~1k parts per zone, ~6.9k per fully upgraded plot) stops at
+	Budget.MaxZoneServerParts 16,000 (about 2 plots), so every other plot keeps the Part build, and EastYard always keeps
+	its Part barracks (ZoneKeepParts). Here: on a zone that still shows its Part build, the zone's MAIN block building
+	(the cluster named Cluster, the one nearest At in the zone frame) is replaced by one of the free desert-house models
+	(Buildings.Models: Prinz Desert Houses 10055885754, CAG Camp 9939040273, Imp Desert House 15654066038), fitted to that
+	cluster's footprint (scale clamped ScaleMin..ScaleMax), bottom on the yard, facing Yaw (zone frame; 180 = the zone's
+	front toward the base). The model's big parts are the collider; the block cluster is removed (the zone folder is
+	rebuilt on every level change, which brings it back if this is off). A zone already wearing store models is left
+	alone. Cap: MaxPartsPerPlot (the lightest house per zone; ~1.15k parts for all 7). OwnerFirst by the base owner. ]]
+Job67DressConfig.ZoneBuildings = {
+	Enabled = true,
+	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud, rebirth-zone buildings): flip after Shaun's phone test
+	Grow = 1.05,
+	ScaleMin = 0.55,
+	ScaleMax = 1.25,
+	MaxPartsPerPlot = 1300,
+	Rows = {
+		WestYard = { Cluster = "WestYard_Hangar", At = { 0, -6 }, Model = "PrinzHouse2", Yaw = 180, Label = "Production hall" },
+		StrategicYard = { Cluster = "StrategicYard_Bunker", At = { 24, -10 }, Model = "CagHouse", Yaw = 180, Label = "Launch control" },
+		WestStrip = { Cluster = "WestStrip_Bunker", At = { 26, -14 }, Model = "PrinzHouse1", Yaw = 180, Label = "Battery command" },
+		DroneBay = { Cluster = "DroneBay_Hangar", At = { -14, -8 }, Model = "PrinzHouse3", Yaw = 180, Label = "Drone ops" },
+		EastYard = { Cluster = "EastYard_Barracks", At = { 0, -10 }, Model = "ImpHouse", Yaw = 180, Label = "Elite barracks" },
+		EastStrip = { Cluster = "EastStrip_FuelTank", At = { -24, 6 }, Model = "CagHouse", Yaw = 90, Label = "Refinery control" },
+		WestFlank = { Cluster = "WestFlank_Bunker", At = { -18, -14 }, Model = "PrinzHouse1", Yaw = 180, Label = "Bunker HQ" },
+	},
+}
+
+-- claude-bud (rebirth-zone buildings): the house scale for a block footprint w x d (pure): fit inside, clamped
+function Job67DressConfig.ZoneFit(nat: Vector3, w: number, d: number, turned: boolean): number
+	local Z: any = Job67DressConfig.ZoneBuildings
+	local nx, nz = if turned then nat.Z else nat.X, if turned then nat.X else nat.Z
+	local s = math.min(w / math.max(nx, 0.1), d / math.max(nz, 0.1)) * (Z.Grow or 1)
+	return math.clamp(s, Z.ScaleMin or 0.55, Z.ScaleMax or 1.25)
+end
+
 -- the wall tier block for a saved DefensiveWalls level (pure; nil at 0)
 function Job67DressConfig.WallTier(level: number): any
 	local lv = math.clamp(math.floor(tonumber(level) or 0), 0, 5)
@@ -32707,7 +32743,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 221)
+		player:SetAttribute("WE_Build", 222)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -78933,7 +78969,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 221)
+			player:SetAttribute("WE_Build", 222)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -87663,7 +87699,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 221)
+		player:SetAttribute("WE_Build", 222)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -87805,7 +87841,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=221",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=222",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -98012,6 +98048,94 @@ local function syncWorld(blockKey: string, folderName: string): number
 	out:SetAttribute("WE_J67Parts", parts)
 	print(string.format("%s %s: %d models, %d parts", C.LogTag, blockKey, placed, parts))
 	return placed
+end
+
+-- claude-bud (rebirth-zone buildings): the main block building of one built zone -> a detailed desert house
+-- (Cfg.ZoneBuildings). Called by RebirthZoneService right after the zone's Part build; returns the model or nil.
+function Job67DressService.DressZone(folder: Instance, zoneId: string, frame: CFrame, ownerUserId: number?): Model?
+	local Z: any = C.ZoneBuildings
+	local row = if typeof(Z) == "table" and typeof(Z.Rows) == "table" then Z.Rows[zoneId] else nil
+	if row == nil or Z.Enabled ~= true or C.Enabled ~= true or not Job67DressService.Live(Z, ownerUserId) then
+		return nil
+	end
+	if folder:GetAttribute("WE_StoreProps") == "on" then
+		return nil -- the zone already wears store models (no block building left)
+	end
+	-- the target cluster: the one named row.Cluster nearest row.At (zone frame)
+	local want = frame * Vector3.new(row.At[1], 0, row.At[2])
+	local best: Model? = nil
+	local bestD = math.huge
+	for _, c in ipairs(folder:GetChildren()) do
+		if c:IsA("Model") and c.Name == row.Cluster then
+			local d = (c:GetPivot().Position - want).Magnitude
+			local cf = c:GetBoundingBox()
+			d = math.min(d, (Vector3.new(cf.X, want.Y, cf.Z) - want).Magnitude)
+			if d < bestD then
+				best, bestD = c, d
+			end
+		end
+	end
+	if best == nil then
+		return nil
+	end
+	local t = Job67DressService.WorldTemplate(C.Buildings, row.Model)
+	if t == nil then
+		return nil
+	end
+	-- the plot's budget (houses already on this plot's zones)
+	local plotParts = 0
+	local pf = folder.Parent
+	if pf then
+		for _, z in ipairs(pf:GetChildren()) do
+			local h = z:FindFirstChild("J67Zone")
+			if h then
+				plotParts += tonumber(h:GetAttribute("WE_J67Parts")) or 0
+			end
+		end
+	end
+	local parts = tonumber(t:GetAttribute("WE_J67Parts")) or 0
+	if plotParts + parts > (Z.MaxPartsPerPlot or 1300) then
+		print(string.format("%s zone %s: kept the block building (plot budget %d + %d)", C.LogTag, zoneId, plotParts, parts))
+		return nil
+	end
+	-- the cluster footprint in the zone frame + its floor
+	local x0, x1, z0, z1, floorY = math.huge, -math.huge, math.huge, -math.huge, math.huge
+	for _, d in ipairs((best :: Model):GetDescendants()) do
+		if d:IsA("BasePart") then
+			local h = d.Size * 0.5
+			for _, sx in ipairs({ -1, 1 }) do
+				for _, sz in ipairs({ -1, 1 }) do
+					local l = frame:PointToObjectSpace((d.CFrame * CFrame.new(h.X * sx, 0, h.Z * sz)).Position)
+					x0, x1, z0, z1 = math.min(x0, l.X), math.max(x1, l.X), math.min(z0, l.Z), math.max(z1, l.Z)
+				end
+			end
+			floorY = math.min(floorY, d.Position.Y - d.Size.Y * 0.5)
+		end
+	end
+	if floorY == math.huge then
+		return nil
+	end
+	local yard = folder:FindFirstChild(zoneId .. "_Yard")
+	local slab = yard and yard:FindFirstChild("ZoneYard", true)
+	if slab and slab:IsA("BasePart") then
+		floorY = slab.Position.Y + slab.Size.Y * 0.5
+	end
+	local ref = C.Buildings.Models[row.Model]
+	local yaw = (ref.Turn or 0) + (row.Yaw or 0)
+	local s = Cfg.ZoneFit(t:GetAttribute("WE_J67Natural") :: Vector3, x1 - x0, z1 - z0, math.abs(yaw % 180) == 90)
+	local m = t:Clone()
+	m.Name = "J67Zone"
+	m:ScaleTo(m:GetScale() * s)
+	local c = frame * CFrame.new((x0 + x1) * 0.5, 0, (z0 + z1) * 0.5)
+	m:PivotTo(CFrame.new(c.X, floorY, c.Z) * frame.Rotation * CFrame.Angles(0, math.rad(yaw), 0))
+	m:SetAttribute("WE_J67Parts", parts)
+	m:SetAttribute("WE_J67Zone", zoneId)
+	m:SetAttribute("WE_J67Scale", s)
+	m:SetAttribute("WE_J67Replaced", row.Cluster)
+	;(best :: Model):Destroy() -- the block building goes; the house's big parts collide
+	m.Parent = folder
+	print(string.format("%s zone %s: %s -> %s scale=%.2f footprint=%.0fx%.0f parts=%d", C.LogTag, zoneId, row.Cluster, row.Model, s, x1 - x0, z1 - z0, parts))
+	return m
 end
 
 function Job67DressService.SyncBuildings(): number
@@ -114707,6 +114831,21 @@ local function buildZone(player: Player, profile: any, plotId: number, zoneId: s
 	end
 	local lv = levelOf(profile, zoneId)
 	local console = Builder.Build(zoneId, lv, frame, a.W, a.D, trimOf(player, profile), folder)
+	-- claude-bud (rebirth-zone buildings): the zone's main block building -> a detailed desert house (Job67DressConfig
+	-- .ZoneBuildings, owner-first by the base owner; yields once on the pack's first load, so off this thread)
+	if lv >= 1 then
+		task.spawn(function()
+			local okJ, J = pcall(function(): any
+				return deps.Job67DressService or require(script.Parent.Job67DressService)
+			end)
+			if okJ and J and J.DressZone and folder.Parent ~= nil then
+				local okZ, err = pcall(J.DressZone, folder, zoneId, frame, player.UserId)
+				if not okZ then
+					warn("[RebirthZones] zone building failed:", zoneId, err)
+				end
+			end
+		end)
+	end
 	if console then
 		addPrompts(player, plotId, zoneId, console, lv)
 	end
