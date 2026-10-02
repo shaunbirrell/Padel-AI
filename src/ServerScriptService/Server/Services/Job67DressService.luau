@@ -944,6 +944,94 @@ local function syncWorld(blockKey: string, folderName: string): number
 	return placed
 end
 
+-- claude-bud (rebirth-zone buildings): the main block building of one built zone -> a detailed desert house
+-- (Cfg.ZoneBuildings). Called by RebirthZoneService right after the zone's Part build; returns the model or nil.
+function Job67DressService.DressZone(folder: Instance, zoneId: string, frame: CFrame, ownerUserId: number?): Model?
+	local Z: any = C.ZoneBuildings
+	local row = if typeof(Z) == "table" and typeof(Z.Rows) == "table" then Z.Rows[zoneId] else nil
+	if row == nil or Z.Enabled ~= true or C.Enabled ~= true or not Job67DressService.Live(Z, ownerUserId) then
+		return nil
+	end
+	if folder:GetAttribute("WE_StoreProps") == "on" then
+		return nil -- the zone already wears store models (no block building left)
+	end
+	-- the target cluster: the one named row.Cluster nearest row.At (zone frame)
+	local want = frame * Vector3.new(row.At[1], 0, row.At[2])
+	local best: Model? = nil
+	local bestD = math.huge
+	for _, c in ipairs(folder:GetChildren()) do
+		if c:IsA("Model") and c.Name == row.Cluster then
+			local d = (c:GetPivot().Position - want).Magnitude
+			local cf = c:GetBoundingBox()
+			d = math.min(d, (Vector3.new(cf.X, want.Y, cf.Z) - want).Magnitude)
+			if d < bestD then
+				best, bestD = c, d
+			end
+		end
+	end
+	if best == nil then
+		return nil
+	end
+	local t = Job67DressService.WorldTemplate(C.Buildings, row.Model)
+	if t == nil then
+		return nil
+	end
+	-- the plot's budget (houses already on this plot's zones)
+	local plotParts = 0
+	local pf = folder.Parent
+	if pf then
+		for _, z in ipairs(pf:GetChildren()) do
+			local h = z:FindFirstChild("J67Zone")
+			if h then
+				plotParts += tonumber(h:GetAttribute("WE_J67Parts")) or 0
+			end
+		end
+	end
+	local parts = tonumber(t:GetAttribute("WE_J67Parts")) or 0
+	if plotParts + parts > (Z.MaxPartsPerPlot or 1300) then
+		print(string.format("%s zone %s: kept the block building (plot budget %d + %d)", C.LogTag, zoneId, plotParts, parts))
+		return nil
+	end
+	-- the cluster footprint in the zone frame + its floor
+	local x0, x1, z0, z1, floorY = math.huge, -math.huge, math.huge, -math.huge, math.huge
+	for _, d in ipairs((best :: Model):GetDescendants()) do
+		if d:IsA("BasePart") then
+			local h = d.Size * 0.5
+			for _, sx in ipairs({ -1, 1 }) do
+				for _, sz in ipairs({ -1, 1 }) do
+					local l = frame:PointToObjectSpace((d.CFrame * CFrame.new(h.X * sx, 0, h.Z * sz)).Position)
+					x0, x1, z0, z1 = math.min(x0, l.X), math.max(x1, l.X), math.min(z0, l.Z), math.max(z1, l.Z)
+				end
+			end
+			floorY = math.min(floorY, d.Position.Y - d.Size.Y * 0.5)
+		end
+	end
+	if floorY == math.huge then
+		return nil
+	end
+	local yard = folder:FindFirstChild(zoneId .. "_Yard")
+	local slab = yard and yard:FindFirstChild("ZoneYard", true)
+	if slab and slab:IsA("BasePart") then
+		floorY = slab.Position.Y + slab.Size.Y * 0.5
+	end
+	local ref = C.Buildings.Models[row.Model]
+	local yaw = (ref.Turn or 0) + (row.Yaw or 0)
+	local s = Cfg.ZoneFit(t:GetAttribute("WE_J67Natural") :: Vector3, x1 - x0, z1 - z0, math.abs(yaw % 180) == 90)
+	local m = t:Clone()
+	m.Name = "J67Zone"
+	m:ScaleTo(m:GetScale() * s)
+	local c = frame * CFrame.new((x0 + x1) * 0.5, 0, (z0 + z1) * 0.5)
+	m:PivotTo(CFrame.new(c.X, floorY, c.Z) * frame.Rotation * CFrame.Angles(0, math.rad(yaw), 0))
+	m:SetAttribute("WE_J67Parts", parts)
+	m:SetAttribute("WE_J67Zone", zoneId)
+	m:SetAttribute("WE_J67Scale", s)
+	m:SetAttribute("WE_J67Replaced", row.Cluster)
+	;(best :: Model):Destroy() -- the block building goes; the house's big parts collide
+	m.Parent = folder
+	print(string.format("%s zone %s: %s -> %s scale=%.2f footprint=%.0fx%.0f parts=%d", C.LogTag, zoneId, row.Cluster, row.Model, s, x1 - x0, z1 - z0, parts))
+	return m
+end
+
 function Job67DressService.SyncBuildings(): number
 	return syncWorld("Buildings", "WE_J67Buildings")
 end

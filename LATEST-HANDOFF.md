@@ -431,6 +431,54 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud REBIRTH-ZONE BUILDINGS (2026-10-02, Shaun item 2) (branch `claude/desktop-bud`)
+**Flag:** `Job67DressConfig.ZoneBuildings` (`OwnerFirst = true`, tagged NEW-OWNER-FIRST; by the base owner). OFF =
+today's zones exactly.
+
+**Root cause (from config):**
+- The store-model zone swap (`StorePropsConfig.ZoneRows`) costs ~6.9k parts per fully upgraded plot.
+- It stops at `Budget.MaxZoneServerParts = 16,000`, i.e. about 2 plots; every other plot index keeps the block build.
+- EastYard always keeps its Part barracks (`ZoneKeepParts`).
+
+**Built:**
+- On every zone still showing its block build, the zone's MAIN block building becomes a detailed free desert house
+  (`Job67DressService.DressZone`, called by RebirthZoneService right after the Part build, off its thread):
+
+  | Zone | Block building replaced | House |
+  |---|---|---|
+  | WestYard | hangar | Prinz 2 |
+  | StrategicYard | bunker | CAG camp |
+  | WestStrip | bunker | Prinz 1 |
+  | DroneBay | hangar | Prinz 3 |
+  | EastYard | barracks | Imp |
+  | EastStrip | a fuel tank | CAG control house |
+  | WestFlank | bunker | Prinz 1 |
+
+  Packs: Prinz = Desert Houses 10055885754, CAG = 9939040273, Imp = 15654066038.
+- **Fit:** `Cfg.ZoneFit` fits the house into the block's footprint (scale 0.55–1.25), on the yard, facing the base.
+- **Collision:** the house's big parts collide (the audited, stripped Buildings template), and the block cluster is
+  removed. The zone folder rebuilds on every level change, so turning the flag off brings the block back.
+- **No clash with store models:** a zone already wearing store models is left alone; if the store swap lands later it
+  replaces the house too.
+- **Budget:** all 7 houses = 1,151 parts, under `MaxPartsPerPlot 1300`.
+
+**Proof:** `tools/checks/claude_bud_zone_buildings.py`.
+- Every one of the 7 rows replaces a block the Part build really makes at level 1 at that spot (parsed from
+  RebirthZoneBuilder).
+- Every model comes from the three requested packs.
+- The part budget holds.
+- DressZone rules: skip store zones, owner-first, budget, remove the block, colliding template, never `WE_Building*`.
+- The REAL ZoneFit is run in Luau.
+
+**Also:** codebot_v220's "no OwnerFirst = true left" guard skips lines tagged `NEW-OWNER-FIRST (claude-bud` (a feature
+added after v220 starts owner-first by the house rule) plus the two blocked jobs (JOB 62 / JOB 64 configs).
+
+**Owed (Studio / phone):** the house scale and facing in each zone, and doors reachable.
+
+**Test ON HIS PHONE:** visit your rebirth zones. Each one's main building is now a detailed desert house (hangars,
+bunkers, the barracks and one refinery tank replaced). Walk into a house: it is solid. The kiosks, consoles and runs
+still work.
+
 ## claude-bud JOB 68 (2026-10-02): SHOOTING RANGE LIFE (branch `claude/desktop-bud`)
 **Flag:** `Shared/Configs/RangeLifeConfig` Enabled + `OwnerFirst = true` (live for the viewing owner). OFF = today's
 still statues.

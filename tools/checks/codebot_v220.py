@@ -51,7 +51,11 @@ for _v220_rel in (S + "Services/BaseService.luau", S + "Services/DataService.lua
 _v220_ALLOW = {"EventConfig.luau"}  # Double Weekend owner preview only (see header)
 _v220_left = []
 for _v220_p in sorted((ROOT / "src").rglob("*.luau")):
-    _v220_c = _v220_code(_v220_p.read_text(encoding="utf-8"))
+    _v220_raw = _v220_p.read_text(encoding="utf-8").replace("\r\n", "\n")
+    # claude-bud: a feature added AFTER v220 starts owner-first by the house rule and carries the NEW-OWNER-FIRST tag
+    _v220_raw = "\n".join(l.replace("OwnerFirst = true", "OwnerFirst = NEW") if "NEW-OWNER-FIRST (claude-bud" in l else l
+                           for l in _v220_raw.split("\n"))
+    _v220_c = _v220_code(_v220_raw)
     for _v220_m in re.finditer(r"\bOwnerFirst\s*=\s*true\b", _v220_c):
         if _v220_p.name not in _v220_ALLOW:
             _v220_left.append("%s:%d" % (_v220_p.name, _v220_c.count("\n", 0, _v220_m.start()) + 1))

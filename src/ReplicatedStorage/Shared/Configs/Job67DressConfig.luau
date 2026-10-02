@@ -335,6 +335,42 @@ local Job67DressConfig = {
 	},
 }
 
+--[[ claude-bud (Shaun 2026-10-02, item 2): REBIRTH-ZONE BUILDINGS. Root cause of the block buildings: the store-model
+	zone swap (StorePropsConfig.ZoneRows, ~1k parts per zone, ~6.9k per fully upgraded plot) stops at
+	Budget.MaxZoneServerParts 16,000 (about 2 plots), so every other plot keeps the Part build, and EastYard always keeps
+	its Part barracks (ZoneKeepParts). Here: on a zone that still shows its Part build, the zone's MAIN block building
+	(the cluster named Cluster, the one nearest At in the zone frame) is replaced by one of the free desert-house models
+	(Buildings.Models: Prinz Desert Houses 10055885754, CAG Camp 9939040273, Imp Desert House 15654066038), fitted to that
+	cluster's footprint (scale clamped ScaleMin..ScaleMax), bottom on the yard, facing Yaw (zone frame; 180 = the zone's
+	front toward the base). The model's big parts are the collider; the block cluster is removed (the zone folder is
+	rebuilt on every level change, which brings it back if this is off). A zone already wearing store models is left
+	alone. Cap: MaxPartsPerPlot (the lightest house per zone; ~1.15k parts for all 7). OwnerFirst by the base owner. ]]
+Job67DressConfig.ZoneBuildings = {
+	Enabled = true,
+	OwnerFirst = true, -- NEW-OWNER-FIRST (claude-bud, rebirth-zone buildings): flip after Shaun's phone test
+	Grow = 1.05,
+	ScaleMin = 0.55,
+	ScaleMax = 1.25,
+	MaxPartsPerPlot = 1300,
+	Rows = {
+		WestYard = { Cluster = "WestYard_Hangar", At = { 0, -6 }, Model = "PrinzHouse2", Yaw = 180, Label = "Production hall" },
+		StrategicYard = { Cluster = "StrategicYard_Bunker", At = { 24, -10 }, Model = "CagHouse", Yaw = 180, Label = "Launch control" },
+		WestStrip = { Cluster = "WestStrip_Bunker", At = { 26, -14 }, Model = "PrinzHouse1", Yaw = 180, Label = "Battery command" },
+		DroneBay = { Cluster = "DroneBay_Hangar", At = { -14, -8 }, Model = "PrinzHouse3", Yaw = 180, Label = "Drone ops" },
+		EastYard = { Cluster = "EastYard_Barracks", At = { 0, -10 }, Model = "ImpHouse", Yaw = 180, Label = "Elite barracks" },
+		EastStrip = { Cluster = "EastStrip_FuelTank", At = { -24, 6 }, Model = "CagHouse", Yaw = 90, Label = "Refinery control" },
+		WestFlank = { Cluster = "WestFlank_Bunker", At = { -18, -14 }, Model = "PrinzHouse1", Yaw = 180, Label = "Bunker HQ" },
+	},
+}
+
+-- claude-bud (rebirth-zone buildings): the house scale for a block footprint w x d (pure): fit inside, clamped
+function Job67DressConfig.ZoneFit(nat: Vector3, w: number, d: number, turned: boolean): number
+	local Z: any = Job67DressConfig.ZoneBuildings
+	local nx, nz = if turned then nat.Z else nat.X, if turned then nat.X else nat.Z
+	local s = math.min(w / math.max(nx, 0.1), d / math.max(nz, 0.1)) * (Z.Grow or 1)
+	return math.clamp(s, Z.ScaleMin or 0.55, Z.ScaleMax or 1.25)
+end
+
 -- the wall tier block for a saved DefensiveWalls level (pure; nil at 0)
 function Job67DressConfig.WallTier(level: number): any
 	local lv = math.clamp(math.floor(tonumber(level) or 0), 0, 5)

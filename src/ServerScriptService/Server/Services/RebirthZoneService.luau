@@ -935,6 +935,21 @@ local function buildZone(player: Player, profile: any, plotId: number, zoneId: s
 	end
 	local lv = levelOf(profile, zoneId)
 	local console = Builder.Build(zoneId, lv, frame, a.W, a.D, trimOf(player, profile), folder)
+	-- claude-bud (rebirth-zone buildings): the zone's main block building -> a detailed desert house (Job67DressConfig
+	-- .ZoneBuildings, owner-first by the base owner; yields once on the pack's first load, so off this thread)
+	if lv >= 1 then
+		task.spawn(function()
+			local okJ, J = pcall(function(): any
+				return deps.Job67DressService or require(script.Parent.Job67DressService)
+			end)
+			if okJ and J and J.DressZone and folder.Parent ~= nil then
+				local okZ, err = pcall(J.DressZone, folder, zoneId, frame, player.UserId)
+				if not okZ then
+					warn("[RebirthZones] zone building failed:", zoneId, err)
+				end
+			end
+		end)
+	end
 	if console then
 		addPrompts(player, plotId, zoneId, console, lv)
 	end

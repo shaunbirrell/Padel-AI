@@ -10203,3 +10203,12 @@ ds_territories.luau T3):
 - Anchored statues never load animation tracks (RigConfig.AnimateStatic = false), so "reload" is a local
   shoulder dip + the magazine sound rather than an animation asset.
 - Owner-first by the VIEWER (cosmetic, client-side), like SoundConfig.Pass59.
+
+## claude-bud DOUBLE WEEKEND proof (2026-10-02)
+- Referral rewards are fixed social rewards like the v104 invites, so they are never doubled (paid as invite_*).
+- "2x kills" = kill rewards + mission / board kill counts (EventConfig scope); profile.Stats.Kills stays +1.
+
+## claude-bud rebirth-zone buildings (2026-10-02)
+- EastStrip (refinery) has no block building, so its western fuel tank becomes the CAG house as a "refinery control house".
+- Only the MAIN building per zone is replaced (part budget); tanks, guns, drones and props stay.
+- New features after v220 stay owner-first by the house rule; the v220 guard accepts lines tagged NEW-OWNER-FIRST (claude-bud).
