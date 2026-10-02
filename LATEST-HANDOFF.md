@@ -1,3 +1,22 @@
+## v224 PUBLISHED (Code Bot Roblox, 2026-10-02 10:25 Dublin): Open Cloud place version **222**. JOB 66 Speed Trial PUBLIC + honest shop text (Shaun items 5+6)
+- **Source:** cherry-pick `d1a07d3` + `e697106` (claude/desktop-bud) → phase-7-polish. WE_Build **224**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no unapproved price change. Servers NOT restarted.
+- **COMPLETED:**
+  - **Item 5 / JOB 66 Speed Trial (PUBLIC):** `SpeedTrialConfig.OwnerFirst = false` (Shaun approved). Creator Hub developer product **Speed Trial** Id **3715953404** at **1 R$** (managed pricing OFF, on sale). Shop row + How-to-play card + ProcessReceipt entry grant + 6-checkpoint road sprint + x1.6 for 5 min + cash prize as `devproduct`. JOB64 Referral NOT shipped.
+  - **Item 6 honest shop text:** VIP / VIP overhaul / 2x Cash / 2x Offline Cash Descriptions say exactly what they do. Names/prices/Ids unchanged.
+- **HELD:** JOB 64 Referral (Creator Hub), JOB 62 notifications (`WE_NOTIFY_KEY`). DOUBLE WEEKEND proof checks stay on bud only.
+- **FILES:** `SpeedTrialConfig.luau`, `SpeedTrialService.luau`, `MonetizationService.luau`, `ShopController.luau`, `ZoneRunController.luau`, `MonetizationConfig.luau`, `tools/checks/claude_bud_job66_speed_trial.py`, `tools/checks/claude_bud_shop_text.py`, `tools/checks/codebot_v224.py`, `tools/sim/run_speed_trial_test.py`, WE_Build pins 223 → 224, `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
+- **TESTING:** BuyPathStatic **PASS=9555 FAIL=0**; speed trial sim + shop text + codebot_v224.
+- **Publish:** HTTP 200, versionNumber **222**, universe 10767159222 / place 97112936860418. **Servers NOT restarted** (join a new server for WE_Build 224).
+- **Phone test (Shaun, new server, WE_Build 224):** (1) Shop → Speed Trial → How to play → 1 R$ START → run 6 rings → cash + speed. (2) CANCEL works. (3) Speed Pass / Speed Boost owners: no Speed Trial row. (4) Shop VIP / 2x Cash / 2x Offline Cash text matches the honest lines and fits one phone row.
+- **NEXT:** watch Speed Trial purchases; Creator Hub purchase-prompt descriptions for VIP / 2x Cash / 2x Offline Cash may want the same wording.
+
+
+## JOB 66 SPEED TRIAL / 1 R$ SPEED BOOST — PRIORITY QUEUED then SHIPPED (Code Bot Roblox, 2026-10-02): ship PUBLIC
+- **Approval:** Shaun approved `OwnerFirst=false` and going straight live. The product price is 1 R$.
+- **Queue (docs-only record):** create the 1 R$ product in Creator Hub; config `ProductId` placeholder until filled; `claude_bud_job66_speed_trial.py`; BuyPathStatic **FAIL=0**. This queue change was docs-only before implementation.
+- **Shipped v224:** ProductId **3715953404** wired; PUBLIC.
+
+
 ## v223 PUBLISHED (Code Bot Roblox, 2026-10-02 09:47 Dublin): Open Cloud place version **221**. Turret+wall looks ONE config + drivable Synty vehicles OWNER-FIRST (Shaun items 3+4)
 - **Source:** cherry-pick `958cb67` + `60a9ded` (claude/desktop-bud) → phase-7-polish. WE_Build **223**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id / save-key / level change. Servers NOT restarted.
 - **COMPLETED (owner-first):**
@@ -453,6 +472,83 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud HONEST SHOP TEXT (2026-10-02, Shaun item 6) (branch `claude/desktop-bud`)
+**Proven from code:** the VIP and 2x Cash multipliers apply to income, training, kills, missions, dailies, achievements,
+level-ups and bounties. They do NOT apply to jobs (ops), supply drops, oil pumps, ATM / bank raids, offline cash, codes
+or Robux (`MonetizationConfig.CashMultExemptReasons`).
+
+**Text changes** (in-game Shop / boards only; names, prices and Ids unchanged):
+
+| Item | Was | Now |
+|---|---|---|
+| VIP | "+25% cash on everything you earn" | "+25% income, kill & mission cash" |
+| VIP (Shop overhaul, the live +50%) | "+50% cash, a daily cash crate and VIP lounge" | "+50% income & kill cash, daily crate, lounge" |
+| 2x Cash | "Double your cash income" | "2x income, kills & mission cash, forever" |
+| 2x Offline Cash | "Offline cash for 4 hours instead of 2 hours" | "Offline cash builds 4 h, not 2 h (same rate)" |
+
+The 2x Offline Cash pass doubles the cap TIME (2 h -> 4 h), never the 10 % rate.
+
+**Already right:** Golden Pumpjacks. The Shop line is `GoldenBoost.Description` "+15% on all your base income, forever"
+while GoldenBoost is live (public since v213). The old "earn 50% more" literal only shows if that block is switched off,
+and a check pins it as the legacy text.
+
+**Proof:** `tools/checks/claude_bud_shop_text.py`.
+- Each number is read back from its config: VIP CashBonusMult 0.25, ShopOverhaul 0.5, DoubleCash 2, OfflineConfig
+  2 h x 2, Golden IncomePct 15.
+- Each named / unnamed reason class matches the exempt list.
+- Every text is <= 44 chars (the phone row).
+
+codebot_v203's exact-text pin is scoped to its own build; the <= 44 rule and the 4 h / 2 h facts are checked always.
+
+**Code Bot:** the Creator Hub (Roblox purchase prompt) descriptions for VIP / 2x Cash / 2x Offline Cash may want the
+same wording.
+
+**Test ON HIS PHONE:** Shop -> SUPPLY · R$: the VIP, 2x Cash and 2x Offline Cash rows read as above and fit on one line.
+
+## claude-bud JOB 66 SPEED TRIAL (2026-10-02, Shaun item 5) (branch `claude/desktop-bud`)
+**Rollout:** PUBLIC (`SpeedTrialConfig.OwnerFirst = false`: Shaun approved going straight live).
+**CODE BOT: create the 1 R$ developer product "Speed Trial" in Creator Hub and paste its id into
+`SpeedTrialConfig.ProductId`.** Until then the Shop row stays hidden (ProductId 0 is never sold or owned).
+
+**Built:**
+- **Shop row** "Speed Trial · Timed sprint · cash prize + 5 min speed":
+  - hidden for Speed Pass / Speed Boost owners;
+  - opens the **How to play** card (what, 3 steps, time limit, reward, big START / CANCEL; the shared phone-safe card);
+  - START uses a saved entry, or opens Roblox's 1 R$ prompt.
+- **ProcessReceipt** (MonetizationService -> SpeedTrialService):
+  - +1 saved entry on the same ProcessedReceipts ledger, saved before the ack (idempotent);
+  - then the run starts at once and spends it;
+  - an entry left by a disconnect waits for the next START (no second charge).
+- **The run** (`SpeedTrialService`, one 4 Hz loop only while a run is on):
+  - 6 rings 110 studs apart along the nearest main road from where you stand, heading inward; only one ring shows at a
+    time;
+  - the shared top pill "SPEED TRIAL 2/6 · 0:41" (timer + step counter), a CANCEL chip, and the ONE objective arrow to
+    the next ring;
+  - the limit is 55 s plus the walk to the first ring.
+- **Speed:** x1.6 walk speed for 5 min (travel only), below the Speed Pass (x1.75), through the one tagged WalkSpeed
+  setter; re-applied on respawn and restored after. A Speed Pass owner gets no extra.
+- **Prize:** finish in time for 3 min of your income ($1,500-$60,000), paid as a purchase grant (never doubled) + your
+  best time saved. Out of time or cancel = no prize; the boost stays.
+- **Save:** one new sanitised key, `profile.SpeedTrial` (Entries / Runs / Best).
+
+**Proof:**
+- `tools/sim/run_speed_trial_test.py` (the real config + service with fakes):
+  - course;
+  - entry required and spent;
+  - boost x1.6 via the setter;
+  - pill fields;
+  - 6 rings, then the prize paid once as devproduct and the best time saved;
+  - timeout and cancel pay nothing;
+  - a Speed Pass owner is not touched.
+- `tools/checks/claude_bud_job66_speed_trial.py`: Code Bot's docs pins + implementation pins + the sim.
+
+**Test ON HIS PHONE (once the product id is in):**
+1. Shop -> Speed Trial: the How to play card appears.
+2. 1 R$ START buys; the run starts.
+3. Follow the arrow through 6 rings before the clock ends: "+$..." and your best time.
+4. CANCEL ends it.
+5. You run faster for 5 min.
+
 ## claude-bud DRIVABLE SYNTY VEHICLES (2026-10-02, Shaun item 4) (branch `claude/desktop-bud`)
 **Flag:** `Shared/Configs/SyntyVehicleConfig` (NEW-OWNER-FIRST, by the vehicle owner). OFF = today's bodies.
 
