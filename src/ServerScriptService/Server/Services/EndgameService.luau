@@ -1196,7 +1196,7 @@ end
 
 local function defEffect(track: string, L: number, uid: number?): string
 	if uid and EndgameConfig.DefenceFixLive(uid) then
-		return EndgameConfig.DefenceText(track, L) -- claude-bud JOB 55: the honest text
+		return EndgameConfig.DefenceText(track, L, EndgameConfig.TierTextLive(uid)) -- claude-bud JOB 55: the honest text (+ item 3: the turret Mk)
 	end
 	local D = EndgameConfig.Defence
 	if track == "Plating" then

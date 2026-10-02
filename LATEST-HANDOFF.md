@@ -441,6 +441,43 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud TURRET + WALL LOOKS ON ONE CONFIG (2026-10-02, Shaun item 3) (branch `claude/desktop-bud`)
+**What was there:**
+- Turrets already had 5 looks: the Minigun pack Lvl 1 / 3 / 5 / 8 / 10, by Turret Guns level 0 | 1-3 | 4-6 | 7-9 | 10.
+- Walls already had 5 looks: L1 Sandbag Line -> L5 Hesco Fortress, on every side since JOB 70.
+
+**The gap (proven):** three separate tables decided the turret tier, and nothing tied them together.
+- `VisualAssetConfig.Job67.TurretTierAt` (the gun model).
+- `EndgameConfig.DefenceVisuals.TierAt` (the extra turret / gate / vault parts).
+- The gameplay `Defence.GunsPct`.
+- The upgrade text never said which look a level gives.
+
+**Built:**
+- **One table, `EndgameConfig.Defence.TurretTiers`** (At / Names Mk I-Mk V / Keys AutoGunT1-5).
+  - `EndgameConfig.TurretTier` / `TurretTierName`, the gun model pick in GateDefenseService (`TurretTier` + the
+    central Keys) and `DefenceVisualTier` all read it.
+  - VisualAssetConfig is byte-pinned (codebot_v211 / v219), so it is untouched: its `Job67.TurretTierAt` / `TurretTierKeys`
+    and `DefenceVisuals.TierAt` stay as mirrors, and the check asserts they equal the central table.
+- **Text** (`EndgameConfig.TierText`, NEW-OWNER-FIRST):
+  - The Engineering Bureau Guns row says e.g. "+42% turret + guard dmg · Mk IV gun".
+  - The base console's Defensive Walls row says "Next look: Hesco Line" (from `Job67DressConfig.Walls.Tiers`, the same
+    saved level the walls are built from).
+  - OFF = today's text.
+- Save keys, levels and prices are untouched (no BaseConfig / MonetizationConfig edit).
+
+**Proof:** `tools/checks/claude_bud_tier_looks.py`, on the real configs in Luau.
+- For Guns L0-10, the gameplay tier = look tier = model key = visual-parts tier.
+- The mirrors equal the central table.
+- Each tier is a bigger, higher Minigun level than the last.
+- Damage rises every level.
+- The text names the Mk, and is today's text when off.
+- Walls L1-5 each have a distinct look on every face.
+
+**Test ON HIS PHONE:**
+1. Engineering Bureau: the Turret Guns row names the gun Mk you get.
+2. Base console: the Defensive Walls row says the next wall look.
+3. Upgrade Turret Guns past L1 / L4 / L7 / L10: the gun model gets bigger each time.
+
 ## claude-bud REBIRTH-ZONE BUILDINGS (2026-10-02, Shaun item 2) (branch `claude/desktop-bud`)
 **Flag:** `Job67DressConfig.ZoneBuildings` (`OwnerFirst = true`, tagged NEW-OWNER-FIRST; by the base owner). OFF =
 today's zones exactly.

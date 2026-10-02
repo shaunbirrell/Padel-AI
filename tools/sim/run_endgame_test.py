@@ -331,7 +331,7 @@ check(J55.refreshed > J55.r0 and synced == J55.s0, string.format("[DefFix] Defen
 do
   local rows = {}
   for _, r in ipairs(ES.State(owner).Defence or {}) do rows[r.Id] = r end
-  check(rows.Gate.Name == EG.Text.GateName and rows.Guns.Now == EG.DefenceText("Guns", 10) and string.find(rows.Vault.Now, "ATM", 1, true) and string.find(rows.Vault.Now, "army", 1, true),
+  check(rows.Gate.Name == EG.Text.GateName and rows.Guns.Now == EG.DefenceText("Guns", 10, EG.TierTextLive and EG.TierTextLive(owner.UserId) or nil) and string.find(rows.Vault.Now, "ATM", 1, true) and string.find(rows.Vault.Now, "army", 1, true),
     "[DefFix] honest rows: " .. rows.Gate.Name .. " | " .. rows.Guns.Now .. " | " .. rows.Gate.Now .. " | " .. rows.Vault.Now)
 end
 check(spentLog[#spentLog].why == "endgame_defence" and spentLog[#spentLog].n == EG.DefenceCost(10), "L10 costs $68.7M as endgame_defence")

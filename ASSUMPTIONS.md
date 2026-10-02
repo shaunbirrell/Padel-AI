@@ -10212,3 +10212,7 @@ ds_territories.luau T3):
 - EastStrip (refinery) has no block building, so its western fuel tank becomes the CAG house as a "refinery control house".
 - Only the MAIN building per zone is replaced (part budget); tanks, guns, drones and props stay.
 - New features after v220 stay owner-first by the house rule; the v220 guard accepts lines tagged NEW-OWNER-FIRST (claude-bud).
+
+## claude-bud turret + wall looks (2026-10-02)
+- "5 turret levels" = the 5 Turret Guns look tiers (Guns 0..10), already 5 Minigun pack levels; no new models needed.
+- The pinned literal tables (codebot_v189 / v199) stay as mirrors; the central table is what code reads.
