@@ -72,6 +72,7 @@ local SecurityConfig = {
 		RequestAnalyticsEvent = { "string", "string?" },
 		RequestTipSetting = { "boolean" }, -- claude-bud JOB 24 §5
 		RequestTipsReplay = {}, -- claude-bud JOB 24 §5
+		RequestAirdropGuideSetting = { "boolean" }, -- Code Bot board-text
 		RequestBuyArmour = { "number" }, -- claude-bud JOB 26
 		RequestMapLive = {}, -- claude-bud JOB 30
 		RequestSiteActivity = { "string:8", "string:24?" }, -- claude-bud JOB 31

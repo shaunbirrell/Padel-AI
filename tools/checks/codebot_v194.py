@@ -12,6 +12,8 @@ from pathlib import Path
 # before the byte-identical compare. Everything else in the file must still match.
 def _bud_j66(t):
     t = (t or "").replace("\r\n", "\n")
+    # Code Bot v212: the one new remote NAME (RequestAirdropGuideSetting; no save key) is not a save-key change
+    t = "".join(ln for ln in t.splitlines(True) if "-- Code Bot board-text: Settings -> airdrop guide line off" not in ln)
     a = t.find("\t-- claude-bud JOB 66 (price approved by Shaun")
     if a >= 0:
         b = t.find("\n", t.find("\tBoost2x10m = {", a)) + 1
@@ -58,12 +60,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 211'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 211'),
-    (S + "Services/DataService.luau", "WE_Build=211"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 211'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 212'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 212'),
+    (S + "Services/DataService.luau", "WE_Build=212"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 212'),
 ):
-    check(needle in read(rel), "CODEBOT v194: WE_Build=211 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v194: WE_Build=212 " + rel.rsplit("/", 1)[-1])
 
 EC = code(read(C + "EconomyConfig.luau"))
 m = re.search(r"\bMaxCash\s*=\s*([0-9_.eE+]+)\s*,", EC)

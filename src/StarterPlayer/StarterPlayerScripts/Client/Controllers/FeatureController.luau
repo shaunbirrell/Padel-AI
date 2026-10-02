@@ -64,6 +64,114 @@ local function feelSound(cue: string)
 	end
 end
 
+--[[ Code Bot board-text: hide the AIRDROP guide line (SupplyDropConfig.GuideHide, NEW-OWNER-FIRST). A big "HIDE LINE"
+	button in the HUD top stack while the AIRDROP line shows: a tap clears ObjectiveMarker (its Beam + marker are
+	destroyed) and THAT airdrop never re-guides automatically; a new airdrop guides again. Settings "Airdrop guide line:
+	OFF" (server-saved, attribute GuideHide.Attr) stops the automatic line for every airdrop and clears a showing one.
+	No Heartbeat: while the button shows, one 1 s task.delay re-check ends it together with the line. ]]
+local SupplyDropConfig = require(Shared.Configs.SupplyDropConfig)
+local GH: any = SupplyDropConfig.GuideHide
+local guideHideLive: boolean? = nil
+local hiddenDropKey: string? = nil -- the airdrop the player hid (its landing spot)
+local hideGui: ScreenGui? = nil
+
+local function ghLive(): boolean
+	if guideHideLive == nil then
+		guideHideLive = SupplyDropConfig.GuideHideLiveFor(game:GetService("Players").LocalPlayer.UserId)
+	end
+	return guideHideLive == true
+end
+
+local function dropKey(x: number, z: number): string
+	return string.format("%d:%d", math.floor(x + 0.5), math.floor(z + 0.5))
+end
+
+local function guideOff(): boolean
+	return ghLive() and game:GetService("Players").LocalPlayer:GetAttribute(GH.Attr) == true
+end
+
+local function airdropShowing(): boolean
+	local cur = ObjectiveMarker.Current()
+	return cur ~= nil and cur.Short == LABELS.Airdrop
+end
+
+local function setHideButton(on: boolean)
+	if hideGui then
+		hideGui.Enabled = on
+	end
+	if on then
+		local function recheck()
+			if hideGui == nil or not hideGui.Enabled then
+				return
+			end
+			if not airdropShowing() then
+				hideGui.Enabled = false
+				return
+			end
+			task.delay(1, recheck)
+		end
+		task.delay(1, recheck)
+	end
+end
+
+local function hideAirdropLine()
+	local cur = ObjectiveMarker.Current()
+	if cur and cur.Short == LABELS.Airdrop then
+		hiddenDropKey = dropKey(cur.X, cur.Z)
+		ObjectiveMarker.Clear() -- destroys the Beam, both attachments and the marker billboard
+	end
+	setHideButton(false)
+end
+
+local function buildHideButton()
+	if not ghLive() or hideGui ~= nil then
+		return
+	end
+	local lp = game:GetService("Players").LocalPlayer
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "WE_AirdropGuideHide"
+	gui.ResetOnSpawn = false
+	gui.Enabled = false
+	local btn = Instance.new("TextButton")
+	btn.Name = "HideLine"
+	btn.AnchorPoint = Vector2.new(0.5, 0)
+	btn.Position = UDim2.new(0.5, 0, 0, 0)
+	btn.Size = UDim2.fromOffset(GH.ButtonSize.X, GH.ButtonSize.Y)
+	btn.BackgroundColor3 = Color3.fromRGB(24, 28, 24)
+	btn.TextColor3 = Color3.fromRGB(255, 226, 120)
+	btn.Font = Enum.Font.GothamBlack
+	btn.TextSize = 24
+	btn.Text = GH.ButtonText
+	btn.AutoButtonColor = true
+	btn.Parent = gui
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 12)
+	corner.Parent = btn
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(240, 214, 110)
+	stroke.Thickness = 3
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = btn
+	btn.Activated:Connect(function()
+		feelSound("Tap")
+		hideAirdropLine()
+	end)
+	gui.Parent = lp:WaitForChild("PlayerGui", 30)
+	hideGui = gui
+	local okH, HudLayout = pcall(require, script.Parent.Parent.Modules.HudLayout)
+	if okH and type(HudLayout) == "table" then
+		pcall((HudLayout :: any).ApplyScreen, gui)
+		pcall((HudLayout :: any).RegisterTopStack, "AirdropHide", btn, GH.StackOrder)
+		pcall((HudLayout :: any).AssertTouchTarget, btn, "AirdropHide")
+	end
+	-- Settings OFF while a line shows: it goes at once
+	lp:GetAttributeChangedSignal(GH.Attr):Connect(function()
+		if guideOff() then
+			hideAirdropLine()
+		end
+	end)
+end
+
 local function marker(kind: string, data: any)
 	local label = LABELS[kind]
 	if label == nil or typeof(data) ~= "table" then
@@ -72,13 +180,27 @@ local function marker(kind: string, data: any)
 	if data.Show == true then
 		local x, y, z = tonumber(data.X), tonumber(data.Y), tonumber(data.Z)
 		if x and y and z then
+			if kind == "Airdrop" and ghLive() then
+				-- Code Bot board-text: Settings OFF, or this very airdrop was hidden: no line
+				if guideOff() or hiddenDropKey == dropKey(x, z) then
+					return
+				end
+				hiddenDropKey = nil -- a new airdrop guides again
+			end
 			ObjectiveMarker.ShowWith({ Short = label, X = x, Y = y, Z = z }, { TimeoutSeconds = 300 })
 			feelSound("Marker")
+			if kind == "Airdrop" and ghLive() then
+				setHideButton(true)
+			end
 		end
 	else
 		local cur = ObjectiveMarker.Current()
 		if cur and cur.Short == label then
 			ObjectiveMarker.Clear()
+		end
+		if kind == "Airdrop" then
+			setHideButton(false)
+			hiddenDropKey = nil
 		end
 	end
 end
@@ -253,6 +375,13 @@ function FeatureController.Init()
 		lp:GetAttributeChangedSignal("WE_Balance2"):Connect(sync)
 	end
 	task.spawn(airstrikeButton)
+	task.spawn(buildHideButton) -- Code Bot board-text: the AIRDROP "HIDE LINE" button (owner-first)
+	task.spawn(function() -- Code Bot board-text: the big Supply Depot board layout (owner-first, client-local)
+		local okB, StandSignBig = pcall(require, script.Parent.Parent.Modules.StandSignBig)
+		if okB and type(StandSignBig) == "table" then
+			pcall((StandSignBig :: any).Start)
+		end
+	end)
 	-- claude-bud JOB 20: a tower-guard hire prompt shows only for its base owner (the server validates the hire too)
 	do
 		local CS = game:GetService("CollectionService")

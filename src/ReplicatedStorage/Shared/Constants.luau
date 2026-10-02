@@ -87,6 +87,7 @@ Constants.RemoteNames = {
 	BuildingTip = "BuildingTip", -- claude-bud JOB 24 §5: server -> client "NEW BUILDING" card { Id }
 	RequestTipSetting = "RequestTipSetting", -- claude-bud JOB 24 §5: Settings -> TIPS on / off
 	RequestTipsReplay = "RequestTipsReplay", -- claude-bud JOB 24 §5: Settings -> show my building tips again
+	RequestAirdropGuideSetting = "RequestAirdropGuideSetting", -- Code Bot board-text: Settings -> airdrop guide line off (boolean; AirdropGuideService)
 	RequestBuyArmour = "RequestBuyArmour", -- claude-bud JOB 26: buy the next armour tier (ArmourService)
 	RequestArmourLook = "RequestArmourLook", -- claude-bud JOB 26: hide / show the armour look
 	RequestNuke = "RequestNuke", -- claude-bud JOB 33: (action "panel" | "rush" | "launch", targetId?) NukeService

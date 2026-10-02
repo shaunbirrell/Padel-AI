@@ -66,6 +66,7 @@ local EVENTS = {
 	Constants.RemoteNames.BuildingTip, -- claude-bud JOB 24 §5 (server push)
 	Constants.RemoteNames.RequestTipSetting, -- claude-bud JOB 24 §5
 	Constants.RemoteNames.RequestTipsReplay, -- claude-bud JOB 24 §5
+	Constants.RemoteNames.RequestAirdropGuideSetting, -- Code Bot board-text: client -> server, rate-limited (AirdropGuideService)
 	Constants.RemoteNames.RequestBuyArmour, -- claude-bud JOB 26
 	Constants.RemoteNames.RequestArmourLook, -- claude-bud JOB 26
 	Constants.RemoteNames.RequestNotifOptInResult, -- claude-bud JOB 29

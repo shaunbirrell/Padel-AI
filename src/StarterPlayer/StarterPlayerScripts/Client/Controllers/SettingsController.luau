@@ -400,6 +400,29 @@ function SettingsController.Init()
 	end)
 	y += TAP + 14
 
+	-- Code Bot board-text: the AIRDROP guide line on / off (SupplyDropConfig.GuideHide, NEW-OWNER-FIRST; saved on the
+	-- server in the new key profile.Settings.AirdropGuideOff, mirrored as GuideHide.Attr). OFF also clears a showing line.
+	do
+		local SupplyDropConfig = require(Shared.Configs.SupplyDropConfig) :: any
+		if SupplyDropConfig.GuideHideLiveFor(player.UserId) then
+			local attr = SupplyDropConfig.GuideHide.Attr
+			section("AIRDROPS")
+			local adBtn = button("AirdropGuide", "Airdrop guide line: ON", UDim.new(0, 16), UDim.new(1, -32))
+			local function refreshAd()
+				local off = player:GetAttribute(attr) == true
+				adBtn.Text = if off then "Airdrop guide line: OFF" else "Airdrop guide line: ON"
+				adBtn.BackgroundColor3 = if off then Constants.Colors.Background else Constants.Colors.Accent
+			end
+			adBtn.Activated:Connect(function()
+				AudioController.PlayClick()
+				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAirdropGuideSetting, player:GetAttribute(attr) ~= true)
+			end)
+			player:GetAttributeChangedSignal(attr):Connect(refreshAd)
+			refreshAd()
+			y += TAP + 14
+		end
+	end
+
 	-- claude-bud JOB 29: game notifications (Roblox experience notifications, opt-in). Only while the switch is live
 	-- for this player (RetentionConfig.Notifications); the tap asks Roblox's own prompt (Modules/NotifOptIn).
 	if (require(Shared.Configs.RetentionConfig) :: any).NotificationsLiveFor(player.UserId) then

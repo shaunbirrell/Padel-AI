@@ -624,6 +624,7 @@ safeInit("ArmyPlan", safeRequire("ArmyPlan", Modules.ArmyPlan), deps) -- claude-
 safeInit("StorePropsService", StorePropsService, deps) -- Code Bot STORE-PROPS v132: Creator Store props (after RebirthZone; lazy, never blocks)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)
+safeInit("AirdropGuideService", safeRequire("AirdropGuideService", Services.AirdropGuideService), deps) -- Code Bot board-text: Settings -> airdrop guide line (owner-first)
 safeInit("PremiumWeaponService", PremiumWeaponService, deps) -- claude-bud PREMIUM: Robux-only vehicle weapons (server-validated)
 safeInit("EngagementService", EngagementService, deps) -- claude-bud JOB 13: events, leaderboards, invite / friends / comeback
 safeInit("GameFeelService", GameFeelService, deps) -- claude-bud JOB 14: kill feed, vehicle numbers, raid report

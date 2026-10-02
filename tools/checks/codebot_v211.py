@@ -77,7 +77,8 @@ if _v211_prev_ec is not None:
     ):
         _prev = _v211_old(_rel)
         if _prev is not None or (_V211_ROOT / _rel).is_file():
-            _v211(_prev == _v211_r(_rel), "byte-identical to v210: " + _rel.rsplit("/", 1)[-1])
+            # Code Bot v212: SupplyDropConfig gains the GuideHide block (airdrop guide line, owner-first; codebot_v212 pins it): v211 scope only
+            _v211((_rel.endswith("SupplyDropConfig.luau") and not _v211_own) or _prev == _v211_r(_rel), "byte-identical to v210: " + _rel.rsplit("/", 1)[-1])
 _v211('{ Id = "AirdropFrenzy", Name = "AIRDROP FRENZY", Window = "Weekend", AirdropIntervalSeconds = 180 },' in _V211_EC,
       "AIRDROP FRENZY gameplay kept (airdrop every 180 s on its weekend)")
 _v211("ShowEventBanner" not in _v211_r(_V211_S + "Services/EngagementService.luau"), "no server file reads ShowEventBanner (display only)")

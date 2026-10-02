@@ -63,4 +63,25 @@ function SupplyDropConfig.AirdropLiveFor(userId: any): boolean
 	return false
 end
 
+--[[ Code Bot board-text (Shaun: "a yellow guide line leads me to every airdrop: let me turn it off"). The AIRDROP guide
+	(ObjectiveMarker's GO line + its marker) can be hidden: a big "HIDE LINE" button while it shows (that airdrop stays
+	hidden; a new airdrop guides again) and a Settings toggle "Airdrop guide line: ON / OFF" (saved per player in the
+	NEW key profile.Settings[GuideHide.SettingKey]; no existing save key is touched; the server mirrors it as the player
+	attribute GuideHide.Attr). The Shop's FREE Airdrop TRACK row still guides on purpose (an explicit tap).
+	NEW-OWNER-FIRST (RetentionConfig.Live: owner 470626172 + Studio). ]]
+SupplyDropConfig.GuideHide = {
+	Enabled = true,
+	OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot board-text): Shaun's phone test first
+	SettingKey = "AirdropGuideOff", -- NEW save key (profile.Settings.AirdropGuideOff = true | nil)
+	Attr = "WE_AirdropGuideOff",
+	Remote = "RequestAirdropGuideSetting", -- = Constants.RemoteNames.RequestAirdropGuideSetting (client -> server boolean, AirdropGuideService)
+	ButtonText = "✕  HIDE LINE",
+	ButtonSize = Vector2.new(220, 64), -- v (HudLayout scale; >= 44 real px on a phone)
+	StackOrder = 31, -- the HUD top stack, right under the Objective row (30), above the toasts (40)
+}
+
+function SupplyDropConfig.GuideHideLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live(SupplyDropConfig.GuideHide, userId) == true
+end
+
 return SupplyDropConfig

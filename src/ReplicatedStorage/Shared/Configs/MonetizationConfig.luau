@@ -114,6 +114,7 @@ local MonetizationConfig = {
 			RobuxPrice = 149,
 			CashMult = 2, -- multiplicative 2x cash earnings
 			Description = "Double your cash income", -- Code Bot v156: plain player text
+			Effect = "2x cash, forever", -- Code Bot board-text: the ONE short effect line on the Supply Depot board (EffectFor)
 		},
 		DoubleXP = {
 			Id = 1982487698,
@@ -136,6 +137,7 @@ local MonetizationConfig = {
 			DisplayName = "Auto Collect",
 			RobuxPrice = 99,
 			Description = "Your ATM cash is collected for you", -- Code Bot v156: plain player text
+			Effect = "Auto-collects cash", -- Code Bot board-text: the ONE short effect line on the Supply Depot board (EffectFor)
 		},
 		-- F8 (owner's 11 features): 5 R$ Speed Pass, walk speed x WalkSpeedMult forever. Id = 0 until the owner creates
 		-- the pass. The 99 R$ Speed Boost Developer Product (DevProducts.SpeedBoost) stays; owning both gives the higher
@@ -680,6 +682,19 @@ local MonetizationConfig = {
 			SignPixelsPerStud = 60,
 			SignBack = Color3.fromRGB(26, 30, 26), -- dark military panel (the gold edge is Gold)
 		},
+		-- Code Bot board-text (Shaun, phone: "the writing on the boards is far too small"): the Supply Depot stand signs
+		-- in a big phone layout (Client/Modules/StandSignBig + Shared/Util/StandSignLayout): bold name, ONE short effect
+		-- line (MonetizationConfig.EffectFor: the Effect / SpeedText below, never typed in the client), a big price /
+		-- OWNED pill. Client-local only (the viewer's own copy of the panel), NEW-OWNER-FIRST (RetentionConfig.Live:
+		-- owner 470626172 + Studio). W stays <= Depot.Step - 5 (neighbours never overlap); the panel grows UP only (its
+		-- bottom and posts stay put, the hologram under it is untouched). No price, Id or prompt change.
+		BigSign = {
+			Enabled = true,
+			OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot board-text): Shaun's phone test first
+			W = 7.0, -- studs (was SignW 6.4)
+			H = 4.2, -- studs (was SignH 3.4)
+			PixelsPerStud = 60, -- unchanged: canvas 420 x 252
+		},
 		-- the Supply Depot corner (plot-local): the stands in one row (front-left, off the gate road and the ATM), the sign
 		-- behind them facing the plot
 		Depot = { X0 = -78, Step = 12, Z = 146, SignZ = 153, Sign = "SUPPLY DEPOT", SignLift = 11 }, -- Code Bot v175: SignLift (board centre height)
@@ -1172,6 +1187,30 @@ function cfg.DescFor(def: any, userId: any): string?
 		return cfg.GoldenBoost.Description
 	end
 	return if typeof(def.Description) == "string" then def.Description else nil
+end
+
+-- Code Bot board-text: the ONE short effect line a board shows for a SKU (speed SKUs from SpeedText, short; else its
+-- Effect; else the same Description the Shop shows). Same config as the Shop: nothing is typed twice.
+function cfg.EffectFor(def: any, userId: any): string?
+	if typeof(def) ~= "table" then
+		return nil
+	end
+	if typeof(def.WalkSpeedMult) == "number" and def.WalkSpeedMult > 1 then
+		return cfg.SpeedText(cfg.SpeedMultOf(def, userId), false)
+	end
+	if typeof(def.Effect) == "string" and #def.Effect > 0 then
+		return def.Effect
+	end
+	return cfg.DescFor(def, userId)
+end
+
+-- Code Bot board-text: is the big Supply Depot board layout live for this viewer (fail closed)
+function cfg.BigSignLiveFor(userId: any): boolean
+	local b = cfg.PremiumPads and cfg.PremiumPads.BigSign
+	if typeof(b) ~= "table" then
+		return false
+	end
+	return (require(script.Parent.RetentionConfig) :: any).Live(b, userId) == true
 end
 
 cfg.GamePasses.ImpulseSpeed.Description = cfg.SpeedText(cfg.GamePasses.ImpulseSpeed.WalkSpeedMult, true)
