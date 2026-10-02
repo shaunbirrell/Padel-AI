@@ -262,6 +262,18 @@ local function cashMultFor(player: Player, profile: any, reason: string?): numbe
 			mult *= DE.ExtraCashMult(player, reason)
 		end
 	end
+	-- Code Bot v210: Golden Pumpjacks (MonetizationConfig.GoldenBoost, owner-first): +IncomePct % on every steady-income
+	-- reason (passive / training / plot_oil = what WE_IncomePerSec sums) for an owner of the entitlement. Pure profile read.
+	if NEVER_MULTIPLIED[reasonKey] ~= true then
+		local GB = (MonetizationConfig :: any).GoldenBoost
+		local ents = profile.Entitlements
+		if typeof(GB) == "table" and typeof(GB.Reasons) == "table" and GB.Reasons[reasonKey] == true
+			and typeof(ents) == "table" and ents[GB.ProductKey] == true
+			and MonetizationConfig.GoldenBoostLiveFor(player.UserId)
+		then
+			mult *= MonetizationConfig.GoldenBoostMult()
+		end
+	end
 	return mult
 end
 

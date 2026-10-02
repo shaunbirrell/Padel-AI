@@ -58,12 +58,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 209'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 209'),
-    (S + "Services/DataService.luau", "WE_Build=209"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 209'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 210'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 210'),
+    (S + "Services/DataService.luau", "WE_Build=210"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 210'),
 ):
-    check(needle in read(rel), "CODEBOT v185: WE_Build=209 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v185: WE_Build=210 " + rel.rsplit("/", 1)[-1])
 
 # --- the config: times and multipliers ---
 EC = code(read(C + "EventConfig.luau"))

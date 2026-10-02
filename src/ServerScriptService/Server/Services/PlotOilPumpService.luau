@@ -449,6 +449,11 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 							-- claude-bud: a gold-dressed pump (owner bought Golden Pumpjacks, rollout live) earns IncomeMult x
 							local goldDef: any = (MonetizationConfig.DevProducts :: any)[GOLDEN_KEY]
 							local goldMult = math.clamp(tonumber(if typeof(goldDef) == "table" then goldDef.IncomeMult else nil) or 1, 1, 3)
+							-- Code Bot v210: while MonetizationConfig.GoldenBoost is live for the owner, the product is +IncomePct % on
+							-- ALL steady income (EconomyService.cashMultFor, plot_oil included), so the gold pumps pay no extra here
+							if MonetizationConfig.GoldenBoostLiveFor(ownerId) then
+								goldMult = 1
+							end
 							local total = cash * (n - golden) + math.floor(cash * goldMult) * golden
 							-- F4: the owner's "+$18 / every 5s" label is client-side (ProducerLabels); no server pop
 							EconomyService.AccruePendingCash(owner, total, reason)

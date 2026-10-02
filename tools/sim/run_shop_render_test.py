@@ -25,6 +25,7 @@ MODS = {
     "Configs/ShopOverhaulConfig": SH / "Configs/ShopOverhaulConfig.luau",
     "Configs/MonetizationConfig": SH / "Configs/MonetizationConfig.luau",
     "Util/LivePrices": SH / "Util/LivePrices.luau",  # Code Bot v156: the real Roblox price / name (config fallback here)
+    "Util/TycoonMath": SH / "Util/TycoonMath.luau",  # Code Bot v210: the shared ShortCash ($ K/M/B/T) for the Golden Pumpjacks row
     "Configs/RetentionConfig": SH / "Configs/RetentionConfig.luau",
     "Configs/AdminConfig": SH / "Configs/AdminConfig.luau",
     "Configs/PremiumGunsConfig": SH / "Configs/PremiumGunsConfig.luau",

@@ -59,6 +59,7 @@ local ShopOverhaulConfig = require(Shared.Configs.ShopOverhaulConfig) -- claude-
 -- Code Bot v156: every R$ price and product name shown here is Roblox's real one (GetProductInfo on the server, cached,
 -- published on ReplicatedStorage); the MonetizationConfig RobuxPrice / DisplayName is only the fallback
 local LivePrices = require(Shared.Util.LivePrices)
+local TycoonMath = require(Shared.Util.TycoonMath) -- Code Bot v210: the shared $ K/M/B/T formatter (ShortCash)
 
 -- claude-bud JOB 36: a cash pack's amount for this player (the live one while the overhaul is on: WE_PassivePerMin)
 local function packCash(key: string, def: any): number
@@ -225,6 +226,33 @@ local function isOneTimeOwned(productKey: string): boolean
 		return true
 	end
 	return false
+end
+
+--[[ Code Bot v210: Golden Pumpjacks (MonetizationConfig.GoldenBoost, owner-first). The row line is worked out live
+	from the server's WE_IncomePerSec with GoldenBoostGainPerSec (the same IncomePct the server multiplies by) and
+	formatted with TycoonMath.ShortCash: "+15% income forever · +$316/s" (owned: "+15% income active · +$N/s"). ]]
+local goldenSubLabel: TextLabel? = nil
+local function goldenBoostShown(): boolean
+	return MonetizationConfig.GoldenBoostLiveFor(player.UserId)
+end
+local function incomePerSecNow(): number
+	local v = tonumber(player:GetAttribute("WE_IncomePerSec")) or 0
+	return if v == v and v > 0 then v else 0
+end
+local function goldenGainText(gain: number): string
+	return TycoonMath.ShortCash(math.floor(math.max(0, gain) + 0.5))
+end
+local function goldenRowText(): string
+	local GB: any = (MonetizationConfig :: any).GoldenBoost
+	local owned = isOneTimeOwned(GB.ProductKey)
+	local gain = MonetizationConfig.GoldenBoostGainPerSec(incomePerSecNow(), owned)
+	return string.format(if owned then GB.OwnedFormat else GB.RowFormat, GB.IncomePct, goldenGainText(gain))
+end
+local function refreshGoldenRow()
+	local lab = goldenSubLabel
+	if lab and lab.Parent and goldenBoostShown() then
+		lab.Text = goldenRowText()
+	end
 end
 
 --[[ v70: a GamePass is known owned (display / offer gating only): bought this session, or replicated by the server
@@ -980,6 +1008,10 @@ function ShopController.Init()
 		elseif sub == "" and def.Gold and def.Gold > 0 then
 			sub = "Get " .. formatCash(def.Gold) .. " gold right away"
 		end
+		local golden = key == (MonetizationConfig :: any).GoldenBoost.ProductKey and goldenBoostShown() -- Code Bot v210
+		if golden then
+			sub = goldenRowText()
+		end
 		if stub then
 			sub = sub .. " · coming soon (no charge)"
 		end
@@ -994,6 +1026,10 @@ function ShopController.Init()
 		end, btnLabel, key, heroLabel ~= nil)
 		if def.OneTime == true then
 			oneTimeRows[key] = { Btn = btn, Label = btnLabel }
+		end
+		if golden then
+			local subLab = (btn.Parent :: any):FindFirstChild("Sub")
+			goldenSubLabel = if subLab and subLab:IsA("TextLabel") then subLab else nil
 		end
 		table.insert(pricedRows, { Kind = "DevProduct", Key = key, Btn = btn, Title = titleFor, Row = (btn.Parent :: any) :: Frame, Empty = "BUY" })
 	end
@@ -1392,6 +1428,7 @@ function ShopController.Init()
 
 	local function refreshOwnedRows()
 		applyPriceOrder() -- Code Bot v206: an OWNED row moves after the unowned rows at its price
+		refreshGoldenRow() -- Code Bot v210: the live +$N/s (and its owned line)
 		for key, r in pairs(oneTimeRows) do
 			if isOneTimeOwned(key) then
 				setRowButton(r.Btn, "OWNED", "owned")
@@ -1497,6 +1534,18 @@ function ShopController.Init()
 				end
 				queueRefresh()
 				refreshPremiumPads()
+				-- Code Bot v210: Golden Pumpjacks bought: once the boost is in WE_IncomePerSec (2 passive ticks), toast the REAL
+				-- new income per second and the boost's share of it (MonetizationConfig.GoldenBoost)
+				local GB: any = (MonetizationConfig :: any).GoldenBoost
+				local gdef: any = (MonetizationConfig.DevProducts :: any)[GB.ProductKey]
+				if typeof(gdef) == "table" and gdef.Id == productId and goldenBoostShown() then
+					task.delay(tonumber(GB.ToastWaitSeconds) or 11, function()
+						local inc = incomePerSecNow()
+						local gain = MonetizationConfig.GoldenBoostGainPerSec(inc, true)
+						pcall(NotificationController.Show, string.format(GB.ToastFormat, TycoonMath.ShortCash(math.floor(inc)), goldenGainText(gain)), "Success", 6)
+						refreshGoldenRow()
+					end)
+				end
 			end)
 		end)
 		pcall(function()
@@ -2157,6 +2206,12 @@ function ShopController.Init()
 
 	-- Gold in the header (WE_Gold replicates from the server; EconomyUpdate as a backup)
 	player:GetAttributeChangedSignal("WE_Gold"):Connect(refreshGold)
+	-- Code Bot v210: the Golden Pumpjacks row's +$N/s follows the live income (only while the Shop is open)
+	player:GetAttributeChangedSignal("WE_IncomePerSec"):Connect(function()
+		if menuOpen then
+			refreshGoldenRow()
+		end
+	end)
 	Remotes.BindEvent(Constants.RemoteNames.EconomyUpdate, function(payload: any)
 		if typeof(payload) == "table" and typeof(payload.Gold) == "number" and player:GetAttribute("WE_Gold") == nil then
 			local chip, lab = goldChip, goldText

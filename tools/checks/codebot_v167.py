@@ -30,12 +30,12 @@ def check(cond, label):
 S = "src/ServerScriptService/Server/"
 C = "src/ReplicatedStorage/Shared/Configs/"
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 209'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 209'),
-    (S + "Services/DataService.luau", "WE_Build=209"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 209'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 210'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 210'),
+    (S + "Services/DataService.luau", "WE_Build=210"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 210'),
 ):
-    check(needle in read(rel), "CODEBOT v167: WE_Build=209 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v167: WE_Build=210 " + rel.rsplit("/", 1)[-1])
 
 MC = read(C + "MonetizationConfig.luau")
 WANT = {
@@ -65,6 +65,9 @@ try:
     # Code Bot v180: the two wired items + PurchaseSources.missions (pinned in codebot_v180.py): the lines v180 added vs 5e9649b
     _v180 = set(l for l in subprocess.run(["git", "diff", "-U0", "5e9649b", "--", C + "MonetizationConfig.luau"], cwd=str(ROOT), capture_output=True, text=True).stdout.splitlines() if l.startswith("+") and not l.startswith("+++"))
     ch = [l for l in ch if l not in _v180]
+    # Code Bot v210: the GoldenBoost block (Golden Pumpjacks fix; added lines only, pinned in codebot_v210.py): the lines added vs 29467a2
+    _v210 = set(l for l in subprocess.run(["git", "diff", "-U0", "29467a2", "--", C + "MonetizationConfig.luau"], cwd=str(ROOT), capture_output=True, text=True).stdout.splitlines() if l.startswith("+") and not l.startswith("+++"))
+    ch = [l for l in ch if l not in _v210]
     norm = lambda l: re.sub(r"\bId = \d+,", "Id = X,", l[1:])
     minus = sorted(norm(l) for l in ch if l.startswith("-"))
     plus = sorted(norm(l) for l in ch if l.startswith("+"))

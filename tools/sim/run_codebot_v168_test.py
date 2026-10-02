@@ -388,10 +388,16 @@ local hv = ES.State(owner).Intel.Hvt
 ES.NoteContract(owner, hv.Kind, hv.Need)
 check(owner.attrs.WE_IntelGuide ~= nil and notes[#notes] == "Weekly target done: claim it at the Intel Office", "the weekly HVT done: toast + guide")
 ES.Purchase(owner, "Claim", "HVT")
-check(owner.attrs.WE_IntelGuide == nil, "HVT claimed: cleared")
+-- Code Bot v210: day-dependent: on a day whose daily row has the HVT's Kind, the HVT kills also finished that row,
+-- which is still unpaid (so the guide rightly stays): claim those rows too, then the guide must clear
+for i, r in ipairs(profiles[470626172].Endgame.Contracts.Rows) do
+	if r.Have >= r.Need and r.Paid ~= true then ES.Purchase(owner, "Claim", "D" .. i) end
+end
+check(owner.attrs.WE_IntelGuide == nil, "HVT claimed (and any same-kind daily row it also finished): cleared")
 -- a stale day's done row never guides (contractsOf resets the day on the next read)
 local c = profiles[470626172].Endgame.Contracts
 c.Rows[2].Have = c.Rows[2].Need
+c.Rows[2].Paid = nil -- Code Bot v210: the claim loop above may have paid it (same-kind day)
 check(ES.IntelClaimable(profiles[470626172]) == true, "a done unpaid row today: claimable")
 c.Day -= 1
 check(ES.IntelClaimable(profiles[470626172]) == false, "the same row from yesterday: not claimable (no stale guide)")

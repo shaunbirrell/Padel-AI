@@ -67,12 +67,12 @@ OWN = 'SetAttribute("WE_Build", 207)' in read(S + "Services/DataService.luau")  
 CURRENT_BUILD = int((re.search(r'WE_Build", (\d+)\)', read(S + "Services/DataService.luau")) or [0, "0"])[1])
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 209'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 209'),
-    (S + "Services/DataService.luau", "WE_Build=209"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 209'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 210'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 210'),
+    (S + "Services/DataService.luau", "WE_Build=210"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 210'),
 ):
-    check(BUD or needle in read(rel), "CODEBOT v207: WE_Build=209 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
+    check(BUD or needle in read(rel), "CODEBOT v207: WE_Build=210 " + rel.rsplit("/", 1)[-1] + (" [bud: skipped]" if BUD else ""))
 
 # ── 2. the two 5 R$ offers public ──
 MON = read(C + "MonetizationConfig.luau")
@@ -121,7 +121,9 @@ check(now_p[("DevProducts", "StarterRecruit5")] == 5 and now_p[("DevProducts", "
       "CODEBOT v207: price parser sees every SKU (%d)" % len(now_p))
 if prev_mon is not None:
     check(prices(prev_mon) == now_p, "CODEBOT v207: every RobuxPrice identical to " + PREV + " (no price change)")
-    check(prev_mon.count("OwnerFirst = true") - 1 == MON.count("OwnerFirst = true") and prev_mon.count("OwnerFirst = false") + 1 == MON.count("OwnerFirst = false"),
+    # Code Bot v210: the new owner-first GoldenBoost block (codebot_v210.py) is a later, separate flag, not a v207 flip
+    _gb209 = MON.count("OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot v210)")
+    check(prev_mon.count("OwnerFirst = true") - 1 == MON.count("OwnerFirst = true") - _gb209 and prev_mon.count("OwnerFirst = false") + 1 == MON.count("OwnerFirst = false"),
           "CODEBOT v207: exactly one OwnerFirst flag flipped in MonetizationConfig")
     if not BUD and OWN:
         a, b = prev_mon.split("\n"), MON.split("\n")
@@ -135,7 +137,7 @@ if prev_mon is not None:
         check(r.returncode == 0 and set(_ch) <= _allowed, "CODEBOT v207: src diff vs " + PREV + " only config / shop / WE_Build pins: " + ", ".join(n.rsplit("/", 1)[-1] for n in _ch))
         for rel in (S + "Services/BaseService.luau", S + "Services/DataService.luau", S + "EarlyRemotes.server.luau"):
             _p = shipped(rel, PREV) or ""
-            check(_p.replace('WE_Build", 206)', 'WE_Build", 208)').replace("WE_Build=206", "WE_Build=209") == read(rel),
+            check(_p.replace('WE_Build", 206)', 'WE_Build", 208)').replace("WE_Build=206", "WE_Build=210") == read(rel),
                   "CODEBOT v207: " + rel.rsplit("/", 1)[-1] + ": only the WE_Build number changed")
         # no other OwnerFirst flag anywhere in src
         r = subprocess.run(["git", "diff", "-U0", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT)

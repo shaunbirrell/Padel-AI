@@ -934,6 +934,58 @@ function MonetizationConfig.Starter5Cash(perMin: number): number
 	return math.clamp(math.floor(S.CashIncomeMinutes * math.max(0, tonumber(perMin) or 0) + 0.5), S.CashMin, S.CashMax)
 end
 
+--[[ Code Bot v210 (Golden Pumpjacks fix): THE one config for what Golden Pumpjacks (DevProducts.GoldenPumpjack, 49 R$,
+	one time, entitlement "GoldenPumpjack", same save key) does while this block is live for the BUYER:
+	  * gameplay: EconomyService.cashMultFor multiplies every steady-income grant (Reasons: passive / training /
+	    plot_oil, exactly the reasons WE_IncomePerSec sums) by (1 + IncomePct / 100) for an owner of the entitlement;
+	    PlotOilPumpService stops paying the legacy per-pump IncomeMult (no double count). Gold pumps stay gold (visual).
+	  * display: the Shop row / purchase stand say Description; the Shop row adds the live "+$N/s" from
+	    GoldenBoostGainPerSec(WE_IncomePerSec) (TycoonMath.ShortCash); the toast after buying shows the real new $/s.
+	Not live (OwnerFirst and not the playtest owner): the legacy effect (gold pumps x IncomeMult) and text, unchanged.
+	Was: +50 % on the 2 plot pumps only ($18 / 5 s each, multiplier-exempt) = at most +$3.60/s on any base. ]]
+(MonetizationConfig :: any).GoldenBoost = {
+	Enabled = true,
+	OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot v210): Shaun's phone test; flip to false for everyone
+	ProductKey = "GoldenPumpjack",
+	IncomePct = 15, -- +15 % of ALL base income per second, permanent (2x Cash 149 R$ = +100 %, VIP 199 R$ = +25 %/+50 %)
+	Reasons = { passive = true, training = true, plot_oil = true } :: { [string]: boolean },
+	-- Description: set right below from IncomePct (one number)
+	RowFormat = "+%d%% income forever · +%s/s", -- Shop row (not owned): pct, ShortCash(gain)
+	OwnedFormat = "+%d%% income active · +%s/s", -- Shop row (owned): pct, ShortCash(the boost's share of WE_IncomePerSec)
+	ToastFormat = "Golden Pumpjacks ON: income now %s/s (+%s/s)", -- after the purchase: ShortCash(new), ShortCash(gain)
+	ToastWaitSeconds = 11, -- two passive ticks (5 s) + slack, so WE_IncomePerSec already carries the boost
+}
+
+(MonetizationConfig :: any).GoldenBoost.Description =
+	string.format("+%d%% on all your base income, forever", (MonetizationConfig :: any).GoldenBoost.IncomePct)
+
+function MonetizationConfig.GoldenBoostLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live((MonetizationConfig :: any).GoldenBoost, userId)
+end
+
+-- the steady-income multiplier for an owner of the product (1 + IncomePct / 100; 1 on a broken config)
+function MonetizationConfig.GoldenBoostMult(): number
+	local pct = tonumber(((MonetizationConfig :: any).GoldenBoost or {}).IncomePct) or 0
+	if pct ~= pct or pct <= 0 then
+		return 1
+	end
+	return 1 + math.min(pct, 100) / 100
+end
+
+-- $/s the boost adds for an income of incomePerSec (WE_IncomePerSec). owned = the income already includes it (the
+-- boost's share = income - income / mult), else what buying adds (income x pct). Pure; the Shop row and the toast.
+function MonetizationConfig.GoldenBoostGainPerSec(incomePerSec: any, owned: boolean?): number
+	local inc = math.max(0, tonumber(incomePerSec) or 0)
+	if inc ~= inc or inc == math.huge then
+		return 0
+	end
+	local m = MonetizationConfig.GoldenBoostMult()
+	if owned == true then
+		return inc - inc / m
+	end
+	return inc * (m - 1)
+end
+
 function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean
 	-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock) follows that switch
 	local row: any = (MonetizationConfig.DevProducts :: any)[key]
@@ -1114,6 +1166,10 @@ function cfg.DescFor(def: any, userId: any): string?
 	end
 	if typeof(def.WalkSpeedMult) == "number" and def.WalkSpeedMult > 1 then
 		return cfg.SpeedText(cfg.SpeedMultOf(def, userId), true)
+	end
+	-- Code Bot v210: Golden Pumpjacks says what GoldenBoost really gives while it is live for this player
+	if def == cfg.DevProducts[cfg.GoldenBoost.ProductKey] and userId ~= nil and cfg.GoldenBoostLiveFor(userId) then
+		return cfg.GoldenBoost.Description
 	end
 	return if typeof(def.Description) == "string" then def.Description else nil
 end
