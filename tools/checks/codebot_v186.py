@@ -67,12 +67,12 @@ def skus(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 216'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 216'),
-    (S + "Services/DataService.luau", "WE_Build=216"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 216'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 217'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 217'),
+    (S + "Services/DataService.luau", "WE_Build=217"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 217'),
 ):
-    check(needle in read(rel), "CODEBOT v186: WE_Build=216 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v186: WE_Build=217 " + rel.rsplit("/", 1)[-1])
 
 CC = read(CL + "Controllers/CombatController.luau")
 check("fitCaption" in CC, "CODEBOT v186: CombatController fitCaption present")

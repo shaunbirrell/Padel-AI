@@ -64,12 +64,12 @@ def _strip_comments(src):
 _bud = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
 if not _bud:
     for _rel, _needle in (
-        (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 216)'),
-        (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 216)'),
-        (S + "Services/DataService.luau", "WE_Build=216"),
-        (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 216)'),
+        (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 217)'),
+        (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 217)'),
+        (S + "Services/DataService.luau", "WE_Build=217"),
+        (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 217)'),
     ):
-        _c(_needle in _r(_rel), "WE_Build=216 " + _rel.rsplit("/", 1)[-1])
+        _c(_needle in _r(_rel), "WE_Build=217 " + _rel.rsplit("/", 1)[-1])
 
 MC = _r(C + "MonetizationConfig.luau")
 SDC = _r(C + "SupplyDropConfig.luau")

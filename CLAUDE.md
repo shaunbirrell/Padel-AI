@@ -1,6 +1,12 @@
 # WAR EMPIRE — rules for anyone working in this repo
 
 ## QUEUED JOBS (Code Bot, 2026-09-30)
+> **Owner instruction (2 Oct 01:27): keep working through the queue continuously overnight. Do not stop or wait for replies. The owner will talk in the morning.**
+- **JOB 70, URGENT, ship LIVE FOR EVERYONE** (`OwnerFirst=false`; the owner explicitly approved going straight live, so no owner test step). This is the next free JOB number and is the top-priority queue item.
+  - **Collision:** the newly wired base props and wall dressings (sandbags, Hesco, concrete blocks, crates, pallets, barbed wire) must not be walk-through. Give every placed prop/visual segment one cheap invisible `Box`/`Block` hull: anchored, sized to the visual bounds, `CanCollide=true` for players and soldiers, with the visual mesh parts `CanCollide=false` (and no mesh collision). Do not use per-frame physics or heavy collision meshes; keep it phone-light.
+  - **Walls:** every wall side (front/gate, left side, right side, and rear) must use the same new wall style selected from the central wall-upgrade config for that saved tier. Keep the progressive tier looks; never let a side silently fall back to the old/front-only style. Wall visuals are non-colliding and their cheap Box hulls/authoritative wall colliders remain solid.
+  - **Acceptance:** add `tools/checks/claude_bud_job70.py` that fails closed unless it can account for every prop category/placement and every wall side, proves visual collision is off plus the Box hull is on, and proves all four wall sides resolve the same central tier style. Update `LATEST-HANDOFF.md`.
+  - **Guardrails:** this queue edit is docs-only; the implementation must keep `StreamingEnabled` and `PreferMesh` OFF, never touch `WE_Building*`, preserve save keys/levels/prices, and make no owner-test step or staged rollout.
 - After JOB 34 is finished and pushed, do JOB 35 then JOB 36 exactly as written in
   [`docs/claude-queue/JOB35-36-shop-and-guns.md`](docs/claude-queue/JOB35-36-shop-and-guns.md), one at a time, same
   rules. No fast travel.

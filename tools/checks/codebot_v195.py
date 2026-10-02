@@ -59,12 +59,12 @@ def code(src):
 
 
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 216'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 216'),
-    (S + "Services/DataService.luau", "WE_Build=216"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 216'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 217'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 217'),
+    (S + "Services/DataService.luau", "WE_Build=217"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 217'),
 ):
-    check(needle in read(rel), "CODEBOT v195: WE_Build=216 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v195: WE_Build=217 " + rel.rsplit("/", 1)[-1])
 
 HC = code(read(C + "HudConfig.luau"))
 check(re.search(r"\bAbbreviateDecimalsBig\s*=\s*3\s*,", HC) is not None, "CODEBOT v195: HudConfig.CashPill.AbbreviateDecimalsBig = 3")

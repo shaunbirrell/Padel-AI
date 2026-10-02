@@ -55,12 +55,12 @@ def _v200(cond, label):
 
 
 for _rel, _needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 216'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 216'),
-    (S + "Services/DataService.luau", "WE_Build=216"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 216'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 217'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 217'),
+    (S + "Services/DataService.luau", "WE_Build=217"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 217'),
 ):
-    _v200(_needle in _v200_read(_rel), "WE_Build=216 " + _rel.rsplit("/", 1)[-1])
+    _v200(_needle in _v200_read(_rel), "WE_Build=217 " + _rel.rsplit("/", 1)[-1])
 
 _VA = _v200_read(C + "VisualAssetConfig.luau")
 _j = _VA.split("Job67 = {")[1].split("\n\t},")[0] if "Job67 = {" in _VA else ""

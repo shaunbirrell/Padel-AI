@@ -7149,6 +7149,7 @@ local Job67DressConfig = {
 		PrinzHouses = 10055885754, -- Desert Houses (PrinzAaron, free): 3 houses, 459 parts total, 18,440 tris, 0 scripts (batch 2)
 		CagCamp = 9939040273, -- CAG Desert house Camp (Jhiyandrino, free): 1 house, 164 parts, 46,740 tris, 0 scripts (batch 2)
 		ImpHouse = 15654066038, -- Desert House (ImParadoxial, free): 281 parts, 41,774 tris, 0 scripts (24 FX + 16 lights stripped)
+		SyntyCity = 6933556508, -- claude-bud JOB 70: Roblox's Synty City pack (creator Roblox; already loads live for VisualAssetConfig): the pallet
 	},
 	PackTriangles = {
 		Sandbags = 149263,
@@ -7193,6 +7194,33 @@ local Job67DressConfig = {
 		TrenchLine = { Pack = "Sandbags", MeshId = 73339338434094 }, -- 13.4 long trench sandbag run
 		TrenchCurve = { Pack = "Sandbags", MeshId = 99053079683491 }, -- 11.7 long
 		TrenchNest = { Pack = "Sandbags", MeshId = 108744101942786 }, -- 15.3 x 11.1 x 8.3 sandbag emplacement
+		Pallet = { Pack = "SyntyCity", Name = "PolygonCity_Props_SM_Prop_Pallet_01" }, -- claude-bud JOB 70: wooden pallet (Roblox Synty City)
+	},
+
+	--[[ claude-bud JOB 70 (URGENT, LIVE FOR EVERYONE: OwnerFirst = false, owner-approved, no owner test step): no
+		walk-through dressing. Every placed prop / wall visual segment (Job67DressService.Place / FitLine) gets ONE cheap
+		invisible Box hull (createHull): an anchored Part, Shape Block, sized to the visual's bounds, CanCollide + CanQuery
+		on (players, soldiers, shots), CanTouch off, Transparency 1, no shadow. The visual mesh parts stay CanCollide off
+		(no mesh collision). No per-frame physics. Every piece key belongs to exactly one category below
+		(tools/checks/claude_bud_job70.py fails on a piece without one). ]]
+	PropCollision = {
+		Enabled = true,
+		OwnerFirst = false, -- LIVE FOR EVERYONE (Shaun approved JOB 70 straight to live)
+		Hull = "Box", -- Shape Block
+		VisualCanCollide = false,
+		HullCanCollide = true,
+		HullCanQuery = true,
+		MinHullStuds = 0.6, -- a hull is never thinner than this
+		MaxHullsPerFolder = 220, -- safety cap per wall / prop folder (walls ~50, props <= 140)
+		Categories = {
+			Sandbag = { "SandbagLine", "SandbagStack", "SandbagStackLow", "TrenchLine", "TrenchCurve", "TrenchNest" },
+			Hesco = { "HescoBlock" },
+			Concrete = { "Blockade", "Barrier" },
+			Crate = { "AmmoCrate", "AmmoCrateB", "LongCrate", "AirDrop", "WoodCrateBig", "LargeCrate", "SupplyBox", "WeaponCase", "TexCrateA", "TexCrateB", "TexCrateC", "TexCrateD" },
+			Pallet = { "Pallet" },
+			BarbedWire = { "BarbedWire", "BarbedWireB" },
+			Misc = { "Drum", "GasBarrel", "GasBarrelB", "JerryCan", "Generator", "SatComms" },
+		},
 	},
 
 	--[[ Walls: decoration only, around the Part ring StructureKitBuilder.SyncPerimeterWalls builds (the Part walls stay
@@ -7206,14 +7234,26 @@ local Job67DressConfig = {
 		Enabled = true,
 		OwnerFirst = true, -- NEW-OWNER-FIRST
 		HescoStretch = 2.0,
+		HescoStretchMax = 2.6, -- claude-bud JOB 70: a Hesco run may stretch up to this so EVERY face fits MaxHesco
 		LineStretch = 1.3,
 		GateClear = 32,
+		--[[ claude-bud JOB 70: ONE wall style per tier for EVERY face (front / gate, left side, right side, rear: the
+			"Sides" face is both side walls). WallStyle names the look; Hesco / Lines list the faces it covers, and every tier
+			covers all three face groups, so no side ever keeps the old Part look or a front-only dressing. Progressive:
+			L1 a sandbag line on every face -> L2 a 2-row sandbag wall + corner stacks -> L3 Hesco on every face + wire ->
+			L4 + more wire + blockades -> L5 + more stacks / wire / blockades + trench nests. A Hesco tier that cannot fit
+			MaxHesco even at HescoStretchMax dresses EVERY face with its FallbackStyle instead (never a mix). ]]
+		WallStyle = {
+			Line = { Rows = 1 },
+			Wall = { Rows = 2 },
+			Hesco = { Hesco = true, FallbackStyle = "Wall" },
+		},
 		Tiers = {
-			[1] = { Name = "Sandbag Line", Hesco = {}, Lines = { "Gate" }, GateStacks = 2, CornerStacks = false, Wire = 0, Blockades = 0, Trench = false, MaxHesco = 0 },
-			[2] = { Name = "Sandbag Wall", Hesco = {}, Lines = { "Gate", "Sides" }, GateStacks = 4, CornerStacks = true, Wire = 0, Blockades = 0, Trench = false, MaxHesco = 0 },
-			[3] = { Name = "Hesco Gate", Hesco = { "Gate" }, Lines = { "Sides" }, GateStacks = 4, CornerStacks = true, Wire = 2, Blockades = 0, Trench = false, MaxHesco = 6 },
-			[4] = { Name = "Hesco Wall", Hesco = { "Gate", "Sides" }, Lines = { "Rear" }, GateStacks = 4, CornerStacks = true, Wire = 4, Blockades = 2, Trench = false, MaxHesco = 12 },
-			[5] = { Name = "Hesco Fortress", Hesco = { "Gate", "Sides", "Rear" }, Lines = { "Rear" }, GateStacks = 6, CornerStacks = true, Wire = 6, Blockades = 4, Trench = true, MaxHesco = 14 },
+			[1] = { Name = "Sandbag Line", WallStyle = "Line", Hesco = {}, Lines = { "Gate", "Sides", "Rear" }, GateStacks = 2, CornerStacks = false, Wire = 0, Blockades = 0, Trench = false, MaxHesco = 0 },
+			[2] = { Name = "Sandbag Wall", WallStyle = "Wall", Hesco = {}, Lines = { "Gate", "Sides", "Rear" }, GateStacks = 4, CornerStacks = true, Wire = 0, Blockades = 0, Trench = false, MaxHesco = 0 },
+			[3] = { Name = "Hesco Line", WallStyle = "Hesco", Hesco = { "Gate", "Sides", "Rear" }, Lines = {}, GateStacks = 4, CornerStacks = true, Wire = 2, Blockades = 0, Trench = false, MaxHesco = 14 },
+			[4] = { Name = "Hesco Wall", WallStyle = "Hesco", Hesco = { "Gate", "Sides", "Rear" }, Lines = {}, GateStacks = 4, CornerStacks = true, Wire = 4, Blockades = 2, Trench = false, MaxHesco = 14 },
+			[5] = { Name = "Hesco Fortress", WallStyle = "Hesco", Hesco = { "Gate", "Sides", "Rear" }, Lines = {}, GateStacks = 6, CornerStacks = true, Wire = 6, Blockades = 4, Trench = true, MaxHesco = 14 },
 		},
 	},
 
@@ -7247,7 +7287,7 @@ local Job67DressConfig = {
 			},
 			Crates = {
 				{ { "TexCrateA", 0, 0, 0 }, { "TexCrateD", 4.6, 0.2, 10 } },
-				{ { "WoodCrateBig", -6.2, 0.4, 0 }, { "TexCrateB", 1.6, 4.2, -15 } },
+				{ { "WoodCrateBig", -6.2, 0.4, 0 }, { "TexCrateB", 1.6, 4.2, -15 }, { "Pallet", -1.4, -5.2, 10 } }, -- claude-bud JOB 70: + a pallet
 				{ { "LongCrate", 6.8, 4.6, 90 }, { "TexCrateC", -2.4, 4.6, 0 } },
 				{ { "SupplyBox", -6.4, 6.4, 0 }, { "AmmoCrate", 0, -4.6, 0 } },
 				{ { "AirDrop", 10.6, -0.6, 0 }, { "LargeCrate", -11.8, 0.4, 0 } },
@@ -7424,6 +7464,50 @@ function Job67DressConfig.PropTier(levelSum: number): number
 		end
 	end
 	return t
+end
+
+-- claude-bud JOB 70: the ONE wall style of a saved tier, the same for every face (pure; nil at 0)
+function Job67DressConfig.WallStyleFor(level: number): any
+	local t = Job67DressConfig.WallTier(level)
+	if t == nil then
+		return nil
+	end
+	local st = Job67DressConfig.Walls.WallStyle[t.WallStyle]
+	return { Kind = t.WallStyle, Rows = st.Rows or 1, Hesco = st.Hesco == true, FallbackStyle = st.FallbackStyle, Faces = { "Gate", "Sides", "Rear" } }
+end
+
+-- claude-bud JOB 70: the category of a piece key (PropCollision.Categories; nil = not registered)
+function Job67DressConfig.CategoryOf(key: string): string?
+	for cat, keys in pairs(Job67DressConfig.PropCollision.Categories) do
+		for _, k in ipairs(keys) do
+			if k == key then
+				return cat
+			end
+		end
+	end
+	return nil
+end
+
+-- claude-bud JOB 70: Hesco for EVERY run at once within a piece cap (pure): the smallest stretch in
+-- [HescoStretch, HescoStretchMax] (0.05 steps) whose total pieces fit; returns (stretch, { n per run }) or nil
+function Job67DressConfig.HescoPlan(runs: { number }, wallHeight: number, cap: number): (number?, { number }?)
+	local p = Job67DressConfig.Pieces.HescoBlock
+	local natural = p.Natural.X * (wallHeight / p.Natural.Y)
+	local W = Job67DressConfig.Walls
+	local s = W.HescoStretch
+	while s <= W.HescoStretchMax + 1e-9 do
+		local counts: { number } = {}
+		local total = 0
+		for i, len in ipairs(runs) do
+			counts[i] = math.max(1, math.ceil(len / (natural * s) - 1e-6))
+			total += counts[i]
+		end
+		if total <= cap then
+			return s, counts
+		end
+		s += 0.05
+	end
+	return nil, nil
 end
 
 -- Hesco pieces for one wall run at a wall height (pure): the count and each piece's length
@@ -32216,7 +32300,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 216)
+		player:SetAttribute("WE_Build", 217)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -78314,7 +78398,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 216)
+			player:SetAttribute("WE_Build", 217)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -87044,7 +87128,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 216)
+		player:SetAttribute("WE_Build", 217)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -87186,7 +87270,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=216",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=217",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -96412,7 +96496,10 @@ return HangarDockDisplayService
 	Folders: <plot>/WE_J67WallDress (beside WE_PerimeterWalls, rebuilt with it) and Workspace.WE_J67Props.Plot<N>.
 	Batch 2: Workspace.WE_J67Buildings = detailed desert buildings over the outlying places' TownBlock kits (Buildings
 	block; world dressing, live once a player it is live for is in the server). The kit parts go invisible and stop
-	colliding (lights / guis off, all restored by ClearBuildings); the building's large parts are the colliders. ]]
+	colliding (lights / guis off, all restored by ClearBuildings); the building's large parts are the colliders.
+	claude-bud JOB 70 (LIVE FOR EVERYONE): every wall / prop clone also gets ONE invisible Box hull (createHull: anchored,
+	CanCollide + CanQuery on, sized to the visual) so nothing is walk-through, and the wall tier's ONE style
+	(Cfg.WallStyleFor) dresses every face: front / gate, both sides and the rear. ]]
 
 local InsertService = game:GetService("InsertService")
 local Players = game:GetService("Players")
@@ -96580,7 +96667,53 @@ function Job67DressService.Template(key: string): Model?
 	return m
 end
 
--- a clone standing with its bottom centre at `at` (yaw from `at`)
+-- claude-bud JOB 70 (LIVE FOR EVERYONE): ONE cheap invisible Box hull per placed prop / wall visual segment, sized to the
+-- visual's bounds (Model: its bounding box; a fitted part: its CFrame / Size). Anchored, CanCollide + CanQuery on, CanTouch
+-- off, Transparency 1, no shadow; the visual's own parts stay CanCollide = false (sanitizePart). `count` = the folder
+-- whose WE_J67Hulls attribute caps the hulls (PropCollision.MaxHullsPerFolder). No per-frame work.
+function Job67DressService.HullsLive(): boolean
+	local K: any = C.PropCollision
+	return K ~= nil and K.Enabled == true and RetentionConfig.Live(K, nil) == true
+end
+
+local function createHull(visual: Instance, key: string, parent: Instance, count: Instance): BasePart?
+	local K: any = C.PropCollision
+	if not Job67DressService.HullsLive() then
+		return nil
+	end
+	local n = tonumber(count:GetAttribute("WE_J67Hulls")) or 0
+	if n >= (tonumber(K.MaxHullsPerFolder) or 220) then
+		return nil
+	end
+	local cf: CFrame, size: Vector3
+	if visual:IsA("Model") then
+		cf, size = visual:GetBoundingBox()
+	elseif visual:IsA("BasePart") then
+		cf, size = visual.CFrame, visual.Size
+	else
+		return nil
+	end
+	local m = tonumber(K.MinHullStuds) or 0.6
+	local h = Instance.new("Part")
+	h.Name = "J67Hull"
+	h.Shape = Enum.PartType.Block
+	h.Size = Vector3.new(math.max(m, size.X), math.max(m, size.Y), math.max(m, size.Z))
+	h.CFrame = cf
+	h.Anchored = true
+	h.CanCollide = true -- players and soldiers stop here (PropCollision.HullCanCollide)
+	h.CanQuery = true -- shots / line of sight see the cover (PropCollision.HullCanQuery)
+	h.CanTouch = false
+	h.Transparency = 1
+	h.CastShadow = false
+	h.Material = Enum.Material.SmoothPlastic
+	h:SetAttribute("WE_J67Hull", key)
+	h:SetAttribute("WE_J67Category", Cfg.CategoryOf(key) or "?")
+	h.Parent = parent
+	count:SetAttribute("WE_J67Hulls", n + 1)
+	return h
+end
+
+-- a clone standing with its bottom centre at `at` (yaw from `at`); claude-bud JOB 70: + its Box hull (inside the model)
 function Job67DressService.Place(key: string, at: CFrame, parent: Instance): Model?
 	local t = Job67DressService.Template(key)
 	if t == nil then
@@ -96588,6 +96721,7 @@ function Job67DressService.Place(key: string, at: CFrame, parent: Instance): Mod
 	end
 	local m = t:Clone()
 	m:PivotTo(at)
+	createHull(m, key, m, parent)
 	m.Parent = parent
 	return m
 end
@@ -96612,6 +96746,7 @@ function Job67DressService.FitLine(key: string, centre: CFrame, along: number, h
 		p.CFrame = centre
 	end
 	p.Parent = parent
+	createHull(p, key, parent, parent) -- claude-bud JOB 70: the fitted segment's Box hull
 	return p
 end
 
@@ -96642,15 +96777,6 @@ local function faceOf(name: string): string
 		return "Rear"
 	end
 	return "Sides"
-end
-
-local function has(list: { string }?, v: string): boolean
-	for _, x in ipairs(list or {}) do
-		if x == v then
-			return true
-		end
-	end
-	return false
 end
 
 Job67DressService._lastWalls = {} :: { [number]: { [string]: number } }
@@ -96689,26 +96815,28 @@ function Job67DressService.DressWalls(plotId: number, plotFolder: Instance, fold
 		end
 		return a.Name < b.Name
 	end)
-	-- whole faces get Hesco while the budget allows
-	local hescoFaces: { [string]: boolean } = {}
-	do
-		local need: { [string]: number } = { Gate = 0, Sides = 0, Rear = 0 }
-		for _, w in ipairs(walls) do
-			local along = math.max(w.Size.X, w.Size.Z)
-			local n = Cfg.HescoSplit(along, w.Size.Y)
-			need[faceOf(w.Name)] += n
-		end
-		local used = 0
-		for _, f in ipairs({ "Gate", "Sides", "Rear" }) do
-			if has(tier.Hesco, f) and used + need[f] <= (tier.MaxHesco or 0) then
-				hescoFaces[f] = true
-				used += need[f]
-			end
+	-- claude-bud JOB 70: the tier's ONE wall style for EVERY face (front / gate, both sides, rear): Hesco on every run
+	-- when the whole ring fits MaxHesco (stretch up to HescoStretchMax), else the tier's FallbackStyle on every run;
+	-- never a face left on the old Part look and never a front-only dressing
+	local style: any = Cfg.WallStyleFor(level)
+	local runs: { number } = {}
+	for i, w in ipairs(walls) do
+		runs[i] = math.max(w.Size.X, w.Size.Z)
+	end
+	local hescoCounts: { number }? = nil
+	local hescoStretch: number? = nil
+	if style.Hesco and #walls > 0 then
+		hescoStretch, hescoCounts = Cfg.HescoPlan(runs, walls[1].Size.Y, tier.MaxHesco or 0)
+		if hescoCounts == nil then
+			style = { Kind = style.FallbackStyle, Rows = W.WallStyle[style.FallbackStyle].Rows or 1, Hesco = false, Faces = style.Faces }
+			warn(string.format("%s walls plot=%d L%d: Hesco does not fit MaxHesco %d on every face; every face uses %s", C.LogTag, plotId, level, tier.MaxHesco or 0, style.Kind))
 		end
 	end
-	local stats = { Hesco = 0, Lines = 0, Props = 0 }
+	out:SetAttribute("WE_WallStyle", style.Kind)
+	out:SetAttribute("WE_WallFaces", table.concat(style.Faces, ","))
+	local stats: any = { Hesco = 0, Lines = 0, Props = 0, Faces = {} }
 	local gx, gz = centre.X, centre.Z
-	for _, w in ipairs(walls) do
+	for wi, w in ipairs(walls) do
 		local face = faceOf(w.Name)
 		local alongX = w.Size.X >= w.Size.Z
 		local along = if alongX then w.Size.X else w.Size.Z
@@ -96720,8 +96848,10 @@ function Job67DressService.DressWalls(plotId: number, plotFolder: Instance, fold
 		local outDir = if alongX then Vector3.new(0, 0, outSign) else Vector3.new(outSign, 0, 0)
 		local alongDir = if alongX then Vector3.new(1, 0, 0) else Vector3.new(0, 0, -1)
 		local base = Vector3.new(w.Position.X, padTop, w.Position.Z)
-		if hescoFaces[face] then
-			local n, len = Cfg.HescoSplit(along, h)
+		local before = stats.Hesco + stats.Lines
+		if style.Hesco and hescoCounts then
+			local n = hescoCounts[wi]
+			local len = along / n
 			for i = 1, n do
 				local off = -along * 0.5 + len * (i - 0.5)
 				local c = base + alongDir * off + Vector3.new(0, h * 0.5, 0)
@@ -96735,8 +96865,7 @@ function Job67DressService.DressWalls(plotId: number, plotFolder: Instance, fold
 			if cap and cap:IsA("BasePart") then
 				cap.Transparency = 1
 			end
-		end
-		if has(tier.Lines, face) and not hescoFaces[face] then
+		else
 			local natural = C.Pieces.SandbagLine.Natural
 			local n = math.max(1, math.ceil(along / (natural.Z * W.LineStretch) - 1e-6))
 			local len = along / n
@@ -96748,12 +96877,18 @@ function Job67DressService.DressWalls(plotId: number, plotFolder: Instance, fold
 				local dGate = if gateAxis == "X" then math.abs(p.Z - gz) else math.abs(p.X - gx)
 				if not (face == "Gate" and dGate < W.GateClear) then
 					local y = groundAt(p.X, p.Z, padTop, skip)
-					if Job67DressService.FitLine("SandbagLine", CFrame.new(p.X, y + natural.Y * 0.5, p.Z) * rot, len + 0.1, natural.Y, depth, out) then
-						stats.Lines += 1
+					for r = 1, math.max(1, style.Rows or 1) do -- Rows 2 = a sandbag wall: the second course on the first
+						if Job67DressService.FitLine("SandbagLine", CFrame.new(p.X, y + natural.Y * (r - 0.5), p.Z) * rot, len + 0.1, natural.Y, depth, out) then
+							stats.Lines += 1
+						end
 					end
 				end
 			end
 		end
+		stats.Faces[face] = (stats.Faces[face] or 0) + (stats.Hesco + stats.Lines - before)
+	end
+	if hescoStretch then
+		out:SetAttribute("WE_J67HescoStretch", hescoStretch)
 	end
 	-- gate dressing: stacks / wire / blockades out in front of the gate, beyond GateClear
 	do
@@ -96815,7 +96950,7 @@ function Job67DressService.DressWalls(plotId: number, plotFolder: Instance, fold
 	out:SetAttribute("WE_J67Lines", stats.Lines)
 	out:SetAttribute("WE_J67Props", stats.Props)
 	Job67DressService._lastWalls[plotId] = stats
-	print(string.format("%s walls plot=%d L%d %s hesco=%d (%d tris) sandbagLines=%d props=%d", C.LogTag, plotId, level, tier.Name, stats.Hesco, stats.Hesco * (C.Pieces.HescoBlock.Tris or 0), stats.Lines, stats.Props))
+	print(string.format("%s walls plot=%d L%d %s style=%s (every face) hesco=%d (%d tris) sandbagLines=%d props=%d hulls=%d", C.LogTag, plotId, level, tier.Name, style.Kind, stats.Hesco, stats.Hesco * (C.Pieces.HescoBlock.Tris or 0), stats.Lines, stats.Props, tonumber(out:GetAttribute("WE_J67Hulls")) or 0))
 	return stats
 end
 
