@@ -810,6 +810,21 @@ local function runCta()
 		if ok and VehicleController and VehicleController.Open then
 			VehicleController.Open()
 		end
+	elseif action == "OpenTargets" then
+		-- claude-bud JOB 48: RAID A RIVAL BASE: the TARGETS list (each row's SEND ARMY is the JOB 38 path)
+		local ok, RivalController = pcall(function()
+			return require(script.Parent.RivalController)
+		end)
+		if ok and RivalController and RivalController.Open then
+			RivalController.Open()
+		end
+	elseif action == "OpenMissions" then
+		local ok, MissionController = pcall(function()
+			return require(script.Parent.MissionController)
+		end)
+		if ok and MissionController and MissionController.Open then
+			MissionController.Open()
+		end
 	elseif action == "OpenArmy" then
 		local ok, ArmyController = pcall(function()
 			return require(script.Parent.ArmyController)
@@ -830,9 +845,39 @@ local APPLY_DEBOUNCE = 0.2
 local pendingPayload: any = nil
 local pendingScheduled = false
 
+-- claude-bud JOB 41: the Guided FIRST FIGHT puts the one objective marker ("ENEMY CAMP") on HIS Home Outpost
+local campMarkerOn = false
+local function campMarker(on: boolean)
+	if not on then
+		if campMarkerOn then
+			campMarkerOn = false
+			local cur = ObjectiveMarker.Current()
+			if cur and cur.Short == TutorialConfig.Guided.Camp.Label then
+				ObjectiveMarker.Clear()
+			end
+		end
+		return
+	end
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local origin = if hrp and hrp:IsA("BasePart") then hrp.Position else Vector3.zero
+	local part, pos = TutorialController.ResolveTargetPos("Outpost", "Tutorial_Outpost", nil, myPlotId, origin)
+	local p: Vector3? = if part then part.Position else pos
+	if p == nil then
+		return
+	end
+	campMarkerOn = true
+	ObjectiveMarker.ShowWith({ Short = TutorialConfig.Guided.Camp.Label, X = p.X, Y = p.Y, Z = p.Z }, { ArriveStuds = 25, TimeoutSeconds = 600 })
+end
+
 local function applyState(payload: any)
 	if typeof(payload) ~= "table" then
 		return
+	end
+	if payload.Id == "FirstFight" and payload.Complete ~= true then
+		task.defer(campMarker, true)
+	else
+		campMarker(false)
 	end
 	local now = os.clock()
 	if (now - lastApplyAt) < APPLY_DEBOUNCE and payload.Complete ~= true then
@@ -1308,7 +1353,7 @@ end
 -- Recruit and 4x4 steps open a panel instead). Per-player targets need the plot id first.
 local function stepHasWorldTarget(): boolean
 	local id = currentStepId
-	if id == "Outpost" then
+	if id == "Outpost" or id == "FirstFight" then -- claude-bud JOB 41: the camp is at the Home Outpost
 		return true
 	end
 	if myPlotId == nil then

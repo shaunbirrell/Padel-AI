@@ -311,6 +311,9 @@ function BattlePassService.Init(deps: { [string]: any })
 
 	local claimRemote = RemoteSetup.Get(Constants.RemoteNames.RequestClaimBattlePassReward) :: RemoteEvent
 	claimRemote.OnServerEvent:Connect(function(player: Player, level: any, track: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestClaimBattlePassReward", level, track) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "bp_claim", 4, 8) then
 			if AntiExploitService and AntiExploitService.Strike then
 				AntiExploitService.Strike(player, "bp_claim_rate")

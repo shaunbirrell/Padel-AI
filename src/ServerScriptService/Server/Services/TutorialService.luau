@@ -33,6 +33,95 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local MonetizationService: any = nil
 local CombatService: any = nil -- F6: EndNoviceShield (batch A lane C API), pcall + nil-check
+local RetentionService: any = nil -- claude-bud JOB 29: the FastStart onboarding hold follows the step
+local AnalyticsService: any = nil -- claude-bud JOB 29: onboarding timing (Step1..7, BaseClaimed)
+local GuidedService: any = nil -- claude-bud JOB 41: the Guided first minutes (camp, reward, funnel); nil = the old tutorial
+
+-- claude-bud JOB 41: the step list THIS profile plays (OrderVersion 4 = the Guided list, else the normal Steps)
+local function stepsOf(profile: any): { TutorialConfig.TutorialStepDef }
+	return TutorialConfig.StepsFor(profile and profile.TutorialOrderVersion)
+end
+local function getStep(profile: any, index: number): TutorialConfig.TutorialStepDef?
+	return stepsOf(profile)[index]
+end
+local function stepCount(profile: any): number
+	return #stepsOf(profile)
+end
+local function guidedHook(name: string, ...: any)
+	if GuidedService and typeof(GuidedService[name]) == "function" then
+		local ok, err = pcall(GuidedService[name], ...)
+		if not ok then
+			warn("[TutorialService] Guided." .. name .. " failed:", err)
+		end
+	end
+end
+
+--[[ Code Bot v163 (Shaun 2026-10-01: "I'm not a new player so can't see the guided tutorial"): an owner / admin-only
+	REPLAY of the Guided first minutes in TEST MODE (AdminService "/replaytutorial" or Settings > ADMIN > REPLAY GUIDED
+	TUTORIAL). ReplayGuided snapshots the tutorial fields into profile.GuidedReplay (saved, so a leave mid-replay is
+	restored on the next load), then plays the Guided order (OrderVersion 4) from step 1 with a fresh profile.Guided
+	{ Replay = true }. Nothing else in the save changes: steps the save cannot redo are skipped as for anyone (a
+	building already owned: Command Center / Barracks; the Home Outpost already taken), the training camp fight is
+	replayed, GuidedService grants NO cash in a replay (no recruit top-up, no reward cash; the banner still shows) and
+	sends NO funnel / analytics events. The end (last step, SKIP, or the next profile load) puts the snapshot back
+	exactly, without the end-of-tutorial follow-ups (no Starter Pack offer, no "tutorial complete" toast). ]]
+local REPLAY_FIELDS = { "TutorialComplete", "TutorialStep", "TutorialOrderVersion", "TutorialDoneAhead", "Guided" }
+
+local function isReplay(profile: any): boolean
+	return typeof(profile) == "table" and typeof(profile.GuidedReplay) == "table"
+end
+
+local function deepCopy(v: any): any
+	if typeof(v) ~= "table" then
+		return v
+	end
+	local out = {}
+	for k, x in pairs(v) do
+		out[k] = deepCopy(x)
+	end
+	return out
+end
+
+-- put the snapshot back (the save is exactly what it was before the replay); true when a replay was ended
+local function restoreReplay(player: Player, profile: any): boolean
+	if not isReplay(profile) then
+		return false
+	end
+	local snap = profile.GuidedReplay
+	for _, k in ipairs(REPLAY_FIELDS) do
+		local saved = snap.Fields and snap.Fields[k]
+		if saved == "__nil" then
+			profile[k] = nil
+		else
+			profile[k] = deepCopy(saved)
+		end
+	end
+	profile.GuidedReplay = nil
+	if DataService then
+		DataService.MarkDirty(player)
+	end
+	return true
+end
+
+function TutorialService.IsReplay(player: Player): boolean
+	local profile = DataService and DataService.GetProfile(player)
+	return isReplay(profile)
+end
+
+-- claude-bud JOB 29: seconds-since-join marks (analytics only) and the FastStart hold; never breaks the tutorial
+local function onboard(player: Player, step: string)
+	if TutorialService.IsReplay(player) then
+		return -- Code Bot v163: a test-mode replay sends no onboarding analytics
+	end
+	if AnalyticsService and AnalyticsService.Onboard then
+		pcall(AnalyticsService.Onboard, player, step)
+	end
+end
+local function retentionStep(player: Player, step: number, complete: boolean)
+	if RetentionService and RetentionService.OnTutorialStep then
+		pcall(RetentionService.OnTutorialStep, player, step, complete)
+	end
+end
 
 -- Step 1 (ClaimBase) is the first step in every order; every other step is found through TutorialConfig
 local STEP_CLAIM = 1
@@ -65,14 +154,23 @@ local function pushTutorial(player: Player)
 	end
 	local remote = RemoteSetup.Get(Constants.RemoteNames.TutorialStateUpdate) :: RemoteEvent
 	local stepIndex = profile.TutorialStep
-	local stepDef = if not profile.TutorialComplete then TutorialConfig.GetStep(stepIndex) else nil
+	local stepDef = if not profile.TutorialComplete then getStep(profile, stepIndex) else nil
+	-- claude-bud JOB 48: the raid goal's fallback copy ("Clear hostiles") while no rival may be raided
+	local goalTitle, goalHint = nil, nil
+	if stepDef and stepDef.Id == "RaidRival" and GuidedService and GuidedService.GoalText then
+		local okG, t, h = pcall(GuidedService.GoalText, profile)
+		if okG then
+			goalTitle, goalHint = t, h
+		end
+	end
 	remote:FireClient(player, {
 		Step = stepIndex,
 		Complete = profile.TutorialComplete == true,
-		Total = TutorialConfig.StepCount(),
+		Total = stepCount(profile),
+		OrderVersion = tonumber(profile.TutorialOrderVersion) or 1, -- claude-bud JOB 41: 4 = the Guided list
 		Id = if stepDef then stepDef.Id else nil,
-		Title = if stepDef then stepDef.Title else nil,
-		Hint = if stepDef then stepDef.Hint else nil,
+		Title = goalTitle or (if stepDef then stepDef.Title else nil),
+		Hint = goalHint or (if stepDef then stepDef.Hint else nil),
 		MarkerName = if stepDef then stepDef.MarkerName else nil,
 		HighlightHint = if stepDef then stepDef.HighlightHint else nil,
 		PadStructureId = if stepDef then stepDef.PadStructureId else nil,
@@ -119,6 +217,19 @@ end
 local function scheduleStarterOffer(player: Player, afterTutorial: boolean)
 	local mon = MonetizationService
 	if not mon or typeof(mon.TrySoftOfferStarterBundle) ~= "function" or not DataService then
+		return
+	end
+	-- Code Bot v153 (MonetizationConfig.FirstOffer): the first offer at ~2 minutes of play for EVERY player, whatever
+	-- the tutorial state; MonetizationService.ScheduleFirstOffer owns the timing, the seated wait, the retries and the
+	-- shown-confirmed re-queue. At load: FirstOffer.AtPlaySeconds; after the tutorial: AfterTutorialSeconds (the
+	-- 120 s quiet window still holds it back when the tutorial ends sooner; a run already waiting is kept).
+	local first: any = (MonetizationConfig :: any).FirstOffer
+	if typeof(first) == "table" and first.Enabled == true and typeof(mon.ScheduleFirstOffer) == "function" then
+		local sbo: any = (MonetizationConfig :: any).StarterBundleOffer
+		local delaySec = if afterTutorial
+			then tonumber(sbo and sbo.AfterTutorialSeconds) or STARTER_AFTER_TUTORIAL_SECONDS
+			else tonumber(first.AtPlaySeconds) or 120
+		mon.ScheduleFirstOffer(player, if afterTutorial then "tutorial_complete" else "first_offer", delaySec)
 		return
 	end
 	local def: any = MonetizationConfig.DevProducts.StarterBundle
@@ -199,12 +310,20 @@ local function stepAlreadyDone(profile: any, def: TutorialConfig.TutorialStepDef
 	if def.Id == "Outpost" then
 		return TerritoryConfig.Starter.Enabled == true and profile.StarterOutpostTaken == true
 	end
+	-- claude-bud JOB 41: the Guided fight / reward are done once (profile.Guided)
+	local g = profile.Guided
+	if def.Id == "FirstFight" then
+		-- Code Bot v163: a replay fights the camp again even though the Home Outpost was taken long ago
+		return (typeof(g) == "table" and g.CampDone == true) or (profile.StarterOutpostTaken == true and not isReplay(profile))
+	elseif def.Id == "Reward" then
+		return typeof(g) == "table" and g.RewardDone == true
+	end
 	return false
 end
 
 local function skipOwnedBuySteps(profile: any, step: number): number
-	local total = TutorialConfig.StepCount()
-	while step <= total and stepAlreadyDone(profile, TutorialConfig.GetStep(step)) do
+	local total = stepCount(profile)
+	while step <= total and stepAlreadyDone(profile, getStep(profile, step)) do
 		step += 1
 	end
 	return step
@@ -270,6 +389,19 @@ local function setStep(player: Player, step: number, complete: boolean?)
 	end
 	DataService.MarkDirty(player)
 	pushTutorial(player)
+	guidedHook("OnStep", player, profile, getStep(profile, step), complete == true) -- claude-bud JOB 41
+	if complete and restoreReplay(player, profile) then
+		-- Code Bot v163: the end of a test-mode replay: the save is back as it was, no end-of-tutorial follow-ups
+		pushTutorial(player)
+		if NotificationService then
+			NotificationService.Notify(player, "Guided replay finished (test mode). Your progress is unchanged.", "Success")
+		end
+		return
+	end
+	retentionStep(player, step, complete == true) -- claude-bud JOB 29
+	if complete then
+		onboard(player, "TutorialDone") -- claude-bud JOB 29
+	end
 	if complete then
 		firstAttackHint(player, TutorialConfig.FirstMinutes.AttackHintDelaySeconds) -- claude-bud JOB 7
 	end
@@ -300,9 +432,15 @@ local function advanceTo(player: Player, targetStep: number)
 	end
 	lastAdvanceAt[player.UserId] = now
 	lastAdvanceStep[player.UserId] = targetStep
+	-- claude-bud JOB 29: the funnel step just finished, at the real moment (ClaimBase = "BaseClaimed", else Tut_<Id>)
+	local doneDef = getStep(profile, targetStep)
+	if doneDef then
+		onboard(player, if doneDef.Id == "ClaimBase" then "BaseClaimed" else "Tut_" .. doneDef.Id)
+		guidedHook("OnStepDone", player, profile, doneDef) -- claude-bud JOB 41: the FirstMinutes funnel
+	end
 	-- One setStep (one push): the client drops a second TutorialStateUpdate that lands within 0.2 s
 	local nextStep = skipOwnedBuySteps(profile, targetStep + 1)
-	if nextStep > TutorialConfig.StepCount() then
+	if nextStep > stepCount(profile) then
 		setStep(player, nextStep, true)
 	else
 		-- Panel update only — no toast spam per step
@@ -318,16 +456,71 @@ function TutorialService.Complete(player: Player)
 	if not profile then
 		return
 	end
+	local skippedAt = getStep(profile, profile.TutorialStep) -- claude-bud JOB 41: where he skipped (before the stamp)
 	profile.TutorialComplete = true
-	profile.TutorialStep = TutorialConfig.StepCount() + 1
+	profile.TutorialStep = stepCount(profile) + 1
 	DataService.MarkDirty(player)
 	pushTutorial(player)
+	guidedHook("OnSkip", player, profile, skippedAt) -- claude-bud JOB 41: clears the camp at once, GuidedSkipped
+	if restoreReplay(player, profile) then
+		-- Code Bot v163: SKIP during a test-mode replay ends it: the snapshot goes back, nothing else runs
+		pushTutorial(player)
+		if NotificationService then
+			NotificationService.Notify(player, "Guided replay ended (test mode). Your progress is unchanged.", "Info", 3)
+		end
+		return
+	end
 	if NotificationService then
 		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
+	onboard(player, "TutorialSkipped") -- claude-bud JOB 29
+	retentionStep(player, profile.TutorialStep, true)
 	firstAttackHint(player, TutorialConfig.FirstMinutes.AttackHintDelaySeconds) -- claude-bud JOB 7
 	endNoviceShield(player) -- F6: SKIP ends the novice shield too
 	scheduleStarterOffer(player, true) -- v71 money (M1): the Starter Pack offer 3 s after the tutorial
+end
+
+-- Code Bot v163: start the test-mode Guided replay (AdminService checks the caller is the owner / an admin first)
+function TutorialService.ReplayGuided(player: Player): (boolean, string)
+	if not DataService or not tutorialEnabled() then
+		return false, "Tutorial is off in this build"
+	end
+	local G: any = (TutorialConfig :: any).Guided
+	if GuidedService == nil or typeof(G) ~= "table" or G.Enabled ~= true then
+		return false, "Guided first minutes are off in this build"
+	end
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return false, "Profile not loaded yet"
+	end
+	if isReplay(profile) then
+		return false, "A guided replay is already running (SKIP ends it)"
+	end
+	if profile.TutorialComplete ~= true then
+		return false, "Finish or skip the current tutorial first"
+	end
+	local fields = {}
+	for _, k in ipairs(REPLAY_FIELDS) do
+		local v = profile[k]
+		fields[k] = if v == nil then "__nil" else deepCopy(v)
+	end
+	profile.GuidedReplay = { Fields = fields, At = os.time() }
+	profile.Guided = { Replay = true, Funnel = {} }
+	profile.TutorialOrderVersion = if GuidedService.OrderFor then GuidedService.OrderFor(player) else G.OrderVersion -- JOB 48: 5 with the Hook
+	profile.TutorialDoneAhead = nil
+	profile.TutorialComplete = false
+	profile.TutorialStep = skipOwnedBuySteps(profile, STEP_CLAIM)
+	lastAdvanceAt[player.UserId] = nil
+	lastAdvanceStep[player.UserId] = nil
+	DataService.MarkDirty(player)
+	pushTutorial(player)
+	guidedHook("OnResume", player, profile, getStep(profile, profile.TutorialStep))
+	task.defer(function()
+		if profile.BasePlotId then
+			TutorialService.Notify(player, "PlotAssigned")
+		end
+	end)
+	return true, "Guided replay started (test mode): no cash, no analytics, your save is restored at the end. SKIP ends it."
 end
 
 function TutorialService.Reset(player: Player)
@@ -376,7 +569,7 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 	end
 	-- F6: only the ACTIVE step can finish, and only on an event its AdvanceOn lists ("Upgrade" = its own console buy;
 	-- any vehicle spawn = the 4x4 step; a collect or a cash drop ("ManualDrop") = the collect step)
-	local def = TutorialConfig.GetStep(step)
+	local def = getStep(profile, step)
 	if def and typeof(def.AdvanceOn) == "table" and table.find(def.AdvanceOn, eventType)
 		and (eventType ~= "Upgrade" or (typeof(detail) == "string" and detail == def.PadStructureId)) then
 		advanceTo(player, step)
@@ -390,9 +583,15 @@ function TutorialService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	MonetizationService = deps.MonetizationService -- v71 money (M1): TrySoftOfferStarterBundle (Starter Pack gate)
 	CombatService = deps.CombatService -- F6: EndNoviceShield (CombatService.Init runs later; called only at run time)
+	RetentionService = deps.RetentionService -- claude-bud JOB 29
+	AnalyticsService = deps.AnalyticsService -- claude-bud JOB 29
+	GuidedService = deps.GuidedService -- claude-bud JOB 41 (nil = the old tutorial)
 
 	local skipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSkipTutorial) :: RemoteEvent
 	skipRemote.OnServerEvent:Connect(function(player: Player)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestSkipTutorial") then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "tutorial_skip", 1, 2) then
 			return
 		end
@@ -411,6 +610,29 @@ function TutorialService.Init(deps: { [string]: any })
 		alone (never stamped down, so it is never migrated twice). ]]
 	local function migrateOrder(player: Player, profile: any)
 		local current = orderVersion()
+		-- claude-bud JOB 41: a NEW player enters the Guided order (steps 1-4 have the same index in 3 and 4), and a
+		-- Guided save stays Guided while the switch is live for him; otherwise it migrates back like any other order
+		if GuidedService and typeof(GuidedService.Wants) == "function" then
+			local okW, wants = pcall(GuidedService.Wants, player, profile)
+			if okW and wants == true then
+				current = TutorialConfig.Guided.OrderVersion
+				if typeof(GuidedService.OrderFor) == "function" then
+					local okO, v = pcall(GuidedService.OrderFor, player)
+					current = if okO and typeof(v) == "number" then v else current -- claude-bud JOB 48: 5 with the Hook
+				end
+				local saved = tonumber(profile.TutorialOrderVersion)
+				if saved ~= current then
+					-- claude-bud JOB 48: a Guided save moving between 4 and 5 (the Hook switched on / off) keeps its place:
+					-- the first step of the new order it has not done (steps 1-7 share an index in both orders)
+					if TutorialConfig.IsGuidedVersion(saved) and profile.TutorialComplete ~= true then
+						profile.TutorialStep = TutorialConfig.MigrateLegacyStep(profile.TutorialStep, TutorialConfig.StepsFor(current), saved)
+					end
+					profile.TutorialOrderVersion = current
+					DataService.MarkDirty(player)
+				end
+				return
+			end
+		end
 		local saved = tonumber(profile.TutorialOrderVersion) or 1
 		if saved == current or TutorialConfig.SavedOrder(saved) == nil then
 			return
@@ -434,6 +656,8 @@ function TutorialService.Init(deps: { [string]: any })
 	end
 
 	local function onProfileLoaded(player: Player, profile: any)
+		-- Code Bot v163: a test-mode Guided replay never outlives its session (left mid-replay: the snapshot goes back)
+		restoreReplay(player, profile)
 		if not tutorialEnabled() then
 			profile.TutorialComplete = true
 			pushTutorial(player)
@@ -457,13 +681,13 @@ function TutorialService.Init(deps: { [string]: any })
 		local firstOpen = skipOwnedBuySteps(profile, profile.TutorialStep)
 		if firstOpen ~= profile.TutorialStep then
 			profile.TutorialStep = firstOpen
-			if firstOpen > TutorialConfig.StepCount() then
+			if firstOpen > stepCount(profile) then
 				profile.TutorialComplete = true
 			end
 			DataService.MarkDirty(player)
 		end
 		-- F6: a migrated v1 save past the last step (or everything already done) is a finished tutorial
-		if profile.TutorialStep > TutorialConfig.StepCount() and profile.TutorialComplete ~= true then
+		if profile.TutorialStep > stepCount(profile) and profile.TutorialComplete ~= true then
 			profile.TutorialComplete = true
 			DataService.MarkDirty(player)
 		end
@@ -472,6 +696,7 @@ function TutorialService.Init(deps: { [string]: any })
 			endNoviceShield(player) -- F6 (no-op unless a shield is already up)
 			return
 		end
+		guidedHook("OnResume", player, profile, getStep(profile, profile.TutorialStep)) -- claude-bud JOB 41: a rejoin mid-chain
 		-- Plot assignment counts as claim-base progress
 		task.defer(function()
 			if profile.BasePlotId then
@@ -487,7 +712,9 @@ function TutorialService.Init(deps: { [string]: any })
 				DataService.MarkDirty(player)
 				task.delay(TutorialConfig.FirstMinutes.WelcomeDelaySeconds, function()
 					if player.Parent and NotificationService then
-						NotificationService.Notify(player, TutorialConfig.FirstMinutes.WelcomeText, "Info", 6)
+						-- claude-bud JOB 29: with FastStart he already stands at the Command Center console
+						local text = if TutorialConfig.FastStartLiveFor(player.UserId) then TutorialConfig.FastStart.WelcomeText else TutorialConfig.FirstMinutes.WelcomeText
+						NotificationService.Notify(player, text, "Info", 6)
 					end
 				end)
 			end
@@ -497,7 +724,9 @@ function TutorialService.Init(deps: { [string]: any })
 		end
 		onProfileLoaded(player, profile)
 		-- v71 money (M1): the tutorial is already done at load → the Starter Pack offer 8 s in (the gate decides)
-		if profile.TutorialComplete == true then
+		-- Code Bot v153: with MonetizationConfig.FirstOffer on, EVERY player gets the first offer at ~2 minutes of play
+		local firstOn = typeof((MonetizationConfig :: any).FirstOffer) == "table" and (MonetizationConfig :: any).FirstOffer.Enabled == true
+		if profile.TutorialComplete == true or firstOn then
 			scheduleStarterOffer(player, false)
 		end
 	end)

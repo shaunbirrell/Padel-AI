@@ -70,6 +70,11 @@ local TutorialConfig = {
 	SavedOrders = {
 		[2] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Jeep", "Outpost" },
 		[3] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Outpost", "Jeep" },
+		-- claude-bud JOB 41: the Guided order (only while TutorialConfig.Guided is live for a NEW player; see GuidedSteps)
+		[4] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "FirstFight", "Outpost", "Reward", "Barracks", "Jeep" },
+		-- claude-bud JOB 48: the Hook order (Guided.Hook live): v4 + RAID A RIVAL BASE after the reward + Open MISSIONS last
+		[5] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "FirstFight", "Outpost", "Reward", "RaidRival",
+			"Barracks", "Jeep", "Missions" },
 	} :: { [number]: { string } },
 	-- Lane Z: the steps whose finish is carried (DoneAhead) when a new order puts them after the step a save moves to:
 	-- the Outpost / 4x4 pair the Home Outpost switch reorders. Any other done step after it is asked again (K2's "first
@@ -313,6 +318,203 @@ function TutorialConfig.FirstMinutesLiveFor(userId: any): boolean
 		return (require(script.Parent.AdminConfig) :: any).IsPlaytestOwner(userId)
 	end
 	return false
+end
+
+--[[ claude-bud JOB 29 (2026-09-30): FAST START, the first 60 seconds. A new player (Command Center not bought, tutorial
+	not done) is already given a base on join (BaseService.AssignPlot) and moved onto it; with FastStart he lands
+	StandStuds in front of his OWN Command Center console instead of at the plot gate (~168 studs away), facing it, so
+	the first BUILD ($1,500 of the $10,000 start) is one step away with the gold line and the pulsing arrow on it.
+	His first BUILD pays StarterPayout (server, once per profile: profile.StarterPayoutDone, reason "onboarding") with a
+	coin burst flying to the cash pill. Until the tutorial is past step HoldPopupsUntilStep - 1 (the Command Center
+	step), nothing covers the screen: the daily-streak card, the nation picker and promos wait (WE_Onboarding = true on
+	the player while the hold is on; the server clears it). Kill switch: Enabled = false (the join exactly as before).
+	OwnerFirst = true: live only for the owner (and Studio test players) first; see RetentionConfig.Live. ]]
+TutorialConfig.FastStart = {
+	Enabled = true,
+	OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
+	StandStuds = 7, -- in front of the console face (ConsolePromptDistance is 10)
+	StarterPayout = 1500,
+	HoldPopupsUntilStep = 3, -- WE_Onboarding clears once TutorialStep >= this (after the Command Center) or at 60 s
+	HoldMaxSeconds = 60, -- the hold never lasts longer than this, whatever the step
+	WelcomeText = "Welcome! Press BUILD on the gold console.", -- <= 42 characters, no key names
+	PayoutText = "Starter bonus!",
+}
+
+function TutorialConfig.FastStartLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live(TutorialConfig.FastStart, userId)
+end
+
+--[[ claude-bud JOB 41 part A (2026-09-30): THE GUIDED FIRST 3-4 MINUTES, owner-first. A NEW player (tutorial not done,
+	Command Center not bought, no building, first join < NewPlayerSeconds ago) is stamped with OrderVersion 4 (SavedOrders
+	[4] / GuidedSteps): Command Center (the FastStart BUILD + payout: the big win inside ~60 s) -> collect at the ATM ->
+	recruit -> FIRST FIGHT (a 2-Recruit training camp at HIS Home Outpost, real CombatService NPCs, hostile only to him)
+	-> capture it -> REWARD ("BASE SECURED!", confetti, GuidedRewardCash) -> the Barracks / 4x4 as the next goals.
+	Versions 2 / 3 are untouched; a v4 save whose Guided switch went off migrates back like any other order.
+	OFF (Enabled = false, or not live for him): OrderVersion 3, no camp, no banner, no new events (today's game). ]]
+TutorialConfig.Guided = {
+	Enabled = true,
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
+	OrderVersion = 4,
+	NewPlayerSeconds = 900, -- a profile older than this (FirstJoinUnix) never enters Guided
+	HoldMaxSeconds = 300, -- the WE_Onboarding hold covers the whole chain up to Reward, never longer than this
+	StuckSeconds = 90, -- "GuidedStuck" once a step has been open this long (analytics only)
+	RecruitCount = 3, -- the recruit step wants him able to afford this many soldiers
+	GuidedRecruitCashMax = 5000, -- the one-time top-up that covers exactly the gap to RecruitCount soldiers (0 = never)
+	GuidedRewardCash = 2500, -- the one-time REWARD (reason "onboarding"): enough for the next building right away
+	RewardText = "BASE SECURED!",
+	RewardSub = "Your outpost is yours. Next: the Barracks.",
+	CampSkipText = "The camp pulled out. Take the outpost!", -- the never-soft-lock line after MaxCampSpawns
+	Camp = {
+		Npc = { "Recruit", "Recruit" }, -- CombatConfig NPC types (weak on purpose)
+		-- the 2 sandbag posts, relative to the Home Outpost centre (studs; on the Starter ring, Radius 20)
+		Posts = { { X = -9, Z = -12 }, { X = 9, Z = -12 } },
+		MaxCampSpawns = 3, -- a death / respawn / rejoin re-spawns them at full health at most this often, then auto-complete
+		Label = "ENEMY CAMP",
+		SandbagColor = Color3.fromRGB(150, 130, 90),
+	},
+	Funnel = {
+		Name = "FirstMinutes",
+		Steps = { "Spawned", "FirstBuild", "Collected", "Recruited", "FightStarted", "FirstKill", "Captured", "Reward",
+			"NextBuilding", "Offered", "Bought" },
+	},
+	--[[ claude-bud JOB 48 (2026-10-01): THE HOOK, the end of the Guided chain (owner-first; OFF == today's v4 chain).
+		Live (Enabled + RetentionConfig.Live, on top of Guided being live) a Guided player plays OrderVersion 5
+		(SavedOrders[5]): after the REWARD the next goal is RAID A RIVAL BASE (SEND ARMY on a TARGETS row, the JOB 38
+		path; ArmySendRules decide), then the Barracks, the 4x4 and Open MISSIONS. ]]
+	Hook = {
+		Enabled = true,
+		OwnerFirst = false, -- Code Bot v175 (Shaun approved 2026-10-01): the Hook is live for everyone (was NEW-OWNER-FIRST, claude-bud JOB 48)
+		OrderVersion = 5,
+		-- free soldiers at the REWARD through the normal recruit path (SoldierService.GrantFree: within the army cap,
+		-- never above it; no cash, no Robux). 0 = off
+		RewardSoldiers = 2,
+		-- the one REAL timer: a raid won within FastRaidSeconds of the reward pays FastRaidBonus once (reason
+		-- "onboarding"); FastRaidBonus = 0 -> no bonus and no countdown on screen
+		FastRaidSeconds = 300,
+		FastRaidBonus = 2000,
+		-- no rival may be raided right now (empty server, all shielded, his army too weak): the goal falls back to
+		-- clearing FallbackKills hostile NPCs (any CombatService NPC he kills, the server's own camps / Ops sites); after
+		-- FallbackMaxSeconds the chain moves on to the Barracks anyway (never a soft-lock)
+		FallbackKills = 2,
+		FallbackMaxSeconds = 180,
+		RecheckSeconds = 15, -- while the raid goal is open: re-check that a rival is still allowed
+		FallbackTitle = "Clear hostiles", -- <= 18 characters
+		FallbackHint = "Beat 2 enemies: send your army to ATTACK.", -- <= 42 characters, no key names
+		FastRaidText = "Fast raid bonus!",
+		-- funnel steps 12-16 of FirstMinutes (appended after Funnel.Steps 1-11, which never change). "GoalFallbackWon"
+		-- is logged at the RaidWon index (15) when the fallback goal was won instead
+		FunnelSteps = { "ArmyGrew", "GoalRaidShown", "RaidSent", "RaidWon", "NextGoal" },
+		FallbackWonName = "GoalFallbackWon",
+		-- custom event SessionMilestone { sec } once each per session at these play seconds (the 3-minute wall)
+		Milestones = { 60, 120, 180, 300, 600 },
+	},
+}
+
+function TutorialConfig.GuidedLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live(TutorialConfig.Guided, userId)
+end
+
+-- claude-bud JOB 48: the Hook (OrderVersion 5) is live only on top of a live Guided
+function TutorialConfig.HookLiveFor(userId: any): boolean
+	local H: any = TutorialConfig.Guided.Hook
+	return typeof(H) == "table" and TutorialConfig.GuidedLiveFor(userId)
+		and (require(script.Parent.RetentionConfig) :: any).Live(H, userId)
+end
+
+-- true for both Guided orders (4 and the Hook's 5)
+function TutorialConfig.IsGuidedVersion(version: any): boolean
+	local v = tonumber(version)
+	local H: any = TutorialConfig.Guided.Hook
+	return v ~= nil and (v == TutorialConfig.Guided.OrderVersion or (typeof(H) == "table" and v == H.OrderVersion))
+end
+
+-- the two new steps of the Guided order (the other seven are the owner's steps above, unchanged)
+local GUIDED_NEW: { [string]: TutorialStepDef } = {
+	FirstFight = {
+		Id = "FirstFight",
+		Title = "Clear the camp",
+		Hint = "Beat the 2 enemies at your outpost.",
+		MarkerName = "Tutorial_Outpost",
+		HighlightHint = "Territory",
+		CtaAction = "Capture",
+		CtaLabel = "GO",
+		AdvanceOn = { "CampCleared" },
+	},
+	Reward = {
+		Id = "Reward",
+		Title = "Base secured!",
+		Hint = "Great win! Your next goal is up.",
+		MarkerName = "Tutorial_Outpost",
+		CtaAction = "WatchHud",
+		CtaLabel = "OK",
+		AdvanceOn = { "GuidedReward" },
+	},
+	-- claude-bud JOB 48: the Hook's two steps (OrderVersion 5)
+	RaidRival = {
+		Id = "RaidRival",
+		Title = "Raid a rival base",
+		Hint = "Tap SEND ARMY on a TARGETS row.",
+		MarkerName = "",
+		HighlightHint = "Targets",
+		CtaAction = "OpenTargets",
+		CtaLabel = "TARGETS",
+		-- RaidWon: a SEND (or an in-person ATM raid) looted; GoalFallbackWon: the fallback hostiles cleared;
+		-- GoalFallbackDone: the fallback timed out (the chain moves on, never a soft-lock)
+		AdvanceOn = { "RaidWon", "GoalFallbackWon", "GoalFallbackDone" },
+	},
+	Missions = {
+		Id = "Missions",
+		Title = "Open Missions",
+		Hint = "Daily jobs pay cash. Open MISSIONS.",
+		MarkerName = "",
+		HighlightHint = "Missions",
+		CtaAction = "OpenMissions",
+		CtaLabel = "MISSIONS",
+		AdvanceOn = { "MissionsOpened", "ClaimMission" },
+	},
+}
+
+local function buildGuided(version: number?): { TutorialStepDef }
+	local list: { TutorialStepDef } = {}
+	for _, id in ipairs(TutorialConfig.SavedOrders[version or 4]) do
+		local def = GUIDED_NEW[id]
+		if def == nil then
+			for _, d in ipairs(OWNER_STEPS) do
+				if d.Id == id then
+					def = d
+				end
+			end
+		end
+		table.insert(list, def :: TutorialStepDef)
+	end
+	return list
+end
+TutorialConfig.GuidedSteps = buildGuided()
+TutorialConfig.HookSteps = buildGuided(5) -- claude-bud JOB 48
+
+-- the step list a saved order version plays (4 = GuidedSteps, 5 = HookSteps; anything else = today's Steps)
+function TutorialConfig.StepsFor(version: any): { TutorialStepDef }
+	if tonumber(version) == TutorialConfig.Guided.OrderVersion then
+		return TutorialConfig.GuidedSteps
+	end
+	local H: any = TutorialConfig.Guided.Hook
+	if typeof(H) == "table" and tonumber(version) == H.OrderVersion then
+		return TutorialConfig.HookSteps
+	end
+	return TutorialConfig.Steps
+end
+
+function TutorialConfig.GetStepFor(version: any, index: number): TutorialStepDef?
+	return TutorialConfig.StepsFor(version)[index]
+end
+
+-- a step definition by Id in either list (the client's per-Id lookups)
+function TutorialConfig.ById(id: string): TutorialStepDef?
+	local i = TutorialConfig.IndexOf(id)
+	if i then
+		return TutorialConfig.Steps[i]
+	end
+	return GUIDED_NEW[id]
 end
 
 return TutorialConfig

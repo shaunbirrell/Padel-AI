@@ -280,6 +280,22 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 			local lat = (if count == 1 then 0 else spread * 0.5) + GOLD_PAD_BESIDE_PUMP
 			padPos = (plotPos :: Vector3) + toward * out + right * lat + Vector3.new(0, 0.3, 0)
 		end
+		-- claude-bud JOB 19: a purchase stand (only its prompt buys); the flat pad below stays the fallback
+		local PP: any = MonetizationConfig.PremiumPads
+		local okS, Stands = pcall(require, script.Parent.Parent.Modules.PurchaseStands)
+		if PP.Stands == true and okS and type(Stands) == "table" then
+			local okB = pcall((Stands :: any).Build, folder, CFrame.lookAt(padPos - Vector3.new(0, 0.3, 0), padPos - Vector3.new(0, 0.3, 0) - toward), {
+				Kind = "DevProduct",
+				Key = GOLDEN_KEY,
+				PlotId = plotId,
+				Label = "Golden Pump",
+				Color = g.Color,
+				Icon = "⛽",
+			})
+			if okB then
+				return
+			end
+		end
 		local pad = Instance.new("Part")
 		pad.Name = "PremiumPad_" .. GOLDEN_KEY
 		pad.Size = Vector3.new(7, 0.45, 7)
@@ -391,6 +407,19 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 	local tickSec = PlotOilPumpConfig.TickSeconds or 5
 	local cash = PlotOilPumpConfig.CashPerTick or 18
 	local reason = PlotOilPumpConfig.Reason or "plot_oil"
+	-- Code Bot v198: DISPLAY ONLY. WE_OilMult = the multiplier AccruePendingCash applied to plot_oil (1, or 2 while the
+	-- DOUBLE WEEKEND doubles it) for the owner's "+$N / every 5s" pump label (client ProducerLabels); written on change.
+	local function publishOilMult(owner: Player)
+		if EconomyService.GetCashMult == nil then
+			return
+		end
+		pcall(function()
+			local m = math.clamp(tonumber(EconomyService.GetCashMult(owner, reason)) or 1, 1, 5)
+			if owner:GetAttribute("WE_OilMult") ~= m then
+				owner:SetAttribute("WE_OilMult", m)
+			end
+		end)
+	end
 	RunService.Heartbeat:Connect(function(dt)
 		accum += dt
 		if accum < tickSec then
@@ -420,9 +449,15 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 							-- claude-bud: a gold-dressed pump (owner bought Golden Pumpjacks, rollout live) earns IncomeMult x
 							local goldDef: any = (MonetizationConfig.DevProducts :: any)[GOLDEN_KEY]
 							local goldMult = math.clamp(tonumber(if typeof(goldDef) == "table" then goldDef.IncomeMult else nil) or 1, 1, 3)
+							-- Code Bot v210: while MonetizationConfig.GoldenBoost is live for the owner, the product is +IncomePct % on
+							-- ALL steady income (EconomyService.cashMultFor, plot_oil included), so the gold pumps pay no extra here
+							if MonetizationConfig.GoldenBoostLiveFor(ownerId) then
+								goldMult = 1
+							end
 							local total = cash * (n - golden) + math.floor(cash * goldMult) * golden
 							-- F4: the owner's "+$18 / every 5s" label is client-side (ProducerLabels); no server pop
 							EconomyService.AccruePendingCash(owner, total, reason)
+							publishOilMult(owner)
 						end
 					end
 				end

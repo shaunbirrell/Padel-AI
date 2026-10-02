@@ -45,6 +45,7 @@ local function rescue(player: Player, root: BasePart)
 	end
 	lastRescueAt[player.UserId] = now
 
+	require(script.Parent.Parent.Modules.MoveDebug).Note(player, "FallRescue(vel=0+teleport)", "FallSafetyService") -- v123 tagged
 	-- Stop downward velocity before teleport
 	root.AssemblyLinearVelocity = Vector3.zero
 	root.AssemblyAngularVelocity = Vector3.zero

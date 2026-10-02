@@ -1,5 +1,103 @@
 # WAR EMPIRE — rules for anyone working in this repo
 
+## QUEUED JOBS (Code Bot, 2026-09-30)
+> **Owner instruction (2 Oct 01:27): keep working through the queue continuously overnight. Do not stop or wait for replies. The owner will talk in the morning.**
+- **JOB 70, URGENT, ship LIVE FOR EVERYONE** (`OwnerFirst=false`; the owner explicitly approved going straight live, so no owner test step). This is the next free JOB number and is the top-priority queue item.
+  - **Collision:** the newly wired base props and wall dressings (sandbags, Hesco, concrete blocks, crates, pallets, barbed wire) must not be walk-through. Give every placed prop/visual segment one cheap invisible `Box`/`Block` hull: anchored, sized to the visual bounds, `CanCollide=true` for players and soldiers, with the visual mesh parts `CanCollide=false` (and no mesh collision). Do not use per-frame physics or heavy collision meshes; keep it phone-light.
+  - **Walls:** every wall side (front/gate, left side, right side, and rear) must use the same new wall style selected from the central wall-upgrade config for that saved tier. Keep the progressive tier looks; never let a side silently fall back to the old/front-only style. Wall visuals are non-colliding and their cheap Box hulls/authoritative wall colliders remain solid.
+  - **Acceptance:** add `tools/checks/claude_bud_job70.py` that fails closed unless it can account for every prop category/placement and every wall side, proves visual collision is off plus the Box hull is on, and proves all four wall sides resolve the same central tier style. Update `LATEST-HANDOFF.md`.
+  - **Guardrails:** this queue edit is docs-only; the implementation must keep `StreamingEnabled` and `PreferMesh` OFF, never touch `WE_Building*`, preserve save keys/levels/prices, and make no owner-test step or staged rollout.
+- **JOB 67 — ASSET UPGRADE REMAINDER: IN PROGRESS / PARTIAL (Code Bot).** Batches 1–3 shipped (walls/base props v208; desert houses + Synty wrecks v214). Still open: rebirth-zone buildings (depends on JOB 69 slots, shipping owner-first in v218), drivable Synty bodies, Sketchfab/CGTrader. OwnerFirst stays true on Walls/BaseProps until the big flip.
+- **JOB 68 — SHOOTING RANGE LIFE (real soldiers firing real guns).** The owner wants the army/base shooting range (the area with the red bullseye target boards) to show actual soldier NPCs in proper military uniforms, holding detailed rifle models (reuse existing owned weapon/soldier assets or the JOB 67 packs, with no block guns) and standing in firing positions facing the targets. They should fire on a loop: a muzzle flash, a short shot sound, a small hit puff/decal on the target, and an occasional reload animation. Keep it mobile-light: at most 3–4 shooters per range, client-side cosmetic only, a single shared low-rate loop (no per-NPC Heartbeat), effects only when a player is within about 80 studs, no PointLights spam and no heavy VFX. Use existing animation assets if owned. Rules: `OwnerFirst=true`; `StreamingEnabled` and `PreferMesh` OFF; never touch `WE_Building*`; no price changes; add `tools/checks/claude_bud_job68.py` and update `LATEST-HANDOFF.md`. Goes public together with the big flip after JOB 67. **SHIPPED owner-first in v218** (`RangeLifeConfig.OwnerFirst = true`).
+- **JOB 69 — EVERY PLOT GETS ALL REBIRTH ZONES + HOW TO PLAY.** `OwnerFirst` behind `RebirthZonesConfig.Rebuild` (`OFF` = today's behaviour). Part A: AnnexAlt + ResolveSlots so every plot gets all 7 zones (incl. Nuclear Silo); Part B+C: how-to-play cards before zone runs / missions / jobs + on-run tracker. **SHIPPED owner-first in v218** (`Rebuild.Slots` / `Rebuild.HowTo` via `Rebuild.OwnerFirst = true`).
+- After JOB 34 is finished and pushed, do JOB 35 then JOB 36 exactly as written in
+  [`docs/claude-queue/JOB35-36-shop-and-guns.md`](docs/claude-queue/JOB35-36-shop-and-guns.md), one at a time, same
+  rules. No fast travel.
+- After JOB 36 is finished and pushed, do JOB 37 (real road checkpoint: detail + killable guards) exactly as written in
+  [`docs/claude-queue/JOB37-checkpoint.md`](docs/claude-queue/JOB37-checkpoint.md), same rules. If any JOB 31 work is
+  still unfinished, it may fold into JOB 37 (JOB 31 itself shipped in v128).
+- After JOB 37 is finished and pushed, do JOB 38 (army ATTACK auto-clear nearest + SEND army to another player's base
+  to breach gates / guards / turrets, raid fairness) exactly as written in
+  [`docs/claude-queue/JOB38-army-attack-orders.md`](docs/claude-queue/JOB38-army-attack-orders.md), same rules. Owner-first
+  flag, no teleport / PivotTo in marches, no fast travel.
+- After JOB 38 is finished and pushed, do JOB 39 exactly as written in
+  [`docs/claude-queue/JOB39-endgame-progression.md`](docs/claude-queue/JOB39-endgame-progression.md).
+- After JOB 39 is finished and pushed, do JOB 40 exactly as written in
+  [`docs/claude-queue/JOB40-guards-speed-props-like-reminder.md`](docs/claude-queue/JOB40-guards-speed-props-like-reminder.md).
+  **PRIORITY (owner 2026-09-30 19:05): do part E (base owner markers: name above each base, visible from anywhere) FIRST
+  within JOB 40, then A-D.** The owner wants the markers to drive attacks.
+- **NEXT, TOP PRIORITY (Shaun 2026-09-30 23:19 Dublin; queued by Code Bot v153): when the job you are on right now is
+  finished and pushed, do JOB 40E-FIX (base owner name tags: high in the sky, compact flag + short name, @handle only
+  when close, distance scale with a clamp, fade + only the nearest 4-5, no overlapping tags, no tag without a live
+  owner, YOU kept on your own base, phone test at 1024x471 with before / after screenshots, BaseMarker OwnerFirst stays
+  true) exactly as written in
+  [`docs/claude-queue/JOB40E-FIX-base-tags.md`](docs/claude-queue/JOB40E-FIX-base-tags.md) (`0f210ab` may already cover
+  most of it: verify, finish, screenshot). THEN JOB 41 (moved to the front: it comes before every other queued job),
+  then JOB 42.**
+- **JOB 41 note (Code Bot v153, already LIVE for everyone on phase-7-polish):** Code Bot already shipped (a) the
+  first-offer timing: the first paid offer (the Commander Starter Pack, or the 99 R$ Speed Boost when the pack is not
+  wanted) comes at ~2 minutes of play whatever the tutorial state (`MonetizationConfig.FirstOffer`, the
+  `ClaimSoftOfferSlot` quiet window, `MonetizationService.ScheduleFirstOffer`); (b) the Starter Pack re-queue: it is
+  marked `StarterBundleOffered` only when the client confirms the card SHOWED (`OfferResult` remote +
+  `Server/Modules/OfferLedger`), a dropped / refused / unanswered card comes back 45 s later; (c) the analytics keys:
+  ProductPrompted now gets `productKey`, plus custom `PassBought` / `OfferShown` / `OfferDropped`. JOB 41 must NOT redo
+  any of these. Its part B Recruit Pack must plug into the same path (ClaimSoftOfferSlot budget, FirstOffer schedule,
+  OfferLedger "shown" ack, the same analytics fields); it must not push the first offer back to 10 minutes or the
+  tutorial end, and must not mark an offer at send. If part B's "only after the first capture or 10 min" rule clashes
+  with the 2-minute first offer, keep the 2-minute Starter Pack and ask Shaun in LATEST-HANDOFF.
+- After JOB 40E-FIX is finished and pushed, do JOB 41 (the first minutes: a guided goal chain with a real first fight and
+  capture, funnel analytics, a ~49 R$ Recruit Pack offered only after the first capture or 10 min, rival TARGETS with
+  SEND ARMY, and a big-win rate prompt with NO reward) exactly as written in
+  [`docs/claude-queue/JOB41-first-minutes-retention.md`](docs/claude-queue/JOB41-first-minutes-retention.md). Owner-first
+  flags, no fast travel, servers stay at 10 players.
+- After JOB 41 is finished and pushed, do JOB 42 (TIME-based cash packs that scale with the player's income: 15 min
+  25 R$, 30 min 49 R$, 1 h 89 R$, 2 h 159 R$, 4 h 279 R$, NO 1-day / 7-day; rows "4 HOURS OF CASH" + the live $ amount
+  computed server-side at receipt time; BEST VALUE on 4h; floors for new players; new Ids 0 until Code Bot creates them;
+  old S / M / L / Mega kept in config but hidden once the time packs are live; the JOB 41 Recruit Pack cash = the
+  30-min pack amount, still 49 R$) exactly as written in
+  [`docs/claude-queue/JOB42-time-cash-packs.md`](docs/claude-queue/JOB42-time-cash-packs.md). Owner-first flag with a
+  kill switch, no publish.
+- **QUEUED AFTER THE LAST EXISTING JOB (Shaun 2026-10-01 18:18 Dublin): JOB 59 — Free Creator Store assets pass.**
+  Strict order: complete the jobs already above, then JOB 59, then JOB 60 immediately below it. All listed assets are
+  already in Shaun's (shaunie6) inventory. Keep `OwnerFirst = true` for the config/phone test, add the feature's
+  `tools/checks/claude_bud_job59.py` checks, update `LATEST-HANDOFF.md`, and obey the house rules: mobile-light (few
+  lights/props, cap props per base, sounds 3D/proximity only, no heavy VFX), `StreamingEnabled` / `PreferMesh` off,
+  never touch `WE_Building*`, no franchise models, real detail.
+  - **(A) Helipad helicopter:** rebuild the helipad heli using SKYtech rotorKit `9961947424` (or rotorLite
+    `12918869816`); vendor its remote self-updating module locally using local copy `96681147793573`, audit every
+    script, and use no remote `require`. Fix the tilt and detached rotor. Coordinate with JOB 56 and fold this in if
+    JOB 56 has not started. aeroKit `8521123488` is optional for hangar jets.
+  - **(B) Sound pass:** create/use one central `SoundConfig` with night crickets `9112764546`, night ambience
+    `9112835836`, harbor night `9112792684`, desert wind `9114057104`, flag flap `9114461215` / `9114576083`, radio
+    chatter `9112851398` / `9125793009` near Command Center, distant artillery `9113169264` in desert, heli
+    `9113417759` / `9125390124`, boats `9112750448` / `9126201834`, gate `9116875342`, raid siren `9119661640`,
+    cash collect `9113728042`, UI clicks `15675059323` / `15675032796`, and Military March `1844397606` for
+    menu/rebirth with cuts `1841116989` / `1845181958`. Sounds must be 3D/proximity-only where world-placed.
+  - **(C) Night and base life:** fold into JOB 54 / JOB 57 where applicable. Use lights `8217816335`, `1725607094`,
+    `404475960` sparingly (8k-triangle cap); Night Fog sky `1864839162`, fireflies `3347717118`, dust `615333766`,
+    fire/smoke `11365590395` only on raided bases/wrecks, and VFX textures `17290956157`. Add lightweight props:
+    sandbags `5678434293`, crates `2930926216`, ammo crates `2190705941` (credit the creator), border fence
+    `4715423769`, metal gate fence `9083814252`, and parked Roblox pickup truck `6418225759`.
+  - **(D) Vault top tier:** use Vault Door `14795516338` as the highest vault-upgrade visual, tied into JOB 53 and read
+    from the central upgrade config.
+  - **Available Studio plugins:** Archimedes `144938633`, F3X `144950355`, Brushtool `2268520847`, RigEdit Lite
+    `1274343708`, AutoScale Lite `1496745047`, VFX Studio `135581141962270`, Tag Editor `948084095`, and GapFill
+    `165687726`.
+- **JOB 60 — Fix error report (small job, immediately after JOB 59).** Find and fix the root causes, not symptoms, for
+  the top error report: 2,233/day `Failed to load animation with sanitized ID`; 265 server sanitized-animation errors;
+  340 animation-track-limit warnings; 98 mesh fetch errors; 67 AnchorPoint nil errors; and 42 sound ConnectFail.
+  Add `tools/checks/claude_bud_job60.py`, keep the same `OwnerFirst = true`, mobile-light, `StreamingEnabled` /
+  `PreferMesh` off, `WE_Building*` untouched and no-franchise/real-detail rules, and update `LATEST-HANDOFF.md`.
+- **JOB 61: Creator Hub Economy + Funnels analytics (AnalyticsService)**
+- **Store props (Code Bot STORE-PROPS, v132): DO NOT REMOVE.** The owner's Creator Store buildings / props live in
+  `Shared/Configs/StorePropsConfig.luau` (placed by `Services/StorePropsService.luau`; list in
+  [`docs/PROP-ASSETS.md`](docs/PROP-ASSETS.md)). They dress the JOB 31 sites / named areas and swap in as the JOB 33
+  rebirth zone upgrade visuals (the Part build stays as the fallback). Do not delete the config, its rows or the
+  service; do not name your own parts `Store_*`; keep new builds clear of `Workspace.WorldFill.StoreProps`. The
+  service does not modify RebirthZoneBuilder / RebirthZoneService: it only reads the `Zone_<Id>` folders they build.
+- **No fast travel, ever:** it was removed in v127 at the owner's request. The map is tap-to-pin only (see
+  `tools/checks/codebot_v127.py`).
+
 ## 0. Start here (every session, every time)
 - **Parallel sessions:** read [`LANES.md`](LANES.md) first. It says which lane your job is in, which files you own,
   the rules for shared hot files, the branch name (`claude/lane-<x>-<topic>` from the latest `phase-7-polish`), and
@@ -75,6 +173,9 @@ Design, build and verify for a **phone in landscape first**, PC second. Anything
   - At most 3 on screen at a base and 5 at an outpost.
   - `AlwaysOnTop` only for the one active objective marker.
   - No debug labels on live.
+  - The one documented exception (owner-approved 2026-09-30, JOB 40 part E): the **base owner marker** (one per
+    occupied base, `BaseMarkerConfig`: name, flag, rank, `MaxDistance` 5000, `AlwaysOnTop`, hidden inside 60 studs).
+    Nothing else gets this.
 - **Pointers:** anything that points a player somewhere (tutorial beam, waypoint, GO line) resolves to **their own** plot or the nearest valid target, never a fixed world marker.
 - **Combat fairness:**
   - The server never trusts a target id sent by the client.
@@ -119,6 +220,7 @@ Design, build and verify for a **phone in landscape first**, PC second. Anything
 - **Structures:**
   - `PreferMesh` stays OFF for structure kits.
   - Perimeter walls spawn on the DefensiveWalls purchase (`SyncPerimeterWalls`). Do not break this.
+- **Build guide:** every build job (buildings, props, vehicles, interiors, POIs, lighting, NPC or UI polish) follows [`docs/ROBLOX-BUILD-GUIDE.md`](docs/ROBLOX-BUILD-GUIDE.md) and ticks its §11 detail checklist in the DONE reply.
 - **Names and assets:**
   - No real-world brand, vehicle or weapon names. Real countries appear only as a player's own cosmetic nation, chosen by the player from `NationConfig` (current national flag + short name, owner-approved list, ISO 3166 ids). Never: historical, regime, separatist, extremist or party flags; military insignia; a real country on NPCs, map places, vehicles, factions or leaderboards; a nation name in any kill, strike, nuke, raid or capture message; nation-vs-nation rules, bonuses or matchmaking; a flag shown damaged, burning, on the ground, beside strike effects or as a target. Flags in the world are Textures/Decals, never SurfaceGuis. Players never draw flags or type nation names. An IP-derived country is only a suggestion to that player: never auto-applied, shown to others, stored or logged.
   - Never copy another game's assets or code. Re-implement mechanics and use only Roblox-official or permissively licensed parts, with attribution.

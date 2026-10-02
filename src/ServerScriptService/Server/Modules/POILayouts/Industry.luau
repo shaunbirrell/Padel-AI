@@ -93,7 +93,7 @@ local Layouts: { [string]: WorldConfig.POILayout } = {
 	Depot = {
 		Board = "WEST DEPOT",
 		Clusters = {
-			{ Id = "CP_E", Block = "Road", Role = "checkpoint", Tier = 1, X = -1127, Z = 0, Yaw = -90, Street = true, Kits = { { Kit = "Checkpoint", X = 0, Z = 0 } } },
+			{ Id = "CP_E", Block = "Road", Role = "checkpoint", Tier = 1, X = -1127, Z = 0, Yaw = -90, Street = true, Kits = { { Kit = "Checkpoint", X = 0, Z = 0, NoDetail = true } } }, -- codebot_v142: plain (no guards), ~54 studs from the vehicle pool
 			{ Id = "CP_W", Block = "Road", Role = "checkpoint", Tier = 1, X = -1483, Z = 0, Yaw = 90, Street = true, Kits = { { Kit = "Checkpoint", X = 0, Z = 0 } } },
 			{ Id = "Board", Block = "Road", Role = "board", Tier = 1, X = -1124, Z = -27, Yaw = -90, Street = true, Kits = { { Kit = "PoiBoard", X = 0, Z = 0 } } },
 			{ Id = "FenceE_N", Block = "Road", Role = "fence", Tier = 2, X = -1135, Z = -62, Yaw = 90, Kits = { { Kit = "WireFence", X = 0, Z = 0, Length = 32 } } },
@@ -133,7 +133,7 @@ local Layouts: { [string]: WorldConfig.POILayout } = {
 	Armory = {
 		Board = "EAST ARMORY",
 		Clusters = {
-			{ Id = "CP_W", Block = "Road", Role = "checkpoint", Tier = 1, X = 1127, Z = 0, Yaw = 90, Street = true, Kits = { { Kit = "Checkpoint", X = 0, Z = 0 } } },
+			{ Id = "CP_W", Block = "Road", Role = "checkpoint", Tier = 1, X = 1127, Z = 0, Yaw = 90, Street = true, Kits = { { Kit = "Checkpoint", X = 0, Z = 0, NoDetail = true } } }, -- codebot_v142: plain (no guards), ~54 studs from the vehicle pool
 			{ Id = "CP_E", Block = "Road", Role = "checkpoint", Tier = 1, X = 1483, Z = 0, Yaw = -90, Street = true, Kits = { { Kit = "Checkpoint", X = 0, Z = 0 } } },
 			{ Id = "Board", Block = "Road", Role = "board", Tier = 1, X = 1124, Z = 27, Yaw = 90, Street = true, Kits = { { Kit = "PoiBoard", X = 0, Z = 0 } } },
 			{ Id = "FenceW_N", Block = "Road", Role = "fence", Tier = 2, X = 1135, Z = -62, Yaw = 90, Kits = { { Kit = "WireFence", X = 0, Z = 0, Length = 32 } } },

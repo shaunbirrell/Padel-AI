@@ -80,6 +80,7 @@ export type KitPlace = {
 	Roof: string?,
 	Lantern: boolean?,
 	R: number?, -- W3 step 2: HoldPad radius (studs)
+	NoDetail: boolean?, -- codebot_v142: build this kit plain (WorldDetailConfig skipped; a Checkpoint then gets no guards)
 }
 -- A Town cluster: one Model <= 64 studs across at (X, Z) turned by Yaw (degrees; 0 = its front faces north, -Z).
 -- Tier 1 = built in Quality Low and Full, 2 = Full only. Street = true: a road-side cluster (checkpoint, lamp, board)
@@ -924,6 +925,11 @@ local WorldConfig = {
 			{ Id = "Gate_P4", PlotId = 4, LocalX = -62, LocalZ = 222 },
 			{ Id = "Gate_P5", PlotId = 5, LocalX = -62, LocalZ = 222 },
 			{ Id = "Gate_P6", PlotId = 6, LocalX = -62, LocalZ = 222 },
+			-- claude-bud JOB 21: the land plots 7-10 (no sign: the world sign budget of 17 is full)
+			{ Id = "Gate_P7", PlotId = 7, LocalX = -62, LocalZ = 222, NoSign = true },
+			{ Id = "Gate_P8", PlotId = 8, LocalX = -62, LocalZ = 222, NoSign = true },
+			{ Id = "Gate_P9", PlotId = 9, LocalX = -62, LocalZ = 222, NoSign = true },
+			{ Id = "Gate_P10", PlotId = 10, LocalX = -62, LocalZ = 222, NoSign = true },
 			{ Id = "Pool_Depot", X = -1180, Z = 34, Yaw = -90 }, -- faces +X (RoadZ0)
 			{ Id = "Pool_Armory", X = 1180, Z = -34, Yaw = 90 }, -- faces -X
 			{ Id = "Pool_Town", X = 40, Z = 170, Yaw = 0 }, -- faces -Z

@@ -457,6 +457,7 @@ end
 -- Crossroads Town: the Empire Bank (anchors stamped on BankPlaza by MapSetup, lane BK; until then the site is off)
 table.insert(Sites, {
 	Id = "Town.Bank",
+	HowTo = { What = "Rob the Empire Bank vault", Steps = { "Go to the bank", "Crack the vault (hold)", "Escape with the cash" }, TimeLimit = 0, Reward = "Big cash (shown at the vault)" },
 	Kind = "Vault",
 	POI = "Town",
 	Enabled = false,
@@ -574,6 +575,7 @@ checkpoint("RigB.CP", "RigB", "Rig Bravo Post", true)
 -- Caches: no NPCs, no label (the prompt pill is the cue)
 table.insert(Sites, {
 	Id = "Town.Market",
+	HowTo = { What = "Grab the market cash box", Steps = { "Go to the market", "Find the cash box", "Hold the prompt to grab it" }, TimeLimit = 0, Reward = "Cash (shown on the job)" },
 	Kind = "Cache",
 	POI = "Town",
 	Enabled = false,
@@ -595,6 +597,7 @@ table.insert(Sites, {
 -- South Port: customs yard heist (breach the HeistGate, crack, grab, carry home)
 table.insert(Sites, {
 	Id = "Port.Customs",
+	HowTo = { What = "Loot the customs yard", Steps = { "Go to the port", "Hold the prompt 20 s", "Keep enemies off" }, TimeLimit = 20, Reward = "Cash (shown on the job)" },
 	Kind = "VaultLite",
 	POI = "Port",
 	Enabled = false,
@@ -635,6 +638,7 @@ table.insert(Sites, {
 -- West Depot: fuel yard heist (start the siphon, crack, grab, carry home); the truck is reserved
 table.insert(Sites, {
 	Id = "Depot.Fuel",
+	HowTo = { What = "Loot the fuel yard", Steps = { "Go to the depot", "Hold the prompt 30 s", "Keep enemies off" }, TimeLimit = 30, Reward = "Cash (shown on the job)" },
 	Kind = "VaultLite",
 	POI = "Depot",
 	Enabled = false,
@@ -674,6 +678,7 @@ table.insert(Sites, {
 -- East Armory: hangar cache (start the crack, crack with a heavy arriving, grab, carry home); the bunker is reserved
 table.insert(Sites, {
 	Id = "Armory.Cache",
+	HowTo = { What = "Loot the arms cache", Steps = { "Go to the armory", "Hold the prompt 30 s", "Keep enemies off" }, TimeLimit = 30, Reward = "Cash (shown on the job)" },
 	Kind = "VaultLite",
 	POI = "Armory",
 	Enabled = false,
@@ -714,6 +719,7 @@ table.insert(Sites, {
 -- Oil Field: sabotage the pumps (plants needed = min(3, pumps built): 2 on Low, where Pump3 / Pump4 are not built)
 table.insert(Sites, {
 	Id = "OilField.Pumps",
+	HowTo = { What = "Sabotage the oil pumps", Steps = { "Go to the oil field", "Plant charges (10 s each)", "Hit every pump" }, TimeLimit = 10, Reward = "Cash (shown on the job)" },
 	Kind = "Sabotage",
 	POI = "OilField",
 	Enabled = false,
@@ -799,6 +805,7 @@ uplink("Radar.Uplink", "Radar", "Radar Console", "Radar Hack", { "G1", "G2" }, 4
 -- Ruined Village: hold the square against 3 waves; the G posts are wave fallbacks, not a standing garrison
 table.insert(Sites, {
 	Id = "Ruins.Holdout",
+	HowTo = { What = "Hold the village square", Steps = { "Go to the village square", "Stay inside the ring", "Survive 90 s" }, TimeLimit = 90, Reward = "Cash (shown on the job)" },
 	Kind = "Holdout",
 	POI = "Ruins",
 	Enabled = false,
@@ -834,6 +841,7 @@ table.insert(Sites, {
 
 table.insert(Sites, {
 	Id = "Ruins.Caches",
+	HowTo = { What = "Find the ruins cache", Steps = { "Go to the ruins", "Search for the crate", "Hold the prompt to grab it" }, TimeLimit = 0, Reward = "Cash (shown on the job)" },
 	Kind = "Cache",
 	POI = "Ruins",
 	Enabled = false,
@@ -860,6 +868,7 @@ table.insert(Sites, {
 -- Crash Site: recover the black box and carry it home
 table.insert(Sites, {
 	Id = "Crash.BlackBox",
+	HowTo = { What = "Recover the black box", Steps = { "Go to the crash site", "Grab the black box", "Bring it to your base" }, TimeLimit = 0, Reward = "Cash (shown on the job)" },
 	Kind = "Cargo",
 	POI = "Crash",
 	Enabled = false,
@@ -895,6 +904,7 @@ table.insert(Sites, {
 -- Oasis: the smuggler stash (the well is reserved)
 table.insert(Sites, {
 	Id = "Oasis.Stash",
+	HowTo = { What = "Find the oasis stash", Steps = { "Go to the oasis", "Search for the stash", "Hold the prompt to grab it" }, TimeLimit = 0, Reward = "Cash (shown on the job)" },
 	Kind = "Cache",
 	POI = "Oasis",
 	Enabled = false,

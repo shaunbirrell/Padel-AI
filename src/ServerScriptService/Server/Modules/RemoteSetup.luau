@@ -62,6 +62,27 @@ local EVENTS = {
 	Constants.RemoteNames.RequestDeclareClanWar,
 	Constants.RemoteNames.ClanWarStateUpdate,
 	Constants.RemoteNames.RequestRedeemCode,
+	Constants.RemoteNames.RequestAnalyticsEvent, -- claude-bud JOB 24 §10
+	Constants.RemoteNames.BuildingTip, -- claude-bud JOB 24 §5 (server push)
+	Constants.RemoteNames.RequestTipSetting, -- claude-bud JOB 24 §5
+	Constants.RemoteNames.RequestTipsReplay, -- claude-bud JOB 24 §5
+	Constants.RemoteNames.RequestAirdropGuideSetting, -- Code Bot board-text: client -> server, rate-limited (AirdropGuideService)
+	Constants.RemoteNames.RequestBuyArmour, -- claude-bud JOB 26
+	Constants.RemoteNames.RequestArmourLook, -- claude-bud JOB 26
+	Constants.RemoteNames.RequestNotifOptInResult, -- claude-bud JOB 29
+	Constants.RemoteNames.RequestSiteActivity, -- claude-bud JOB 31
+	Constants.RemoteNames.RequestNuke, -- claude-bud JOB 33
+	Constants.RemoteNames.RequestAchievements, -- claude-bud JOB 34
+	Constants.RemoteNames.RequestArmySend, -- claude-bud JOB 38
+	Constants.RemoteNames.RequestArmySendCheck, -- claude-bud JOB 38
+	Constants.RemoteNames.RequestEndgameBuy, -- claude-bud JOB 39
+	Constants.RemoteNames.RequestEndgameState, -- claude-bud JOB 39
+	Constants.RemoteNames.RequestRatePromptAnswer, -- claude-bud JOB 40 part D
+	Constants.RemoteNames.RequestEventPopupSeen, -- Code Bot v192: DOUBLE WEEKEND one-time pop-up
+	Constants.RemoteNames.RequestRecruitPackResult, -- claude-bud JOB 41 part B
+	Constants.RemoteNames.RequestZoneRun, -- claude-bud JOB 69 B
+	Constants.RemoteNames.RequestRivalAction, -- claude-bud JOB 41 part C
+	Constants.RemoteNames.RequestMissionReroll, -- claude-bud JOB 49 part C
 	Constants.RemoteNames.CodeStateUpdate,
 	Constants.RemoteNames.NationColorUpdate,
 	Constants.RemoteNames.RequestSetNation,
@@ -110,6 +131,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestPlazaAirstrike, -- claude-bud JOB 5c: client -> server, rate-limited (PlazaAirstrike)
 	Constants.RemoteNames.RequestGroupReward, -- claude-bud JOB 5e: client -> server, rate-limited (MonetizationService)
 	Constants.RemoteNames.RequestPremiumWeapon, -- claude-bud PREMIUM: client -> server, rate-limited (PremiumWeaponService)
+	Constants.RemoteNames.RequestBoardSetting, -- claude-bud BOARDS: client -> server, rate-limited (EngagementService)
 }
 
 -- v71 money (M2): UnreliableRemoteEvents (server → client cosmetic Fx; ordering and delivery not guaranteed)
@@ -128,6 +150,7 @@ end
 local FUNCTIONS = {
 	Constants.RemoteNames.GetPlayerState,
 	Constants.RemoteNames.RedeemCode, -- Code Bot v102: CodesService (redeem codes)
+	Constants.RemoteNames.RequestMapLive, -- claude-bud JOB 30
 }
 local FUNCTION_SET: { [string]: boolean } = {}
 for _, name in ipairs(FUNCTIONS) do
@@ -174,6 +197,9 @@ local function ensurePurchaseHook(folder: Folder)
 		if _purchaseHookedInstance ~= hookedEv then
 			return
 		end
+		if not require(script.Parent.RemoteGate).Check(player, Constants.RemoteNames.RequestPurchaseUpgrade, payload) then -- claude-bud JOB 15
+			return
+		end
 		local sid = if typeof(payload) == "table" then tostring((payload :: any).StructureId) else tostring(payload)
 		print(string.format("[RemoteSetup] OnServerEvent RequestPurchaseUpgrade %s → %s handler=%s", player.Name, sid, tostring(_purchaseHandler ~= nil)))
 		if _purchaseHandler then
@@ -190,6 +216,34 @@ local function ensurePurchaseHook(folder: Folder)
 		end
 	end)
 	print("[RemoteSetup] RequestPurchaseUpgrade OnServerEvent hooked on WE_Remotes." .. name)
+end
+
+-- claude-bud JOB 15 (SecurityConfig): remotes with a client -> server handler have a Schemas entry; every other
+-- RemoteEvent / UnreliableRemoteEvent here gets ONE sink listener (and the gate forgets a player who leaves)
+local _sunk: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local _gateForget = false
+local function sinkClientOnly(folder: Folder)
+	local okS, SecurityConfig = pcall(require, ReplicatedStorage.Shared.Configs.SecurityConfig)
+	local okG, RemoteGate = pcall(require, script.Parent.RemoteGate)
+	if not okS or not okG then
+		return
+	end
+	local schemas = (SecurityConfig :: any).Schemas
+	for _, child in ipairs(folder:GetChildren()) do
+		if (child:IsA("RemoteEvent") or child:IsA("UnreliableRemoteEvent")) and schemas[child.Name] == nil and not _sunk[child] then
+			_sunk[child] = true
+			local remoteName = child.Name
+			;(child :: any).OnServerEvent:Connect(function(player: Player)
+				(RemoteGate :: any).Sink(player, remoteName)
+			end)
+		end
+	end
+	if not _gateForget then
+		_gateForget = true
+		game:GetService("Players").PlayerRemoving:Connect(function(p: Player)
+			(RemoteGate :: any).Forget(p.UserId)
+		end)
+	end
 end
 
 function RemoteSetup.Init(): Folder
@@ -250,6 +304,9 @@ function RemoteSetup.Init(): Folder
 
 	-- v62: hook purchase OnServerEvent on the SAME instance clients FireServer
 	ensurePurchaseHook(folder :: Folder)
+	-- claude-bud JOB 15: a remote the client must never fire (server pushes, unused requests) gets a sink listener, so
+	-- a fire there is logged / counted as a bad request (RemoteGate.Sink) instead of queueing unheard
+	sinkClientOnly(folder :: Folder)
 
 	if not _initialized then
 		_initialized = true

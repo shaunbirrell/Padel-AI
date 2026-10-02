@@ -27,6 +27,7 @@ local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
 local Types = require(Shared.Types)
 
 local EconomyService = {}
+EconomyService._Endgame = nil :: any -- claude-bud JOB 39 (EndgameService, from deps)
 
 local SeasonService: any = nil
 local DataService: any = nil
@@ -36,6 +37,8 @@ local MonetizationService: any = nil
 local TutorialService: any = nil
 local MoneyCollectorService: any = nil
 local XPService: any = nil -- XP rebalance: one-time purchase XP (spec_xp.md §3.3; read from deps, no require)
+-- PendingCash origin buckets are server-only and are flushed once on collect.
+local pendingAnalyticsOrigins: { [number]: { [string]: number } } = {}
 
 -- v65: never index nil DataService (SpendCash must not throw GetProfile on nil)
 local function getDataService(): any
@@ -121,6 +124,8 @@ local NEVER_MULTIPLIED: { [string]: boolean } = {
 	admin = true,
 	collector = true,
 	atm_raid = true,
+	endgame_reward = true, -- claude-bud JOB 39: contract rewards are already sized from the player's own (multiplied) income
+	bank_raid_kit = true, -- Code Bot v197: a heist kit's bank payout is minutes of WE_IncomePerSec (already multiplied)
 }
 
 --[[ F3 Empire Tax (EconomyConfig.OutpostIncomeBuff). A Home Outpost row (TerritoryConfig.Starter, F10) is never a
@@ -198,6 +203,19 @@ local function publishEmpireTax(player: Player, pct: number)
 	end)
 end
 
+-- Code Bot v185: DOUBLE WEEKEND server module (Modules/DoubleEvent), required lazily, never throws
+local doubleEventMod: any = nil
+local function doubleEvent(): any
+	if doubleEventMod == nil then
+		local ok, m = pcall(function(): any
+			return require(script.Parent.Parent.Modules.DoubleEvent)
+		end)
+		doubleEventMod = if ok and type(m) == "table" then m else false
+	end
+	return if doubleEventMod then doubleEventMod else nil
+end
+EconomyService._DoubleEvent = doubleEvent
+
 local function cashMultFor(player: Player, profile: any, reason: string?): number
 	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 	local reasonKey = reason or ""
@@ -213,6 +231,11 @@ local function cashMultFor(player: Player, profile: any, reason: string?): numbe
 		if taxPct > 0 then
 			mult *= (1 + taxPct / 100)
 		end
+		-- claude-bud JOB 39: EMPIRE LEVEL +2 % per level (1 while EndgameConfig's EmpireLevel part is not live)
+		local eg = EconomyService._Endgame
+		if eg and eg.EmpireMultFor then
+			mult *= eg.EmpireMultFor(player, profile)
+		end
 		if MonetizationService and MonetizationService.GetCashMultiplier then
 			mult *= MonetizationService.GetCashMultiplier(player)
 		end
@@ -225,6 +248,30 @@ local function cashMultFor(player: Player, profile: any, reason: string?): numbe
 		local okE, ES = pcall(require, script.Parent.EngagementService)
 		if okE and type(ES) == "table" and (ES :: any).CashMult then
 			mult *= (ES :: any).CashMult(player)
+		end
+		-- Code Bot v185: DOUBLE WEEKEND (Shared/Configs/EventConfig): x CashMult, kill reasons x KillMult, on top of the stack
+		local DE = doubleEvent()
+		if DE then
+			mult *= DE.CashMult(player, reason)
+		end
+	elseif NEVER_MULTIPLIED[reasonKey] ~= true then
+		-- Code Bot v197: DOUBLE WEEKEND on pass-exempt fixed payouts (EventConfig.ExtraCashReasons: oil, jobs, supply drops,
+		-- bank raid without a kit, clan war); the event's CashMult only, the pass / prestige / tax still skip them
+		local DE = doubleEvent()
+		if DE and DE.ExtraCashMult then
+			mult *= DE.ExtraCashMult(player, reason)
+		end
+	end
+	-- Code Bot v210: Golden Pumpjacks (MonetizationConfig.GoldenBoost, owner-first): +IncomePct % on every steady-income
+	-- reason (passive / training / plot_oil = what WE_IncomePerSec sums) for an owner of the entitlement. Pure profile read.
+	if NEVER_MULTIPLIED[reasonKey] ~= true then
+		local GB = (MonetizationConfig :: any).GoldenBoost
+		local ents = profile.Entitlements
+		if typeof(GB) == "table" and typeof(GB.Reasons) == "table" and GB.Reasons[reasonKey] == true
+			and typeof(ents) == "table" and ents[GB.ProductKey] == true
+			and MonetizationConfig.GoldenBoostLiveFor(player.UserId)
+		then
+			mult *= MonetizationConfig.GoldenBoostMult()
 		end
 	end
 	return mult
@@ -258,6 +305,48 @@ function EconomyService.GetCashMult(player: Player, reason: string?): number
 		return 1
 	end
 	return cashMultFor(player, profile, reason)
+end
+
+-- Code Bot v198: DISPLAY ONLY. The DOUBLE WEEKEND part of cashMultFor for `reason` right now: DoubleEvent.CashMult on
+-- the non-exempt stack, DoubleEvent.ExtraCashMult on a pass-exempt reason, 1 for NEVER_MULTIPLIED (or no module).
+-- Used for the toasts' "2x" tag (Modules/RewardToast); never used to grant.
+function EconomyService.EventCashMult(player: Player, reason: string?): number
+	local DE = doubleEvent()
+	local key = reason or ""
+	if DE == nil or NEVER_MULTIPLIED[key] == true then
+		return 1
+	end
+	local ok, m = pcall(function(): any
+		local exempt = require(Shared.Configs.MonetizationConfig).CashMultExemptReasons
+		if exempt ~= nil and exempt[key] == true then
+			return if DE.ExtraCashMult then DE.ExtraCashMult(player, reason) else 1
+		end
+		return DE.CashMult(player, reason)
+	end)
+	return if ok and typeof(m) == "number" and m == m then m else 1
+end
+
+-- Code Bot v198: DISPLAY ONLY. What a cash reward toast shows for an AddCash call: its 2nd return (credited, the
+-- multipliers in) when the grant went through and said how much, else `base` (the old text).
+function EconomyService.ToastAmount(base: any, ok: any, credited: any): number
+	if ok == true and typeof(credited) == "number" and credited == credited and credited >= 0 and credited ~= math.huge then
+		return math.floor(credited)
+	end
+	return math.floor(tonumber(base) or 0)
+end
+
+-- Code Bot v198: DISPLAY ONLY. The toast suffix " · 2x" (EventConfig.ToastTag) when the DOUBLE WEEKEND doubles `reason`
+-- for this player right now (EventCashMult > 1), else "". Never throws.
+function EconomyService.ToastTag(player: Player, reason: string?): string
+	local ok, tag = pcall(function(): string
+		if EconomyService.EventCashMult(player, reason) <= 1 then
+			return ""
+		end
+		local EC: any = require(Shared.Configs.EventConfig)
+		local t = if typeof(EC.ToastTag) == "string" and EC.ToastTag ~= "" then EC.ToastTag else "2x"
+		return " · " .. t
+	end)
+	return if ok and typeof(tag) == "string" then tag else ""
 end
 
 --[[ v72 WE_IncomePerSec (tycoon guide: cash pill "+$24/s", the pick's "ready in"): the last amount granted per steady
@@ -326,9 +415,15 @@ function EconomyService.Init(deps: { [string]: any })
 	TutorialService = deps.TutorialService
 	MoneyCollectorService = deps.MoneyCollectorService
 	XPService = deps.XPService
+	EconomyService._Endgame = deps.EndgameService -- claude-bud JOB 39: the Empire Level factor
+	local DE = doubleEvent() -- Code Bot v185: publish the owner-preview switch (EventConfig.OwnerFirst) once
+	if DE and DE.Init then
+		pcall(DE.Init)
+	end
 	if TycoonGuideConfig.Enabled then
 		game:GetService("Players").PlayerRemoving:Connect(function(player: Player)
 			steadyIncome[player.UserId] = nil
+			pendingAnalyticsOrigins[player.UserId] = nil
 		end)
 	end
 end
@@ -344,19 +439,50 @@ function EconomyService.Push(player: Player)
 	end
 end
 
-function EconomyService.AddCash(player: Player, amount: number, reason: string?): boolean
+-- claude-bud JOB 24 §10: Cash sources / sinks to the analytics sink (summed and flushed there; never yields, never throws)
+local analyticsMod: any = nil
+local function analytics(): any
+	if analyticsMod == nil then
+		local ok, m = pcall(function()
+			return require(script.Parent.AnalyticsService) :: any
+		end)
+		analyticsMod = if ok then m else false
+	end
+	return if analyticsMod then analyticsMod else nil
+end
+local function analyticsEconomy(player: Player, flow: string, amount: number, balance: number, reason: string?, currency: string?)
+	pcall(function()
+		local a = analytics()
+		if a and a.Economy then
+			a.Economy(player, flow, amount, balance, reason, currency)
+		end
+	end)
+end
+local function notePendingOrigin(player: Player, amount: number, reason: string?)
+	local key = if typeof(reason) == "string" and reason ~= "" then reason else "collect"
+	local rows = pendingAnalyticsOrigins[player.UserId] or {}
+	pendingAnalyticsOrigins[player.UserId] = rows
+	rows[key] = (rows[key] or 0) + amount
+end
+
+-- Code Bot v198: returns (ok, credited): credited = the grant after the multipliers (what the toast should show,
+-- Modules/RewardToast). Callers that read only the first value are unchanged.
+function EconomyService.AddCash(player: Player, amount: number, reason: string?): (boolean, number)
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
-		return false
+		return false, 0
 	end
 	amount = math.floor(amount)
 	local profile = getDataService().GetProfile(player)
 	if not profile then
-		return false
+		return false, 0
 	end
 
 	local granted = applyCashMult(player, profile, amount, reason)
+	local before = profile.Cash
 	profile.Cash = math.clamp(profile.Cash + granted, EconomyConfig.MinCash, EconomyConfig.MaxCash)
-	profile.Stats.TotalCashEarned += granted
+	-- Code Bot v194: count only what actually landed in the wallet (was the full grant even past MaxCash)
+	profile.Stats.TotalCashEarned += math.max(0, profile.Cash - before)
+	analyticsEconomy(player, "Source", granted, profile.Cash, reason) -- claude-bud JOB 24 §10
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	noteSteadyIncome(player, reason, granted) -- v72 WE_IncomePerSec (display only; no-op while the guide is off)
@@ -366,7 +492,7 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	if reason == "collector" and TutorialService and TutorialService.Notify then
 		TutorialService.Notify(player, "PassiveIncome")
 	end
-	return true
+	return true, granted
 end
 
 --[[ Accrue passive / stipend into PendingCash (not spendable until Money Collector). ]]
@@ -381,7 +507,9 @@ function EconomyService.AccruePendingCash(player: Player, amount: number, reason
 	end
 	local granted = applyCashMult(player, profile, amount, reason)
 	local pending = tonumber((profile :: any).PendingCash) or 0
-	(profile :: any).PendingCash = math.clamp(pending + granted, 0, EconomyConfig.MaxCash)
+	local nextPending = math.clamp(pending + granted, 0, EconomyConfig.MaxCash)
+	;(profile :: any).PendingCash = nextPending
+	notePendingOrigin(player, nextPending - pending, reason)
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	noteSteadyIncome(player, reason, granted) -- v72 WE_IncomePerSec (display only; no-op while the guide is off)
@@ -400,16 +528,55 @@ function EconomyService.CollectPendingCash(player: Player): number
 	if pending <= 0 then
 		return 0
 	end
-	(profile :: any).PendingCash = 0
-	-- Pending already had mult applied at accrue; grant with exempt reason
-	profile.Cash = math.clamp(profile.Cash + pending, EconomyConfig.MinCash, EconomyConfig.MaxCash)
-	profile.Stats.TotalCashEarned += pending
+	-- Pending already had mult applied at accrue; grant with exempt reason.
+	-- Code Bot v194: credit only what fits under MaxCash and leave the rest in PendingCash
+	-- (was: PendingCash zeroed before the clamp, so everything over the cap was deleted).
+	local room = math.max(0, EconomyConfig.MaxCash - profile.Cash)
+	local credited = math.min(pending, room)
+	if credited <= 0 then
+		return 0
+	end
+	(profile :: any).PendingCash = pending - credited
+	profile.Cash = math.clamp(profile.Cash + credited, EconomyConfig.MinCash, EconomyConfig.MaxCash)
+	profile.Stats.TotalCashEarned += credited
+	local origins = pendingAnalyticsOrigins[player.UserId]
+	if credited >= pending then
+		pendingAnalyticsOrigins[player.UserId] = nil
+	end
+	if origins == nil then
+		-- A PendingCash balance loaded from an older session has no origin ledger.
+		analyticsEconomy(player, "Source", credited, profile.Cash, "collect")
+	elseif credited >= pending then
+		for reason, amount in pairs(origins) do
+			if amount > 0 then
+				analyticsEconomy(player, "Source", amount, profile.Cash, reason)
+			end
+		end
+	else
+		-- partial collect (wallet at MaxCash): report the credited share per origin, keep the rest on the ledger
+		local share = credited / pending
+		for reason, amount in pairs(origins) do
+			if amount > 0 then
+				local part = math.floor(amount * share)
+				if part > 0 then
+					analyticsEconomy(player, "Source", part, profile.Cash, reason)
+					origins[reason] = amount - part
+				end
+			end
+		end
+	end
+	pcall(function()
+		local a = analytics()
+		if a and a.Log then
+			a.Log("CASH_COLLECT", player.UserId, { amount = credited })
+		end
+	end)
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	if MissionService and MissionService.TrackProgress then
-		MissionService.TrackProgress(player, "EarnCash", pending)
+		MissionService.TrackProgress(player, "EarnCash", credited)
 	end
-	return pending
+	return credited
 end
 
 function EconomyService.GetPendingCash(player: Player): number
@@ -479,6 +646,7 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 			return false, "InsufficientCash"
 		end
 		profile.Cash = have - amount
+		analyticsEconomy(player, "Sink", amount, profile.Cash, _reason) -- claude-bud JOB 24 §10
 		pcall(function()
 			getDataService().MarkDirty(player)
 		end)
@@ -493,7 +661,9 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 	end
 	-- XP rebalance: purchase XP only after a spend that succeeded, deferred so a level-up can never fail or double a
 	-- purchase. XPService.OnSpend pays only the whitelisted one-time reasons (upgrade_ / research_ / vehicle_ / weapon_).
-	if a == true and XPService and XPService.OnSpend then task.defer(XPService.OnSpend, player, amount, _reason) end
+	if a == true and XPService and XPService.OnSpend then
+		task.defer(XPService.OnSpend, player, amount, _reason)
+	end
 	return (a :: any) :: boolean, b :: string?
 end
 
@@ -508,6 +678,7 @@ function EconomyService.AddGold(player: Player, amount: number, _reason: string?
 	end
 	profile.Gold = math.clamp(profile.Gold + amount, EconomyConfig.MinGold, EconomyConfig.MaxGold)
 	profile.Stats.TotalGoldEarned += amount
+	analyticsEconomy(player, "Source", amount, profile.Gold, _reason, "Gold")
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	return true
@@ -526,6 +697,7 @@ function EconomyService.SpendGold(player: Player, amount: number, _reason: strin
 		return false, "InsufficientGold"
 	end
 	profile.Gold -= amount
+	analyticsEconomy(player, "Sink", amount, profile.Gold, _reason, "Gold")
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	return true, nil
@@ -625,6 +797,31 @@ end
 	Move PendingCash from victim → thief without cash multipliers (already accrued).
 	Returns amount transferred (0 if none).
 ]]
+-- claude-bud JOB 65: move exactly `amount` of his own ATM (PendingCash) into Cash, never multiplied (a transfer that
+-- already sits in his ATM, e.g. a nuke raid's loot). His other pending cash stays in the ATM. Returns what moved.
+function EconomyService.PendingToCash(player: Player, amount: number): number
+	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
+		return 0
+	end
+	local profile = getDataService().GetProfile(player)
+	if not profile then
+		return 0
+	end
+	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
+	local take = math.min(math.floor(amount), pending)
+	if take <= 0 then
+		return 0
+	end
+	;(profile :: any).PendingCash = pending - take
+	profile.Cash = math.clamp(profile.Cash + take, EconomyConfig.MinCash, EconomyConfig.MaxCash)
+	getDataService().MarkDirty(player)
+	pushEconomy(player, profile)
+	if MoneyCollectorService and MoneyCollectorService.RefreshForPlayer then
+		MoneyCollectorService.RefreshForPlayer(player)
+	end
+	return take
+end
+
 function EconomyService.TransferPendingCash(fromPlayer: Player, toPlayer: Player, amount: number): number
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
 		return 0

@@ -360,6 +360,123 @@ function SettingsController.Init()
 	end)
 	y += TAP + 14
 
+	-- claude-bud BOARDS: hide / show yourself on the TOP SUPPORTERS notice board (saved on the server, which
+	-- removes your entry when hidden); the label follows the server's WE_SupporterOptOut attribute
+	section("LEADERBOARDS")
+	local supBtn = button("SupporterBoard", "Supporter board: SHOWN", UDim.new(0, 16), UDim.new(1, -32))
+	local function refreshSup()
+		local hidden = player:GetAttribute("WE_SupporterOptOut") == true
+		supBtn.Text = if hidden then "Supporter board: HIDDEN" else "Supporter board: SHOWN"
+		supBtn.BackgroundColor3 = if hidden then Constants.Colors.Background else Constants.Colors.Accent
+	end
+	supBtn.Activated:Connect(function()
+		AudioController.PlayClick()
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestBoardSetting, player:GetAttribute("WE_SupporterOptOut") ~= true)
+	end)
+	player:GetAttributeChangedSignal("WE_SupporterOptOut"):Connect(refreshSup)
+	refreshSup()
+	y += TAP + 14
+
+	-- claude-bud JOB 24 §5: "NEW BUILDING" tips on / off (saved on the server: WE_TipsOff) and show them again
+	section("TIPS")
+	local tipsBtn = button("TipsToggle", "Building tips: ON", UDim.new(0, 16), UDim.new(1, -32))
+	local function refreshTips()
+		local off = player:GetAttribute("WE_TipsOff") == true
+		tipsBtn.Text = if off then "Building tips: OFF" else "Building tips: ON"
+		tipsBtn.BackgroundColor3 = if off then Constants.Colors.Background else Constants.Colors.Accent
+	end
+	tipsBtn.Activated:Connect(function()
+		AudioController.PlayClick()
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestTipSetting, player:GetAttribute("WE_TipsOff") ~= true)
+	end)
+	player:GetAttributeChangedSignal("WE_TipsOff"):Connect(refreshTips)
+	refreshTips()
+	y += TAP + 14
+	local replayBtn = button("TipsReplay", "SHOW MY BUILDING TIPS", UDim.new(0, 16), UDim.new(1, -32))
+	replayBtn.Activated:Connect(function()
+		AudioController.PlayClick()
+		setOpen(false)
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestTipsReplay)
+	end)
+	y += TAP + 14
+
+	-- Code Bot board-text: the AIRDROP guide line on / off (SupplyDropConfig.GuideHide, NEW-OWNER-FIRST; saved on the
+	-- server in the new key profile.Settings.AirdropGuideOff, mirrored as GuideHide.Attr). OFF also clears a showing line.
+	do
+		local SupplyDropConfig = require(Shared.Configs.SupplyDropConfig) :: any
+		if SupplyDropConfig.GuideHideLiveFor(player.UserId) then
+			local attr = SupplyDropConfig.GuideHide.Attr
+			section("AIRDROPS")
+			local adBtn = button("AirdropGuide", "Airdrop guide line: ON", UDim.new(0, 16), UDim.new(1, -32))
+			local function refreshAd()
+				local off = player:GetAttribute(attr) == true
+				adBtn.Text = if off then "Airdrop guide line: OFF" else "Airdrop guide line: ON"
+				adBtn.BackgroundColor3 = if off then Constants.Colors.Background else Constants.Colors.Accent
+			end
+			adBtn.Activated:Connect(function()
+				AudioController.PlayClick()
+				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAirdropGuideSetting, player:GetAttribute(attr) ~= true)
+			end)
+			player:GetAttributeChangedSignal(attr):Connect(refreshAd)
+			refreshAd()
+			y += TAP + 14
+		end
+	end
+
+	-- claude-bud JOB 29: game notifications (Roblox experience notifications, opt-in). Only while the switch is live
+	-- for this player (RetentionConfig.Notifications); the tap asks Roblox's own prompt (Modules/NotifOptIn).
+	if (require(Shared.Configs.RetentionConfig) :: any).NotificationsLiveFor(player.UserId) then
+		section("NOTIFICATIONS")
+		local notifBtn = button("NotifOptIn", "Game alerts: TURN ON", UDim.new(0, 16), UDim.new(1, -32))
+		notifBtn.Activated:Connect(function()
+			AudioController.PlayClick()
+			setOpen(false)
+			require(script.Parent.Parent.Modules.NotifOptIn).Ask("settings")
+		end)
+		y += TAP + 14
+	end
+
+	-- Code Bot v163 (Shaun: "I'm not a new player so can't see the guided tutorial"): owner / admin only. Replays the
+	-- Guided first minutes in TEST MODE (server: AdminService "replaytutorial" -> TutorialService.ReplayGuided: the save
+	-- is snapshotted and put back at the end, no cash, no analytics). The server re-checks the allowlist; nobody else
+	-- ever sees this row. Same as typing /replaytutorial in chat.
+	if table.find(AdminConfig.UserIds, player.UserId) ~= nil then
+		section("ADMIN")
+		local replayGuidedBtn = button("ReplayGuided", "REPLAY GUIDED TUTORIAL (test)", UDim.new(0, 16), UDim.new(1, -32))
+		replayGuidedBtn.Activated:Connect(function()
+			AudioController.PlayClick()
+			setOpen(false)
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAdminCommand, "replaytutorial")
+		end)
+		y += TAP + 14
+		-- Code Bot v168: SET REBIRTH (= /setrebirth N): [-] REBIRTH N [+] [SET]; the server re-checks the allowlist and
+		-- sets the count through PrestigeService.AdminSetRebirth (cash and items kept, saved)
+		local rebirthN = 10
+		local minus = button("RebirthMinus", "-", UDim.new(0, 16), UDim.new(0.15, -16))
+		local nLabel = button("RebirthValue", "REBIRTH 10", UDim.new(0.15, GAP / 2), UDim.new(0.35, -GAP), Constants.Colors.Background)
+		nLabel.AutoButtonColor = false
+		local plus = button("RebirthPlus", "+", UDim.new(0.5, GAP / 2), UDim.new(0.15, -GAP))
+		local setBtn = button("SetRebirth", "SET REBIRTH", UDim.new(0.65, GAP / 2), UDim.new(0.35, -16 - GAP / 2), Color3.fromRGB(150, 60, 170))
+		local function showN()
+			nLabel.Text = "REBIRTH " .. tostring(rebirthN)
+		end
+		minus.Activated:Connect(function()
+			AudioController.PlayClick()
+			rebirthN = math.max(0, rebirthN - 1)
+			showN()
+		end)
+		plus.Activated:Connect(function()
+			AudioController.PlayClick()
+			rebirthN = math.min(50, rebirthN + 1)
+			showN()
+		end)
+		setBtn.Activated:Connect(function()
+			AudioController.PlayClick()
+			task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestAdminCommand, "setrebirth", rebirthN)
+		end)
+		y += TAP + 14
+	end
+
 	-- Supply spinner (the Missions panel has the same claim row; this section stays per spec §3.7)
 	section("SUPPLY SPINNER")
 	local spinnerBtn = button("SpinnerClaim", "SUPPLY SPINNER — Claim free Cash/Gold", UDim.new(0, 16), UDim.new(1, -32))

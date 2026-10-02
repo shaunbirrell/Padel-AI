@@ -24,6 +24,12 @@ local AdminConfig = {
 	PlaytestOwnerUserId = PLAYTEST_OWNER_USER_ID,
 	AdminPlaytestLevel = PLAYTEST_LEVEL,
 	AdminPlaytestAllVehicles = true,
+	-- Code Bot v169 (Shaun 2026-10-01: "doesn't want to type /setrebirth"): a ONE-TIME rebirth grant on his next profile
+	-- load, through PrestigeService.AdminSetRebirth (the /setrebirth path: cash / items kept, derived state refreshed,
+	-- saved). Applied only if UserId is also in UserIds and profile.AdminGrants[Key] is unset; the Key is then stored,
+	-- so it never re-applies (even after he rebirths further or lowers it). Already >= Rebirths: nothing changes (the
+	-- Key is still stored). A new Key = a new one-time grant. nil = off.
+	OwnerRebirthGrant = { UserId = PLAYTEST_OWNER_USER_ID, Rebirths = 10, Key = "rebirth10-2026-10-01" } :: { UserId: number, Rebirths: number, Key: string }?,
 	-- v81: true only for the owner's playtest account (shaunie6). Pure: safe to require anywhere (server + Open
 	-- Cloud checks). Used by DataService (level + vehicles on LoadProfile) and VehicleService (spawn gate bypass).
 	IsPlaytestOwner = function(userId: any): boolean

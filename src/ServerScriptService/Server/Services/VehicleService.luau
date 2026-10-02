@@ -1623,7 +1623,13 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		addPart(model, body, "SkidR", Vector3.new(0.25 * s, 0.25 * s, 7 * s), CFrame.new(wid * 0.5 * s, -1.3 * s, 0), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, true)
 		addPart(model, body, "SkidPadL", Vector3.new(0.9 * s, 0.2 * s, 1.2 * s), CFrame.new(-wid * 0.5 * s, -1.45 * s, 2 * s), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil, true)
 		addPart(model, body, "SkidPadR", Vector3.new(0.9 * s, 0.2 * s, 1.2 * s), CFrame.new(wid * 0.5 * s, -1.45 * s, 2 * s), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil, true)
-		addRotorDisc(model, body, s, 2.2, rotor * 0.48, accentCol)
+		-- Code Bot v219: the yellow neon disc read as a ring round the rotor (VehicleConfig.HeliRotorRing, owner-first)
+		local okRing, ringOff = pcall(function(): boolean
+			return (require(Shared.Configs.RetentionConfig) :: any).Live((require(Shared.Configs.VehicleConfig) :: any).HeliRotorRing, ownerUserId) == true
+		end)
+		if not (okRing and ringOff) then
+			addRotorDisc(model, body, s, 2.2, rotor * 0.48, accentCol)
+		end
 		addPart(model, body, "Accent", Vector3.new((wid - 0.4) * s, 0.12 * s, 0.35 * s), CFrame.new(0, 1.2 * s, -1 * s), accentCol, Enum.Material.Neon, nil, false)
 		addPart(model, body, "NavLight", Vector3.new(0.35 * s, 0.35 * s, 0.35 * s), CFrame.new(0, 1.6 * s, len * 0.4 * s), Color3.fromRGB(255, 60, 50), Enum.Material.Neon, Enum.PartType.Ball, false)
 		if attack then
@@ -4446,6 +4452,7 @@ VehicleService._PlaceExit = function(rec: VehicleRec, seat: BasePart, hum: Human
 	if not ok or spot == nil then
 		return nil -- no clear spot: Roblox's own jump-out, as before
 	end
+	require(script.Parent.Parent.Modules.MoveDebug).Note(char, "PivotTo", "VehicleService.ExitSpot") -- v123 tagged
 	char:PivotTo(spot)
 	zeroVelocity(hrp) -- no fling: the character keeps nothing of the car's (or the jump's) speed
 	VehicleService._ExitHold(spot, char) -- R2.2: the next rider (same wreck, or right after) gets another spot
@@ -4865,7 +4872,25 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	end
 	-- v81: the owner's playtest account (shaunie6 only) skips the level / Helipad / Airfield / Dock / Depot /
 	-- Prestige / rebirth-flag gates so every vehicle (all aircraft) can be tested without building the base first
-	if not VehicleService._IsPlaytestOwner(player) then
+	-- claude-bud JOB 33: a vehicle a rebirth GRANTED him (PrestigeConfig.RebirthUnlocks, its flag set) is usable at once,
+	-- at any level and base (RebirthConfig.Perks.GrantedVehiclesIgnoreRunGates, RebirthConfig.LiveFor "Vehicles")
+	local rebirthGranted = false
+	do
+		local okRC, RC = pcall(function(): any
+			return require(Shared.Configs.RebirthConfig)
+		end)
+		local okPC, PC = pcall(function(): any
+			return require(Shared.Configs.PrestigeConfig)
+		end)
+		if okRC and okPC and RC.Perks.GrantedVehiclesIgnoreRunGates == true and RC.LiveFor(player.UserId, "Vehicles") and typeof(profile.RebirthUnlocks) == "table" then
+			for _, u in ipairs(PC.RebirthUnlocks) do
+				if u.Kind == "Vehicle" and u.Id == vehicleId and profile.RebirthUnlocks[u.Flag] == true then
+					rebirthGranted = true
+				end
+			end
+		end
+	end
+	if not VehicleService._IsPlaytestOwner(player) and not rebirthGranted then
 		if profile.Level < def.UnlockLevel then
 			return false, "LevelTooLow"
 		end
@@ -4975,8 +5000,35 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			(require(script.Parent.PremiumWeaponService) :: any).OnSpawn(model, def, player)
 		end)
 	end
+	-- claude-bud JOB 39: the Vehicle Workshop (HP / speed by class; 1, 1 while not live): speed on the drive attributes,
+	-- HP through VehicleHealth's HPMult, the L3 plates / L5 nameplate on the model
+	local wsHp = 1
+	do
+		local okW, EGS = pcall(function(): any
+			return require(script.Parent.EndgameService)
+		end)
+		if okW and EGS and EGS.WorkshopFor then
+			local hpM, spM, wsL = EGS.WorkshopFor(player.UserId, (def :: any).Category)
+			wsHp = hpM
+			if spM ~= 1 then
+				for _, k in ipairs({ "WE_BaseMaxSpeed", "WE_MaxSpeed" }) do
+					local v = model:GetAttribute(k)
+					if typeof(v) == "number" then
+						model:SetAttribute(k, v * spM)
+					end
+				end
+			end
+			if wsL > 0 then
+				pcall(EGS.DressVehicle, model, wsL)
+			end
+			if EGS.PaintVehicle then
+				pcall(EGS.PaintVehicle, model, player.UserId) -- phase 5: the Black Market paint (nothing while not live)
+			end
+		end
+	end
 	-- W2: vehicle HP (VehicleHealth). At 0 HP: the wreck look at once, the normal teardown after DebrisSeconds.
 	local okHp, errHp = pcall(VehicleService._VehicleHealth.Register, model, def, player, {
+		HPMult = wsHp, -- claude-bud JOB 39: the Vehicle Workshop (1 while not live)
 		Premium = (def :: any).Premium ~= nil,
 		OnWrecked = function()
 			VehicleService._Wreck(model)
@@ -5269,6 +5321,9 @@ function VehicleService.Init(deps: { [string]: any })
 
 	local spawnRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSpawnVehicle) :: RemoteEvent
 	spawnRemote.OnServerEvent:Connect(function(player: Player, vehicleId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestSpawnVehicle", vehicleId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "spawn_vehicle", 1, 2) then
 			if NotificationService then
 				NotificationService.Notify(player, "Spawn too fast — wait a moment", "Warn", 2)
@@ -5286,6 +5341,9 @@ function VehicleService.Init(deps: { [string]: any })
 
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseVehicle) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, vehicleId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPurchaseVehicle", vehicleId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "buy_vehicle", 2, 3) then
 			return
 		end
@@ -5303,6 +5361,9 @@ function VehicleService.Init(deps: { [string]: any })
 
 	local despawnRemote = RemoteSetup.Get(Constants.RemoteNames.RequestDespawnVehicle) :: RemoteEvent
 	despawnRemote.OnServerEvent:Connect(function(player: Player)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestDespawnVehicle") then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "despawn_vehicle", 2, 3) then
 			return
 		end
@@ -5311,6 +5372,9 @@ function VehicleService.Init(deps: { [string]: any })
 
 	local driveRemote = RemoteSetup.Get(Constants.RemoteNames.VehicleDriveInput) :: RemoteEvent
 	driveRemote.OnServerEvent:Connect(function(player: Player, msg: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "VehicleDriveInput", msg) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		handleDriveInput(player, msg)
 	end)
 

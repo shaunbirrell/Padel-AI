@@ -1,0 +1,21 @@
+[ArmyController] v115 Follow3 TrailBlock controller started (true, all, debug false)
+[WAR EMPIRE] ArmyPlan Init
+S_WARM Following
+[SERVER ARMY] received player=shaunie6 command=Send target=A:Town
+[SERVER ARMY] shaunie6 command=Send target=A:Town (Crossroads Town) kind=Area state=Following
+[ARMY DESTINATION] shaunie6 old=nil new=(-100,1,0) source=ArmyPlan.Travel/March
+[ARMY PATH] shaunie6 start=(-518,3,-0) dest=(-100,1,0) distance=418 status=Success waypoints=54
+[ARMY STATE] shaunie6 Following -> TravellingToBase SOURCE=SEND A:Town mode=Attack target=Crossroads Town
+[ARMY MOVE] shaunie6 travel started -> A:Town (Crossroads Town) approach=(-100,1,0) objective=(0,1,0) distance=418 units=24
+[ARMY MOVE] shaunie6 Travel/March block=(-518,3,-0) lead=(-495,0,-0) to dest 418 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-487,3,-0) lead=(-461,0,-0) to dest 387 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-453,3,-0) lead=(-428,0,-0) to dest 353 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-419,3,-0) lead=(-394,0,-0) to dest 319 studs, lead 14 studs/s, lost 0
+S_BEFORE TravellingToBase
+[SERVER ARMY] shaunie6 command=Attack state=TravellingToBase plan=Travel/March source=test Attack
+[ARMY MOVE] shaunie6 ATTACK probe from=(-412,3,-0) radius=400 -> none
+WARN	[SERVER ARMY] REJECTED shaunie6 ATTACK reason=NoEnemiesNear from=(-412,3,-0) radius=400 nearest=none state=TravellingToBase
+S_OK false
+S_WHY NoEnemiesNear
+S_AFTER TravellingToBase
+S_PLAN Travel

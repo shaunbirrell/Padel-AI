@@ -108,11 +108,13 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 local WeaponConfig = require(Shared.Configs.WeaponConfig)
+local GunMechanics = require(Shared.Util.GunMechanics) -- claude-bud JOB 35: burst / spin / charge (visual pacing)
 local HudConfig = require(Shared.Configs.HudConfig)
 local ResearchConfig = require(Shared.Configs.ResearchConfig)
 local GameConfig = require(Shared.Configs.GameConfig)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
+local Scope = require(script.Parent.Parent.Modules.Scope) -- claude-bud JOB 35: the sniper scope
 
 -- W2 (contracts §5.5): feel modules + state in ONE table (module locals are at Luau's register limit)
 type FeelState = {
@@ -128,6 +130,7 @@ type FeelState = {
 	FilterChar: Instance?,
 	FilterVeh: Instance?,
 	FilterSquads: Instance?,
+	FilterKids: number?, -- v133: the squad folder's child count when the list was built
 	FilterList: { Instance },
 	Shown: boolean?, -- last drawn state pushed to the feel modules
 	Weapon: string?,
@@ -174,6 +177,7 @@ do
 		FilterChar = nil,
 		FilterVeh = nil,
 		FilterSquads = nil,
+		FilterKids = nil,
 		FilterList = {},
 		Shown = nil,
 		Weapon = nil,
@@ -190,6 +194,26 @@ do
 	}
 end
 local W2 = {} -- W2 helper functions (defined below, as table fields for the same register reason)
+
+-- claude-bud JOB 39 phase 4: this player's Weapon Mastery / attachment multipliers for a gun (the server's WE_GunMods,
+-- "Id=rate,range,reload,spread;..."). All 1 when the gun has none (or the job is not live for him). Parsed once per
+-- attribute change (cached by the string), never per frame.
+local ONE_MOD = table.freeze({ Rate = 1, Range = 1, Reload = 1, Spread = 1 })
+W2._modSrc = nil :: string?
+W2._mods = {} :: { [string]: { Rate: number, Range: number, Reload: number, Spread: number } }
+function W2.gunMod(id: string?): { Rate: number, Range: number, Reload: number, Spread: number }
+	local s = Players.LocalPlayer:GetAttribute("WE_GunMods")
+	local src = if typeof(s) == "string" then s else ""
+	if src ~= W2._modSrc then
+		W2._modSrc = src
+		local t = {}
+		for gid, a, b, c, d in string.gmatch(src, "([%w_]+)=([%d%.]+),([%d%.]+),([%d%.]+),([%d%.]+)") do
+			t[gid] = { Rate = tonumber(a) or 1, Range = tonumber(b) or 1, Reload = tonumber(c) or 1, Spread = tonumber(d) or 1 }
+		end
+		W2._mods = t
+	end
+	return if id and W2._mods[id] then W2._mods[id] else ONE_MOD
+end
 
 local CombatController = {}
 
@@ -271,6 +295,8 @@ type Slot = {
 local hotbar: Frame? = nil
 local healthPanel: Frame? = nil
 local healthFill: Frame? = nil
+local armourFill: Frame? = nil -- claude-bud JOB 26: the blue bar (the armour's bonus health, spent first)
+local armourPanel: Frame? = nil
 local ammoPanel: Frame? = nil
 local ammoName: TextLabel? = nil
 local ammoCount: TextLabel? = nil
@@ -280,6 +306,7 @@ local fireBtn: Frame? = nil -- W2: a non-Active Frame (drag-to-aim); TouchStarte
 local fireIcon: Frame? = nil
 local fireDimmed: boolean? = nil -- current FIRE style (nil = not styled yet)
 local reloadBtn: TextButton? = nil
+local scopeBtn: TextButton? = nil -- claude-bud JOB 35: phone SCOPE (only with a Scope gun drawn)
 local reticle: Frame? = nil
 local hitMarker: Frame? = nil
 local damageEdge: Frame? = nil
@@ -420,9 +447,17 @@ local function combatBlocked(): boolean
 	return false
 end
 
+local triggerHeld = false -- claude-bud JOB 35: a trigger press is in progress (spin / charge release)
 local function stopFiring()
 	firing = false
 	table.clear(fireTouches)
+	if triggerHeld then
+		triggerHeld = false
+		local wv = Feel.WV
+		if wv and wv.SpinBarrel then
+			pcall(wv.SpinBarrel, false)
+		end
+	end
 end
 
 local function refreshBound()
@@ -608,18 +643,111 @@ local function showHitMarker(kind: string)
 	end)
 end
 
-local function onDamaged()
+-- codebot v216: HudConfig.Hotbar.AutoDrawGuard (one table: module locals are at Luau's register limit)
+local ADG: any = { LastDamagedAt = -math.huge, Pending = false }
+function ADG.live(): boolean
+	local ok, RC = pcall(function(): any
+		return require(Shared.Configs.RetentionConfig)
+	end)
+	local g = HB_ANY.AutoDrawGuard
+	return ok and RC ~= nil and typeof(g) == "table" and RC.Live(g, player.UserId) == true
+end
+function ADG.near(): number
+	return tonumber(HB_ANY.AutoDrawGuard and HB_ANY.AutoDrawGuard.NearStuds) or 160
+end
+function ADG.myPos(): Vector3?
+	local ch = player.Character
+	local r = ch and ch:FindFirstChild("HumanoidRootPart")
+	return if r and r:IsA("BasePart") then r.Position else nil
+end
+-- another player / a soldier that is not mine / an NPC within NearStuds (once per unconfirmed drop: no loop)
+function ADG.bodyNear(): boolean
+	local me = ADG.myPos()
+	if me == nil then
+		return true -- no body to measure from: the old behaviour
+	end
+	local r = ADG.near()
+	local function close(m: Instance): boolean
+		local root = m:FindFirstChild("HumanoidRootPart")
+		local hum = m:FindFirstChildOfClass("Humanoid")
+		return root ~= nil and root:IsA("BasePart") and hum ~= nil and hum.Health > 0
+			and (root.Position - me).Magnitude <= r
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player and p.Character and close(p.Character) then
+			return true
+		end
+	end
+	local sq = Workspace:FindFirstChild("WarEmpireSquads")
+	if sq then
+		for _, m in ipairs(sq:GetChildren()) do
+			if m:GetAttribute("OwnerUserId") ~= player.UserId and close(m) then
+				return true
+			end
+		end
+	end
+	local npc = Workspace:FindFirstChild("WarEmpireNPCs")
+	if npc then
+		for _, m in ipairs(npc:GetChildren()) do
+			if close(m) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- src: nil = a health drop (HealthChanged / CombatStateUpdate); a table = the server's Damaged feedback
+local function onDamaged(src: any?)
 	if not alive then
 		return
 	end
 	markCombat()
+	if src ~= nil then
+		ADG.LastDamagedAt = clock()
+	end
 	flashEdge()
 	-- ambush: draw the last weapon (not from a seat — combat is hidden there and Q/1-4 belong to the vehicle)
-	if HB.AutoDrawOnDamage and not drawn and not seatedNow() and not HudLayout.GetFlag("Dead")
-		and clock() - Feel.HolsterAt >= (tonumber(HB_ANY.HolsterAutoDrawGraceSeconds) or 4) -- v99: not right after a holster
-	then
-		setDrawn(true)
+	local function mayDraw(): boolean
+		if HB.AutoDrawOnDamage and not drawn and not seatedNow() and not HudLayout.GetFlag("Dead") and alive
+			and clock() - Feel.HolsterAt >= (tonumber(HB_ANY.HolsterAutoDrawGraceSeconds) or 4) -- v99: not right after a holster
+		then
+			return true
+		end
+		return false
 	end
+	if not mayDraw() then
+		return
+	end
+	if not ADG.live() then
+		setDrawn(true) -- v214 behaviour
+		return
+	end
+	if src ~= nil then
+		-- a real hit on ME: draw, unless it is an army / defence shot whose shooter is known and far away
+		local from = src.From
+		local me = ADG.myPos()
+		if src.Unit == true and typeof(from) == "Vector3" and me ~= nil and (from - me).Magnitude > ADG.near() then
+			return
+		end
+		setDrawn(true)
+		return
+	end
+	-- a health drop: the Damaged feedback (same server step) decides; without one, only a body close by draws
+	if ADG.Pending then
+		return
+	end
+	ADG.Pending = true
+	local at = clock()
+	task.delay(tonumber(HB_ANY.AutoDrawGuard.ConfirmSeconds) or 0.6, function()
+		ADG.Pending = false
+		if ADG.LastDamagedAt >= at - 0.5 then
+			return -- the Damaged path already judged this hit
+		end
+		if mayDraw() and ADG.bodyNear() then
+			setDrawn(true)
+		end
+	end)
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -633,8 +761,19 @@ local function applyHealth(h: number, mx: number)
 	health = math.max(0, h)
 	maxHealth = math.max(0, mx)
 	local fill = healthFill
+	-- claude-bud JOB 26: armour = bonus max health above the base (WE_ArmourBaseHP): the blue bar holds the part above
+	-- the base (spent first), the health bar the base part
+	local base = tonumber(game:GetService("Players").LocalPlayer:GetAttribute("WE_ArmourBaseHP")) or maxHealth
+	local bonus = math.max(0, maxHealth - base)
+	local ap, af = armourPanel, armourFill
+	if ap and af then
+		ap.Visible = bonus > 0.5 and (healthPanel == nil or (healthPanel :: Frame).Visible)
+		if bonus > 0.5 then
+			af.Size = UDim2.fromScale(math.clamp((health - base) / bonus, 0, 1), 1)
+		end
+	end
 	if fill and maxHealth > 0 then
-		local ratio = math.clamp(health / maxHealth, 0, 1)
+		local ratio = math.clamp(if bonus > 0.5 then math.min(health, base) / math.max(1, base) else health / maxHealth, 0, 1)
 		fill.Size = UDim2.fromScale(ratio, 1)
 		fill.BackgroundColor3 = if ratio <= 0.25 then HP.Low elseif ratio <= 0.5 then HP.Mid else HP.Fill
 	end
@@ -825,6 +964,9 @@ syncFeel = function()
 		end
 	end
 	W2.queueDrawn(on)
+	if scopeBtn then
+		HudLayout.RefreshVisibility(scopeBtn) -- claude-bud JOB 35: SCOPE follows the drawn Scope gun
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -833,6 +975,35 @@ end
 
 local function slotSize(): number
 	return if isTouch then HB.Slot else HB.SlotDesktop
+end
+
+-- claude-bud JOB 50 D: the hotbar caption fits INSIDE its slot: the biggest TextSize from NameSize down to
+-- CaptionMinTextPx (real px, through the HUD scale) whose width fits; below that the name is cut with "…"
+local TextServiceC = game:GetService("TextService")
+local function fitCaption(label: TextLabel, text: string)
+	local nameSize = if isTouch then HB.NameSize else HB.NameSizeDesktop
+	local width = slotSize() - 4
+	local scale = math.max(HudLayout.Scale(), 0.05)
+	local minV = math.min(nameSize, math.ceil((tonumber((HudConfig :: any).Scale.CaptionMinTextPx) or 12) / scale))
+	local function fits(t: string, size: number): boolean
+		local ok, b = pcall(function()
+			return TextServiceC:GetTextSize(t, size, FONT_BODY, Vector2.new(1000, 200))
+		end)
+		return ok and b.X <= width
+	end
+	for size = nameSize, minV, -1 do
+		if fits(text, size) then
+			label.TextSize = size
+			label.Text = text
+			return
+		end
+	end
+	local t = text
+	while #t > 1 and not fits(t .. "…", minV) do
+		t = string.sub(t, 1, #t - 1)
+	end
+	label.TextSize = minV
+	label.Text = if t == text then t else t .. "…"
 end
 
 -- v from the content bottom to the health bar's bottom edge: Hotbar.Bottom + slot + Health.GapAboveHotbar,
@@ -940,15 +1111,20 @@ local function makeSlot(parent: Frame, i: number): Slot
 	num.Parent = btn
 	UIUtil.TextOutline(num, 1, nil, 0.3)
 
-	-- a little wider than the slot (into the gap) so "SHOTGUN" keeps its full size on phones
+	-- claude-bud JOB 50 D (Shaun's phone: "HAVOC" "LONGSHOT" "LONGSHOT" "QUAKE" running into each other): ROOT CAUSE:
+	-- this caption box was slot + Gap + 4 = 80 v in a 64 v slot (8 v into each 12 v gap: neighbours overlapped by 4 v)
+	-- and TextScaled stretched an 8-letter name across the whole box. Now the caption stays INSIDE its slot and
+	-- fitCaption picks the biggest size that fits (down to CaptionMinTextPx real), truncating only below that.
 	local name = Instance.new("TextLabel")
 	name.Name = "WeaponName"
 	name.BackgroundTransparency = 1
 	name.AnchorPoint = Vector2.new(0.5, 1)
 	name.Position = UDim2.new(0.5, 0, 1, -4)
-	name.Size = UDim2.new(1, HB.Gap + 4, 0, nameSize + 4)
+	name.Size = UDim2.new(1, -4, 0, nameSize + 4)
 	name.Font = FONT_BODY
-	name.TextScaled = true
+	name.TextScaled = false
+	name.TextSize = nameSize
+	name.TextTruncate = Enum.TextTruncate.AtEnd
 	name.TextColor3 = WHITE
 	name.Text = ""
 	name.Active = false
@@ -1055,7 +1231,7 @@ refreshHotbar = function()
 		table.clear(slots)
 		for i, id in ipairs(ids) do
 			local sl = makeSlot(bar, i)
-			sl.Name.Text = shortName(id)
+			fitCaption(sl.Name, shortName(id)) -- claude-bud JOB 50 D: fits inside its own slot
 			slots[i] = sl
 		end
 		local s = slotSize()
@@ -1081,7 +1257,7 @@ end
 local function reloadSeconds(): number
 	local id = currentWeaponId
 	local def = if id then WeaponConfig.Weapons[id] else nil
-	local base = if def then def.ReloadTime else 2
+	local base = if def then def.ReloadTime * W2.gunMod(id).Reload else 2 -- claude-bud JOB 39 mastery
 	return math.max(0.1, base / math.max(1, reloadMult))
 end
 
@@ -1208,7 +1384,7 @@ local function onHitFeedback(raw: any)
 		markCombat()
 		showHitMarker(kind)
 	elseif kind == "Damaged" then
-		onDamaged()
+		onDamaged(raw) -- codebot v216: the source (From / Unit) goes to the AutoDrawGuard
 		local cf = Feel.CF
 		if cf then
 			pcall(cf.HitTaken, tonumber(raw.Damage) or 0) -- W2: small trauma pulse
@@ -1280,8 +1456,12 @@ function W2.shotFilter(): RaycastParams
 		end
 	end
 	local squads = Workspace:FindFirstChild("WarEmpireSquads")
-	if ch ~= Feel.FilterChar or veh ~= Feel.FilterVeh or squads ~= Feel.FilterSquads then
-		Feel.FilterChar, Feel.FilterVeh, Feel.FilterSquads = ch, veh, squads
+	-- v133 (Code Bot): enemy army soldiers are shootable now (server CombatService shotFilterFor): the preview ray passes
+	-- only through HIS OWN soldiers (the server also passes clan allies'); the list is rebuilt when the folder's
+	-- child count changes (a unit spawned / died)
+	local nKids = if squads then #squads:GetChildren() else -1
+	if ch ~= Feel.FilterChar or veh ~= Feel.FilterVeh or squads ~= Feel.FilterSquads or nKids ~= Feel.FilterKids then
+		Feel.FilterChar, Feel.FilterVeh, Feel.FilterSquads, Feel.FilterKids = ch, veh, squads, nKids
 		local list = Feel.FilterList
 		table.clear(list)
 		if ch then
@@ -1291,7 +1471,11 @@ function W2.shotFilter(): RaycastParams
 			table.insert(list, veh)
 		end
 		if squads then
-			table.insert(list, squads)
+			for _, m in ipairs(squads:GetChildren()) do
+				if m:GetAttribute("OwnerUserId") == player.UserId or typeof(m:GetAttribute("OwnerUserId")) ~= "number" then
+					table.insert(list, m)
+				end
+			end
 		end
 		Feel.ShotParams.FilterDescendantsInstances = list
 	end
@@ -1300,17 +1484,33 @@ end
 
 -- W2: local shot visuals follow the server's fire schedule (the same GCRA as CombatService: the 20 Hz loop sends
 -- more requests than a slow gun may fire; only the ones the server would take get a flash / tracer / kick)
+-- claude-bud JOB 35: this client's GunMechanics state per gun (the server keeps its own and decides)
+local clientMech: { [string]: GunMechanics.State } = {}
+function W2.mech(id: string): GunMechanics.State
+	local m = clientMech[id]
+	if m == nil then
+		m = GunMechanics.New()
+		clientMech[id] = m
+	end
+	return m
+end
+
 function W2.visualShotAllowed(def: WeaponConfig.WeaponDef): boolean
 	if Feel.PredictedAmmo <= 0 then
 		return false
 	end
-	local interval = 1 / math.max(0.1, (tonumber(def.FireRate) or 1) * Feel.FireRateMult)
+	local m = W2.mech(def.Id) -- claude-bud JOB 35: no predicted shot while the barrel spins up / the charge builds
 	local t = clock()
+	if not GunMechanics.Ready(def, m, t) then
+		return false
+	end
+	local interval = GunMechanics.Interval(def, m, t, 1 / math.max(0.1, (tonumber(def.FireRate) or 1) * Feel.FireRateMult * W2.gunMod(def.Id).Rate)) -- JOB 39 mastery
 	if t - Feel.NextVisualAt < -interval * 0.5 then
 		return false
 	end
 	Feel.NextVisualAt = math.max(Feel.NextVisualAt + interval, t)
 	Feel.PredictedAmmo -= 1
+	GunMechanics.OnShot(def, m, t)
 	return true
 end
 
@@ -1320,7 +1520,7 @@ function W2.bloomReticle(def: WeaponConfig.WeaponDef)
 	if not b then
 		return
 	end
-	b.Scale = 1 + math.clamp((tonumber(def.Spread) or 0) * 0.06, 0.03, 0.5)
+	b.Scale = 1 + math.clamp((tonumber(def.Spread) or 0) * W2.gunMod(def.Id).Spread * 0.06, 0.03, 0.5) -- JOB 39: the Grip
 	TweenService:Create(b, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 end
 
@@ -1332,6 +1532,52 @@ local function canFireNow(): boolean
 		return false -- holstered: the click belongs to the world (droppers, consoles, ClickDetectors)
 	end
 	return true
+end
+
+--[[ claude-bud JOB 35: the trigger. A SpinUp / ChargeSeconds gun sends a "Prime" on the press (no shot; the server
+	starts the spin / charge); a charge gun fires once on the release; the 20 Hz hold loop fires everything else. ]]
+local function currentDef(): any
+	local wid = activeWeaponId() or currentWeaponId
+	return if wid then WeaponConfig.Weapons[wid] else nil
+end
+
+local function triggerDown()
+	local def = currentDef()
+	local kind = GunMechanics.PrimeKind(def)
+	triggerHeld = true
+	if kind and canFireNow() and not reloading then
+		GunMechanics.Prime(def, W2.mech(def.Id), clock(), kind)
+		local remote = Remotes.TryGetEvent(Constants.RemoteNames.RequestFire)
+		if remote then
+			remote:FireServer({ Prime = kind })
+		end
+		local wv = Feel.WV
+		if kind == "Spin" and wv and wv.SpinBarrel then
+			pcall(wv.SpinBarrel, true)
+		end
+	end
+	if kind ~= "Charge" then
+		requestFire()
+	end
+end
+
+-- after the last trigger input ends
+local function maybeRelease()
+	if not triggerHeld or firing or next(fireTouches) ~= nil then
+		return
+	end
+	triggerHeld = false
+	local kind = GunMechanics.PrimeKind(currentDef())
+	local wv = Feel.WV
+	if kind == "Spin" and wv and wv.SpinBarrel then
+		pcall(wv.SpinBarrel, false)
+	elseif kind == "Charge" then
+		requestFire() -- the charged shot (the server checks the charge)
+	end
+end
+
+local function holdFires(): boolean
+	return GunMechanics.PrimeKind(currentDef()) ~= "Charge"
 end
 
 requestFire = function()
@@ -1369,10 +1615,10 @@ requestFire = function()
 	-- the server's exact ray lands and a far miss never reports a HitPosition out of range (fire_hitpos_oor)
 	local wid = activeWeaponId() or currentWeaponId
 	local def = if wid then WeaponConfig.Weapons[wid] else nil
-	local reach = if def then (tonumber(def.Range) or 496) + Feel.HitSlop else 500
+	local reach = if def then (tonumber(def.Range) or 496) * W2.gunMod(def.Id).Range + Feel.HitSlop else 500 -- JOB 39 mastery / Red-dot
 	-- streaming2 F30: this ray sees only what has streamed in here (a far wall may be missing), so HitPosition and the
 	-- target ids are hints; the server re-casts on the whole world and decides the hit
-	local result = Workspace:Raycast(origin, direction * reach, W2.shotFilter())
+	local result = (require(Shared.Util.LosRule) :: any).HitCast(origin, direction * reach, W2.shotFilter()) -- claude-bud JOB 32: the server's shot rule
 	if result then
 		payload.HitPosition = result.Position
 		local model = result.Instance:FindFirstAncestorOfClass("Model")
@@ -1401,7 +1647,7 @@ requestFire = function()
 				pcall(wv.LocalShot, wid, origin, direction, payload.HitPosition, if result then result.Instance else nil, if result then result.Normal else nil)
 			end
 			if cf then
-				pcall(cf.Kick, wid)
+				pcall(cf.Kick, wid, Scope.RecoilMult()) -- claude-bud JOB 35: x0.5 while scoped
 			end
 			W2.bloomReticle(def)
 		end
@@ -1409,6 +1655,7 @@ requestFire = function()
 end
 
 requestReload = function()
+	Scope.Exit() -- claude-bud JOB 35: a reload drops the scope
 	if combatBlocked() then
 		return
 	end
@@ -1468,7 +1715,7 @@ end
 local function weaponRange(): number
 	local id = activeWeaponId() or currentWeaponId
 	local def = if id then WeaponConfig.Weapons[id] else nil
-	return if def then math.max(0, tonumber(def.Range) or 0) else 0
+	return if def then math.max(0, (tonumber(def.Range) or 0) * W2.gunMod(def.Id).Range) else 0 -- JOB 39 mastery / Red-dot
 end
 
 local function aliveHumanoid(model: Model): boolean
@@ -1655,6 +1902,10 @@ local function onWheel(_name: string, _state: Enum.UserInputState, io: InputObje
 	if z == 0 or not drawn or combatBlocked() then
 		return Enum.ContextActionResult.Pass
 	end
+	if Scope.Level() > 0 then
+		Scope.Set(if Scope.Level() == 1 then 2 else 1) -- claude-bud JOB 35: scoped, the wheel zooms
+		return Enum.ContextActionResult.Sink
+	end
 	local t = clock()
 	if t - lastWheelAt >= WHEEL_MIN_GAP then
 		lastWheelAt = t
@@ -1733,6 +1984,10 @@ local function placeCombatControls()
 	local r = reloadBtn
 	if r then
 		r.Position = UDim2.new(1, -g.ReloadRight, 1, -g.ReloadBottom)
+	end
+	local sc = scopeBtn -- claude-bud JOB 35: straight above RELOAD (away from the jump button)
+	if sc then
+		sc.Position = UDim2.new(1, -g.ReloadRight, 1, -(g.ReloadBottom + TC.Reload.Size + 12))
 	end
 end
 
@@ -1891,6 +2146,35 @@ local function buildTouchButtons(parent: Instance)
 	end)
 	reloadBtn = rel
 	HudLayout.AssertTouchTarget(rel, "RELOAD")
+
+	-- claude-bud JOB 35: SCOPE (above RELOAD, same size; only with a Scope gun drawn): off -> x1 -> x2 -> off
+	local sc = Instance.new("TextButton")
+	sc.Name = "ScopeButton"
+	sc.AnchorPoint = TC.Reload.Anchor
+	sc.Size = UDim2.fromOffset(TC.Reload.Size, TC.Reload.Size)
+	sc.BackgroundColor3 = Color3.fromRGB(30, 34, 40)
+	sc.BackgroundTransparency = 0.12
+	sc.BorderSizePixel = 0
+	sc.Font = Enum.Font.GothamBlack
+	sc.TextScaled = true
+	sc.TextColor3 = WHITE
+	sc.Text = "SCOPE"
+	sc.AutoButtonColor = true
+	sc.Active = true
+	sc.ZIndex = 2
+	sc.Visible = false
+	sc.Parent = parent
+	round(sc)
+	stroke(sc, Color3.fromRGB(0, 0, 0), 2.5, 0.55)
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0.12, 0)
+	pad.PaddingRight = UDim.new(0.12, 0)
+	pad.Parent = sc
+	sc.Activated:Connect(function()
+		Scope.Cycle()
+	end)
+	scopeBtn = sc
+	HudLayout.AssertTouchTarget(sc, "SCOPE")
 end
 
 local function buildReticleGui(pg: Instance)
@@ -2056,6 +2340,41 @@ local function buildHud(pg: Instance)
 	round(fill)
 	healthPanel = hp
 	healthFill = fill
+	-- claude-bud JOB 26: the armour bar, a thin blue strip right above the health bar (hidden without armour)
+	local ab = Instance.new("Frame")
+	ab.Name = "ArmourPanel"
+	ab.AnchorPoint = Vector2.new(0, 0)
+	ab.Size = UDim2.fromOffset(HP.MinWidth, math.max(6, math.floor(HP.Height * 0.45)))
+	ab.BackgroundColor3 = HP.Bg
+	ab.BackgroundTransparency = HP.BgTransparency
+	ab.BorderSizePixel = 0
+	ab.ClipsDescendants = true
+	ab.Active = false
+	ab.Visible = false
+	ab.Parent = sg
+	round(ab)
+	local af = Instance.new("Frame")
+	af.Name = "Fill"
+	af.Size = UDim2.fromScale(1, 1)
+	af.BackgroundColor3 = Color3.fromRGB(70, 150, 255)
+	af.BorderSizePixel = 0
+	af.Active = false
+	af.Parent = ab
+	round(af)
+	armourPanel = ab
+	armourFill = af
+	-- it follows the health bar wherever HudLayout puts it (bottom / top stack, width, shown / hidden): no per-frame work
+	local function syncArmour()
+		local h = ab.Size.Y.Offset
+		ab.Position = UDim2.fromOffset(hp.AbsolutePosition.X - sg.AbsolutePosition.X, hp.AbsolutePosition.Y - sg.AbsolutePosition.Y - h - 3)
+		ab.Size = UDim2.fromOffset(hp.AbsoluteSize.X, h)
+		local base = tonumber(game:GetService("Players").LocalPlayer:GetAttribute("WE_ArmourBaseHP")) or maxHealth
+		ab.Visible = hp.Visible and maxHealth - base > 0.5
+	end
+	hp:GetPropertyChangedSignal("AbsolutePosition"):Connect(syncArmour)
+	hp:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncArmour)
+	hp:GetPropertyChangedSignal("Visible"):Connect(syncArmour)
+	task.defer(syncArmour)
 
 	buildAmmo(sg)
 	if isTouch then
@@ -2094,6 +2413,14 @@ local function buildHud(pg: Instance)
 		HudLayout.BindVisibility(r, TC, notSeated)
 		table.insert(bound, f)
 		table.insert(bound, r)
+	end
+	local sc = scopeBtn -- claude-bud JOB 35
+	if sc then
+		HudLayout.BindVisibility(sc, TC, function(): boolean
+			local d = currentDef()
+			return notSeated() and drawn and d ~= nil and d.Scope == true
+		end)
+		table.insert(bound, sc)
 	end
 	local ret = reticle
 	if ret then
@@ -2307,7 +2634,14 @@ function CombatController.Init()
 		if ut == Enum.UserInputType.MouseButton1 or kc == GP.Fire then
 			if canFireNow() then
 				firing = true
-				requestFire()
+				triggerDown() -- claude-bud JOB 35 (was requestFire(): spin / charge guns prime first)
+			end
+			return
+		end
+		if ut == Enum.UserInputType.MouseButton2 or kc == Enum.KeyCode.ButtonL2 then
+			local d = currentDef() -- claude-bud JOB 35: hold RMB / L2 = scope
+			if d and d.Scope == true and drawn and canFireNow() then
+				Scope.Set(1)
 			end
 			return
 		end
@@ -2345,7 +2679,11 @@ function CombatController.Init()
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.KeyCode == GP.Fire then
 			firing = false
 		end
+		if input.UserInputType == Enum.UserInputType.MouseButton2 or input.KeyCode == Enum.KeyCode.ButtonL2 then
+			Scope.Exit() -- claude-bud JOB 35: hold-to-scope
+		end
 		fireTouches[input] = nil
+		maybeRelease() -- claude-bud JOB 35: spin down / fire the charged shot
 	end)
 	-- W2 drag-to-aim FIRE (P1-1): a finger that STARTS inside FIRE's rect (+ FireSlopPx real px) fires and keeps
 	-- firing while held; the touch is never sunk (FIRE is a non-Active Frame), so the same thumb turns the camera.
@@ -2372,11 +2710,12 @@ function CombatController.Init()
 		end
 		if canFireNow() then
 			fireTouches[input] = true
-			requestFire()
+			triggerDown() -- claude-bud JOB 35
 		end
 	end)
 	UserInputService.TouchEnded:Connect(function(input: InputObject)
 		fireTouches[input] = nil
+		maybeRelease() -- claude-bud JOB 35
 		-- a finger that slid off a hotbar slot before lifting ends that slot's long-press too
 		for _, sl in ipairs(slots) do
 			if sl.PressInput == input then
@@ -2392,7 +2731,9 @@ function CombatController.Init()
 			task.wait(period)
 			if firing or next(fireTouches) ~= nil then
 				if canFireNow() then
-					requestFire()
+					if holdFires() then -- claude-bud JOB 35: a charge gun fires on the release
+						requestFire()
+					end
 				else
 					stopFiring()
 				end
@@ -2402,6 +2743,12 @@ function CombatController.Init()
 
 	-- touch: dimmed FIRE while holstered with a visible hostile in range (≤ 4 Hz; nothing on desktop)
 	startArmedScan()
+
+	-- claude-bud JOB 35: the scope drops on reload, death, a seat, a switch, a holster or a gun without a scope
+	Scope.Start(function(): boolean
+		local d = currentDef()
+		return not drawn or not alive or reloading or combatBlocked() or d == nil or d.Scope ~= true
+	end)
 end
 
 return CombatController

@@ -1,0 +1,67 @@
+ok    A flags: Grace / Day7Scale / Calendar live for everyone (codebot_v177: OwnerFirst=false)
+ok    days 1-7 in a row: 1:ok,2:ok,3:ok,4:ok,5:ok,6:ok,7:ok
+ok    PER_MIN 0 -> Day 7 pays the table floor: total $49000 (want $49000)
+ok    after Day 7 the next day is Day 1 of a new cycle (cycle 2)
+ok    two claims on one day pay once
+ok    a claim at 23:59:59 and one at 00:00:00 UTC: two days, streak 2
+ok    Grace ON: one missed day keeps the streak (day 3 -> 4), the day is marked SAVED, StreakClaimed grace=yes
+ok    the strip carries the SAVED day (4)
+ok    the strip's countdown is the server's real time to the next UTC day (43200 s)
+ok    a second miss in the same cycle resets to Day 1 (StreakReset lastDay 4)
+ok    two missed days reset to Day 1 (grace allows 1)
+ok    Grace OFF: one missed day resets (today's hard reset)
+ok    codebot_v177: grace is live for another player (OwnerFirst=false, one missed day saved)
+ok    owner-first (OwnerFirst = true): grace is not live for another player (reset)
+ok    Day 7 income-scaled: $900/min x 60 min = $54000 (floor $20000)
+ok    Day7Scale OFF: Day 7 pays the table exactly
+ok    the grace bookkeeping survives a save + ProfileSchema.Migrate
+ok    Calendar OFF: no countdown and no SAVED mark (the JOB 29 strip)
+ok    Calendar ON: a held new player's first streak claim + card at 150 s (FirstCardSeconds 150; the client still waits out combat)
+ok    Calendar OFF: the JOB 29 timing (8 s + 90 s hold cap = 98 s)
+ok    B flags: the Welcome back card is live for everyone (codebot_v177); the CapBoost sidegrade hook is DISABLED (Enabled = false, OwnerFirst = true)
+ok    B: DevProducts.OfflineCap2x has Id 0, NO price, hidden (never prompted / never in the Shop)
+ok    4 min away (< MinSeconds 300 s): nothing
+ok    1 h away: $9000 into the ATM, card: Collect $9000, not capped, cap 8 h
+ok    exactly the cap (8 h): $72000, capped
+ok    30 h away: capped at 8 h ($72000)
+ok    a negative gap (future LastSeen): nothing
+ok    first join (no LastSeen): nothing
+ok    the same load hook firing twice pays once (PrevSeenUnix is cleared after the first)
+ok    a rejoin after 2 min (server hop / spam) pays nothing (MinSeconds)
+ok    Premium: +10% once ($9900)
+ok    CapBoost OFF: the entitlement changes nothing (cap 8 h)
+ok    CapBoost ON (test only): 2x the cap TIME with the entitlement ($144000), Share unchanged; without it the normal cap
+ok    Card OFF: the JOB 29 payload exactly (no Collect / CapHours)
+ok    OfflineEarned logged once per payout
+MATHS offline: $60/min -> 1 h $900, cap (8 h) $7200 | $1000/min -> 1 h $15000, cap (8 h) $120000 | $20000/min -> 1 h $300000, cap (8 h) $2400000
+ok    C flags: Core is owner-first; the Robux reroll hook is DISABLED
+ok    C: DevProducts.MissionReroll Id 0, no price (never prompted)
+ok    3 core missions of 3 different loop types on top: CoreRaid1, CoreRecruit1, CoreWinFights1
+ok    the Daily Ops stay below the core missions (3)
+ok    a level-5 player gets tier-1 targets (finishable in one session)
+ok    the payload carries the real reset time and 1 free reroll
+ok    stable within the day (even after a level-up)
+ok    no raid possible: the Raid mission is not offered (CoreRecruit1, CoreBuild1, CoreWinFights1)
+ok    a day with the Raid mission (CoreRaid1)
+ok    a raid win (TrackProgress Raid, from the ArmyPlan / ATM raid hooks) counts
+ok    progress + the day's list survive a rejoin (save + Migrate + a fresh server)
+ok    all 3 claimed -> the chest once ($12000); MissionDone x3
+ok    each core mission pays max(floor, 10 min of income): $18000
+ok    claiming again pays nothing (idempotent), no second chest
+ok    ResetHourUtc 6: the day rolls at 06:00 UTC, not before (progress reset)
+ok    the next reset is 24 h after 06:00
+ok    the free reroll swaps a mission for another loop type not already offered (CoreRaid1 -> CoreBuild1)
+ok    a second reroll the same day is refused (NoRerolls)
+ok    Robux reroll hook OFF: tokens do nothing (never sold while Id 0)
+ok    Robux hook ON (test only): a token rerolls and is spent; a reroll never pays
+ok    the receipt grant path adds a token (MissionService.GrantRerollToken)
+ok    the free reroll comes back the next day
+ok    Core OFF: today's rotation exactly (no core rows, no Core payload)
+ok    owner-first: another player still gets today's rotation
+ok    D flags: ReturnSequence is owner-first
+ok    Comeback + offline both due: ONE Welcome back card with both amounts ($9000 + comeback $25000)
+ok    Comeback with no offline pay (first join of the day elsewhere): the card still shows the comeback
+ok    ReturnSequence OFF: the Welcome back payload as before (no comeback on it)
+ok    ReturnDay on join: days 1, guidedDone yes
+ok    owner-first: no ReturnDay for another player yet
+DAILY RETURN TEST: 0 failed

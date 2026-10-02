@@ -101,7 +101,21 @@ local function maxSoldiers(profile: any): number
 	local base = SoldierConfig.MaxSoldiersBase or 50
 	local per = SoldierConfig.SoldiersPerBarracksLevel or 5
 	-- + Army Expansion (ExtraSoldierSlot DevProduct entitlement): ArmyCapBonus capacity
-	return base + barracksLevel(profile) * per + armyCapBonus(profile)
+	-- claude-bud JOB 33: + the rebirth perk (+2 per rebirth, cap +40) and the Elite Barracks (+5 a level)
+	local rebirth = 0
+	local okRZ, RZ = pcall(function(): any
+		return require(script.Parent.RebirthZoneService)
+	end)
+	if okRZ and RZ and RZ.ArmyBonus then
+		local okB, b = pcall(RZ.ArmyBonus, profile)
+		rebirth = if okB and typeof(b) == "number" and b == b then math.max(0, math.floor(b)) else 0
+	end
+	-- claude-bud JOB 39: + the Base Tier soldiers (0 while EndgameConfig's BaseTier part is not live for the owner)
+	local okEG, EGS = pcall(function(): any
+		return require(script.Parent.EndgameService)
+	end)
+	local tier = if okEG and EGS and EGS.SoldierCapBonus then EGS.SoldierCapBonus(profile) else 0
+	return base + barracksLevel(profile) * per + armyCapBonus(profile) + rebirth + tier
 end
 
 local function pushState(player: Player)
@@ -208,6 +222,31 @@ function SoldierService.Recruit(player: Player, amount: any): (boolean, string?)
 	return true, nil
 end
 
+--[[ claude-bud JOB 48: free soldiers (the Guided Hook's reward: TutorialConfig.Guided.Hook.RewardSoldiers). The same
+	state Recruit writes (profile.Soldiers, within maxSoldiers, the state push + army listeners), no cash taken. Server
+	only (no remote calls this); returns how many were added (0 at the cap). ]]
+function SoldierService.GrantFree(player: Player, amount: number, reason: string?): number
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 0
+	end
+	local current = tonumber(profile.Soldiers) or 0
+	local n = math.clamp(math.floor(tonumber(amount) or 0), 0, math.max(0, maxSoldiers(profile) - current))
+	if n <= 0 then
+		return 0
+	end
+	profile.Soldiers = current + n
+	DataService.MarkDirty(player)
+	pushState(player)
+	if NotificationService then
+		NotificationService.Notify(player, string.format("+%d soldiers joined · Army %d/%d", n, profile.Soldiers, maxSoldiers(profile)), "Success")
+	end
+	if AnalyticsService and AnalyticsService.Log then
+		AnalyticsService.Log("SOLDIER_GRANT", player.UserId, { amount = n, reason = reason or "grant", total = profile.Soldiers })
+	end
+	return n
+end
+
 function SoldierService.Dismiss(player: Player, amount: any): (boolean, string?)
 	local n, serr = sanitizeAmount(amount)
 	if not n then
@@ -264,6 +303,13 @@ function SoldierService.ConsumeRefills(player: Player)
 	pushState(player)
 	if NotificationService then
 		NotificationService.Notify(player, string.format("Army refilled: %d/%d", profile.Soldiers, cap), "Reward")
+	end
+	-- claude-bud JOB 39 (APPROVED §9 b): the refill also re-trains every soldier at its tier for free (not live = nothing)
+	local okEG, EGS = pcall(function(): any
+		return require(script.Parent.EndgameService)
+	end)
+	if okEG and EGS and EGS.GrantRefill then
+		pcall(EGS.GrantRefill, player)
 	end
 end
 
@@ -345,6 +391,9 @@ function SoldierService.Init(deps: { [string]: any })
 
 	local recruitRemote = RemoteSetup.Get(Constants.RemoteNames.RequestRecruitSoldiers) :: RemoteEvent
 	recruitRemote.OnServerEvent:Connect(function(player: Player, amount: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestRecruitSoldiers", amount) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		-- v69: fast taps are normal play — drop extras with a throttled toast, never an AntiExploit strike
 		if not RateLimitService.Allow(player, "soldier_recruit", TAP_RATE, TAP_BURST) then
 			slowDownToast(player, "recruit")
@@ -367,6 +416,9 @@ function SoldierService.Init(deps: { [string]: any })
 
 	local dismissRemote = RemoteSetup.Get(Constants.RemoteNames.RequestDismissSoldiers) :: RemoteEvent
 	dismissRemote.OnServerEvent:Connect(function(player: Player, amount: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestDismissSoldiers", amount) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "soldier_dismiss", TAP_RATE, TAP_BURST) then
 			slowDownToast(player, "dismiss")
 			return

@@ -21,7 +21,7 @@
 ]]
 
 local ManualDropperConfig = {
-	Enabled = true,
+	Enabled = false, -- v111 (Shaun 2026-09-29): cash pile removed, $75 added nothing; true restores it
 
 	-- Award (PendingCash). Prefer AwardAmount; else random [MinAward, MaxAward].
 	MinAward = 10,

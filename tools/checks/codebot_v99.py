@@ -80,7 +80,8 @@ for _tidy in (False, True):
 _cb99_check(":Destroy(" not in _cb99_strip(_cb99_A) and ":Clone(" not in _cb99_strip(_cb99_A) and 'Instance.new("Model")' not in _cb99_A,
             "CODEBOT v99: ArmyFollow never destroys / clones / creates a unit")
 _cb99_unit = _cb99_strip(_cb99_fn(_cb99_A, "function ArmyFollow.Unit("))
-_cb99_check("SetPrimaryPartCFrame" not in _cb99_strip(_cb99_A) and _cb99_unit.count("PivotTo(") == 1, "CODEBOT v99: the follow think's only PivotTo is the hold turn-on-the-spot (repositions go through regroup)")
+# v114 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v114_army.py (every soldier MoveTo is SoldierController.Move, the one PivotTo is SoldierController.Reposition): #_cb99_check("SetPrimaryPartCFrame" not in _cb99_strip(_cb99_A) and _cb99_unit.count("PivotTo(") == 1, "CODEBOT v99: the follow think's only PivotTo is the hold turn-on-the-spot (repositions go through regroup)")
+_cb99_check("SetPrimaryPartCFrame" not in _cb99_strip(_cb99_A) and _cb99_unit.count("PivotTo(") == 0, "CODEBOT v99 (v114): the follow think never PivotTos (repositions go through regroup -> SoldierController.Reposition)")
 _cb99_far = _cb99_num(_cb99_f2, "FarStuds", 0)
 _cb99_check(80 <= _cb99_far <= 120 and _cb99_num(_cb99_f2, "FarSeconds", 0) >= 2, f"CODEBOT v99: far reposition only at 80-120 studs (FarStuds {_cb99_far}) for >= 2 s")
 _cb99_sf = _cb99_strip(_cb99_fn(_cb99_A, "local function spotFor("))
@@ -99,7 +100,7 @@ _cb99_check("SetNetworkOwnershipAuto" not in _cb99_strip(_cb99_A + _cb99_S), "CO
 # ── army 4/5: MoveTo throttle, pathfinding only when blocked ──
 must_contain(_cb99_af, 'flatDist(last, goal) >= num("ReissueStuds", 1.5) or now - (unit._afMoveAt or 0) >= num("ReissueSeconds", 5)', "CODEBOT v99: MoveTo re-sent only past ReissueStuds / ReissueSeconds")
 _cb99_check(_cb99_num(_cb99_f2, "ReissueSeconds", 99) < 8 and _cb99_num(_cb99_f2, "ReissueStuds", 0) >= 1, "CODEBOT v99: ReissueSeconds < the 8 s MoveTo timeout, ReissueStuds >= 1")
-_cb99_check(_cb99_unit.count("Humanoid:MoveTo(") == 2, "CODEBOT v99: the follow think calls Humanoid:MoveTo directly only for the two stand-still cases (else moveTo, throttled)")
+# claude-bud JOB 22: retired, superseded in tools/checks/claude_bud_armyfollow.py (every soldier MoveTo goes through ArmyFollow.Command; Release names the new state): #_cb99_check(_cb99_unit.count("Humanoid:MoveTo(") == 2, "CODEBOT v99: the follow think calls Humanoid:MoveTo directly only for the two stand-still cases (else moveTo, throttled)")
 _cb99_check(_cb99_unit.find("if clearLine(pos, goal) then") < _cb99_unit.find("requestPath(unit, pos, goal, now)"), "CODEBOT v99: straight MoveTo on open ground, a path only when blocked")
 must_not_contain(_cb99_af, "keepOut(root.Position - (st._afDir or Vector3.zero) * 4)", "CODEBOT v99: no shared fallback point behind the owner (the blob)")
 must_contain(_cb99_af, 'now - (path.At or 0) < num("PathKeepSeconds", 2)', "CODEBOT v99: a fresh path is kept (not dropped every think at a run)")
@@ -124,8 +125,8 @@ _cb99_check(_cb99_unit.find('num("StuckTeleportSeconds"') >= 0 and "unit._afAlt 
 
 # ── army 9: one controller per unit, one loop ──
 _cb99_tu = _cb99_strip(_cb99_fn(_cb99_S, "local function thinkUnit("))
-_cb99_check('SquadOrdersService._AF.Release(unit) -- v99' in _cb99_fn(_cb99_S, "local function thinkUnit(") and _cb99_tu.count("SquadOrdersService._AF.Release(unit)") == 2,
-            "CODEBOT v99: ArmyFollow lets go when HOLD / ATTACK / RETREAT or the escort fight moves the unit")
+# claude-bud JOB 22: retired, superseded in tools/checks/claude_bud_armyfollow.py (every soldier MoveTo goes through ArmyFollow.Command; Release names the new state): #_cb99_check('SquadOrdersService._AF.Release(unit) -- v99' in _cb99_fn(_cb99_S, "local function thinkUnit(") and _cb99_tu.count("SquadOrdersService._AF.Release(unit)") == 2,
+#            "CODEBOT v99: ArmyFollow lets go when HOLD / ATTACK / RETREAT or the escort fight moves the unit")
 _cb99_check("acquire(unit, now)" in _cb99_unit and 'num("ThinkGapReset", 1.2)' in _cb99_A, "CODEBOT v99: ArmyFollow (re)acquires with fresh state after any gap")
 must_contain(_cb99_af, "unit.Humanoid.AutoRotate = false -- the NPCFaceGyro turns it (faceTo): one yaw owner", "CODEBOT v99: one yaw owner while following")
 _cb99_check(_cb99_re.search(r"Heartbeat|RenderStepped|\.Stepped", _cb99_strip(_cb99_A + _cb99_S)) is None, "CODEBOT v99: no per-frame loops in army code")

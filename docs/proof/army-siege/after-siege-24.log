@@ -1,0 +1,58 @@
+[ArmyController] v115 Follow3 TrailBlock controller started (true, all, debug false)
+[WAR EMPIRE] ArmyPlan Init
+[ARMY DESTINATION] shaunie6 old=nil new=(506,0,0) source=ArmyPlan.Send/March
+[ARMY PATH] shaunie6 start=(182,0,-0) dest=(506,0,0) distance=324 status=Success waypoints=41
+[ARMY STATE] shaunie6 Following -> TravellingToBase SOURCE=SEND base 9 mode=Attack target=Chaplin606's base
+[ARMY MOVE] shaunie6 travel started -> plot 9 dest=(506,0,0) units=24
+S_SEND	true	Your army 60,000 vs defences 2,500: much stronger: half loot
+[ARMY MOVE] shaunie6 Send/March block=(182,0,-0) lead=(205,0,-0) to dest 324 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(213,0,-0) lead=(239,0,-0) to dest 293 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(247,0,-0) lead=(272,0,-0) to dest 259 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(280,0,-0) lead=(306,0,-0) to dest 226 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(314,0,-0) lead=(339,0,-0) to dest 192 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(348,0,-0) lead=(373,0,-0) to dest 158 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(381,0,-0) lead=(407,0,-0) to dest 125 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(415,0,-0) lead=(440,0,-0) to dest 91 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(449,0,-0) lead=(474,0,-0) to dest 57 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Send/March block=(482,0,-0) lead=(506,0,0) to dest 24 studs, lead 14 studs/s, lost 0
+[ARMY STATE] shaunie6 TravellingToBase -> EngagingTarget SOURCE=ArmyPlan Send/Siege mode=Attack target=Chaplin606's base
+[ARMY SIEGE] shaunie6 target=Structure at (540,4,0) gate=87% enemy turrets=0 firing=8/24 breached=false
+[ARMY SIEGE] shaunie6 target=Structure at (540,4,0) gate=54% enemy turrets=0 firing=24/24 breached=false
+[ARMY SIEGE] shaunie6 target=Structure at (540,4,0) gate=16% enemy turrets=0 firing=24/24 breached=false
+[ARMY DESTINATION] shaunie6 old=(506,0,0) new=(700,3,40) source=ArmyPlan.Send/Siege
+[ARMY PATH] shaunie6 start=(509,0,-17) dest=(700,3,40) distance=200 status=Success waypoints=27
+[ARMY SIEGE] shaunie6 target=Player at (620,3,12) gate=0% enemy turrets=0 firing=17/24 breached=true
+[ARMY SIEGE] shaunie6 target=Player at (620,3,12) gate=0% enemy turrets=0 firing=0/24 breached=true
+[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=5/24 breached=true
+[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
+[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
+[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
+[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
+[ARMY SIEGE] shaunie6 target=none gate=0% enemy turrets=0 firing=0/24 breached=true
+[ARMY DESTINATION] shaunie6 old=(700,3,40) new=(200,3,0) source=ArmyPlan.Return/Return
+[ARMY PATH] shaunie6 start=(684,0,35) dest=(200,3,0) distance=485 status=Success waypoints=64
+[ARMY STATE] shaunie6 EngagingTarget -> Recalling SOURCE=ArmyPlan.return looted mode=Attack
+[ARMY STATE] shaunie6 Recalling -> Following SOURCE=ArmyPlan.finish Return mode=Follow
+[ARMY MOVE] shaunie6 plan Return ended -> Following
+S_GATE_SERIES 100,100,100,100,100,87,29,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+S_GATE_END 0
+S_BREACHED true
+S_ENTERED true
+S_LOOTED 4321
+S_KILLS 1
+S_TARGETS Player=13,Structure=19,none=38
+S_SHOTS fired=134 gatehits=125 nolos=0 outofband=373
+S_CENTRE 217,1
+S_TELEPORTS 0
+S_UNITS_OUTSIDE 24
+S_UNIT_POS 206,4 206,-3 205,9 206,-8 210,4 210,-3 209,9 210,-8 214,5 215,-2 214,10 215,-7 219,5 219,-2 218,10 219,-7 223,5 224,-2 223,10 224,-7 227,6 228,-1 227,11 228,-6
+S_KILLED Chaplin606;
+S_MARCH_MAXSTILL 0.0
+S_PHASE_END none
+S_STATUS Return: RETURNING
+notify	shaunie6	Army left for Chaplin606's base
+notify	Chaplin606	⚠ shaunie6's ARMY is marching on your base, ETA 0:29
+notify	shaunie6	Arrived at Chaplin606's base
+notify	shaunie6	Gate breached!
+notify	shaunie6	Looted $4,321
+notify	shaunie6	Army home

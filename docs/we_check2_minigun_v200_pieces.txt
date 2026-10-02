@@ -1,0 +1,28 @@
+# Code Bot v200 Minigun Turret Pack piece probes (Open Cloud Luau Execution, live place v197, 2026-10-01 ~23:25 Dublin)
+# tools/probes/v200_minigun_pieces.luau:
+P2 SCRIPT README class=Script path=Model.Minigun Turret Pack by Hoshizora_N1.README srclen=3187
+P2 PIECE minigun_l01 class=Model parts=4 tris=0 triOk=0 triFail=4 ext=8.04,4.24,8.86 names=L01_Base|L01_TurretYaw|L01_GunPitch|L01_BarrelRotation
+P2 PIECE minigun_l02 class=Model parts=4 tris=0 triOk=0 triFail=4 ext=8.47,4.42,9.22 names=L02_Base|L02_TurretYaw|L02_GunPitch|L02_BarrelRotation
+P2 PIECE minigun_l03 class=Model parts=4 tris=0 triOk=0 triFail=4 ext=8.90,4.60,9.58 names=L03_Base|L03_TurretYaw|L03_GunPitch|L03_BarrelRotation
+P2 PIECE minigun_l04 class=Model parts=4 tris=0 triOk=0 triFail=4 ext=9.33,5.17,9.95 names=L04_Base|L04_TurretYaw|L04_GunPitch|L04_BarrelRotation
+P2 PIECE minigun_l05 class=Model parts=4 tris=0 triOk=0 triFail=4 ext=9.76,5.49,10.31 names=L05_Base|L05_TurretYaw|L05_GunPitch|L05_BarrelRotation
+P2 PIECE minigun_l06 class=Model parts=4 tris=0 triOk=0 triFail=4 ext=10.19,5.66,10.67 names=L06_Base|L06_TurretYaw|L06_GunPitch|L06_BarrelRotation
+P2 PIECE minigun_l07 class=Model parts=4 tris=0 triOk=0 triFail=4 ext=10.62,5.86,11.03 names=L07_Base|L07_TurretYaw|L07_GunPitch|L07_BarrelRotation
+P2 PIECE minigun_l08 class=Model parts=4 tris=0 triOk=0 triFail=4 ext=11.05,6.04,11.39 names=L08_Base|L08_TurretYaw|L08_GunPitch|L08_BarrelRotation
+P2 PIECE minigun_l09 class=Model parts=4 tris=0 triOk=0 triFail=4 ext=11.48,6.34,11.75 names=L09_Base|L09_TurretYaw|L09_GunPitch|L09_BarrelRotation
+P2 PIECE minigun_l10 class=Model parts=4 tris=0 triOk=0 triFail=4 ext=22.18,12.71,22.56 names=L10_Base|L10_TurretYaw|L10_GunPitch|L10_BarrelRotation
+P2 TOTALTRIS 0
+P2 DONE
+# (per-mesh triangles: AssetService:CreateEditableMeshAsync -> 'no permission to load asset' for all 40 meshes: not forkable)
+# tools/probes/v200_minigun_tier_fit.luau (loader path: strip, Yaw 180, AimHitbox, relative scale):
+P3 S0 minigun_l01 0.0195
+P3 T1 minigun_l01 parts=4(+hitbox) hum=0 scripts=0 scale=0.621 final=4.99,2.63,5.50 barrelZ=-1.63 pitchZ=0.32 barrelFront=true look=-0.00,-0.00,-1.00
+P3 S0 minigun_l03 0.0195
+P3 T2 minigun_l03 parts=4(+hitbox) hum=0 scripts=0 scale=0.605 final=5.39,2.78,5.80 barrelZ=-1.75 pitchZ=0.30 barrelFront=true look=-0.00,-0.00,-1.00
+P3 S0 minigun_l05 0.0195
+P3 T3 minigun_l05 parts=4(+hitbox) hum=0 scripts=0 scale=0.592 final=5.78,3.25,6.10 barrelZ=-1.86 pitchZ=0.27 barrelFront=true look=-0.00,-0.00,-1.00
+P3 S0 minigun_l08 0.0195
+P3 T4 minigun_l08 parts=4(+hitbox) hum=0 scripts=0 scale=0.571 final=6.31,3.45,6.50 barrelZ=-2.02 pitchZ=0.24 barrelFront=true look=-0.00,-0.00,-1.00
+P3 S0 minigun_l10 0.0364
+P3 T5 minigun_l10 parts=4(+hitbox) hum=0 scripts=0 scale=0.310 final=6.88,3.94,7.00 barrelZ=-2.20 pitchZ=0.22 barrelFront=true look=-0.00,-0.00,-1.00
+P3 DONE

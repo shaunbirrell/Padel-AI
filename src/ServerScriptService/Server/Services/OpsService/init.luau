@@ -275,8 +275,10 @@ function ctx.Deliver(player: Player, bag: any)
 		return
 	end
 	local value = OpsCargo.ValueFor(bag, player)
-	if OpsRewards.Grant(player, def, value, bag.XP, true) then
-		ctx.Notify(player, string.format(TOAST.Paid, def.Title, OpsRewards.FormatCash(value)), "Reward")
+	local paidOk, paid = OpsRewards.Grant(player, def, value, bag.XP, true)
+	if paidOk then
+		local shown, tag = OpsRewards.ToastCash(player, value, paid) -- Code Bot v198: credited cash + " · 2x" (display only)
+		ctx.Notify(player, string.format(TOAST.Paid, def.Title, OpsRewards.FormatCash(shown)) .. tag, "Reward")
 		OpsRewards.Log(Events.BAG_DELIVER, player.UserId, { site = def.Id, value = value, picked = player.UserId ~= bag.Grabber })
 		ctx.MarkPlayerSite(player, def.Id)
 		if def.Kind == "Vault" and os.clock() - lastRobbedLine >= D.RobbedLineGapSeconds then

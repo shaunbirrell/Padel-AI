@@ -1108,8 +1108,20 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	if MissionService and MissionService.TrackProgress then
 		MissionService.TrackProgress(player, "CaptureTerritory", 1)
 	end
+	pcall(function() -- claude-bud JOB 39: the Intel Office's "capture outposts" contract
+		(require(script.Parent.EndgameService) :: any).NoteContract(player, "Outpost", 1)
+	end)
 	if TutorialService and TutorialService.Notify then
 		TutorialService.Notify(player, "CaptureTerritory", rt.Id)
+		-- claude-bud JOB 41 part B: the first capture is the Recruit Pack moment (its service decides; owner-first)
+		pcall(function()
+			local RPS = require(script.Parent.RecruitPackService) :: any
+			RPS.OnCapture(player)
+		end)
+		pcall(function() -- claude-bud JOB 41 part D: the first capture may bring the (no-reward) rate card forward once
+			local RP = require(script.Parent.RatePromptService) :: any
+			RP.Trigger(player, "FirstCapture")
+		end)
 	end
 
 	if BaseService then
@@ -1119,8 +1131,29 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	updateMarkerVisual(rt)
 end
 
+local OutpostDefenders = require(script.Parent.Parent.Modules.OutpostDefenders) -- claude-bud JOB 24 §6
+
+-- claude-bud JOB 41: the Guided training camp at a Home Outpost blocks its capture the same way (starter rows only)
+local function guidedBlocking(id: string): boolean
+	if not TerritoryConfig.Starter.Enabled or string.sub(id, 1, #TerritoryConfig.Starter.IdPrefix) ~= TerritoryConfig.Starter.IdPrefix then
+		return false
+	end
+	local ok, GS = pcall(function(): any
+		return require(script.Parent.GuidedService) -- (script = the TerritoryService folder module, so Parent = Services)
+	end)
+	return ok and GS ~= nil and GS.Blocking ~= nil and GS.Blocking(id) == true
+end
+
 local function playersInZone(rt: TerritoryRuntime): { Player }
-	return TerritoryCapture.PlayersInZone(rt)
+	local inside = TerritoryCapture.PlayersInZone(rt)
+	-- claude-bud JOB 24 §6: nobody captures (or contests) an outpost while its defenders stand; they are told why
+	if #inside > 0 and (OutpostDefenders.Blocking(rt.Def.Id) or guidedBlocking(rt.Def.Id)) then
+		for _, p in ipairs(inside) do
+			OutpostDefenders.NoteBlocked(p)
+		end
+		return {}
+	end
+	return inside
 end
 
 local function tickTerritory(rt: TerritoryRuntime, dt: number)
@@ -1282,6 +1315,39 @@ function TerritoryService.BeginCapture(player: Player, territoryId: any): (boole
 	-- (no "Capturing X..." toast per request: the HUD capture bar shows it — spec §4.2)
 	TerritoryService.PushPlayer(player)
 	return true, nil
+end
+
+--[[ Code Bot v221 (Shaun 2026-10-02): a paid instant takeover (the Plaza Airstrike, Server/Modules/PlazaAirstrike).
+	Server only, never reachable from a remote. Runs the SAME awardCapture a normal capture runs (the previous owner
+	loses it with the normal toast, defenders stand down because the zone is held, PlazaBounty, Empire Tax,
+	Stats.PlazaCaptures leaderboard, missions, analytics, the marker / flag), then pushes the new state to everyone.
+	Nothing about re-capture changes: the normal protection period starts and others take it back as normal.
+	Returns "captured" (+ the previous player owner's UserId or 0), "held" (the buyer already holds it: no change)
+	or "failed" (unknown zone, a Home Outpost, no profile, the buyer left). ]]
+function TerritoryService.InstantCapture(player: Player, territoryId: string): (string, number)
+	if typeof(player) ~= "Instance" or not player:IsA("Player") or player.Parent ~= Players then
+		return "failed", 0
+	end
+	if typeof(territoryId) ~= "string" or DataService == nil or DataService.GetProfile(player) == nil then
+		return "failed", 0
+	end
+	ensureRuntime()
+	local rt = territories[territoryId]
+	if rt == nil or isStarterRt(rt) then
+		return "failed", 0
+	end
+	local ot = ownerTypes()
+	if rt.OwnerType == ot.Player and rt.OwnerUserId == player.UserId then
+		return "held", 0
+	end
+	local prev = if rt.OwnerType == ot.Player and rt.OwnerUserId > 0 then rt.OwnerUserId else 0
+	awardCapture(player, rt)
+	if not (rt.OwnerType == ot.Player and rt.OwnerUserId == player.UserId) then
+		return "failed", 0
+	end
+	pushDirty = true
+	TerritoryService.PushAll()
+	return "captured", prev
 end
 
 --[[ Nations B2 (e): redraw every zone this UserId owns or contests (NationColorService calls it after an accepted
@@ -1452,8 +1518,31 @@ function TerritoryService.Init(deps: { [string]: any })
 	ensureRuntime()
 	seedNpcOwners()
 
+	-- claude-bud JOB 24 §6: defenders at every capturable (non-starter) outpost while no player / clan holds it
+	OutpostDefenders.Start({
+		CombatService = CombatService,
+		EngagementService = deps.EngagementService,
+		NotificationService = NotificationService,
+		Territories = function()
+			local ot = ownerTypes()
+			local out = {}
+			for id, rt in pairs(territories) do
+				if not rt.Def.IsStarter and typeof(rt.Def.Position) == "Vector3" then
+					table.insert(out, { Id = id, Def = rt.Def, Held = rt.OwnerType == ot.Player or rt.OwnerType == ot.Clan })
+				end
+			end
+			table.sort(out, function(a, b)
+				return a.Id < b.Id
+			end)
+			return out
+		end,
+	})
+
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestCaptureTerritory) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player, territoryId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestCaptureTerritory", territoryId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "capture_territory", 1, 2) then
 			return
 		end

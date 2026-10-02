@@ -363,6 +363,19 @@ function NationFlag.OwnerOf(plotId: number): number?
 	return if st and st.View then st.View.OwnerUserId else nil
 end
 
+-- claude-bud JOB 25: the view the plot's flags were last dressed with (the base sign's flag plate shows the same)
+function NationFlag.ViewOf(plotId: number): View?
+	local st = plots[plotId]
+	return if st then st.View else nil
+end
+
+-- claude-bud JOB 25: dress any flag-shaped part (the base sign's plate) exactly like the plot's own flags: Textures on
+-- its two thin faces, banner colour, idempotent (WE_NationShown)
+function NationFlag.DressPart(flag: BasePart, view: View?)
+	markShaped(flag)
+	dress(flag, view)
+end
+
 --[[ cb(owner, plotId) when the plot's owner triggers the flagpole prompt (analytics only; the client opens the
 	picker itself through WE_OpenPanel). ]]
 function NationFlag.SetPromptHandler(cb: (Player, number) -> ())

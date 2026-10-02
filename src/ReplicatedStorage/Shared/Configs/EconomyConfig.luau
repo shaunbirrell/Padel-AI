@@ -9,7 +9,7 @@ local EconomyConfig = {
 	StartingGold = 0,
 	MinCash = 0,
 	MinGold = 0,
-	MaxCash = 1_000_000_000,
+	MaxCash = 1e15, -- Code Bot v194: was 1_000_000_000 (the $1B wall); matches the 1e15 ceilings in ProfileSchema / XP / Prestige
 	MaxGold = 10_000_000,
 
 	-- Passive income: base + sum(structureLevel * rate)
@@ -112,6 +112,38 @@ local EconomyConfig = {
 		KeyboardKey = Enum.KeyCode.E,
 		GamepadKey = Enum.KeyCode.ButtonX,
 		Exclusivity = Enum.ProximityPromptExclusivity.OnePerButton,
+	},
+	--[[ claude-bud JOB 29 (2026-09-30): OFFLINE EARNINGS. When the save loads, the server pays for the time away since
+		the last save was written (profile.LastSeenUnix, os.time(), stamped by DataService on every write). The formula is
+		the live passive tick's: BaseService.ComputePassiveIncomePerTick x EconomyService.GetCashMult(player, "passive"),
+		once per PassiveIncome.TickSeconds, for the seconds away (capped at CapSeconds), x Share, x (1 + PremiumBonus)
+		for Roblox Premium. It is paid straight into PendingCash (the ATM, like the tick) with reason "offline" (the
+		multiplier is already in, so never applied twice), then a "Welcome back: +$X while away" card shows.
+		No payout: first join (no LastSeenUnix), a negative gap, or a gap under MinSeconds.
+		Kill switch: Enabled = false (no payout, no card). OwnerFirst as TutorialConfig.FastStart. No Robux option. ]]
+	OfflineEarnings = {
+		Enabled = true,
+		OwnerFirst = false, -- codebot_v136 launch (owner 2026-09-30 14:17): everyone
+		-- Code Bot v201 (Shaun 2026-10-01): the cap and the rate moved to OfflineConfig (MaxSeconds 7200 = 2 h, Rate 0.10;
+		-- was CapSeconds 8 h, Share 0.25, PremiumBonus 0.10). Only the switches stay here.
+		MinSeconds = 300,
+		ShowDelaySeconds = 6, -- the card: after the save loads (and after the onboarding hold)
+		--[[ claude-bud JOB 49 part B (2026-10-01): "Welcome back! Collect $X". Owner-first; OFF = the JOB 29 card. The
+			card shows the real server amount, the time away and "(capped at N h)"; COLLECT draws the gold line to his
+			own ATM (ConsoleWaypoint.ShowAtm: the money is already in the ATM; no travel, no second claim). ]]
+		Card = {
+			Enabled = true,
+			OwnerFirst = false, -- Code Bot v177 (Shaun approved 2026-10-01): everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
+		},
+		--[[ claude-bud JOB 49 B: the Robux SIDEGRADE. Code Bot v180 (Shaun approved 2026-10-01): owning the
+			MonetizationConfig.GamePasses.OfflineCap2x pass ("2x Offline Cash", 2002664894, 149 R$) makes the cap TIME
+			OfflineConfig.PassCapMult x OfflineConfig.MaxSeconds (now 2 h -> 4 h). It never raises the Rate and gives no combat stat. ]]
+		CapBoost = {
+			Enabled = true, -- Code Bot v180: live (was false)
+			OwnerFirst = false, -- Code Bot v180: everyone (was NEW-OWNER-FIRST, claude-bud JOB 49)
+			ProductKey = "OfflineCap2x", -- the GamePasses key (ownership: MonetizationService pass cache)
+			-- the multiplier is OfflineConfig.PassCapMult (Code Bot: one central offline config)
+		},
 	},
 }
 

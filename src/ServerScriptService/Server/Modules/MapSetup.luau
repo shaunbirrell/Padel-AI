@@ -44,6 +44,7 @@ local WorldConfig = require(SharedConfigs:WaitForChild("WorldConfig"))
 -- F10 (owner's 11 features): the capture zones (incl. the Home Outposts) are TerritoryConfig's rows
 -- (ReplicatedStorage.Shared ships with the place and replicates before any server script runs: no wait needed)
 local TerritoryConfig = require(ReplicatedStorage.Shared.Configs.TerritoryConfig)
+local BaseConfig = require(ReplicatedStorage.Shared.Configs.BaseConfig) -- claude-bud JOB 21: the one plot list
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -106,14 +107,9 @@ local STRUCT_COLS = 4
 local STRUCT_GAP = 42 -- studs between upgrade pad centers (was 30)
 local STRUCT_ORIGIN = Vector3.new(-63, 1.6, -63) -- CommandCenter grid origin on each plot
 
-local PLOT_POSITIONS = {
-	Vector3.new(-PLOT_RING, 0.5, -PLOT_RING * 0.5), -- Plot1 SW
-	Vector3.new(-PLOT_RING, 0.5, PLOT_RING * 0.5), -- Plot2 NW
-	Vector3.new(0, 0.5, -PLOT_RING), -- Plot3 S
-	Vector3.new(0, 0.5, PLOT_RING), -- Plot4 N
-	Vector3.new(PLOT_RING, 0.5, -PLOT_RING * 0.5), -- Plot5 SE
-	Vector3.new(PLOT_RING, 0.5, PLOT_RING * 0.5), -- Plot6 NE
-}
+-- claude-bud JOB 21: the one plot list is BaseConfig.PlotPositions (MaxPlots of them); PLOT_RING stays for the ring roads
+local PLOT_POSITIONS: { Vector3 } = table.clone(BaseConfig.PlotPositions :: { Vector3 })
+local _ = PLOT_RING
 
 -- World v2 (spec §3.4): each fort's wall toward its nearest road has a 16-wide gate (GateSide = the gated wall)
 local FORT_GATE_WIDTH = 16
@@ -1035,6 +1031,10 @@ local function layoutSignature(): number
 	for id, c in pairs((StructureVisualConfig :: any).Installations or {}) do
 		table.insert(rows, string.format("I%s:%g,%g", tostring(id), tonumber(c.Width) or 0, tonumber(c.Depth) or 0))
 	end
+	-- claude-bud JOB 21: the plot list too, so a map saved with fewer plots is rebuilt
+	for i, p in ipairs(BaseConfig.PlotPositions :: { Vector3 }) do
+		table.insert(rows, string.format("P%d:%g,%g", i, p.X, p.Z))
+	end
 	table.sort(rows)
 	local text = table.concat(rows, ";")
 	local h = 5381
@@ -1898,10 +1898,37 @@ end
 -- never AlwaysOnTop, and tagged WorldLabelConfig.BaseLabelTag for the client LabelGovernor.
 local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLocal: Vector3)
 	local labelRange = MonetizationConfig.PremiumPads.LabelMaxDistance
+	-- claude-bud JOB 19: purchase stands in the plot's Supply Depot corner (PurchaseStands; only the prompt buys)
+	local PP: any = MonetizationConfig.PremiumPads
+	local okS, Stands = pcall(require, script.Parent.PurchaseStands)
+	local useStands = PP.Stands == true and okS and type(Stands) == "table"
+	local standIndex = 0
 	for _, slot in ipairs(MonetizationConfig.PremiumPads.Slots) do
 		local offer = MonetizationConfig.LivePadOffer(slot)
 		if offer == nil then
 			continue -- no live Id for this slot: no pad, no label, nothing to prompt
+		end
+		if useStands then
+			standIndex += 1
+			local D = PP.Depot
+			local at = F * CFrame.new(D.X0 + (standIndex - 1) * D.Step, 0.3, D.Z) * CFrame.Angles(0, math.pi, 0) -- front faces the plot (-Z)
+			local okB, errB = pcall((Stands :: any).Build, folder, at, {
+				Kind = offer.Kind,
+				Key = offer.Key,
+				PlotId = plotId,
+				Label = slot.Label,
+				Color = slot.Color,
+				Icon = (slot :: any).Icon,
+				OwnedIfAny = table.concat(MonetizationConfig.PadOwnedKeys(slot), ","),
+				PadSlot = slot.Id,
+				-- Code Bot v175: the sign reads toward the plot inside (local -Z: the ATM / courtyard side). The stand's
+				-- own front (turned pi) looks at the front wall, so its old camera-facing billboard hid that.
+				FaceDir = F:VectorToWorldSpace(Vector3.new(0, 0, -1)),
+			})
+			if not okB then
+				warn("[MapSetup] purchase stand failed", offer.Key, errB)
+			end
+			continue
 		end
 		local pad = part({
 			Name = "PremiumPad_" .. offer.Key,
@@ -1926,6 +1953,13 @@ local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLo
 			Offset = Vector3.new(0, 5.5, 0),
 			BaseLabel = true, -- CollectionService tag WorldLabelConfig.BaseLabelTag (the LabelGovernor's cap)
 		})
+	end
+	if useStands and standIndex > 0 then
+		local D = PP.Depot
+		local mid = D.X0 + (standIndex - 1) * D.Step / 2
+		-- Code Bot v175: the SUPPLY DEPOT board faces the plot inside too (its Front was turned to the front wall) and stands
+		-- above the stand signs (centre D.SignLift, default 11) so they never cover it
+		pcall((Stands :: any).Sign, folder, F * CFrame.new(mid, 0.3, D.SignZ), D.Sign, D.SignLift or 11)
 	end
 end
 
@@ -3081,6 +3115,9 @@ function MapSetup.Run()
 			continue
 		end
 		-- 1-post sign on the back edge, the painted face toward the pad front (readable as you walk up to the pad)
+		if (def :: any).NoSign == true then
+			continue -- claude-bud JOB 21: the new plots' gate pads carry no sign (the world sign budget 17 is full)
+		end
 		-- vscale R2: now GarageSignBack behind the pad centre, clear of a Roblox-size body parked on it (pickup tail 13.29)
 		local back = tonumber(spawnCfg.GarageSignBack) or (spawnCfg.PadSize.Z * 0.5 + 0.4)
 		local topY = spawnCfg.PadSize.Y * 0.5

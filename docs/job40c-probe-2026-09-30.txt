@@ -1,0 +1,23 @@
+COMPLETE
+None
+OK 856258654 parts=213 mesh=0 union=0 spm=53 block=119 other=41 decal=1 sa=0 scripts=0 hum=0 size=13.5x16.9x30.3 mats=Metal
+ASSETS 856258654 77911929
+NAMES 856258654 Decal|Mesh|Strut|Radar Station 1
+FAIL 91764409 load User is not authorized to access Asset.
+FAIL 124247102466690 load User is not authorized to access Asset.
+FAIL 110033425601385 load User is not authorized to access Asset.
+FAIL 37473580 load User is not authorized to access Asset.
+FAIL 12972439539 load User is not authorized to access Asset.
+FAIL 10140810871 load User is not authorized to access Asset.
+FAIL 10480494876 load User is not authorized to access Asset.
+FAIL 1660469777 load User is not authorized to access Asset.
+FAIL 5437548774 load User is not authorized to access Asset.
+FAIL 9230948087 load User is not authorized to access Asset.
+FAIL 12735882090 load User is not authorized to access Asset.
+FAIL 11921729320 load User is not authorized to access Asset.
+FAIL 11921736228 load User is not authorized to access Asset.
+FAIL 8887518461 load User is not authorized to access Asset.
+FAIL 86311252190175 load User is not authorized to access Asset.
+FAIL 388036950 load User is not authorized to access Asset.
+FAIL 2033520495 load User is not authorized to access Asset.
+FAIL 740042082 load User is not authorized to access Asset.

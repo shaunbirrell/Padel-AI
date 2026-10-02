@@ -128,9 +128,9 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "-- v63
 # ── 6. left OFF on purpose ──
 must_contain(_cb101_mc, "\tLaunchAll = false,\n", "CODEBOT v101: LaunchAll stays false (redundant: every gate is \"all\"; keeps the owner's UserId-only test shortcuts)")
 must_contain(_cb101_C + "VisualAssetConfig.luau", '\tBodyRollout = "owner",\n', "CODEBOT v101: store vehicle bodies stay owner-only (11 hulls have no WE_CHECK2 / licence record)")
-must_contain(_cb101_C + "AircraftWeaponConfig.luau", "\tWeaponsLive = false,", "CODEBOT v101: AircraftWeaponConfig.WeaponsLive stays off")
-must_contain(_cb101_C + "RebirthConfig.luau", "\tZonesLive = false,", "CODEBOT v101: RebirthConfig.ZonesLive stays off")
-must_contain(_cb101_C + "RebirthConfig.luau", "\tWeaponsLive = false,", "CODEBOT v101: RebirthConfig.WeaponsLive stays off")
+must_contain(_cb101_C + "AircraftWeaponConfig.luau", "\tWeaponsLive = true,", "CODEBOT v101: AircraftWeaponConfig.WeaponsLive live (codebot_v138 launch)")
+must_contain(_cb101_C + "RebirthConfig.luau", "\tZonesLive = true,", "CODEBOT v101: RebirthConfig.ZonesLive live (codebot_v131 launch)")
+must_contain(_cb101_C + "RebirthConfig.luau", "\tWeaponsLive = true,", "CODEBOT v101: RebirthConfig.WeaponsLive live (codebot_v131 launch)")
 must_contain(_cb101_C + "OpsConfig.luau", "\tEnabled = false, -- master switch", "CODEBOT v101: OpsConfig.Enabled stays off")
 must_contain(_cb101_C + "XPBalanceConfig.luau", "\tBackfill = { Enabled = false,", "CODEBOT v101: XP backfill stays off")
 must_not_contain("default.project.json", '"StreamingEnabled": true', "CODEBOT v101: StreamingEnabled stays OFF")

@@ -1,0 +1,57 @@
+COMPLETE
+None
+OK 856258654 parts=213 mesh=0 union=0 spm=53 block=119 other=41 decal=1 sa=0 scripts=0 hum=0 size=13.5x16.9x30.3 mats=Metal
+ASSETS 856258654 77911929
+NAMES 856258654 Decal|Mesh|Strut|Radar Station 1
+OK 91764409 parts=44 mesh=0 union=0 spm=0 block=41 other=3 decal=1 sa=0 scripts=0 hum=0 size=61.0x15.8x53.0 mats=Plastic
+ASSETS 91764409 91764334
+NAMES 91764409 Decal|Wedge|Model|Part|Mesh
+OK 124247102466690 parts=213 mesh=0 union=0 spm=53 block=119 other=41 decal=1 sa=0 scripts=2 hum=0 size=13.5x16.9x30.3 mats=Metal
+ASSETS 124247102466690 77911929
+NAMES 124247102466690 Decal|_id|Mesh|Strut|Radar Station
+OK 110033425601385 parts=1 mesh=1 union=0 spm=0 block=0 other=0 decal=0 sa=0 scripts=2 hum=0 size=2.2x1.9x1.8 mats=Plastic
+ASSETS 110033425601385 95793753624321,133879967797743
+NAMES 110033425601385 ThumbnailCamera|_id|SM_SatellitDish_01|Radar Station
+OK 37473580 parts=26 mesh=0 union=0 spm=14 block=12 other=0 decal=0 sa=0 scripts=0 hum=0 size=47.0x16.9x39.0 mats=Grass,Plastic,CorrodedMetal
+ASSETS 37473580 
+NAMES 37473580 Smooth Block Model|Model|Part|Mesh|Value
+OK 12972439539 parts=114 mesh=8 union=52 spm=0 block=49 other=5 decal=24 sa=0 scripts=0 hum=0 size=34.0x123.1x50.4 mats=Concrete,Glass,SmoothPlastic,Metal
+ASSETS 12972439539 42420590,3255274265,3255274385,3255268515
+NAMES 12972439539 uni004D|ThreeDTextObject|uni0043|Union|Texture|uni0041|ThreeDTextBoundingBox|ATC tower |Part|ThreeDTextHandle|ThreeDTextParams
+FAIL 10140810871 load User is not authorized to access Asset.
+OK 10480494876 parts=2993 mesh=0 union=0 spm=0 block=2658 other=335 decal=0 sa=0 scripts=0 hum=0 size=104.3x185.8x73.9 mats=Wood,Glass,Neon,Plastic,SmoothPlastic,DiamondPlate,Concrete,Asphalt,Metal
+ASSETS 10480494876 
+NAMES 10480494876 Curved Wireless Monitor|Glass Entry Door|Wedge|Metal Double Doors|Part|SpotLight|Air Traffic Controller (ATC)Tower|Seat|Staircase|Deep Sea Studios File|Model|Truss|Mr. Sharky's Chair|Flat Monitor|Office Phone
+OK 1660469777 parts=38 mesh=0 union=26 spm=0 block=12 other=0 decal=0 sa=0 scripts=0 hum=0 size=56.9x65.8x51.7 mats=DiamondPlate,Glass,Metal
+ASSETS 1660469777 
+NAMES 1660469777 Part|Union|Model
+OK 5437548774 parts=830 mesh=0 union=0 spm=0 block=816 other=14 decal=0 sa=0 scripts=0 hum=0 size=92.5x195.9x82.0 mats=Glass,Neon,Concrete,DiamondPlate,Slate,Metal
+ASSETS 5437548774 
+NAMES 5437548774 Part|Smooth Block Model|Radio Command|StairBrick|WallBrickShort|Window|MediumSpire|Railing|PointLight|WallBrickLong|SmallSpire|Base|LargeSpire|WallBrick|FloorBrick|Excepted
+OK 9230948087 parts=100 mesh=99 union=1 spm=0 block=0 other=0 decal=0 sa=0 scripts=0 hum=0 size=19.9x9.1x17.4 mats=Wood,Plastic
+ASSETS 9230948087 8798202361,8798202365,8798203107
+NAMES 9230948087 Union|Model|Cube.002|Cube.003|sandbag Bunker 
+OK 12735882090 parts=112 mesh=3 union=1 spm=88 block=9 other=11 decal=0 sa=0 scripts=22 hum=0 size=23.2x22.2x22.8 mats=Grass,DiamondPlate,Concrete,Plastic,Metal
+ASSETS 12735882090 467359376,25581719,467359400,139076290,19106014
+NAMES 12735882090 BoltBack|Part|Sandbags2|body|Sandbag|AimPart|SB&G|Armor|Attachment|Mesh|M60 Modded + Sandbags|circle|gunpart|sitanim|effect|Seat|Union|SpawnLocation|FlashFX|FlashFX2|barrel|barrel2|Model|gun|base|M60|Sandbags Bunker
+OK 11921729320 parts=320 mesh=0 union=0 spm=320 block=0 other=0 decal=320 sa=0 scripts=0 hum=0 size=11.6x10.3x10.7 mats=Plastic
+ASSETS 11921729320 19106014,139076290
+NAMES 11921729320 Decal|Sandbag Bunker (small)|Model|Mesh|Sandbag
+OK 11921736228 parts=1200 mesh=0 union=0 spm=1200 block=0 other=0 decal=1200 sa=0 scripts=0 hum=0 size=20.1x10.3x21.5 mats=Plastic
+ASSETS 11921736228 19106014,139076290
+NAMES 11921736228 Decal|Sandbag Bunker (medium)|Mesh|Sandbag
+OK 8887518461 parts=175 mesh=158 union=0 spm=0 block=17 other=0 decal=1050 sa=0 scripts=0 hum=0 size=19.7x19.8x20.3 mats=Wood,Sand
+ASSETS 8887518461 1124830313,932300775,321649122
+NAMES 8887518461 Wood|Firebase Sandbag Bunker|Sandbag|Texture|Sandbags
+OK 86311252190175 parts=1 mesh=1 union=0 spm=0 block=0 other=0 decal=0 sa=0 scripts=0 hum=0 size=1.6x2.0x1.0 mats=Plastic
+ASSETS 86311252190175 115301117023765,125481352272554
+NAMES 86311252190175 MarketStall|MarketStall_Node|Market stall|world
+OK 388036950 parts=109 mesh=0 union=0 spm=28 block=32 other=49 decal=0 sa=0 scripts=0 hum=0 size=18.0x8.6x19.2 mats=Wood,Plastic,Fabric,Sand
+ASSETS 388036950 125755971,125755118
+NAMES 388036950 PumkinBox|ThumbnailCamera|LemonBox|MainBody|Coins|MarketStand|Roof|Lemons|Apple|AppleBox|Part|Mesh|Pumkin
+OK 2033520495 parts=66 mesh=0 union=29 spm=0 block=29 other=8 decal=205 sa=0 scripts=0 hum=0 size=41.2x16.6x24.9 mats=Plastic
+ASSETS 2033520495 319943163,321649122
+NAMES 2033520495 Part|Union|Texture|Model
+OK 740042082 parts=110 mesh=0 union=0 spm=28 block=33 other=49 decal=0 sa=0 scripts=0 hum=0 size=18.0x8.6x18.0 mats=Wood,Plastic,Fabric,Sand
+ASSETS 740042082 125755971,125755118
+NAMES 740042082 PumkinBox|LemonBox|MainBody|Coins|MarketStand|Roof|Lemons|Apple|AppleBox|Part|Mesh|Pumkin

@@ -1,0 +1,24 @@
+[ArmyController] v115 Follow3 TrailBlock controller started (true, all, debug false)
+[WAR EMPIRE] ArmyPlan Init
+S_WARM Following
+[SERVER ARMY] shaunie6 command=Attack state=Following plan=none source=test Attack
+[ARMY MOVE] shaunie6 ATTACK probe from=(-500,3,0) radius=400 -> NPC at (-400,3,60)
+[ARMY DESTINATION] shaunie6 old=nil new=(-400,3,60) source=ArmyPlan.Clear/March
+[ARMY PATH] shaunie6 start=(-518,3,-0) dest=(-400,3,60) distance=132 status=Success waypoints=17
+[ARMY STATE] shaunie6 Following -> Attacking SOURCE=ATTACK mode=Attack target=RidgeCamp
+[ARMY MOVE] shaunie6 ATTACK started target=NPC RidgeCamp from=(-500,3,0)
+[ARMY DESTINATION] shaunie6 old=(-400,3,60) new=(-400,3,60) source=ArmyPlan.Clear/March
+[ARMY PATH] shaunie6 start=(-512,3,-4) dest=(-400,3,60) distance=129 status=Success waypoints=17
+[ARMY MOVE] shaunie6 Clear/March block=(-512,3,-4) lead=(-492,0,8) to dest 129 studs, lead 14 studs/s, lost 0
+[ARMY DESTINATION] shaunie6 old=(-400,3,60) new=(-400,3,60) source=ArmyPlan.Clear/March
+[ARMY PATH] shaunie6 start=(-513,3,1) dest=(-400,3,60) distance=127 status=Success waypoints=16
+[ARMY DESTINATION] shaunie6 old=(-400,3,60) new=(-400,3,60) source=ArmyPlan.Clear/March
+[ARMY PATH] shaunie6 start=(-502,3,-5) dest=(-400,3,60) distance=121 status=Success waypoints=16
+S_BEFORE Attacking
+[SERVER ARMY] shaunie6 command=Retreat state=Attacking plan=Clear/Seek source=test Retreat
+[ARMY MOVE] shaunie6 plan Clear/Seek replaced by Retreat
+[ARMY DESTINATION] shaunie6 old=nil new=(-900,0,0) source=ArmyPlan.Retreat/March
+[ARMY PATH] shaunie6 start=(-502,3,1) dest=(-900,0,0) distance=398 status=Success waypoints=50
+[ARMY STATE] shaunie6 Attacking -> Retreating SOURCE=RETREAT (far) mode=Attack
+S_AFTER Retreating
+S_PLAN Retreat

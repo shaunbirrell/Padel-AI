@@ -1,0 +1,11 @@
+# RECEIPT ORDER (run_time_packs_test.py, 2026-10-01T08:01Z, headless luau stand-in with the real MonetizationService: NOT Roblox)
+== RECEIPT ORDER ==
+call order: income -> AddCash
+ok    the income lookup (yields 1 s) runs BEFORE AddCash; 4h at $1,800/min = $432,000
+ok    granted once, with reason devproduct (never multiplied again)
+ok    the same PurchaseId twice -> granted once
+ok    the player leaves during the yield -> NotProcessedYet, nothing granted
+ok    a profile swap during the yield -> NotProcessedYet, nothing granted
+ok    the receipt-time income wins ($324,000 at $5,400/min, not the shown $108,000)
+ok    a running 2x CashBoost does not change the amount (30m = $54,000, ExcludeTimedBoosts)
+ok    a new player (no income) gets the floor ($10,000 for 15m)

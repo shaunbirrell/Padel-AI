@@ -58,11 +58,32 @@ local SquadOrdersService = safeRequire("SquadOrdersService", Services.SquadOrder
 local SeasonService = safeRequire("SeasonService", Services.SeasonService)
 local ClanWarService = safeRequire("ClanWarService", Services.ClanWarService)
 local CodesService = safeRequire("CodesService", Services.CodesService)
+local BuildingTips = safeRequire("BuildingTips", Services.BuildingTips) -- claude-bud JOB 24 §5
+local BaseSignService = safeRequire("BaseSignService", Services.BaseSignService) -- claude-bud JOB 25
+local ArmourService = safeRequire("ArmourService", Services.ArmourService) -- claude-bud JOB 26
+local RetentionService = safeRequire("RetentionService", Services.RetentionService) -- claude-bud JOB 29
+local RatePromptService = safeRequire("RatePromptService", Services.RatePromptService) -- claude-bud JOB 40 part D
+local GuidedService = safeRequire("GuidedService", Services.GuidedService) -- claude-bud JOB 41 part A
+local RecruitPackService = safeRequire("RecruitPackService", Services.RecruitPackService) -- claude-bud JOB 41 part B
+local RivalService = safeRequire("RivalService", Services.RivalService) -- claude-bud JOB 41 part C
+local RecruitTrimService = safeRequire("RecruitTrimService", Services.RecruitTrimService) -- claude-bud JOB 45
+local MapService = safeRequire("MapService", Services.MapService) -- claude-bud JOB 30
+local SiteActivityService = safeRequire("SiteActivityService", Services.SiteActivityService) -- claude-bud JOB 31
+local RebirthZoneService = safeRequire("RebirthZoneService", Services.RebirthZoneService) -- claude-bud JOB 33
+local NukeService = safeRequire("NukeService", Services.NukeService) -- claude-bud JOB 33
+local AchievementService = safeRequire("AchievementService", Services.AchievementService) -- claude-bud JOB 34
+local PremiumGunService = safeRequire("PremiumGunService", Services.PremiumGunService) -- claude-bud JOB 35
+local ShopOverhaulService = safeRequire("ShopOverhaulService", Services.ShopOverhaulService) -- claude-bud JOB 36
+local CheckpointGuardService = safeRequire("CheckpointGuardService", Services.CheckpointGuardService) -- claude-bud JOB 37
+local EndgameService = safeRequire("EndgameService", Services.EndgameService) -- claude-bud JOB 39
+local BaseMarkerService = safeRequire("BaseMarkerService", Services.BaseMarkerService) -- claude-bud JOB 40 part E
+local StorePropsService = safeRequire("StorePropsService", Services.StorePropsService) -- Code Bot STORE-PROPS v132 (DO NOT REMOVE)
 local NationColorService = safeRequire("NationColorService", Services.NationColorService)
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
 local PremiumWeaponService = safeRequire("PremiumWeaponService", Services.PremiumWeaponService) -- claude-bud PREMIUM
 local EngagementService = safeRequire("EngagementService", Services.EngagementService) -- claude-bud JOB 13
+local GameFeelService = safeRequire("GameFeelService", Services.GameFeelService) -- claude-bud JOB 14
 local BankRaidService = safeRequire("BankRaidService", Services.BankRaidService)
 local OpsService = safeRequire("OpsService", Services.OpsService) -- W3s2 Phase B Jobs (OpsConfig.Enabled; ships off)
 local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
@@ -73,6 +94,11 @@ local MoneyCollectorService = safeRequire("MoneyCollectorService", Services.Mone
 local ManualDropperService = safeRequire("ManualDropperService", Services.ManualDropperService)
 local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAssetService)
 local GateDefenseService = safeRequire("GateDefenseService", Services.GateDefenseService)
+local SpawnTerminalService = safeRequire("SpawnTerminalService", Services.SpawnTerminalService) -- claude-bud JOB 56
+local BaseLifeService = safeRequire("BaseLifeService", Services.BaseLifeService) -- claude-bud JOB 57
+local Job67DressService = safeRequire("Job67DressService", Services.Job67DressService) -- Code Bot JOB 67 remainder
+local HangarDockDisplayService = safeRequire("HangarDockDisplayService", Services.HangarDockDisplayService) -- claude-bud JOB 58
+local AntiCampService = safeRequire("AntiCampService", Services.AntiCampService) -- claude-bud JOB 63
 local ResearchService = safeRequire("ResearchService", Services.ResearchService) -- v69 Research Lab upgrades
 local MissileStrikeService = safeRequire("MissileStrikeService", Services.MissileStrikeService) -- v69 CC strikes
 local PlotOilPumpService = safeRequire("PlotOilPumpService", Services.PlotOilPumpService)
@@ -95,11 +121,25 @@ local deps: { [string]: any } = {
 	CombatService = CombatService,
 	VehicleService = VehicleService,
 	TerritoryService = TerritoryService,
+	EngagementService = EngagementService, -- claude-bud JOB 24 §6: outpost defender kills count on MOST KILLS
 	MissionService = MissionService,
 	PrestigeService = PrestigeService,
 	ClanService = ClanService,
 	MonetizationService = MonetizationService,
 	TutorialService = TutorialService,
+	GuidedService = GuidedService, -- claude-bud JOB 41: TutorialService calls its hooks (nil = the old tutorial)
+	RecruitPackService = RecruitPackService, -- claude-bud JOB 41 B
+	RatePromptService = RatePromptService, -- claude-bud JOB 41 B: SinceHurt (the combat-quiet rule)
+	RetentionService = RetentionService, -- claude-bud JOB 29: FastStart / offline earnings / notification opt-in
+	RebirthZoneService = RebirthZoneService, -- claude-bud JOB 33
+	NukeService = NukeService, -- claude-bud JOB 33
+	AchievementService = AchievementService, -- claude-bud JOB 34: achievements, chat shout-outs, badges
+	PremiumGunService = PremiumGunService, -- claude-bud JOB 35: the premium guns armory
+	ShopOverhaulService = ShopOverhaulService, -- claude-bud JOB 36: shop overhaul (VIP crate, perks, live pack amounts)
+	CheckpointGuardService = CheckpointGuardService, -- claude-bud JOB 37: road checkpoint guards
+	EndgameService = EndgameService, -- claude-bud JOB 39: endgame progression (rebirth price scale, Empire Level, plaza stations)
+	StorePropsService = StorePropsService, -- Code Bot STORE-PROPS v132
+	BaseSignService = BaseSignService, -- claude-bud JOB 30: the map uses the sign's "<Name>'s Empire" (TitleFor)
 	BattlePassService = BattlePassService,
 	SoldierService = SoldierService,
 	BusinessService = BusinessService,
@@ -189,6 +229,12 @@ safeInit("NotificationService", NotificationService, deps)
 -- OnProfileLoaded fires at once for already-loaded players and used to call Notify before this Init → threw.
 -- (TutorialService.Init only needs BaseService.GetUpgradeChangedEvent, which works before BaseService.Init.)
 safeInit("TutorialService", TutorialService, deps)
+safeInit("RetentionService", RetentionService, deps) -- claude-bud JOB 29 (after Data / Tutorial; before the join hooks)
+safeInit("RatePromptService", RatePromptService, deps) -- claude-bud JOB 40 part D: the no-reward "Enjoying WAR EMPIRE?" timing
+safeInit("GuidedService", GuidedService, deps) -- claude-bud JOB 41 part A: the Guided first minutes (camp, reward, funnel)
+safeInit("RecruitPackService", RecruitPackService, deps) -- claude-bud JOB 41 part B: when the Recruit Pack card is offered
+safeInit("RivalService", RivalService, deps) -- claude-bud JOB 41 part C: rival TARGETS (one shared 10 s tick)
+safeInit("RecruitTrimService", RecruitTrimService, deps) -- claude-bud JOB 45: the Recruit Pack's gold gate arch
 safeInit("AntiExploitService", AntiExploitService, deps)
 safeInit("MonetizationService", MonetizationService, deps)
 safeInit("EconomyService", EconomyService, deps)
@@ -561,12 +607,34 @@ safeInit("OpsService", OpsService, deps) -- W3s2 Jobs: after Data / Combat / Mis
 safeInit("SeasonService", SeasonService, deps)
 safeInit("ClanWarService", ClanWarService, deps)
 safeInit("CodesService", CodesService, deps)
+safeInit("BuildingTips", BuildingTips, deps) -- claude-bud JOB 24 §5: "NEW BUILDING" cards (after BaseService)
+safeInit("BaseSignService", BaseSignService, deps) -- claude-bud JOB 25: "<Name>'s Empire" signs (after BaseService + GateDefenseService)
+safeInit("ArmourService", ArmourService, deps) -- claude-bud JOB 26: personal armour (bonus max health)
+safeInit("MapService", MapService, deps) -- claude-bud JOB 30: the world map feed, no fast travel (v127/v128) (after BaseSign / Ops / Clan / Vehicle)
+safeInit("SiteActivityService", SiteActivityService, deps) -- claude-bud JOB 31: site garrisons + activities (after Combat)
+safeInit("RebirthZoneService", RebirthZoneService, deps) -- claude-bud JOB 33: rebirth zones, effects, rank
+safeInit("NukeService", NukeService, deps) -- claude-bud JOB 33: the silo nukes (after Combat / RebirthZone)
+safeInit("AchievementService", AchievementService, deps) -- claude-bud JOB 34: achievements (after Soldier / Mission / Economy)
+safeInit("PremiumGunService", PremiumGunService, deps) -- claude-bud JOB 35: premium guns armory (after Monetization / Combat / Base)
+safeInit("ShopOverhaulService", ShopOverhaulService, deps) -- claude-bud JOB 36: shop overhaul (after Monetization / Economy / Base / SquadOrders)
+safeInit("CheckpointGuardService", CheckpointGuardService, deps) -- claude-bud JOB 37: road checkpoint guards (after Combat / Mission / Monetization)
+safeInit("EndgameService", EndgameService, deps) -- claude-bud JOB 39: endgame progression (after Economy / Base / BaseSign)
+safeInit("BaseMarkerService", BaseMarkerService, deps) -- claude-bud JOB 40 part E: base owner marker data (after Base / Clan / BaseSign)
+safeInit("ArmyPlan", safeRequire("ArmyPlan", Modules.ArmyPlan), deps) -- claude-bud JOB 38: army ATTACK auto-clear / SEND / RECALL (after SquadOrders / GateDefense / MoneyCollector)
+safeInit("StorePropsService", StorePropsService, deps) -- Code Bot STORE-PROPS v132: Creator Store props (after RebirthZone; lazy, never blocks)
 safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)
+safeInit("AirdropGuideService", safeRequire("AirdropGuideService", Services.AirdropGuideService), deps) -- Code Bot board-text: Settings -> airdrop guide line (owner-first)
 safeInit("PremiumWeaponService", PremiumWeaponService, deps) -- claude-bud PREMIUM: Robux-only vehicle weapons (server-validated)
 safeInit("EngagementService", EngagementService, deps) -- claude-bud JOB 13: events, leaderboards, invite / friends / comeback
+safeInit("GameFeelService", GameFeelService, deps) -- claude-bud JOB 14: kill feed, vehicle numbers, raid report
 safeInit("BankRaidService", BankRaidService, deps)
 safeInit("GateDefenseService", GateDefenseService, deps)
+safeInit("SpawnTerminalService", SpawnTerminalService, deps) -- claude-bud JOB 56: helipad + dock spawn terminals (owner-first)
+safeInit("BaseLifeService", BaseLifeService, deps) -- claude-bud JOB 57: base props + ambient soldiers (owner-first)
+safeInit("Job67DressService", Job67DressService, deps) -- Code Bot JOB 67 remainder: owned-asset walls + base props (owner-first)
+safeInit("HangarDockDisplayService", HangarDockDisplayService, deps) -- claude-bud JOB 58: real aircraft / boat bodies in the hangar + dock (owner-first)
+safeInit("AntiCampService", AntiCampService, deps) -- claude-bud JOB 63: anti-spawn-camping (owner-first)
 safeInit("PlotOilPumpService", PlotOilPumpService, deps)
 safeInit("SpinnerService", SpinnerService, deps)
 safeInit("ResearchService", ResearchService, deps)
@@ -591,7 +659,7 @@ do
 end
 
 if DevConfig.VerboseLogging then
-	print("[WAR EMPIRE] Services initialized. Plots:", Constants.MaxBasePlots)
+	print("[WAR EMPIRE] Services initialized. Plots:", require(ReplicatedStorage.Shared.Configs.BaseConfig).MaxPlots) -- claude-bud JOB 21
 end
 
 print("[WAR EMPIRE] Server Bootstrap ready.")

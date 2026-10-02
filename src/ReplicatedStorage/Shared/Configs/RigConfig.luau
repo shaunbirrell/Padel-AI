@@ -19,6 +19,18 @@ local RigConfig = {
 	Enabled = true, -- false: VisualAssetService never rigs (every soldier keeps its Part kit, no escorts) and clients do nothing
 	Tag = "WE_Rig", -- CollectionService tag on every server-built soldier rig (clients find figures by it)
 
+	-- Code Bot v148 (Server/AvatarMoodGuard): PLAYER avatars only (never soldiers / guards). A dynamic-head "mood"
+	-- (the character's Animate.mood Animation) whose animation this place may not load is swapped for Roblox's
+	-- default mood before the client plays it. Live proof 2026-09-30: Roblox's own bundles The Winning Smile (957),
+	-- Shiny Teeth (265345), Silly Fun (299652) and Woman Face (948) ship moods whose animations are uploaded by user
+	-- 8923762 (not Roblox, not this game's owner): "Failed to load animation with sanitized ID" x 1,878 client + 277 server.
+	AvatarMood = {
+		Enabled = true,
+		FallbackId = "rbxassetid://14366558676", -- Mood_StevieStandard, creator Roblox (1): the Animate default mood; loads here
+		-- known not loadable in this place (AnimationClipProvider, live place): swapped with no lookup
+		KnownBad = { 104666063103723, 114302219876492, 122193759333439, 96806611330323, 121132383996019 },
+	},
+
 	-- The host Humanoid (server, set once at attach). RigType "Keep" leaves the kit's default untouched (HEAD
 	-- behaviour); "R15" is the Studio fallback if the Humanoid ever measures hip height from the rig's legs (spec §10).
 	Host = {
@@ -44,7 +56,7 @@ local RigConfig = {
 		WalkMinStuds = 1.5, -- studs/s of flat root movement that counts as walking
 		WalkSpeedRef = 14.5, -- Walk track speed = figure speed / WalkSpeedRef (clamped)
 		WalkRateMin = 0.6,
-		WalkRateMax = 1.4,
+		WalkRateMax = 2.4, -- claude-bud JOB 22: up to the army catch-up speed (34 studs/s / 14.5): no foot sliding
 		AimSeconds = 1.2, -- after an NPC shot (WeaponFx S = 0) the shooter plays Aim this long, if standing
 		AimMatchStuds = 3, -- a shot's origin within this many studs (flat) of a figure's root = its shot
 		FadeSeconds = 0.2,
@@ -116,6 +128,25 @@ local RigConfig = {
 			LeadScreenFrac = 0.9,
 			RootToFeetStuds = 3, -- a squad unit's root to its feet (root half-height 1 + Humanoid.HipHeight 2)
 		},
+	},
+
+	-- v119 cloth bodies (VisualAssetConfig.SoldierAssetId, the Army Soldier 7703684779): block limbs dressed by a classic
+	-- Shirt / Pants template. A rig has no Humanoid (catalog rule: a Humanoid in WE_Rig would turn every limb into a
+	-- "character" for the hit / aim code), so RigBuilder paints the template's regions (standard 585 x 559 layout) onto
+	-- the limb faces as Texture objects named WE_Cloth, tinted TintAlpha of the way to the kit colour (friend / foe cue).
+	-- Clients (RigAnimator) hide WE_Cloth and the helmet on figures outside the LOD pick, and show helmets in pick order
+	-- only while the pick stays inside Budget.MaxMeshedTriangles (a cloth figure costs BodyTris, + HeadwearTris with its
+	-- helmet; a Roblox-body figure TrianglesPerMeshedFigure). Enabled = false: plain kit-colour blocks (still animated).
+	Cloth = {
+		Enabled = true,
+		CanvasW = 585, -- template pixels (Roblox shirt / pants template)
+		CanvasH = 559,
+		TintAlpha = 0.3, -- 0 = the template's own colours, 1 = multiplied by the kit colour
+		TopFaces = true, -- paint the shoulder / torso tops (seen from the raised third-person camera)
+		BodyTris = 60, -- Torso + 4 block limbs (12 triangles a box)
+		HeadwearTris = 2103, -- the Army Soldier FAST helmet mesh 5608666819, LOD0 (measured v119: mesh v3.01, 3536 faces all LODs)
+		-- the file's headwear pick: the first Accoutrement whose lower-case name holds one of these (else the first one)
+		HeadwearPrefer = { "helmet", "beret", "cap", "hat" } :: { string },
 	},
 
 	-- Figure budget (BuyPathStatic pins these; the census driver checks them)

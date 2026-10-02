@@ -38,6 +38,20 @@ export type WeaponDef = {
 	Recoil: RecoilDef?,
 	Falloff: FalloffDef?, -- nil = no damage fall-off
 	Projectile: ProjectileDef?, -- set = launched as a server projectile (no hitscan, no assist)
+	-- claude-bud JOB 35 (Shared/Util/GunMechanics; nil = unchanged for every existing gun; all server-authoritative)
+	Burst: { Count: number, Gap: number }?, -- one trigger cycle = Count shots Gap s apart; FireRate = cycles / s
+	SpinUp: number?, -- seconds of barrel spin before the first shot (a "Spin" prime starts it)
+	ChargeSeconds: number?, -- seconds of charge per shot (a "Charge" prime starts it; the shot fires on release)
+	Pierce: number?, -- hitscan: up to this many players / NPCs in a line
+	HeadshotMult: number?, -- this gun's headshot multiplier (nil = CombatFeelConfig.HeadshotMult)
+	Scope: boolean?, -- client: RMB / L2 / the SCOPE button zooms (PremiumGunsConfig.Scope)
+	Premium: boolean?, -- Robux-only (PremiumGunsConfig); CostCash 0, never sold for Cash
+	PassKey: string?, -- MonetizationConfig.GamePasses key that unlocks it
+	-- claude-bud JOB 35: WeaponAssetLoader for an asset with no Tool (a plain Model / MeshPart)
+	VisualPlain: boolean?, -- true = the asset's first Model / MeshPart is the gun (an invisible Handle is added)
+	VisualGrip: { X: number, Y: number, Z: number, RX: number, RY: number, RZ: number }?, -- Handle offset from the gun body (studs / deg)
+	VisualLength: number?, -- the template is scaled so its longest side is this many studs (nil = as loaded)
+	VisualSpin: string?, -- a child Model whose name contains this (lower case) spins while firing (the rotary barrel)
 }
 
 local WeaponConfig = {
@@ -213,8 +227,91 @@ local WeaponConfig = {
 	DefaultWeapon = "StarterRifle",
 }
 
+--[[ claude-bud JOB 33: the 7 REBIRTH GUNS (RebirthConfig.WeaponsLive; granted by PrestigeConfig.RebirthUnlocks at R1 / 3 /
+	5 / 7 / 9 / 12 / 15, only while RebirthConfig.LiveFor(player, "Weapons")). Each is a current gun's frame and model
+	with a modest edge (about +10-15 % damage per second, never a new class), so a rebirth is felt but the base guns
+	stay competitive. Our own made-up names. CostCash 0: never sold (the Shop lists them only once owned); UnlockLevel
+	1: usable at once after the rebirth (Level 1). RebirthOnly / RequiresPrestige are display fields; the grant is the
+	gate. ]]
+local function rebirthGun(baseId: string, id: string, name: string, short: string, prestige: number, over: { [string]: any })
+	local b = WeaponConfig.Weapons[baseId]
+	local d: any = table.clone(b)
+	d.Id = id
+	d.DisplayName = name
+	d.ShortName = short
+	d.Rarity = "Legendary"
+	d.UnlockLevel = 1
+	d.CostCash = 0
+	d.RebirthOnly = true
+	d.RequiresPrestige = prestige
+	for k, v in pairs(over) do
+		d[k] = v
+	end
+	-- the weapon CATALOGUE (this config), not a player's owned-weapons table (XP 4.1 / 4.2 guard the profile's)
+	local catalogue: any = WeaponConfig.Weapons
+	catalogue[id] = d
+end
+rebirthGun("AssaultRifle", "VanguardCarbine", "Vanguard Carbine", "VANGUARD", 1, { Damage = 24, FireRate = 9.5 }) -- 198 -> 228 DPS
+rebirthGun("SMG", "TempestSMG", "Tempest SMG", "TEMPEST", 3, { Damage = 15, FireRate = 14.5, MagazineSize = 36 }) -- 196 -> 218
+rebirthGun("Shotgun", "WardenShotgun", "Warden Shotgun", "WARDEN", 5, { Damage = 13, FireRate = 1.3, Range = 44 }) -- 86 -> 101
+rebirthGun("Sniper", "LongshotDMR", "Longshot DMR", "DMR", 7, { Damage = 58, FireRate = 1.4, MagazineSize = 8, Range = 300 }) -- a semi-auto marksman: 81 DPS; claude-bud JOB 50 D: "DMR" (the PG Longshot Sniper keeps "LONGSHOT")
+rebirthGun("Sniper", "TalonSniper", "Talon Sniper", "TALON", 9, { Damage = 95, FireRate = 0.8, Range = 440 }) -- 68 -> 76
+rebirthGun("RocketLauncher", "HavocLauncher", "Havoc Launcher", "HAVOC RL", 12, { Damage = 165, MagazineSize = 2 }) -- +10 % per rocket, 2 in the tube; claude-bud JOB 50 D: distinct from the PG Havoc Rotary
+rebirthGun("StarterRifle", "SovereignRifle", "Sovereign Rifle", "SOV RIFLE", 15, { Damage = 26, FireRate = 9, Range = 140 }) -- 144 -> 234: the late-rebirth all-rounder; claude-bud JOB 50 D: distinct from the PG Sovereign Pistol
+
 --[[ v69: one weapon order for Shop › WEAPONS rows and the Q/E / mobile ◀ ▶ cycle:
 	UnlockLevel, then CostCash, then id. ]]
+--[[ claude-bud JOB 35: the 6 PREMIUM GUNS (PremiumGunsConfig; Robux passes MonetizationConfig PG_*; the models are
+	owned by the place owner and load live). Our own made-up names, generic designs. CostCash 0 + Premium: never sold
+	for Cash; owning the pass (or the Armory Pass) grants them. DPS vs the base guns (AR 198, SMG 196, Sniper 68,
+	Rocket 60): an edge in their role, not a new tier (tools/sim/run_armory_test.py prints the table). ]]
+local function premiumGun(d: { [string]: any })
+	d.Rarity = "Legendary"
+	d.UnlockLevel = 1
+	d.CostCash = 0
+	d.Premium = true
+	local catalogue: any = WeaponConfig.Weapons
+	catalogue[d.Id] = d
+end
+premiumGun({
+	Id = "SovereignPistol", DisplayName = "Sovereign Gold Pistol", ShortName = "SOVEREIGN", PassKey = "PG_Sovereign",
+	Damage = 30, FireRate = 2, Burst = { Count = 2, Gap = 0.1 }, MagazineSize = 12, ReloadTime = 1.6, Range = 70, Spread = 1.5,
+	Visual = "Pistol", VisualAssetId = 720567240, VisualPlain = true, VisualLength = 1.7, -- one MeshPart (place owner)
+	Tracer = true, Recoil = { Kick = 1.1, Side = 0.25, Recover = 10 }, Falloff = { Start = 45, MinMult = 0.7 },
+})
+premiumGun({
+	Id = "QuakeLauncher", DisplayName = "Quake Grenade Launcher", ShortName = "QUAKE", PassKey = "PG_Quake",
+	Damage = 70, FireRate = 1.2, MagazineSize = 6, ReloadTime = 3.2, Range = 120, Spread = 1,
+	Visual = "Launcher", VisualAssetId = 4842201032, VisualChild = "*", -- Roblox kit Tool (its first Model child)
+	Tracer = false, Recoil = { Kick = 2.0, Side = 0.3, Recover = 7 },
+	Projectile = { Speed = 90, GravityFactor = 0.35, Splash = 11, SplashMinMult = 0.3, MaxSeconds = 2.2, MeshId = 232379763, TextureId = 232379808 }, -- lobbed; Roblox grenade mesh
+})
+premiumGun({
+	Id = "LongshotSniper", DisplayName = "Longshot Sniper", ShortName = "LONGSHOT", PassKey = "PG_Longshot",
+	Damage = 110, FireRate = 0.7, MagazineSize = 5, ReloadTime = 2.8, Range = 600, Spread = 0.3, HeadshotMult = 1.5, Scope = true,
+	Visual = "LongRifle", VisualAssetId = 14498314181, VisualPlain = true, VisualLength = 5, -- 6 MeshParts incl. the scope
+	Tracer = true, Recoil = { Kick = 3.0, Side = 0.3, Recover = 6 },
+})
+premiumGun({
+	Id = "HavocRotary", DisplayName = "Havoc Rotary Gun", ShortName = "HAVOC", PassKey = "PG_Havoc",
+	Damage = 9, FireRate = 20, SpinUp = 0.6, MagazineSize = 150, ReloadTime = 4.5, Range = 110, Spread = 3.5,
+	Visual = "Carbine", VisualAssetId = 590594953, VisualPlain = true, VisualLength = 4.2, VisualSpin = "barrel", -- gun + barrel model
+	Tracer = true, Recoil = { Kick = 0.3, Side = 0.35, Recover = 16 }, Falloff = { Start = 70, MinMult = 0.6 },
+})
+premiumGun({
+	Id = "ThunderheadLauncher", DisplayName = "Thunderhead Rocket Launcher", ShortName = "THUNDER", PassKey = "PG_Thunderhead",
+	Damage = 170, FireRate = 0.35, Burst = { Count = 2, Gap = 0.25 }, MagazineSize = 2, ReloadTime = 3.5, Range = 260, Spread = 0.5,
+	Visual = "Launcher", VisualAssetId = 12458308179, VisualPlain = true, VisualLength = 4.5, -- launcher + rocket MeshParts
+	Tracer = false, Recoil = { Kick = 3.2, Side = 0.4, Recover = 5 },
+	Projectile = { Speed = 150, GravityFactor = 0, Splash = 12, SplashMinMult = 0.3, MaxSeconds = 2, MeshId = 94690081, TextureId = 94689966 }, -- a 2-rocket salvo
+})
+premiumGun({
+	Id = "TempestRailgun", DisplayName = "Tempest Railgun", ShortName = "RAILGUN", PassKey = "PG_Tempest",
+	Damage = 140, FireRate = 1, ChargeSeconds = 0.8, Pierce = 3, MagazineSize = 5, ReloadTime = 2.6, Range = 300, Spread = 0.2,
+	Visual = "LongRifle", VisualAssetId = 4842190633, VisualChild = "*", -- Roblox kit Tool (its first Model child)
+	Tracer = true, Recoil = { Kick = 2.4, Side = 0.2, Recover = 7 },
+})
+
 function WeaponConfig.SortedIds(): { string }
 	local ids: { string } = {}
 	for id in pairs(WeaponConfig.Weapons) do

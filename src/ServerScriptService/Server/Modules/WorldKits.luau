@@ -85,6 +85,8 @@ local Workspace = game:GetService("Workspace")
 
 local Configs = ReplicatedStorage.Shared.Configs
 local WorldConfig = require(Configs.WorldConfig)
+local WorldDetailConfig = require(Configs.WorldDetailConfig) -- claude-bud JOB 31: detailed props (kill switch)
+local PlazaBuildingsConfig = require(Configs.PlazaBuildingsConfig) -- claude-bud JOB 32: enterable plaza buildings
 local WorldTerrain = require(script.Parent.WorldTerrain)
 local WorldLabel = require(ReplicatedStorage.Shared.Util.WorldLabel)
 
@@ -318,6 +320,19 @@ WorldKits.Specs = {
 	PipeRun = spec(1, 9, Vector3.new(40, 1.8, 1.8), "manmade", true, 2, "POI", { Unit = "40 studs", Variants = { rack = 3 } }), -- Length 40 .. 120 (a cluster must stay <= 64 wide: the layouts use 40); "rack" = 3 per 40 (pipe on 2 posts, top 4.5, 2 deep)
 	ActivityHost = spec(1, 1, Vector3.new(1, 1, 1), "anchor", false, 2, "POI"), -- invisible, CanCollide / CanQuery / CanTouch off, no overlay: hosts a POI layout's activity anchors (WorldConfig.Activity.HostKit)
 	Runway = spec(5, 5, Vector3.new(500, 0.12, 40), "infra", false, 2, "POI"), -- InfraRow only: Length (default 500) + Taxiway; flat, no collision, top <= 0.62 world, under POI_<Id>.Infra
+	-- claude-bud JOB 18 (WorldFill 2): countryside + town character; <= 8 parts, no scripts, no lights, no Neon
+	CropField = spec(5, 5, Vector3.new(40, 0.9, 30), "natural", false, 2, "Fill2", { Variants = { dry = 5 } }), -- soil + 4 crop rows, flat, no collision (Width / Depth)
+	Silo = spec(3, 3, Vector3.new(9, 27.5, 10), "manmade", true, 2, "Fill2"), -- farm silo: body, dome, ladder
+	Pylon = spec(3, 3, Vector3.new(9, 24, 0.8), "manmade", true, 2, "Fill2"), -- power-line pylon (2 legs + cross-arm); WorldFill strings the wires
+	CivCar = spec(4, 4, Vector3.new(3.6, 4.1, 6.4), "manmade", true, 2, "Fill2", { Variants = { pickup = 4 } }), -- a parked civilian car (long axis along Z)
+	Awning = spec(3, 3, Vector3.new(8, 4.2, 4.3), "manmade", false, 2, "Fill2"), -- 2 posts + a sloped cloth awning (walk under)
+	Planter = spec(2, 2, Vector3.new(3, 3.4, 3), "manmade", true, 2, "Fill2"), -- stone box + shrub
+	Bin = spec(1, 1, Vector3.new(1.6, 2.4, 1.6), "manmade", true, 2, "Fill2"),
+	Statue = spec(4, 4, Vector3.new(4, 11.4, 4), "manmade", true, 2, "Fill2"), -- plinth + a bronze figure (body, head, raised arm)
+	RoofTank = spec(2, 2, Vector3.new(3.4, 4.4, 3.4), "manmade", false, 2, "Fill2"), -- rooftop water tank on a stand
+	ACUnit = spec(2, 2, Vector3.new(3, 1.9, 2.4), "manmade", false, 2, "Fill2"), -- rooftop AC box + fan
+	Antenna = spec(2, 2, Vector3.new(2.4, 7, 0.3), "manmade", false, 2, "Fill2"), -- rooftop mast + cross-bar
+	NameSign = spec(3, 3, Vector3.new(12, 7.2, 0.8), "manmade", false, 2, "Fill2", { Signs = 1 }), -- 2 posts + a board with a made-up name (Text)
 } :: { [string]: KitSpec }
 
 function WorldKits.List(): { string }
@@ -1497,6 +1512,695 @@ local function seedOf(cf: CFrame, opts: KitOpts): number
 	return math.floor(p.X * 7.31 + p.Z * 13.7 + 104729) % 2147483647
 end
 
+-- ── claude-bud JOB 31: DETAILED builds (WorldDetailConfig) ─────────────────────────────────────────────────────────
+-- Same frame, footprint and road-side rule as the plain kit (collidable parts at local z >= 0 for the road-side kits),
+-- more shape. Each returns false for a variant it does not detail (the plain builder then runs). Exact part counts:
+-- WorldKits.DetailSpecs (the headless kit test checks them).
+local Detail: { [string]: (b: B) -> boolean } = {}
+
+-- claude-bud JOB 31 / 32: the parts each cluster holds BEYOND its plain kits (detail + enterable buildings). Every
+-- caller's budget counts the plain kits: Finish reports parts minus this, and WorldPOI / WorldFill subtract it from
+-- what they measure, so the allowances (MaxExtraParts) are the only growth and no row is dropped for it.
+local extraBy: { [Instance]: number } = setmetatable({}, { __mode = "k" }) :: any
+function WorldKits.ExtraParts(inst: Instance): number
+	local n = extraBy[inst] or 0
+	for _, d in ipairs(inst:GetDescendants()) do
+		if d:IsA("Model") then
+			n += extraBy[d] or 0
+		end
+	end
+	return n
+end
+
+local function wheelZ(b: B, name: string, x: number, y: number, z: number, d: number, t: number, color: Color3)
+	-- a wheel on an axle along Z (a Cylinder's axis is X: turned 90 about Y); never collides (the track / body does)
+	put(b, name, Vector3.new(t, d, d), CFrame.new(x, y, z) * rotY(90), color, M.CorrodedMetal, false, false, Enum.PartType.Cylinder)
+end
+
+Detail.Wreck = function(b: B): boolean
+	local v = b.Opts.Variant or "truck"
+	local burnt, rust, dark = PAL.Burnt, PAL.Rust, PAL.SteelDark
+	local cm = M.CorrodedMetal
+	if v == "tank" then
+		-- 21 parts. Long axis X, gun toward -X; tracks z 0 .. 1.3 and 5.3 .. 6.6 (collide), wheels / fenders outside
+		for _, z in ipairs({ 0.65, 5.95 }) do
+			put(b, "WreckTankTrack", Vector3.new(9.6, 1.6, 1.3), CFrame.new(0, 0.8, z), burnt, cm, true)
+			put(b, "WreckTankFender", Vector3.new(10, 0.25, 1.5), CFrame.new(0.2, 1.72, z) * rotZ(if z < 1 then 3 else -2), rust, cm, false)
+		end
+		for _, x in ipairs({ -3, 0, 3 }) do
+			wheelZ(b, "WreckTankWheel", x, 0.8, -0.1, 1.5, 0.5, dark)
+			wheelZ(b, "WreckTankWheel", x, 0.8, 6.7, 1.5, 0.5, dark)
+		end
+		put(b, "WreckTankHull", Vector3.new(9, 1.4, 4.0), CFrame.new(0.2, 1.3, 3.3), rust, cm, true)
+		-- sloped glacis plate at the front (a wedge, its slope toward -X)
+		put(b, "WreckTankGlacis", Vector3.new(4.0, 1.3, 1.8), CFrame.new(-5.2, 1.25, 3.3) * rotY(90), rust, cm, true, false, Enum.PartType.Wedge)
+		put(b, "WreckTankDeck", Vector3.new(3, 0.4, 3.6), CFrame.new(3.2, 2.2, 3.3) * rotZ(-3), burnt, cm, false)
+		local tcf = CFrame.new(0.3, 2.75, 3.3) * rotY(22)
+		put(b, "WreckTankTurret", Vector3.new(4, 1.5, 3.6), tcf, burnt, cm, true)
+		put(b, "WreckTankBustle", Vector3.new(1.6, 1.1, 2.6), tcf * CFrame.new(2.7, -0.1, 0), rust, cm, false)
+		put(b, "WreckTankMantlet", Vector3.new(0.8, 1.0, 1.6), tcf * CFrame.new(-2.3, 0, 0), dark, M.Metal, false)
+		local gun = tcf * CFrame.new(-2.6, 0.1, 0) * rotZ(-5)
+		put(b, "WreckTankBarrel", Vector3.new(6, 0.5, 0.5), gun * CFrame.new(-3, 0, 0), burnt, cm, false, false, Enum.PartType.Cylinder)
+		put(b, "WreckTankMuzzle", Vector3.new(0.7, 0.75, 0.75), gun * CFrame.new(-6.2, 0, 0), dark, M.Metal, false, false, Enum.PartType.Cylinder)
+		local hatch = tcf * CFrame.new(0.8, 0.9, 0.6)
+		put(b, "WreckTankHatch", Vector3.new(0.3, 1.2, 1.2), hatch * rotZ(90), dark, M.Metal, false, false, Enum.PartType.Cylinder)
+		put(b, "WreckTankCan", Vector3.new(0.9, 1.2, 0.5), CFrame.new(3.9, 2.9, 1.6) * rotY(8), PAL.DrumOlive, M.Metal, false)
+		put(b, "WreckTankLink", Vector3.new(3, 0.3, 1.2), CFrame.new(-6.4, 0.15, 0.9) * rotY(25), burnt, cm, false)
+		return true
+	elseif v == "gun" then
+		-- 10 parts: shield, split trail, axle + 2 wheels, cradle, barrel, recuperator, a shell crate
+		put(b, "WreckGunShield", Vector3.new(0.3, 2.6, 3.4), CFrame.new(-1.2, 1.5, 3.0) * rotY(4), rust, cm, true)
+		put(b, "WreckGunTrail", Vector3.new(5.5, 0.5, 0.6), CFrame.new(1.9, 0.3, 2.2) * rotY(16), burnt, cm, true)
+		put(b, "WreckGunTrail", Vector3.new(5.5, 0.5, 0.6), CFrame.new(1.9, 0.3, 3.8) * rotY(-16), burnt, cm, true)
+		put(b, "WreckGunAxle", Vector3.new(0.4, 0.4, 3.8), CFrame.new(-0.6, 1.0, 3.0), dark, M.Metal, false)
+		wheelZ(b, "WreckGunWheel", -0.6, 1.0, 1.0, 2.0, 0.5, dark)
+		wheelZ(b, "WreckGunWheel", -0.6, 1.0, 5.0, 2.0, 0.5, dark)
+		put(b, "WreckGunCradle", Vector3.new(2.4, 0.7, 0.9), CFrame.new(-1.6, 1.9, 3.0) * rotZ(-10), burnt, cm, false)
+		put(b, "WreckGunBarrel", Vector3.new(5.2, 0.5, 0.5), CFrame.new(-4.3, 2.35, 3.0) * rotZ(-10), burnt, cm, false, false, Enum.PartType.Cylinder)
+		put(b, "WreckGunRecoil", Vector3.new(2.4, 0.35, 0.35), CFrame.new(-2.4, 2.45, 3.0) * rotZ(-10), dark, M.Metal, false, false, Enum.PartType.Cylinder)
+		put(b, "WreckGunCrate", Vector3.new(1.4, 0.8, 0.9), CFrame.new(2.6, 0.4, 5.3) * rotY(12), PAL.CrateOlive, M.Wood, true)
+		return true
+	elseif v == "truck" then
+		-- 15 parts: chassis, 5 of 6 wheels (one burnt off), bed floor + 2 sides + a fallen tailgate, cab, windscreen
+		-- frame, hood, grille, bumper
+		put(b, "WreckTruckChassis", Vector3.new(14, 0.5, 3.4), CFrame.new(0, 1.35, 2.2), dark, cm, true)
+		for _, w in ipairs({ { -5.6, -0.05 }, { -5.6, 4.45 }, { 1.5, -0.05 }, { 1.5, 4.45 }, { 4.5, 4.45 } }) do
+			wheelZ(b, "WreckTruckWheel", w[1], 1.1, w[2], 2.2, 0.8, PAL.SteelDark)
+		end
+		put(b, "WreckTruckBed", Vector3.new(9, 0.4, 4.4), CFrame.new(2.95, 1.8, 2.2), burnt, cm, true)
+		put(b, "WreckTruckSide", Vector3.new(9, 1.2, 0.25), CFrame.new(2.95, 2.6, 0.15), rust, cm, true)
+		put(b, "WreckTruckSide", Vector3.new(9, 1.2, 0.25), CFrame.new(2.95, 2.6, 4.25) * rotX(6), rust, cm, true)
+		put(b, "WreckTruckTailgate", Vector3.new(0.25, 1.2, 4.4), CFrame.new(7.9, 1.1, 2.2) * rotZ(-35), rust, cm, false)
+		put(b, "WreckTruckCab", Vector3.new(3.6, 3.0, 4.2), CFrame.new(-3.45, 3.1, 2.2), rust, cm, true)
+		put(b, "WreckTruckGlass", Vector3.new(0.2, 1.3, 3.6), CFrame.new(-5.3, 3.9, 2.2) * rotZ(8), PAL.Window, M.Glass, false)
+		put(b, "WreckTruckHood", Vector3.new(2.2, 1.6, 4.0), CFrame.new(-6.35, 2.4, 2.2) * rotZ(6), burnt, cm, true)
+		put(b, "WreckTruckGrille", Vector3.new(0.2, 1.2, 3.0), CFrame.new(-7.5, 2.2, 2.2), PAL.Steel, M.Metal, false)
+		put(b, "WreckTruckBumper", Vector3.new(0.5, 0.4, 4.2), CFrame.new(-7.7, 1.4, 2.2) * rotY(4), dark, M.Metal, false)
+		return true
+	end
+	return false -- "car": the plain build + its Roblox-made mesh overlay
+end
+
+-- 2 parts per 5 studs: a wide bottom course and a narrower top course (the plain line is one block per 5 studs)
+Detail.SandbagLine = function(b: B): boolean
+	local n = math.clamp(math.floor((b.Opts.Length or 5) / 5 + 0.5), 1, 8)
+	for i = 1, n do
+		local x = (i - (n + 1) * 0.5) * 5
+		local yaw = if i % 2 == 0 then 1.5 else -1.5
+		put(b, "Sandbag", Vector3.new(5, 1.1, 1.7), CFrame.new(x, 0.55, 0.97) * rotY(yaw), PAL.Sandbag, M.Sand, true)
+		put(b, "Sandbag", Vector3.new(4.6, 0.9, 1.35), CFrame.new(x + 0.2, 1.55, 0.95) * rotY(-yaw), PAL.SandbagLight, M.Sand, true)
+	end
+	return true
+end
+
+Detail.SandbagArc = function(b: B): boolean
+	for _, s in ipairs({ -1, 1 }) do
+		local cf = CFrame.new(1.65 * s, 0, 1.3) * rotY(-20 * s)
+		put(b, "SandbagArc", Vector3.new(3.6, 1.1, 1.4), cf * CFrame.new(0, 0.55, 0), PAL.Sandbag, M.Sand, true)
+		put(b, "SandbagArc", Vector3.new(3.2, 0.9, 1.15), cf * CFrame.new(0, 1.55, 0.05), PAL.SandbagLight, M.Sand, true)
+	end
+	return true
+end
+
+-- 10 parts: two courses on the front and both sides, an MG on a tripod, an ammo box
+Detail.SandbagNest = function(b: B): boolean
+	put(b, "SandbagFront", Vector3.new(6, 1.1, 1.5), CFrame.new(0, 0.55, 0.8), PAL.Sandbag, M.Sand, true)
+	put(b, "SandbagFront", Vector3.new(5.6, 0.95, 1.25), CFrame.new(0, 1.55, 0.85), PAL.SandbagLight, M.Sand, true)
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "SandbagSide", Vector3.new(1.5, 1.1, 4.2), CFrame.new(3.7 * s, 0.55, 2.9), PAL.SandbagLight, M.Sand, true)
+		put(b, "SandbagSide", Vector3.new(1.25, 0.95, 3.8), CFrame.new(3.7 * s, 1.55, 3.0), PAL.Sandbag, M.Sand, true)
+	end
+	put(b, "NestTripod", Vector3.new(0.9, 1.1, 0.9), CFrame.new(0, 2.55, 1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "NestTurret", Vector3.new(0.7, 0.6, 1.8), CFrame.new(0, 3.35, 1.3), PAL.SteelDark, M.Metal, false)
+	put(b, "NestBarrel", Vector3.new(2.6, 0.22, 0.22), CFrame.new(0, 3.4, -0.9) * rotY(90), PAL.SteelDark, M.Metal, false, false, Enum.PartType.Cylinder)
+	put(b, "NestAmmo", Vector3.new(0.9, 0.6, 0.5), CFrame.new(1.6, 2.3, 1.7) * rotY(10), PAL.DrumOlive, M.Metal, false)
+	return true
+end
+
+-- 5 parts: the real jersey profile (wide foot, sloped skirts both sides, upright web, cap); z 0 .. 1.1 as the plain one
+Detail.Jersey = function(b: B): boolean
+	local c, cm = PAL.ConcreteLight, M.Concrete
+	put(b, "JerseyBarrier", Vector3.new(4.5, 0.45, 1.1), CFrame.new(0, 0.225, 0.55), c, cm, true)
+	put(b, "JerseySkirt", Vector3.new(4.5, 0.75, 0.3), CFrame.new(0, 0.82, 0.25), c, cm, true, false, Enum.PartType.Wedge)
+	put(b, "JerseySkirt", Vector3.new(4.5, 0.75, 0.3), CFrame.new(0, 0.82, 0.85) * rotY(180), c, cm, true, false, Enum.PartType.Wedge)
+	put(b, "JerseyWeb", Vector3.new(4.5, 1.25, 0.4), CFrame.new(0, 1.43, 0.55), c, cm, true)
+	put(b, "JerseyCap", Vector3.new(4.5, 0.15, 0.46), CFrame.new(0, 2.12, 0.55), PAL.Concrete, cm, false)
+	return true
+end
+
+-- 14 parts: 4 legs, 3 cross braces (the back face keeps the ladder clear), deck, front wall + 2 side rails, a sandbag
+-- row on the deck, roof, ladder
+Detail.Watchtower = function(b: B): boolean
+	local deckY = KC.WatchtowerDeckY
+	local roofY = deckY + TOWER_HEADROOM
+	for _, c in ipairs({ { -3.9, -3.9 }, { 3.9, -3.9 }, { -3.9, 3.9 }, { 3.9, 3.9 } }) do
+		put(b, "TowerLeg", Vector3.new(0.8, roofY, 0.8), CFrame.new(c[1], roofY * 0.5, c[2]), PAL.WoodDark, M.Wood, true)
+	end
+	local rise = deckY - 2
+	local len = math.sqrt(7.8 * 7.8 + rise * rise)
+	local ang = math.deg(math.atan2(rise, 7.8))
+	put(b, "TowerBrace", Vector3.new(len, 0.35, 0.3), CFrame.new(0, 1 + rise * 0.5, -3.9) * rotZ(ang), PAL.Wood, M.Wood, false)
+	put(b, "TowerBrace", Vector3.new(len, 0.35, 0.3), CFrame.new(-3.9, 1 + rise * 0.5, 0) * rotY(90) * rotZ(-ang), PAL.Wood, M.Wood, false)
+	put(b, "TowerBrace", Vector3.new(len, 0.35, 0.3), CFrame.new(3.9, 1 + rise * 0.5, 0) * rotY(90) * rotZ(ang), PAL.Wood, M.Wood, false)
+	put(b, "TowerDeck", Vector3.new(9, 0.6, 6.5), CFrame.new(0, deckY - 0.3, -1.25), PAL.Wood, M.WoodPlanks, true)
+	put(b, "TowerWall", Vector3.new(9, 3.4, 0.4), CFrame.new(0, deckY + 1.7, -4.3), PAL.Wood, M.WoodPlanks, true)
+	put(b, "TowerRail", Vector3.new(0.3, 1.2, 6.2), CFrame.new(-4.3, deckY + 0.6, -1.3), PAL.WoodDark, M.Wood, true)
+	put(b, "TowerRail", Vector3.new(0.3, 1.2, 6.2), CFrame.new(4.3, deckY + 0.6, -1.3), PAL.WoodDark, M.Wood, true)
+	put(b, "TowerSandbags", Vector3.new(7.6, 0.9, 1.0), CFrame.new(0, deckY + 0.45, -3.5), PAL.Sandbag, M.Sand, true)
+	put(b, "TowerRoof", Vector3.new(9, 0.5, 9), CFrame.new(0, roofY + 0.25, 0), PAL.SteelDark, M.Metal, false, true)
+	truss(b, "TowerLadder", deckY + 2, CFrame.new(0, (deckY + 2) * 0.5, 3), PAL.SteelDark)
+	return true
+end
+
+-- 9 parts: mound, concrete roof slab, facade, blast door (the runtime door keeps its name), 2 firing slits, 2 roof
+-- sandbag rows, a vent pipe
+Detail.Bunker = function(b: B): boolean
+	put(b, "BunkerBody", Vector3.new(18, 7, 11), CFrame.new(0, 3.5, 5.5), PAL.Sandbag, M.Ground, true, true)
+	put(b, "BunkerRoof", Vector3.new(12, 0.8, 6), CFrame.new(0, 7.4, 4.2), PAL.Concrete, M.Concrete, true)
+	put(b, "BunkerFacade", Vector3.new(10, 5.6, 0.3), CFrame.new(0, 2.8, -0.15), PAL.Concrete, M.Concrete, true)
+	runtimeDoor(put(b, "BunkerDoor", Vector3.new(4.4, 4.4, 0.2), CFrame.new(0, 2.2, -0.4), PAL.Hazard, M.DiamondPlate, true))
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "BunkerSlit", Vector3.new(2.2, 0.5, 0.35), CFrame.new(3.6 * s, 4.4, -0.25), PAL.SteelDark, M.Metal, false)
+		put(b, "BunkerSandbags", Vector3.new(4.6, 1.0, 1.4), CFrame.new(3.6 * s, 8.3, 1.8) * rotY(3 * s), PAL.SandbagLight, M.Sand, true)
+	end
+	vcyl(b, "BunkerVent", 5.5, 7, 8, 2.2, 0.8, PAL.SteelDark, M.Metal, false)
+	return true
+end
+
+-- 7 parts: 2 canvas panels, front and back poles, the ridge pole, a groundsheet, a supply crate inside
+Detail.Tent = function(b: B): boolean
+	local half, h, t = 3.8, 4.8, 0.2
+	local a = math.atan2(h, half)
+	local L = math.sqrt(half * half + h * h)
+	local cy = (L * math.sin(a) + t * math.cos(a)) * 0.5
+	put(b, "TentCanvas", Vector3.new(L, t, 9), CFrame.new(-half * 0.5, cy, 0) * rotZ(math.deg(a)), PAL.Canvas, M.Fabric, true)
+	put(b, "TentCanvas", Vector3.new(L, t, 9), CFrame.new(half * 0.5, cy, 0) * rotZ(-math.deg(a)), PAL.Canvas:Lerp(PAL.WoodDark, 0.15), M.Fabric, true)
+	put(b, "TentPole", Vector3.new(0.3, h, 0.3), CFrame.new(0, h * 0.5, -4.3), PAL.WoodDark, M.Wood, false)
+	put(b, "TentPole", Vector3.new(0.3, h, 0.3), CFrame.new(0, h * 0.5, 4.3), PAL.WoodDark, M.Wood, false)
+	put(b, "TentRidge", Vector3.new(9, 0.25, 0.25), CFrame.new(0, h + 0.05, 0) * rotY(90), PAL.WoodDark, M.Wood, false, false, Enum.PartType.Cylinder)
+	put(b, "TentFloor", Vector3.new(7.2, 0.1, 8.6), CFrame.new(0, 0.05, 0), PAL.Canvas:Lerp(PAL.Sandbag, 0.5), M.Fabric, false)
+	put(b, "TentCrate", Vector3.new(1.4, 1.2, 1.4), CFrame.new(1.4, 0.6, 1.2) * rotY(18), PAL.CrateOlive, M.Wood, true)
+	return true
+end
+
+--[[ claude-bud JOB 37: the REAL road checkpoint (WorldDetailConfig.Kits.Checkpoint; 99 parts, the plain kit is 8).
+	Same frame as the plain kit: pivot on the road centre line, X across the road, the booth on the +X shoulder, -Z faces
+	arriving traffic. Every part stays >= 13.2 studs from the road line (WorldPOI CollideRoadGap 13 / VisibleRoadGap 9),
+	the arm is raised and never collides, the span stays inside 64 (x -24.5 .. 28.5, z -18.7 .. 15).
+	The CheckpointBooth part keeps its name, size and place (CheckpointAnchors clearances, WorldPOI stamping). It is a
+	solid block (the plain kit's), so its windows are panes on its faces over a dark shade, and no interior is modelled.
+	ONE light per checkpoint (the world cap is WorldConfig.Lights.MaxWorld 24): the tower searchlight, a SpotLight
+	(Shadows off, night only, WE_NightLight); the client sweeps it (CheckpointClient). The floodlight and door lamps are
+	lamp-coloured heads (SmoothPlastic, never Neon). 3 painted boards through WorldKits.Sign (the world sign budget).
+	Guard posts: Attachments WE_GuardPost1..5 on the booth (CheckpointGuardService reads them; 0 parts); the booth is
+	tagged WE_CheckpointSite. ]]
+local CP_WHITE = Color3.fromRGB(232, 230, 222)
+local CP_RED = Color3.fromRGB(178, 38, 34)
+local function cpGlass(p: Part, t: number)
+	p.Transparency = t
+	p.CastShadow = false
+end
+Detail.Checkpoint = function(b: B): boolean
+	local cl, cd, cm = PAL.ConcreteLight, PAL.Concrete, M.Concrete
+	local steel, wood = PAL.SteelDark, PAL.WoodDark
+	-- booth (19)
+	local booth = put(b, "CheckpointBooth", Vector3.new(4, 7, 4.4), CFrame.new(17.5, 3.5, 2.0), cl, cm, true)
+	put(b, "BoothPlinth", Vector3.new(4.8, 0.5, 5.2), CFrame.new(17.5, 0.25, 2.0), cd, cm, true)
+	put(b, "BoothRoof", Vector3.new(6, 0.4, 6.4), CFrame.new(17.5, 7.2, 1.6), steel, M.Metal, false)
+	put(b, "BoothFascia", Vector3.new(6.1, 0.5, 0.2), CFrame.new(17.5, 6.85, -1.6), PAL.Hazard, M.SmoothPlastic, false)
+	put(b, "BoothAC", Vector3.new(1.6, 0.9, 1.2), CFrame.new(18.4, 7.85, 3.0), PAL.ConcreteLight:Lerp(steel, 0.4), M.Metal, false)
+	type Win = { G: CFrame, GS: Vector3, M: CFrame, MS: Vector3, S: CFrame, SS: Vector3 }
+	local wins: { Win } = {
+		{ G = CFrame.new(17.5, 4.6, -0.26), GS = Vector3.new(2.6, 1.2, 0.12), M = CFrame.new(17.5, 4.6, -0.3), MS = Vector3.new(0.15, 1.2, 0.16), S = CFrame.new(17.5, 3.92, -0.35), SS = Vector3.new(3.0, 0.18, 0.35) },
+		{ G = CFrame.new(15.44, 5.0, 2.0), GS = Vector3.new(0.12, 1.8, 3.0), M = CFrame.new(15.4, 5.0, 2.0), MS = Vector3.new(0.16, 1.8, 0.15), S = CFrame.new(15.35, 4.0, 2.0), SS = Vector3.new(0.35, 0.18, 3.4) },
+		{ G = CFrame.new(17.5, 5.0, 4.26), GS = Vector3.new(2.6, 1.8, 0.12), M = CFrame.new(17.5, 5.0, 4.3), MS = Vector3.new(0.15, 1.8, 0.16), S = CFrame.new(17.5, 4.0, 4.35), SS = Vector3.new(3.0, 0.18, 0.35) },
+	}
+	for _, w in ipairs(wins) do
+		cpGlass(put(b, "BoothWindow", w.GS, w.G, PAL.Window, M.Glass, false), 0.4)
+		put(b, "WindowMullion", w.MS, w.M, steel, M.Metal, false)
+		put(b, "WindowSill", w.SS, w.S, cd, cm, false)
+	end
+	put(b, "BoothDoor", Vector3.new(0.15, 5.2, 2.0), CFrame.new(19.58, 3.1, 2.0), steel, M.DiamondPlate, false)
+	put(b, "DoorFrame", Vector3.new(0.2, 0.3, 2.4), CFrame.new(19.62, 5.85, 2.0), cd, cm, false)
+	put(b, "DoorHandle", Vector3.new(0.2, 0.2, 0.4), CFrame.new(19.72, 3.0, 1.3), PAL.Hazard, M.Metal, false)
+	local sign = put(b, "CheckpointSign", Vector3.new(3.2, 1.2, 0.2), CFrame.new(17.5, 6.15, -0.3), PAL.TarpRed, M.SmoothPlastic, false)
+	put(b, "DoorLamp", Vector3.new(0.6, 0.4, 0.4), CFrame.new(19.75, 6.2, 2.0), PAL.LampLens, M.SmoothPlastic, false)
+	-- boom gate (11): cabinet, hinge, counterweight, a raised arm in 6 red / white bands (never collides), the rest post
+	put(b, "GateCabinet", Vector3.new(1.2, 3.2, 1.2), CFrame.new(14.4, 1.6, -0.9), PAL.Hazard, M.Metal, true)
+	put(b, "GateHinge", Vector3.new(0.8, 0.7, 0.7), CFrame.new(14.4, 3.35, -0.9) * rotY(90), steel, M.Metal, false, false, Enum.PartType.Cylinder)
+	put(b, "GateCounterweight", Vector3.new(0.9, 0.9, 0.7), CFrame.new(15.1, 2.6, -0.9), steel, M.Metal, false)
+	local dir = Vector3.new(math.sin(math.rad(8)), math.cos(math.rad(8)), 0)
+	local hinge = Vector3.new(13.75, 3.35, -0.9)
+	for i = 1, 6 do
+		local c = hinge + dir * ((i - 0.5) * (13 / 6))
+		put(b, "CheckpointArm", Vector3.new(0.45, 13 / 6, 0.45), CFrame.new(c.X, c.Y, c.Z) * rotZ(-8), if i % 2 == 1 then CP_RED else CP_WHITE, M.SmoothPlastic, false)
+	end
+	put(b, "GateRestPost", Vector3.new(0.4, 2.6, 0.4), CFrame.new(-13.8, 1.3, -0.9), CP_WHITE, M.Metal, true)
+	put(b, "GateRestFork", Vector3.new(0.8, 0.3, 0.4), CFrame.new(-13.8, 2.7, -0.9), CP_RED, M.Metal, false)
+	-- sandbag firing positions (8): an L on the far shoulder, a U in front of the booth, two courses each
+	local sb, sl = PAL.Sandbag, PAL.SandbagLight
+	put(b, "Sandbag", Vector3.new(1.7, 1.1, 5), CFrame.new(-16.5, 0.55, -5.5), sb, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(1.35, 0.9, 4.6), CFrame.new(-16.5, 1.55, -5.5), sl, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(5, 1.1, 1.7), CFrame.new(-20, 0.55, -8.3), sl, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(4.6, 0.9, 1.35), CFrame.new(-20, 1.55, -8.3), sb, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(5, 1.1, 1.7), CFrame.new(18.5, 0.55, -5.5), sb, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(4.6, 0.9, 1.35), CFrame.new(18.5, 1.55, -5.5), sl, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(1.7, 1.1, 3.5), CFrame.new(21.8, 0.55, -3.6), sl, M.Sand, true)
+	put(b, "Sandbag", Vector3.new(1.35, 0.9, 3.1), CFrame.new(21.8, 1.55, -3.6), sb, M.Sand, true)
+	-- guard tower (16): the JOB 31 braced watchtower behind the booth + a searchlight on its front wall
+	local towerAt = CFrame.new(24, 0, 10.5)
+	local tb: B = { Cluster = b.Cluster, CF = b.CF * towerAt, Opts = b.Opts, Parts = b.Parts, Rng = b.Rng, Overlays = b.Overlays }
+	Detail.Watchtower(tb)
+	local deckY = KC.WatchtowerDeckY
+	local housing = put(tb, "SearchlightHousing", Vector3.new(1.2, 0.9, 1.4), CFrame.new(2.5, deckY + 3.85, -4.3), steel, M.Metal, false)
+	put(tb, "SearchlightLens", Vector3.new(0.9, 0.7, 0.12), CFrame.new(2.5, deckY + 3.85, -5.06), PAL.LampLens, M.Glass, false)
+	local spot = Instance.new("SpotLight")
+	spot.Name = "Searchlight"
+	spot.Face = Enum.NormalId.Front
+	spot.Angle = 40
+	spot.Brightness = math.min(0.8, WorldConfig.Lights.MaxBrightness)
+	spot.Range = math.min(18, WorldConfig.Lights.MaxRange)
+	spot.Color = PAL.LampLens
+	spot.Shadows = false
+	spot.Enabled = nightOn()
+	CollectionService:AddTag(spot, WorldConfig.Atmosphere.NightLightTag)
+	spot.Parent = housing
+	CollectionService:AddTag(housing, "WE_Searchlight")
+	-- concrete barriers (12): a staggered chicane on both shoulders (the jersey profile in 3 pieces)
+	for _, j in ipairs({ { -14.4, -10.5, 0 }, { 14.4, -14.0, 0 }, { -15.6, -15.5, 0 }, { 18.2, -16.6, 70 } }) do
+		local cf = CFrame.new(j[1], 0, j[2]) * rotY(90 + j[3])
+		put(b, "JerseyBarrier", Vector3.new(4.5, 0.45, 1.1), cf * CFrame.new(0, 0.225, 0), cl, cm, true)
+		put(b, "JerseyWeb", Vector3.new(4.5, 1.35, 0.45), cf * CFrame.new(0, 1.12, 0), cl, cm, true)
+		put(b, "JerseyCap", Vector3.new(4.5, 0.15, 0.5), cf * CFrame.new(0, 1.87, 0), cd, cm, false)
+	end
+	-- razor-wire fence (8) along the far side of the compound
+	for _, z in ipairs({ -4, 1.5, 7, 12 }) do
+		put(b, "FencePost", Vector3.new(0.3, 3.2, 0.3), CFrame.new(-24, 1.6, z), steel, M.Metal, true)
+	end
+	for _, y in ipairs({ 1.2, 2.4 }) do
+		put(b, "FenceWire", Vector3.new(0.08, 0.08, 16), CFrame.new(-24, y, 4), steel, M.Metal, false)
+	end
+	for _, z in ipairs({ 0, 8 }) do
+		put(b, "RazorCoil", Vector3.new(7.6, 0.9, 0.9), CFrame.new(-24, 3.5, z) * rotY(90), PAL.SteelDark:Lerp(CP_WHITE, 0.25), M.DiamondPlate, false, false, Enum.PartType.Cylinder)
+	end
+	-- floodlights (6): pole + head + lens, aimed down at the lane (lamp-coloured lens, no light: the world cap)
+	for _, f in ipairs({ { 14.6, -3.2, 90 }, { -14.6, 1.5, -90 } }) do
+		vcyl(b, "FloodPole", f[1], 0, f[2], 9, 0.4, steel, M.Metal, true)
+		local head = CFrame.new(f[1], 9.3, f[2]) * rotY(f[3]) * CFrame.Angles(math.rad(-30), 0, 0)
+		put(b, "FloodHead", Vector3.new(1.2, 0.7, 0.9), head, steel, M.Metal, false)
+		put(b, "FloodLens", Vector3.new(1.0, 0.55, 0.08), head * CFrame.new(0, 0, -0.48), PAL.LampLens, M.SmoothPlastic, false)
+	end
+	-- flag (3): a pole, an olive cloth and our own gold diamond emblem (a fictional faction, no real flag)
+	put(b, "FlagPole", Vector3.new(0.25, 10, 0.25), CFrame.new(-20, 5, 4), steel, M.Metal, true)
+	put(b, "FlagCloth", Vector3.new(0.08, 2.2, 3.4), CFrame.new(-20, 8.7, 5.85), PAL.CrateOlive, M.Fabric, false)
+	put(b, "FlagEmblem", Vector3.new(0.12, 0.9, 0.9), CFrame.new(-20, 8.7, 5.85) * CFrame.Angles(math.rad(45), 0, 0), PAL.Hazard, M.SmoothPlastic, false)
+	-- signs (7): STOP and HALT boards facing arrivals, a speed-limit disc, a warning triangle
+	put(b, "SignPost", Vector3.new(0.25, 3.4, 0.25), CFrame.new(-18.6, 1.7, -13.2), steel, M.Metal, false)
+	local stop = put(b, "SignBoard", Vector3.new(2.6, 1.2, 0.15), CFrame.new(-18.6, 3.6, -13.3), CP_RED, M.SmoothPlastic, false)
+	put(b, "SignPost", Vector3.new(0.25, 3.4, 0.25), CFrame.new(18.5, 1.7, -13.0), steel, M.Metal, false)
+	local halt = put(b, "SignBoard", Vector3.new(3.4, 1.2, 0.15), CFrame.new(18.5, 3.6, -13.1), PAL.Hazard, M.SmoothPlastic, false)
+	put(b, "SpeedPost", Vector3.new(0.2, 2.8, 0.2), CFrame.new(14.6, 1.4, -18.0), steel, M.Metal, false)
+	put(b, "SpeedDisc", Vector3.new(0.1, 1.3, 1.3), CFrame.new(14.6, 3.2, -18.08) * rotY(90), CP_WHITE, M.SmoothPlastic, false, false, Enum.PartType.Cylinder)
+	put(b, "WarnTriangle", Vector3.new(0.1, 1.1, 1.3), CFrame.new(18.5, 2.3, -13.12) * rotY(90), PAL.Hazard, M.SmoothPlastic, false, false, Enum.PartType.Wedge)
+	WorldKits.Sign(sign, Enum.NormalId.Front, "CHECKPOINT")
+	WorldKits.Sign(stop, Enum.NormalId.Front, "STOP")
+	WorldKits.Sign(halt, Enum.NormalId.Front, "HALT - SHOW PASS")
+	-- supplies (9): a stack of crates with a strap, 2 ammo boxes on a small table, a jerry can
+	local olive = PAL.CrateOlive
+	put(b, "SupplyCrate", Vector3.new(1.6, 1.6, 1.6), CFrame.new(25, 0.8, -6) * rotY(6), olive, M.Wood, true)
+	put(b, "SupplyCrate", Vector3.new(1.5, 1.4, 1.5), CFrame.new(25, 2.3, -6) * rotY(-8), olive:Lerp(wood, 0.2), M.Wood, false)
+	put(b, "SupplyCrate", Vector3.new(1.6, 1.6, 1.6), CFrame.new(26.8, 0.8, -4.6) * rotY(14), olive:Lerp(PAL.Sandbag, 0.15), M.Wood, true)
+	put(b, "CrateStrap", Vector3.new(1.62, 0.12, 0.25), CFrame.new(25, 1.2, -6) * rotY(6), steel, M.Fabric, false)
+	put(b, "FieldTable", Vector3.new(2.2, 0.15, 1.2), CFrame.new(24.2, 1.25, -1.2), wood, M.Wood, false)
+	put(b, "FieldTableLegs", Vector3.new(2.0, 1.15, 1.0), CFrame.new(24.2, 0.6, -1.2), wood:Lerp(steel, 0.4), M.Wood, true)
+	put(b, "AmmoBox", Vector3.new(1.0, 0.55, 0.5), CFrame.new(23.8, 1.6, -1.3) * rotY(10), PAL.DrumOlive, M.Metal, false)
+	put(b, "AmmoBox", Vector3.new(1.0, 0.55, 0.5), CFrame.new(24.8, 1.6, -1.0) * rotY(-12), PAL.DrumOlive, M.Metal, false)
+	put(b, "JerryCan", Vector3.new(0.5, 0.9, 0.7), CFrame.new(26.9, 0.45, -2.2) * rotY(20), CP_RED, M.Metal, false)
+	-- guard posts (0 parts): kit-local points the guard service reads; the booth hosts them
+	local posts = { Vector3.new(18.5, 0, -3.8), Vector3.new(-18.0, 0, -4.6), Vector3.new(15.8, 0, -2.4), Vector3.new(-15.4, 0, 3.8), Vector3.new(24, deckY, 9.0) }
+	for i, p in ipairs(posts) do
+		local a = Instance.new("Attachment")
+		a.Name = "WE_GuardPost" .. i
+		a.Position = p - Vector3.new(17.5, 3.5, 2.0)
+		if i == #posts then
+			a:SetAttribute("WE_Static", true) -- the tower deck: a Post guard (never walks off)
+		end
+		a.Parent = booth
+	end
+	CollectionService:AddTag(booth, "WE_CheckpointSite")
+	return true
+end
+
+-- exact part counts of the detailed builds (per unit for SandbagLine), checked by the headless kit test
+WorldKits.DetailSpecs = {
+	Wreck = { tank = 21, truck = 15, gun = 10 },
+	SandbagLine = 2,
+	SandbagArc = 4,
+	SandbagNest = 10,
+	Jersey = 5,
+	Watchtower = 14,
+	Bunker = 9,
+	Tent = 7,
+	Checkpoint = 99, -- claude-bud JOB 37 (the plain kit is 8)
+} :: { [string]: any }
+
+-- the running tally of detail parts beyond the plain kits (WorldDetailConfig.MaxExtraParts caps it)
+WorldKits.DetailStats = { Kits = 0, Extra = 0, Plain = 0 }
+-- claude-bud JOB 37: the extra parts per kit with its own share (WorldDetailConfig.KitCaps), and which kit a cluster spent
+WorldKits.DetailByKit = {} :: { [string]: number }
+local extraKitBy: { [Instance]: { [string]: number } } = setmetatable({}, { __mode = "k" }) :: any
+
+-- claude-bud JOB 37: give a discarded cluster's detail parts back to the allowances (WorldPOI rebuilds it plain)
+function WorldKits.RefundDetail(cluster: Instance)
+	local byKit = extraKitBy[cluster]
+	local n = extraBy[cluster] or 0
+	if n <= 0 then
+		return
+	end
+	WorldKits.DetailStats.Extra = math.max(0, WorldKits.DetailStats.Extra - n)
+	for kit, k in pairs(byKit or {}) do
+		WorldKits.DetailByKit[kit] = math.max(0, (WorldKits.DetailByKit[kit] or 0) - k)
+		WorldKits.DetailStats.Kits = math.max(0, WorldKits.DetailStats.Kits - 1)
+	end
+	extraBy[cluster] = nil
+	extraKitBy[cluster] = nil
+end
+
+local function detailWanted(kitId: string, o: KitOpts): boolean
+	local cfg: any = WorldDetailConfig
+	if cfg.Enabled ~= true or Detail[kitId] == nil or (o :: any).NoDetail == true then
+		return false
+	end
+	local k = cfg.Kits[kitId]
+	if typeof(k) == "table" then
+		return k[o.Variant or "truck"] == true
+	end
+	return k == true
+end
+
+-- claude-bud JOB 31: build the detailed kit into b when wanted and the world allowance has room; true = built
+local function tryDetail(kitId: string, b: B): boolean
+	if not detailWanted(kitId, b.Opts) then
+		return false
+	end
+	local plain = WorldKits.Footprint(kitId, b.Opts)
+	local plainN = if plain then plain.Parts else 0
+	local before = #b.Parts
+	if not Detail[kitId](b) then
+		return false
+	end
+	local extra = (#b.Parts - before) - plainN
+	local cap = math.max(0, tonumber((WorldDetailConfig :: any).MaxExtraParts) or 0)
+	-- claude-bud JOB 37: a kit with its own share (KitCaps) spends only that share; every other kit spends the rest
+	local kitCaps: { [string]: number } = (WorldDetailConfig :: any).KitCaps or {}
+	local over: boolean
+	if kitCaps[kitId] ~= nil then
+		over = (WorldKits.DetailByKit[kitId] or 0) + extra > kitCaps[kitId]
+	else
+		local shared = cap
+		local othersExtra = 0
+		for k, c in pairs(kitCaps) do
+			shared -= c
+			othersExtra += WorldKits.DetailByKit[k] or 0
+		end
+		over = (WorldKits.DetailStats.Extra - othersExtra) + extra > math.max(0, shared)
+	end
+	if over then
+		-- the allowance is spent: undo this detailed build; the plain one runs instead
+		for i = #b.Parts, before + 1, -1 do
+			b.Parts[i]:Destroy()
+			b.Parts[i] = nil
+		end
+		WorldKits.DetailStats.Plain += 1
+		return false
+	end
+	WorldKits.DetailStats.Extra += extra
+	WorldKits.DetailStats.Kits += 1
+	extraBy[b.Cluster] = (extraBy[b.Cluster] or 0) + extra
+	if kitCaps[kitId] ~= nil then
+		WorldKits.DetailByKit[kitId] = (WorldKits.DetailByKit[kitId] or 0) + extra
+		local byKit = extraKitBy[b.Cluster] or {}
+		byKit[kitId] = (byKit[kitId] or 0) + extra
+		extraKitBy[b.Cluster] = byKit
+	end
+	if kitId == "Checkpoint" then
+		print(string.format("[WorldDetail] Checkpoint extra=%d (share %d / %d)", extra, WorldKits.DetailByKit[kitId] or 0, kitCaps[kitId] or cap))
+	end
+	return true
+end
+
+-- ── claude-bud JOB 32: the enterable PlazaHouse (PlazaBuildingsConfig) ─────────────────────────────────────────────
+-- a wall along local X (centre-bottom at cf, thickness T in Z) with openings { c = centre, w = width, b = bottom,
+-- t = top } (heights from the wall base): full-height piers between, a lintel above and a sill below each opening.
+-- The openings are GAPS: nothing stops a shot or a look through them.
+local PH = { W = 17.6, D = 17.4, T = 0.8, H = 11 }
+
+local function wallOpen(b: B, name: string, cf: CFrame, len: number, height: number, openings: { { c: number, w: number, b: number, t: number } }, color: Color3, mat: Enum.Material)
+	table.sort(openings, function(x, y)
+		return x.c < y.c
+	end)
+	local T = PH.T
+	local x = -len * 0.5
+	local function piece(x0: number, x1: number, y0: number, y1: number)
+		if x1 - x0 > 0.05 and y1 - y0 > 0.05 then
+			put(b, name, Vector3.new(x1 - x0, y1 - y0, T), cf * CFrame.new((x0 + x1) * 0.5, (y0 + y1) * 0.5, 0), color, mat, true)
+		end
+	end
+	for _, o in ipairs(openings) do
+		local o0, o1 = o.c - o.w * 0.5, o.c + o.w * 0.5
+		piece(x, o0, 0, height)
+		piece(o0, o1, o.t, height)
+		piece(o0, o1, 0, o.b)
+		x = o1
+	end
+	piece(x, len * 0.5, 0, height)
+end
+
+-- v133 (Code Bot): the town-centre look (PlazaBuildingsConfig.Styles, one per row: walls, trim, awning, accent).
+-- Every detail part is small, never casts a shadow, and (except the balcony, AC units and cistern: roof / balcony
+-- cover you can stand on or duck behind) never collides or answers a ray: glass and frames never stop a shot or a
+-- look through a window (the JOB 32 LosRule), and the plaza test checks each window / door gap stays clear of
+-- colliding parts.
+local PH_FRONT_OUT = 1 -- how far the facade reaches out of the front face (see the facade block)
+local PH_STYLE_DEFAULT = { Wall = Color3.fromRGB(212, 176, 122), Trim = Color3.fromRGB(236, 226, 200), Awning = Color3.fromRGB(38, 118, 118), Accent = Color3.fromRGB(96, 70, 48) }
+local function plazaStyle(b: B): any?
+	local cfgP: any = PlazaBuildingsConfig
+	local st = if typeof(cfgP.Styles) == "table" then cfgP.Styles[tostring(b.Cluster.Name)] else nil
+	return if typeof(st) == "table" then st else nil
+end
+
+-- a see-through pane in a window gap: never collides, never answers a ray (shots and sight pass as through the gap)
+local function glass(b: B, size: Vector3, lcf: CFrame)
+	local g = put(b, "PlazaWindowGlass", size, lcf, Color3.fromRGB(150, 190, 205), M.Glass, false)
+	g.Transparency = 0.55
+	g.CanQuery = false
+	return g
+end
+
+-- a window's dressing in the frame `wcf` of a wall face (local -Z = out of the building, z 0 = the face): a head
+-- (lintel trim), a sill and the glass in the gap. proj = how far head and sill stand out of the face (the front
+-- has room for a real sill; the sides and back keep them flush: WorldPOI measures the row's part box).
+local function windowDress(b: B, wcf: CFrame, c: number, w: number, y0: number, y1: number, trim: Color3, proj: number)
+	local outer = -math.max(proj, 0.02) -- the frame's outer face, just proud of the wall (no z-fighting)
+	local d = math.max(proj, 0.3)
+	local zc = outer + d * 0.5
+	put(b, "PlazaWindowFrame", Vector3.new(w + 0.6, 0.3, d), wcf * CFrame.new(c, y1 + 0.15, zc), trim, M.SmoothPlastic, false)
+	put(b, "PlazaWindowFrame", Vector3.new(w + 0.8, 0.25, d), wcf * CFrame.new(c, y0 - 0.125, zc), trim, M.SmoothPlastic, false)
+	glass(b, Vector3.new(w, y1 - y0, 0.1), wcf * CFrame.new(c, (y0 + y1) * 0.5, 0.4))
+end
+
+-- 142 parts (v133; 55 before the facade); see PlazaBuildingsConfig. Front (door) toward local -Z, like the TownHouse it replaces.
+Builders.PlazaHouse = function(b: B)
+	local W, D, T, H = PH.W, PH.D, PH.T, PH.H
+	local rowSty = plazaStyle(b)
+	local sty: any = rowSty or PH_STYLE_DEFAULT
+	local wallC = if rowSty then rowSty.Wall else (b.Opts.Color or PAL.AdobeLight) -- the row's style wins
+	local trimC: Color3 = sty.Trim or PH_STYLE_DEFAULT.Trim
+	local wm = M.Concrete
+	local win1 = function(c: number)
+		return { c = c, w = 3.6, b = 4, t = 7.4 }
+	end
+	local win2 = function(c: number)
+		return { c = c, w = 3.6, b = 3.5, t = 7 }
+	end
+	for storey = 1, 2 do
+		local y0 = (storey - 1) * H
+		local front = if storey == 1 then { { c = 0, w = 6, b = 0, t = 8 }, win1(-5.4), win1(5.4) } else { win2(-5.4), win2(0), win2(5.4) }
+		wallOpen(b, "PlazaWall", CFrame.new(0, y0, -D * 0.5 + T * 0.5), W, H, front, wallC, wm)
+		wallOpen(b, "PlazaWall", CFrame.new(0, y0, D * 0.5 - T * 0.5), W, H, if storey == 1 then {} else { win2(0) }, wallC, wm)
+		wallOpen(b, "PlazaWall", CFrame.new(-W * 0.5 + T * 0.5, y0, 0) * rotY(90), D - 2 * T, H, { if storey == 1 then win1(2) else win2(0) }, wallC, wm)
+		-- the stair side: solid downstairs (the ramp runs along it), a window upstairs
+		wallOpen(b, "PlazaWall", CFrame.new(W * 0.5 - T * 0.5, y0, 0) * rotY(90), D - 2 * T, H, if storey == 1 then {} else { win2(0) }, wallC, wm)
+	end
+	local ix, iz = W * 0.5 - T, D * 0.5 - T -- the inside half-extents (8.0, 7.9)
+	-- ground floor, the upper floor with the stair hole (x 4.2 .. 8.0, z -5.5 .. 6.5), the roof with the hatch
+	put(b, "PlazaFloor", Vector3.new(ix * 2, 0.3, iz * 2), CFrame.new(0, 0.15, 0), PAL.WoodDark, M.WoodPlanks, true)
+	local fy = H + 0.2 -- the upper floor's centre (top 11.4)
+	put(b, "PlazaFloor", Vector3.new(4.2 + ix, 0.4, iz * 2), CFrame.new((-ix + 4.2) * 0.5, fy, 0), PAL.WoodDark, M.WoodPlanks, true)
+	put(b, "PlazaFloor", Vector3.new(ix - 4.2, 0.4, iz - 5.5), CFrame.new((4.2 + ix) * 0.5, fy, (-iz - 5.5) * 0.5), PAL.WoodDark, M.WoodPlanks, true)
+	put(b, "PlazaFloor", Vector3.new(ix - 4.2, 0.4, iz - 6.5), CFrame.new((4.2 + ix) * 0.5, fy, (iz + 6.5) * 0.5), PAL.WoodDark, M.WoodPlanks, true)
+	-- the ramp: a wedge rising toward +Z (its sloped face looks to -Z), foot at z -5.5, top at z 6.5 on the upper floor
+	put(b, "PlazaStair", Vector3.new(ix - 4.4, H + 0.4, 12), CFrame.new((4.4 + ix) * 0.5, (H + 0.4) * 0.5, 0.5), PAL.Wood, M.WoodPlanks, true, false, Enum.PartType.Wedge)
+	put(b, "PlazaRail", Vector3.new(0.3, 3, 10.5), CFrame.new(4.2, H + 0.4 + 1.5, -0.25), PAL.SteelDark, M.Metal, true)
+	--[[ v133 (Code Bot, phone bug "the ladder ends under a solid ceiling"): JOB 32's hatch was the 2 x 2 truss footprint
+		(x -8.8 .. -5.4, z 5.3 .. 8.7, half of it over the walls): a climber hangs on a FACE of the truss, so his head hit
+		the roof slab 5 studs below the top (tools/sim/run_hatch_test.py: every face blocked). The roof is now 4 slabs
+		round a real 5.6 x 5.3 opening (inside x -8.0 .. -2.4, z 2.6 .. 7.9); the ladder stands against the opening's
+		+X edge (its +X face boxed in), so he climbs any open face inside the hole and steps off its top onto the roof;
+		a hatch frame round the hole, a railing on its open edges, the lid propped open. ]]
+	local roofY = 2 * H + 0.4 -- the roof slab's centre (top 22.8)
+	local hx0, hx1, hz0, hz1 = -ix, -2.4, 2.6, iz -- the opening (inside the walls)
+	put(b, "PlazaRoof", Vector3.new(W, 0.8, hz0 + D * 0.5), CFrame.new(0, roofY, (-D * 0.5 + hz0) * 0.5), PAL.Concrete, M.Concrete, true, true)
+	put(b, "PlazaRoof", Vector3.new(W * 0.5 - hx1, 0.8, D * 0.5 - hz0), CFrame.new((hx1 + W * 0.5) * 0.5, roofY, (hz0 + D * 0.5) * 0.5), PAL.Concrete, M.Concrete, true)
+	put(b, "PlazaRoof", Vector3.new(T, 0.8, D * 0.5 - hz0), CFrame.new(-W * 0.5 + T * 0.5, roofY, (hz0 + D * 0.5) * 0.5), PAL.Concrete, M.Concrete, true)
+	put(b, "PlazaRoof", Vector3.new(hx1 - hx0, 0.8, T), CFrame.new((hx0 + hx1) * 0.5, roofY, D * 0.5 - T * 0.5), PAL.Concrete, M.Concrete, true)
+	-- the ladder: 12 tall from the upper floor (11.4) to 0.6 above the roof top, 0.2 in from the opening's +X edge, so
+	-- a climber on its -X, +Z or -Z face hangs inside the hole all the way up. Its +X face (under the roof) is boxed
+	-- in by a shaft panel from the floor to the roof top, which also bridges the ladder's top to the roof.
+	truss(b, "PlazaLadder", 12, CFrame.new(hx1 - 1.2, H + 0.4 + 6, 5.25), PAL.SteelDark)
+	put(b, "PlazaHatchShaft", Vector3.new(0.2, 2 * H + 0.8 - (H + 0.4), 2), CFrame.new(hx1 - 0.1, (H + 0.4 + 2 * H + 0.8) * 0.5, 5.25), PAL.SteelDark, M.Metal, true)
+	local rt = roofY + 0.4 -- the roof top (22.8)
+	-- the hatch frame (a low kerb on the roof round the opening's front and open +X edge, clear of the ladder's top)
+	put(b, "PlazaHatchFrame", Vector3.new(hx1 - hx0 + 0.3, 0.3, 0.3), CFrame.new((hx0 + hx1) * 0.5 + 0.15, rt + 0.15, hz0 - 0.15), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaHatchFrame", Vector3.new(0.3, 0.3, 4.25 - hz0 - 0.2), CFrame.new(hx1 + 0.15, rt + 0.15, (hz0 + 4.05) * 0.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaHatchFrame", Vector3.new(0.3, 0.3, hz1 - 6.45), CFrame.new(hx1 + 0.15, rt + 0.15, (6.45 + hz1) * 0.5), PAL.SteelDark, M.Metal, false)
+	-- the railing: posts + top rail along the front edge and the +X edge either side of the ladder's top
+	local railC = sty.Accent or PAL.SteelDark
+	put(b, "PlazaHatchRail", Vector3.new(hx1 - hx0, 0.25, 0.25), CFrame.new((hx0 + hx1) * 0.5, rt + 3.2, hz0 - 0.15), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 3.2, 0.25), CFrame.new(hx0 + 0.2, rt + 1.6, hz0 - 0.15), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 3.2, 0.25), CFrame.new(hx1 + 0.15, rt + 1.6, hz0 - 0.15), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 0.25, 4.05 - hz0), CFrame.new(hx1 + 0.15, rt + 3.2, (hz0 + 4.05) * 0.5), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 0.25, hz1 - 6.45), CFrame.new(hx1 + 0.15, rt + 3.2, (6.45 + hz1) * 0.5), railC, M.Metal, true)
+	put(b, "PlazaHatchRail", Vector3.new(0.25, 3.2, 0.25), CFrame.new(hx1 + 0.15, rt + 1.6, hz1 - 0.15), railC, M.Metal, true)
+	-- the lid, propped open against the back parapet (see-through for shots: it neither collides nor answers a ray)
+	put(b, "PlazaHatchLid", Vector3.new(4.6, 3.6, 0.15), CFrame.new(-5.2, rt + 1.8, hz1 - 0.3) * rotX(-12), PAL.SteelDark, M.DiamondPlate, false)
+	-- the parapet (chest-high cover) and two sandbag rows at the front corners
+	local py = roofY + 0.4 + 1.6
+	put(b, "PlazaParapet", Vector3.new(W, 3.2, 0.6), CFrame.new(0, py, -D * 0.5 + 0.3), PAL.AdobeDark, M.Concrete, true)
+	put(b, "PlazaParapet", Vector3.new(W, 3.2, 0.6), CFrame.new(0, py, D * 0.5 - 0.3), PAL.AdobeDark, M.Concrete, true)
+	put(b, "PlazaParapet", Vector3.new(0.6, 3.2, D - 1.2), CFrame.new(-W * 0.5 + 0.3, py, 0), PAL.AdobeDark, M.Concrete, true)
+	put(b, "PlazaParapet", Vector3.new(0.6, 3.2, D - 1.2), CFrame.new(W * 0.5 - 0.3, py, 0), PAL.AdobeDark, M.Concrete, true)
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaSandbags", Vector3.new(3.5, 1.2, 1.2), CFrame.new(5.2 * s, roofY + 1.0, -D * 0.5 + 1.4), PAL.Sandbag, M.Sand, true)
+	end
+	-- cover inside
+	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-5, 1.3, 3) * rotY(10), PAL.CrateOlive, M.Wood, true)
+	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-2.5, 1.3, 5.6) * rotY(-8), PAL.Crate, M.Wood, true)
+	put(b, "PlazaCrate", Vector3.new(2, 2, 2), CFrame.new(-4, H + 1.4, -4) * rotY(20), PAL.CrateOlive, M.Wood, true)
+
+	-- ── v133: the facade (issue: "town centre buildings are flat boxes") ──
+	-- Nothing reaches more than PH_FRONT_OUT out of the front face, and nothing past the sides or the back: WorldPOI
+	-- measures the row's part box, and its disc must stay >= 30 from the road line and outside the plaza capture ring
+	-- (the 4 rows have ~1.2 - 1.8 studs to spare; tools/sim/run_plaza_test.py pins the box)
+	local out = PH_FRONT_OUT
+	local fz = -D * 0.5 -- the front face plane (outside)
+	local frontW = CFrame.new(0, 0, fz) -- window dressing frame on the front wall (local -Z = out)
+	local accC: Color3 = sty.Accent or PH_STYLE_DEFAULT.Accent
+	-- door: jambs + head, a step
+	put(b, "PlazaDoorFrame", Vector3.new(0.45, 8.3, 0.4), CFrame.new(-3.2, 4.15, fz - 0.2), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaDoorFrame", Vector3.new(0.45, 8.3, 0.4), CFrame.new(3.2, 4.15, fz - 0.2), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaDoorFrame", Vector3.new(6.9, 0.5, 0.45), CFrame.new(0, 8.25, fz - 0.22), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaDoorStep", Vector3.new(6.4, 0.25, out), CFrame.new(0, 0.125, fz - out * 0.5), PAL.Concrete, M.Concrete, false)
+	-- ground-floor shop windows (glass + frame) with striped awnings, and the door's awning
+	for _, c in ipairs({ -5.4, 5.4 }) do
+		windowDress(b, frontW, c, 3.6, 4, 7.4, trimC, 0.6)
+	end
+	for _, a in ipairs({ { -5.4, 4.6, 8.35 }, { 5.4, 4.6, 8.35 }, { 0, 7.2, 9.3 } }) do
+		local ax, aw, ay = a[1], a[2], a[3]
+		-- a 1.9-long canopy sloped 58 degrees down from the wall: it reaches ~0.95 out
+		put(b, "PlazaAwningCanopy", Vector3.new(aw, 0.15, 1.9), CFrame.new(ax, ay - 0.8, fz - out * 0.44) * rotX(-58), sty.Awning or PH_STYLE_DEFAULT.Awning, M.Fabric, false)
+		put(b, "PlazaAwningStripe", Vector3.new(aw, 0.4, 0.08), CFrame.new(ax, ay - 1.0, fz - out + 0.05), trimC, M.Fabric, false)
+	end
+	-- the shop sign band between the storeys, with a trim inset. No painted text and no light here: WorldPOI counts
+	-- the row's SurfaceGuis and Lights against the Town caps, and a row over a cap is skipped whole.
+	put(b, "PlazaShopSign", Vector3.new(11.5, 1.35, 0.3), CFrame.new(0, 10.05, fz - 0.2), accC, M.Wood, false)
+	put(b, "PlazaShopSignInset", Vector3.new(10.3, 0.55, 0.06), CFrame.new(0, 10.05, fz - 0.38), sty.Awning or PH_STYLE_DEFAULT.Awning, M.SmoothPlastic, false)
+	-- storey band + the roof-line cornice, a coping on the front parapet, corner quoins, a base plinth
+	put(b, "PlazaCornice", Vector3.new(W, 0.45, 0.5), CFrame.new(0, H + 0.1, fz - 0.25), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaCornice", Vector3.new(W, 0.7, out), CFrame.new(0, 2 * H + 0.45, fz - out * 0.5), trimC, M.SmoothPlastic, false)
+	put(b, "PlazaCoping", Vector3.new(W, 0.2, 0.8), CFrame.new(0, py + 1.7, -D * 0.5 + 0.3), trimC, M.SmoothPlastic, false)
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaQuoin", Vector3.new(0.9, 2 * H, 0.35), CFrame.new(s * (W * 0.5 - 0.45), H, fz - 0.175), trimC, M.Concrete, false)
+	end
+	put(b, "PlazaPlinth", Vector3.new(W, 0.9, 0.3), CFrame.new(0, 0.45, fz - 0.15), accC, M.Concrete, false)
+	-- upper-floor windows: front 3 (the middle one opens onto a balcony), back, both sides; the ground-floor side one
+	for _, c in ipairs({ -5.4, 0, 5.4 }) do
+		windowDress(b, frontW * CFrame.new(0, H, 0), c, 3.6, 3.5, 7, trimC, 0.6)
+	end
+	windowDress(b, CFrame.new(0, H, -fz) * rotY(180), 0, 3.6, 3.5, 7, trimC, 0)
+	windowDress(b, CFrame.new(-W * 0.5, H, 0) * rotY(90), 0, 3.6, 3.5, 7, trimC, 0)
+	windowDress(b, CFrame.new(W * 0.5, H, 0) * rotY(-90), 0, 3.6, 3.5, 7, trimC, 0)
+	windowDress(b, CFrame.new(-W * 0.5, 0, 0) * rotY(90), 2, 3.6, 4, 7.4, trimC, 0) -- win1(2) on the left side
+	-- a shallow balcony under the middle upper window: a ledge you can stand on, its railing, two brackets, a planter
+	local by = H + 3.5 -- its top level with the window sill (14.5)
+	put(b, "PlazaBalcony", Vector3.new(5.2, 0.35, out), CFrame.new(0, by - 0.175, fz - out * 0.5), PAL.Concrete, M.Concrete, true)
+	put(b, "PlazaBalconyRail", Vector3.new(5.2, 0.2, 0.2), CFrame.new(0, by + 2.9, fz - out + 0.1), accC, M.Metal, true)
+	for _, x in ipairs({ -2.5, -0.9, 0.9, 2.5 }) do
+		put(b, "PlazaBalconyRail", Vector3.new(0.14, 2.9, 0.14), CFrame.new(x, by + 1.45, fz - out + 0.1), accC, M.Metal, math.abs(x) > 2)
+	end
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaBalconyBracket", Vector3.new(0.3, 1.1, out * 0.9), CFrame.new(s * 2.2, by - 0.9, fz - out * 0.45), trimC, M.Concrete, false, false, Enum.PartType.Wedge)
+	end
+	put(b, "PlazaPlanter", Vector3.new(4.2, 0.6, 0.5), CFrame.new(0, by + 0.3, fz - out + 0.45), PAL.WoodDark, M.Wood, false)
+	put(b, "PlazaPlanterFlora", Vector3.new(3.8, 0.5, 0.4), CFrame.new(0, by + 0.85, fz - out + 0.45), Color3.fromRGB(84, 120, 60), M.Grass, false)
+	-- street level: two planters by the door, a bench under the right window, a wall lantern
+	for _, s in ipairs({ -1, 1 }) do
+		put(b, "PlazaPlanter", Vector3.new(0.95, 1.0, out * 0.95), CFrame.new(s * 3.9, 0.5, fz - out * 0.5), accC, M.Concrete, false)
+		put(b, "PlazaPlanterFlora", Vector3.new(0.9, 0.9, 0.9), CFrame.new(s * 3.9, 1.35, fz - out * 0.5), Color3.fromRGB(78, 116, 58), M.Grass, false, false, Enum.PartType.Ball)
+	end
+	put(b, "PlazaBenchSeat", Vector3.new(3.4, 0.25, out * 0.8), CFrame.new(5.6, 1.5, fz - out * 0.5), PAL.Wood, M.WoodPlanks, false)
+	put(b, "PlazaBenchLeg", Vector3.new(3.0, 1.35, out * 0.6), CFrame.new(5.6, 0.7, fz - out * 0.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaLampLantern", Vector3.new(0.7, 1, 0.7), CFrame.new(-7.4, 9.0, fz - 0.35), PAL.LampLens, M.SmoothPlastic, false) -- unlit (the row's light cap)
+	-- rooftop: two AC units (cover), a water cistern on a stand (cover), an antenna mast with a dish, a vent pipe; all
+	-- clear of the hatch (x -8 .. -2.4, z 2.6 .. 7.9), the ladder's step-off (x -2.4 .. 0) and the front sandbags
+	for _, ac in ipairs({ { 2.6, 6.2, 0 }, { 5.8, 6.2, 90 } }) do
+		put(b, "PlazaACUnit", Vector3.new(2.4, 1.6, 1.8), CFrame.new(ac[1], rt + 0.8, ac[2]) * rotY(ac[3]), Color3.fromRGB(198, 200, 196), M.Metal, true)
+		vcyl(b, "PlazaACFan", ac[1], rt + 1.6, ac[2], 0.12, 1.3, PAL.SteelDark, M.Metal, false)
+	end
+	put(b, "PlazaCisternStand", Vector3.new(2.8, 1.2, 2.8), CFrame.new(5.8, rt + 0.6, 1.2), PAL.SteelDark, M.Metal, true)
+	vcyl(b, "PlazaCistern", 5.8, rt + 1.2, 1.2, 2.8, 2.6, Color3.fromRGB(70, 88, 104), M.Metal, true)
+	vcyl(b, "PlazaCisternLid", 5.8, rt + 4.0, 1.2, 0.25, 2.8, Color3.fromRGB(60, 74, 88), M.Metal, false)
+	put(b, "PlazaAntennaMast", Vector3.new(0.2, 7, 0.2), CFrame.new(-7.2, rt + 3.5, -1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaAntennaMast", Vector3.new(2.4, 0.12, 0.12), CFrame.new(-7.2, rt + 5.6, -1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaAntennaMast", Vector3.new(1.6, 0.12, 0.12), CFrame.new(-7.2, rt + 6.4, -1.5), PAL.SteelDark, M.Metal, false)
+	put(b, "PlazaAntennaDish", Vector3.new(0.2, 1.8, 1.8), CFrame.new(-6.95, rt + 4.4, -1.5) * rotY(-20), Color3.fromRGB(220, 220, 215), M.SmoothPlastic, false, false, Enum.PartType.Cylinder)
+	vcyl(b, "PlazaVentPipe", 1.5, rt, -2.5, 1.4, 0.5, PAL.SteelDark, M.Metal, false)
+end
+
+WorldKits.DetailSpecs.PlazaHouse = 142 -- v133 (Code Bot): the facade + the real hatch (was 55)
+WorldKits.PlazaStats = { Built = 0, Extra = 0, Plain = 0 }
+
+-- claude-bud JOB 32: a TownHouse row flagged Enterable (its cluster's WE_Enterable, set by WorldPOI from
+-- PlazaBuildingsConfig.Rows; or opts.Enterable) builds the PlazaHouse
+-- instead, when the switch is on and its allowance has room; true = built (the caller returns the TownHouse count)
+local function tryPlaza(kitId: string, b: B): boolean
+	local cfgP: any = PlazaBuildingsConfig
+	local flagged = (b.Opts :: any).Enterable == true or b.Cluster:GetAttribute("WE_Enterable") == true
+	if kitId ~= "TownHouse" or not flagged or cfgP.Enabled ~= true then
+		return false
+	end
+	local plain = WorldKits.Footprint(kitId, b.Opts)
+	local plainN = if plain then plain.Parts else 0
+	local extra = (tonumber(cfgP.Parts) or 55) - plainN
+	if WorldKits.PlazaStats.Extra + extra > math.max(0, tonumber(cfgP.MaxExtraParts) or 0) then
+		WorldKits.PlazaStats.Plain += 1
+		return false
+	end
+	local before = #b.Parts
+	Builders.PlazaHouse(b)
+	local ex = (#b.Parts - before) - plainN
+	WorldKits.PlazaStats.Extra += ex
+	extraBy[b.Cluster] = (extraBy[b.Cluster] or 0) + ex
+	WorldKits.PlazaStats.Built += 1
+	local okE, Ent = pcall(function(): any
+		return require(script.Parent.Enterables)
+	end)
+	if okE and Ent and Ent.Register then
+		Ent.Register(tostring(b.Cluster.Name), b.CF, Vector3.new(PH.W, 2 * PH.H + 4.4, PH.D), tonumber(cfgP.DoorOutStuds) or 10)
+	end
+	return true
+end
+
 function WorldKits.Add(cluster: Model, kitId: string, cf: CFrame, opts: KitOpts?): number
 	local s = WorldKits.Specs[kitId]
 	local builder = Builders[kitId]
@@ -1509,6 +2213,18 @@ function WorldKits.Add(cluster: Model, kitId: string, cf: CFrame, opts: KitOpts?
 	end
 	local o: KitOpts = opts or {}
 	local b: B = { Cluster = cluster, CF = cf, Opts = o, Parts = {}, Rng = WorldKits.Rng(seedOf(cf, o)), Overlays = {} }
+	-- claude-bud JOB 31: the detailed build when WorldDetailConfig wants it and its allowance has room. It returns the
+	-- PLAIN count, so every caller's budget and cap (planned from Footprint, which stays plain) is unchanged; the
+	-- extra parts are counted once, in WorldKits.DetailStats.Extra (<= MaxExtraParts)
+	-- claude-bud JOB 32: an enterable plaza building instead of this TownHouse row (the TownHouse count is returned)
+	if tryPlaza(kitId, b) then
+		local plainH = WorldKits.Footprint(kitId, o)
+		return if plainH then plainH.Parts else #b.Parts
+	end
+	if tryDetail(kitId, b) then
+		local plain = WorldKits.Footprint(kitId, o)
+		return if plain then plain.Parts else #b.Parts
+	end
 	builder(b)
 	if #b.Overlays > 0 then
 		local list = pendingMesh[cluster]
@@ -1918,7 +2634,8 @@ function WorldKits.Finish(cluster: Model, parent: Instance): ClusterInfo
 	if overlays and #overlays > 0 then
 		scheduleOverlays(cluster, overlays)
 	end
-	return { Ok = true, Parts = parts, Span = span, Lights = lights, Signs = signs, Reason = nil }
+	-- claude-bud JOB 31 / 32: the plain-kit count (the extras come out of their own allowances)
+	return { Ok = true, Parts = parts - (extraBy[cluster] or 0), Span = span, Lights = lights, Signs = signs, Reason = nil }
 end
 
 function WorldKits.Place(kitId: string, cf: CFrame, parent: Instance, opts: PlaceOpts): Model?
@@ -1927,6 +2644,105 @@ function WorldKits.Place(kitId: string, cf: CFrame, parent: Instance, opts: Plac
 	local info = WorldKits.Finish(cluster, parent)
 	return if info.Ok then cluster else nil
 end
+
+-- ── claude-bud JOB 18 (WorldFill 2): countryside and town-character kits ─────────────────────────────────────────
+local FILL2 = {
+	Soil = Color3.fromRGB(104, 82, 60),
+	Crop = Color3.fromRGB(96, 128, 58),
+	CropDry = Color3.fromRGB(176, 150, 82),
+	Bronze = Color3.fromRGB(120, 92, 60),
+	Shrub = Color3.fromRGB(78, 104, 56),
+	Cars = { Color3.fromRGB(182, 48, 40), Color3.fromRGB(226, 222, 210), Color3.fromRGB(54, 86, 140), Color3.fromRGB(196, 170, 70), Color3.fromRGB(70, 74, 78) },
+	Awnings = { Color3.fromRGB(180, 60, 48), Color3.fromRGB(40, 110, 120), Color3.fromRGB(206, 170, 70) },
+}
+
+Builders.CropField = function(b: B)
+	local w = b.Opts.Width or 40
+	local d = b.Opts.Depth or 30
+	local crop = if b.Opts.Variant == "dry" then FILL2.CropDry else FILL2.Crop
+	put(b, "CropSoil", Vector3.new(w, 0.2, d), CFrame.new(0, 0.1, 0), FILL2.Soil, M.Ground, false)
+	for i = 1, 4 do
+		local x = -w / 2 + (i - 0.5) * w / 4
+		put(b, "CropRow", Vector3.new(w / 4 - 2.5, 0.7, d - 3), CFrame.new(x, 0.55, 0), crop, M.Grass, false)
+	end
+end
+
+Builders.Silo = function(b: B)
+	vcyl(b, "SiloBody", 0, 0, 0, 22, 9, PAL.ConcreteLight, M.Metal, true, true)
+	put(b, "SiloDome", Vector3.new(9, 9, 9), CFrame.new(0, 23, 0), PAL.Aluminium, M.Metal, true, true, Enum.PartType.Ball)
+	put(b, "SiloLadder", Vector3.new(1.2, 22, 0.4), CFrame.new(0, 11, -4.7), PAL.SteelDark, M.Metal, false)
+end
+
+Builders.Pylon = function(b: B)
+	put(b, "PylonLeg", Vector3.new(0.8, 24, 0.8), CFrame.new(-2.4, 12, 0) * CFrame.Angles(0, 0, math.rad(-4)), PAL.Steel, M.Metal, true)
+	put(b, "PylonLeg", Vector3.new(0.8, 24, 0.8), CFrame.new(2.4, 12, 0) * CFrame.Angles(0, 0, math.rad(4)), PAL.Steel, M.Metal, true)
+	put(b, "PylonArm", Vector3.new(9, 0.6, 0.6), CFrame.new(0, 22.5, 0), PAL.SteelDark, M.Metal, false)
+end
+
+Builders.CivCar = function(b: B)
+	local cols = FILL2.Cars
+	local col = cols[(math.floor(b.CF.Position.X * 7 + b.CF.Position.Z * 3) % #cols) + 1]
+	local pickup = b.Opts.Variant == "pickup"
+	put(b, "CarBody", Vector3.new(3.4, 1.6, 6.4), CFrame.new(0, 1.5, 0), col, M.Metal, true)
+	put(b, "CarCabin", Vector3.new(3.1, 1.4, if pickup then 2.4 else 3.4), CFrame.new(0, 3, if pickup then -1.2 else 0.2), col:Lerp(Color3.new(0, 0, 0), 0.25), M.Glass, true)
+	xcyl(b, "CarAxle", 0, 0.9, -2.1, 3.6, 1.8, PAL.MetalDark, M.Rubber, true)
+	xcyl(b, "CarAxle", 0, 0.9, 2.1, 3.6, 1.8, PAL.MetalDark, M.Rubber, true)
+end
+
+Builders.Awning = function(b: B)
+	local cols = FILL2.Awnings
+	local col = cols[(math.floor(b.CF.Position.X + b.CF.Position.Z) % #cols) + 1]
+	put(b, "AwningPost", Vector3.new(0.3, 3.8, 0.3), CFrame.new(-3.8, 1.9, -1.9), PAL.WoodDark, M.Wood, false)
+	put(b, "AwningPost", Vector3.new(0.3, 3.8, 0.3), CFrame.new(3.8, 1.9, -1.9), PAL.WoodDark, M.Wood, false)
+	put(b, "AwningCloth", Vector3.new(8, 0.2, 4.4), CFrame.new(0, 4, 0) * CFrame.Angles(math.rad(-12), 0, 0), col, M.Fabric, false)
+end
+
+Builders.Planter = function(b: B)
+	put(b, "PlanterBox", Vector3.new(3, 1.4, 3), CFrame.new(0, 0.7, 0), PAL.ConcreteLight, M.Concrete, true)
+	put(b, "PlanterShrub", Vector3.new(2.8, 2.2, 2.8), CFrame.new(0, 2.3, 0), FILL2.Shrub, M.Grass, false, false, Enum.PartType.Ball)
+end
+
+Builders.Bin = function(b: B)
+	vcyl(b, "Bin", 0, 0, 0, 2.4, 1.6, PAL.MetalDark, M.Metal, true)
+end
+
+Builders.Statue = function(b: B)
+	put(b, "StatuePlinth", Vector3.new(4, 4, 4), CFrame.new(0, 2, 0), PAL.ConcreteLight, M.Concrete, true, true)
+	put(b, "StatueBody", Vector3.new(1.8, 5, 1.2), CFrame.new(0, 6.5, 0), FILL2.Bronze, M.Metal, true)
+	put(b, "StatueHead", Vector3.new(1.4, 1.4, 1.4), CFrame.new(0, 9.7, 0), FILL2.Bronze, M.Metal, false, false, Enum.PartType.Ball)
+	put(b, "StatueArm", Vector3.new(0.5, 2.6, 0.5), CFrame.new(1.1, 9.8, 0) * CFrame.Angles(0, 0, math.rad(-25)), FILL2.Bronze, M.Metal, false)
+end
+
+Builders.RoofTank = function(b: B)
+	put(b, "RoofTankStand", Vector3.new(3, 1.2, 3), CFrame.new(0, 0.6, 0), PAL.SteelDark, M.Metal, false)
+	vcyl(b, "RoofTank", 0, 1.2, 0, 3.2, 3.4, PAL.TankCream, M.Metal, false)
+end
+
+Builders.ACUnit = function(b: B)
+	put(b, "ACBox", Vector3.new(3, 1.6, 2.4), CFrame.new(0, 0.8, 0), PAL.Aluminium, M.Metal, false)
+	put(b, "ACFan", Vector3.new(0.3, 1.8, 1.8), CFrame.new(0, 1.7, 0) * CFrame.Angles(0, 0, math.rad(90)), PAL.MetalDark, M.Metal, false, false, Enum.PartType.Cylinder)
+end
+
+Builders.Antenna = function(b: B)
+	put(b, "AntennaMast", Vector3.new(0.3, 7, 0.3), CFrame.new(0, 3.5, 0), PAL.Steel, M.Metal, false)
+	put(b, "AntennaBar", Vector3.new(2.4, 0.2, 0.2), CFrame.new(0, 5.8, 0), PAL.Steel, M.Metal, false)
+end
+
+Builders.NameSign = function(b: B)
+	put(b, "SignPost", Vector3.new(0.6, 7.2, 0.6), CFrame.new(-5.4, 3.6, 0.2), PAL.SteelDark, M.Metal, false)
+	put(b, "SignPost", Vector3.new(0.6, 7.2, 0.6), CFrame.new(5.4, 3.6, 0.2), PAL.SteelDark, M.Metal, false)
+	local board = put(b, "SignBoard", Vector3.new(12, 3, 0.4), CFrame.new(0, 5.4, 0), PAL.SignBoard, M.Wood, false)
+	local text = b.Opts.Text
+	-- WorldFill's own small sign budget (WorldKits.Fill2SignsMax; its folder is outside WarEmpireSetup, so the frozen
+	-- world budget of 17 is neither used nor exceeded)
+	local wk: any = WorldKits
+	if text ~= nil and text ~= "" and (wk.Fill2Signs or 0) < (wk.Fill2SignsMax or 8) then
+		wk.Fill2Signs = (wk.Fill2Signs or 0) + 1
+		WorldLabel.Surface(board, Enum.NormalId.Front, text, { Name = "WE_FillSign", MaxDistance = math.min(60, KC.SignMaxDistance), Color = PAL.LampLens })
+	end
+end
+;(WorldKits :: any).Fill2Signs = 0
+;(WorldKits :: any).Fill2SignsMax = 8
 
 -- ── Footprint (measured from a throw-away build; cached) ──────────────────────────────────────────────────────────
 local footCache: { [string]: Footprint } = {}

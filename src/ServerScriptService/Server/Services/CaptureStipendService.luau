@@ -62,12 +62,15 @@ local function payoutPlayer(player: Player)
 	if total <= 0 then
 		return
 	end
-	EconomyService.AddCash(player, total, "capture_stipend")
+	local paidOk, paid = EconomyService.AddCash(player, total, "capture_stipend")
 	if TerritoryConfig.CaptureStipend.NotifyOnPayout and NotificationService then
 		local oilHint = if oilCount > 0 then string.format(" (%d oil)", oilCount) else ""
+		-- Code Bot v198: the cash credited (multipliers in) + " · 2x" in the DOUBLE WEEKEND; display only
+		local shown = if EconomyService.ToastAmount then EconomyService.ToastAmount(total, paidOk, paid) else total
+		local tag = if EconomyService.ToastTag then EconomyService.ToastTag(player, "capture_stipend") else ""
 		NotificationService.Notify(
 			player,
-			string.format("Capture stipend +$%d from %d zones%s", total, count, oilHint),
+			string.format("Capture stipend +$%d%s from %d zones%s", shown, tag, count, oilHint),
 			"Reward"
 		)
 	end

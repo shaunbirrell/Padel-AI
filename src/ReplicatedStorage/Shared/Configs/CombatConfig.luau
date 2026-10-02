@@ -16,6 +16,8 @@ export type NPCTypeDef = {
 	CashReward: number,
 	XPReward: number,
 	Color: Color3,
+	HitChanceNear: number?, -- claude-bud JOB 41: an optional per-type CAP on CombatNPC.HitChance (near / far)
+	HitChanceFar: number?,
 }
 
 local AdminConfig = require(script.Parent.AdminConfig)
@@ -59,7 +61,7 @@ local CombatConfig = {
 	-- W3 step 2 Phase B, lane N (NPC core; spec w3s2 §4, contract §5). The cap stays MaxActiveNPCs (18 regular);
 	-- these types, and SpawnNPC's opts.OverCap event NPCs, may go SpecialOverCap past it (18 + 4 = 22 alive at most).
 	SpecialNPCTypes = { "BankGuard", "OilRigGuard", "FortGuard" } :: { string },
-	SpecialOverCap = 4,
+	SpecialOverCap = 24, -- claude-bud JOB 24 §6: 4 (bank) + OutpostDefenderConfig.MaxTotal 20 (defenders only exist near players)
 	-- The legacy field NPCs (BootstrapNPCs over the WE_NPCSpawn anchors). Ships true (today). The Ops cutover sets
 	-- it false: the camps' garrisons then come from OpsService, never two garrisons on the same posts.
 	FieldBootstrap = true,
@@ -71,6 +73,22 @@ local CombatConfig = {
 	},
 
 	NPCTypes = {
+		-- claude-bud JOB 41: the Guided training camp (TutorialConfig.Guided.Camp): weak on purpose, a first win
+		Recruit = {
+			Id = "Recruit",
+			DisplayName = "Camp Recruit",
+			Health = 40,
+			Damage = 4,
+			FireRate = 1.2,
+			Range = 50,
+			WalkSpeed = 10,
+			AggroRange = 60,
+			CashReward = 50,
+			XPReward = 15,
+			Color = Color3.fromRGB(120, 100, 70),
+			HitChanceNear = 0.35,
+			HitChanceFar = 0.2,
+		},
 		Infantry = {
 			Id = "Infantry",
 			DisplayName = "Hostile Infantry",
@@ -96,6 +114,22 @@ local CombatConfig = {
 			CashReward = 90,
 			XPReward = 28,
 			Color = Color3.fromRGB(90, 40, 40),
+		},
+		-- claude-bud JOB 37: road checkpoint guards (CheckpointGuardConfig; rewards set there). Between Infantry and the
+		-- bank guard. NOT a SpecialNPCType: they use the regular 18-slot pool (never the +4 headroom the bank / fort /
+		-- oil-rig guards need), sleep with no slot while no live player is near, and a full pool simply spawns fewer.
+		CheckpointGuard = {
+			Id = "CheckpointGuard",
+			DisplayName = "Checkpoint Guard",
+			Health = 140,
+			Damage = 9,
+			FireRate = 1.1,
+			Range = 70,
+			WalkSpeed = 13,
+			AggroRange = 80,
+			CashReward = (require(script.Parent.CheckpointGuardConfig) :: any).KillCash,
+			XPReward = (require(script.Parent.CheckpointGuardConfig) :: any).KillXP,
+			Color = Color3.fromRGB(95, 90, 60),
 		},
 		OilRigGuard = {
 			Id = "OilRigGuard",
@@ -197,5 +231,24 @@ function CombatConfig.LiveFor(block: any, userId: any): boolean
 	end
 	return false
 end
+
+--[[ claude-bud JOB 32: the ONE line-of-sight / shot rule for every shooter (Shared/Util/LosRule): a solid (CanCollide)
+	part stops a shot and blocks sight, a non-colliding one never does, water never does; a shot can also stop on a
+	character part (its target). Unified = false: every shooter keeps its old ray settings. ]]
+CombatConfig.LineOfSight = {
+	Unified = true,
+	MaxSkips = 6, -- a shot steps over at most this many see-through parts
+}
+
+--[[ claude-bud JOB 51 (2026-10-01, P0 "the Central Plaza guards don't shoot my girlfriend / she can't damage them"):
+	ONE shared hostility / protection rule (CombatService.ProtectedReason / NpcMayTarget / MayHurt). With it live, EVERY
+	CombatService NPC (outpost defenders, bank, checkpoint, ops garrisons) picks the nearest player it MAY hurt and skips
+	a spawn- or novice-shielded one (before: the nearest player, shielded or not, then a guaranteed miss forever).
+	OwnerFirst by the CANDIDATE player (RetentionConfig.Live); OFF == the old pick exactly. ]]
+;(CombatConfig :: any).SharedHostility = {
+	Enabled = true,
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 51): Code Bot flips it after Shaun's 2-player phone test
+	DebugLogSeconds = 1, -- [GuardTarget] at most once per NPC per this many seconds (only while someone has WE_GuardDebug)
+}
 
 return CombatConfig

@@ -1,0 +1,17 @@
+ok    SharedHostility is owner-first (Enabled, OwnerFirst = true)
+ok    MECHANISM (old brain): a novice-shielded player nearest every guard: 60 s, Laumartinez26 hits=0, the guards fired 340 guaranteed misses at the shielded one
+ok    counter-case (old brain): standing beside the shielded player she is nearest to one guard and gets shot (hits=10): this mechanism explains 'never shot' only in that geometry
+ok    FIX: the guards skip the shielded player and shoot Laumartinez26 (hits=10, real hit roll)
+ok    3 players round the circle, nobody protected: the nearest gets shot (distance pick as before)
+ok    a 3 s spawn shield: never fired at during it, picked up once it ends
+SPAWN  a fresh spawn in the circle centre, 4 Medium guards awake: dies after 5.9 s (3 s shield + the NPC reaction delay + the hit roll)
+FINDING  only ~2.9 s of exposure after the shield: the emergency / plot-less spawn sits inside the defenders' aggro (ring 35 + AggroRange 90). Moving the spawn needs a Studio check of clear ground (reported in LATEST-HANDOFF, not moved blind).
+ok    MayHurt(Player): a shielded victim -> no, a free victim -> yes
+ok    MayHurt(Vehicle): a shielded victim -> no, a free victim -> yes
+ok    MayHurt(Unit): a shielded victim -> no, a free victim -> yes
+ok    MayHurt(Turret): a shielded victim -> no, a free victim -> yes
+ok    MayHurt(BaseGuard): a shielded victim -> no, a free victim -> yes
+ok    MayHurt(NPC): a shielded victim -> no, a free victim -> yes
+CASES Player=false/true Vehicle=false/true Unit=false/true Turret=false/true BaseGuard=false/true NPC=false/true
+ok    owner-first on a live server: the rule is not live for a non-owner yet (the old pick for them)
+PLAZA GUARDS TEST: 0 failed

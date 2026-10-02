@@ -1,0 +1,340 @@
+--!strict
+--[[
+	claude-bud JOB 41 part B (2026-10-01): WHEN the Recruit Pack card is offered (MonetizationConfig.RecruitPackOffer,
+	owner-first). The server decides; the client (Controllers/RecruitPackController) only draws the card, reports
+	"shown" / "dropped", and prompts Roblox when he taps the price (the grant stays MonetizationService.ProcessReceipt).
+
+	Once per profile (profile.RecruitPackOffered, set when the client confirms the card SHOWED), at the FIRST of:
+	  * his first capture (TerritoryService calls OnCapture: the Guided reward capture or any first territory), or
+	  * RecruitPackOffer.OfferAfterPlaySeconds of total play (profile.Stats.PlayTimeSeconds, accrued here).
+	Never: before either, with Id 0, owned, during the Guided / onboarding hold, within CombatQuietSeconds of damage
+	taken, while seated, or while another card is out. It goes through MonetizationService.ClaimSoftOfferSlot (the
+	existing budget); a busy slot or a dropped card retries every RetrySeconds (MaxTriesPerSession). Telemetry:
+	RecruitPackOffered { trigger } + the FirstMinutes funnel steps 10 Offered / 11 Bought.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Constants = require(Shared.Constants)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+
+local RecruitPackService = {}
+
+local MC: any = MonetizationConfig
+local O: any = MC.RecruitPackOffer
+local deps: { [string]: any } = {}
+
+type Session = { Trigger: string?, Tries: number, NextAt: number, Awaiting: boolean, LastAccrue: number, Slot: any?, ShownAt: number?, Key: string? }
+local sessions: { [number]: Session } = {}
+
+RecruitPackService._clock = os.clock -- tests replace these
+RecruitPackService._delay = function(s: number, fn: (...any) -> (), ...: any)
+	task.delay(s, fn, ...)
+end
+
+local function sessionOf(player: Player): Session
+	local s = sessions[player.UserId]
+	if s == nil then
+		s = { Trigger = nil, Tries = 0, NextAt = 0, Awaiting = false, LastAccrue = RecruitPackService._clock() }
+		sessions[player.UserId] = s
+	end
+	return s :: Session
+end
+
+local function productId(): number
+	local def = MC.DevProducts.RecruitPack
+	return if typeof(def) == "table" then tonumber(def.Id) or 0 else 0
+end
+
+local function hasPack(player: Player, profile: any): boolean
+	if typeof(profile.Entitlements) == "table" and profile.Entitlements.RecruitPack == true then
+		return true
+	end
+	return player:GetAttribute("WE_Ent_RecruitPack") == true
+end
+
+--[[ The pure rule (tests call it). s = { Live, ProductId, Offered, Owned, Tries, Trigger?, PlaySeconds, Onboarding,
+	SinceHurt, Seated, Awaiting } -> (offer, why). `why` is the trigger on an offer ("capture" | "playtime"). ]]
+function RecruitPackService.Decide(s: any): (boolean, string)
+	if s.Live ~= true then
+		return false, "not_live"
+	elseif (tonumber(s.ProductId) or 0) == 0 then
+		return false, "id0" -- the owner has not OK'd the price yet: never prompts
+	elseif s.Offered == true or s.Owned == true then
+		return false, "done"
+	elseif s.Awaiting == true then
+		return false, "awaiting"
+	elseif (tonumber(s.Tries) or 0) >= O.MaxTriesPerSession then
+		return false, "tries"
+	end
+	local why: string? = nil
+	if s.Trigger == "capture" then
+		why = "capture"
+	elseif (tonumber(s.PlaySeconds) or 0) >= (tonumber(s.AfterSeconds) or O.OfferAfterPlaySeconds) then
+		why = "playtime"
+	end
+	if why == nil then
+		return false, "too_early"
+	elseif s.Onboarding == true then
+		return false, "hold"
+	elseif (tonumber(s.SinceHurt) or math.huge) < O.CombatQuietSeconds then
+		return false, "combat"
+	elseif s.Seated == true then
+		return false, "seated"
+	end
+	return true, why :: string
+end
+
+-- TerritoryService: a capture (the first one is the trigger)
+function RecruitPackService.OnCapture(player: Player)
+	if not MC.RecruitPackLiveFor(player.UserId) then
+		return
+	end
+	local s = sessionOf(player)
+	if s.Trigger == nil then
+		s.Trigger = "capture"
+	end
+end
+
+local function sinceHurt(player: Player): number
+	local RP = deps.RatePromptService
+	if RP and RP.SinceHurt then
+		local ok, v = pcall(RP.SinceHurt, player)
+		if ok and typeof(v) == "number" then
+			return v
+		end
+	end
+	return math.huge
+end
+
+local function seated(player: Player): boolean
+	local char = player.Character
+	local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+	return hum ~= nil and hum.SeatPart ~= nil
+end
+
+local function guidedFunnel(player: Player, profile: any, name: string)
+	local GS = deps.GuidedService
+	if GS and GS.Funnel then
+		pcall(GS.Funnel, player, profile, name)
+	end
+end
+
+-- one player's check (the shared tick calls it; tests call it with a fake clock)
+function RecruitPackService.Step(player: Player): (boolean, string)
+	local s = sessionOf(player)
+	local now = RecruitPackService._clock()
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil then
+		return false, "no_profile"
+	end
+	-- total play: Stats.PlayTimeSeconds (it was never counted before; analytics read it as minutesPlayed)
+	local dt = math.clamp(now - s.LastAccrue, 0, 60)
+	s.LastAccrue = now
+	if typeof(profile.Stats) == "table" then
+		profile.Stats.PlayTimeSeconds = math.floor((tonumber(profile.Stats.PlayTimeSeconds) or 0) + dt + 0.5)
+	end
+	if now < s.NextAt then
+		return false, "wait"
+	end
+	local RS = deps.RetentionService
+	-- claude-bud JOB 66: where the 5 R$ starter offer is live for him, THAT is his one-time offer (at ~5 min of play);
+	-- everyone else keeps the Recruit Pack offer exactly as before
+	-- (only once the 5 R$ product exists: with Id 0 he keeps the Recruit Pack offer, never no offer at all)
+	local row5: any = MC.DevProducts.StarterRecruit5
+	local s5 = (tonumber(row5 and row5.Id) or 0) ~= 0 and MC.Starter5LiveFor(player.UserId)
+	s.Key = if s5 then "StarterRecruit5" else "RecruitPack"
+	local offer, why = RecruitPackService.Decide({
+		Live = if s5 then true else MC.RecruitPackLiveFor(player.UserId),
+		ProductId = if s5 then (tonumber(row5.Id) or 0) else productId(),
+		Offered = if s5 then profile.Starter5Offered == true else profile.RecruitPackOffered == true,
+		Owned = if s5 then player:GetAttribute("WE_Ent_StarterRecruit5") == true else hasPack(player, profile),
+		AfterSeconds = if s5 then MC.Starter5.OfferAfterPlaySeconds else nil,
+		Tries = s.Tries,
+		Trigger = s.Trigger,
+		PlaySeconds = if typeof(profile.Stats) == "table" then profile.Stats.PlayTimeSeconds else 0,
+		Onboarding = RS ~= nil and RS.IsOnboarding ~= nil and RS.IsOnboarding(player) == true,
+		SinceHurt = sinceHurt(player),
+		Seated = seated(player),
+		Awaiting = s.Awaiting,
+	})
+	if not offer then
+		return false, why
+	end
+	local MS = deps.MonetizationService
+	local slot = if MS and MS.ClaimSoftOfferSlotRefundable then MS.ClaimSoftOfferSlotRefundable(player)
+		elseif MS and MS.ClaimSoftOfferSlot and MS.ClaimSoftOfferSlot(player) then {}
+		else nil
+	if slot == nil then
+		s.NextAt = now + O.RetrySeconds -- the existing budget is busy: try again later this session
+		return false, "slot"
+	end
+	s.Slot = slot
+	s.Tries += 1
+	s.Awaiting = true
+	-- claude-bud JOB 42 part C: the card shows the same number as the 30 MIN OF CASH row while TimePacks is live
+	local useTime = MC.RecruitPackUsesTimePack(player.UserId)
+	local perMin = if MS.PassivePerMin then MS.PassivePerMin(player, profile, useTime) else 0
+	local price = MC.DevProducts.RecruitPack.RobuxPrice
+	local okLP, LP = pcall(function(): any
+		return require(Shared.Util.LivePrices)
+	end)
+	if okLP and LP and LP.Price then
+		local okP, p = pcall(LP.Price, "DevProduct", "RecruitPack")
+		if okP and typeof(p) == "number" and p > 0 then
+			price = p
+		end
+	end
+	local rs = deps.RemoteSetup
+	local ev = rs and rs.Get(Constants.RemoteNames.FeaturePush)
+	if s5 and ev and ev:IsA("RemoteEvent") then -- claude-bud JOB 66: the 5 R$ card (same card, its own lines)
+		local L = MC.Starter5.Lines
+		local perMin5 = if MS.PassivePerMin then MS.PassivePerMin(player, profile, true) else 0
+		(ev :: RemoteEvent):FireClient(player, "RecruitPackOffer", {
+			ProductKey = "StarterRecruit5",
+			ProductId = tonumber(row5.Id) or 0,
+			RobuxPrice = row5.RobuxPrice,
+			Title = MC.Starter5.Title,
+			Lines = { L.Soldiers, string.format(L.Cash, tostring(MC.Starter5Cash(perMin5))), L.Boost },
+			Trigger = why,
+		})
+	elseif ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent):FireClient(player, "RecruitPackOffer", {
+			ProductKey = "RecruitPack",
+			ProductId = productId(),
+			Cash = MC.RecruitPackCashFor(player.UserId, perMin), -- the real number for him right now (the receipt recomputes it)
+			RobuxPrice = price,
+			Trigger = why,
+		})
+	end
+	local A = deps.AnalyticsService
+	if A and A.Log then
+		pcall(A.Log, "RECRUIT_PACK_OFFERED", player.UserId, { trigger = why })
+	end
+	-- no answer at all (the client never drew it): free it for a retry
+	local myTry = s.Tries
+	RecruitPackService._delay(O.ClientWaitMaxSeconds + O.AutoHideSeconds + 10, function()
+		if sessions[player.UserId] == s and s.Awaiting and s.Tries == myTry then
+			s.Awaiting = false
+			s.NextAt = RecruitPackService._clock() + O.RetrySeconds
+		end
+	end)
+	return true, why
+end
+
+-- the client's report (already through RemoteGate + the rate limit): "shown" = mark it (saved, never again);
+-- "dropped" = he never saw it: retry RetrySeconds later
+function RecruitPackService.Result(player: Player, result: any): boolean
+	local s = sessions[player.UserId]
+	if s == nil or not s.Awaiting or (result ~= "shown" and result ~= "dropped") then
+		return false
+	end
+	s.Awaiting = false
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	if profile == nil then
+		return false
+	end
+	if result == "shown" then
+		s.ShownAt = RecruitPackService._clock()
+		if s.Key == "StarterRecruit5" then
+			profile.Starter5Offered = true -- claude-bud JOB 66: its own once-ever flag
+		else
+			profile.RecruitPackOffered = true
+		end
+		deps.DataService.MarkDirty(player)
+		guidedFunnel(player, profile, "Offered")
+	else
+		-- he never saw it: give the soft-offer slot back (the Starter Pack's v153 rule) and retry
+		local MS = deps.MonetizationService
+		if MS and MS.RefundSoftOfferSlot and s.Slot then
+			pcall(MS.RefundSoftOfferSlot, player, s.Slot)
+		end
+		s.Slot = nil
+		s.NextAt = RecruitPackService._clock() + O.RetrySeconds
+	end
+	return true
+end
+
+-- the rate card (JOB 41 part D) waits while this card is out
+function RecruitPackService.CardOut(player: Player): boolean
+	local s = sessions[player.UserId]
+	return s ~= nil and s.Awaiting
+end
+
+-- out, or shown and not yet closed + `gap` seconds (the card hides itself after AutoHideSeconds)
+function RecruitPackService.CardBlocks(player: Player, gap: number): boolean
+	local s = sessions[player.UserId]
+	if s == nil then
+		return false
+	end
+	if s.Awaiting then
+		return true
+	end
+	return s.ShownAt ~= nil and RecruitPackService._clock() < (s.ShownAt :: number) + O.AutoHideSeconds + (tonumber(gap) or 0)
+end
+
+-- the pack is still due from a capture this session (live, a real Id, never offered, tries left): it goes first
+function RecruitPackService.Pending(player: Player): boolean
+	local s = sessions[player.UserId]
+	local profile = deps.DataService and deps.DataService.GetProfile(player)
+	return s ~= nil and profile ~= nil and s.Trigger == "capture" and MC.RecruitPackLiveFor(player.UserId) and productId() ~= 0
+		and profile.RecruitPackOffered ~= true and not hasPack(player, profile) and s.Tries < O.MaxTriesPerSession
+end
+
+function RecruitPackService._Session(player: Player): Session
+	return sessionOf(player)
+end
+
+function RecruitPackService.Init(d: { [string]: any })
+	deps = d
+	if O == nil or O.Enabled ~= true then
+		print("[WAR EMPIRE] RecruitPackService: off (RecruitPackOffer.Enabled = false)")
+		return
+	end
+	local MS = deps.MonetizationService
+	if MS and MS.OnGranted then
+		MS.OnGranted(function(player: Player, key: string, _event: any)
+			if key == "RecruitPack" then
+				local profile = deps.DataService and deps.DataService.GetProfile(player)
+				if profile then
+					guidedFunnel(player, profile, "Bought")
+				end
+				local BS = deps.BaseSignService
+				if BS and BS.Refresh then
+					pcall(BS.Refresh)
+				end
+			end
+		end)
+	end
+	local rs = deps.RemoteSetup
+	local ev = rs and rs.Get(Constants.RemoteNames.RequestRecruitPackResult)
+	if ev and ev:IsA("RemoteEvent") then
+		(ev :: RemoteEvent).OnServerEvent:Connect(function(player: Player, result: any)
+			if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestRecruitPackResult", result) then
+				return
+			end
+			if deps.RateLimitService and not deps.RateLimitService.Allow(player, "recruit_pack", 2 / 60, 3) then
+				return
+			end
+			RecruitPackService.Result(player, result)
+		end)
+	end
+	Players.PlayerRemoving:Connect(function(player: Player)
+		sessions[player.UserId] = nil
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(O.TickSeconds)
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p.Parent then
+					pcall(RecruitPackService.Step, p)
+				end
+			end
+		end
+	end)
+	print(string.format("[WAR EMPIRE] RecruitPackService Init (OwnerFirst=%s)", tostring(O.OwnerFirst)))
+end
+
+return RecruitPackService

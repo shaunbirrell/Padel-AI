@@ -38,7 +38,8 @@ _q2_qg = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/QualityGovernor.
 # v101 (Code Bot): retired, superseded in tools/checks/codebot_v101.py: #must_contain(_q2_qc, "local QualityConfig = {\n\tRollout = \"owner\",", "CLAUDE-BUD J8: low tier owner-only first")
 must_contain(_q2_qg, "local small = math.min(vp.X, vp.Y) <= Q.SmallScreenShortSide", "CLAUDE-BUD J8: small screens go low")
 must_contain(_q2_qg, "if small or lowFor >= Q.LowFpsSeconds then", "CLAUDE-BUD J8: sustained low FPS goes low")
-must_contain(_q2_qg, "local hide = low and ((e.Tier >= 2 and d > Q.HideTier2BeyondStuds) or d > Q.HideAnyBeyondStuds)", "CLAUDE-BUD J8: far decoration hidden while low")
+# claude-bud JOB 24 §8: retired, superseded in tools/checks/claude_bud_job24b.py (hide rule + look-ahead + hysteresis; buildings never culled): #must_contain(_q2_qg, "local hide = low and ((e.Tier >= 2 and d > Q.HideTier2BeyondStuds) or d > Q.HideAnyBeyondStuds)", "CLAUDE-BUD J8: far decoration hidden while low")
+# claude-bud JOB 27: superseded in tools/checks/claude_bud_job27.py (box distance + load / unload buffer): #must_contain(_q2_qg, "local hide = low and ((e.Tier >= 2 and d > Q.HideTier2BeyondStuds + extra) or d > Q.HideAnyBeyondStuds + extra)", "CLAUDE-BUD J8 (J24 §8): far decoration hidden while low (with hysteresis)")
 must_contain(_q2_qg, "\tfor _, d in ipairs(folder:GetDescendants()) do -- once per folder", "CLAUDE-BUD J8: the cluster list is built once per folder (no per-frame scans)")
 _q2_g = read(_q2_qg) or ""
 _q2_hb = _q2_g[_q2_g.find("RunService.Heartbeat:Connect"):_q2_g.find("end)", _q2_g.find("RunService.Heartbeat:Connect"))]

@@ -83,10 +83,32 @@ Constants.RemoteNames = {
 	RequestDeclareClanWar = "RequestDeclareClanWar",
 	ClanWarStateUpdate = "ClanWarStateUpdate",
 	RequestRedeemCode = "RequestRedeemCode",
+	RequestAnalyticsEvent = "RequestAnalyticsEvent", -- claude-bud JOB 24 §10: a whitelisted UI event (AnalyticsService)
+	BuildingTip = "BuildingTip", -- claude-bud JOB 24 §5: server -> client "NEW BUILDING" card { Id }
+	RequestTipSetting = "RequestTipSetting", -- claude-bud JOB 24 §5: Settings -> TIPS on / off
+	RequestTipsReplay = "RequestTipsReplay", -- claude-bud JOB 24 §5: Settings -> show my building tips again
+	RequestAirdropGuideSetting = "RequestAirdropGuideSetting", -- Code Bot board-text: Settings -> airdrop guide line off (boolean; AirdropGuideService)
+	RequestBuyArmour = "RequestBuyArmour", -- claude-bud JOB 26: buy the next armour tier (ArmourService)
+	RequestArmourLook = "RequestArmourLook", -- claude-bud JOB 26: hide / show the armour look
+	RequestNuke = "RequestNuke", -- claude-bud JOB 33: (action "panel" | "rush" | "launch", targetId?) NukeService
+	RequestAchievements = "RequestAchievements", -- claude-bud JOB 34: () -> FeaturePush "AchState" (AchievementService)
+	RequestArmySend = "RequestArmySend", -- claude-bud JOB 38: (plotId) SEND the army (ArmyPlan; the server re-checks everything)
+	RequestArmySendCheck = "RequestArmySendCheck", -- claude-bud JOB 38: (plotId) -> FeaturePush "ArmySendVerdict"
+	RequestEndgameBuy = "RequestEndgameBuy", -- claude-bud JOB 39: (kind, id?) EndgameService.Purchase (the price is config's)
+	RequestRivalAction = "RequestRivalAction", -- claude-bud JOB 41 C: "open" | "send" (+ plot id): telemetry only
+	RequestMissionReroll = "RequestMissionReroll", -- claude-bud JOB 49 C: (missionId) reroll a core mission (server-checked)
+	RequestZoneRun = "RequestZoneRun", -- claude-bud JOB 69 B: "start" | "cancel", zoneId (the how-to card's buttons; the server decides)
+	RequestRecruitPackResult = "RequestRecruitPackResult", -- claude-bud JOB 41 B: shown | dropped (the card; grants stay ProcessReceipt)
+	RequestRatePromptAnswer = "RequestRatePromptAnswer", -- claude-bud JOB 40 D: later | never | favorite | timeout (no reward)
+	RequestEndgameState = "RequestEndgameState", -- claude-bud JOB 39: () -> FeaturePush "EndgameState"
+	RequestSiteActivity = "RequestSiteActivity", -- claude-bud JOB 31: (action "list" | "start" | "quit", id?) SiteActivityService
+	RequestNotifOptInResult = "RequestNotifOptInResult", -- claude-bud JOB 29: the notification opt-in prompt result
+	RequestEventPopupSeen = "RequestEventPopupSeen", -- Code Bot v192: (EventConfig.Id) the DOUBLE WEEKEND pop-up was shown
 	CodeStateUpdate = "CodeStateUpdate",
 	-- Code Bot v102: RemoteFunction. Client -> server (code: string) -> { Result = "Success" | "AlreadyUsed" | "Invalid"
 	-- | "Expired" | "RateLimited" | "NotReady", Message: string }. Server validates + rate-limits (CodesService).
 	RedeemCode = "RedeemCode",
+	RequestMapLive = "RequestMapLive", -- claude-bud JOB 30: RemoteFunction, the world map's live markers (MapService)
 	NationColorUpdate = "NationColorUpdate",
 	-- Nations (cosmetic country flag): client -> server Types.NationRequestPayload { Action = "pick" | "later", Id?,
 	-- Source }. Replies go to that player only on NationColorUpdate. The server validates everything (rate limit,
@@ -156,6 +178,7 @@ Constants.RemoteNames = {
 	RequestGroupReward = "RequestGroupReward",
 	-- claude-bud PREMIUM: client -> server (action "Fire" | "Missile", aim: Vector3); PremiumWeaponService checks all
 	RequestPremiumWeapon = "RequestPremiumWeapon",
+	RequestBoardSetting = "RequestBoardSetting", -- claude-bud BOARDS: client -> server, the Supporter board opt-out (boolean)
 	-- claude-bud PREMIUM: UnreliableRemoteEvent (RemoteSetup UNRELIABLE list), server -> all clients: gun / missile / boom fx
 	PremiumWeaponFx = "PremiumWeaponFx",
 }
@@ -171,7 +194,7 @@ Constants.SessionLockRefreshSeconds = 15
 Constants.DataStoreRetries = 3
 Constants.DataStoreRetryDelay = 1.5
 
-Constants.MaxBasePlots = 6
+Constants.MaxBasePlots = 10 -- claude-bud JOB 21: = BaseConfig.MaxPlots (tools/checks/claude_bud_plots.py)
 Constants.PassiveIncomeTickSeconds = 5
 
 Constants.Colors = {

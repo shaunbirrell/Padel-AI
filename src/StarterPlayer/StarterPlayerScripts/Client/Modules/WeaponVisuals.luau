@@ -53,6 +53,48 @@ local CameraFx = require(script.Parent.CameraFx)
 
 local WeaponVisuals = {}
 
+--[[ claude-bud JOB 39 phase 4: a gun camo (EndgameConfig.Mastery.CamoLook; the server's character attribute WE_GunCamo).
+	Recolours the gun's BaseParts (the body in tone A, every other part tone B; Gold = metal), keeping each part's
+	original colour / material in attributes so a camo change or "None" restores it. Once per build / change, never
+	per frame. Unknown / nil camo = the original look. ]]
+function WeaponVisuals.ApplyCamo(mdl: Instance, camo: any)
+	local okC, EG = pcall(function(): any
+		return require(game:GetService("ReplicatedStorage").Shared.Configs.EndgameConfig)
+	end)
+	local look = if okC and EG and typeof(camo) == "string" then EG.Mastery.CamoLook[camo] else nil
+	local i = 0
+	for _, d in ipairs(mdl:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			if d:GetAttribute("WE_CamoC0") == nil then
+				d:SetAttribute("WE_CamoC0", d.Color)
+				d:SetAttribute("WE_CamoM0", d.Material.Name)
+			end
+			if look then
+				i += 1
+				d.Color = if i % 2 == 1 then look.A else look.B
+				d.Material = (Enum.Material :: any)[look.Mat] or d.Material
+				local sm = d:FindFirstChildOfClass("SpecialMesh")
+				if sm and sm.TextureId ~= "" then
+					sm.VertexColor = Vector3.new(d.Color.R, d.Color.G, d.Color.B) * 1.6
+				end
+			else
+				local c0 = d:GetAttribute("WE_CamoC0")
+				local m0 = d:GetAttribute("WE_CamoM0")
+				if typeof(c0) == "Color3" then
+					d.Color = c0
+				end
+				if typeof(m0) == "string" then
+					d.Material = (Enum.Material :: any)[m0] or d.Material
+				end
+				local sm = d:FindFirstChildOfClass("SpecialMesh")
+				if sm then
+					sm.VertexColor = Vector3.one
+				end
+			end
+		end
+	end
+end
+
 local FX = HudConfig.CombatFx
 local player = Players.LocalPlayer
 
@@ -456,6 +498,7 @@ local function buildGun(character: Model, weaponId: string, maxParts: number): G
 	if muzzle and flashSize > 0 then
 		flash = flashEmitter(muzzle, flashSize)
 	end
+	WeaponVisuals.ApplyCamo(mdl, character:GetAttribute("WE_GunCamo")) -- claude-bud JOB 39 (nil = the gun's own colours)
 	mdl.Parent = character
 	return { Model = mdl, Handle = h, Muzzle = muzzle, Eject = eject, Flash = flash, WeaponId = weaponId, Parts = n }
 end
@@ -1814,6 +1857,44 @@ function WeaponVisuals.MuzzleWorldPosition(): Vector3?
 		return attWorld(g.Muzzle, g.Handle)
 	end
 	return nil
+end
+
+-- claude-bud JOB 35: the rotary barrel (WeaponAssetLoader "WE_SpinWeld" under the Handle) turns while the trigger is
+-- held on a SpinUp gun. One RenderStepped connection only while spinning; nothing runs otherwise.
+local spinConn: RBXScriptConnection? = nil
+local spinWeld: Weld? = nil
+local spinBase: CFrame? = nil
+local spinAngle = 0
+function WeaponVisuals.SpinBarrel(on: boolean)
+	if not on then
+		if spinConn then
+			spinConn:Disconnect()
+			spinConn = nil
+		end
+		return
+	end
+	if spinConn then
+		return
+	end
+	local g = localGun
+	local w = if g then g.Handle:FindFirstChild("WE_SpinWeld") else nil
+	if w == nil or not w:IsA("Weld") then
+		return
+	end
+	if spinWeld ~= w then
+		spinWeld = w :: Weld
+		spinBase = (w :: Weld).C0
+		spinAngle = 0
+	end
+	spinConn = RunService.RenderStepped:Connect(function(dt: number)
+		local sw, base = spinWeld, spinBase
+		if sw == nil or base == nil or sw.Parent == nil then
+			WeaponVisuals.SpinBarrel(false)
+			return
+		end
+		spinAngle = (spinAngle + dt * 28) % (math.pi * 2)
+		sw.C0 = base * CFrame.Angles(0, 0, spinAngle)
+	end)
 end
 
 function WeaponVisuals.LocalShot(weaponId: string, origin: Vector3, dir: Vector3, hitPos: Vector3?, hitInst: Instance?, hitNormal: Vector3?)

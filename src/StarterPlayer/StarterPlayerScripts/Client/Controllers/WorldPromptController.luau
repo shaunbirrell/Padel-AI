@@ -200,8 +200,7 @@ local function applyTutorialStep(complete: boolean, id: any, pad: any, pointer: 
 		tutStep = nil
 		return
 	end
-	local i = if typeof(id) == "string" then TutorialConfig.IndexOf(id) else nil
-	local def = if i ~= nil then TutorialConfig.Steps[i] else nil
+	local def = if typeof(id) == "string" then (TutorialConfig :: any).ById(id) else nil -- claude-bud JOB 41: either step list
 	if def ~= nil then
 		tutStep = def
 	else
@@ -965,6 +964,11 @@ function structureInfo(structureId: string): (string, number, number?, boolean, 
 	end
 	local nextLevel = level + 1
 	local cost = def.Costs[nextLevel]
+	-- claude-bud JOB 39: the rebirth price scale the server charges (WE_BaseCostScale; nil = 1 = the raw price)
+	local scale = player:GetAttribute("WE_BaseCostScale")
+	if cost and typeof(scale) == "number" and scale > 1 then
+		cost = require(Shared.Configs.EndgameConfig).ScaleStructureCost(structureId, cost, scale)
+	end
 	return display, level, cost, false, prereqHint
 end
 
@@ -1854,6 +1858,10 @@ local function worldLabelPass()
 	end
 end
 
+-- v147: the last padKey each pad had in the overlap loop (weak keys: a lost entry only means one recompute)
+local padKeyCache: { [BasePart]: string } = setmetatable({}, { __mode = "k" }) :: any
+local PAD_MAX_MARGIN = math.max(OVERLAP_MARGIN, CONSOLE_MARGIN)
+
 local function startOverlapLoop()
 	if overlapConn then
 		overlapConn:Disconnect()
@@ -1897,9 +1905,21 @@ local function startOverlapLoop()
 		local bestSid: string? = nil
 		for part in pairs(slotParts) do
 			if part.Parent then
+				-- v147 (phone FPS): this runs every frame over every upgrade pad of all 10 plots (150 live), and each pad
+				-- cost two attribute reads and two new strings (padKey). A pad whose bounding sphere of the pointInPad
+				-- box (half size + the larger margin, +8 up) is farther than the player can never be "inside", so it is
+				-- skipped unless it is still marked entered (its leave must fire). Same result as before, no allocation.
+				local h = part.Size * 0.5
+				local rx, ry, rz = h.X + PAD_MAX_MARGIN, h.Y + 8, h.Z + PAD_MAX_MARGIN
+				local d = pos - part.Position
+				local ck = padKeyCache[part]
+				if d.X * d.X + d.Y * d.Y + d.Z * d.Z > rx * rx + ry * ry + rz * rz and ck ~= nil and not lastOverlap[ck] then
+					continue
+				end
 				local structureId = part:GetAttribute("StructureId")
 				if typeof(structureId) == "string" then
 					local key = padKey(part, structureId)
+					padKeyCache[part] = key
 					local inside = pointInPad(pos, part)
 					if inside then
 						if not lastOverlap[key] then
@@ -2230,7 +2250,7 @@ function WorldPromptController.Init()
 		if state.TutorialComplete == true then
 			applyTutorialStep(true, nil, nil, nil)
 		elseif state.TutorialComplete == false and typeof(state.TutorialStep) == "number" then
-			local def = TutorialConfig.GetStep(state.TutorialStep)
+			local def = (TutorialConfig :: any).GetStepFor(state.TutorialOrderVersion, state.TutorialStep) -- claude-bud JOB 41: the Guided list too
 			if def ~= nil then
 				applyTutorialStep(false, def.Id, nil, nil)
 			end

@@ -54,6 +54,55 @@ local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local PANEL_ID = "Shop"
 
 local player = Players.LocalPlayer
+local PremiumGunsConfig = require(Shared.Configs.PremiumGunsConfig) -- claude-bud JOB 35
+local ShopOverhaulConfig = require(Shared.Configs.ShopOverhaulConfig) -- claude-bud JOB 36 (owner-first)
+-- Code Bot v156: every R$ price and product name shown here is Roblox's real one (GetProductInfo on the server, cached,
+-- published on ReplicatedStorage); the MonetizationConfig RobuxPrice / DisplayName is only the fallback
+local LivePrices = require(Shared.Util.LivePrices)
+local TycoonMath = require(Shared.Util.TycoonMath) -- Code Bot v210: the shared $ K/M/B/T formatter (ShortCash)
+
+-- claude-bud JOB 36: a cash pack's amount for this player (the live one while the overhaul is on: WE_PassivePerMin)
+local function packCash(key: string, def: any): number
+	if ShopOverhaulConfig.LiveFor(player.UserId) then
+		local live = ShopOverhaulConfig.CashPackAmount(key, tonumber(player:GetAttribute(ShopOverhaulConfig.PerMinAttribute)) or 0)
+		if live then
+			return live
+		end
+	end
+	return tonumber(typeof(def) == "table" and def.Cash) or 0
+end
+-- claude-bud JOB 42: the time packs. SHOWN = TimePacksLiveFor AND all five Ids set (TimePacksReady); in Studio a
+-- live player also sees them with the Ids still 0 (price button "SOON") so the layout can be tested.
+local function timePacksShown(): boolean
+	return ShopOverhaulConfig.TimePacksShown(player.UserId)
+end
+local function timePacksPreview(): boolean
+	return game:GetService("RunService"):IsStudio() and ShopOverhaulConfig.TimePacksLiveFor(player.UserId) and not ShopOverhaulConfig.TimePacksReady()
+end
+-- the live amount (WE_TimePackPerMin; the floor until the first publish, never $0) and its row line
+local function timePackCash(key: string): number
+	local per = tonumber(player:GetAttribute(ShopOverhaulConfig.TimePacks.PerMinAttribute)) or 0
+	return ShopOverhaulConfig.TimePackAmount(key, per) or 0
+end
+local function timePackText(key: string): string
+	local n = math.floor(timePackCash(key))
+	local s = tostring(n):reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if s:sub(1, 1) == "," then
+		s = s:sub(2)
+	end
+	local p = ShopOverhaulConfig.TimePacks.Packs[key]
+	return "$" .. s .. (if p and n <= p.Floor then " " .. ShopOverhaulConfig.TimePacks.MinimumText else "")
+end
+
+-- Code Bot v156: a cash pack row in plain words ("Get $50,000 cash right away"; the live amount while JOB 36 is on)
+local function cashPackText(key: string, def: any): string
+	local n = math.floor(packCash(key, def))
+	local s = tostring(n):reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if s:sub(1, 1) == "," then
+		s = s:sub(2)
+	end
+	return "Get $" .. s .. " cash right away"
+end
 local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
 local pendingCashMegaHighlight = false
@@ -179,6 +228,33 @@ local function isOneTimeOwned(productKey: string): boolean
 	return false
 end
 
+--[[ Code Bot v210: Golden Pumpjacks (MonetizationConfig.GoldenBoost, owner-first). The row line is worked out live
+	from the server's WE_IncomePerSec with GoldenBoostGainPerSec (the same IncomePct the server multiplies by) and
+	formatted with TycoonMath.ShortCash: "+15% income forever · +$316/s" (owned: "+15% income active · +$N/s"). ]]
+local goldenSubLabel: TextLabel? = nil
+local function goldenBoostShown(): boolean
+	return MonetizationConfig.GoldenBoostLiveFor(player.UserId)
+end
+local function incomePerSecNow(): number
+	local v = tonumber(player:GetAttribute("WE_IncomePerSec")) or 0
+	return if v == v and v > 0 then v else 0
+end
+local function goldenGainText(gain: number): string
+	return TycoonMath.ShortCash(math.floor(math.max(0, gain) + 0.5))
+end
+local function goldenRowText(): string
+	local GB: any = (MonetizationConfig :: any).GoldenBoost
+	local owned = isOneTimeOwned(GB.ProductKey)
+	local gain = MonetizationConfig.GoldenBoostGainPerSec(incomePerSecNow(), owned)
+	return string.format(if owned then GB.OwnedFormat else GB.RowFormat, GB.IncomePct, goldenGainText(gain))
+end
+local function refreshGoldenRow()
+	local lab = goldenSubLabel
+	if lab and lab.Parent and goldenBoostShown() then
+		lab.Text = goldenRowText()
+	end
+end
+
 --[[ v70: a GamePass is known owned (display / offer gating only): bought this session, or replicated by the server
 	(WE_Ent_<passKey>, MonetizationService: its join check, a confirmed purchase, or a saved entitlement).
 	F1: no client-side ownership polling any more; the server attribute is the one source. Never yields. ]]
@@ -274,7 +350,7 @@ local function ownsAnyKey(keys: any): boolean
 end
 
 --[[ v70 (spec §4.3): every upsell goes through ONE offer toast (throttled / deferred by NotificationController). ]]
-type OfferDef = { Key: string, Title: string, Sub: string?, Cta: string, OnGet: () -> () }
+type OfferDef = { Key: string, Title: string, Sub: string?, Cta: string, OnGet: () -> (), First: boolean?, OnShown: (() -> ())?, OnDropped: ((why: string) -> ())? } -- Code Bot v153: + First / OnShown / OnDropped
 local function showOffer(def: OfferDef): boolean
 	local fn = (NotificationController :: any).ShowOffer
 	if typeof(fn) ~= "function" then
@@ -397,12 +473,28 @@ local function selectTab(name: string)
 	queueRefresh()
 end
 
+-- codebot_v140 (owner bug "cash packs gone"): the JOB 36 overhaul order puts the cash packs after ~30 pass rows
+-- (ShopOverhaulConfig.Order), but the cash "+" still scrolled to the TOP ("CashMega is first"), so the packs were never
+-- on screen. The Mega row's canvas Y = the heights (WE_RowH) of every visible row sorted before it + the list padding.
+local LIST_PAD = 6
+local function rowCanvasY(list: Instance, row: GuiObject): number
+	local y = 0
+	for _, c in ipairs(list:GetChildren()) do
+		if c ~= row and c:IsA("GuiObject") and c.Visible ~= false and c.LayoutOrder < row.LayoutOrder then
+			local h = tonumber(c:GetAttribute("WE_RowH"))
+			y += (h or c.AbsoluteSize.Y) + LIST_PAD
+		end
+	end
+	return y
+end
+
 local function highlightCashMegaRow()
 	local list = shopListFrame
 	if not list then
 		return
 	end
-	local row = list:FindFirstChild("ShopRow_CashMega")
+	-- claude-bud JOB 42: the cash "+" lands on the 4 HOURS OF CASH row while the time packs are shown
+	local row = list:FindFirstChild(if timePacksShown() or timePacksPreview() then "ShopRow_" .. ShopOverhaulConfig.TimePacks.BestValueKey else "ShopRow_CashMega")
 	if not row or not row:IsA("GuiObject") then
 		return
 	end
@@ -412,9 +504,9 @@ local function highlightCashMegaRow()
 	stroke.Parent = row
 	stroke.Color = Constants.Colors.Gold
 	stroke.Thickness = 2.5
-	-- Scroll to top (CashMega is first)
+	-- codebot_v140: scroll to the Mega row wherever the order puts it (was: to the top, "CashMega is first")
 	if list:IsA("ScrollingFrame") then
-		list.CanvasPosition = Vector2.new(0, 0)
+		list.CanvasPosition = Vector2.new(0, rowCanvasY(list, row))
 	end
 	task.delay(4, function()
 		if row.Parent then
@@ -430,6 +522,12 @@ end
 
 -- source: the purchase source of this open (F2: "hud_plus" from the cash "+"); a fresh open without one is "shop"
 local function setOpen(open: boolean, source: string?)
+	if open and not menuOpen then
+		-- claude-bud JOB 24 §10: "shop opened" (a whitelisted analytics event; the server rate-limits it)
+		pcall(function()
+			Remotes.FireServer(Constants.RemoteNames.RequestAnalyticsEvent, "ShopOpened")
+		end)
+	end
 	if open then
 		openSource = source or (if menuOpen then openSource else "shop")
 	end
@@ -480,6 +578,8 @@ local function promptDevProduct(productKey: string, source: string?)
 		toast("Coming soon", "Info") -- claude-bud: also while MonetizationConfig.Rollout is not live for this player
 		return
 	end
+	-- The client reports only the SKU; the server validates and emits the funnel event.
+	pcall(Remotes.FireServer, Constants.RemoteNames.RequestAnalyticsEvent, "ShopItemViewed", productKey)
 	-- Ask server to log + validate; client still prompts Marketplace (v69: intent log never delays the prompt)
 	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, productKey, cleanSource(source))
 	MarketplaceService:PromptProductPurchase(player, def.Id)
@@ -491,7 +591,10 @@ local function promptGamePass(passKey: string, source: string?)
 		return
 	end
 	-- v69: HideFromShop passes (ExtraPlotCosmetic — theme not implemented) are never offered
-	if (def :: any).HideFromShop == true then
+	-- claude-bud JOB 35: premium gun passes (WeaponIds) are HideFromShop for the generic list but sold from WEAPONS
+	if (def :: any).HideFromShop == true and typeof((def :: any).WeaponIds) ~= "table"
+		and not ((def :: any).OverhaulShop == true and ShopOverhaulConfig.LiveFor(player.UserId)) -- claude-bud JOB 36
+	then
 		return
 	end
 	-- F1: an owned pass (or one whose OwnedIfAny key is owned: the Speed Pass for a Speed Boost owner) never prompts
@@ -505,7 +608,8 @@ local function promptGamePass(passKey: string, source: string?)
 		toast("Coming soon", "Info")
 		return
 	end
-	-- Log intent on server; NEVER treat client confirmation as a grant
+	-- Log the SKU view on the server; NEVER treat client confirmation as a grant.
+	pcall(Remotes.FireServer, Constants.RemoteNames.RequestAnalyticsEvent, "ShopItemViewed", passKey)
 	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseGamePass, passKey, cleanSource(source))
 	MarketplaceService:PromptGamePassPurchase(player, def.Id)
 end
@@ -530,13 +634,16 @@ function ShopController.Init()
 			if key == speedPassKey and ownsAnyKey(speedOffer.SkipIfOwnsAny) then
 				return nil, nil, nil, nil
 			end
+			if key == ShopOverhaulConfig.DeathOfferProduct and speedOffer and ownsAnyKey(speedOffer.SkipIfOwnsAny) then
+				return nil, nil, nil, nil -- claude-bud JOB 36: no Speed Boost offer to a speed owner
+			end
 			-- Prefer live GamePass, then live DevProduct (DoubleCash is GP; SpeedBoost is DP)
 			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
 			if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
 				if offerOwned("GamePass", key) then
 					return nil, nil, nil, nil
 				end
-				return "GamePass", key, gp.Id, gp.DisplayName or key
+				return "GamePass", key, gp.Id, LivePrices.Name("GamePass", key) -- Code Bot v156: the Roblox name
 			end
 			-- v69: never offer a one-time product the player already owns (e.g. Speed Boost)
 			if isOneTimeOwned(key) then
@@ -544,11 +651,11 @@ function ShopController.Init()
 			end
 			local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
 			if dp and typeof(dp.Id) == "number" and dp.Id ~= 0 and dp.HideFromShop ~= true then
-				return "DevProduct", key, dp.Id, dp.DisplayName or key
+				return "DevProduct", key, dp.Id, LivePrices.Name("DevProduct", key) -- Code Bot v156
 			end
 			-- SpeedBoost / other: allow DevProduct even if HideFromShop when explicitly offered
 			if dp and typeof(dp.Id) == "number" and dp.Id ~= 0 then
-				return "DevProduct", key, dp.Id, dp.DisplayName or key
+				return "DevProduct", key, dp.Id, LivePrices.Name("DevProduct", key) -- Code Bot v156
 			end
 			return nil, nil, nil, nil
 		end
@@ -566,18 +673,17 @@ function ShopController.Init()
 					local def: any = if kind == "GamePass"
 						then (MonetizationConfig.GamePasses :: any)[k]
 						else (MonetizationConfig.DevProducts :: any)[k]
-					local robux = if typeof(def) == "table" then tonumber(def.RobuxPrice) else nil
-					local desc = if typeof(def) == "table" and typeof(def.Description) == "string" then def.Description else nil
+					local robux = if typeof(def) == "table" then LivePrices.Price(kind, k) else nil -- Code Bot v156: the real price
+					local desc = (MonetizationConfig :: any).DescFor(def, player.UserId) -- claude-bud JOB 40: speed text from the helper
 					local title = "Back stronger: " .. name
 					local sub = desc or "Boost after death"
-					if k == speedPassKey then
-						-- F8 copy: "Run faster" / "Speed Pass  +15% forever" / "GET R$ 5" (from the config values).
+					if k == speedPassKey or (k == ShopOverhaulConfig.DeathOfferProduct and ShopOverhaulConfig.LiveFor(player.UserId)) then
+						-- claude-bud JOB 36: the overhaul's death offer is Speed Boost (same "Run faster" copy)
+						-- F8 copy: "Run faster" / "Speed Pass  +40% forever" / "GET R$ 99" (from the config values).
 						-- No Cash Pack Mega highlight after this offer (M1: no 799 R$ push after a death).
-						local mult = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
+						local mult = (MonetizationConfig :: any).SpeedMultOf(def, player.UserId)
 						title = "Run faster"
-						sub = if mult and mult > 1
-							then string.format("%s  +%d%% forever", name, math.floor((mult - 1) * 100 + 0.5))
-							else name
+						sub = if mult > 1 then string.format("%s  %s", name, (MonetizationConfig :: any).SpeedText(mult, true)) else name -- JOB 40: the helper
 					else
 						pendingCashMegaHighlight = true -- v35: CashMega highlight if the shop opens next
 					end
@@ -734,13 +840,14 @@ function ShopController.Init()
 		l.Visible = name == activeTab
 		l.Parent = panel
 		local lay = Instance.new("UIListLayout")
-		lay.Padding = UDim.new(0, 6)
+		lay.Padding = UDim.new(0, LIST_PAD)
 		lay.SortOrder = Enum.SortOrder.LayoutOrder
 		lay.Parent = l
 		local n = Instance.new("TextLabel")
 		n.Name = "Note"
 		n.BackgroundTransparency = 1
 		n.Size = UDim2.new(1, -8, 0, noteSize * 2 + 6)
+		n:SetAttribute("WE_RowH", noteSize * 2 + 6) -- codebot_v140: rowCanvasY
 		n.Font = Enum.Font.GothamMedium
 		n.TextSize = noteSize
 		n.TextWrapped = true
@@ -752,7 +859,7 @@ function ShopController.Init()
 		tabLists[name] = l
 		return l
 	end
-	local list = makeList("Supply", "Prices in Robux. Live products charge on confirm. Passes persist after Rebirth.")
+	local list = makeList("Supply", "Prices in Robux. Passes last forever, even after a Rebirth.") -- Code Bot v156: plain text
 	shopListFrame = list
 	local weaponList = makeList(
 		"Weapons",
@@ -779,6 +886,7 @@ function ShopController.Init()
 		row.BackgroundColor3 = if isHero then HERO_ROW_BG else Constants.Colors.Background
 		row.BorderSizePixel = 0
 		row.LayoutOrder = layoutOrder
+		row:SetAttribute("WE_RowH", rowH) -- codebot_v140: rowCanvasY (the cash "+" scrolls to the Mega row)
 		row.Parent = parentList
 		corner(row, 8)
 		if isHero then
@@ -791,6 +899,7 @@ function ShopController.Init()
 		end
 
 		local t = Instance.new("TextLabel")
+		t.Name = "Title" -- Code Bot v156: the live-price refresh renames the row (LivePrices)
 		t.BackgroundTransparency = 1
 		t.Position = UDim2.fromOffset(12, titleY)
 		t.Size = UDim2.new(1, -(rowBtnW + 30), 0, titleSize + 4)
@@ -811,6 +920,7 @@ function ShopController.Init()
 		t.Parent = row
 
 		local s = Instance.new("TextLabel")
+		s.Name = "Sub"
 		s.BackgroundTransparency = 1
 		s.Position = UDim2.fromOffset(12, titleY + titleSize + 6)
 		s.Size = UDim2.new(1, -(rowBtnW + 30), 0, rowSubSize + 4)
@@ -847,10 +957,13 @@ function ShopController.Init()
 	end
 
 	local order = 0
+	local overhaul = ShopOverhaulConfig.LiveFor(Players.LocalPlayer.UserId) -- claude-bud JOB 36
+	local builtRows: { { Row: Frame, Sub: TextLabel, Key: string } } = {} -- claude-bud JOB 36: reorder + live amounts
 	-- SUPPLY row. onClick nil = display-only row: its button is disabled (never a dead gold BUY).
 	local function addRow(label: string, sub: string, onClick: (() -> ())?, btnText: string?, rowKey: string?, hero: boolean?): TextButton
 		order += 1
-		local _, _, btn = buildRow(list, order, rowKey or tostring(order), label, sub, btnText or "BUY", hero)
+		local rowFrame, rowSub, btn = buildRow(list, order, rowKey or tostring(order), label, sub, btnText or "BUY", hero)
+		table.insert(builtRows, { Row = rowFrame, Sub = rowSub, Key = rowKey or tostring(order) })
 		btn.Activated:Connect(function()
 			if onClick == nil or btn:GetAttribute("WE_Disabled") == true then
 				return
@@ -866,10 +979,16 @@ function ShopController.Init()
 	-- v69: rows whose button flips to OWNED (one-time DevProducts, GamePasses)
 	local oneTimeRows: { [string]: { Btn: TextButton, Label: string } } = {}
 	local passRows: { [string]: { Btn: TextButton, Label: string } } = {}
+	-- Code Bot v156: every Robux row, so a live Roblox price / name that arrives after the Shop was built updates it
+	type PricedRow = { Kind: string, Key: string, Btn: TextButton, Title: (string) -> string, Row: Frame, Empty: string }
+	local pricedRows: { PricedRow } = {}
 
 	local function addDevRow(key: string, def: any, heroLabel: string?)
 		if def.HideFromShop == true then
 			return
+		end
+		if overhaul and ShopOverhaulConfig.HideWhenLive[key] == true then
+			return -- claude-bud JOB 36: Army Expansion left the Shop (Bigger Army sells the same +10)
 		end
 		-- Id=0 stubs (AutoCollect/DoubleCash/VIPBoost/GoldenPumpjack) stay out of Shop — GamePasses / pads cover them
 		if (tonumber(def.Id) or 0) == 0 then
@@ -879,26 +998,28 @@ function ShopController.Init()
 		if not MonetizationConfig.SkuLiveFor(Players.LocalPlayer.UserId, key) then
 			return
 		end
-		local robux = tonumber(def.RobuxPrice) or 0
+		local robux = LivePrices.Price("DevProduct", key) -- Code Bot v156: Roblox's real price (config = fallback)
 		local stub = false -- kept for "coming soon" path if ever re-enabled
-		local sub = def.Description or ""
-		if def.GrantsBattlePassPremium then
-			sub = "Unlocks Battle Pass Premium (ProcessReceipt only)"
-		elseif def.GrantEntitlement then
-			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement)))
-		elseif def.Cash and def.Cash > 0 then
-			sub = "+$" .. formatCash(def.Cash) .. " Cash"
-		elseif def.Gold and def.Gold > 0 then
-			sub = "+" .. formatCash(def.Gold) .. " Gold"
+		-- Code Bot v156: plain player text: the product's Description says exactly what you get (Battle Pass Premium
+		-- used to show a developer note about the receipt path)
+		local sub = (MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or ""
+		if sub == "" and def.Cash and def.Cash > 0 then
+			sub = cashPackText(key, def) -- claude-bud JOB 36: the live amount
+		elseif sub == "" and def.Gold and def.Gold > 0 then
+			sub = "Get " .. formatCash(def.Gold) .. " gold right away"
+		end
+		local golden = key == (MonetizationConfig :: any).GoldenBoost.ProductKey and goldenBoostShown() -- Code Bot v210
+		if golden then
+			sub = goldenRowText()
 		end
 		if stub then
 			sub = sub .. " · coming soon (no charge)"
 		end
-		local title = def.DisplayName
-		if heroLabel then
-			-- F2: the title carries "BEST OFFER"; the sub is just what you get (no second "BEST OFFER —")
-			title = heroLabel .. " · " .. title
+		-- F2: the title carries "BEST OFFER"; the sub is just what you get (no second "BEST OFFER —")
+		local function titleFor(name: string): string
+			return if heroLabel then heroLabel .. " · " .. name else name
 		end
+		local title = titleFor(LivePrices.Name("DevProduct", key)) -- Code Bot v156: the Roblox product name
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "BUY"
 		local btn = addRow(title, sub, function()
 			promptDevProduct(key, openSource)
@@ -906,6 +1027,11 @@ function ShopController.Init()
 		if def.OneTime == true then
 			oneTimeRows[key] = { Btn = btn, Label = btnLabel }
 		end
+		if golden then
+			local subLab = (btn.Parent :: any):FindFirstChild("Sub")
+			goldenSubLabel = if subLab and subLab:IsA("TextLabel") then subLab else nil
+		end
+		table.insert(pricedRows, { Kind = "DevProduct", Key = key, Btn = btn, Title = titleFor, Row = (btn.Parent :: any) :: Frame, Empty = "BUY" })
 	end
 
 	-- F9: a stable row order (Robux price, then key) instead of the table's hash order, so a newly pasted Id (Golden
@@ -978,7 +1104,33 @@ function ShopController.Init()
 	-- Hero CashMega first, then remaining cash packs, then other DevProducts
 	local cashOrder = { "CashMega", "CashLarge", "CashMedium", "CashSmall" }
 	local listed: { [string]: boolean } = {}
-	do
+	local TP = ShopOverhaulConfig.TimePacks
+	local timeRows = timePacksShown() or timePacksPreview()
+	if timeRows then
+		-- claude-bud JOB 42: five TIME rows (4h .. 15m) replace the four old packs (hidden only while shown; their Ids
+		-- stay in config and their receipts are still granted)
+		for _, key in ipairs(TP.Order) do
+			local def: any = (MonetizationConfig.DevProducts :: any)[key]
+			local p = TP.Packs[key]
+			if typeof(def) == "table" and p then
+				local id = tonumber(def.Id) or 0
+				local robux = LivePrices.Price("DevProduct", key)
+				local best = key == TP.BestValueKey
+				addRow((if best then TP.BestValueLabel .. " · " else "") .. p.Title, timePackText(key), if id ~= 0 then function()
+					promptDevProduct(key, openSource)
+				end else nil, if id ~= 0 then (tostring(robux) .. " R$") else "SOON", key, best)
+			end
+			listed[key] = true
+		end
+		for key in pairs(TP.HideOldKeys) do
+			listed[key] = true
+		end
+	else
+		for _, key in ipairs(TP.Order) do
+			listed[key] = true -- claude-bud JOB 42: never a time row while they are not shown (OFF == OLD)
+		end
+	end
+	if not timeRows then
 		local mega = MonetizationConfig.DevProducts.CashMega
 		if mega then
 			addDevRow("CashMega", mega, "★ BEST OFFER")
@@ -1002,8 +1154,25 @@ function ShopController.Init()
 
 	for _, key in ipairs(sortedKeys(MonetizationConfig.GamePasses)) do
 		local def: any = (MonetizationConfig.GamePasses :: any)[key]
+		-- claude-bud JOB 36: the overhaul Shop lists its own passes (War Chest / Super Soldiers / Double HP) and the armory
+		-- guns (still Id 0 = no row), and drops the Speed Pass (Speed Boost sells the speed)
+		local overhaulRow = overhaul and (def.OverhaulShop == true or typeof(def.WeaponIds) == "table")
+		if overhaul and ShopOverhaulConfig.HideWhenLive[key] == true then
+			continue
+		end
+		if overhaul and typeof(def.Implies) == "table" then
+			local all = true
+			for _, k in ipairs(def.Implies) do
+				if not offerOwned("GamePass", k) then
+					all = false
+				end
+			end
+			if all then
+				continue -- the War Chest hides once its four parts are owned
+			end
+		end
 		-- v69: HideFromShop passes are not sold (ExtraPlotCosmetic "Elite Base Theme": nothing applies it yet)
-		if def.HideFromShop == true then
+		if def.HideFromShop == true and not overhaulRow then
 			continue
 		end
 		-- claude-bud JOB 6: Robux features (Extra Garage Slot, Robux-only vehicles) get a gold ROBUX row. While the Id
@@ -1022,18 +1191,43 @@ function ShopController.Init()
 		if not MonetizationConfig.SkuLiveFor(Players.LocalPlayer.UserId, key) then
 			continue -- claude-bud rollout gate
 		end
-		local robux = tonumber(def.RobuxPrice) or 0
+		-- Code Bot v156: Roblox's real pass price (GetProductInfo via LivePrices); the config RobuxPrice (and the JOB 36
+		-- OverhaulRobuxPrice, equal to it) is only the fallback, so the Shop can never show a price Roblox does not charge
+		local robux = LivePrices.Price("GamePass", key)
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "PASS"
-		local name = tostring(def.DisplayName or key)
+		local name = LivePrices.Name("GamePass", key) -- Code Bot v156: the Roblox pass name
 		-- "Pass: VIP", but "Speed Pass" (not "Pass: Speed Pass")
+		local titleMode = if robuxFeature then "robux" else "pass"
 		local passTitle = if string.find(string.lower(name), "pass", 1, true) then name else "Pass: " .. name
 		if robuxFeature then
 			passTitle = "ROBUX · " .. name -- claude-bud JOB 6: the gold Robux row
 		end
-		local btn = addRow(passTitle, tostring(def.Description or ""), function()
+		local passSub = tostring((MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or "") -- claude-bud JOB 40
+		if overhaul then -- claude-bud JOB 36: PERMANENT on every pass; BEST VALUE on 2x Cash; gold armory rows
+			passSub = ShopOverhaulConfig.PermanentPrefix .. tostring(def.OverhaulDescription or def.Description or "")
+			if key == ShopOverhaulConfig.BestValueKey then
+				passTitle = ShopOverhaulConfig.BestValueLabel .. " · " .. name
+				robuxFeature = true
+				titleMode = "best"
+			elseif typeof(def.WeaponIds) == "table" then
+				passTitle = "ROBUX · " .. name
+				robuxFeature = true
+				titleMode = "robux"
+			end
+		end
+		local function passTitleFor(n: string): string
+			if titleMode == "best" then
+				return ShopOverhaulConfig.BestValueLabel .. " · " .. n
+			elseif titleMode == "robux" then
+				return "ROBUX · " .. n
+			end
+			return if string.find(string.lower(n), "pass", 1, true) then n else "Pass: " .. n
+		end
+		local btn = addRow(passTitle, passSub, function()
 			promptGamePass(key, openSource)
 		end, btnLabel, "Pass_" .. key, robuxFeature)
 		passRows[key] = { Btn = btn, Label = btnLabel }
+		table.insert(pricedRows, { Kind = "GamePass", Key = key, Btn = btn, Title = passTitleFor, Row = (btn.Parent :: any) :: Frame, Empty = "PASS" })
 	end
 
 	-- Policy-pending loot crates (display only — no purchase/grant path). v69: disabled LOCKED button.
@@ -1045,6 +1239,89 @@ function ShopController.Init()
 			addRow("Supply Crate (locked)", "Random loot is policy-pending — not for sale", nil, "LOCKED", "SupplyCrate")
 		end
 	end
+
+	-- claude-bud JOB 36: the overhaul order (ShopOverhaulConfig.Order; rows in the same place keep their build order), and
+	-- the cash packs' live amounts follow WE_PassivePerMin
+	if overhaul then
+		for _, r in ipairs(builtRows) do
+			r.Row.LayoutOrder = ShopOverhaulConfig.Rank(r.Row.Name) * 1000 + r.Row.LayoutOrder
+		end
+		local function refreshPacks()
+			for _, r in ipairs(builtRows) do
+				local def: any = (MonetizationConfig.DevProducts :: any)[r.Key]
+				if ShopOverhaulConfig.CashPacks[r.Key] ~= nil and typeof(def) == "table" then
+					r.Sub.Text = cashPackText(r.Key, def) -- Code Bot v156: plain text
+				elseif ShopOverhaulConfig.TimePacks.Packs[r.Key] ~= nil then
+					r.Sub.Text = timePackText(r.Key) -- claude-bud JOB 42: the live amount (the floor until the first publish)
+				end
+			end
+		end
+		Players.LocalPlayer:GetAttributeChangedSignal(ShopOverhaulConfig.TimePacks.PerMinAttribute):Connect(refreshPacks) -- claude-bud JOB 42
+		Players.LocalPlayer:GetAttributeChangedSignal(ShopOverhaulConfig.PerMinAttribute):Connect(refreshPacks)
+		refreshPacks()
+	end
+
+	-- Code Bot v206 (Shaun): the SUPPLY · R$ tab is sorted by Robux price, cheapest first, so the 5 R$ rows are on top
+	-- (was: the JOB 36 overhaul order, the 5 R$ rows below the expensive ones). DISPLAY ORDER ONLY: the price is read from
+	-- MonetizationConfig RobuxPrice; no price, Id, prompt or rollout gate changes (owner-only rows stay owner-only: they
+	-- are still never built for anyone else). Rows with no Robux price (the FREE rows, Favorite WAR EMPIRE, the locked
+	-- Supply Crate) go to the bottom; at the same price an OWNED one-time product / pass goes after the unowned ones;
+	-- ties keep the build (overhaul) order.
+	local SORT_NO_PRICE = 1e9
+	local function rowRobuxPrice(rowKey: string): number
+		local def: any
+		if string.sub(rowKey, 1, 5) == "Pass_" then
+			def = (MonetizationConfig.GamePasses :: any)[string.sub(rowKey, 6)]
+		else
+			def = (MonetizationConfig.DevProducts :: any)[rowKey]
+		end
+		local p = if typeof(def) == "table" then tonumber(def.RobuxPrice) else nil
+		return if p and p > 0 then p else SORT_NO_PRICE
+	end
+	-- Code Bot v207 (Shaun): the FREE rows (FREE · Daily Reward / Airdrop / Join our group / Invite friends, keys fr_*)
+	-- go back to the TOP in their build order; then the paid rows cheapest first; then the rows with no price (Favorite
+	-- WAR EMPIRE, the locked Supply Crate) at the bottom.
+	local function rowTier(rowKey: string): number
+		if string.sub(rowKey, 1, 3) == "fr_" and rowKey ~= "fr_favorite" then
+			return 0
+		end
+		return if rowRobuxPrice(rowKey) < SORT_NO_PRICE then 1 else 2
+	end
+	local rowBuildOrder: { [Frame]: number } = {}
+	for _, r in ipairs(builtRows) do
+		rowBuildOrder[r.Row] = r.Row.LayoutOrder
+	end
+	local function applyPriceOrder()
+		local items: { { Row: Frame, Tier: number, Price: number, Owned: boolean, Base: number } } = {}
+		for _, r in ipairs(builtRows) do
+			local owned = false
+			if string.sub(r.Key, 1, 5) == "Pass_" then
+				local passKey = string.sub(r.Key, 6)
+				owned = passRows[passKey] ~= nil and offerOwned("GamePass", passKey)
+			elseif oneTimeRows[r.Key] ~= nil then
+				owned = isOneTimeOwned(r.Key)
+			end
+			table.insert(items, { Row = r.Row, Tier = rowTier(r.Key), Price = rowRobuxPrice(r.Key), Owned = owned, Base = rowBuildOrder[r.Row] or 0 })
+		end
+		table.sort(items, function(a, b): boolean
+			if a.Tier ~= b.Tier then
+				return a.Tier < b.Tier -- Code Bot v207: FREE rows first, paid, then no-price rows
+			end
+			if a.Price ~= b.Price then
+				return a.Price < b.Price
+			end
+			if a.Owned ~= b.Owned then
+				return not a.Owned
+			end
+			return a.Base < b.Base
+		end)
+		for i, it in ipairs(items) do
+			if it.Row.LayoutOrder ~= i then
+				it.Row.LayoutOrder = i -- 1.. (the tab note keeps LayoutOrder 0, above every row)
+			end
+		end
+	end
+	applyPriceOrder()
 
 	-- v69: WEAPONS tab — one row per WeaponConfig weapon in the shared order (UnlockLevel, price, id)
 	local weaponRows: { { Id: string, Row: Frame, Sub: TextLabel, Btn: TextButton, Action: string? } } = {}
@@ -1073,6 +1350,13 @@ function ShopController.Init()
 			-- Weapons with no Cash price are only listed once owned (starter / granted)
 			r.Row.Visible = isOwned or cost > 0
 			r.Action = nil
+			-- claude-bud JOB 35: a premium gun (gold row) is listed while live once its pass has an Id (Id 0 = hidden)
+			local premiumKey: string? = if (def :: any).Premium == true then (def :: any).PassKey else nil
+			local premiumPass: any = if premiumKey then (MonetizationConfig.GamePasses :: any)[premiumKey] else nil
+			local premiumSold = premiumPass ~= nil and (tonumber(premiumPass.Id) or 0) ~= 0 and PremiumGunsConfig.LiveFor(player.UserId)
+			if premiumKey then
+				r.Row.Visible = isOwned or premiumSold
+			end
 			if r.Id == equipped then
 				setRowButton(r.Btn, "EQUIPPED", "owned")
 				r.Sub.Text = "Equipped · " .. stats
@@ -1085,6 +1369,10 @@ function ShopController.Init()
 			elseif isOwned then
 				setRowButton(r.Btn, "LV " .. def.UnlockLevel, "locked")
 				r.Sub.Text = string.format("Owned · equip at Lv %d", def.UnlockLevel)
+			elseif premiumKey and premiumSold then
+				setRowButton(r.Btn, utf8.char(0xE002) .. " " .. tostring(LivePrices.Price("GamePass", premiumKey :: string)), "buy") -- claude-bud JOB 35; Code Bot v156 real price
+				r.Sub.Text = "PERMANENT · " .. stats
+				r.Action = "robux"
 			elseif cost <= 0 then
 				setRowButton(r.Btn, "N/A", "locked")
 				r.Sub.Text = "Not sold in the Shop"
@@ -1108,12 +1396,17 @@ function ShopController.Init()
 		for _, id in ipairs(WeaponConfig.SortedIds()) do
 			local def = WeaponConfig.Weapons[id]
 			wOrder += 1
-			local row, subLabel, btn = buildRow(weaponList, wOrder, "Weapon_" .. id, def.DisplayName, weaponStats(def), "…")
+			local premium = (def :: any).Premium == true -- claude-bud JOB 35: gold rows, listed first
+			local row, subLabel, btn = buildRow(weaponList, if premium then wOrder - 1000 else wOrder, "Weapon_" .. id, def.DisplayName, weaponStats(def), "…", premium)
 			local entry = { Id = id, Row = row, Sub = subLabel, Btn = btn, Action = nil :: string? }
 			table.insert(weaponRows, entry)
 			btn.Activated:Connect(function()
 				local action = entry.Action
 				if btn:GetAttribute("WE_Disabled") == true or action == nil then
+					return
+				end
+				if action == "robux" then
+					promptGamePass(tostring((def :: any).PassKey), "shop") -- claude-bud JOB 35: the pass grants the gun
 					return
 				end
 				-- One request per tap: the row shows BUYING… / EQUIPPING… until the server's attribute push
@@ -1134,6 +1427,8 @@ function ShopController.Init()
 	end
 
 	local function refreshOwnedRows()
+		applyPriceOrder() -- Code Bot v206: an OWNED row moves after the unowned rows at its price
+		refreshGoldenRow() -- Code Bot v210: the live +$N/s (and its owned line)
 		for key, r in pairs(oneTimeRows) do
 			if isOneTimeOwned(key) then
 				setRowButton(r.Btn, "OWNED", "owned")
@@ -1159,6 +1454,29 @@ function ShopController.Init()
 		refreshWeaponRows()
 		refreshOwnedRows()
 	end
+
+	-- Code Bot v156: the server publishes Roblox's real prices / names a few seconds after it starts; rows built before
+	-- that (with the config fallback) take the live price and name here, then the OWNED pass re-applies
+	local function applyLivePrices()
+		for _, r in ipairs(pricedRows) do
+			local p = LivePrices.Price(r.Kind, r.Key)
+			local label = if p > 0 then (tostring(p) .. " R$") else r.Empty
+			local owned = if r.Kind == "GamePass" then passRows[r.Key] else oneTimeRows[r.Key]
+			if owned then
+				owned.Label = label
+			end
+			if r.Btn:GetAttribute("WE_Disabled") ~= true then
+				r.Btn.Text = label
+			end
+			local t = r.Row:FindFirstChild("Title")
+			if t and t:IsA("TextLabel") then
+				t.Text = r.Title(LivePrices.Name(r.Kind, r.Key))
+			end
+		end
+		refreshOwnedRows()
+	end
+	LivePrices.Changed(applyLivePrices)
+	applyLivePrices()
 
 	-- v69: live inputs for the rows (attributes replicate without any remote)
 	do
@@ -1216,6 +1534,18 @@ function ShopController.Init()
 				end
 				queueRefresh()
 				refreshPremiumPads()
+				-- Code Bot v210: Golden Pumpjacks bought: once the boost is in WE_IncomePerSec (2 passive ticks), toast the REAL
+				-- new income per second and the boost's share of it (MonetizationConfig.GoldenBoost)
+				local GB: any = (MonetizationConfig :: any).GoldenBoost
+				local gdef: any = (MonetizationConfig.DevProducts :: any)[GB.ProductKey]
+				if typeof(gdef) == "table" and gdef.Id == productId and goldenBoostShown() then
+					task.delay(tonumber(GB.ToastWaitSeconds) or 11, function()
+						local inc = incomePerSecNow()
+						local gain = MonetizationConfig.GoldenBoostGainPerSec(inc, true)
+						pcall(NotificationController.Show, string.format(GB.ToastFormat, TycoonMath.ShortCash(math.floor(inc)), goldenGainText(gain)), "Success", 6)
+						refreshGoldenRow()
+					end)
+				end
 			end)
 		end)
 		pcall(function()
@@ -1260,6 +1590,51 @@ function ShopController.Init()
 		local PAD_TAG = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
 
 		local function applyOwnedVisual(part: BasePart, owned: boolean)
+			-- claude-bud JOB 19: a purchase stand: OWNED = green ring + hologram, a check badge in the price chip, no prompt
+			if part:GetAttribute("WE_Stand") == true then
+				local stand = part.Parent
+				local color = part:GetAttribute("WE_StandColor")
+				local base: Color3 = if typeof(color) == "Color3" then color else Color3.fromRGB(255, 210, 40)
+				local green = Color3.fromRGB(80, 210, 110)
+				for _, nm in ipairs({ "FloorRing", "Hologram" }) do
+					local p = stand and stand:FindFirstChild(nm)
+					if p and p:IsA("BasePart") then
+						p.Color = if owned then green else base
+					end
+				end
+				local chip = part:FindFirstChild("WE_PremiumBillboard")
+				chip = chip and chip:FindFirstChild("PriceChip")
+				if chip and chip:IsA("Frame") then
+					local price = chip:FindFirstChild("Price")
+					if price and price:IsA("TextLabel") then
+						if owned then
+							if price:GetAttribute("WE_PriceText") == nil then
+								price:SetAttribute("WE_PriceText", price.Text)
+							end
+							price.Text = "✓ OWNED"
+						else
+							local was = price:GetAttribute("WE_PriceText")
+							if typeof(was) == "string" then
+								price.Text = was
+							end
+						end
+					end
+					chip.BackgroundColor3 = if owned then green else Color3.fromRGB(214, 170, 62)
+				end
+				-- Code Bot v175: the stand sign (a SurfaceGui panel): its gold edge turns green while owned
+				local sign = part:FindFirstChild("WE_PremiumBillboard")
+				local card = sign and sign:FindFirstChild("Card")
+				local edge = card and card:FindFirstChild("Edge")
+				if edge and edge:IsA("UIStroke") then
+					edge.Color = if owned then green else Color3.fromRGB(214, 170, 62)
+				end
+				local pp = part:FindFirstChild("WE_BuyPrompt")
+				if pp and pp:IsA("ProximityPrompt") then
+					pp.Enabled = not owned
+				end
+				part:SetAttribute("WE_LocalOwned", owned)
+				return
+			end
 			local bb = part:FindFirstChild("WE_PremiumBillboard")
 			if not bb then
 				bb = part:FindFirstChildWhichIsA("BillboardGui")
@@ -1329,7 +1704,15 @@ function ShopController.Init()
 		local lastStarterToastAt = -math.huge
 		local STARTER_TOAST_DEBOUNCE = 30
 
-		local function StarterBundleToast(payload: any): boolean
+		-- Code Bot v153: tell the server whether the Starter card really showed (it marks the pack offered only on
+		-- "shown"; "dropped" / "refused" = it comes back later). No AckId (old server) = nothing to answer.
+		local function starterAnswer(ackId: number?, result: string)
+			if ackId ~= nil then
+				task.spawn(Remotes.FireServer, Constants.RemoteNames.OfferResult, "StarterBundle", result, ackId)
+			end
+		end
+
+		local function starterBundleToastInner(payload: any, ackId: number?): boolean
 			local now = os.clock()
 			if now - lastStarterToastAt < STARTER_TOAST_DEBOUNCE then
 				return false
@@ -1340,8 +1723,9 @@ function ShopController.Init()
 			end
 			lastStarterToastAt = now
 			local p: any = if typeof(payload) == "table" then payload else {}
-			local displayName = tostring(p.DisplayName or def.DisplayName or "Starter Bundle")
-			local robux = tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)
+			-- Code Bot v156: the Roblox product name and REAL price (the card said 149 while Roblox charged 249)
+			local displayName = LivePrices.Name("DevProduct", "StarterBundle")
+			local robux = LivePrices.ForOffer("DevProduct", "StarterBundle", p.RobuxPrice)
 			-- claude-bud JOB 5d: a real limited window from the server (EndsUnix); no end = no timer text
 			local ends = tonumber(p.EndsUnix)
 			if ends then
@@ -1360,7 +1744,23 @@ function ShopController.Init()
 					-- PromptProductPurchase only — grants via ProcessReceipt
 					promptDevProduct("StarterBundle", "starter_offer")
 				end,
+				First = p.First == true, -- Code Bot v153: not held for the tutorial card
+				OnShown = function()
+					starterAnswer(ackId, "shown")
+				end,
+				OnDropped = function()
+					starterAnswer(ackId, "dropped")
+				end,
 			})
+		end
+
+		local function StarterBundleToast(payload: any): boolean
+			local ackId = if typeof(payload) == "table" then tonumber(payload.AckId) else nil
+			local queued = starterBundleToastInner(payload, ackId)
+			if not queued then
+				starterAnswer(ackId, "refused") -- debounce / owned / window over / throttled: not seen
+			end
+			return queued
 		end
 
 		Remotes.BindEvent(Constants.RemoteNames.StarterBundleOffer, StarterBundleToast)
@@ -1385,8 +1785,8 @@ function ShopController.Init()
 			return showOffer({
 				Key = "AutoCollectToast",
 				Title = "Skip the walk to the ATM",
-				Sub = tostring(p.DisplayName or def.DisplayName or "Auto Collect") .. " · collects for you",
-				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
+				Sub = LivePrices.Name("GamePass", "AutoCollect") .. " · collects for you",
+				Cta = ctaFor(LivePrices.ForOffer("GamePass", "AutoCollect", p.RobuxPrice)), -- Code Bot v156
 				OnGet = function()
 					promptGamePass("AutoCollect", "offer")
 				end,
@@ -1415,8 +1815,8 @@ function ShopController.Init()
 			return showOffer({
 				Key = "DoubleCashToast",
 				Title = "Double all cash",
-				Sub = tostring(p.DisplayName or def.DisplayName or "2x Cash") .. " · every payout, forever",
-				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
+				Sub = LivePrices.Name("GamePass", "DoubleCash") .. " · every payout, forever",
+				Cta = ctaFor(LivePrices.ForOffer("GamePass", "DoubleCash", p.RobuxPrice)), -- Code Bot v156
 				OnGet = function()
 					promptGamePass("DoubleCash", "offer")
 				end,
@@ -1444,9 +1844,10 @@ function ShopController.Init()
 			local p: any = if typeof(payload) == "table" then payload else {}
 			return showOffer({
 				Key = "VIPToast",
-				Title = "Go " .. tostring(p.DisplayName or def.DisplayName or "VIP"),
-				Sub = "+25% cash · prestige presence",
-				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
+				Title = "Go " .. LivePrices.Name("GamePass", "VIP"),
+				-- Code Bot v156: what VIP really gives this player (+50 % with the live JOB 36 overhaul, else +25 %)
+				Sub = tostring(if ShopOverhaulConfig.LiveFor(player.UserId) and def.OverhaulDescription then def.OverhaulDescription else (MonetizationConfig :: any).DescFor(def, player.UserId)),
+				Cta = ctaFor(LivePrices.ForOffer("GamePass", "VIP", p.RobuxPrice)), -- Code Bot v156
 				OnGet = function()
 					promptGamePass("VIP", "offer")
 				end,
@@ -1474,9 +1875,9 @@ function ShopController.Init()
 			local p: any = if typeof(payload) == "table" then payload else {}
 			return showOffer({
 				Key = "SpeedBoostToast",
-				Title = tostring(p.DisplayName or def.DisplayName or "Speed Boost"),
-				Sub = if typeof(def.Description) == "string" and def.Description ~= "" then def.Description else "Run faster across the map",
-				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
+				Title = LivePrices.Name("DevProduct", "SpeedBoost"), -- Code Bot v156
+				Sub = (MonetizationConfig :: any).DescFor(def, Players.LocalPlayer.UserId) or "Run faster across the map", -- claude-bud JOB 40
+				Cta = ctaFor(LivePrices.ForOffer("DevProduct", "SpeedBoost", p.RobuxPrice)), -- Code Bot v156
 				OnGet = function()
 					promptDevProduct("SpeedBoost", "offer")
 				end,
@@ -1496,19 +1897,40 @@ function ShopController.Init()
 			if now - lastMegaToastAt < MEGA_TOAST_DEBOUNCE then
 				return false
 			end
+			local tkey = if typeof(payload) == "table" and typeof(payload.ProductKey) == "string" then payload.ProductKey else nil
+			local tp = if tkey then ShopOverhaulConfig.TimePacks.Packs[tkey :: string] else nil
+			if tp then
+				-- claude-bud JOB 42: the same slot sells "4 HOURS OF CASH: $<N>" while the time packs are shown
+				local tdef = (MonetizationConfig.DevProducts :: any)[tkey :: string]
+				if typeof(tdef) ~= "table" or (tonumber(tdef.Id) or 0) == 0 then
+					return false
+				end
+				lastMegaToastAt = now
+				local n = timePackCash(tkey :: string)
+				return showOffer({
+					Key = "CashMegaToast",
+					Title = string.format("%s: $%s", tp.Title, formatCash(n)),
+					Sub = tp.Label,
+					Cta = ctaFor(LivePrices.ForOffer("DevProduct", tkey :: string, payload.RobuxPrice)),
+					OnGet = function()
+						pendingCashMegaHighlight = true
+						promptDevProduct(tkey :: string, "offer")
+					end,
+				})
+			end
 			local def = (MonetizationConfig.DevProducts :: any).CashMega
 			if typeof(def) ~= "table" or typeof(def.Id) ~= "number" or def.Id == 0 then
 				return false
 			end
 			lastMegaToastAt = now
 			local p: any = if typeof(payload) == "table" then payload else {}
-			local cashAmount = tonumber(def.Cash) or 0
+			local cashAmount = packCash("CashMega", def) -- claude-bud JOB 36: the live amount while the overhaul is on
 			return showOffer({
 				Key = "CashMegaToast",
 				Title = "★ BEST OFFER",
-				Sub = tostring(p.DisplayName or def.DisplayName or "Cash Pack Mega")
+				Sub = LivePrices.Name("DevProduct", "CashMega")
 					.. (if cashAmount > 0 then " · +$" .. formatCash(cashAmount) else ""),
-				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
+				Cta = ctaFor(LivePrices.ForOffer("DevProduct", "CashMega", p.RobuxPrice)), -- Code Bot v156
 				OnGet = function()
 					pendingCashMegaHighlight = true
 					promptDevProduct("CashMega", "offer")
@@ -1784,6 +2206,12 @@ function ShopController.Init()
 
 	-- Gold in the header (WE_Gold replicates from the server; EconomyUpdate as a backup)
 	player:GetAttributeChangedSignal("WE_Gold"):Connect(refreshGold)
+	-- Code Bot v210: the Golden Pumpjacks row's +$N/s follows the live income (only while the Shop is open)
+	player:GetAttributeChangedSignal("WE_IncomePerSec"):Connect(function()
+		if menuOpen then
+			refreshGoldenRow()
+		end
+	end)
 	Remotes.BindEvent(Constants.RemoteNames.EconomyUpdate, function(payload: any)
 		if typeof(payload) == "table" and typeof(payload.Gold) == "number" and player:GetAttribute("WE_Gold") == nil then
 			local chip, lab = goldChip, goldText

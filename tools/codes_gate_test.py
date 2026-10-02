@@ -3,7 +3,7 @@
 
 Loads the real Server/Configs/CodesConfig.luau, Server/Services/CodesService.luau and Server/Services/RateLimitService.luau
 (plus the real EconomyService.CashBoostMult and ProfileSchema ensureCodesFields function bodies, sliced from their files)
-under small mocks for the Roblox globals / DataService / EconomyService / RemoteSetup, then drives the RedeemCode
+under small mocks for the Roblox globals / DataService / EconomyService / RemoteSetup / RemoteGate (JOB 15), then drives the RedeemCode
 RemoteFunction handler the way a client would. Checks: BUDSTUDIOS pays $50,000 (reason "code") + a 30 min 2x boost and
 is saved; case / spaces ignored; once per player (AlreadyUsed); unknown / junk = Invalid; inactive + past-expiry =
 Expired; a bad date never makes a code live; 5 tries per minute then RateLimited; boost stacking; save sanitising.
@@ -80,6 +80,7 @@ SRC.CodesService = @CODESSERVICE@
 SRC.RateLimitService = @RATELIMIT@
 MODS.Constants = { RemoteNames = { RedeemCode = "RedeemCode", CodeStateUpdate = "CodeStateUpdate" } }
 MODS.AnalyticsConfig = { Events = { CODE_REDEEM = "CODE_REDEEM" } }
+MODS.RemoteGate = { Check = function() return true end } -- v106: CodesService gates RedeemCode; stub always allows (real gate covered by remotegate_test)
 local function load(name) local f = assert(loadstring(SRC[name], name)); return f() end
 require = function(p) local n = rawget(p, "__name"); if MODS[n] == nil then MODS[n] = load(n) end; return MODS[n] end
 

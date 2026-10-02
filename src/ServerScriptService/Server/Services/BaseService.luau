@@ -32,6 +32,7 @@ local HollowBuildingBuilder = require(script.Parent.Parent.Modules.HollowBuildin
 local BusinessService = require(script.Parent.BusinessService) -- v72 war businesses: stateless world builder
 
 local BaseService = {}
+BaseService._Endgame = nil :: any -- claude-bud JOB 39 (EndgameService, from deps)
 
 local DataService: any = nil
 local EconomyService: any = nil
@@ -306,6 +307,16 @@ local function passiveMultAndFlat(profile: Types.PlayerProfile, player: Player?)
 		mult += tonumber(bonusMult) or 0
 		flat = tonumber(bonusFlat) or 0
 	end
+	-- claude-bud JOB 33: the rebirth zones' income per tick (Tank Factory, Refinery ...; 0 while not live / not built)
+	local okRZ, RZ = pcall(function(): any
+		return require(script.Parent.RebirthZoneService)
+	end)
+	if okRZ and RZ and RZ.FlatIncomePerTick then
+		local okF, f = pcall(RZ.FlatIncomePerTick, profile, player)
+		if okF and typeof(f) == "number" and f == f and f > 0 then
+			flat += f
+		end
+	end
 	return mult, flat
 end
 
@@ -516,6 +527,14 @@ function BaseService.TeleportToPlot(player: Player, onArrived: ((boolean) -> ())
 	local cf: CFrame? = nil
 	if plotId ~= nil then
 		cf = BaseService.GetPlotSpawnCFrame(plotId)
+		-- claude-bud JOB 29 FastStart: a new player lands in front of his own Command Center console (nil = as before)
+		local okR, RS = pcall(require, script.Parent.RetentionService)
+		if okR and typeof(RS) == "table" and (RS :: any).FastStartCFrame then
+			local okC, fast = pcall((RS :: any).FastStartCFrame, player, profile, plotId)
+			if okC and typeof(fast) == "CFrame" then
+				cf = fast
+			end
+		end
 	else
 		cf = noPlotDropCFrame()
 	end
@@ -610,6 +629,19 @@ function BaseService.IsAtConsole(player: Player, structureId: string, atPart: Ba
 	return ok, reason, dist
 end
 
+-- claude-bud JOB 21: does this plot have a dock channel (a WaterConfig.Channels row)?
+function BaseService._PlotHasChannel(pid: number): boolean
+	local okW, WC = pcall(function()
+		return require(ReplicatedStorage.Shared.Configs.WaterConfig) :: any
+	end)
+	for _, c in ipairs(if okW and WC and WC.Channels then WC.Channels else {}) do
+		if c.PlotId == pid then
+			return true
+		end
+	end
+	return false
+end
+
 function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: PurchaseOpts?): Types.PurchaseUpgradeResult
 	if not RemoteGuard.IsIdString(structureId, 48) then
 		return { Ok = false, Error = "InvalidStructure" }
@@ -667,6 +699,13 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: 
 	if profile.BasePlotId ~= ownPlot then
 		profile.BasePlotId = ownPlot
 		DS.MarkDirty(player)
+	end
+	-- claude-bud JOB 21: a plot with no WaterConfig.Channels row has no water route: no Dock there (every plot has one today)
+	if structureId == "Dock" and not BaseService._PlotHasChannel(ownPlot) then
+		if NotificationService and NotificationService.Notify then
+			pcall(NotificationService.Notify, player, "This base has no harbour", "Warn", 3)
+		end
+		return { Ok = false, Error = "NoHarbour" }
 	end
 
 	-- v71: console-only buying — the player must stand at THIS structure's console on their own plot. Runs before
@@ -729,6 +768,11 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: 
 	local cost = def.Costs[targetLevel]
 	if not cost then
 		return { Ok = false, Error = "NoCost" }
+	end
+	-- claude-bud JOB 39: the rebirth price scale (EndgameConfig.Rebirth; the raw price while that part is off)
+	local eg = BaseService._Endgame
+	if eg and eg.ScaledCost then
+		cost = eg.ScaledCost(player, profile, structureId, cost)
 	end
 
 	-- Order: reconcile (above) → spend → set upgrade → MarkDirty → return Ok; visuals AFTER in pcall
@@ -1561,6 +1605,7 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 			PassiveIncomePerTick = BaseService.ComputePassiveIncomePerTick(profile, player),
 		},
 		TutorialStep = profile.TutorialStep,
+		TutorialOrderVersion = profile.TutorialOrderVersion, -- claude-bud JOB 41: 4 = the Guided step list
 		TutorialComplete = profile.TutorialComplete,
 		Vehicles = profile.Vehicles,
 		Weapons = profile.Weapons,
@@ -1576,6 +1621,34 @@ end
 
 -- v69: server full (every plot owned) — the player gets no plot and is told why, never a shared plot.
 local NO_PLOT_BUY_MESSAGE = "No free base on this server — you get the next one that frees up"
+
+-- claude-bud JOB 21: a player with no free plot is told and teleported to another public server (matchmaking picks
+-- one with room). Studio / BaseConfig.FullServerTeleport = false: only the message. pcall'd, one retry.
+function BaseService._MoveToAnotherServer(player: Player)
+	if (BaseConfig :: any).FullServerTeleport ~= true or RunService:IsStudio() then
+		return
+	end
+	if NotificationService and NotificationService.Notify then
+		pcall(NotificationService.Notify, player, "Server full - moving you to another server", "Warn", 6)
+	end
+	task.spawn(function()
+		task.wait(3)
+		local TeleportService = game:GetService("TeleportService")
+		for attempt = 1, 2 do
+			if player.Parent == nil or ownedPlotOf(player.UserId) ~= nil then
+				return -- left, or a base freed up meanwhile
+			end
+			local ok, err = pcall(function()
+				TeleportService:TeleportAsync(game.PlaceId, { player })
+			end)
+			if ok then
+				return
+			end
+			warn("[BaseService] full-server teleport failed", player.UserId, attempt, err)
+			task.wait(5)
+		end
+	end)
+end
 
 local function notifyNoPlot(player: Player)
 	if not (NotificationService and NotificationService.Notify) then
@@ -1697,6 +1770,7 @@ function BaseService.Init(deps: { [string]: any })
 	TutorialService = deps.TutorialService
 	NotificationService = deps.NotificationService
 	MonetizationService = deps.MonetizationService
+	BaseService._Endgame = deps.EndgameService -- claude-bud JOB 39: the rebirth price scale
 
 	getUpgradeChangedEvent()
 
@@ -1867,6 +1941,9 @@ function BaseService.Init(deps: { [string]: any })
 
 	local getStateFn = RemoteSetup.Get(Constants.RemoteNames.GetPlayerState) :: RemoteFunction
 	getStateFn.OnServerInvoke = function(player: Player)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "GetPlayerState") then -- claude-bud JOB 15
+			return nil
+		end
 		-- v56: do not nil bootstrap for first 20s after join (HUD/WorldPrompt poll)
 		local joinedAt = getStateJoinedAt[player.UserId]
 		local inBootstrap = typeof(joinedAt) == "number" and (os.clock() - joinedAt) < 20
@@ -1895,7 +1972,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 105)
+			player:SetAttribute("WE_Build", 222)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -1904,6 +1981,8 @@ function BaseService.Init(deps: { [string]: any })
 			task.delay(8, function()
 				if player.Parent and ownedPlotOf(player.UserId) == nil then
 					notifyNoPlot(player)
+					-- claude-bud JOB 21 safety net: still no base -> another public server (never left baseless)
+					BaseService._MoveToAnotherServer(player)
 				end
 			end)
 		end

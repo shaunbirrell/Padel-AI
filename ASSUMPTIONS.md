@@ -9145,3 +9145,1070 @@ ds_territories.luau T3):
 - **Friends:** every 60 s, $500 per friend in the same server (max 3); friendships are cached at join with IsFriendsWithAsync.
 - **Comeback:** DataService keeps `PrevJoinUnix` before stamping LastJoinUnix. Away 3+ days pays $25,000 once on that join.
 - **Not in LaunchSafe yet** (new, unverified on Roblox servers). Flip `EngagementConfig.Rollout` per feature after the phone test.
+
+## 2026-09-29 — claude-bud JOB 14: game-feel polish (GameFeelConfig + GameFeelService + GameFeelClient, owner-only)
+- **Already there, kept:** infantry, NPC and direct vehicle hits already sent hit markers + damage numbers
+  (CombatHitFeedback → CombatController / WeaponVisuals); ATM raids already had Robbed / Defended chips.
+  Job 14 fills the gaps:
+  - **Kill feed:** PvP kills + vehicle kills by a player.
+    - Two lines max, in the HUD top stack (order 47, after the toasts and the event banner) rather than a corner, so
+      it can't overlap controls.
+    - Lines last 4 s. DisplayNames + the weapon's DisplayName only. Blast deaths stay quiet (nuke §15.2).
+    - Server-wide cap of 4 lines/s; extras are dropped, never queued.
+    - Assumption: NPC kills are left out of the feed (they would flood it).
+  - **Vehicle numbers:**
+    - The owner of a damaged vehicle sees red numbers over it, merged per 0.25 s, plus a metal hit sound.
+    - A vehicle hit with no hit point uses the vehicle's position for the attacker's number.
+    - Splash damage on a vehicle now gives the attacker a hit marker.
+    - Billboards: MaxDistance 40, never AlwaysOnTop (CLAUDE.md world-label rule). Assumption: from a jet camera
+      farther than 40 studs the number is not drawn (the sound still plays).
+  - **Premium missile splash:** it now also damages vehicles (VehicleHealth.ApplyRadiusDamage), never your own or a
+    clan mate's. Before, only a direct hit did. This is inside the owner-only premium weapons.
+  - **Raid report:**
+    - Base hits, a breach and ATM holds open a raid. 20 s after the last event the owner gets ONE banner:
+      "YOU WERE RAIDED -$N · name" if the ATM was robbed, else "BASE DEFENDED" ("Gate down · cash safe" after a breach).
+    - Hooks are pcall'd one-liners in GateDefenseService / MoneyCollectorService; for anyone the report isn't live
+      for, NoteRaid returns at once.
+  - **Sound pass:**
+    - `SoundConfig.Mix.Bands` gives one volume band per bus. AudioController clamps into it only while
+      `Mix.BandsLive` (set by GameFeelClient for players the pass is live for). Today only Level.Up (0.9 → 0.8) is
+      outside its band (`tools/sound_audit.py`).
+    - Once-silent actions now make a sound, using existing sound ids only: premium gun, missile launch,
+      airdrop / bounty marker, AIRSTRIKE tap, event banner, raid report, kill feed when you die.
+- **Tests:**
+  - `tools/gamefeel_test.py` runs the real service in the Luau CLI: 18/18.
+  - `tools/sound_audit.py`: every played key exists.
+  - There is no HUD viewport harness in this repo (check_hud.py is not here), so the top-stack placement at
+    800×360 / 844×390 needs the phone test.
+- All four features are owner-only via `GameFeelConfig.Rollout` and not in LaunchSafe yet.
+
+## 2026-09-29 — claude-bud JOB 15: anti-exploit sweep (SecurityConfig + RemoteGate)
+- **What was already there:** every handler already had its own RateLimitService key and most had type checks, plus
+  AntiExploitService strikes (decay, kick at 10). All of that is kept.
+- **New:** `RemoteGate.Check` is the first line of all 37 client → server handlers plus GetPlayerState and the
+  RequestPurchaseUpgrade hook:
+  - a per-remote rate ceiling set ABOVE each handler's own limit, so real play never meets it;
+  - an argument schema (`SecurityConfig.Schemas`) matched to the client's FireServer calls: types, string length,
+    finite numbers / Vector3, tables ≤ 16 keys and ≤ 2 deep, no Instances, no extra arguments.
+- Remotes the client must never fire (pushes, unused requests) get one sink listener; a fire there is a bad request.
+- Bad requests are logged once per 10 s per player, with counts, and ignored. A kick happens only after 600
+  rejected requests in 60 s.
+- **Rollout:** enforced for the owner only (`RemoteGate.Rollout = "owner"`). Everyone else runs in "observe": the same
+  checks run and are logged as "would reject", but nothing is dropped or kicked, so play is unchanged.
+  - Next step: read the live server logs for "would reject" lines, then set Rollout = "all".
+- **Checks:**
+  - `tools/remote_audit.py` (static): every handler is gated and has a schema; every remote the client fires has a schema.
+  - `tools/remotegate_test.py` (Luau CLI, real module): 37/37.
+
+## 2026-09-29 — claude-bud: after rebasing on v103 (all rollouts are "all" since v101)
+- The v101 Code Bot check allows no owner-only rollout, so:
+  - GameFeelConfig (JOB 14) is now "all" for every feature.
+  - SecurityConfig.RemoteGate.Rollout (JOB 15) is "observe": the checks run and log "would reject" for everyone,
+    and no one is enforced yet. Assumption: enforcing for every player before a phone test could block a real
+    request if one schema is wrong. Flip it to "all" once the live logs are quiet.
+- The codes schema now covers v102's `RedeemCode` RemoteFunction (gate inside its OnServerInvoke →
+  result("RateLimited")). RequestRedeemCode has no handler any more and gets the sink.
+- The behaviour tests set the rollouts to "owner" inside their harness, so both the gated and the open paths
+  are still exercised.
+
+## 2026-09-29 — claude-bud BOARDS: Town Centre notice boards (LeaderboardConfig; extends the JOB 13 leaderboard)
+- **One system:** EngagementService's leaderboard section and EngagementClient's single board were replaced in place:
+  same WE_Leaderboards folder, one server-wide fetch. The boards are live for everyone (no owner gate); the
+  Engagement events / invite / friends / comeback keep their own Rollout.
+- **Placement:** 6 boards in a row along the Town Square's south edge (x −187.5…−112.5, z 190), facing the fountain.
+  - That's clear of the event anchor's 20-stud circle, the west benches and the hall (z 216).
+  - Each board is 14 × 22 studs so 1.5-stud rows are readable from ~30 studs on a phone; the square's 90 studs is
+    why they are not wider.
+  - CanCollide off (they never block the square). Client-built: 36 parts, 6 SurfaceGuis (MaxDistance 80),
+    6 SpotLights (no shadows, night only).
+- **Stores:** new stores `WE_LB2_<Id>` and weekly `WE_LB2_<Id>_W<ISO week>`. The JOB 13 stores (WE_LB_*_v1) were
+  owner-only, so no player data is lost.
+  - Writes: per player at most every 90 s, only changed non-zero values, request budget checked, plus once on leave.
+  - Reads: one shared fetch every 75 s. Every call is pcall'd with a doubling back-off (30 → 600 s).
+- **"You:" line:** the rank comes from the shared top-100 page (one page, same cost as top 10), so outside the top 100
+  it shows "#100+" instead of an exact "#1,234". OrderedDataStores give no rank; counting further would cost reads
+  per player.
+- **Kills:** a separate counter (profile.LB.Kills), fed only by CombatService's death listener (the server creator
+  tag). Self and clan-mate kills never count, and each killer → victim pair counts at most 3 per 10 min. It is
+  seeded once from Stats.Kills (the existing PvP kill count) so veterans don't start at zero.
+- **Plaza weekly:** Stats.PlazaCaptures minus the count at the start of the ISO week.
+- **Top army:** the biggest army ever (profile.LB.ArmyMax, updated when scores are written).
+- **Supporters:** profile.Monetization.RobuxSpent.
+  - Dev products: receipt CurrencySpent, recorded with the grant and saved before PurchaseGranted (unchanged).
+  - Passes: now the real PriceInRobux from GetProductInfo (config price as a fallback), counted once after
+    UserOwnsGamePassAsync confirms.
+  - A player who spent 0 is never written. The Settings toggle "Supporter board" saves
+    Settings.SupporterBoardOptOut and removes the entry.
+- **Crown:** the weekly #1 on MOST KILLS (weekly) and PLAZA CONQUEROR gets a 👑 BillboardGui over the head
+  (MaxDistance 40), refreshed with each fetch and after respawn.
+- **Kills board tabs:** it alternates ALL-TIME / THIS WEEK every 8 s (no tap needed on a phone).
+- **Checks:** `tools/checks/claude_bud_boards.py` (throttle, confirmed-only Robux ordering, kill validation, opt-out,
+  budgets) and the pure helpers run in the Luau CLI (ISO weeks incl. 2020W53 / 2025W01, anti-farm, throttle).
+  - The four old pins of the single board are retired with a note (claude_bud_q3.py ×3, codebot_v103.py ×1).
+
+## 2026-09-29 — claude-bud army: Flank formation (owner: "the army is still glitchy and despawns when walking")
+- **Cause (from the code; no server log to confirm):** the tidy wedge put row k at 3 + 4k studs behind him (7, 11, 15,
+  19 for 8 units), plus the catch-up lag while he walks. The phone camera sits ~12–15 studs behind him, so the back
+  rows are at or behind the camera: they leave the view, and the client camera guard (RigConfig LeadScreenFrac)
+  hides one that fills the screen.
+  - Result: soldiers vanish while he walks and "respawn" when he stops.
+  - A far / stuck regroup also lands behind the camera by design (RegroupBehindStuds).
+- **Fix:** `ArmyConfig.Follow2.Tidy.Formation = "Flank"`. A file on each side of him:
+  - row k sits 1 stud ahead then 3 studs back per row, 3.5 + 2.6 × (k−1) studs out;
+  - for 8 units (5 + research 3) the last row is 8 studs back, in front of the camera;
+  - each row on its own side line, so the client escort files ahead of a soldier never land on another soldier;
+  - neighbours are 3.97 studs apart, above SeparationStuds 3.5.
+  - `"Wedge"` restores the old formation. Hold, attack and the base wait rows are unchanged.
+- **Assumption:** soldiers 3.5 studs beside him may brush him on a sharp turn (turns are rate-limited); widen
+  FlankSide if that shows up on the phone.
+
+## 2026-09-29 — claude-bud JOB 17: night readable on phones (LightingConfig + NightLights; live for all)
+- **Night look:** WorldAtmosphere (the live day loop) reads `LightingConfig.Night` while `LightingConfig.Enabled`:
+  - Ambient (80,86,112) and OutdoorAmbient (90,95,120) at midnight (were 40,45,70 / 50,55,85);
+  - Brightness 2.0 (was 1.6);
+  - lighter bluish haze (Density 0.30);
+  - a `WE_NightCC` ColorCorrectionEffect faded in by the night share: Brightness +0.05, Contrast +0.1,
+    Saturation −0.05, tint (214,224,255). It's written only on change, like the Atmosphere.
+  - Night is 20:00–05:00 with 1-hour ramps (~42 % of the 20-minute cycle).
+  - `Enabled = false` restores the old night exactly.
+- **Lights:** Workspace.WE_NightLights sits outside the dressing folders, so the world-hygiene budget of 24 dressing
+  lights (and its cull) is untouched. About 50 lights (cap 120), all Shadows off, Range 40–60, on only at night:
+  - streetlights along the Town's two main roads (14 studs off the centre line, outside the 12-stud corridor);
+  - 6 round the Central Plaza (off the roads) and 3 in the Town Square;
+  - 2 gate + 1 hangar floodlight per base;
+  - a spotlight on the plaza flag.
+  - Nothing collides and nothing casts shadows.
+- **Glow (Neon only at night, plain by day):**
+  - lamp heads;
+  - runway edge markers (both edges, every 19 studs, 6 bases);
+  - the plaza flag (keeps its owner colour);
+  - lit windows: up to 6 per town building, placed by raycast on the real front wall, 60 % lit in a fixed pattern.
+    That's ≤ ~340 window parts and ~200 Neon at night, inside the 986 Neon hard cap; the 300 Neon target is exceeded
+    at night.
+- **Low quality (client QualityGovernor):** every second light (WE_LowOff) stays off; the Neon glow still shows.
+  Lights that stream in after the switch follow at the next dusk / dawn flip.
+- **Not done:** a HUD / device render. Phone brightness at 50 % needs the real phone.
+
+## 2026-09-29 — claude-bud JOB 18: WorldFill 2 (the same WorldFill system; live for all)
+- **One system:** WorldFill.Build runs Build2 at its end (same `Workspace.WorldFill` folder, same shared occupancy).
+  Every item is a WorldKits kit (≤ 8 parts, no scripts), a Terrain rock, or a plain flat / thin part. Each is
+  re-checked with WorldDress.Blocked (plots, aprons / runways, garage and naval pads, captures, spawn / event /
+  airdrop anchors, roads, water, POIs unless it's that POI's own identity field) and skipped when blocked.
+- **New kits:** CropField, Silo, Pylon, CivCar, Awning, Planter, Bin, Statue, RoofTank, ACUnit, Antenna, NameSign.
+  - NameSign has its own cap of 8 signs (MaxDistance 60) because the world sign budget of 17 is frozen and full.
+    The fill folder is outside WarEmpireSetup, so that budget is neither used nor exceeded.
+  - Made-up names only: SANDLINE BAZAAR, CAFE MIRAGE, DUNE MOTORS, SUNSTONE SPICE, SOUTHWHARF FREIGHT, CAMP KESTREL,
+    CAMP HALCYON, RED MESA FARMS.
+- **Town identities:**
+  - Crossroads Town: a desert market town, with four market corners (stalls, awnings, planters, bench, bin, parked
+    car, crates, a shop sign) and the existing fountain square.
+  - South Port: an industrial port (container stacks, fuel tank, trucks, drums, a statue square).
+  - West Depot / East Armory: garrison towns (tent lines, watchtower, sandbags, a statue square).
+  - Rooftops: up to 2 water tanks / AC units / antennas on each town building's real roof (raycast).
+  - Assumption: identity field positions inside the POIs are best guesses. Items that hit existing dressing are
+    skipped at build (logged count).
+- **Countryside:** every 300-stud cell (±1650) with nothing within 130 studs gets a themed patch. The theme comes
+  from the region (oil round the Oil Field, farms round the Oasis, ruins round the Ruined Village), otherwise a hashed
+  mix: farm, rocks / small hills (Terrain), palms, tank graveyard, wadi, comms post, ruins, oil.
+  - Power lines (pylons every 140 + 2 wires) along both highways outside the Town. A skipped pylon breaks the wire.
+  - Six flat dirt tracks from the Town corners to the outer POIs. Pieces over water, plots, aprons, pads or captures
+    are skipped.
+  - A low dune belt (48 wedges, one Atomic model) at 2,000–2,550 north / east / west, in front of the 2,700 skyline.
+    The south is sea. Dunes may partly sink into the canyon terrain there (harmless).
+- **Budget:** the new-part cap is 7,000 Full / 2,600 Low (the owner allowed ~15k; kept low for phones); the upper
+  bound is 6.3k. This exceeds CLAUDE.md's world-parts hard cap (3,100) on the owner's explicit say-so for this job;
+  flag it if the phone frame rate suffers.
+  - Tier 2 = small clutter: Full quality only, and the client hides it beyond 180 studs in low quality
+    (QualityGovernor, WorldFill folder).
+  - Small props cast no shadows. Nothing is Persistent; clusters are Atomic.
+- **Tests:** static `claude_bud_worldfill2.py` only. The real placement / skip counts print
+  `[WAR EMPIRE] WorldFill2: ... parts= skipped= cells= filled=` at server start; the aerial read needs the bomber
+  flyover.
+
+## 2026-09-29 — claude-bud JOB 19: purchase stands replace the flat Robux pads (live for all)
+- **Stand** (Server/Modules/PurchaseStands), for every base Robux offer (the 3 ATM slots + the Golden Pump):
+  - a hexagonal steel plinth (3 boxes at 0 / 60 / 120°, 1.6 tall) with a gold trim ring and a steel top;
+  - a Neon hologram diamond (the client spins it) with an icon BillboardGui (💰 / 2x / ⚡ / ⛽);
+  - an info board: name, a benefit line (config Description), a gold price chip with the Robux glyph + RobuxPrice
+    from MonetizationConfig;
+  - a Neon floor ring (the client pulses it);
+  - one PointLight (Shadows off); nothing casts shadows; labels MaxDistance 30.
+- **Purchase:** the steel top IS the old pad: same WE_PremiumPad tag and PlotId / OfferKind / OfferKey / OwnedIfAny /
+  PadSlot attributes, so PremiumPadService.tryPrompt → PromptPremiumPad → PromptPurchase / ProcessReceipt is unchanged
+  (same Ids).
+  - The only trigger is its ProximityPrompt ("Buy - R$ X", 0.3 s hold, 10 studs). Stands skip the Touched and
+    standing checks, so stepping on one never buys.
+  - OWNED (client ShopController, from the server's WE_Ent_* attributes): green ring + hologram + chip,
+    "✓ OWNED", prompt hidden. The server still refuses an owned offer.
+- **Supply Depot corner:** plot-local row x −78…−42, z 146, with a "SUPPLY DEPOT" sign at z 153 facing the plot. It's
+  clear of the barracks, the business lines, the kiosks, the gate road, the spawn and the ATM (static check). The
+  Golden Pump stand stays by the pumps, where its pad was.
+- **Revert:** `MonetizationConfig.PremiumPads.Stands = false` restores the flat pads.
+- **Low quality:** no spin, no pulse.
+- **Map:** existing servers keep their current map until it rebuilds; new servers build stands.
+
+## 2026-09-29 — claude-bud JOB 20: base guards as real defenders (GuardConfig + Modules/BaseGuards; live for all)
+- **Structure:** GateDefenseService still builds the guards and runs the 5 Hz loop. Its thinkGuard hands off to
+  BaseGuards, which receives GateDefenseService's own helpers (LOS, plot bounds, spawn grace, clan check).
+  `GuardConfig.Enabled = false` restores the old guards exactly.
+- **Guards:**
+  - They stand at their posts (no patrol), idle via the existing rig 187790284.
+  - Hostiles inside the plot are players (not owner / clan / friend; friends come from EngagementService's join-time
+    friends list) and enemy army units (WE_SquadUnit, not the owner's or a friend's / clan-mate's).
+  - The nearest hostile within the leash (60 from the post, clamped inside the plot) gets faced and walked to; a
+    throttled path is used when there's no line of sight. Shots need LOS and roll a hit chance (0.8 near → 0.45 at
+    range), with a tracer.
+  - Guards go back to the post 8 s after the last intruder. Respawn at the post is 45 s (was 12).
+  - Upgrades use the existing Defenses research: Guard Armor (+20 % HP per level), Guard Roster (+1 / +2 guards
+    beside the courtyard), Targeting Systems (damage, unchanged).
+- **Tower guards:** one per base corner tower (StructureKitBuilder corner towers, so the Watchtowers must be bought),
+  hired in order at a prompt on the next free tower (owner only; the client hides it for others).
+  - Paid with Cash as the Defenses research "Tower Guards" (4 levels) through ResearchService.Purchase. The frozen
+    SpendCash pin allows no new spend site, so this reuses the research path.
+  - Price = 25,000 × (1 + 0.5 × rebirths), capped at 2M (RebirthScale in ResearchService).
+  - Assumption: the Research panel's card shows the unscaled 25,000 while the tower prompt shows the real price.
+  - Anchored on the platform; shoots hostiles outside the walls within 150 at 0.5 shots/s for 34 damage (60 % hit).
+    Gold helmet + ★ badge (MaxDistance 40), 260 HP, can be shot and killed (via GateDefenseService.ApplyDamage),
+    respawns after 45 s.
+- **Rewards:**
+  - A guard / tower-guard kill of a player sets the server creator tag to the owner on the killing hit only, so
+    CombatService treats it as his kill: PlayerKill cash / XP, Stats.Kills, MOST KILLS, the kill feed
+    "<owner>'s Tower Guard".
+  - At most 3 per victim per 10 min (then no credit), and never in a private server.
+  - Killing an enemy guard: 1,500 Cash + 40 XP; your guard killing an enemy army unit: 600 + 15. Same pair limit,
+    not on MOST KILLS.
+- **Balance:** at most 30 damage per target per second (12 for players below level 5 or in their first 10 minutes);
+  at most 6 guards / tower guards / auto-guns firing per base at once. The AI stays in the 5 Hz loop.
+- **Tests:** static + GuardConfig pure functions (Luau CLI). The real fights need two accounts on a server.
+
+## 2026-09-29 — claude-bud JOB 21: 10 base plots (was 6), every one with a dock
+- **Final count: 10 plots.** `BaseConfig.MaxPlots = 10`, and GameConfig.MaxPlayersPerServer, GameConfig.BasePlotCount,
+  Constants.MaxBasePlots and docs/LIVE_PLACE.md all say 10. The owner must set the place's Max Players to 10 (a
+  place setting, no publish).
+- **Why not 12:** with the owner's rule that every plot has a dock, a new plot needs its back to open water with a
+  straight channel crossing no road (roads have no gaps, so water can't pass under them) and no POI. Only 4 such
+  spots exist without moving POIs.
+  - The gap spots between the ring plots (±400, ±800) were rejected: their channels would cross the Signal Station /
+    Airstrip / Port / Crash Site.
+- **The new plots** (same 320 size; PlotFrame.PlotYaw faces each front toward the map centre):
+  - P7 (−980, −1300) and P8 (980, −1300): rear north into the ring canal (channels x −872…−832 and 1088…1128,
+    z −1760…−1460);
+  - P9 (−1000, 1280) and P10 (560, 1280): rear south into the sea (x −1148…−1108 and 412…452, 50 long).
+  - Each gets a Gate_P<n> pad row (no painted sign: the frozen world sign budget of 17 is full) and a WorldFill spur
+    from the gate to the nearest ±800 road, running between the front wall and the gate pad.
+  - They're clear of every other plot (≥ 60 between pads), the Town, POIs, captures and water, and every channel
+    reaches water crossing no road / POI (`tools/checks/claude_bud_plots.py`, which also covers plots 1–6).
+  - Naval pad (420, 1580) sits ~90 studs off P10's channel mouth in open sea; boats steer round it.
+- **One plot list:** MapSetup's second, hard-coded 6-entry list is gone (it builds from BaseConfig.PlotPositions). The
+  map layout stamp now includes the plots, so a saved 6-plot map is rebuilt without bumping MAP_GEN. Everything else
+  already looped over MaxPlots / PlotPositions (BaseService, TerritoryConfig Starter_P rows, GateDefense, BaseGuards,
+  SquadOrders, NextPadChevrons, ProducerLabels, NightLights, Waterways, WorldDress, WorldHygiene).
+- **Saved profiles:** an old saved plot id (1–6) is still valid (isValidPlotId checks 1..MaxPlots) and is reclaimed
+  when free.
+- **Dock guard:** BaseService refuses a Dock on a plot without a WaterConfig.Channels row ("This base has no
+  harbour"). No plot is like that today.
+- **Safety net:** a player still without a plot 8 s after joining sees "Server full - moving you to another server"
+  and TeleportService.TeleportAsync(PlaceId) sends them to another public server (2 tries; skipped in Studio;
+  BaseConfig.FullServerTeleport = false = message only).
+- **Performance:** per-base part count is unchanged (same layout). A 10-player server has 10 bases' parts; the
+  max-player frame rate needs a real 10-account test.
+
+## 2026-09-29 — claude-bud JOB 22: army follow / formation root-cause fix (docs/ARMY-FOLLOW-ROOTCAUSE.md)
+- **Order of work:** JOB 22 was asked for before JOB 21, but JOB 21 (10 plots) had already been pushed when it
+  arrived. JOB 22 was rebased onto v110 on top of it; the two touch different code.
+- **Switch:** `ArmyConfig.Follow2.Stable = true` turns on the new controller; false = the v99 controller exactly.
+  Flank stays the default formation; Wedge still works (same seat offsets, same anchor).
+- **Heading:** follows the owner's FACING, not his velocity (the old velocity flip was a root cause). With
+  AutoRotate a walking character faces its travel, so normal turns work; backing up / strafing with shift-lock keeps
+  the formation.
+  - Assumption: a player who turns his character without moving (standing) re-aims the formation only after 60° held
+    for 1.2 s.
+- **One mover:** `ArmyFollow.Command` is the only `Humanoid:MoveTo` on soldiers (SquadOrdersService's 32 calls go
+  through it). HOLD / ATTACK / RETREAT / Combat keep their own logic but name their state when they take a unit
+  (`Release(unit, state)`), so exactly one state drives a unit at a time.
+  - In Combat (owner standing near a hostile) the escort keeps its old aim behaviour (AutoRotate + gyro aim), but
+    walks to the SAME Flank slot.
+- **Collision:** player characters are put in a `WE_PlayerChars` group (collides with everything except army
+  soldiers; ArmyNPCs ↔ WE_PlayerChars off). Nothing else in the repo sets character collision groups. Base guards are
+  in `WE_Guards` (not with each other).
+- **Animation:** RigConfig.Anim.WalkRateMax 1.4 → 2.4 (the Walk track keeps up with the 34 studs/s catch-up).
+- **Frozen pins:** retired in place with a claude-bud note and replaced in claude_bud_armyfollow.py — squadfair ATTACK
+  chase, army-fix recover re-issue (BuyPathStatic body), and two CODEBOT v99 checks that counted literal
+  `Humanoid:MoveTo(` / `Release(unit)` text.
+- **Tests:**
+  - Static + simulated only (the real FormationMath in the Luau CLI, with a Vector3 stand-in and simulated soldiers):
+    5 / 8 / 20 / 50 seats; straight, stop, slow 90°, fast 180°, backwards, strafe, zig-zag, circles.
+  - Checked: ≤ 1 MoveTo per soldier per 0.4 s think, 0 once settled, turn ≤ 36° per think, no flips, sides stable,
+    no bunching.
+  - Not run in Studio / a real server (no Roblox runtime here); the phone playtest list is in LATEST-HANDOFF.
+
+## 2026-09-29 — claude-bud JOB 23: army formation turn transitions (docs/ARMY-FOLLOW-ROOTCAUSE-4.md)
+- **Switch:** `ArmyConfig.Follow3.Steer = true` turns on the steered block. False gives the v115 TrailBlock rows
+  exactly. `Follow3.Enabled` is still the kill switch (the v113 path). It is live for all players, like Follow3
+  (`Rollout = "all"`), per the standing "no owner gate" rule.
+- **Heading source:** his smoothed MOVEMENT direction (never his look vector), as the brief requires. This reverses
+  JOB 22's facing-based heading, which v115 had already replaced. Backing up with shift-lock therefore turns the block
+  round (slowly, capped), like any other change of direction.
+- **Fresh block** (spawn / respawn / FOLLOW restart): it faces from the army's centroid toward him, not his look vector.
+  If the army stands on top of him it keeps its old heading.
+- **About-turn:** while he walks back into the block, it waits with its heading held, so the aisle stays on his path.
+  It turns round once he is past its centre. The brief asked for "keeps going briefly, then arcs round": the block
+  brakes to a stop, then arcs.
+- **Rigid block:** it keeps its grid shape on corners (no crescent), so on a sharp turn it trails further behind him
+  for about a second. It stays ≥ 7.6 studs from him.
+- **Labels:** the CatchingUp / Following labels keep the 6 / 3 hysteresis, but they no longer change speed.
+- **Tuning:** values were chosen by a parameter sweep in the sim (mock humanoids), not on a device. They are all in
+  `Follow3` for phone tuning.
+- **Sim fix:** `tools/sim/run_army_sim.py` now writes utf-8 and finds `luau.exe` next to `LUAU_COMPILE`. On Windows
+  the v115 sim used to crash on the box-drawing comments and silently SKIP.
+- **Tests:**
+  - Static pins plus the A–J sim (the real FormationController / SoldierController in the Luau CLI) all pass.
+  - The v115 and v114 sims pass.
+  - Not run in Studio or on a real server. The headless world sim and the DataService harness are not in the repo.
+  - Phone tests are in LATEST-HANDOFF.
+
+## 2026-09-29 — claude-bud JOB 24: army ATTACK mode + no debug visuals by default (docs/ARMY-ATTACK-ROOTCAUSE.md)
+- **Switch:** ATTACK is driven by the Follow3 steered block when `Follow3.AttackSteer = true` (and `Steer`). False
+  gives the v116 `attackUnit` movement exactly. It is live for all players, like Follow3, per the standing "no owner
+  gate" rule.
+- **Target:** one per squad (the nearest to the army's centre, sticky), not one per soldier. The client still sends
+  only "Attack"; there is no tap-to-target UI, so "switch targets" means a retarget when the target dies, leaves reach,
+  or another comes 15 studs nearer.
+- **Leash:** 140 studs from him. Past that the army leaves the fight and follows him, but the order stays "Attack", so
+  it engages again when something comes in reach. v116 had no leash.
+- **Standoff:** 36 studs (the fire band is 46.75), so the whole line, including rear ranks, is inside the band.
+  Soldiers stand and fire; they do not close in.
+- **Walls:** no chase round a wall. The v116 give-up / trail walk is not used in steered ATTACK. A blocked soldier holds
+  its cell and shoots what it can see in its band.
+- **Line layout:** by permanent slot index, centre-out, so sides are kept. A death leaves a hole in the line (no
+  renumbering), as in FOLLOW.
+- **Debug:** off for everyone by default. `/armydebug` (admin allowlist) plus `DebugUserIds` turns it on. The v115 pin
+  "Debug = true" is retired with a claude-bud note.
+- **Tests:**
+  - Static pins plus the attack sim (7 tests; the old mode is a re-implementation of the v116 movement).
+  - FOLLOW sims unchanged.
+  - Not run in Studio or on a phone. The headless world sim and the DataService harness are not in the repo.
+
+## 2026-09-29 — claude-bud JOB 24 big pass (§2, §4-§11)
+- **§2 PvP:** army player damage = 0.6 x the soldier hit, capped at 40 DPS per victim, so a full army needs >= 2.5 s.
+  - Guard kills keep the JOB 20 guard reward (not MOST KILLS).
+  - NPC kills from a steered ATTACK are credited (the 140-stud leash keeps the owner near); v116 attack kills paid
+    nothing.
+- **§4c:** the 8 asset ids are removed, not replaced: I cannot acquire assets, and the Part kit look was already what
+  live showed. The owner can pick owned / free replacements through tools/wire-asset-ids.py.
+- **§4d:** the Radar / Airstrip "skipped" lines were cap / occupancy skips of decoration, now info only. The
+  ActivityHost cluster no longer goes through those tests. The exact live line was not available, so this is inferred
+  from "3 anchor rows not stamped (no ActivityHost cluster was built)".
+- **§5 copy:** avoids key names (phones), so it says "at its terminal", not "press E".
+- **§6:**
+  - Defenders exist only while no player / clan holds the outpost, and only near players (performance), so an
+    owner's outpost has no hostile NPCs.
+  - Friendly guards on owned outposts: not done.
+  - Defender kills count on MOST KILLS as the owner asked; the respawn timer (150 s) limits farming.
+- **§7:** the areas use the map's existing named POIs, so no new geometry was placed blind.
+- **§8:** the NeverHideKinds list is a judgement of which WorldKits cluster kinds are buildings. All culling is
+  client-only, and StreamingEnabled is untouched.
+- **§10:** the funnel only includes players whose FirstJoinUnix is within 15 minutes, so returning players never
+  enter it. Economy events are summed per minute to respect Roblox limits.
+- **Tests:** static pins, sims and models only. Nothing was run in Studio or on a phone. The headless world sim and
+  the DataService harness are not in the repo.
+
+## 2026-09-29 — claude-bud JOB 25: base name signs
+- **Sign position:** above the main gate, not the plot centre, so it never clips a building and is seen from the road.
+- **Flag:** a physical plate with Textures beside the BillboardGui (CLAUDE.md: flags in the world are Textures, never
+  GUIs). The billboard itself holds only the headshot and text.
+- **Headshot:** an rbxthumb:// URL (no yielding GetUserThumbnailAsync on the server).
+- **Army:** the owner's saved soldier count (profile.Soldiers).
+- **Not done, against the CLAUDE.md nation rules:** leaderboard flags, auto-applied IP country, outpost flags. These
+  need the owner's explicit override.
+
+## 2026-09-29 — claude-bud JOB 26: stronger army + armour
+- **Armour = bonus max health**, not a damage multiplier in one function. Player damage has several paths (CombatService
+  hurtPlayer, BaseGuards TakeDamage, blasts, vehicles), so max health is the only mechanism that treats every source
+  the same. The blue bar shows the bonus part.
+- **Paid through a hidden research node** (PersonalArmour, ServiceOnly) to keep the XP SpendCash invariant (8 sites,
+  owned-level tables). The tier is read with ResearchService.GetLevel.
+- **Player DPS cap 50:** a full army kills an unarmoured player in ~1.6 s (the owner wanted "a few seconds"; 35 would
+  give ~2.6 s). It is one config number.
+- **Kept through rebirth:** yes (research is not reset by rebirth). No extra rebirth bonus was added.
+- **Tests:** static pins + the TTK model only; nothing was run in Studio or on a phone.
+
+## 2026-09-30 — claude-bud JOB 27: city building culling
+- **Building definition:** bounding-box footprint >= 14 studs or height >= 10, plus the POI NeverHideKinds. Anything
+  whose box touches a building's box (rooftop props, signs) counts as part of it.
+- **Load / unload distances:** 220 / 320 (Tier 2) and 480 / 640 (others) for small decor only. The brief's example was
+  550 / 700 for loading. Small decor at 480+ studs is not noticeable, and phones keep the benefit.
+- **Not measured:** FPS and memory need a device. The replay model replaces the Studio route, and says so.
+
+
+## 2026-09-30 — claude-bud JOB 29: retention
+- **Owner-first:** a boolean `OwnerFirst` (RetentionConfig.Live), because codebot_v101 forbids `= "owner"` strings in
+  Configs. Studio test players also count, so a fresh-profile Studio run can test FastStart.
+- **Funnel:** the existing funnel is extended and re-indexed (14 steps). Creator Hub funnel data from v121-v124
+  (8 steps) does not line up with the new indexes; only players in their first 15 min at deploy are affected.
+- **Offline pay:** it uses the "passive" cash multiplier at join time (outpost Empire Tax may not be restored yet at
+  load, so it can slightly under-pay). It sits in PendingCash, so an ATM raid can take its usual 10%. Premium +10% is
+  kept from the first JOB 29 brief.
+- **Opt-in result:** "accepted" = Roblox no longer lets us prompt after the dialog closed (opt-in, or Roblox's own
+  limit).
+- **Starter payout:** $1,500 (it refunds the Command Center). It is only paid while the tutorial is running, so a
+  rebirth never re-pays it.
+- **Streak card:** it is owner-first. The "tomorrow" text is for everyone under ShowTomorrow, since it is copy only.
+
+## 2026-09-30 — claude-bud JOB 30: world map
+- **Tap rules:** a tap inside a named area opens its card (GO pins the tapped point); a tap on open ground pins at once.
+  Both "tap an area shows what's there" and "tap anywhere to pin" hold.
+- **Pin priority:** a manual pin ignores later mission / job / airdrop targets until it ends. The ignored targets do not
+  come back by themselves: tap GO again.
+- **Fast travel:** REMOVED in v127 (Code Bot) at the owner's request. The map is tap-to-pin only; players walk or
+  drive to the pin. Do not re-add fast travel (codebot_v127/v128.py fails the build if it comes back).
+- **"Missions" on the map:** the job spots from OpsService's GO targets (camps, posts, uplinks, cargo). They are the
+  same points the Missions GO buttons use.
+- **Rail:** it grows to 7 tiles (wraps 5 + 2 on short phones). The frozen 6-tile pin is retired with a replacement.
+
+## 2026-09-30 — claude-bud JOB 31: real detail + fill the map
+- **No store models:** no Code Bot asset IDs came with this job and store models need the owner's WE_CHECK2, so all
+  detail is built from Parts. The IDs can still replace kits later through VisualAssetConfig overlays.
+- **Budget:** CLAUDE.md says world budgets must not grow, but the owner asked to fill the map and detail the props.
+  Growth is capped instead: 240 parts (sites) + 900 (detail extras). The small ones are culled on LOW-tier phones.
+  This is an owner decision to confirm; lowering `MaxExtraParts` or `WorldSitesConfig.MaxParts` shrinks it.
+- **World switches:** detail and sites are world-wide (the world is built once for everyone), so they have kill
+  switches, not owner-first. The garrisons and activities are owner-first.
+- **"Enemy patrols":** leashed garrisons that move inside their site, not squads walking between sites (no roaming AI
+  exists yet).
+- **"Rooftop sniper":** uses the Overwatch tower deck. JOB 32's enterable plaza roofs can host a second one.
+- **"Capture the depot":** the new Kestrel Supply Depot (clear the guards, then hold 30 s), not the West Depot outpost
+  (that is a territory capture and already pays).
+
+## 2026-09-30 — claude-bud JOB 32: enterable plaza buildings, one LOS rule, army at the door
+- **Which buildings:** the 4 facing the flag, one per side. The rest stay solid mesh buildings (their collider can't be
+  hollowed without new art).
+- **Windows** are open gaps, not glass: "shots through windows work" for every shooter with no special case. The base
+  buildings' glass panes (WE_Building*) were not touched.
+- **The one LOS rule** is "solid parts block, non-colliding parts don't, shots can hit limbs". Player bullets therefore
+  now pass non-colliding decor (tarps, fronds, flat decals), the same as NPC / army / turret sight already did.
+- **Army:** it waits OUTSIDE the door, not on the ground floor. Pathing units up a 43-degree ramp and a ladder is where
+  they get stuck.
+- **Ramp slope:** relies on Roblox's default Humanoid MaxSlopeAngle (89 degrees); the ramp is 43.5 degrees.
+
+## 2026-09-30 — claude-bud JOB 33: rebirth overhaul
+- **Zone placement:** zones are annexes outside the 320-stud plot (the plot is full), so they sit partly in the open
+  desert. A blocked annex is skipped on that plot, never forced.
+- **Zone levels:** 3 per zone. They are kept through rebirths, as rebirth rewards, and are never reset.
+- **Zone effects:** each does something real (income, army cap, missile reload, auto-collect, raid shield, nukes).
+  The Artillery Battery shortens the missile reload rather than firing its own shells.
+- **Silo:** 3 levels, capacity 1-3, 60 / 45 / 30 min charges (NukeConfig.Silo's 5-level costs are not used).
+- **Nuke damage:** 260 at the centre down to 15%, radius 150, no line of sight needed. Targets are 360+ studs from any
+  base.
+- **Pacing:** 40 + 4 levels per rebirth (cap 90), measured by the pacing sim. This is a live-feel change, owner-first.
+- **Vehicles:** the gaps are filled with existing vehicles rather than new models. Tank skins were not done.
+- **Rebirth guns:** existing gun frames and models with modest stat edges.
+- **Keep-base product:** RebirthKeepBase is live, contrary to the brief; left as is for the owner to decide.
+
+## 2026-09-30 — claude-bud JOB 34: achievements, chat shout-outs, badges
+- **First Building:** it is the existing `FirstUpgrade` entry (old toast "First Brick"). The page and popup say
+  "First Building"; with Live off the old toast text is unchanged.
+- **Player kills:** counted from the validated leaderboard counter `LB.Kills` (no self, clan-mate or farmed kills).
+  It was seeded once from the old mixed `Stats.Kills` (JOB 24), so an old player's backfill may count NPC kills from
+  before then.
+- **First NPC kill:** event-only; there is no NPC-only counter. Existing players get it on their next NPC kill.
+- **Counters:**
+  - First Outpost counts the Home Outpost capture (`Stats.TerritoriesCaptured` does).
+  - The 7-day streak is earned at the day-7 claim (the streak wraps after 7).
+  - Army 50 is the current soldier count, not the peak.
+  - Command Center max stays earned after a rebirth resets the base.
+- **Weekly #1:** fires when a player first takes a weekly crown (EngagementService `crownNote`), not at week end.
+  Admins are never crowned (boards unchanged).
+- **Rebirth lines:** every rebirth gets the big chat line and banner (`AnnounceEveryRebirth`), as in the brief's
+  "3rd time" example. Milestones 1 / 5 / 10 / 20 also give the popup, badge and reward.
+- **Names:** chat uses the Roblox username (`player.Name`, e.g. "shaunie6"), not the display name. No nation name
+  ever appears.
+- **Backfill:** the first check of an old profile grants what it already reached QUIETLY (rewards + badges, one toast,
+  no chat), so launching to everyone does not flood chat.
+- **Owner-first chat:** while owner-first, the owner's lines still go to everyone in the server, as the brief asks.
+- **Badges:** none were created (Code Bot, `docs/BADGES.md`); every BadgeId is 0.
+
+## 2026-09-30 — Code Bot STORE-PROPS (v132): the owner's Creator Store props wired in
+- **Load check:** all 80 picks load live (Open Cloud Luau, InsertService:LoadAsset on the place); none "not authorized".
+- **Wired:** 62 of 80 (57 in the world, 25 in the rebirth zones, some both). Not placed: 3 rejected (2473378608
+  contains an "m4 sherman" real-tank replica; 3117530492's mesh is "Volga (Metro 2033)"; 2580028799 is a Tool with
+  one flat part), the 4 checkpoint pieces (JOB 37 is our own Part design by spec), and 11 over the part / decal budget
+  or worse than our Part build (8637034739, the plain barracks block). Full list: docs/PROP-ASSETS.md.
+- **CLAUDE.md store rules:** the <= 40 parts / <= 20k tris / WE_CHECK2 origin rules are not applied to this owner-picked
+  set; server budgets replace them (world 9,000 parts, a plot's zones 7,200, all zones 16,000, one model 2,300). The
+  origin (mesh uploader) check was not run.
+- **World placement:** additive: nothing existing is removed or moved. Copies go round the JOB 31 sites and inside the
+  named areas on open level ground, off roads, clear of every part, >= 330 studs from every plot centre (so a
+  rebirth annex slot is never blocked). A roof row needs a town building whose visible roof is flush with its
+  HouseCollider. Rows that find no spot are skipped and logged, never forced.
+- **Owner-first for the world:** the world is one shared build, so while OwnerFirst the world props are placed once the
+  owner (or a Studio tester) is in the server, and then everyone in that server sees them. The zone visuals are only
+  on the owner's plot.
+- **Rebirth zones:** a store layout swaps the whole Part complex (the yard and console stay) at the levels it covers;
+  if a template fails, the layout does not fit or the budget is spent, the Part build stays. The Part build shows for
+  a moment until the (pre-loaded) templates swap in. Elite Barracks keeps its Part barracks (the store one is a plain
+  block) and only gets store dressing.
+- **Scale:** several store models are miniatures or giants (the silo complex is 26 studs, the refinery 37, the ruined
+  building 631, the factory 242), so each row has its own scale, chosen to fit the 74 x 60 annex yard or the site.
+- **Cleaning:** scripts, humanoids, sounds, prompts, particles, movers, joints and loose attachments are removed;
+  seats are disabled; every part is anchored with CanTouch off; lights capped at 2 and shadowless; detail under
+  0.2 studs dropped; parts under 8 studs cast no shadow; under 1.2 studs no collision.
+- **Not changed:** RebirthZoneBuilder / RebirthZoneService / WorldSites / WorldKits (Claude's queued jobs), WE_Building*,
+  PreferMesh (OFF), VisualAssetConfig, fast travel (still removed).
+
+## 2026-09-30 — claude-bud JOB 35: premium guns armory
+- **Gun ids:** SovereignPistol / QuakeLauncher / LongshotSniper / HavocRotary / ThunderheadLauncher / TempestRailgun.
+  They don't clash with the JOB 33 rebirth guns (Sovereign Rifle, Longshot DMR, Havoc Launcher, Tempest SMG).
+- **Pierce 3:** one shot hits up to 3 players / NPCs in a line, full damage with falloff each. It stops at scenery, a
+  vehicle or a gate.
+- **Fire rates:** the Burst FireRate is cycles per second (Sovereign 2 bursts/s = 100 DPS; Thunderhead 0.35 salvos/s,
+  mag 2 = one salvo per reload). Charge: prime on the press, fire on the release. There is no charge meter on screen
+  yet.
+- **Longshot:** 110 damage one-shots a 100 HP player, as the brief says; there is no player-gun DPS cap in the game.
+  "Keep PlayerMaxDps" is met by the premium DPS staying below the best existing automatics (run_armory_test prints the
+  table).
+- **Armory:** one light for the whole row (not one per case), to fit the phone light budget. The row is west of the
+  Supply Depot (plot X -92 .. -131, Z 146), which the placement test checks against the layout. Visitors can buy from
+  any armory. The board shows the plot owner's state.
+- **Owner test grant:** while live, `OwnerTestGrant` writes the six guns into the owner's real profile (and every
+  Studio player's) so they can be tested before the Ids exist. This is like the admin unlock-all.
+- **Plain models:** the grip is automatic (longest axis, a quarter from the rear). The muzzle direction must be checked
+  in Studio; `VisualGrip` overrides it.
+- **Scope:** scales mouse sensitivity only (`MouseDeltaSensitivity`). Touch camera speed while scoped is Roblox's
+  default. RMB also rotates the default camera on PC; the shoulder camera already locks the mouse while drawn.
+- **Shop:** premium rows show in WEAPONS only; the generic pass list skips them (HideFromShop). JOB 36 reorders the Shop.
+
+## 2026-09-30 — claude-bud JOB 36: shop overhaul
+- **VIP price:** the price shown is 349 only while the overhaul is live (`OverhaulRobuxPrice`). The config keeps 199
+  until the owner reprices on the Creator Hub, so no player sees a price different from what Roblox charges before
+  launch.
+- **Speed:** "owners keep x1.4" is read as "owners keep what they have". The Speed Pass is x1.5 and Speed Boost x2
+  since v133; `SpeedMultFor` is unchanged.
+- **Where the old items are still sold:** Army Expansion still sells in the Army panel (the brief only removes it from
+  the Shop). The Speed Pass still sells to non-live players.
+- **Speed stand:** it follows its plot owner. A non-live owner's stand keeps the Speed Pass; it is restored when a live
+  owner leaves.
+- **Shop order:** Double XP (not in the brief's list) sits after Speed Boost; Extra Garage Slot sits with the premium
+  vehicles; Golden Pumpjacks, Instant Army Refill, Plaza Airstrike and the locked crate are "consumables".
+- **Cash packs:** they use the passive income only (not training or oil), multipliers included, the same number the
+  offline earnings use.
+- **VIP crate:** automatic (join + a 10 min check), once per 20 h, floor $5k.
+- **Super Soldiers:** they do not raise the per-player army DPS cap (fairness), so the +25 % shows fully against NPCs,
+  guards and gates.
+- **Double HP:** it rides on ArmourService (the one MaxHealth writer after spawn). If ArmourConfig is ever disabled,
+  Double HP stops too.
+- **War Chest ownership:** the join check / purchase marks the four passes owned for the session, and each runs its
+  OnPassOwned perks (Bigger Army mirrors into Entitlements as before).
+
+## 2026-09-30 — claude-bud JOB 37: real road checkpoint + guards
+- **Lights:** one real light per checkpoint (the searchlight). The world light cap is 24 and hygiene deletes extras,
+  so the booth PointLight and floodlight SpotLights asked for would have used the whole budget. The floodlights are
+  lamp-coloured heads instead.
+- **Part budget:** only 6 checkpoints get the detailed build (+546 parts, their own share); the rest stay plain.
+  Guards exist only at detailed checkpoints (they need the posts and the tower). A detailed build WorldPOI refuses is
+  rebuilt plain instead of being dropped.
+- **Booth:** it stays the solid plain part (name / size / place kept for the anchors), so the windows are panes on its
+  faces and there is no desk / stool inside.
+- **Boom arm:** stays raised; lowering it across the lane would break the road rules and the "never blocks a vehicle"
+  rule.
+- **NPC slots:** CheckpointGuard is not a SpecialNPCType (the 18-slot pool); when the pool is full, fewer guards
+  spawn. OpsGarrison's ledger is not used: its owner (OpsService) is off.
+- **Targeting:** guards ignore non-live players through a new optional `TargetFilter` spawn option. Non-live players
+  can still shoot them (the normal weapon path) and get the NPC per-kill reward, but never the cleared bonus.
+- **Mission:** the daily "Checkpoint" objective is offered only once the switch is live for everyone, because the
+  offer is global. While owner-first, the owner tests through the map (hostile / cleared) and the tracker.
+- **Cleared bonus:** "checkpoint" cash is multiplier-exempt (it is already minutes of multiplied income).
+
+## 2026-09-30 — claude-bud JOB 38: army attack orders + SEND + ARMY KILLS
+**DECIDED by Shaun (2026-09-30):**
+- a) Online only.
+- b) Army loot 5 %.
+- c) The defender always gets the ETA warning + red marker.
+- d) The army keeps attacking while the sender is dead but in the server; it disbands on leave.
+- e) Too weak < 0.25 is blocked; > 4 x halves the loot.
+- f) 5 min SEND cooldown.
+- g) 10 min base protection after any army raid.
+
+**My assumptions:**
+- **Movement:** the block follows a plan-owned lead point rather than a new steering input, so the Follow3 formation
+  code is reused unchanged.
+- **Lead height:** the lead point's Y follows the route (ground), so its FLAT speed is MarchSpeed.
+- **Auto-clear range:** grouped NPCs (camps, garrisons, checkpoint guards) may be engaged away from the owner ONLY during
+  his ordered auto-clear (the "owner must be near" rule is relaxed for that order, not for FOLLOW / ATTACK near him).
+- **Kill credit:** auto-clear kills pay at the army unit rate (CreditSteeredAttackKills), exactly as the JOB 24 steered
+  attack.
+- **CLEARED status:** it shows the kill count, not a cash amount (the per-kill cash is paid by CombatService as today).
+- **Siege targets:** turrets are a siege target through a pseudo "Structure" target (the turret's aim part). AutoGuns
+  still shoot players only, not army units (unchanged).
+- **Players shooting turrets:** a shootable turret part is the one narrow LosRule exception (`GateAutoGunPart`), so
+  players can shoot turrets too (one rule for everyone), only while the switch is live for the shooter.
+- **Power verdict:** ArmyPower = units x unit HP x unit DPS and DefencePower = gate HP + guard HP x DPS + turret HP x
+  DPS, as specified, even though the units differ. Tower guards are not in DefencePower.
+- **Leaving an order mid-plan:** a Hold / Retreat / Follow order during a plan marches the army back first, then applies
+  the order (no teleport back).
+- **ARMY KILLS:** counts players (army fire, MOST KILLS rules), checkpoint and bank guards, and base guards. Tower guards
+  killed by the army are not credited (the tower damage path does not report the killing blow). Alts cannot be told
+  apart beyond the MOST KILLS pair cap.
+- **Walkie size:** the walkie grows to 216 x 346 v on touch while live (SizeTouchPlan); the 5-viewport HUD harness still
+  has to confirm it clears the reserved zones.
+
+## 2026-09-30 — claude-bud JOB 39 phase 1: rebirth price scale + Empire Level + Command Office
+- **Stations are built client-side:** the plaza station interiors are built by the client, for live players only
+  (PlazaServicesConfig). The world is shared and the job is owner-first, so nobody else sees a desk, NPC or sign. The
+  world part / light / SurfaceGui budgets are untouched; each station stays under the ROBLOX-BUILD-GUIDE §3 house budget
+  on the viewer's client. The server validates every buy against the same frame (the Enterables registry).
+- **Milestone cosmetics:** the L5 gold star and the L30 Marshal title show on the base sign in phase 1. The L10 gate
+  banner, L15 HQ roof flag, L20 nameplate chevron and L25 finial are base props, so they ship with phase 2's Base Tier
+  builder (the same base-dressing code).
+- **What gets scaled:** only BaseConfig.Structures rows are scaled (the 15 structures + the 4 businesses). The
+  rebirth-zone structures are bought through RebirthZoneService and are never scaled (kept through rebirth, as the spec
+  says).
+- **Rounding:** EmpireCost rounds halves to the even 100k, so the table matches the spec exactly (5M x 1.17 = 5.85M ->
+  5.8M).
+- **Pacing (owner decision):** CostScale 0.20 (as approved) puts R7 at -31 % vs the rebirth-level minutes. The spec's
+  §7 asks +/-25 % for R1-R7; R1-R6 pass (+21 % ... -24 %).
+- **Purchase XP:** a scaled structure buy pays sqrt-scaled purchase XP (XPBalanceConfig.BuildXP(price paid)); the
+  frozen XP pin requires the paid price to be passed. At R3 that is x1.26 build XP per buy.
+- **No combat lock on the server:** the server has no "in combat" state for players, so EndgameService stamps a hurt
+  time from Humanoid.HealthChanged; buying is refused for 6 s after damage (HudConfig RecentCombatSeconds).
+- **Rebirth unlock rows:** the R25-R40 rows (§2.1) reference phase 3 / 5 systems (Mythic, Heavy Warhead), so they are
+  added with those phases, not in phase 1.
+- **§11 proof:** phase 1 is code complete, but §11 item 6 needs Studio captures that this session cannot make.
+  Recorded as NOT DONE in LATEST-HANDOFF; phases 2-5 were not started.
+
+## 2026-09-30 — claude-bud JOB 39 phase 2: Base Tier + Defence tree + Engineering Bureau
+- **Proof owed:** the owner said (CONTINUE-NOW.md) not to block on the §11 Studio proof. Phase 2 was built and pushed;
+  the §11.1 / §11.5 screenshots and the 2-player raid tests are still owed (listed in LATEST-HANDOFF).
+- **The HQ console:** the HQ UPGRADE / base Defences console is the player's own Command Center console. There is a
+  client prompt on it (KeyboardKeyCode F, so the console's own E buy prompt stays), and the server checks
+  BaseService.IsAtConsole. The same console sells the instant rebuild.
+- **Gate towers:** "gate towers get roofs" = roofs on the real gate posts (GateDefenseService's post list, whatever
+  their size). The HQ storey sits on the Command Center building's live bounding box. Both are rebuilt when the CC level
+  or the walls change.
+- **Extra nests:** the extra AutoGun nests are real turrets placed like the two gate guns, NestExtraX (9) studs further
+  out. spawnAutoGun already builds a sandbag ring; the tier adds ammo boxes and a second bag layer.
+- **Engineering Bureau placement:** a forecourt stand, 7 studs out of the Office Building's face nearest the Command
+  Office house. Its interior is not proven walkable (the spec's fallback). Without the store prop (StoreProps not live)
+  it stands beside the Command Office house.
+- **Turret damage cap:** Turret Guns multiply the research bonus and the product is capped at ResearchConfig.MaxMult (3).
+  The gate HP multiplier (tier + Gate track) is capped at 3 too.
+- **Rebuild floor:** the gate rebuild never goes under 10 s (MinRebuildSeconds). With T3 + Gate L10 the spec's
+  50 - 10 - 30 would be exactly 10.
+- **Base Tier soldiers:** they show on the army cap at the next soldier push (SoldierService has no public push).
+- **Tier look:** the Base Tier model is shared (everyone sees a base's tier) and is removed when its owner leaves the
+  plot.
+
+## 2026-09-30 — claude-bud JOB 39 phase 3: Elite Training
+- **Type split:** the split is by field SLOT (slot % 5 = Heavy, slot % 10 = Special Forces with the SF Facility L3+).
+  The field army is a handful of units, so a 5-unit army has 1 Heavy.
+- **Heavy speed:** Heavy walks at the normal speed (the spec's -10 % speed would pull a Heavy out of the steered block;
+  "keep MarchSpeed so the block stays coherent").
+- **Re-train fee:** the fee is the only refill cost. The game does not spend soldiers on death (units respawn free), so
+  §2.4's "$500 + fee" is the fee alone.
+- **No insignia swap for SF / Heavy rigs:** SF and Heavy keep the army's rig (the SpecialForces VisualKind has no rig
+  model, a Part kit would look worse). Their type shows as shoulder pads (Heavy) and in the Recruitment Office rows.
+- **Aura quality:** the Mythic aura is client-only and needs Graphics Quality >= 4; "automatic" quality counts only on a
+  keyboard device (PreferredInput), so phones never pay for it.
+- **Retrain timing:** a training buy / RE-TRAIN / refill re-applies to living soldiers in place (MaxHealth rescaled with
+  the HP ratio kept, Model:ScaleTo in place). No move and no PivotTo, so JOB 38's formation standard holds.
+
+## 2026-09-30 — claude-bud JOB 39 phase 4: Hospital + Armory Workshop + Vehicle Workshop
+- **Suppressor not sold:** the Suppressor's effect ("no minimap ping when firing") has nothing to act on, because no
+  firing ping exists in the game. It shows as SOON and is not sold, rather than selling a 3M part that does nothing.
+- **Spread:** WeaponConfig.Spread only drives the client reticle bloom (the server ray has no spread), so the Grip's
+  -15 % shows as a steadier reticle.
+- **Camos:** camos are owned once (per account) and put on / taken off per gun for free; profile.Endgame.Camos[id] =
+  true, Camos.Equip[gun] = id. They recolour the gun parts client-side (two tones, Gold = metal).
+- **Hospital placement:** the Field Hospital is a forecourt stand at the Hospital store prop (its interior is not proven
+  walkable). Without the prop it stands beside the radio shop house. No red cross (a protected emblem): a white plus on
+  green.
+- **Field Surgeon:** the revive reloads the character and pivots it onto the spot it fell (within 10 s). That is the one
+  PivotTo in the endgame code, pinned, and not travel. It is refused inside another player's plot (the "enemy base
+  during a siege" rule, applied to any enemy plot).
+- **Army medic:** it runs on the 5 s endgame sweep (+5 HP a sweep = 1 HP / s) for soldiers whose HP did not drop since
+  the last sweep.
+- **Vehicle Workshop timing:** the Workshop applies at the next spawn (a spawned vehicle keeps the numbers it spawned
+  with).
+
+## 2026-09-30 — claude-bud JOB 39 phase 5: warheads, heist, Intel, Black Market, reward scaling, R25-R40
+- **Where warheads are bought:** they are sold at the HQ console (the player's own Command Center; the HQ UPGRADE
+  list), not inside the silo's own panel, so NukeService's JOB 33 UI is untouched. The Tactical Warhead only loads a
+  slot (NukeService.FillSlot = the Rush path without its fee); the Heavy Warhead is a one-shot upgrade on the next
+  launch.
+- **Heist station:** the Fixer is a world-anchored desk inside the bank hall (the hall has no NPC). Heist guards are
+  extra BankGuard NPCs through CombatService.SpawnNPC (the bank's own GUARD_OPTS), removed 120 s later. The saved bank
+  cooldown cap is now 30 min, so the Vault Cracker's cooldown survives a rejoin; a no-kit raid still sets 5 min.
+- **Contracts:** contracts are claimed at the Intel Office (a reason to visit), not auto-paid. "Defend a raid" counts
+  an in-person ATM raid the owner stopped (MoneyCollector's "Defended" phase). A failed SEND siege is not counted.
+- **Scouting:** it lists only players online in this server (offline bases cannot be raided). The report is shown in
+  the Intel panel, not a pop-up.
+- **Black Market effects:** the Black Market items are cosmetics with a visible effect each. The trophy is 16 Parts on
+  the parade ground; a paint recolours the 6 biggest visible body parts at spawn (textured catalog meshes may keep
+  their texture); a beret tint uses the hat's SpecialMesh VertexColor when it is textured.
+- **R25-R40 unlocks:** they live in EndgameConfig (their own track) rather than as PrestigeConfig rows, so players the
+  job is not live for see exactly today's rebirth screen. The Legend Parade is client-only.
+- **Bounty scaling:** the bounty's reason ("plaza_bounty") is multiplied, so the income-sized target is divided by the
+  player's cash multiplier before scaling (no double count).
+
+## 2026-09-30 — claude-bud JOB 40 part E: base owner markers
+- **The world-label exception:** the base owner marker is the ONE documented exception to the world-label rules
+  (MaxDistance <= 40, AlwaysOnTop only for the objective marker, flags as Textures). The owner approved it (JOB 40
+  part E, Shaun 14:44 Dublin), and it is written into CLAUDE.md's world-label bullet.
+- **Owner-first by viewer:** the flag gates who SEES markers; the data is published for every plot (the same public
+  data as the v123 sign).
+- **The flag:** the flag is the nation the plot's own NationFlag view shows (view.Show and not neutral). There is no
+  clan-flag art, so clans show as a "[TAG]" prefix. Allied = same ClanId as the viewer's own base record.
+- **Data home:** the marker data lives in ReplicatedStorage (not on the workspace plot folders), so a client never
+  depends on a streamed workspace part.
+- **Map icons:** the optional map-icon change (E.4) is not done; the map is untouched.
+
+## 2026-09-30 — claude-bud JOB 40 part A: real base guards + one rule
+- **Statues:** statues are parked (ServerStorage) rather than never built, because MapSetup builds plots before any
+  owner. They come back when the plot's defences clear, so OFF == OLD for the next owner.
+- **Friends:** friends outside the clan are now hostile to a live base (the owner's decision in the job file).
+- **Guard regen:** the post guard's at-post HP regen writes the guard NPC's own Health (the one Health write in the new
+  code); players are only ever hurt through CombatService.
+- **Tower guards:** they keep their anchored platform figures (converting them is not needed for the one rule); only
+  their targeting changed.
+- **MaxShootersPerBase:** it stays 6 (the post guards share it with the gate guards / towers / AutoGuns).
+
+## 2026-09-30 — claude-bud JOB 40 part B: speed
+- **Owner-first:** the new multipliers ship owner-first (SpeedV2): the live Speed Pass / Speed Boost stay x1.5 / x2 for
+  everyone else until launch. The texts follow the multiplier each player actually gets (DescFor).
+- **Stand text:** PurchaseStands.OfferInfo takes an optional viewer id; the world stands (shared) pass none, so they read
+  today's text until launch.
+- **Army caps:** the army caps (Follow3 58, CatchUp 60, Lead 48, Follow2 58) are headroom and apply to everyone (they
+  only matter above today's 32 run speed). The default sim is unchanged (FAILS 0).
+- **Turn error:** at a 40-stud/s run the formation's turn error exceeds the spec's 6 (90-degree turn 7.5, hairpin
+  10.7). Reported as a known limit, not fixed by retuning the formation controller outside the brief's numbers.
+
+## 2026-09-30 — claude-bud JOB 40 part C: store props
+- **Rows empty:** the rows ship empty because the load / origin probe needs Open Cloud (Code Bot). The code paths are
+  no-ops until rows exist, so this is safe to publish.
+- **Replace scope:** ReplaceRows change the shared world for everyone in a server once the owner is there (same model
+  as the STORE-PROPS world rows); BaseRows only dress a live owner's own plot.
+- **Kit cluster:** the kit to hide = BaseParts of the named part's model within 9 studs of it (the RadarDome kit is
+  6 parts inside that radius).
+
+## 2026-09-30 — claude-bud JOB 40 part D: rate reminder
+- **Show path:** the show uses the existing FeaturePush event (kind "RatePrompt") instead of a new server->client
+  RemoteEvent: same effect, one fewer remote.
+- **Answer remote:** it is named RequestRatePromptAnswer (the repo's Request* convention for client->server).
+- **Play time:** "total play" = RatePrompt.PlaySeconds, counted by the service from the first live session (older
+  play before the flag is not back-filled; Stats.PlayTimeSeconds is never incremented anywhere in the code).
+- **Combat quiet:** on the server this is damage taken (Humanoid.HealthChanged). Firing / hitting is covered on the
+  client, which waits 20 s past its RecentCombat flag.
+- **Purchase prompts:** a Roblox purchase prompt open at that moment is not detected (no client event for "a prompt
+  is open"). The card never covers the centre of the screen.
+- **Counting:** a show counts when the server sends it; a "timeout" (not drawn within 90 s, or auto-hidden) still
+  counts toward the 3-day gap.
+
+## 2026-09-30 — claude-bud JOB 40E fix: base owner tags
+- **Far fade:** tags now fade out past 1,800-2,400 studs and cap at the nearest 5 rivals. The owner asked for a fade
+  "past a sensible distance" + a cap, which replaces "visible from anywhere" for the far edge of the map.
+- **Detail line:** the @handle and "R<n>" show only inside 300 studs (the owner: "drop the @handle at a distance").
+  The rebirth title is gone from the tag (the "VETERAN" overlap).
+- **Height:** it rises with distance (150 + 6 %, max 260 studs), so far tags stay above the horizon; the tallest base
+  kit is under 100 studs.
+
+## 2026-10-01 — Code Bot v156: real Robux prices, plain Shop text, ARMY KILLS board
+- **Price source:** every R$ price and product name in the Shop, the Supply Depot tab, the purchase stands and the
+  offer cards comes from `Shared/Util/LivePrices` (server `MarketplaceService:GetProductInfo`, pcall'd, one round per
+  server at start then every 10 min, published as ReplicatedStorage attributes `WE_Px_<GP|DP>_<Key>` /
+  `WE_PxN_<GP|DP>_<Key>`). The MonetizationConfig `RobuxPrice` / `DisplayName` are only the fallback while the first
+  lookup is in flight or if Roblox fails. Display only: prompts and grants are unchanged.
+- **Fallbacks corrected, prices untouched:** the audit found two dev products whose config disagreed with the Creator
+  Hub: StarterBundle (149 "Commander Starter Pack" vs Roblox 249 "Commander Starter Bundle") and ExtraSoldierSlot (99
+  "Army Expansion (+10)" vs Roblox 79 "Extra Soldier Slot"). The config fallbacks now equal Roblox. No Creator Hub price
+  was changed; the v71 D2 decision to sell the Starter Pack at 149 was never applied on Roblox (owner's call).
+- **Roblox-side text is stale (not changed, owner action):** the Creator Hub description of the Starter Bundle still
+  says "25,000 cash + 25 gold jumpstart" (the game grants $50,000 + Auto Collect) and Extra Soldier Slot says "+1
+  soldier capacity" (the game grants +10).
+- **Plain text budget:** a Shop row sub is at most 56 characters and a title 48 (phone 1024x471: panel capped at 900 v,
+  ~698 v text column, 20 v Gotham ~11-12 v per character). `tools/sim/run_shop_render_test.py` checks every row.
+- **ARMY KILLS:** a leaderboard, so it has its own switch (`LeaderboardConfig.ArmyKillsBoardLive = true`) instead of
+  waiting for army orders to be live for everyone; `ArmyOrdersConfig.Live.OwnerFirst` stays true. Kills made by the
+  army's normal fire (FOLLOW / HOLD / DEFEND escort shots on checkpoint / bank guards, base / tower guards and enemy
+  players) count, not only ATTACK / SEND. Army units do not shoot enemy army soldiers yet (JOB 43), so those kills
+  cannot count until that ships. The weekly and all-time ARMY KILLS stores start empty (earlier kills were never
+  counted for anyone but the owner, who is excluded).
+
+## 2026-10-01 — claude-bud JOB 41 part A: the Guided first minutes
+- **Barracks / 4x4 placement:** they stay in the tutorial AFTER the Reward (steps 8 and 9 of OrderVersion 4), so the
+  chain ends on a goal, not a blank screen. The WE_Onboarding hold ends at the Reward.
+- **Collect step:** the old Notify path is reused (PassiveIncome / ManualDrop). The ATM always has cash once one 5 s
+  tick has passed after the Command Center, so no extra payment exists; it can never pay twice.
+- **Per-type hit chance:** CombatNPC.HitChance takes the NPC type as an optional 4th argument. Its HitChanceNear /
+  HitChanceFar only CAP the curve (only the Recruit sets them; every other NPC is unchanged).
+- **Who the camp targets:** the TargetFilter restricts the camp's targets to its owner; the server NPCs are still
+  visible to others.
+- **Spawned step:** the funnel's "Spawned" is logged when the Guided profile loads (the join), with step seconds
+  measured from then.
+- **Sim pace:** the sim's pace is DERIVED from the layout. The brief's 180-240 s target is reported as not met
+  (faster), instead of padding the script.
+
+## 2026-10-01 — claude-bud JOB 41 part B: Recruit Pack
+- **Starter pop-up:** while RecruitPackOffer is live for a player, the RecruitPack takes the StarterBundle's pop-up slot
+  (and the first-offer Speed Boost fallback). The StarterBundle row stays in the Shop, unchanged. Only ONE starter
+  offer pops up per profile.
+- **Play time:** Stats.PlayTimeSeconds is now accrued by RecruitPackService for every player while the kill switch is
+  on (analytics already read it as minutesPlayed; it was always 0).
+- **Combat quiet:** on the server this is damage taken (RatePromptService.SinceHurt); the client waits 20 s past its
+  RecentCombat flag (covers firing).
+- **Id 0:** the card is never sent while the Id is 0, so nothing can prompt before Creator Hub.
+- **Owned in the Shop:** an owned pack stays at the top of the Shop with OWNED (the order pattern does not move it).
+
+## 2026-10-01 — claude-bud JOB 41 part C: rival targets
+- **Pill placement:** the TARGETS pill sits top-right under the top-bar pills, NOT beside the Army button. The Army
+  button is a left-rail tile in the middle of the screen, inside the thumbstick band (left 40 % x lower 2/3), so a tap
+  target beside it would break the reserved-zone rule.
+- **Config:** RivalConfig is its own config file (the brief allowed either), so ArmyOrdersConfig's JOB 38 pins stay.
+- **Army size:** the victim's live soldier count (SquadOrdersService.UnitPower units).
+- **Distance:** base centre to base centre (PlotFrame.PlotPosition), rounded.
+- **Telemetry remote:** RequestRivalAction is telemetry only. The send itself is the JOB 38 RequestArmySend, fired by
+  the same tap.
+- **Toast:** the optional "new rich target" toast is not built (kept small; the pill's count badge does that job).
+
+## 2026-10-01 — claude-bud JOB 41 part D: big-win rate triggers
+- **When a trigger is spent:** a one-time trigger is spent only when the card actually showed for it. A FirstCapture
+  blocked by the 3-day gap stays unspent, so "the next big win" can still bring it forward.
+- **Pack first:** "the Recruit Pack goes first" is enforced with a 180 s ceiling, so a pack that can never get a
+  soft-offer slot cannot block the rate card for the whole session.
+
+## 2026-10-01 — claude-bud JOB 42 part A: time cash packs
+- **Floors:** 10k / 25k / 50k / 100k / 200k are the brief's proposed minimums (owner to confirm). The sim proves both
+  minutes per R$ and floor $ per R$ rise with the price.
+- **ExcludeTimedBoosts:** an option on MonetizationService.PassivePerMin (it divides out EconomyService.CashBoostMult and
+  EngagementService.CashMult) instead of a second income function. Permanent multipliers stay in.
+- **Ready rule:** the Shop swaps only when all five Ids are set (TimePacksReady), so a live player never sees an empty
+  cash section.
+- **Paid receipts:** any receipt of a time-pack Id is granted the real amount, live flag or not.
+
+## 2026-10-01 — claude-bud JOB 42 parts B-D: time packs in the Shop, the Recruit Pack, docs
+- **Recruit Pack vs Cash30m:** the Recruit Pack stays clearly better than buying Cash30m alone. It costs the same 49 R$
+  for the same cash, plus the 2x 30-min boost and the gold trim.
+- **Garage offer:** when no time pack covers the gap, it offers Cash4h with its REAL amount (never an inflated number).
+- **Studio preview:** in Studio a live player sees the time rows with "SOON" while the Ids are 0, so the layout can be
+  tested. Live servers never show an Id-0 row.
+- **The 4h amount:** uncapped (up to 2^53). Capping it is an open question for the owner.
+
+## 2026-10-01 — claude-bud JOB 43: army vs army brawl
+- **Owner-first:** owner-first by the SHOOTING army's owner, so OFF equals today. In Studio every test player is live,
+  so both armies brawl in the 2-player test.
+- **Hostility:** "safe zones / post-raid protection" use THE shared army rule as it is (ArmyHostility + the attacker's
+  shield). The JOB 38 post-raid ArmyProtectUntil protects a BASE from SENDs; it does not make field armies immune.
+- **Credit cap:** the per-pair credit cap (30 per 10 min) stops two friends farming XP / ARMY KILLS by brawling
+  respawning soldiers.
+
+## 2026-10-01 — claude-bud JOB 46: rebirth stations
+- **Shipments:** a shipment is 10 min of that zone's own flat income (before multipliers) once every 20 min, so the
+  extra is at most +50 % of that zone's income for a player who visits every time. The card shows income per
+  second before multipliers.
+- **Where the dressing goes:** the dressing sits on the front apron (outside the yard), so it never fights the
+  probe-verified store models in the yard. Better main buildings need new probed assets (Code Bot).
+- **Activity per zone:** DRILL reuses the Recruitment Office's Elite Training list; CALL STRIKE reuses the missile
+  panel. There is no second system for either.
+
+## 2026-10-01 — claude-bud JOB 47: the ghost label
+- **The ghost:** I take the ghost behind INTEL OFFICE to be a base owner marker (flag + name, AlwaysOnTop) projected
+  into the top-bar row. Tags are now hidden there (TopBarPadPx 6); the row's height comes from GetGuiInset /
+  TopbarInset.
+- **Not covered yet:** tags behind other HUD cards (TARGETS, top stack) are not filtered yet. If one is seen, the
+  next step is to add those cards' rects to the same rule.
+- **No re-implementation:** the TARGETS card and scout fixes are Code Bot v171's; I did not re-implement them.
+
+## 2026-10-01 — claude-bud JOB 44: the Studio test driver
+- **What it is:** the JOB 44 driver is a test-only Script in a separately built place (build/j44, gitignored).
+- **Fixture writes:** it sets fixture values in the two Studio test profiles (Player2 DefensiveWalls >= 1,
+  Player1 Soldiers = cap).
+- **Why fixture writes are safe:** Studio test players get fresh, unsaved-to-live profiles, so this never touches
+  live data.
+- **No teleport in game code:** B3 moves the test player's character (not the army) to the runway; the
+  no-teleport rule applies to the game code, which is unchanged.
+
+## 2026-10-01 — claude-bud JOB 48: the first 2 minutes hook
+- **Order:** I chose a saved order (SavedOrders[5]) over post-chain goals, because the chip, tracker, skip, resume
+  and migration all exist per step already.
+- **A v4 save past the Reward:** it resumes on the new raid goal. It is a goal it has not done yet.
+- **The fallback goal:** "clear 2 hostiles" counts ANY CombatService NPC he kills (except his Guided camp).
+  CombatService has no per-site API for "the nearest Open camp". After 180 s the chain moves on, so it never
+  soft-locks.
+- **Tuning:** FastRaidBonus $2,000 and RewardSoldiers 2 are first guesses, both in config. The bonus is an onboarding
+  cash grant, not a price.
+- **Funnel:** GoalFallbackWon is logged at the RaidWon index (15), so the funnel keeps one step per index.
+- **The Missions step:** it finishes on the panel open. That rides on the RequestAchievements remote the panel already
+  sends on every open, so no new remote was added. A mission claim also finishes it.
+
+## 2026-10-01 — claude-bud JOB 49 part A: streak
+- **Cycles:** a "cycle" starts each time the streak lands on Day 1, and grace is once per cycle.
+- **What SAVED marks:** it marks the day claimed after the miss (the missed date is not a strip slot).
+- **Day7Scale.IncomeMinutes = 60:** a first guess, in config. The table stays the floor.
+
+## 2026-10-01 — claude-bud JOB 49 part B: offline
+- **Cap:** kept at 8 h; the brief allows 8-12 h, and no live numbers say longer is better.
+- **COLLECT:** it draws the ATM waypoint rather than adding a second server claim; the money is already in the
+  ATM.
+- **OfflineCap2x:** a permanent entitlement through the existing GrantEntitlement receipt path. It stays disabled
+  with Id 0 until Shaun approves a price.
+
+## 2026-10-01 — claude-bud JOB 49 part C: core missions
+- **Raid availability:** decided once at the day's first build, so the list never reshuffles. The NPC fallback
+  from JOB 48 is not used for the Raid mission; WinFights covers fights.
+- **The reset hour:** Core.ResetHourUtc moves the reset for the whole daily list (it is 0, so no change today).
+- **The Build GO target:** the cheapest next upgrade by BaseConfig cost. A reroll picks the first loop type not
+  already offered (Pool order).
+
+## 2026-10-01 — claude-bud JOB 49 part D: return sequence
+- **The queue:** it is client-side, ordered by priority, and each card waits up to 90 s for a free screen. The
+  server timings stay as they were.
+- **The missions toast:** it shows only when 3 untouched core missions are offered (part C live), once per session.
+- **Comeback with no offline pay:** it still gets the Welcome back card (Cash 0 + Comeback).
+
+## 2026-10-01 — claude-bud JOB A: Recruitment Office
+- **What "the office" is:** "beside my office" is taken to be the DRILL kiosk on his own Elite Barracks zone. That is the only Recruitment Office path that closes at 0.5 s; the plaza path was in range.
+- **Damage:** a damage scratch no longer closes this panel. Buying while hurt is still blocked server-side (HurtLock).
+
+## 2026-10-01 — claude-bud JOB B: TARGETS list
+- **Default ordering:** taken as Global for an Instance.new ScreenGui; every other gui here sets Sibling explicitly, which supports this. The fix is the same explicit setting.
+
+## 2026-10-01 — claude-bud JOB 51: plaza guards
+- **Owner-first gate:** SharedHostility is gated by the CANDIDATE player (owner + Studio testers first); NPCs keep the old pick for everyone else until the flip.
+- **Spawn not moved:** the emergency / plot-less spawn and the defender ring are not moved without a Studio check of clear ground.
+
+## 2026-10-01 — claude-bud JOB 52: ATTACK at range
+- **The card's units:** distances use the game's existing m = studs x 0.28, like MARCHING. The config numbers are studs.
+- **Kill credit:** only kills of the ordered ATTACK target group count, capped at 60 / hour per owner.
+
+## claude-bud JOB 50 part B (2026-10-01): rebirth zone run props
+- The run props are parts only, with no Light objects. The JOB 46 / v173 pins forbid lights in the zone dressing, so
+  the gate lamp is a warm SmoothPlastic head. Night lighting is JOB 54's job.
+- Props are built only while `Rebuild.Visuals` is live (owner-first). OFF = the JOB 46 dressing exactly.
+- Store model swaps (the open-roof garage in WestYard / DroneBay) are left to Code Bot. They need WE_CHECK2-probed
+  assets.
+
+## claude-bud JOB 50 part C (2026-10-01): zone signs / card / map
+- The plaque status shows minutes ("NEXT RUN 12 MIN") instead of m:ss. A 30 s server refresh keeps replication
+  traffic tiny (at most 7 labels x 10 players), and a live m:ss would need a client countdown. Reversible:
+  `RunRules.StatusRefreshSeconds`.
+- Map zone dots are unlabelled to avoid label overlap with the area / site pills. The name shows on tap.
+- "Ready" toast: once per zone per off-cooldown edge, only while the plaques exist (he has the plot loaded).
+
+## claude-bud JOB 53 (2026-10-01): Defence visuals
+- Four visual tiers per track (L1 / 4 / 7 / 10) rather than ten looks. Each step is readable on a phone, and the
+  budget stays small. `EndgameConfig.DefenceVisuals.TierAt` is tunable.
+- The turret visuals are static (round the nest, not on the turning gun). The guns rotate by PivotTo / welded
+  catalog parts, and attaching parts to them risks the aim code.
+- The vault has no model on the base, so "Vault Plating" dresses the plot's money collector (the thing raiders
+  rob).
+- The gate damage stages run with the visuals flag only (OFF = no smoke, no scorch: the old gate exactly).
+
+## claude-bud JOB 54 (2026-10-01): night lighting
+- The per-base extras are built per OWNED plot (owner-first by the plot owner) instead of at map start. Empty plots
+  stay dark, which keeps the light count down and lets Code Bot flip it per owner.
+- The exposure is client-side. Lighting is server-global, and a client write lets it ship owner-first; the server
+  never writes ExposureCompensation, so nothing fights it.
+- The beacon is steady (no blink). A blink would need a loop per base; Neon + one small light reads from the air.
+
+## claude-bud JOB 55 (2026-10-01): honest Defence + exploit fixes
+- Plating before Walls L4 is REFUSED (not just labelled): spending millions on nothing is the trap the job names.
+  Guns stays buyable (it now arms the guards).
+- "Gate & Walls" is shown as "Gate Armour" rather than inventing wall HP. Making walls destructible is a big gameplay
+  change nobody asked for.
+- The mid-raid fix keeps the damage taken (new max - damage), not the fraction: a fraction would still heal a
+  little on every buy.
+- Base Tier purchases still resync fully. That is out of scope here and reported to Code Bot.
+
+## claude-bud JOB 56 (2026-10-01): spawn terminals + rotor
+- Terminals reuse the Garage (WE_OpenTab) rather than a new spawn menu, so there is one spawn path and one set of
+  server gates.
+- The rotor fix is geometric (the disc normal + centre from the blade parts), so it also helps other store helis.
+  It is guarded by a flatness ratio and a 25 deg cap, and it logs [RotorRig] for proof.
+- The rotorKit vendoring is not done: it needs the asset pipeline (download + script audit) in Studio.
+
+## claude-bud JOB 57 (2026-10-01): base life
+- The props are part-built WorldKits, not store models: BaseRows needs WE_CHECK2-passed models, and none has passed.
+  They count against the same 600 allowance, so swapping one in later stays in budget.
+- The soldiers are server Humanoids (like the gate guards), not client-only figures. That gives the same look for
+  every viewer and reuses the proven guard body + RigAnimator walk. 3 a base and an 18 server cap keep the cost
+  small.
+- The server cap reuses CombatConfig.MaxActiveNPCs (18) as the job says, but it is a separate count: ambient
+  soldiers never take a hostile NPC slot.
+
+## claude-bud JOB 58 (2026-10-01): hangar + dock showpieces
+- The showpieces reuse vehicle bodies that are already approved and wired (no new store models). The asset rule
+  (WE_CHECK2) still governs anything new.
+- The boat body follows BodyAllowed (the owner-only rollout) like a driven boat. Other players see it only on the
+  owner's dock, which is exactly how a driven owner-only body already shows.
+- The Part builds stay as the fallback and are only hidden under a placed body.
+
+## claude-bud JOB 59 (2026-10-01): free assets pass
+- Only the sounds are wired: an audio id plays directly, while models / textures need the WE_CHECK2 pipeline (A, C,
+  D are left to Code Bot).
+- Existing keys change their id only for the owner (Pass59.Overrides), so a sound he dislikes never reaches
+  players.
+
+## claude-bud JOB 60 (2026-10-01): error report
+- No code change without the report text: the house rule is to prove the root cause first. The verified invariants
+  are pinned so the fixed causes (AnchorPoint, track stacking) cannot come back.
+
+## claude-bud JOB 63 (2026-10-01): anti-spawn-camping
+- Keyed by the base owner (protects bases whose owner it is live for), so Shaun can test both roles with an alt.
+- Home = Player:LoadCharacter (the normal respawn), not BaseService.TeleportToPlot. It also drops a vehicle /
+  raid hold cleanly.
+- Re-entering during the cooldown restarts it (a fresh 3 min), so walking back in is never worth it.
+
+## claude-bud JOB 65 (2026-10-01): nuke instant raid
+- One silo, one cooldown: the base nuke shares the saved NukeLastLaunch and the warheads with the plaza nuke. No new
+  save keys.
+- The cash moves at launch (an instant raid); the missile is the show. The amount is the full raidable balance read
+  at launch, the same function as the preview, so they match unless income lands in the seconds between.
+- Vault Plating does not reduce a nuke raid: the brief says the full ATM.
+- The NUKE button lives on TARGETS (one of the three entry points the brief allows). The map card has no room left
+  beside SEND ARMY on a phone.
+
+## claude-bud JOB 67 sub-part 1 (2026-10-01): turret tiers
+- "Turret level" = the owner's Turret Guns Defence level (0..10): the gun is the turret's weapon.
+- The pack is wired PENDING (Id 0): the asset rules forbid using a model before WE_CHECK2, and the pack's per-level
+  model names are only known from that probe.
+
+## claude-bud JOB 66 (2026-10-01): 5 R$ starter products
+- Built with Id 0: creating the products needs the Open Cloud key (Code Bot). The 5 R$ price is Shaun-approved.
+- The 5 R$ offer replaces the 49 R$ card only for players Starter5 is live for (one soft-offer slot, never two cards).
+- The boost chip shows any running cash boost (codes, Recruit Pack, the 5 R$ boost) for those players.
+## claude-bud JOB 70 (2026-10-02): collision hulls + one wall style
+- "LIVE FOR EVERYONE" is the JOB 70 fix (PropCollision.OwnerFirst = false); the JOB 67 visual blocks (Walls /
+  BaseProps OwnerFirst) are left to the big flip (reversible: one line each).
+- Hulls are CanQuery = true (the guard asks for it): sandbags / crates are real cover for shots and line of sight.
+- L3 is renamed "Hesco Line" (Hesco on every face; it was "Hesco Gate", gate face only); only the
+  WE_WallTierName attribute shows the name.
+- Hesco may stretch up to 2.6x its natural length (was 2.0) so every face fits the 14-block / 241k-tri budget.
+
+## claude-bud JOB 69 part A (2026-10-02): zone slots
+- With fallbacks on, a slot must also have a free front apron (the kiosk / plaque / run markers stand there). OFF
+  keeps the old rule (the zone builds without its dressing when only the apron is blocked).
+- WE_Build is not bumped here (the brief asks for it, but the house rule says lanes never bump it; Code Bot does).
+- The config geometry sim approximates the world (no WorldFill spurs / decor); the live overlap test in the service
+  stays the real arbiter, and /zonereport shows its result.
+
+## claude-bud JOB 69 parts B + C (2026-10-02): how to play
+- The brief names PanelShell / HudLayout for the card; it is a self-contained ScreenGui placed by a pure, tested
+  CardLayout (real screen px, IgnoreGuiInset) so the thumbstick / jump rules are checked headlessly.
+- The jump / fire keep-out is the bottom-right 130 x 130 px (the Roblox jump button ~70 px + 16 px clear + margin).
+- Jobs start at their sites (OpsService prompts), so the job card sits on the menu GO (GO = track the job).
+- Rows generated in loops (e.g. extra checkpoints) without a HowTo keep their old text (HowTo.Line falls back).
+
+## claude-bud JOB 68 (2026-10-02): shooting range life
+- The range already has 3 R-RIG Soldier statues (rifles held forward); they are the shooters (no new models or
+  asset ids; JOB 67 packs not needed). 3 per range sits inside the brief's 3-4.
+- Anchored statues never load animation tracks (RigConfig.AnimateStatic = false), so "reload" is a local
+  shoulder dip + the magazine sound rather than an animation asset.
+- Owner-first by the VIEWER (cosmetic, client-side), like SoundConfig.Pass59.
+
+## claude-bud DOUBLE WEEKEND proof (2026-10-02)
+- Referral rewards are fixed social rewards like the v104 invites, so they are never doubled (paid as invite_*).
+- "2x kills" = kill rewards + mission / board kill counts (EventConfig scope); profile.Stats.Kills stays +1.
+
+## claude-bud rebirth-zone buildings (2026-10-02)
+- EastStrip (refinery) has no block building, so its western fuel tank becomes the CAG house as a "refinery control house".
+- Only the MAIN building per zone is replaced (part budget); tanks, guns, drones and props stay.
+- New features after v220 stay owner-first by the house rule; the v220 guard accepts lines tagged NEW-OWNER-FIRST (claude-bud).

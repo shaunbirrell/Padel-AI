@@ -1,0 +1,19 @@
+[ArmyController] v115 Follow3 TrailBlock controller started (true, all, debug false)
+[WAR EMPIRE] ArmyPlan Init
+S_WARM Following
+S_BEFORE Following
+[SERVER ARMY] shaunie6 command=Attack state=Following plan=none source=test Attack
+[ARMY MOVE] shaunie6 ATTACK probe from=(-500,3,0) radius=400 -> NPC at (-120,40,0)
+[ARMY DESTINATION] shaunie6 old=nil new=(-120,40,0) source=ArmyPlan.Clear/March
+[ARMY PATH] shaunie6 start=(-518,3,-0) dest=(-120,40,0) distance=398 status=Success waypoints=50
+[ARMY STATE] shaunie6 Following -> Attacking SOURCE=ATTACK mode=Attack target=RidgeCamp
+[ARMY MOVE] shaunie6 ATTACK started target=NPC RidgeCamp from=(-500,3,0)
+S_OK true
+S_AFTER Attacking
+[ARMY DESTINATION] shaunie6 old=(-120,40,0) new=(-500,3,0) source=ArmyPlan.Clear/Return
+[ARMY PATH] shaunie6 start=(-518,3,-0) dest=(-500,3,0) distance=18 status=Success waypoints=3
+[ARMY STATE] shaunie6 Attacking -> Recalling SOURCE=ArmyPlan.return nothing left mode=Attack
+[ARMY MOVE] shaunie6 Clear/Return block=(-518,3,-0) lead=(-500,0,0) to dest 18 studs, lead 0 studs/s, lost 0
+[ARMY STATE] shaunie6 Recalling -> Following SOURCE=ArmyPlan.finish Clear mode=Follow
+[ARMY MOVE] shaunie6 plan Clear ended -> Following
+S_LATER Following

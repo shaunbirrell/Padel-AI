@@ -1,0 +1,15 @@
+# run_rival_targets_test.py output (2026-10-01T07:44Z, VERBOSE=1, headless luau stand-in: NOT Roblox)
+ok    the list = the allowed set, sorted by loot then distance (9 beats 7: same loot, closer), top 3: 5,8,9
+ok    shielded / ally / new player / too strong are never candidates; allowed-rich / allowed-poor are
+ok    loot buckets: rich $100k+, bully (half loot) $10k+, mid $10k+; the 4th (plot 7) cut by MaxShown 3
+ok    allowed-poor (loot $500 < MinLootToShow) is not listed
+ok    the verdict chip: much stronger = easy, ratio 2 = even
+ok    never the exact loot number in the push
+ok    row: name, army size, distance between the bases
+ok    sender cooldown: nothing listed (the verdict blocks every base)
+ok    one active SEND: nothing listed (the verdict blocks every base)
+ok    one push per live viewer per tick; none for a viewer it is not live for (OFF == OLD)
+ok    during the Guided / onboarding hold: an empty list (no pill)
+ok    telemetry: RIVAL_LIST_OPENED,RIVAL_SEND_TAPPED:easy,RIVAL_RAID_WON
+RIVAL TARGETS TEST: 0 failed
+ok    the list's SEND ARMY fires the same JOB 38 RequestArmySend remote as the map

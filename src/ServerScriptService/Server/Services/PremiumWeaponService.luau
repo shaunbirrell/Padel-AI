@@ -27,6 +27,7 @@ local VehicleConfig = require(Shared.Configs.VehicleConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local AdminConfig = require(Shared.Configs.AdminConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local LosRule = require(Shared.Util.LosRule) -- claude-bud JOB 32
 
 local PremiumWeaponService = {}
 
@@ -186,6 +187,19 @@ local function splash(player: Player, model: Model, pos: Vector3, radius: number
 		IgnoreModel = model,
 		VsInfantryMult = vsInf,
 	})
+	-- claude-bud JOB 14: the missile's splash hurts vehicles too (never your own or a clan mate's); the splash hit
+	-- marker comes from GameFeelService (VehicleHealth.OnDamage)
+	pcall(function()
+		local VH = require(script.Parent.Parent.Modules.VehicleHealth) :: any
+		VH.ApplyRadiusDamage(pos, radius, amount, player, P.Missile.Class, {
+			WeaponId = weaponId,
+			IgnoreModel = model,
+			SkipOwner = function(uid: number): boolean
+				local o = Players:GetPlayerByUserId(uid)
+				return uid == player.UserId or (o ~= nil and cs.IsClanAlly ~= nil and cs.IsClanAlly(player, o) == true)
+			end,
+		})
+	end)
 end
 
 local function fire(player: Player, aim: any)
@@ -207,7 +221,7 @@ local function fire(player: Player, aim: any)
 	dir = clampCone(seat.CFrame.LookVector, dir :: Vector3, gun.ConeDeg)
 	local origin = muzzle(model, seat)
 	exclude(model, player, nil)
-	local r = Workspace:Raycast(origin, (dir :: Vector3) * gun.Range, rayParams)
+	local r = LosRule.HitCast(origin, (dir :: Vector3) * gun.Range, rayParams) -- claude-bud JOB 32
 	local at = if r then r.Position else origin + (dir :: Vector3) * gun.Range
 	local wid = "V_Prem_" .. gunId
 	if r then
@@ -352,7 +366,7 @@ local function step(dt: number)
 		end
 		local nextPos = m.Pos + m.Dir * M.Speed * dt
 		exclude(m.Vehicle, m.Owner, m.Part)
-		local r = Workspace:Raycast(m.Pos, nextPos - m.Pos, rayParams)
+		local r = LosRule.HitCast(m.Pos, nextPos - m.Pos, rayParams) -- claude-bud JOB 32
 		if r then
 			boom(m, r.Position, r.Instance)
 			done = true
@@ -427,6 +441,9 @@ function PremiumWeaponService.Init(d: { [string]: any })
 	end
 	if req and req:IsA("RemoteEvent") then
 		(req :: RemoteEvent).OnServerEvent:Connect(function(player: Player, action: any, aim: any)
+			if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPremiumWeapon", action, aim) then -- claude-bud JOB 15: rate ceiling + argument schema
+				return
+			end
 			local rl = d.RateLimitService
 			if rl and not rl.Allow(player, "premium_weapon", P.MaxRequestHz, P.MaxRequestHz) then
 				return

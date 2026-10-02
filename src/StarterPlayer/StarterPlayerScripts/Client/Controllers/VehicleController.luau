@@ -43,6 +43,7 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local VehicleConfig = require(Shared.Configs.VehicleConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig) -- claude-bud JOB 5a: Robux-only vehicles
+local LivePrices = require(Shared.Util.LivePrices) -- Code Bot v156: the real Roblox price (config = fallback)
 
 local HudConfig = require(Shared.Configs.HudConfig)
 
@@ -139,7 +140,7 @@ local function premiumPass(def: any): (string?, number, boolean)
 	end
 	local key = prem.PassKey :: string
 	local pass = (MonetizationConfig.GamePasses :: any)[key]
-	local robux = if typeof(pass) == "table" then (tonumber(pass.RobuxPrice) or 0) else 0
+	local robux = if typeof(pass) == "table" then LivePrices.Price("GamePass", key) else 0 -- Code Bot v156
 	local lp = Players.LocalPlayer
 	local owns = lp ~= nil and lp:GetAttribute("WE_Ent_" .. key) == true
 	return key, robux, owns
@@ -586,17 +587,45 @@ local function onRowTap(id: string)
 		local place: any = (MonetizationConfig :: any).Placement
 		if lp and typeof(place) == "table" and place.CantAffordVehicle == true and MonetizationConfig.PlacementLiveFor(lp.UserId) then
 			local need = st.Need or 0
-			for _, k in ipairs({ "CashSmall", "CashMedium", "CashLarge", "CashMega" }) do
+			-- claude-bud JOB 36: while the shop overhaul is live a pack pays max(Floor, minutes x passive $/min)
+			local SOC = require(Shared.Configs.ShopOverhaulConfig) :: any
+			local rate = tonumber(lp:GetAttribute(SOC.PerMinAttribute)) or 0
+			local function packCash(k: string, pk: any): number
+				return (if SOC.LiveFor(lp.UserId) then SOC.CashPackAmount(k, rate) else nil) or tonumber(pk.Cash) or 0
+			end
+			-- claude-bud JOB 42: while the time packs are shown, the SMALLEST time pack that covers the gap (else 4h)
+			local keys = { "CashSmall", "CashMedium", "CashLarge", "CashMega" }
+			local forceKey: string? = nil
+			if SOC.TimePacksShown(lp.UserId) then
+				local trate = tonumber(lp:GetAttribute(SOC.TimePacks.PerMinAttribute)) or 0
+				packCash = function(k: string, pk: any): number
+					return SOC.TimePackAmount(k, trate) or tonumber(pk.Cash) or 0
+				end
+				keys = { "Cash15m", "Cash30m", "Cash1h", "Cash2h", "Cash4h" }
+				local best = SOC.TimePacks.BestValueKey
+				local covered = false
+				for _, k in ipairs(keys) do
+					local pk: any = (MonetizationConfig.DevProducts :: any)[k]
+					if typeof(pk) == "table" and packCash(k, pk) >= need then
+						covered = true
+					end
+				end
+				if not covered then
+					keys = { best }
+					forceKey = best -- none covers the gap: the biggest pack, with its REAL amount shown
+				end
+			end
+			for _, k in ipairs(keys) do
 				local pk: any = (MonetizationConfig.DevProducts :: any)[k]
-				if typeof(pk) == "table" and (tonumber(pk.Id) or 0) ~= 0 and (tonumber(pk.Cash) or 0) >= need then
+				if typeof(pk) == "table" and (tonumber(pk.Id) or 0) ~= 0 and (packCash(k, pk) >= need or k == forceKey) then
 					local okN, NC = pcall(require, script.Parent.NotificationController)
 					local okS, SC = pcall(require, script.Parent.ShopController)
 					if okN and okS then
 						(NC :: any).ShowOffer({
 							Key = "fp_garage_cash",
 							Title = "Short on cash for " .. def.DisplayName,
-							Sub = string.format("%s: $%s", tostring(pk.DisplayName or k), commas(tonumber(pk.Cash) or 0)),
-							Cta = tostring(pk.RobuxPrice) .. " R$",
+							Sub = string.format("%s: $%s", LivePrices.Name("DevProduct", k), commas(packCash(k, pk))),
+							Cta = LivePrices.Cta("DevProduct", k), -- Code Bot v156
 							OnGet = function()
 								(SC :: any).PromptDevProduct(k, "garage")
 							end,

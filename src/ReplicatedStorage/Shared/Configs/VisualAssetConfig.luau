@@ -88,6 +88,7 @@ export type AirGear = {
 
 export type AssetRef = {
 	ModelAssetId: number?, -- InsertService / AssetService:LoadAssetAsync catalog Model
+	FallbackAssetId: number?, -- v119 rig rows: loaded instead when ModelAssetId fails for good (not authorized / not an R6 rig)
 	MeshId: number?, -- optional SpecialMesh / MeshPart MeshId (0 = unused)
 	Note: string?,
 	-- W3 LOOK: one piece of a (Roblox-owned) pack
@@ -103,6 +104,8 @@ export type AssetRef = {
 	Yaw: number?, -- Fit: degrees from the piece's front (-Z) to the kit's front (-Z); GateDefense.AutoGun: degrees that
 	-- turn the model's barrel onto -Z (turned once in the template at load)
 	HideKit: boolean?, -- Fit: hide the Part-kit visuals under the body (physics, seats and hitboxes unchanged)
+	LongAxisStuds: number?, -- Code Bot v200: GateDefense.AutoGunT1..T5 only: the tier gun's long side (4..7.5; nil = AutoGunLongAxisStuds)
+	AimHitbox: boolean?, -- Code Bot v200: GateDefense.AutoGunT1..T5 only: an invisible -Z box over the piece is the aim part / Turret HP hitbox
 	KeepVisible: { string }?, -- HideKit: kit part names that stay visible (the Armed 4x4 keeps its Part turret)
 	-- vscale (owner: the avatar sat above the buggy / through the jeep roof): Fit bodies at a set scale over the same kit
 	BodyScale: number?, -- Fit: body scale (1 = Roblox size); nil = as long as the kit chassis. The kit still drives
@@ -729,8 +732,19 @@ local BODY_BATTLESHIP = {
 	StripDecals = true,
 }
 
+-- v119 (owner pick 2026-09-29): the soldier body of the player's army (Squad + escorts) and the base / tower guards.
+-- "Army Soldier" 7703684779 (Creator Store, @Ca_zr, free; owned by the place creator so LoadAsset works live): a
+-- block-limb R6 body dressed by a camo Shirt / Pants and a FAST helmet. Its 6 scripts, 9 remotes, weapons (26 unions,
+-- 8 MeshParts) and sounds never reach a template (VisualAssetService strips every script / remote first; RigBuilder keeps
+-- only Torso, 4 limbs, the helmet and the clothing template ids). A failed load or a refused rig falls back to the Roblox
+-- "Soldier" 187790284 (the v118 body). Set SOLDIER_ASSET_ID = 187790284 to go back to the old body everywhere.
+local SOLDIER_ASSET_ID = 7703684779
+local SOLDIER_FALLBACK_ID = 187790284
+
 local VisualAssetConfig = {
 	Enabled = true,
+	SoldierAssetId = SOLDIER_ASSET_ID, -- v119: Characters.Squad / Guard / GateGuard
+	SoldierFallbackAssetId = SOLDIER_FALLBACK_ID,
 	StripScripts = true,
 	-- v87 (Code Bot): who wears the Rollout = "Body" store bodies (helicopters, bombers, transports, ships): "owner" = only
 	-- vehicles spawned by the playtest owner (AdminConfig.IsPlaytestOwner), "all" = everyone, "off" = nobody (Part kit).
@@ -821,6 +835,28 @@ local VisualAssetConfig = {
 			SpinUpSeconds = 2.5,
 			Refresh = 0.5,
 		},
+	},
+	-- claude-bud JOB 56: the rotor spins about ITS OWN disc, not the chassis Y. rigRotor used the chassis axis through
+	-- the Hub's box centre: a blade disc tilted against the chassis wobbles ("tilted rotor") and a hub box that is not
+	-- on the blades' centre makes them orbit ("detached rotor"). With this on (owner-first by the vehicle owner) the
+	-- spin axis is the blades' thinnest box axis (within MaxCorrectionDeg of the configured axis, only when clearly
+	-- thin: ThinRatio) and the centre is the blades' own centre. Every rotor logs [RotorRig] tilt / offset.
+	-- claude-bud JOB 67: the asset upgrade switch (owner-first by the BASE OWNER; OFF = today's models)
+	Job67 = {
+		Enabled = true,
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 67): Code Bot flips it with the public flip
+		-- the turret tier by the owner's Turret Guns level (EndgameConfig.Defence, 0..10): 0 = T1, 1-3 = T2, 4-6 = T3,
+		-- 7-9 = T4, 10 = T5
+		TurretTierAt = { 1, 4, 7, 10 }, -- the first level of T2 / T3 / T4 / T5
+		TurretTierKeys = { "AutoGunT1", "AutoGunT2", "AutoGunT3", "AutoGunT4", "AutoGunT5" },
+	},
+	AirRotorDisc = {
+		Enabled = true,
+		OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 56): Code Bot flips it after Shaun's phone test
+		MinTiltDeg = 1, -- below this the configured axis is kept
+		MinOffset = 0.05, -- studs: below this the configured centre is kept
+		MaxCorrectionDeg = 25, -- a larger "tilt" means the box guess is wrong: keep the configured axis
+		ThinRatio = 0.5, -- the thinnest box side must be under half the next one (a flat blade disc)
 	},
 	-- air-looks fix1 (2026-09-28): the phone cost of ONE store vehicle body, in Creator Store triangles (the whole model;
 	-- a pack counts in full). tools/wire-asset-ids.py promote refuses a vehicle body above it unless the lead accepts it
@@ -1384,17 +1420,18 @@ local VisualAssetConfig = {
 	Characters = {
 		-- R-RIG: owner rule 9 + decision #8 default: the Roblox "Soldier" 187790284 (creator Roblox) for every soldier kind
 		Soldier = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret", Note = "Roblox Soldier (rule 9)" } :: AssetRef,
-		Squad = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret", Note = "friendly squad units" } :: AssetRef,
+		Squad = { ModelAssetId = SOLDIER_ASSET_ID, FallbackAssetId = SOLDIER_FALLBACK_ID, Rig = "R6", Headwear = "Beret", Note = "v119 Army Soldier 7703684779: friendly squad units (the army escorts copy it on each phone)" } :: AssetRef,
 		Infantry = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet", Note = "hostile infantry" } :: AssetRef,
 		Worker = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet", Note = "#9 default: Roblox soldier body" } :: AssetRef,
 		WorkerFallback = { ModelAssetId = 0, Note = "R-RIG: unused (rig kinds keep the Part kit on a failed load)" } :: AssetRef,
 		HeavyInfantry = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
-		Guard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		Guard = { ModelAssetId = SOLDIER_ASSET_ID, FallbackAssetId = SOLDIER_FALLBACK_ID, Rig = "R6", Headwear = "Beret", Note = "v119 Army Soldier 7703684779" } :: AssetRef,
 		BankGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
 		OilRigGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
 		FortGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		CheckpointGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet", Note = "claude-bud JOB 37: the bank guards' rig" } :: AssetRef,
 		CampCommander = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
-		GateGuard = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet" } :: AssetRef,
+		GateGuard = { ModelAssetId = SOLDIER_ASSET_ID, FallbackAssetId = SOLDIER_FALLBACK_ID, Rig = "R6", Headwear = "Beret", Note = "v119 Army Soldier 7703684779: base gate / tower guards" } :: AssetRef,
 		-- W1 CFG drop (country / real-world weapon in the source): 0 → CharacterAlt (0) → Part kit
 		SpecialForces = { ModelAssetId = 0, Note = "W1 CFG drop (real-world unit) — Part kit" } :: AssetRef,
 		SpecialForcesAlt = { ModelAssetId = 0, Note = "W1 CFG drop (real-world weapon) — unused key" } :: AssetRef,
@@ -1440,11 +1477,23 @@ local VisualAssetConfig = {
 		-- tripod leg reaching forward, the rear grips behind, the ammo box on the left); GateDefenseService turns the template
 		-- once so it aims -Z, stands it on the ground and welds it to its aim part (only that part is anchored)
 		AutoGun = { ModelAssetId = 114570602, Yaw = 90, Note = "owner pick: Tripod Mounted Machine Gun by GuestCapone (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
+		-- claude-bud JOB 67 (1): the turret TIERS from Shaun's paid Minigun Turret Pack (Lvl 1-10, 109072907337393; its
+		-- one script is stripped by the loader). Pack levels 1 / 3 / 5 / 8 / 10 = T1..T5 (ChildName = the pack's model
+		-- name for that level, read from the WE_CHECK2 probe). PendingAssetId until tools/wire-asset-ids.py promotes it
+		-- (WE_CHECK2: <= 40 parts per piece, <= 20k tris); a tier with ModelAssetId 0 = the AutoGun above (today).
+		-- Code Bot v200 WE_CHECK2 (Open Cloud Luau, place v197, docs/we_check2_minigun_v200.txt): pack = Folder of 10 Models
+		-- minigun_l01..l10, 4 MeshParts each (Base > TurretYaw > GunPitch > BarrelRotation), 1 Script "README" (stripped),
+		-- 0 Humanoids; every part faces -Z with the barrel on +Z, so Yaw 180 + AimHitbox; LongAxisStuds grows per tier.
+		AutoGunT1 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l01", LongAxisStuds = 5.5, AimHitbox = true, Note = "JOB 67 T1 = Lvl 1 of Shaun's paid Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1, 4 MeshParts (promoted 2026-10-01 by tools/wire-asset-ids.py)" } :: AssetRef,
+		AutoGunT2 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l03", LongAxisStuds = 5.8, AimHitbox = true, Note = "JOB 67 T2 = Lvl 3 of Shaun's paid Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1, 4 MeshParts (promoted 2026-10-01 by tools/wire-asset-ids.py)" } :: AssetRef,
+		AutoGunT3 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l05", LongAxisStuds = 6.1, AimHitbox = true, Note = "JOB 67 T3 = Lvl 5 of Shaun's paid Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1, 4 MeshParts (promoted 2026-10-01 by tools/wire-asset-ids.py)" } :: AssetRef,
+		AutoGunT4 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l08", LongAxisStuds = 6.5, AimHitbox = true, Note = "JOB 67 T4 = Lvl 8 of Shaun's paid Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1, 4 MeshParts (promoted 2026-10-01 by tools/wire-asset-ids.py)" } :: AssetRef,
+		AutoGunT5 = { ModelAssetId = 109072907337393, Yaw = 180, ChildName = "minigun_l10", LongAxisStuds = 7.0, AimHitbox = true, Note = "JOB 67 T5 = Lvl 10 of Shaun's paid Minigun Turret Pack (Lvl 1-10) by Hoshizora_N1, 4 MeshParts (promoted 2026-10-01 by tools/wire-asset-ids.py)" } :: AssetRef,
 		-- L2 elevated ONLY (not door flanks):
 		AutoGunElevated = { ModelAssetId = 0, Note = "W1 CFG drop (uploader not the author) — unused key" } :: AssetRef,
 		AutoGunElevatedAlt = { ModelAssetId = 10354803684, Note = "Military turret — L2/corner only" } :: AssetRef,
 		SandbagNest = { ModelAssetId = 0, Note = "Circular sandbag ring under HMG" } :: AssetRef,
-		Sandbags = { ModelAssetId = 3525056989, Note = "Realistic Sandbag scatter at posts" } :: AssetRef,
+		Sandbags = { ModelAssetId = 0, Note = "v147: was 3525056989 (not authorized: live LoadAsset 2026-09-30; never loaded, a wasted LoadAsset per server) - sandbag scatter at posts" } :: AssetRef,
 	},
 
 	-- Owner asset list hooks (2026-09-25): war-business line dress. BusinessService.SyncBusiness defers
@@ -1499,18 +1548,18 @@ local VisualAssetConfig = {
 
 	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
 	-- W1 CFG drop (paid): 0 is skipped, so TryAttachCollectorVisual tries the fallback, then the alts, then the Part kit
-	MoneyCollector = { ModelAssetId = 18220523228, Note = "owner pick: ATM by 0GColt (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
-	MoneyCollectorFallback = { ModelAssetId = 175462478, Note = "ATM fallback classic" } :: AssetRef,
+	MoneyCollector = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 18220523228 (75 parts > the 40-part cap (live); the Part kit look stays) - owner pick: ATM by 0GColt (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
+	MoneyCollectorFallback = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 175462478 (not authorized (live LoadAsset); the Part kit look stays) - ATM fallback classic" } :: AssetRef,
 	MoneyCollectorAlts = {
-		{ ModelAssetId = 90362241548850, Note = "ATM alt A" } :: AssetRef,
-		{ ModelAssetId = 76846072091295, Note = "ATM alt B" } :: AssetRef,
-		{ ModelAssetId = 35409899, Note = "ATM alt C" } :: AssetRef,
+		{ ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 90362241548850 (not authorized (live LoadAsset); the Part kit look stays) - ATM alt A" } :: AssetRef,
+		{ ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 76846072091295 (not authorized (live LoadAsset); the Part kit look stays) - ATM alt B" } :: AssetRef,
+		{ ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 35409899 (not authorized (live LoadAsset); the Part kit look stays) - ATM alt C" } :: AssetRef,
 	},
 	MoneyBagFX = { ModelAssetId = 38451313, Note = "Collect cash burst VFX (StripScripts)" } :: AssetRef,
 	VfxSparkles = { ModelAssetId = 4221608224, Note = "Collect/upgrade sparkles VFX" } :: AssetRef,
 	CashCrate = { ModelAssetId = 16803204916, Note = "Cash crate alt overlay" } :: AssetRef,
-	UpgradeFlag = { ModelAssetId = 1679839739, Note = "L5 structure flag pop" } :: AssetRef,
-	FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower PROP (not vehicle)" } :: AssetRef,
+	UpgradeFlag = { ModelAssetId = 0, Note = "v147: was 1679839739 (not authorized: live LoadAsset 2026-09-30; the Part kit look stays) - L5 structure flag pop" } :: AssetRef,
+	FloodlightTower = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 107381977457431 (not authorized (live LoadAsset); the Part kit look stays) - Floodlight tower PROP (not vehicle)" } :: AssetRef,
 	-- VehicleDepot showroom catalog (Part-kit podium remains fallback)
 	ShowroomPodium = { ModelAssetId = 5267267960, Note = "Showroom podium mesh" } :: AssetRef,
 	ShowroomPedestal = { ModelAssetId = 130578088310000, Note = "Showroom pedestal" } :: AssetRef,
@@ -1526,22 +1575,22 @@ local VisualAssetConfig = {
 		SandbagBarrier = { ModelAssetId = 12651656400, Note = "Warzone SandbagBarrier" } :: AssetRef,
 		SandbagWall = { ModelAssetId = 25733125, Note = "Warzone SandbagWall" } :: AssetRef,
 		ConcreteBarrier = { ModelAssetId = 2766525411, Note = "owner pick: road barrier by SiameseMouse (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
-		Crate = { ModelAssetId = 53591587, Note = "Warzone Crate" } :: AssetRef,
+		Crate = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 53591587 (not authorized (live LoadAsset); the Part kit look stays) - Warzone Crate" } :: AssetRef,
 		MilitaryCrate = { ModelAssetId = 2930926216, Note = "owner pick: Military Crates by XIArchangel (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		AmmoBox = { ModelAssetId = 16382915010, Note = "Warzone AmmoBox" } :: AssetRef,
 		OilBarrel = { ModelAssetId = 23153991, Note = "owner list: Roblox Smoking Barrel, whole model (4 parts), smoke removed (StripEffectsAssetIds)" } :: AssetRef,
 		BarbedWire = { ModelAssetId = 1291725699, Note = "Warzone BarbedWire" } :: AssetRef,
 		Tent = { ModelAssetId = 182529039, Note = "owner pick: Military Canvas Tent by Quenty (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		RadioAntenna = { ModelAssetId = 19277831, PendingAssetId = 1439808070, Note = "owner pick Antenna (Sereinmachy): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
-		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
-		FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower prefer" } :: AssetRef,
-		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
+		Floodlight = { ModelAssetId = 0, Note = "v147: was 116763933 (not authorized: live LoadAsset in place 97112936860418, 2026-09-30; the Part kit look stays) - Warzone Floodlight" } :: AssetRef,
+		FloodlightTower = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 107381977457431 (not authorized (live LoadAsset); the Part kit look stays) - Floodlight tower prefer" } :: AssetRef,
+		Flag = { ModelAssetId = 0, Note = "v147: was 1679839739 (not authorized: live LoadAsset 2026-09-30; the Part kit flag stays) - L5 upgrade flag" } :: AssetRef,
 		Lantern = { ModelAssetId = 0, Note = "W1 CFG drop (extracted from another game) — Part kit host" } :: AssetRef,
 		TentAlt = { ModelAssetId = 3133150032, Note = "Tent alt if primary Tent fails" } :: AssetRef,
 		RadioAntennaAlt = { ModelAssetId = 42209845, Note = "HQ roof antenna alt" } :: AssetRef,
 		FloodlightAlt = { ModelAssetId = 4893998573, Note = "Depot bay floodlight" } :: AssetRef,
 		FuelCans = { ModelAssetId = 1160141839, PendingAssetId = 112426091, Note = "owner pick Gas Can (Maximum_ADHD): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
-		FlagPole = { ModelAssetId = 1679839739, PendingAssetId = 172755983, Note = "owner pick Flagpole (Quenty): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
+		FlagPole = { ModelAssetId = 0, PendingAssetId = 172755983, Note = "owner pick Flagpole (Quenty): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
 		FlagPoleHD = { ModelAssetId = 1454179642, Note = "HQ prestige flag pole" } :: AssetRef,
 		-- Map densify P0/P1 (Design MAP_BUILD_OUT_WIRE 2026-09-21)
 		JerseyBarrier = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; WorldKits Jersey is our Part kit) — Part kit" } :: AssetRef,
@@ -1562,13 +1611,13 @@ local VisualAssetConfig = {
 		Sandbags = { ModelAssetId = 15271872710, Note = "owner pick: SandBag Wall by Herbie778811 (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		Barrier = { ModelAssetId = 25733125, Note = "alias → SandbagWall" } :: AssetRef,
 		Cone = { ModelAssetId = 2766525411, Note = "owner pick: road barrier by SiameseMouse (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
-		Drum = { ModelAssetId = 53591587, Note = "alias → Crate" } :: AssetRef,
+		Drum = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 53591587 (not authorized (live LoadAsset); the Part kit look stays) - alias → Crate" } :: AssetRef,
 		Pallet = { ModelAssetId = 2930926216, Note = "owner pick: Military Crates by XIArchangel (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		CamoNet = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		CamoNetAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		Fence = { ModelAssetId = 25623924, Note = "legacy alias of the old OilBarrel id (no caller; WarzoneProps.OilBarrel is the Roblox barrel now)" } :: AssetRef,
 		Radio = { ModelAssetId = 19277831, PendingAssetId = 1439808070, Note = "owner pick Antenna (Sereinmachy): pending, P1i (inert while PreferMesh is off); alias of RadioAntenna" } :: AssetRef,
-		Lamp = { ModelAssetId = 116763933, Note = "alias → Floodlight" } :: AssetRef,
+		Lamp = { ModelAssetId = 0, Note = "v147: was 116763933 (not authorized) - alias → Floodlight" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	DesertProps = {
@@ -1601,7 +1650,7 @@ local VisualAssetConfig = {
 	-- Tier 2: oil spectacle + map landmarks (REJECT Ultrapump 1837698074)
 	IndustrialProps = {
 		IndustrialPack = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit (oil spectacle)" } :: AssetRef,
-		OilPumpjack = { ModelAssetId = 15192621369, Note = "owner pick: Oil Rig / Pumpjack by sadfiacs (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
+		OilPumpjack = { ModelAssetId = 0, Note = "claude-bud JOB 24 §4c: was 15192621369 (68 parts > the 40-part cap (live); the Part kit look stays) - owner pick: Oil Rig / Pumpjack by sadfiacs (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		OilPumpjackAlt = { ModelAssetId = 0, Note = "0 since 2026-09-25: 15192621369 (PlotOilPump) is the primary now (tools/wire-asset-ids.py)" } :: AssetRef,
 		RustyPipes = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit" } :: AssetRef,
 		OilBarrel = { ModelAssetId = 25623924, Note = "Oil barrel ring" } :: AssetRef,
@@ -1718,5 +1767,17 @@ local VisualAssetConfig = {
 		NavalSub = "_FallbackNaval",
 	} :: { [string]: string },
 }
+
+-- claude-bud JOB 67: the turret tier (1..5) for a Turret Guns level 0..10 (pure; Job67.TurretTierAt)
+function VisualAssetConfig.TurretTierFor(level: number): number
+	local J: any = (VisualAssetConfig :: any).Job67
+	local t = 1
+	for i, l in ipairs(if J then J.TurretTierAt else {}) do
+		if (tonumber(level) or 0) >= l then
+			t = i + 1
+		end
+	end
+	return t
+end
 
 return VisualAssetConfig

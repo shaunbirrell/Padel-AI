@@ -1,8 +1,8 @@
 --!strict
 --[[ Aircraft weapons (owner request part 2). Numbers: Shared/Configs/AircraftWeaponConfig.luau.
 
-	Only combat aircraft are armed (AircraftWeaponConfig.Aircraft / Loadouts). The feature is dark while
-	WeaponsLive = false, except for the owner's playtest account (AircraftWeaponConfig.LiveFor, evaluated HERE).
+	Only combat aircraft are armed (AircraftWeaponConfig.Aircraft / Loadouts). v138: WeaponsLive = true, live for every
+	player (AircraftWeaponConfig.LiveFor, evaluated HERE; the owner's playtest override is now redundant).
 
 	RequestVehicleFire (the v71 M2 remote, contract { M = mountId, D = direction }) + optional I = input class.
 	Nothing else in the payload is read: a client never names a target. Order of checks (first failure wins, the
@@ -856,6 +856,9 @@ function AirWeaponService.Init(deps: { [string]: any })
 	if remote and remote:IsA("RemoteEvent") then
 		local ev = remote :: RemoteEvent
 		ev.OnServerEvent:Connect(function(player: Player, payload: any)
+			if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestVehicleFire", payload) then -- claude-bud JOB 15: rate ceiling + argument schema
+				return
+			end
 			local ok, res = pcall(function()
 				AirWeaponService.RequestFire(player, payload)
 			end)

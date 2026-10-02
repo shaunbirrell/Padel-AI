@@ -157,6 +157,7 @@ export type PlayerProfile = {
 	Monetization: MonetizationStats?,
 	AnnouncePurchases: boolean?, -- M8 purchase ticker opt-out (true = announce)
 	VipSupplyAt: number?, -- M8 daily VIP supply: os.time() of the last claim
+	Endgame: { [string]: any }?, -- claude-bud JOB 39: EmpireLevel, BaseTier, Elite, Defence, ... (ProfileSchema ensureEndgameFields)
 	-- Owner's 11 features (ProfileSchema default-fill + sanitise; no DataVersion bump)
 	KeepBaseRebirths: number?, -- F7 keep-base rebirth tokens (added only in ProcessReceipt; spent by PrestigeService)
 	TutorialOrderVersion: number?, -- F6 order the saved TutorialStep index uses (missing = 1, the pre-F6 order)
@@ -260,6 +261,7 @@ export type PlayerStatePayload = {
 	TrainingIncomePerTick: number?,
 	Base: BaseStatePayload,
 	TutorialStep: number?,
+	TutorialOrderVersion: number?, -- claude-bud JOB 41: 4 = the Guided step list
 	TutorialComplete: boolean,
 	Vehicles: { [string]: boolean },
 	Weapons: { [string]: boolean },
@@ -289,6 +291,7 @@ export type CombatHitFeedbackPayload = {
 	TargetKind: string?, -- "Player" | "NPC" | "Vehicle" | "Gate"
 	Pos: Vector3?, -- Hit/Kill: world hit point (damage-number anchor)
 	From: Vector3?, -- Damaged: attacker position (direction cue)
+	Unit: boolean?, -- codebot v216: Damaged from an army / defence shot (From = that shooter, nil = unknown)
 	Assist: boolean?, -- Hit/Kill: the server assist chose this target
 	Splash: boolean?, -- aggregated area damage
 }
@@ -369,6 +372,7 @@ export type FireRequestPayload = {
 	TargetNpcId: string?, -- same
 	HitPosition: Vector3?, -- the client ray's end: telemetry only (the fire_hitpos_oor soft strike)
 	Input: string?, -- W2: "Touch" | "Gamepad" | "KeyboardAndMouse" (<= 16 chars; anything else is ignored, no strike)
+	Prime: string?, -- claude-bud JOB 35: "Spin" | "Charge" = the trigger went down on a SpinUp / ChargeSeconds gun (no shot)
 }
 
 -- W2 (contracts §2.1): one WeaponFx UnreliableRemoteEvent table per event, sent with FireClient to each recipient.

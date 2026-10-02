@@ -55,7 +55,10 @@ export type Look = {
 }
 
 local function findPart(root: Instance, name: string): BasePart?
-	local p = root:FindFirstChild(name, true)
+	local p = root:FindFirstChild(name) -- v119: the figure's own direct child first (a nested gun part never wins)
+	if not (p and p:IsA("BasePart")) then
+		p = root:FindFirstChild(name, true)
+	end
 	if p and p:IsA("BasePart") then
 		return p
 	end
@@ -84,10 +87,25 @@ end
 
 -- Inserted R6 character → a Humanoid-free rig template (unparented), or nil + reason. `model` is consumed.
 function RigBuilder.BakeTemplate(model: Model, assetId: number): (Model?, string?)
+	-- v119: only a real R6 character is baked (a Humanoid with RigType R6 + the R6 limbs / joints below)
+	local fileHum = model:FindFirstChildWhichIsA("Humanoid", true)
+	if fileHum == nil then
+		return nil, "no Humanoid (not a character rig)"
+	end
+	if (fileHum :: Humanoid).RigType ~= Enum.HumanoidRigType.R6 then
+		return nil, "not an R6 rig (" .. tostring((fileHum :: Humanoid).RigType) .. ")"
+	end
 	local torso = findPart(model, "Torso")
 	if torso == nil then
 		return nil, "no Torso"
 	end
+	local fileHead = findPart(model, "Head") -- v119: headwear offsets are measured from the file's own head
+	local fileHeadCf = if fileHead then fileHead.CFrame else nil
+	-- v119 cloth: the file's Shirt / Pants template ids (read before anything is destroyed)
+	local shirt = model:FindFirstChildWhichIsA("Shirt", true)
+	local pants = model:FindFirstChildWhichIsA("Pants", true)
+	local shirtTemplate = if shirt then (shirt :: Shirt).ShirtTemplate else ""
+	local pantsTemplate = if pants then (pants :: Pants).PantsTemplate else ""
 	local rig = Instance.new("Model")
 	rig.Name = "WE_Rig_" .. tostring(assetId)
 	local rest = torso.CFrame -- the template is stored with Torso at the origin (identity)
@@ -152,11 +170,38 @@ function RigBuilder.BakeTemplate(model: Model, assetId: number): (Model?, string
 			end
 		end
 	end
-	-- the hat: its Handle becomes "Beret" (SpecialMesh kept), welded to the head at attach
-	local hat = model:FindFirstChildWhichIsA("Accoutrement", true)
+	-- the hat: its Handle becomes "Beret" (SpecialMesh kept), welded to the head at attach. v119: the file's helmet /
+	-- beret / cap / hat first (RigConfig.Cloth.HeadwearPrefer; the Army Soldier also wears hair and sunglasses)
+	local hats: { Instance } = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Accoutrement") then
+			table.insert(hats, d)
+		end
+	end
+	local hat: Instance? = hats[1]
+	local prefer = (RigConfig :: any).Cloth and (RigConfig :: any).Cloth.HeadwearPrefer
+	if typeof(prefer) == "table" then
+		local found = false
+		for _, word in ipairs(prefer) do
+			for _, h in ipairs(hats) do
+				if string.find(string.lower(h.Name), word, 1, true) then
+					hat = h
+					found = true
+					break
+				end
+			end
+			if found then
+				break
+			end
+		end
+	end
 	local handle = if hat then hat:FindFirstChild("Handle") else nil
 	if handle and handle:IsA("BasePart") then
 		local hw = model:FindFirstChild("HeadWeld", true)
+		if hw and hw:IsA("Weld") and hw.Part1 ~= handle then
+			hw = nil -- v119: that HeadWeld holds another hat (the Army Soldier's glasses): measure this one instead
+		end
+		local handleCf = handle.CFrame
 		handle.Name = "Beret"
 		for _, c in ipairs(handle:GetChildren()) do
 			if not c:IsA("DataModelMesh") then
@@ -171,10 +216,23 @@ function RigBuilder.BakeTemplate(model: Model, assetId: number): (Model?, string
 		w.Part1 = handle
 		if hw and hw:IsA("Weld") then
 			w.C0, w.C1 = hw.C0, hw.C1
+		elseif fileHeadCf then
+			w.C0, w.C1 = (fileHeadCf :: CFrame):ToObjectSpace(handleCf), CFrame.new() -- where the file wears it
 		else
 			w.C0, w.C1 = CFrame.new(0, 0.5, 0), CFrame.new()
 		end
 		w.Parent = handle
+	end
+	-- v119 cloth: block limbs (no FileMesh baked from a CharacterMesh) keep the file's clothing as template ids; Attach
+	-- paints them onto the limb faces (Textures). A CharacterMesh body (the Roblox Soldier) has its look in the meshes.
+	local meshed = parts.Torso:FindFirstChildWhichIsA("SpecialMesh") ~= nil
+	if not meshed then
+		if shirtTemplate ~= "" then
+			rig:SetAttribute("WE_ShirtTemplate", shirtTemplate)
+		end
+		if pantsTemplate ~= "" then
+			rig:SetAttribute("WE_PantsTemplate", pantsTemplate)
+		end
 	end
 	-- rest pose around Torso at the origin (the engine re-solves the joints anyway once parented)
 	for n, p in pairs(parts) do
@@ -212,6 +270,84 @@ local function relink(rig: Model)
 		end
 	end
 	return byName
+end
+
+-- ── v119 cloth: a Shirt / Pants template painted onto block limbs (Texture per face, no Humanoid) ──────────────────
+-- Regions of the standard Roblox 585 x 559 template: { x, y, w, h } in pixels, per limb, per face (NormalId name). The
+-- right arm / leg is the template's left block (L B R F from the left), the left arm / leg its right block (F L B R).
+type Region = { number }
+local SHIRT_MAP: { [string]: { [string]: Region } } = {
+	Torso = { Front = { 231, 74, 128, 128 }, Back = { 427, 74, 128, 128 }, Right = { 165, 74, 64, 128 },
+		Left = { 361, 74, 64, 128 }, Top = { 231, 8, 128, 64 } },
+	["Right Arm"] = { Left = { 19, 355, 64, 128 }, Back = { 85, 355, 64, 128 }, Right = { 151, 355, 64, 128 },
+		Front = { 217, 355, 64, 128 }, Top = { 217, 289, 64, 64 } },
+	["Left Arm"] = { Front = { 308, 355, 64, 128 }, Left = { 374, 355, 64, 128 }, Back = { 440, 355, 64, 128 },
+		Right = { 506, 355, 64, 128 }, Top = { 308, 289, 64, 64 } },
+}
+local PANTS_MAP: { [string]: { [string]: Region } } = {
+	["Right Leg"] = { Left = { 19, 355, 64, 128 }, Back = { 85, 355, 64, 128 }, Right = { 151, 355, 64, 128 },
+		Front = { 217, 355, 64, 128 } },
+	["Left Leg"] = { Front = { 308, 355, 64, 128 }, Left = { 374, 355, 64, 128 }, Back = { 440, 355, 64, 128 },
+		Right = { 506, 355, 64, 128 } },
+}
+RigBuilder.ClothName = "WE_Cloth"
+
+-- face width / height in studs as the Texture's U / V see it
+local function faceDims(size: Vector3, face: string): (number, number)
+	if face == "Front" or face == "Back" then
+		return size.X, size.Y
+	elseif face == "Left" or face == "Right" then
+		return size.Z, size.Y
+	end
+	return size.X, size.Z
+end
+
+-- one Texture showing `r` of `template` across the whole `face` of `p` (U / V from the face's top-left corner)
+local function clothFace(p: BasePart, face: string, template: string, r: Region, tint: Color3, z: number)
+	local cfg = (RigConfig :: any).Cloth
+	local cw, ch = tonumber(cfg.CanvasW) or 585, tonumber(cfg.CanvasH) or 559
+	local w, h = faceDims(p.Size, face)
+	local t = Instance.new("Texture")
+	t.Name = RigBuilder.ClothName
+	t.Face = (Enum.NormalId :: any)[face]
+	t.Texture = template
+	t.StudsPerTileU = w * cw / r[3]
+	t.StudsPerTileV = h * ch / r[4]
+	t.OffsetStudsU = r[1] * w / r[3]
+	t.OffsetStudsV = r[2] * h / r[4]
+	t.Color3 = tint
+	t.ZIndex = z
+	t.Parent = p
+end
+
+-- paints the rig's WE_ShirtTemplate / WE_PantsTemplate (BakeTemplate) onto its limbs; returns the Textures made
+function RigBuilder.PaintCloth(rig: Model, parts: { [string]: BasePart }, shirtKit: Color3, pantsKit: Color3): number
+	local cfg = (RigConfig :: any).Cloth
+	if typeof(cfg) ~= "table" or cfg.Enabled ~= true then
+		return 0
+	end
+	local a = math.clamp(tonumber(cfg.TintAlpha) or 0, 0, 1)
+	local white = Color3.new(1, 1, 1)
+	local n = 0
+	local function paint(map: { [string]: { [string]: Region } }, template: any, tint: Color3)
+		if typeof(template) ~= "string" or template == "" then
+			return
+		end
+		for limb, faces in pairs(map) do
+			local p = parts[limb]
+			if p then
+				for face, r in pairs(faces) do
+					if face ~= "Top" or cfg.TopFaces == true then
+						clothFace(p, face, template, r, tint, 1)
+						n += 1
+					end
+				end
+			end
+		end
+	end
+	paint(SHIRT_MAP, rig:GetAttribute("WE_ShirtTemplate"), white:Lerp(shirtKit, a))
+	paint(PANTS_MAP, rig:GetAttribute("WE_PantsTemplate"), white:Lerp(pantsKit, a))
+	return n
 end
 
 -- the kit parts a rig keeps; every other BasePart child of the host (except its root) goes
@@ -379,6 +515,10 @@ function RigBuilder.Attach(host: Model, template: Model, look: Look?): boolean
 	if depth > 0 then
 		torso.Size = Vector3.new(torso.Size.X, torso.Size.Y, depth)
 		torso.CanQuery = true
+	end
+	-- v119 cloth (after the hit depth: the side faces are painted at their real width)
+	if rig:GetAttribute("WE_ShirtTemplate") or rig:GetAttribute("WE_PantsTemplate") then
+		RigBuilder.PaintCloth(rig, parts, torsoColor, legColor)
 	end
 	root.Transparency = 1
 	local hum = host:FindFirstChildOfClass("Humanoid")

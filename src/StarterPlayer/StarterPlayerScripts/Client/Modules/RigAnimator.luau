@@ -34,11 +34,20 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60) :: Instance -- Bootstrap already waited for it; bounded anyway
 local RigConfig = require((Shared :: any).Configs.RigConfig) :: any
+-- v114/v115 (Code Bot Roblox): ArmyConfig.Follow3 escort layout (v115: on the unit's own path behind it)
+local okArmyCfg, ArmyConfigOrErr = pcall(require, (Shared :: any).Configs.ArmyConfig)
+local follow3: any = if okArmyCfg and typeof(ArmyConfigOrErr) == "table" then (ArmyConfigOrErr :: any).Follow3 else nil
 
 local RigAnimator = {}
 
 type Tracks = { Hold: AnimationTrack?, Idle: AnimationTrack?, Walk: AnimationTrack?, Aim: AnimationTrack? }
 type Escort = { Model: Model, Tracks: Tracks?, State: string, Torso: BasePart?, Parts: { BasePart }, Decals: { Decal }, Hidden: boolean }
+-- v114: an escort's RootJoint, its index in the unit's row and the last local offset written (weak: goes with the escort)
+type EscLayout = { Joint: Motor6D, Index: number, Off: Vector3? }
+local escLayout: { [any]: EscLayout } = setmetatable({}, { __mode = "k" }) :: any
+-- v119: an escort's helmet and whether the helmet budget hides it this pass (weak: goes with the escort)
+type EscHelm = { Part: BasePart, Off: boolean }
+local escHelm: { [any]: EscHelm } = setmetatable({}, { __mode = "k" }) :: any
 type Entry = {
 	Rig: Model,
 	Index: number,
@@ -69,9 +78,14 @@ type Entry = {
 	WantEsc: number, -- escorts this figure asks for this pass (WE_Escorts, capped; 0 when not eligible)
 	Escorts: { Escort },
 	LeadHidden: boolean, -- an own squad unit in the camera's face: its rig hidden on this client (parts + Decals)
+	Cloth: { Texture }, -- v119: the WE_Cloth Textures of a cloth body (hidden while Far)
+	HasLod: boolean, -- v119: FileMesh limbs or cloth: the figure has a far look (blocks) to swap to
+	HelmetOff: boolean, -- v119: a cloth body's helmet hidden this pass (over Budget.MaxMeshedTriangles)
 }
 
 local TAG: string = RigConfig.Tag
+local CLOTH_NAME = "WE_Cloth" -- v119: RigBuilder.ClothName (server)
+local clothCfg = (RigConfig :: any).Cloth or {}
 local ESCORT_NAME = "WE_Escort"
 local TRACK_NAMES = { "Hold", "Idle", "Walk", "Aim" }
 local LIMB_NAMES = { "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg" }
@@ -103,7 +117,7 @@ local guardN = 0
 local stats = {
 	Passes = 0, Animated = 0, Loads = 0, Registered = 0, Escorts = 0, EscortParts = 0, EscortBuilds = 0, FarSwaps = 0,
 	Meshed = 0, MeshedStatic = 0, EscortsHidden = 0, EscortHides = 0, HoldBaked = 0, LeadsHidden = 0, LeadHides = 0,
-	GuardPasses = 0,
+	GuardPasses = 0, HelmetsOn = 0, HelmetsOff = 0, MeshedTris = 0,
 }
 
 local function animation(name: string): Animation?
@@ -204,6 +218,10 @@ local function setEscortHidden(x: Escort, hidden: boolean)
 	for _, p in ipairs(x.Parts) do
 		p.LocalTransparencyModifier = if hidden then 1 else 0
 	end
+	local hb = escHelm[x]
+	if hb and hb.Off and not hidden then
+		hb.Part.LocalTransparencyModifier = 1 -- v119: shown again, but its helmet stays over the triangle budget
+	end
 	for _, d in ipairs(x.Decals) do -- the face: a Decal is drawn even on a hidden part
 		d.LocalTransparencyModifier = if hidden then 1 else 0
 	end
@@ -223,9 +241,15 @@ local function setLeadHidden(e: Entry, hidden: boolean)
 	for _, c in ipairs(e.Rig:GetChildren()) do
 		if c:IsA("BasePart") then
 			c.LocalTransparencyModifier = if hidden or (c == e.Beret and e.Far) then 1 else 0
+			if c == e.Beret and e.HelmetOff then
+				c.LocalTransparencyModifier = 1 -- v119: a helmet over the triangle budget stays hidden
+			end
 			for _, d in ipairs(c:GetChildren()) do
 				if d:IsA("Decal") then -- the kit head's face: a Decal is drawn even on a hidden part
 					d.LocalTransparencyModifier = if hidden then 1 else 0
+					if e.Far and d.Name == CLOTH_NAME then
+						d.LocalTransparencyModifier = 1 -- v119: a far cloth body shows its kit-colour blocks
+					end
 				end
 			end
 		end
@@ -257,7 +281,7 @@ end
 
 -- a local copy of the unit's body, `offset` from its root (unit frame). Joints are re-linked by part name inside the
 -- copy, so this never depends on how Clone remaps references; the copy loses the WE_Rig tag (Clone keeps tags).
-local function buildEscort(e: Entry, offset: Vector3): Escort?
+local function buildEscort(e: Entry, offset: Vector3, index: number): Escort?
 	local root, host = e.Root, e.Host
 	if root == nil or host == nil then
 		return nil
@@ -273,6 +297,7 @@ local function buildEscort(e: Entry, offset: Vector3): Escort?
 	local byName: { [string]: BasePart } = {}
 	local parts: { BasePart } = {}
 	local decals: { Decal } = {}
+	local joint: Motor6D? = nil
 	for _, d in ipairs(copy:GetDescendants()) do -- one small body (<= 30 instances), once per build, never per frame
 		if d:IsA("Decal") then -- the kit head's face (a Texture is a Decal too)
 			d.LocalTransparencyModifier = 0
@@ -301,6 +326,7 @@ local function buildEscort(e: Entry, offset: Vector3): Escort?
 			if d.Name == "RootJoint" and d:IsA("Motor6D") then
 				d.Part0 = root
 				d.C0 = CFrame.new(offset) * ROOT_ROT
+				joint = d
 			elseif d.Name == "Right Shoulder" and d:IsA("Motor6D") and e.ShoulderC0 then
 				d.C0 = e.ShoulderC0 :: CFrame -- the escort plays Hold itself: never copy a baked hold turn
 			end
@@ -321,7 +347,12 @@ local function buildEscort(e: Entry, offset: Vector3): Escort?
 	stats.Escorts += 1
 	stats.EscortParts += RigConfig.Budget.PartsPerEscort
 	stats.EscortBuilds += 1
-	return { Model = copy, Tracks = loadTracks(animatorOf(copy), true, false), State = "", Torso = torso, Parts = parts, Decals = decals, Hidden = false }
+	local rec: Escort = { Model = copy, Tracks = loadTracks(animatorOf(copy), true, false), State = "", Torso = torso, Parts = parts, Decals = decals, Hidden = false }
+	escHelm[rec] = if byName.Beret then { Part = byName.Beret, Off = false } else nil -- v119: the copy's helmet
+	if joint then
+		escLayout[rec] = { Joint = joint, Index = index, Off = nil }
+	end
+	return rec
 end
 
 -- ── registry ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -363,6 +394,12 @@ local function setFar(e: Entry, far: boolean)
 	end
 	if e.Beret then
 		e.Beret.LocalTransparencyModifier = if far or e.LeadHidden then 1 else 0
+		if e.HelmetOff then
+			e.Beret.LocalTransparencyModifier = 1 -- v119: over the helmet triangle budget
+		end
+	end
+	for _, t in ipairs(e.Cloth) do -- v119: the cloth body's far look is its kit-colour blocks
+		t.LocalTransparencyModifier = if far or e.LeadHidden then 1 else 0
 	end
 	stats.FarSwaps += 1
 end
@@ -385,6 +422,17 @@ local function add(inst: Instance)
 			local s = p.Size
 			local nominal = NOMINAL[n]
 			table.insert(brickScales, Vector3.new(nominal.X / s.X, nominal.Y / s.Y, nominal.Z / s.Z)) -- a 1.45-deep hit torso still looks 1 deep
+		end
+	end
+	local cloth: { Texture } = {}
+	for _, n in ipairs(LIMB_NAMES) do -- the WE_Cloth Textures sit on the limbs (RigBuilder.PaintCloth), once per figure
+		local p = rig:FindFirstChild(n)
+		if p then
+			for _, d in ipairs(p:GetChildren()) do
+				if d:IsA("Texture") and d.Name == CLOTH_NAME then
+					table.insert(cloth, d)
+				end
+			end
 		end
 	end
 	local beret = rig:FindFirstChild("Beret")
@@ -420,6 +468,9 @@ local function add(inst: Instance)
 		WantEsc = 0,
 		Escorts = {},
 		LeadHidden = false,
+		Cloth = cloth,
+		HasLod = #meshes > 0 or #cloth > 0,
+		HelmetOff = false,
 	}
 	entries[e.Index] = e
 	byRig[rig] = e
@@ -477,6 +528,111 @@ local function insertBest(buf: { Entry? }, n: number, cap: number, e: Entry): nu
 	return n
 end
 
+--[[ v115 (ArmyConfig.Follow3.EscortTrail, docs/ARMY-FOLLOW-ROOTCAUSE-3.md): escort figures are client-drawn copies of
+	a unit; the server's TrailBlock formation keeps a cell for each of them in the rows DIRECTLY BEHIND their unit (same
+	column, Follow3.RowSpacing apart). Here escort i (its stable escLayout Index, never a pairs() order) stands i x
+	RowSpacing of path behind its unit along the unit's OWN walked path (a per-unit breadcrumb trail, CrumbStep apart,
+	a backtrack pruned), so a turning unit's escorts walk round the corner behind it like the rows do, instead of
+	a rigid file / side row swinging with its yaw (v114: the side-row wings, gone). Past the trail's end they run on
+	straight back (its last direction, else -WE_FormYaw, else the root's back). One RootJoint C0 write per escort only
+	when it moved > 0.05 studs; runs with the camera guard (GuardHz). ]]
+local ESC_CRUMB = 0.4
+local escTrail: { [Instance]: { Vector3 } } = setmetatable({}, { __mode = "k" }) :: any
+
+local function escTrailStep(host: Instance, pos: Vector3, keep: number): { Vector3 }
+	local pts = escTrail[host]
+	if pts == nil then
+		pts = {}
+		escTrail[host] = pts
+	end
+	local p = Vector3.new(pos.X, pos.Y, pos.Z)
+	-- a backtrack (it walks back over its own trail): drop the points now ahead of it
+	while #pts >= 2 do
+		local a, b = pts[#pts - 1], pts[#pts]
+		local seg = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+		local to = Vector3.new(p.X - b.X, 0, p.Z - b.Z)
+		if seg:Dot(to) < 0 and to.Magnitude > 0.05 then
+			table.remove(pts)
+		else
+			break
+		end
+	end
+	local last = pts[#pts]
+	if last == nil or Vector3.new(p.X - last.X, 0, p.Z - last.Z).Magnitude >= ESC_CRUMB then
+		table.insert(pts, p)
+	end
+	-- keep `keep` studs of path
+	local arc, cut = 0, 0
+	for k = #pts, 2, -1 do
+		arc += Vector3.new(pts[k].X - pts[k - 1].X, 0, pts[k].Z - pts[k - 1].Z).Magnitude
+		if arc > keep then
+			cut = k - 2
+			break
+		end
+	end
+	for _ = 1, cut do
+		table.remove(pts, 1)
+	end
+	return pts
+end
+
+local function layoutEscorts(e: Entry)
+	if follow3 == nil or follow3.Enabled ~= true or follow3.EscortTrail == false then
+		return
+	end
+	local host, root = e.Host, e.Root
+	if host == nil or root == nil or #e.Escorts == 0 then
+		return
+	end
+	local spacing = tonumber(follow3.RowSpacing) or 4.5
+	local rcf = root.CFrame
+	local pos = rcf.Position
+	local pts = escTrailStep(host, pos, spacing * (#e.Escorts + 1) + 2)
+	-- the run-on direction (backwards) past the trail's end
+	local back: Vector3
+	if #pts >= 2 then
+		local a, b = pts[1], pts[2]
+		back = Vector3.new(a.X - b.X, 0, a.Z - b.Z)
+	else
+		local yaw = host:GetAttribute("WE_FormYaw")
+		if typeof(yaw) == "number" then
+			local r = math.rad(yaw)
+			back = -Vector3.new(math.sin(r), 0, math.cos(r))
+		else
+			back = -Vector3.new(rcf.LookVector.X, 0, rcf.LookVector.Z)
+		end
+	end
+	back = if back.Magnitude > 1e-3 then back.Unit else Vector3.new(0, 0, 1)
+	for _, x in ipairs(e.Escorts) do
+		local L = escLayout[x]
+		if L then
+			-- the point L.Index x spacing of path behind the unit (root -> newest crumb -> older ...)
+			local want = L.Index * spacing
+			local prev = pos
+			local at: Vector3? = nil
+			local s = 0
+			for k = #pts, 1, -1 do
+				local q = pts[k]
+				local seg = Vector3.new(q.X - prev.X, 0, q.Z - prev.Z).Magnitude
+				if s + seg >= want and seg > 1e-4 then
+					at = prev:Lerp(q, (want - s) / seg)
+					break
+				end
+				s += seg
+				prev = q
+			end
+			local pt: Vector3 = at or (prev + back * (want - s))
+			local lo = rcf:PointToObjectSpace(pt)
+			lo = Vector3.new(lo.X, math.clamp(lo.Y, -3, 3), lo.Z)
+			local old = L.Off
+			if old == nil or (old - lo).Magnitude > 0.05 then
+				L.Off = lo
+				L.Joint.C0 = CFrame.new(lo) * ROOT_ROT
+			end
+		end
+	end
+end
+
 -- camera guard (every pass and, alone, Escort.Camera.GuardHz times a second): no escort between the camera and the
 -- player, none taller than MaxScreenFrac of the screen; no own squad unit between the camera and the player drawn
 -- taller than LeadScreenFrac of it. Only the guard buffer (picked figures with escorts, own units): no tables, no scans.
@@ -500,6 +656,7 @@ local function cameraGuard(camCf: CFrame, focus: Vector3?, fovDeg: number?)
 	local nearLift = math.min(-feet * look.Y, (camCfg.FigureStuds - feet) * look.Y)
 	for i = 1, guardN do
 		local e = guard[i] :: Entry
+		layoutEscorts(e) -- v115: escorts on the unit's own path behind it (before the guard judges where they are)
 		for _, x in ipairs(e.Escorts) do
 			local t = x.Torso
 			if t then
@@ -530,6 +687,67 @@ local function cameraGuard(camCf: CFrame, focus: Vector3?, fovDeg: number?)
 			end
 		end
 	end
+end
+
+-- ── v119 helmet budget ───────────────────────────────────────────────────────────────────────────────────────────
+-- A cloth body (Army Soldier) is 60 triangles of blocks + a 2103-triangle FAST helmet; a Roblox-body figure is
+-- Budget.TrianglesPerMeshedFigure (its beret included). Every meshed figure (and escort) pays its body; helmets then go
+-- in pick order (own army first, nearest next, statues last) while the total stays inside Budget.MaxMeshedTriangles.
+-- A unit's escorts share its helmet decision. Only a flip writes LocalTransparencyModifier.
+local helmOrder: { Entry? } = {}
+
+local function setHelmet(e: Entry, on: boolean)
+	local off = not on
+	if e.HelmetOff ~= off then
+		e.HelmetOff = off
+		if e.Beret then
+			e.Beret.LocalTransparencyModifier = if e.Far or e.LeadHidden or off then 1 else 0
+		end
+	end
+	for _, x in ipairs(e.Escorts) do
+		local hb = escHelm[x]
+		if hb and hb.Off ~= off then
+			hb.Off = off
+			hb.Part.LocalTransparencyModifier = if x.Hidden or off then 1 else 0
+		end
+	end
+end
+
+local function helmetBudget(hn: number)
+	local budget = tonumber(RigConfig.Budget.MaxMeshedTriangles) or math.huge
+	local roblox = tonumber(RigConfig.Budget.TrianglesPerMeshedFigure) or 0
+	local body = tonumber(clothCfg.BodyTris) or 0
+	local helm = tonumber(clothCfg.HeadwearTris) or 0
+	local used = 0
+	local sn = hn
+	for _, e in ipairs(entries) do
+		if (e.Picked or e.SPicked) and not e.Far and e.HasLod then
+			used += (if #e.Cloth > 0 then body else roblox) * (1 + #e.Escorts)
+			if e.SPicked then
+				sn += 1
+				helmOrder[sn] = e -- statues after the animated pick
+			end
+		end
+	end
+	local on, off = 0, 0
+	for i = 1, sn do
+		local e = helmOrder[i] :: Entry
+		helmOrder[i] = nil
+		if #e.Cloth > 0 and e.Beret and not e.Far then
+			local want = helm * (1 + #e.Escorts)
+			local show = used + want <= budget
+			if show then
+				used += want
+				on += 1 + #e.Escorts
+			else
+				off += 1 + #e.Escorts
+			end
+			setHelmet(e, show)
+		end
+	end
+	stats.HelmetsOn = on
+	stats.HelmetsOff = off
+	stats.MeshedTris = used
 end
 
 -- ── one LOD pass (also the test hook) ────────────────────────────────────────────────────────────────────────────
@@ -596,6 +814,8 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 		end
 		if not e.Picked and not e.SPicked and #e.Meshes > 0 then
 			setFar(e, true)
+		elseif not e.Picked and not e.SPicked and e.HasLod then
+			setFar(e, true) -- v119: a cloth body (no FileMesh limbs) goes to its kit-colour blocks too
 		end
 		if e.LeadHidden and not e.Picked then
 			setLeadHidden(e, false) -- out of the guard buffer: shown again
@@ -608,7 +828,7 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 			setFar(e, false)
 			swaps += 1
 		end
-		if not e.Far and #e.Meshes > 0 then
+		if not e.Far and e.HasLod then
 			if e.SPicked then
 				meshedStatic += 1
 			else
@@ -653,7 +873,7 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 				dropEscort(e)
 			end
 			while #e.Escorts < allow and builds < esc.MaxBuildsPerTick do
-				local x = buildEscort(e, esc.Offsets[#e.Escorts + 1])
+				local x = buildEscort(e, esc.Offsets[#e.Escorts + 1], #e.Escorts + 1)
 				builds += 1
 				if x == nil then
 					break
@@ -674,13 +894,16 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 		end
 	end
 	local gn = 0
+	local hn = 0
 	local leadOn = (tonumber(camCfg.LeadScreenFrac) or 0) > 0 -- off: own units without escorts need no guard runs
 	for i = 1, pickN do
 		local e = pick[i] :: Entry
 		pick[i] = nil
+		hn += 1
+		helmOrder[hn] = e -- v119: helmets in pick order (own army first, then nearest)
 		if not e.Own and e.Tracks then
 			while #e.Escorts < e.WantEsc and room > 0 and builds < esc.MaxBuildsPerTick do
-				local x = buildEscort(e, esc.Offsets[#e.Escorts + 1])
+				local x = buildEscort(e, esc.Offsets[#e.Escorts + 1], #e.Escorts + 1)
 				builds += 1
 				if x == nil then
 					break
@@ -705,6 +928,7 @@ function RigAnimator._Step(now: number, camCf: CFrame, focus: Vector3?, fovDeg: 
 	end
 	guardN = gn
 	cameraGuard(camCf, focus, fovDeg)
+	helmetBudget(hn) -- v119: after the escorts of this pass exist
 	stats.Passes += 1
 	stats.Animated = animated
 	stats.Meshed = meshed

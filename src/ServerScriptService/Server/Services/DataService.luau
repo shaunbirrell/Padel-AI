@@ -208,7 +208,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 105)
+		player:SetAttribute("WE_Build", 222)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -331,6 +331,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 
 	;(profile :: any).PrevJoinUnix = profile.LastJoinUnix -- claude-bud JOB 13: the comeback reward reads the previous join
+	;(profile :: any).PrevSeenUnix = (profile :: any).LastSeenUnix -- claude-bud JOB 29: offline earnings read the last save
 	profile.LastJoinUnix = os.time()
 	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
 		profile.FirstJoinUnix = os.time()
@@ -349,7 +350,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=105",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=222",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -398,6 +399,12 @@ function DataService.RemovePersistedProfile(userId: number): (boolean, string?)
 	return true, nil
 end
 
+-- claude-bud JOB 24 §4d (live: "DataStore request was added to queue" on player_470626172): a key written twice within
+-- ~6 s queues. Purchase saves (ProcessReceipt) and the leave save always write; the autosave skips a player whose
+-- profile was written within AutosaveSkipRecentSeconds (it is saved next cycle).
+local lastWriteAt: { [number]: number } = {}
+local AUTOSAVE_SKIP_RECENT = 10
+
 local function writeProfile(userId: number, profile: PlayerProfile, releaseLock: boolean?): boolean
 	local ds = getDataStore()
 	if not ds then
@@ -406,13 +413,18 @@ local function writeProfile(userId: number, profile: PlayerProfile, releaseLock:
 		end
 		return true -- nothing to persist (Studio without API access)
 	end
+	;(profile :: any).LastSeenUnix = os.time() -- claude-bud JOB 29: the last time this save was written (offline earnings)
 	local snapshot = ProfileSchema.DeepCopy(profile)
+	lastWriteAt[userId] = os.clock() -- claude-bud JOB 24 §4d
 	local ok, err = retryAsync("SetAsync", function()
 		ds:SetAsync(keyFor(userId), snapshot)
 	end)
-	if ok then
+	if ok and not releaseLock then
+		-- v147: a leave / shutdown save goes straight to Release below. Refresh + Release are two UpdateAsync calls on the
+		-- same lock_<userId> key back to back, and the second one always hit the ~6 s per-key write limit ("DataStore
+		-- request was added to queue"). Release writes the free tombstone either way, so the Refresh there did nothing.
 		SessionLock.Refresh(userId)
-	else
+	elseif not ok then
 		warn("[DataService] Save failed for", userId, err)
 	end
 	if releaseLock then
@@ -492,7 +504,8 @@ function DataService.Init()
 		while true do
 			task.wait(Constants.AutosaveIntervalSeconds)
 			for _, player in ipairs(Players:GetPlayers()) do
-				if dirty[player.UserId] and profiles[player.UserId] then
+				local recent = os.clock() - (lastWriteAt[player.UserId] or -math.huge) < AUTOSAVE_SKIP_RECENT
+				if dirty[player.UserId] and profiles[player.UserId] and not recent then
 					DataService.SaveProfile(player, false)
 				end
 			end

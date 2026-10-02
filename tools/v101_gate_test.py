@@ -74,7 +74,7 @@ for _, g in ipairs(gates) do
 	check(g[2](OTHER) == true, "non-owner gate " .. g[1] .. " open")
 	check(g[2](OWNER) == true, "owner gate " .. g[1] .. " open")
 end
-check(W.WeaponsLive == false and W.LiveFor(OTHER) == false, "AircraftWeaponConfig.WeaponsLive stays off for a non-owner")
+check(W.WeaponsLive == true and W.LiveFor(OTHER) == true and W.LiveFor(OWNER) == true, "AircraftWeaponConfig.WeaponsLive live for a non-owner (v138 launch)")
 print("fails=" .. fails)
 '''
 

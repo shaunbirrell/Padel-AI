@@ -1,0 +1,15 @@
+[WAR EMPIRE] OrdersController ready (Army popover: tile / Y, orders 1-4 / T / tile long-press)
+[ARMY SEND] SEND pressed: MapController.OpenForArmySend() MapMode=ArmySend ArmyId=470626172
+[ARMY SEND] map opened MapMode=ArmySend
+C_MODE	ArmySend
+[ARMY SEND] tap -> Area Town "Crossroads Town" MapMode=ArmySend card button=SEND ARMY (RequestArmySend A:Town)
+C_GOTEXT	SEND ARMY
+[ARMY SEND] GO pressed MapMode=ArmySend ArmyId=470626172 BaseId=A:Town Position=(0,0) Firing remote=RequestArmySend
+C_OPEN_AFTER	false
+C_MODE_AFTER	Normal
+C_REMOTE	RequestArmySend	A:Town
+C_PINS	0
+C_LIT_FOLLOW	true
+C_LIT_ATTACK	false
+C_LIT_AFTER_PRESS	differs
+C_SEND_LIT	true

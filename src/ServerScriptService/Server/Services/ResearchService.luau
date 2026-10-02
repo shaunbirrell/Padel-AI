@@ -228,6 +228,10 @@ end
 
 --[[ Buy the next level of an upgrade. Server-authoritative: id validated, price from ResearchConfig,
 	Lab + track gates re-checked, Cash via EconomyService.SpendCash. Returns (true) or (false, error). ]]
+-- claude-bud JOB 26: set only while PurchaseViaService runs (a ServiceOnly node, e.g. personal armour, is bought
+-- only through its own service's checks; the research remote can never set this)
+local serviceCall = false
+
 function ResearchService.Purchase(player: Player, upgradeId: any): (boolean, string?)
 	-- 1-3: id / def / enabled
 	if not RemoteGuard.IsIdString(upgradeId, 48) then
@@ -239,6 +243,10 @@ function ResearchService.Purchase(player: Player, upgradeId: any): (boolean, str
 		return false, "UnknownUpgrade"
 	end
 	if not def.Enabled then
+		return false, "Disabled"
+	end
+	-- claude-bud JOB 26: a ServiceOnly node (personal armour) is bought only through its own service's checks
+	if (def :: any).ServiceOnly == true and not serviceCall then
 		return false, "Disabled"
 	end
 	-- 4: profile (nil until the real save has loaded)
@@ -275,6 +283,11 @@ function ResearchService.Purchase(player: Player, upgradeId: any): (boolean, str
 		return false, "BadConfig"
 	end
 	cost = math.floor(cost)
+	-- claude-bud JOB 20: RebirthScale (Tower Guards): the price grows with the buyer's rebirths
+	local rebirthScale = tonumber((def :: any).RebirthScale)
+	if rebirthScale and rebirthScale > 0 then
+		cost = math.min(2000000, math.floor(cost * (1 + rebirthScale * math.max(0, math.floor(tonumber((profile :: any).Prestige) or 0)))))
+	end
 	if EconomyService == nil or EconomyService.SpendCash == nil then
 		return false, "SpendFailed"
 	end
@@ -329,6 +342,17 @@ function ResearchService.Purchase(player: Player, upgradeId: any): (boolean, str
 	end
 	ResearchService.Push(player)
 	return true, nil
+end
+
+-- claude-bud JOB 26: ArmourService's purchase of a ServiceOnly node (after its own tier / base / Command Center checks)
+function ResearchService.PurchaseViaService(player: Player, upgradeId: string): (boolean, string?)
+	serviceCall = true
+	local ok, a, b = pcall(ResearchService.Purchase, player, upgradeId)
+	serviceCall = false
+	if not ok then
+		return false, "SpendFailed"
+	end
+	return a, b
 end
 
 --[[ Player-facing refusal text (nil = stay silent). ]]
@@ -386,7 +410,8 @@ local function sanityCheck()
 			local prev = 0
 			for i = 1, def.MaxLevel do
 				local c = def.Costs[i]
-				if typeof(c) ~= "number" or c ~= c or c <= prev then
+				-- (claude-bud JOB 24: FlatCosts allows equal steps, e.g. one tower guard per level at one price)
+				if typeof(c) ~= "number" or c ~= c or c < prev or (c == prev and def.FlatCosts ~= true) then
 					problem = "costs not strictly increasing"
 					break
 				end
@@ -433,6 +458,9 @@ function ResearchService.Init(deps: { [string]: any })
 
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestResearch) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player, action: any, upgradeId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestResearch", action, upgradeId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if action == "Buy" then
 			if RateLimitService and not RateLimitService.Allow(player, "research_buy", ResearchConfig.BuyRate, ResearchConfig.BuyBurst) then
 				if NotificationService and NotificationService.NotifyThrottled then

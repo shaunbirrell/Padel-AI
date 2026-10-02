@@ -275,8 +275,12 @@ local function insideFootprint(poi: WorldConfig.POI, x: number, z: number, r: nu
 end
 
 -- the WorldKits options of one cluster kit row (text only for a real build)
+-- claude-bud JOB 37: true while WorldPOI rebuilds a refused detailed cluster plain (kitOpts then asks for NoDetail)
+local plainRebuild = false
+
 local function kitOpts(k: WorldConfig.KitPlace, text: string?): WorldKits.KitOpts
 	return {
+		NoDetail = if plainRebuild or (k :: any).NoDetail == true then true else nil, -- claude-bud JOB 37; codebot_v142: a row may ask for the plain kit
 		Variant = k.Variant,
 		Count = k.Count,
 		Length = k.Length,
@@ -342,9 +346,15 @@ local function isHostCluster(c: TownCluster): boolean
 	return true
 end
 
-local function note(ctx: Ctx, msg: string)
+-- claude-bud JOB 24 §4d: a skipped decoration (caps, a blocked spot) is the design, not an error: an info line (it
+-- still lands in ctx.Warnings for the stats). Only a missing activity host (anchors not stamped) warns (loud).
+local function note(ctx: Ctx, msg: string, loud: boolean?)
 	table.insert(ctx.Warnings, msg)
-	warn(msg)
+	if loud then
+		warn(msg)
+	else
+		print(msg)
+	end
 end
 
 local function skip(ctx: Ctx, what: string, why: string)
@@ -531,42 +541,61 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 			continue
 		end
 		local pParts, pLights = planned(c)
-		if row.Parts + pParts > partsCap or row.Lights + pLights > lightsCap then
+		-- (claude-bud JOB 24 §4d: the 1-part invisible ActivityHost is never capped out: its POI's job prompts need it)
+		if not isHostCluster(c) and (row.Parts + pParts > partsCap or row.Lights + pLights > lightsCap) then
 			skip(ctx, c.Id, string.format("caps: parts %d + %d > %d or lights %d + %d > %d", row.Parts, pParts, partsCap, row.Lights, pLights, lightsCap))
 			continue
 		end
-		local model = WorldKits.NewCluster(c.Id, { Source = "poi", Kind = c.Role, Anchor = anchor, AnchorX = c.X, AnchorZ = c.Z, Tier = c.Tier, InWater = c.InWater })
 		local frame = CFrame.new(c.X, GROUND_Y, c.Z) * CFrame.Angles(0, math.rad(c.Yaw), 0)
-		local built: Built = { First = nil, Host = nil, Booths = {}, MissingBooths = 0 }
-		local signsHere = 0
-		for _, k in ipairs(c.Kits) do
-			local text = k.Text
-			if text == nil and k.Kit == "PoiBoard" then
-				text = rows.Board
+		local PBC: any = require(game:GetService("ReplicatedStorage").Shared.Configs.PlazaBuildingsConfig)
+		local model: Model, built: Built
+		-- claude-bud JOB 37: the cluster's kits (noDetail = the plain rebuild of a refused detailed cluster)
+		local function buildCluster(noDetail: boolean)
+			plainRebuild = noDetail
+			model = WorldKits.NewCluster(c.Id, { Source = "poi", Kind = c.Role, Anchor = anchor, AnchorX = c.X, AnchorZ = c.Z, Tier = c.Tier, InWater = c.InWater })
+			built = { First = nil, Host = nil, Booths = {}, MissingBooths = 0 }
+			local signsHere = 0
+			-- claude-bud JOB 32: the plaza rows named in PlazaBuildingsConfig build the enterable PlazaHouse (WorldKits reads it)
+			if PBC.Enabled == true and PBC.Rows[c.Id] == true then
+				model:SetAttribute("WE_Enterable", true)
 			end
-			if text ~= nil and row.Signs + signsHere + 1 > signsCap then
-				text = nil -- the POI's sign cap: the board stays, unpainted
+			for _, k in ipairs(c.Kits) do
+				local text = k.Text
+				if text == nil and k.Kit == "PoiBoard" then
+					text = rows.Board
+				end
+				if text ~= nil and row.Signs + signsHere + 1 > signsCap then
+					text = nil -- the POI's sign cap: the board stays, unpainted
+				end
+				if text ~= nil then
+					signsHere += 1
+				end
+				local kcf = frame * CFrame.new(k.X, 0, k.Z) * CFrame.Angles(0, math.rad(k.Yaw or 0), 0)
+				local before = childSet(model)
+				WorldKits.Add(model, k.Kit, kcf, kitOpts(k, text))
+				noteKit(built, k.Kit, freshParts(model, before), kcf)
 			end
-			if text ~= nil then
-				signsHere += 1
-			end
-			local kcf = frame * CFrame.new(k.X, 0, k.Z) * CFrame.Angles(0, math.rad(k.Yaw or 0), 0)
-			local before = childSet(model)
-			WorldKits.Add(model, k.Kit, kcf, kitOpts(k, text))
-			noteKit(built, k.Kit, freshParts(model, before), kcf)
+			plainRebuild = false
 		end
-		local m = measure(model, roads, poi.Rect)
-		local cx, cz = (m.X0 + m.X1) * 0.5, (m.Z0 + m.Z1) * 0.5
-		local r = 0.5 * math.sqrt((m.X1 - m.X0) ^ 2 + (m.Z1 - m.Z0) ^ 2)
+		buildCluster(false)
+		local m: Measure = measure(model, roads, poi.Rect)
+		local cx, cz, r = 0, 0, 0
 		local hostOnly = isHostCluster(c)
 		local why: string? = nil
+		-- claude-bud JOB 37: judged once; a refused cluster that holds detail parts is rebuilt plain and judged again
+		for attempt = 1, 2 do
+		m = measure(model, roads, poi.Rect)
+		cx, cz = (m.X0 + m.X1) * 0.5, (m.Z0 + m.Z1) * 0.5
+		r = 0.5 * math.sqrt((m.X1 - m.X0) ^ 2 + (m.Z1 - m.Z0) ^ 2)
+		why = nil
 		if m.Parts == 0 then
 			why = "no parts"
 		elseif c.Street then
 			why = WorldDress.Blocked(occ, cx, cz, r, { AllowPOI = poi.Id, RoadClear = 0, RoadR = 0, AllowWater = c.InWater })
 		elseif hostOnly then
-			-- the invisible activity host (nothing to see or bump into): the default road test; may sit over an event anchor
-			why = WorldDress.Blocked(occ, cx, cz, r, { AllowPOI = poi.Id, SkipEvents = true })
+			-- the invisible activity host (nothing to see or bump into). claude-bud JOB 24 §4d (live: "3 anchor rows not
+			-- stamped (no ActivityHost cluster was built)"): no road / occupancy / budget test can refuse it any more
+			why = nil
 		elseif c.InWater == true then
 			why = WorldDress.Blocked(occ, cx, cz, r, { AllowPOI = poi.Id, RoadClear = T.RoadClear, AllowWater = true, SkipEvents = m.Marking })
 		else
@@ -576,15 +605,28 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 				why = WorldDress.Blocked(occ, cx, cz, r, { AllowPOI = poi.Id, RoadClear = T.RoadClear, SkipEvents = true })
 			end
 		end
-		why = why or m.RoadWhy or m.Outside or circleWhy(poi, cx, cz, r)
-		if why == nil and row.Parts + m.Parts > partsCap then
-			why = string.format("budget %d + %d > %d", row.Parts, m.Parts, partsCap)
+		if not hostOnly then
+			why = why or m.RoadWhy or m.Outside or circleWhy(poi, cx, cz, r)
+		end
+		-- claude-bud JOB 31 / 32: the budget counts the plain kits (detail / enterable extras have their own allowances)
+		local plainParts = m.Parts - WorldKits.ExtraParts(model)
+		if why == nil and not hostOnly and row.Parts + plainParts > partsCap then
+			why = string.format("budget %d + %d > %d", row.Parts, plainParts, partsCap)
 		end
 		if why == nil and row.Lights + m.Lights > lightsCap then
 			why = string.format("lights %d + %d > %d", row.Lights, m.Lights, lightsCap)
 		end
 		if why == nil and row.Signs + m.Signs > signsCap then
 			why = string.format("signs %d + %d > %d", row.Signs, m.Signs, signsCap)
+		end
+		if why ~= nil and attempt == 1 and WorldKits.ExtraParts(model) > 0 then
+			print(string.format("[WorldDetail] %s %s refused detailed (%s): rebuilt plain", poi.Id, c.Id, why))
+			WorldKits.RefundDetail(model)
+			WorldKits.Discard(model)
+			buildCluster(true)
+		else
+			break
+		end
 		end
 		if why ~= nil then
 			WorldKits.Discard(model)
@@ -741,7 +783,7 @@ local function stampAnchors(ctx: Ctx, rows: Rows)
 	end
 	if noHost > 0 then
 		local why = if rows.Layout then "no " .. A.HostKit .. " cluster was built" else "a Town row needs Requires (its host cluster)"
-		note(ctx, string.format("[WorldPOI] %s: %d anchor rows not stamped (%s)", poi.Id, noHost, why))
+		note(ctx, string.format("[WorldPOI] %s: %d anchor rows not stamped (%s)", poi.Id, noHost, why), true)
 	end
 end
 

@@ -1,0 +1,27 @@
+[ArmyController] v115 Follow3 TrailBlock controller started (true, all, debug false)
+[WAR EMPIRE] ArmyPlan Init
+S_WARM Following
+[SERVER ARMY] received player=shaunie6 command=Send target=A:Town
+[SERVER ARMY] shaunie6 command=Send target=A:Town (Crossroads Town) kind=Area state=Following
+[ARMY DESTINATION] shaunie6 old=nil new=(-100,1,0) source=ArmyPlan.Travel/March
+[ARMY PATH] shaunie6 start=(-518,3,-0) dest=(-100,1,0) distance=418 status=Success waypoints=54
+[ARMY STATE] shaunie6 Following -> TravellingToBase SOURCE=SEND A:Town mode=Attack target=Crossroads Town
+[ARMY MOVE] shaunie6 travel started -> A:Town (Crossroads Town) approach=(-100,1,0) objective=(0,1,0) distance=418 units=24
+[ARMY MOVE] shaunie6 Travel/March block=(-518,3,-0) lead=(-495,0,-0) to dest 418 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-487,3,-0) lead=(-461,0,-0) to dest 387 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-453,3,-0) lead=(-428,0,-0) to dest 353 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-419,3,-0) lead=(-394,0,-0) to dest 319 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-386,3,-0) lead=(-360,0,-0) to dest 286 studs, lead 14 studs/s, lost 0
+[ARMY MOVE] shaunie6 Travel/March block=(-352,3,-0) lead=(-327,0,-0) to dest 252 studs, lead 14 studs/s, lost 0
+S_BEFORE TravellingToBase
+[SERVER ARMY] shaunie6 command=Recall state=TravellingToBase plan=Travel/March source=test Recall
+[ARMY DESTINATION] shaunie6 old=(-100,1,0) new=(-500,3,0) source=ArmyPlan.Travel/Return
+[ARMY PATH] shaunie6 start=(-328,3,-0) dest=(-500,3,0) distance=172 status=Success waypoints=22
+[ARMY STATE] shaunie6 TravellingToBase -> Recalling SOURCE=ArmyPlan.return recall mode=Attack target=Crossroads Town
+S_AFTER Recalling
+[ARMY STATE] shaunie6 Recalling -> Following SOURCE=ArmyPlan.finish Travel mode=Follow
+[ARMY MOVE] shaunie6 plan Travel ended -> Following
+S_LATER Following
+S_FAR 172
+S_NEAR 17
+S_TELEPORTS 0

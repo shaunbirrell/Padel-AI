@@ -73,11 +73,19 @@ function PlazaBounty.OnCaptured(player: Player, zoneId: string, position: Vector
 			pcall(function()
 				mult = (require(script.Parent.Parent.Services.EngagementService) :: any).PlazaBountyMult(player)
 			end)
+			pcall(function() -- claude-bud JOB 39 phase 5: the bounty scales to 3 min of income (x1 while not live)
+				mult *= (require(script.Parent.Parent.Services.EndgameService) :: any).BountyScale(player, PlazaBountyConfig.Cash)
+			end)
 			local econ = deps.EconomyService
+			local base = math.floor(PlazaBountyConfig.Cash * mult)
+			local paidOk, paid = false, 0
 			if econ and econ.AddCash then
-				econ.AddCash(player, math.floor(PlazaBountyConfig.Cash * mult), "plaza_bounty")
+				paidOk, paid = econ.AddCash(player, math.floor(PlazaBountyConfig.Cash * mult), "plaza_bounty")
 			end
-			notify(player, "Bounty claimed! +$" .. fmt(PlazaBountyConfig.Cash * mult), "Reward")
+			-- Code Bot v198: the cash credited (the DOUBLE WEEKEND doubles "plaza_bounty") + " · 2x"; display only
+			local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, paidOk, paid) else PlazaBountyConfig.Cash * mult
+			local tag = if econ and econ.ToastTag then econ.ToastTag(player, "plaza_bounty") else ""
+			notify(player, "Bounty claimed! +$" .. fmt(shown) .. tag, "Reward")
 		end
 		endBounty()
 	elseif b and now >= b.EndsAt then

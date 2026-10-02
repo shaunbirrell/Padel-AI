@@ -659,7 +659,9 @@ function UpgradePadService.Init(deps: { [string]: any })
 		print(string.format("[WAR EMPIRE] UpgradePadService: scanned Bases → attached=%d", scanned))
 		if countAttached() == 0 then
 			local swept = scanEntireWorkspaceForStructureId()
-			warn(string.format("[WAR EMPIRE] UpgradePadService: Init Workspace StructureId sweep attached=%d", swept))
+			-- (claude-bud JOB 24 §4d: at Init the map is not built yet, attached=0 is expected: info only; the after-map
+			-- check below is the real one)
+			print(string.format("[WAR EMPIRE] UpgradePadService: Init Workspace StructureId sweep attached=%d", swept))
 		end
 	end
 
@@ -686,6 +688,12 @@ function UpgradePadService.Init(deps: { [string]: any })
 
 	task.defer(function()
 		task.wait(1)
+		-- claude-bud JOB 24 §4d: the map builds asynchronously; wait for it (up to 20 s) before calling ZERO pads a problem
+		local waited = 0
+		while countAttached() == 0 and #CollectionService:GetTagged(TAG) == 0 and waited < 20 do
+			task.wait(1)
+			waited += 1
+		end
 		for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
 			if inst:IsA("BasePart") then
 				attachSlot(inst)

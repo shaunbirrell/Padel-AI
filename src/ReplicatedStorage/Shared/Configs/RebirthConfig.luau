@@ -39,9 +39,30 @@ export type TrimDef = {
 
 local RebirthConfig = {
 	Enabled = true,
-	-- Publish switches (M7b / M7d flip them in the release that ships the world and the guns)
-	ZonesLive = false, -- locked-zone fences, rebirth structures and zone gating in BaseService
-	WeaponsLive = false, -- the 7 rebirth guns (WeaponConfig RequiresPrestige rows)
+	-- Publish switches. claude-bud JOB 33 builds what they switch on (RebirthZoneService / NukeService / the rebirth
+	-- guns); each part still goes through the owner-first gate below (RebirthConfig.LiveFor).
+	-- claude-bud JOB 33: ZonesLive / WeaponsLive = PUBLISHED FOR EVERYONE (codebot_v101 keeps them false). While
+	-- Live.OwnerFirst is true the owner (+ Studio) gets the zones and guns anyway; to launch, Code Bot sets OwnerFirst =
+	-- false AND these two true.
+	ZonesLive = true, -- codebot_v131 launch: published for everyone (JOB 33 handoff)
+	WeaponsLive = true, -- codebot_v131 launch: published for everyone (JOB 33 handoff)
+	--[[ claude-bud JOB 33: the owner-first gate of the whole rebirth overhaul. Enabled = false: every part off (the
+		rebirth exactly as before). OwnerFirst = true: live only for the owner (+ Studio test players). Parts can be
+		switched off one by one. ]]
+	Live = {
+		Enabled = true,
+		OwnerFirst = false, -- codebot_v131 launch: everyone (JOB 33 handoff)
+		Parts = {
+			Zones = true, -- RebirthZoneService: zones, locked fences, buildings, their effects
+			Nuke = true, -- NukeService: silo charging, launch, blast
+			Weapons = true, -- the rebirth gun grants
+			Vehicles = true, -- the added land-vehicle grants + granted vehicles usable at once
+			Perks = true, -- +2 soldiers / rebirth, starting cash steps, gold 50 + 10 / rebirth
+			Trims = true, -- rank banners at the gate, the title above the head and on the base sign
+			Pacing = true, -- later rebirths need a higher level (PrestigeConfig.MinLevelFor)
+			Screen = true, -- the richer KEEP / RESET / GAIN + next 3 rebirths on the rebirth screen
+		} :: { [string]: boolean },
+	},
 
 	Zones = {
 		WestYard = { Id = "WestYard", Tier = 1, DisplayName = "West Yard", Structures = { "TankFactory" } },
@@ -202,6 +223,30 @@ local function stepValue(steps: { { AtPrestige: number, Cash: number } }, presti
 		end
 	end
 	return best
+end
+
+-- claude-bud JOB 33: is `part` of the rebirth overhaul live for this player (fail closed)
+function RebirthConfig.LiveFor(userId: any, part: string): boolean
+	local L: any = RebirthConfig.Live
+	if RebirthConfig.Enabled ~= true or typeof(L) ~= "table" or L.Enabled ~= true or L.Parts[part] ~= true then
+		return false
+	end
+	if L.OwnerFirst ~= true then
+		-- published for everyone: the zones and the guns also need their publish switch
+		if part == "Zones" or part == "Nuke" then
+			return RebirthConfig.ZonesLive == true
+		elseif part == "Weapons" then
+			return RebirthConfig.WeaponsLive == true
+		end
+		return true
+	end
+	local okR, RS = pcall(function(): any
+		return game:GetService("RunService")
+	end)
+	if okR and RS and RS:IsStudio() then
+		return true
+	end
+	return (require(script.Parent.AdminConfig) :: any).IsPlaytestOwner(userId)
 end
 
 -- Zone id for a structure, or nil for the 15 base structures.

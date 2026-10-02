@@ -74,21 +74,54 @@ local MonetizationConfig = {
 			DisplayName = "VIP",
 			RobuxPrice = 199,
 			CashBonusMult = 0.25, -- additive +25% cash earnings
-			Description = "+25% Cash earnings",
+			Description = "+25% cash on everything you earn", -- Code Bot v156: plain player text
+			-- claude-bud JOB 36 (ShopOverhaulConfig, owner-first): the premium VIP. Shown at this price while the overhaul is
+			-- live. codebot_v142 (2026-09-30): the Creator Hub price stays 199 (owner has NOT approved 349), so the Shop shows
+			-- the real price. Change this only together with the Creator Hub price.
+			OverhaulRobuxPrice = 199,
+			OverhaulDescription = "+50% cash, a daily cash crate and VIP lounge", -- Code Bot v156: plain player text
+		},
+		-- claude-bud JOB 36: new passes (ShopOverhaulConfig). codebot_v140 (2026-09-30): owner created them on the Creator
+		-- Hub (universe 10767159222, on sale, prices match); Ids wired. Implies = passes this one counts as owning.
+		WarChest = {
+			Id = 2002640637,
+			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
+			DisplayName = "War Chest",
+			RobuxPrice = 799,
+			Implies = { "DoubleCash", "AutoCollect", "VIP", "BiggerArmy" },
+			HideFromShop = true, -- listed by the overhaul Shop only (hidden once all four are owned)
+			Description = "2x cash, Auto Collect, VIP and Bigger Army", -- Code Bot v156: plain player text
+		},
+		SuperSoldiers = {
+			Id = 1998231741,
+			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
+			DisplayName = "Super Soldiers",
+			RobuxPrice = 349,
+			HideFromShop = true, -- listed by the overhaul Shop only
+			Description = "Your soldiers get +25% damage and health", -- Code Bot v156: plain player text
+		},
+		DoubleHP = {
+			Id = 2002214665,
+			OverhaulShop = true, -- sold by the JOB 36 Shop (and prompted) while ShopOverhaulConfig is live
+			DisplayName = "Double HP",
+			RobuxPrice = 199,
+			HideFromShop = true, -- listed by the overhaul Shop only
+			Description = "Double your max health",
 		},
 		DoubleCash = {
 			Id = 1982865711,
 			DisplayName = "2x Cash",
 			RobuxPrice = 149,
 			CashMult = 2, -- multiplicative 2x cash earnings
-			Description = "2x Cash earnings",
+			Description = "Double your cash income", -- Code Bot v156: plain player text
+			Effect = "2x cash, forever", -- Code Bot board-text: the ONE short effect line on the Supply Depot board (EffectFor)
 		},
 		DoubleXP = {
 			Id = 1982487698,
 			DisplayName = "Double XP",
 			RobuxPrice = 99,
 			XPMult = 2,
-			Description = "2x XP",
+			Description = "Double the XP you earn", -- Code Bot v156: plain player text
 		},
 		-- v69: HideFromShop — no code applies this theme yet, so it is not sold in the in-game Shop.
 		-- Id kept unchanged (existing owners keep the pass); remove HideFromShop once the theme ships.
@@ -103,7 +136,8 @@ local MonetizationConfig = {
 			Id = 1985115501,
 			DisplayName = "Auto Collect",
 			RobuxPrice = 99,
-			Description = "Auto-claims Money Collector without touch",
+			Description = "Your ATM cash is collected for you", -- Code Bot v156: plain player text
+			Effect = "Auto-collects cash", -- Code Bot board-text: the ONE short effect line on the Supply Depot board (EffectFor)
 		},
 		-- F8 (owner's 11 features): 5 R$ Speed Pass, walk speed x WalkSpeedMult forever. Id = 0 until the owner creates
 		-- the pass. The 99 R$ Speed Boost Developer Product (DevProducts.SpeedBoost) stays; owning both gives the higher
@@ -112,9 +146,10 @@ local MonetizationConfig = {
 		ImpulseSpeed = {
 			Id = 1998656357,
 			DisplayName = "Speed Pass",
-			RobuxPrice = 5,
-			WalkSpeedMult = 1.15,
-			Description = "Run 15% faster, forever",
+			RobuxPrice = 99, -- 2026-09-29 owner repriced 5 -> 99 in Creator Hub
+			WalkSpeedMult = 1.5, -- v133 (owner: "still not fast"): was 1.4 (v126, 16 -> 22.4); now 16 -> 24
+			WalkSpeedMultV2 = 1.75, -- claude-bud JOB 40 (SpeedV2 live): 16 -> 28, "Run 75% faster"
+			-- Description: set below from MonetizationConfig.SpeedText (one source for every speed string)
 		},
 		-- v71 money (M1): premium Robux vehicles (plan §2.2, PremiumVehicleConfig.Lineup PassKey). Id = 0 until the
 		-- owner creates each pass (Item for Sale OFF until the M6 publish, J3). HideFromShop until M3's feature gate
@@ -127,7 +162,7 @@ local MonetizationConfig = {
 			VehicleIds = { "PremiumRazorfang" },
 			BundlePassKeys = { "PV_MotorPool" },
 			Feature = "PremiumVehicles",
-			Description = "Premium armored car with twin hood machine guns",
+			Description = "Armored car with twin machine guns", -- Code Bot v156: plain player text
 		},
 		PV_Bastion = {
 			Id = 0,
@@ -146,7 +181,7 @@ local MonetizationConfig = {
 			VehicleIds = { "PremiumWarlord" },
 			BundlePassKeys = { "PV_MotorPool" },
 			Feature = "PremiumVehicles",
-			Description = "Premium heavy tank with a siege cannon",
+			Description = "Heavy tank with a siege cannon", -- Code Bot v156: plain player text
 		},
 		PV_MotorPool = {
 			Id = 0,
@@ -164,7 +199,7 @@ local MonetizationConfig = {
 			RobuxPrice = 999,
 			VehicleIds = { "PremiumStormwing" },
 			Feature = "PremiumVehicles",
-			Description = "Premium attack helicopter",
+			Description = "Attack helicopter with a chin gun", -- Code Bot v156: plain player text
 		},
 		PV_Tidebreaker = { -- M6b (after waterways / boats)
 			Id = 1999263465,
@@ -172,7 +207,7 @@ local MonetizationConfig = {
 			RobuxPrice = 299,
 			VehicleIds = { "PremiumTidebreaker" },
 			Feature = "PremiumVehicles",
-			Description = "Premium assault boat",
+			Description = "Fast assault boat with a machine gun", -- Code Bot v156: plain player text
 		},
 		-- claude-bud JOB 5a: Robux-only jet and capital ship (VehicleConfig Premium defs). TODO(owner): create on the Creator
 		-- Hub, then paste the Ids (tools/wire-monetization-ids.py). Id 0 = hidden everywhere, nothing prompts.
@@ -182,7 +217,7 @@ local MonetizationConfig = {
 			RobuxPrice = 899,
 			VehicleIds = { "PremiumSkylance" },
 			Feature = "PremiumVehicles",
-			Description = "Robux-only interceptor jet",
+			Description = "Fighter jet with an air cannon", -- Code Bot v156: plain player text
 		},
 		-- claude-bud JOB 5b: Bigger Army pass (+ArmyCapBonus army capacity, mirrored into profile.Entitlements.BiggerArmy on
 		-- ownership so SoldierService's cap reads it). TODO(owner): create "Bigger Army" (game pass, 249 R$), paste the Id.
@@ -191,7 +226,7 @@ local MonetizationConfig = {
 			DisplayName = "Bigger Army",
 			RobuxPrice = 249,
 			ArmyCapBonus = 10,
-			Description = "+10 soldiers in your army, forever",
+			Description = "+10 soldiers in your army", -- Code Bot v156: plain player text (the Shop adds PERMANENT)
 		},
 		-- claude-bud JOB 6: Extra Garage Slot: +1 vehicle slot. Spawning a different vehicle PARKS the one you have out
 		-- (it stays in the world, health kept) instead of removing it; sit in it to drive it again (VehicleService
@@ -201,7 +236,7 @@ local MonetizationConfig = {
 			Id = 1999359549,
 			DisplayName = "Extra Garage Slot",
 			RobuxPrice = 199,
-			Description = "+1 vehicle slot: keep a second vehicle out",
+			Description = "Keep 2 vehicles out at the same time", -- Code Bot v156: plain player text
 		},
 		PV_Leviathan = {
 			Id = 2001398410,
@@ -209,7 +244,84 @@ local MonetizationConfig = {
 			RobuxPrice = 1199,
 			VehicleIds = { "PremiumLeviathan" },
 			Feature = "PremiumVehicles",
-			Description = "Robux-only dreadnought",
+			Description = "Giant battleship with a deck cannon", -- Code Bot v156: plain player text
+		},
+		-- claude-bud JOB 35: the PREMIUM GUNS ARMORY (PremiumGunsConfig; WeaponConfig Premium defs). Robux-only guns; owning
+		-- a pass sets profile.Weapons[id] = true (PremiumGunService, on join + OnPassOwned). Id 0 = hidden in the Shop, the
+		-- armory case shows SOON and never prompts. TODO(owner): create each pass on the Creator Hub, paste the Id.
+		-- BundlePassKeys = the other pass that also unlocks the gun (the Armory Pass). Not in RolloutKeys (Id 0).
+		PG_Sovereign = {
+			Id = 2002154652,
+			DisplayName = "Sovereign Gold Pistol",
+			RobuxPrice = 99,
+			WeaponIds = { "SovereignPistol" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Gold pistol that fires 2-shot bursts", -- Code Bot v156: plain player text
+		},
+		PG_Quake = {
+			Id = 2003492417,
+			DisplayName = "Quake Grenade Launcher",
+			RobuxPrice = 249,
+			WeaponIds = { "QuakeLauncher" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Lobs grenades, 6 per reload", -- Code Bot v156: plain player text
+		},
+		PG_Longshot = {
+			Id = 2003180431,
+			DisplayName = "Longshot Sniper",
+			RobuxPrice = 299,
+			WeaponIds = { "LongshotSniper" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Scoped sniper: 110 damage, long range", -- Code Bot v156: plain player text
+		},
+		PG_Havoc = {
+			Id = 2002250646,
+			DisplayName = "Havoc Rotary Gun",
+			RobuxPrice = 349,
+			WeaponIds = { "HavocRotary" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Spinning minigun with a 150-round belt", -- Code Bot v156: plain player text
+		},
+		PG_Thunderhead = {
+			Id = 1999305818,
+			DisplayName = "Thunderhead Rocket Launcher",
+			RobuxPrice = 399,
+			WeaponIds = { "ThunderheadLauncher" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Fires 2 rockets at once", -- Code Bot v156: plain player text
+		},
+		PG_Tempest = {
+			Id = 2002682646,
+			DisplayName = "Tempest Railgun",
+			RobuxPrice = 499,
+			WeaponIds = { "TempestRailgun" },
+			BundlePassKeys = { "PG_ArmoryPass" },
+			HideFromShop = true, -- sold from Shop > WEAPONS (gold rows) and the base armory, never the generic pass list
+			Description = "Charged shot that goes through 3 enemies", -- Code Bot v156: plain player text
+		},
+		PG_ArmoryPass = {
+			Id = 2002868467,
+			DisplayName = "Armory Pass",
+			RobuxPrice = 1299,
+			WeaponIds = { "SovereignPistol", "QuakeLauncher", "LongshotSniper", "HavocRotary", "ThunderheadLauncher", "TempestRailgun" },
+			BundlePassKeys = { "PG_Sovereign", "PG_Quake", "PG_Longshot", "PG_Havoc", "PG_Thunderhead", "PG_Tempest" }, -- hidden once all six are owned
+			HideFromShop = true,
+			Description = "All 6 premium guns", -- Code Bot v156: plain player text
+		},
+		-- claude-bud JOB 49 B / Code Bot v180 (Shaun approved + created 2026-10-01, universe 10767159222): 2x Offline Cash,
+		-- a permanent Game Pass (was a Developer Product stub at Id 0). Owned = UserOwnsGamePassAsync on join / after
+		-- PromptGamePassPurchaseFinished (WE_Ent_OfflineCap2x display flag); EconomyConfig.OfflineEarnings.CapBoost doubles
+		-- the offline cap TIME (OfflineConfig: 2 h -> 4 h since v201). Never raises Share, no combat stat. Sold in the Shop (SUPPLY pass rows).
+		OfflineCap2x = {
+			Id = 2002664894,
+			DisplayName = "2x Offline Cash",
+			RobuxPrice = 149,
+			Description = "Offline cash for 4 hours instead of 2 hours", -- Code Bot v203 (Shaun approved): OfflineConfig 2 h x PassCapMult 2; <= 44 chars (phone shop row)
 		},
 		-- v71 money (M1): Rebirth Boost (J13: +15% Cash per Rebirth instead of +10%, 1.5x starting Cash; no Gold x2).
 		-- RebirthConfig.Boost.GamePassKey. Id = 0 until created (OFF sale until the M7b/M7d publish).
@@ -223,6 +335,11 @@ local MonetizationConfig = {
 		},
 	},
 	DevProducts = {
+		-- claude-bud JOB 49 (Robux sidegrade). Code Bot v180 (Shaun approved + created 2026-10-01): the paid reroll after the
+		-- free daily one, 19 R$. Sold from the Missions panel only (the 19 R$ reroll button on a core mission row once the
+		-- free reroll is used); ProcessReceipt grants ONE MissionRerollTokens per receipt (idempotent: ProcessedReceipts).
+		-- OfflineCap2x moved to GamePasses (it is a Game Pass on the Creator Hub, 2002664894).
+		MissionReroll = { Id = 3715836569, DisplayName = "Mission Reroll", RobuxPrice = 19, Cash = 0, Gold = 0, GrantsMissionReroll = true, HideFromShop = true, SoldFrom = "Missions" },
 		CashSmall = { Id = 3713838744, DisplayName = "Cash Pack S", RobuxPrice = 49, Cash = 10000, Gold = 0 },
 		CashMedium = { Id = 3713838815, DisplayName = "Cash Pack M", RobuxPrice = 149, Cash = 50000, Gold = 0 },
 		CashLarge = { Id = 3713838888, DisplayName = "Cash Pack L", RobuxPrice = 399, Cash = 200000, Gold = 0 },
@@ -239,6 +356,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantsBattlePassPremium = true,
+			Description = "Unlock premium rewards on every Battle Pass tier", -- Code Bot v156: plain player text (was a dev note in the Shop)
 			OneTime = true, -- v69: Premium is a boolean kept across seasons; the Shop shows OWNED once granted
 		},
 		-- Monetization add-ons (Ids = 0 until Creator Dashboard)
@@ -269,14 +387,14 @@ local MonetizationConfig = {
 		-- ExtraSoldierSlot entitlement name stay (receipts, saves and the Army panel use them).
 		ExtraSoldierSlot = {
 			Id = 3713839210,
-			DisplayName = "Army Expansion (+10)",
-			RobuxPrice = 99,
+			DisplayName = "Extra Soldier Slot", -- Code Bot v156: the Roblox product name (was "Army Expansion (+10)")
+			RobuxPrice = 79, -- Code Bot v156: the real Creator Hub price (was 99; display fallback only, LivePrices)
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "ExtraSoldierSlot",
 			ArmyCapBonus = 10,
 			OneTime = true, -- v69: boolean entitlement; a second purchase would add nothing
-			Description = "+10 army capacity, permanent",
+			Description = "+10 soldiers in your army, forever", -- Code Bot v156: plain player text
 		},
 		-- v71 money (M0): not sold any more (Barracks L1 costs $2,500 of early cash; audit F13). Id kept for receipt compat.
 		InstantBarracks = {
@@ -309,8 +427,9 @@ local MonetizationConfig = {
 			Gold = 0,
 			GrantEntitlement = "SpeedBoost",
 			OneTime = true, -- v69: permanent boolean flag
-			WalkSpeedMult = 1.25, -- F8: was MonetizationService SPEED_BOOST_MULT; the Speed Pass is 1.15
-			Description = "Permanent move-speed boost",
+			WalkSpeedMult = 2.0, -- v133 (owner: "still not fast"): was 1.6 (v126, 16 -> 25.6); now 16 -> 32. Speed Pass 1.5
+			WalkSpeedMultV2 = 2.5, -- claude-bud JOB 40 (SpeedV2 live): 16 -> 40, "Run 2.5x faster"
+			-- Description: set below from MonetizationConfig.SpeedText
 		},
 		-- Cosmetic oil pump gold dress. v71 money (M0): one-time Developer Product (J29), 49 R$.
 		-- F9 (owner's 11 features): lights up when the Id is pasted. While Id = 0 the Shop skips the row (it skips
@@ -325,23 +444,44 @@ local MonetizationConfig = {
 			GrantEntitlement = "GoldenPumpjack",
 			OneTime = true, -- boolean entitlement: a second purchase adds nothing; the Shop shows OWNED
 			IncomeMult = 1.5, -- claude-bud: plot pump cash per tick x this for an owner (PlotOilPumpService)
-			Description = "Gold pumpjacks: +50% pump income",
+			Description = "Gold oil pumps that earn 50% more, forever", -- Code Bot v156: plain player text
 		},
 		-- v71 money (M1, owner decision D2): Commander Starter Pack v2, same Id, 149 R$, one time (J14: no timer until
 		-- M3's real 72 h window). $50,000 + Auto Collect (permanent); a buyer who already owns Auto Collect gets
 		-- StarterFallbackCash more instead. Old 249 R$ buyers get Auto Collect once (StarterGoodwill below).
 		StarterBundle = {
 			Id = 3713839505,
-			DisplayName = "Commander Starter Pack",
-			RobuxPrice = 149,
+			-- Code Bot v156: the Roblox product name and REAL price (Creator Hub: "Commander Starter Bundle", 249 R$). The
+			-- v71 D2 repricing to 149 never reached the Creator Hub, so the Shop said 149 while Roblox charged 249. These two
+			-- are only the display fallback now (Shared/Util/LivePrices reads the live product); change the price on the
+			-- Creator Hub, never here.
+			DisplayName = "Commander Starter Bundle",
+			RobuxPrice = 249,
 			Cash = 50000,
 			Gold = 0,
 			GrantEntitlement = "StarterBundle", -- OWNED key (WE_Ent_StarterBundle); also in GrantEntitlements
 			GrantEntitlements = { "StarterBundle", "AutoCollect" },
 			StarterFallbackCash = 25000,
 			OneTime = true,
-			Description = "$50,000 Cash + Auto Collect (permanent)",
+			Description = "$50,000 cash plus Auto Collect forever", -- Code Bot v156: plain player text
 		},
+		-- claude-bud JOB 41 part B: the Recruit Pack (one time). Id 0 until the owner OKs 49 R$ and Code Bot creates the
+		-- product. Cash is computed in ProcessReceipt from his income (RecruitPackOffer: 30 min of income, $25k..$150k), plus a
+		-- 2x cash boost for 30 min (CodesService.GrantCashBoost) and the gold "RECRUIT" base trim (entitlement, no stat).
+		-- NOT pay-to-win: no damage / health / armour / army / raid / protection key in this row (pinned).
+		-- claude-bud JOB 42: TIME-based cash packs (repeatable). Id 0 until Code Bot creates them in the Creator Hub (an Id 0
+		-- product never prompts and the Shop skips it). Cash = the floor; ProcessReceipt grants max(Floor, Minutes x his
+		-- income) at receipt time (ShopOverhaulConfig.TimePacks). Cash only: no stat key.
+		Cash15m = { Id = 3715776339, DisplayName = "15 Minutes of Cash", RobuxPrice = 25, Cash = 10000, Gold = 0 },
+		Cash30m = { Id = 3715776410, DisplayName = "30 Minutes of Cash", RobuxPrice = 49, Cash = 25000, Gold = 0 },
+		Cash1h = { Id = 3715776466, DisplayName = "1 Hour of Cash", RobuxPrice = 89, Cash = 50000, Gold = 0 },
+		Cash2h = { Id = 3715776582, DisplayName = "2 Hours of Cash", RobuxPrice = 159, Cash = 100000, Gold = 0 },
+		Cash4h = { Id = 3715776616, DisplayName = "4 Hours of Cash", RobuxPrice = 279, Cash = 200000, Gold = 0 },
+		RecruitPack = { Id = 3715776659, DisplayName = "Recruit Pack", RobuxPrice = 49, Cash = 0, Gold = 0, GrantEntitlement = "RecruitPack", OneTime = true, CashFromTimePack = "Cash30m", Description = "Cash, 2x cash for 30 min and a gold base trim" }, -- claude-bud JOB 42 C: cash = the 30-min pack while TimePacks is live
+	-- claude-bud JOB 66 (price approved by Shaun 2026-10-01 22:13 Dublin: 5 R$ each). Id 0 until Code Bot creates the
+	-- products (turn OFF managed / dynamic pricing on both so they stay 5 R$). LiveBlock = owner-first switch (cfg.Starter5).
+	StarterRecruit5 = { Id = 3715888533, DisplayName = "Recruit Starter Pack", RobuxPrice = 5, Cash = 0, Gold = 0, GrantEntitlement = "StarterRecruit5", OneTime = true, GrantSoldiers = 3, StarterCash = true, LiveBlock = "Starter5", Description = "3 soldiers join your army + starter cash (one time)" },
+	Boost2x10m = { Id = 3715888566, DisplayName = "2x Income 10 min", RobuxPrice = 5, Cash = 0, Gold = 0, GrantsCashBoostMinutes = 10, LiveBlock = "Starter5", Description = "2x earned income for 10 minutes (buy again to extend)" },
 		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
 		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
 		Nuke = {
@@ -382,7 +522,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantSoldierRefills = 1,
-			Description = "Fill your army to its cap right now",
+			Description = "Refill your army to full right now", -- Code Bot v156: plain player text
 		},
 		PlazaAirstrike = {
 			Id = 3715442542,
@@ -391,7 +531,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantAirstrikes = 1,
-			Description = "One airstrike on the Central Plaza (3 s warning, never lethal)",
+			Description = "Airstrike + instant Plaza takeover", -- Code Bot v221 (Shaun): the strike now also takes the Central Plaza
 		},
 		RebirthKeepBase = {
 			Id = 3714663721,
@@ -444,6 +584,23 @@ local MonetizationConfig = {
 		MinHealthLeft = 1,
 		ServerCooldownSeconds = 120,
 		PlayerCooldownSeconds = 300,
+	},
+	--[[ Code Bot v221 (Shaun 2026-10-02): the Plaza Airstrike ALSO hands the buyer the Central Plaza. Server only:
+		the receipt banks the charge (GrantAirstrikes) and is saved; then the OnGranted listener (MonetizationService)
+		spends it at once (Server/Modules/PlazaAirstrike.FireFromPurchase): the strike runs as before (warning, then
+		non-lethal damage to the others in the zone), and when it lands TerritoryService.InstantCapture runs the SAME
+		awardCapture a normal capture uses (previous owner loses it, defenders stand down, bounty / Empire Tax /
+		PlazaCaptures leaderboard / missions / marker), then everyone gets ToastAll. Already the holder: the strike
+		still lands and the buyer is told ToastHeld. Re-capture rules are untouched (others take it back as normal).
+		Public for every player. Enabled = false == the old strike-only charge (banked, AIRSTRIKE button). ]]
+	PlazaAirstrikeTakeover = {
+		Enabled = true,
+		OwnerFirst = false, -- PUBLIC (Code Bot v221, Shaun 2026-10-02 07:54)
+		TerritoryId = "CentralPlaza",
+		FireOnPurchase = true,
+		ToastAll = "AIRSTRIKE! %s took the Plaza",
+		ToastHeld = "AIRSTRIKE! You still hold the Plaza",
+		ToastHeldOthers = "AIRSTRIKE! %s holds the Plaza",
 	},
 	-- v71 money (M1, D2): one-time thank-you for players who bought the old 249 R$ Starter Bundle: Auto Collect on
 	-- their next join. Entitlements[Flag] marks it done (set even when they already owned Auto Collect).
@@ -513,11 +670,57 @@ local MonetizationConfig = {
 
 	PremiumPads = {
 		LabelMaxDistance = 20,
+		-- claude-bud JOB 19: every base Robux offer is a purchase STAND (Server/Modules/PurchaseStands): a hexagonal steel
+		-- plinth with a gold trim, a spinning hologram, an info board with the price from this config, a pulsing floor
+		-- ring; ONLY its ProximityPrompt buys (stepping on it never does). Stands = true; false = the old flat pads.
+		Stands = true,
+		Stand = {
+			Radius = 3.2, -- hexagon circumradius
+			Height = 1.6,
+			HoloSize = 1.6,
+			HoloLift = 2.6, -- hologram centre above the top
+			HoloTransparency = 0.3,
+			RingTransparency = 0.55,
+			LabelMaxDistance = 30, -- CLAUDE.md world labels (<= 40)
+			PromptDistance = 10,
+			HoldSeconds = 0.3, -- a short hold: never an accidental buy, easy with a finger
+			LightBrightness = 0.7,
+			LightRange = 10,
+			Steel = Color3.fromRGB(58, 62, 68),
+			Top = Color3.fromRGB(40, 43, 48),
+			Gold = Color3.fromRGB(214, 170, 62),
+			Owned = Color3.fromRGB(80, 210, 110),
+			SpinSeconds = 6, -- one hologram turn (client)
+			PulseSeconds = 1.6, -- ring pulse (client)
+			-- Code Bot v175: ONE physical sign per stand (PurchaseStands.BuildSign, a SurfaceGui panel): never wider than
+			-- Depot.Step minus a 5-stud gap, so neighbouring signs can never overlap (Code Bot v175)
+			SignW = 6.4,
+			SignH = 3.4,
+			SignPixelsPerStud = 60,
+			SignBack = Color3.fromRGB(26, 30, 26), -- dark military panel (the gold edge is Gold)
+		},
+		-- Code Bot board-text (Shaun, phone: "the writing on the boards is far too small"): the Supply Depot stand signs
+		-- in a big phone layout (Client/Modules/StandSignBig + Shared/Util/StandSignLayout): bold name, ONE short effect
+		-- line (MonetizationConfig.EffectFor: the Effect / SpeedText below, never typed in the client), a big price /
+		-- OWNED pill. Client-local only (the viewer's own copy of the panel), PUBLIC (RetentionConfig.Live:
+		-- owner 470626172 + Studio). W stays <= Depot.Step - 5 (neighbours never overlap); the panel grows UP only (its
+		-- bottom and posts stay put, the hologram under it is untouched). No price, Id or prompt change.
+		BigSign = {
+			Enabled = true,
+			OwnerFirst = false, -- PUBLIC (Code Bot v215): Shaun approved the bigger board text for everyone
+			W = 7.0, -- studs (was SignW 6.4)
+			H = 4.2, -- studs (was SignH 3.4)
+			PixelsPerStud = 60, -- unchanged: canvas 420 x 252
+		},
+		-- the Supply Depot corner (plot-local): the stands in one row (front-left, off the gate road and the ATM), the sign
+		-- behind them facing the plot
+		Depot = { X0 = -78, Step = 12, Z = 146, SignZ = 153, Sign = "SUPPLY DEPOT", SignLift = 11 }, -- Code Bot v175: SignLift (board centre height)
 		Slots = {
 			{
 				Id = "AutoCollect",
 				Label = "Auto Collect",
 				Color = Color3.fromRGB(220, 50, 50), -- red
+				Icon = "💰",
 				Offset = Vector3.new(-10, 0.55, 14),
 				Offers = { { Kind = "GamePass", Key = "AutoCollect" } },
 			},
@@ -525,6 +728,7 @@ local MonetizationConfig = {
 				Id = "DoubleCash",
 				Label = "2x Cash",
 				Color = Color3.fromRGB(255, 210, 40), -- yellow
+				Icon = "2x",
 				Offset = Vector3.new(0, 0.55, 16),
 				Offers = { { Kind = "GamePass", Key = "DoubleCash" } },
 			},
@@ -532,6 +736,7 @@ local MonetizationConfig = {
 				Id = "Speed",
 				Label = "Speed",
 				Color = Color3.fromRGB(60, 190, 255), -- cyan
+				Icon = "⚡",
 				Offset = Vector3.new(10, 0.55, 14),
 				-- the 5 R$ pass once its Id is live, else the 99 R$ Speed Boost product; owning either = OWNED
 				Offers = { { Kind = "GamePass", Key = "ImpulseSpeed" }, { Kind = "DevProduct", Key = "SpeedBoost" } },
@@ -543,6 +748,7 @@ local MonetizationConfig = {
 		prompt came from). Analytics only; anything not listed is logged as "other". A receipt within
 		IntentAttributionSeconds of the intent for the same key inherits its source. ]]
 	PurchaseSources = {
+		recruit_offer = true, -- claude-bud JOB 41 B: the Recruit Pack card
 		shop = true,
 		featured = true,
 		hud_plus = true,
@@ -552,6 +758,7 @@ local MonetizationConfig = {
 		starter_offer = true,
 		death_card = true,
 		pad = true,
+		missions = true, -- Code Bot v180: the Missions panel's paid reroll button
 		bp_panel = true,
 		army_panel = true,
 		army_full = true,
@@ -587,6 +794,31 @@ local MonetizationConfig = {
 	StarterBundleOffer = {
 		DelaySeconds = 8,
 		AfterTutorialSeconds = 3,
+	},
+	-- Code Bot v153 (Shaun: "ship the sales fixes"; ~1,100 ad visits, 0 sales, 2.8-minute sessions, almost nobody saw
+	-- an offer). Live for everyone (a timing / bug fix, not owner-first). While Enabled:
+	--   * the soft-offer quiet window is the first AtPlaySeconds of the session, WHATEVER the tutorial state (it was:
+	--     none until the 7-step tutorial is done, or SoftOfferQuietMaxSeconds 900 s for players who never finish);
+	--   * MonetizationService.ScheduleFirstOffer sends the Starter Pack at AtPlaySeconds (TutorialService schedules it
+	--     at load for every player; after the tutorial when that comes later). When the pack is not wanted (owned /
+	--     window over / already SHOWN), the first FallbackKeys offer that is live and unowned goes instead, once;
+	--   * the Starter Pack is marked StarterBundleOffered only when the client confirms it SHOWED (OfferResult
+	--     remote, OfferLedger). A dropped / refused / unanswered card is re-queued RequeueSeconds later (slot
+	--     refunded), at most MaxSendsPerSession sends a session;
+	--   * a seated player (driving) is waited for up to SeatedWaitSeconds before the send; on the client the card
+	--     still waits out active combat (RecentCombat, a few seconds), a modal, death, an alert, and driving.
+	-- The D8 budget stays: SoftOfferSessionMax per session, SoftOfferSessionCooldownSeconds apart (and HudConfig.Offer
+	-- MaxPerSession / MinGapSeconds on the client). Prices / passes / products are unchanged.
+	FirstOffer = {
+		Enabled = true,
+		AtPlaySeconds = 120,
+		SeatedWaitSeconds = 30,
+		SeatedCheckSeconds = 1,
+		AckTimeoutSeconds = 100, -- > the client's 60 s queue drop + a pump tick
+		RequeueSeconds = 45, -- > ShopController's 30 s Starter toast debounce
+		MaxSendsPerSession = 4,
+		MaxSlotWaits = 6, -- slot busy (another offer's cooldown): wait for it this many times, then stop
+		FallbackKeys = { "SpeedBoost" } :: { string }, -- 99 R$ Speed Boost (existing product, TrySoftOfferSpeedBoost)
 	},
 	-- v33: one-shot soft offer after first manual ATM collect (server marks AutoCollectOffered)
 	AutoCollectOffer = {
@@ -629,6 +861,8 @@ local MonetizationConfig = {
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {
 		devproduct = true,
+		vip_supply = true, -- claude-bud JOB 36: the VIP crate is already minutes of multiplied income
+		checkpoint = true, -- claude-bud JOB 37: the checkpoint-cleared bonus is already minutes of multiplied income
 		admin = true,
 		purchase_refund = true,
 		prestige = true,
@@ -642,6 +876,8 @@ local MonetizationConfig = {
 		clan_war_participate = true,
 		collector = true, -- pending already multiplied at accrue time
 		manual_dropper = true, -- fixed click awards stay $10–25
+		offline = true, -- claude-bud JOB 29: the offline pay is already a share of the multiplied income rate
+		onboarding = true, -- claude-bud JOB 29: the FastStart starter payout is a fixed amount
 		atm_raid = true,
 		plot_oil = true, -- plot pump PendingCash via AccruePendingCash
 		ops = true, -- W3s2 Jobs: fixed job pay (OpsConfig.Rewards), never pass-multiplied
@@ -707,7 +943,88 @@ function MonetizationConfig.VIPPerksLiveFor(userId: any): boolean
 end
 
 -- claude-bud: is this SKU key on sale / effective for this player under Rollout. Keys outside RolloutKeys are always live.
+-- claude-bud JOB 66: the two 5 R$ starter products (owner-first; the one-time offer after ~5 min of play)
+(MonetizationConfig :: any).Starter5 = {
+	Enabled = true,
+	OwnerFirst = false, -- PUBLIC (Code Bot v207, Shaun approved): both 5 R$ rows + the one-time offer for every player (was NEW-OWNER-FIRST, claude-bud JOB 66)
+	OfferAfterPlaySeconds = 120, -- THE Starter5 pop-up delay (one value): LIVE VALUE 120 (Code Bot v209: Shaun approved the 2-minute delay). The "5 R$ ONE-TIME OFFER" card (once, saved: profile.Starter5Offered)
+	CashIncomeMinutes = 2.5, -- the Recruit Starter Pack's cash = about 2-3 minutes of his early income ...
+	CashMin = 750, -- ... at least this (a brand-new base earns about $300 / min)
+	CashMax = 20000, -- ... and never more (a starter pack, not a cash pack)
+	BoostMult = 2, -- the 10-minute boost (CodesService.GrantCashBoost: extends a running one)
+	Title = "5 R$ ONE-TIME OFFER",
+	Lines = { Soldiers = "3 soldiers join your army", Cash = "$%s starter cash", Boost = "2x income 10 min: in the Shop" },
+}
+
+function MonetizationConfig.Starter5LiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live((MonetizationConfig :: any).Starter5, userId)
+end
+
+-- the Recruit Starter Pack cash for an income of perMin (pure)
+function MonetizationConfig.Starter5Cash(perMin: number): number
+	local S = (MonetizationConfig :: any).Starter5
+	return math.clamp(math.floor(S.CashIncomeMinutes * math.max(0, tonumber(perMin) or 0) + 0.5), S.CashMin, S.CashMax)
+end
+
+--[[ Code Bot v210 (Golden Pumpjacks fix): THE one config for what Golden Pumpjacks (DevProducts.GoldenPumpjack, 49 R$,
+	one time, entitlement "GoldenPumpjack", same save key) does while this block is live for the BUYER:
+	  * gameplay: EconomyService.cashMultFor multiplies every steady-income grant (Reasons: passive / training /
+	    plot_oil, exactly the reasons WE_IncomePerSec sums) by (1 + IncomePct / 100) for an owner of the entitlement;
+	    PlotOilPumpService stops paying the legacy per-pump IncomeMult (no double count). Gold pumps stay gold (visual).
+	  * display: the Shop row / purchase stand say Description; the Shop row adds the live "+$N/s" from
+	    GoldenBoostGainPerSec(WE_IncomePerSec) (TycoonMath.ShortCash); the toast after buying shows the real new $/s.
+	Not live (OwnerFirst and not the playtest owner): the legacy effect (gold pumps x IncomeMult) and text, unchanged.
+	Was: +50 % on the 2 plot pumps only ($18 / 5 s each, multiplier-exempt) = at most +$3.60/s on any base. ]]
+(MonetizationConfig :: any).GoldenBoost = {
+	Enabled = true,
+	OwnerFirst = false, -- Code Bot v213: Shaun approved Golden Pumpjacks for everyone
+	ProductKey = "GoldenPumpjack",
+	IncomePct = 15, -- +15 % of ALL base income per second, permanent (2x Cash 149 R$ = +100 %, VIP 199 R$ = +25 %/+50 %)
+	Reasons = { passive = true, training = true, plot_oil = true } :: { [string]: boolean },
+	-- Description: set right below from IncomePct (one number)
+	RowFormat = "+%d%% income forever · +%s/s", -- Shop row (not owned): pct, ShortCash(gain)
+	OwnedFormat = "+%d%% income active · +%s/s", -- Shop row (owned): pct, ShortCash(the boost's share of WE_IncomePerSec)
+	ToastFormat = "Golden Pumpjacks ON: income now %s/s (+%s/s)", -- after the purchase: ShortCash(new), ShortCash(gain)
+	ToastWaitSeconds = 11, -- two passive ticks (5 s) + slack, so WE_IncomePerSec already carries the boost
+}
+
+(MonetizationConfig :: any).GoldenBoost.Description =
+	string.format("+%d%% on all your base income, forever", (MonetizationConfig :: any).GoldenBoost.IncomePct)
+
+function MonetizationConfig.GoldenBoostLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live((MonetizationConfig :: any).GoldenBoost, userId)
+end
+
+-- the steady-income multiplier for an owner of the product (1 + IncomePct / 100; 1 on a broken config)
+function MonetizationConfig.GoldenBoostMult(): number
+	local pct = tonumber(((MonetizationConfig :: any).GoldenBoost or {}).IncomePct) or 0
+	if pct ~= pct or pct <= 0 then
+		return 1
+	end
+	return 1 + math.min(pct, 100) / 100
+end
+
+-- $/s the boost adds for an income of incomePerSec (WE_IncomePerSec). owned = the income already includes it (the
+-- boost's share = income - income / mult), else what buying adds (income x pct). Pure; the Shop row and the toast.
+function MonetizationConfig.GoldenBoostGainPerSec(incomePerSec: any, owned: boolean?): number
+	local inc = math.max(0, tonumber(incomePerSec) or 0)
+	if inc ~= inc or inc == math.huge then
+		return 0
+	end
+	local m = MonetizationConfig.GoldenBoostMult()
+	if owned == true then
+		return inc - inc / m
+	end
+	return inc * (m - 1)
+end
+
 function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean
+	-- claude-bud JOB 66: a row tied to an owner-first switch (LiveBlock) follows that switch
+	local row: any = (MonetizationConfig.DevProducts :: any)[key]
+	if row and typeof(row.LiveBlock) == "string" then
+		local block = (MonetizationConfig :: any)[row.LiveBlock]
+		return (require(script.Parent.RetentionConfig) :: any).Live(block, userId)
+	end
 	if not (MonetizationConfig.RolloutKeys :: any)[key] then
 		return true
 	end
@@ -752,5 +1069,168 @@ function MonetizationConfig.PadOwnedKeys(slot: PremiumPadSlot): { string }
 	local offer = MonetizationConfig.LivePadOffer(slot)
 	return if offer then { offer.Key } else {}
 end
+
+--[[ claude-bud JOB 40 part B: SPEED, with text that cannot go stale. SpeedV2 (owner-first) switches the speed SKUs to
+	their WalkSpeedMultV2 (Speed Pass x1.75 = 28, Speed Boost x2.5 = 40; owning both = the higher); off = x1.5 / x2 as
+	today. Every speed string comes from SpeedText (the Descriptions below, the stands, the Shop rows, the death card,
+	the Speed Boost toast). MaxWalkSpeedMult is the sanity cap MonetizationService applies (it was a local 2.0). Robux
+	prices and Ids are unchanged. ]]
+local cfg: any = MonetizationConfig
+
+--[[ claude-bud JOB 41 part B: WHEN the Recruit Pack is offered (owner-first; RetentionConfig.Live). Once per profile
+	(profile.RecruitPackOffered), at the FIRST of: his first capture, or OfferAfterPlaySeconds of total play
+	(Stats.PlayTimeSeconds); never in the Guided hold, combat, a seat or another card; through ClaimSoftOfferSlot (busy =
+	retry every RetrySeconds this session). While it is live for a player the old after-tutorial Starter Pack pop-up does
+	NOT fire for him (the StarterBundle row stays in the Shop). Id 0 = never offered. ]]
+cfg.RecruitPackOffer = {
+	Enabled = true,
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone (Id 0 = never offered)
+	IncomeMinutes = 30, -- cash = this many minutes of his passive income ...
+	MinCash = 25000, -- ... at least (2.5x the 49 R$ Cash Pack S $10,000) ...
+	MaxCash = 150000, -- ... at most
+	BoostMinutes = 30,
+	BoostMult = 2,
+	OfferAfterPlaySeconds = 600,
+	CombatQuietSeconds = 20,
+	RetrySeconds = 30,
+	MaxTriesPerSession = 6,
+	TickSeconds = 5,
+	AutoHideSeconds = 20,
+	ClientWaitMaxSeconds = 90,
+	Lines = { Cash = "$%s Cash", Boost = "2x Cash for 30 min", Trim = "Gold base trim" },
+}
+
+function cfg.RecruitPackLiveFor(userId: any): boolean
+	return (require(script.Parent.RetentionConfig) :: any).Live(cfg.RecruitPackOffer, userId)
+end
+
+-- Code Bot v166: the Recruit Pack takes the old Starter Pack pop-up slot only once it can actually be offered (live for
+-- him AND its Id set). While the Id is 0 the Starter Pack first offer (+ its Speed Boost fallback) runs as before.
+function cfg.RecruitPackTakesStarterSlot(userId: any): boolean
+	local def = cfg.DevProducts.RecruitPack
+	local id = if typeof(def) == "table" then tonumber(def.Id) or 0 else 0
+	return id ~= 0 and cfg.RecruitPackLiveFor(userId) == true
+end
+
+-- claude-bud JOB 42 part C: the Recruit Pack's cash for a player: the CashFromTimePack time pack's amount (no cap, the
+-- Cash30m floor = MinCash) while TimePacks is live for him, else the JOB 41 clamp below (OFF == OLD). One formula each.
+function cfg.RecruitPackCashFor(userId: any, perMin: number): number
+	local key = cfg.DevProducts.RecruitPack.CashFromTimePack
+	local okS, SO = pcall(function(): any
+		return (require :: any)(script.Parent.ShopOverhaulConfig) -- (any: breaks the static cycle with ShopOverhaulConfig for the type checker)
+	end)
+	if okS and SO and typeof(key) == "string" and SO.TimePacks.Packs[key] ~= nil and SO.TimePacksLiveFor(userId) then
+		return SO.TimePackAmount(key, perMin) or cfg.RecruitPackCash(perMin)
+	end
+	return cfg.RecruitPackCash(perMin)
+end
+
+-- true when the Recruit Pack's cash follows a time pack for this player (the income then leaves out timed boosts)
+function cfg.RecruitPackUsesTimePack(userId: any): boolean
+	local key = cfg.DevProducts.RecruitPack.CashFromTimePack
+	local okS, SO = pcall(function(): any
+		return (require :: any)(script.Parent.ShopOverhaulConfig) -- (any: breaks the static cycle with ShopOverhaulConfig for the type checker)
+	end)
+	return okS and SO ~= nil and typeof(key) == "string" and SO.TimePacks.Packs[key] ~= nil and SO.TimePacksLiveFor(userId) == true
+end
+
+-- the pack's cash for an income of `perMin` $/min (clamped; never below MinCash)
+function cfg.RecruitPackCash(perMin: number): number
+	local o = cfg.RecruitPackOffer
+	local p = tonumber(perMin) or 0
+	if p ~= p or p < 0 then
+		p = 0
+	end
+	return math.clamp(math.floor(o.IncomeMinutes * p + 0.5), o.MinCash, o.MaxCash)
+end
+cfg.SpeedV2 = {
+	Enabled = true,
+	OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone: only changes the speed SKUs' multiplier, so only Speed Pass / Speed Boost owners run faster (SpeedMultFor counts owned SKUs only)
+}
+cfg.MaxWalkSpeedMult = 2.5
+
+function cfg.SpeedV2LiveFor(userId: any): boolean
+	local b = cfg.SpeedV2
+	if b.Enabled ~= true then
+		return false
+	end
+	if b.OwnerFirst ~= true then
+		return true
+	end
+	local okR, RS = pcall(function(): any
+		return game:GetService("RunService")
+	end)
+	if okR and RS and RS:IsStudio() then
+		return true
+	end
+	return AdminConfig.IsPlaytestOwner(userId)
+end
+
+-- "Run 75% faster" (x < 2) / "Run 2x faster" / "Run 2.5x faster" (x >= 2); forever adds ", forever"
+function cfg.SpeedText(mult: number, forever: boolean?): string
+	local m = tonumber(mult) or 1
+	local s
+	if m < 2 then
+		s = string.format("Run %d%% faster", math.floor((m - 1) * 100 + 0.5))
+	elseif math.abs(m - math.floor(m + 0.5)) < 0.001 then
+		s = string.format("Run %dx faster", math.floor(m + 0.5))
+	else
+		s = string.format("Run %sx faster", (string.gsub(string.format("%.2f", m), "0+$", "")))
+	end
+	return if forever then s .. ", forever" else s
+end
+
+-- a speed SKU's multiplier for this player (V2 while live; nil userId = today's)
+function cfg.SpeedMultOf(def: any, userId: any): number
+	if typeof(def) ~= "table" then
+		return 1
+	end
+	if userId ~= nil and typeof(def.WalkSpeedMultV2) == "number" and cfg.SpeedV2LiveFor(userId) then
+		return def.WalkSpeedMultV2
+	end
+	return tonumber(def.WalkSpeedMult) or 1
+end
+
+-- the description a player should read for a SKU (speed SKUs from SpeedText, everything else its Description)
+function cfg.DescFor(def: any, userId: any): string?
+	if typeof(def) ~= "table" then
+		return nil
+	end
+	if typeof(def.WalkSpeedMult) == "number" and def.WalkSpeedMult > 1 then
+		return cfg.SpeedText(cfg.SpeedMultOf(def, userId), true)
+	end
+	-- Code Bot v210: Golden Pumpjacks says what GoldenBoost really gives while it is live for this player
+	if def == cfg.DevProducts[cfg.GoldenBoost.ProductKey] and userId ~= nil and cfg.GoldenBoostLiveFor(userId) then
+		return cfg.GoldenBoost.Description
+	end
+	return if typeof(def.Description) == "string" then def.Description else nil
+end
+
+-- Code Bot board-text: the ONE short effect line a board shows for a SKU (speed SKUs from SpeedText, short; else its
+-- Effect; else the same Description the Shop shows). Same config as the Shop: nothing is typed twice.
+function cfg.EffectFor(def: any, userId: any): string?
+	if typeof(def) ~= "table" then
+		return nil
+	end
+	if typeof(def.WalkSpeedMult) == "number" and def.WalkSpeedMult > 1 then
+		return cfg.SpeedText(cfg.SpeedMultOf(def, userId), false)
+	end
+	if typeof(def.Effect) == "string" and #def.Effect > 0 then
+		return def.Effect
+	end
+	return cfg.DescFor(def, userId)
+end
+
+-- Code Bot board-text: is the big Supply Depot board layout live for this viewer (fail closed)
+function cfg.BigSignLiveFor(userId: any): boolean
+	local b = cfg.PremiumPads and cfg.PremiumPads.BigSign
+	if typeof(b) ~= "table" then
+		return false
+	end
+	return (require(script.Parent.RetentionConfig) :: any).Live(b, userId) == true
+end
+
+cfg.GamePasses.ImpulseSpeed.Description = cfg.SpeedText(cfg.GamePasses.ImpulseSpeed.WalkSpeedMult, true)
+cfg.DevProducts.SpeedBoost.Description = cfg.SpeedText(cfg.DevProducts.SpeedBoost.WalkSpeedMult, true)
 
 return MonetizationConfig

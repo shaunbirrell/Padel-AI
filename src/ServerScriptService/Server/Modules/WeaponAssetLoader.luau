@@ -23,6 +23,15 @@
 	welded to the part that carries it. WeaponVisuals grips the part named Handle, so the gun sits in the hand the
 	way the kit holds it: barrel along the Handle's -Z, top along its +Y.
 
+	claude-bud JOB 35 (the premium guns): WeaponConfig VisualPlain = the asset has no Tool (a plain Model of MeshParts or
+	one MeshPart). Its contents are copied as they are, every part is welded (WeldConstraint) to the gun body (the
+	largest part), and an invisible Handle is added: at VisualGrip from the body, else automatically on the model's
+	longest axis a quarter from the rear (the muzzle direction must be checked in Studio; VisualGrip RY = 180 flips
+	it). VisualSpin: the child Model whose name contains it (the rotary barrel) is welded to its own root and that root
+	to the Handle with "WE_SpinWeld", which the client turns while firing. VisualChild "*" = the Tool's first Model
+	child. VisualLength scales the finished template so its longest side is that many studs. Scripts are stripped and
+	the Part kit stays the fallback exactly as before.
+
 	WeaponConfig wires the Roblox-owned Weapons Kit guns (creator Roblox, User 1: they load with "Allow Loading Third
 	Party Assets" OFF). Each distinct id loads once per server, outside VisualAssetConfig.MaxLoadAttempts. A failed
 	load or a refused template keeps that weapon's Part kit. ]]
@@ -189,9 +198,146 @@ function WeaponAssetLoader._AddGripHandle(model: Model, kitHandle: BasePart, bod
 	h.Parent = model
 end
 
+-- claude-bud JOB 35: the largest BasePart under `inst` (the gun body)
+local function largestPart(inst: Instance): BasePart?
+	local best, bestV = nil, -1
+	for _, d in ipairs(inst:GetDescendants()) do -- once per template, never per frame
+		if d:IsA("BasePart") then
+			local v = d.Size.X * d.Size.Y * d.Size.Z
+			if v > bestV then
+				best, bestV = d, v
+			end
+		end
+	end
+	return best
+end
+
+-- claude-bud JOB 35: the grip for a plain model: the configured offset from the body, else the longest axis
+function WeaponAssetLoader._PlainGrip(model: Model, body: BasePart, grip: any): CFrame
+	if typeof(grip) == "table" then
+		return body.CFrame
+			* CFrame.new(tonumber(grip.X) or 0, tonumber(grip.Y) or 0, tonumber(grip.Z) or 0)
+			* CFrame.Angles(math.rad(tonumber(grip.RX) or 0), math.rad(tonumber(grip.RY) or 0), math.rad(tonumber(grip.RZ) or 0))
+	end
+	local boxCf, size = model:GetBoundingBox()
+	local cf = boxCf
+	local len = size.Z
+	if size.X >= size.Y and size.X >= size.Z then
+		cf = boxCf * CFrame.Angles(0, math.rad(90), 0) -- the box X axis becomes the grip's Z (the barrel line)
+		len = size.X
+	elseif size.Y > size.X and size.Y >= size.Z then
+		cf = boxCf * CFrame.Angles(math.rad(90), 0, 0)
+		len = size.Y
+	end
+	return cf * CFrame.new(0, 0, len * 0.25) -- a quarter of the length toward the rear (+Z; the barrel points -Z)
+end
+
+-- claude-bud JOB 35: weld a plain model together, add the grip Handle and the optional spinning barrel
+local function rigPlain(model: Model, opts: any): string?
+	local body = largestPart(model)
+	if body == nil then
+		return "no parts"
+	end
+	local spinName = if typeof(opts.VisualSpin) == "string" then string.lower(opts.VisualSpin) else nil
+	local spinGroup: Instance? = nil
+	if spinName then
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("Model") and string.find(string.lower(d.Name), spinName, 1, true) ~= nil and not body:IsDescendantOf(d) then
+				spinGroup = d
+				break
+			end
+		end
+	end
+	local spinRoot: BasePart? = if spinGroup then largestPart(spinGroup) else nil
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d ~= body and d ~= spinRoot then
+			local wc = Instance.new("WeldConstraint")
+			wc.Part0 = if spinRoot and spinGroup and d:IsDescendantOf(spinGroup) then spinRoot else body
+			wc.Part1 = d
+			wc.Parent = d
+		end
+	end
+	local kitHandle = Instance.new("Part")
+	kitHandle.Size = Vector3.new(0.2, 0.2, 0.2)
+	kitHandle.CFrame = WeaponAssetLoader._PlainGrip(model, body, opts.VisualGrip)
+	WeaponAssetLoader._AddGripHandle(model, kitHandle, body)
+	kitHandle:Destroy()
+	local handle = model:FindFirstChild("Handle")
+	if spinRoot and handle and handle:IsA("BasePart") then
+		-- the barrel turns about the Handle's Z (the barrel line) through its own centre
+		local pivot = handle.CFrame.Rotation + spinRoot.Position
+		local sw = Instance.new("Weld")
+		sw.Name = "WE_SpinWeld"
+		sw.Part0 = handle
+		sw.Part1 = spinRoot
+		sw.C0 = handle.CFrame:ToObjectSpace(pivot)
+		sw.C1 = spinRoot.CFrame:ToObjectSpace(pivot)
+		sw.Parent = handle
+	end
+	return nil
+end
+
+-- claude-bud JOB 35: scale so the longest side is `length` studs
+local function scaleTo(model: Model, length: any)
+	local want = tonumber(length)
+	if want == nil or want <= 0 then
+		return
+	end
+	local size = model:GetExtentsSize()
+	local longest = math.max(size.X, size.Y, size.Z)
+	if longest > 0.01 then
+		model:ScaleTo(model:GetScale() * want / longest)
+	end
+end
+
+-- claude-bud JOB 35: a plain Model / MeshPart asset (VisualPlain): the root's contents become the template
+local function buildPlain(weaponId: string, root: Instance, opts: any): (Model?, string)
+	local model = Instance.new("Model")
+	model.Name = "Weapon_" .. weaponId
+	local sources: { Instance } = if root:IsA("BasePart") then { root :: Instance } else root:GetChildren()
+	for _, s in ipairs(sources) do
+		if s:IsA("Model") or s:IsA("BasePart") or s:IsA("Folder") then
+			local c: Instance? = (s :: Instance):Clone() -- nil when not Archivable
+			if c then
+				c.Parent = model
+			end
+		end
+	end
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("LuaSourceContainer") or d:IsA("Sound") then
+			d:Destroy()
+		end
+	end
+	local why = rigPlain(model, opts)
+	if why then
+		model:Destroy()
+		return nil, why
+	end
+	return model, "ok"
+end
+
 -- Build Weapon_<weaponId> from one loaded asset root. Returns the template, or nil and a reason.
-function WeaponAssetLoader.BuildTemplate(weaponId: string, root: Instance, toolName: string?, childName: string?): (Model?, string)
+-- claude-bud JOB 35: opts = the WeaponDef (VisualPlain / VisualGrip / VisualLength / VisualSpin); nil = as before
+function WeaponAssetLoader.BuildTemplate(weaponId: string, root: Instance, toolName: string?, childName: string?, opts: any?): (Model?, string)
+	local o: any = opts or {}
 	local tool = findTool(root, toolName)
+	if tool == nil and o.VisualPlain == true then
+		local plain, why = buildPlain(weaponId, root, o)
+		if plain == nil then
+			return nil, why
+		end
+		local parts = sanitise(plain)
+		if parts > MAX_PARTS then
+			plain:Destroy()
+			return nil, string.format("%d parts > %d", parts, MAX_PARTS)
+		end
+		local h = plain:FindFirstChild("Handle")
+		if h and h:IsA("BasePart") then
+			plain.PrimaryPart = h
+		end
+		scaleTo(plain, o.VisualLength)
+		return plain, "ok"
+	end
 	if tool == nil then
 		return nil, "no Tool"
 	end
@@ -200,7 +346,7 @@ function WeaponAssetLoader.BuildTemplate(weaponId: string, root: Instance, toolN
 	local source: Instance = tool
 	local gunModel = false
 	if typeof(childName) == "string" and childName ~= "" then
-		local child = tool:FindFirstChild(childName)
+		local child = if childName == "*" then tool:FindFirstChildWhichIsA("Model") else tool:FindFirstChild(childName) -- claude-bud JOB 35: "*"
 		if child and child:IsA("Model") then
 			source = child
 			gunModel = true
@@ -241,6 +387,7 @@ function WeaponAssetLoader.BuildTemplate(weaponId: string, root: Instance, toolN
 	if handle and handle:IsA("BasePart") then
 		model.PrimaryPart = handle
 	end
+	scaleTo(model, o.VisualLength) -- claude-bud JOB 35 (nil = unchanged)
 	return model, "ok"
 end
 
@@ -266,7 +413,7 @@ function WeaponAssetLoader.Start(weapons: { [string]: any })
 		local assetId = tonumber(def.VisualAssetId) :: number
 		local root = loadAsset(assetId)
 		if root and not published[weaponId] then
-			local ok, template, why = pcall(WeaponAssetLoader.BuildTemplate, weaponId, root, def.VisualToolName, def.VisualChild)
+			local ok, template, why = pcall(WeaponAssetLoader.BuildTemplate, weaponId, root, def.VisualToolName, def.VisualChild, def)
 			if ok and template then
 				local f = folder()
 				local old = f:FindFirstChild(template.Name)

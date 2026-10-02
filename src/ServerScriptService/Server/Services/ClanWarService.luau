@@ -169,6 +169,14 @@ local function broadcastAll()
 	end
 end
 
+-- Code Bot v198: DISPLAY ONLY. A cash reward toast shows what was credited (AddCash's 2nd return, multipliers in), plus
+-- " · 2x" while the DOUBLE WEEKEND doubled it (EconomyService.ToastAmount / ToastTag); an economy without them = the old text
+local function toastCash(econ: any, player: Player, base: number, reason: string, ok: any, credited: any): (number, string)
+	local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, ok, credited) else math.floor(base)
+	local tag = if econ and econ.ToastTag then econ.ToastTag(player, reason) else ""
+	return shown, tag
+end
+
 local function settleWar(war: WarRecord)
 	if war.Settled then
 		return
@@ -215,31 +223,43 @@ local function settleWar(war: WarRecord)
 				local myScore = if cid == war.AttackerClanId then war.AttackerScore else war.DefenderScore
 				bonus = math.floor(myScore * scoreBonus)
 			end
+			local winOk, winPaid = false, 0
 			if winCash + bonus > 0 then
-				EconomyService.AddCash(player, winCash + bonus, "clan_war_win")
+				winOk, winPaid = EconomyService.AddCash(player, winCash + bonus, "clan_war_win")
 			end
 			if winGold > 0 then
 				EconomyService.AddGold(player, winGold, "clan_war_win")
 			end
 			if NotificationService then
+				-- Code Bot v198: the cash credited (the DOUBLE WEEKEND doubles "clan_war_win") + " · 2x" while it does
+				local shown, tag = toastCash(EconomyService, player, winCash + bonus, "clan_war_win", winOk, winPaid)
 				NotificationService.Notify(
 					player,
-					string.format("Clan war VICTORY! %s  (+$%d%s)", scoreLine, winCash + bonus, if winGold > 0 then string.format(" +%dG", winGold) else ""),
+					string.format(
+						"Clan war VICTORY! %s  (+$%d%s%s)",
+						scoreLine,
+						shown,
+						if winCash + bonus > 0 then tag else "",
+						if winGold > 0 then string.format(" +%dG", winGold) else ""
+					),
 					"Reward"
 				)
 			end
 		elseif cid == war.AttackerClanId or cid == war.DefenderClanId then
+			local partOk, partPaid = false, 0
 			if partCash > 0 then
-				EconomyService.AddCash(player, partCash, "clan_war_participate")
+				partOk, partPaid = EconomyService.AddCash(player, partCash, "clan_war_participate")
 			end
 			if partGold > 0 then
 				EconomyService.AddGold(player, partGold, "clan_war_participate")
 			end
 			local resultWord = if winner then "defeat" else "draw"
 			if NotificationService then
+				-- Code Bot v198: the cash credited ("clan_war_participate" doubled in the DOUBLE WEEKEND) + " · 2x"
+				local shown, tag = toastCash(EconomyService, player, partCash, "clan_war_participate", partOk, partPaid)
 				NotificationService.Notify(
 					player,
-					string.format("Clan war %s — %s  (+$%d participation)", resultWord, scoreLine, partCash),
+					string.format("Clan war %s — %s  (+$%d participation%s)", resultWord, scoreLine, shown, if partCash > 0 then tag else ""),
 					"Info"
 				)
 			end
@@ -407,6 +427,9 @@ function ClanWarService.Init(deps: { [string]: any })
 
 	local declareRemote = RemoteSetup.Get(Constants.RemoteNames.RequestDeclareClanWar) :: RemoteEvent
 	declareRemote.OnServerEvent:Connect(function(player: Player, defenderClanId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestDeclareClanWar", defenderClanId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "clan_war_declare", 1, 1) then
 			if AntiExploitService and AntiExploitService.Strike then
 				AntiExploitService.Strike(player, "clan_war_declare_rate")

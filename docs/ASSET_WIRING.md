@@ -693,14 +693,24 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 
 | Item | Decision | Live id | Pending id | Owned | Gate |
 |---|---|---|---|---|---|
+| Minigun Turret Pack | owner pick, waits for promote | 109072907337393 | – | yes | promoted (live) |
+| J67 Hesco PBR | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 116015230898207 (Job67DressConfig) | – | yes | PAID (shaunie6); 1 MeshPart, 17,247 tris, 0 scripts; wall tiers L3-L5 (Code Bot JOB 67… |
+| J67 Trench Sandbags | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 71112106874796 (Job67DressConfig) | – | yes | PAID (shaunie6); 26 MeshParts, 149,263 tris (pack), 0 scripts; corner nests + base prop… |
+| J67 Military Supplies | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 70726960831586 (Job67DressConfig) | – | yes | PAID (shaunie6); 204 MeshParts, store tris not published, 0 scripts; wall sandbag runs… |
+| J67 Textured Crates | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 87282634781307 (Job67DressConfig) | – | yes | PAID (shaunie6); 25 MeshParts, 10,914 tris (pack), 0 scripts; base prop crates (Code Bo… |
+| J67 Prinz Desert Houses | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 10055885754 (Job67DressConfig) | – | yes | FREE (shaunie6 inventory); 3 houses 459 parts, 18,440 tris, 0 scripts (5 PointLights +… |
+| J67 Cag Desert Camp | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 9939040273 (Job67DressConfig) | – | yes | FREE (shaunie6 inventory); 164 parts, 46,740 tris, 0 scripts; POI TownBlock blocks (Cod… |
+| J67 Imp Desert House | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 15654066038 (Job67DressConfig) | – | yes | FREE (shaunie6 inventory); 281 parts, 41,774 tris, 0 scripts (24 ParticleEmitters + 16… |
+| J67 Arcade Desert House | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 16365964601 (Job67DressConfig) | – | yes | FREE; 317 parts, 41,976 tris, 0 scripts (lights / Camera stripped); POI TownBlock block… |
+| J67 Synty Military Wrecks | wired in Job67DressConfig (Code Bot JOB 67, owner-first) | 119390702773907 (Job67DressConfig) | – | yes | PAID (shaunie6); 10 destroyed-vehicle MeshParts used (1 each, tank 2), store triangles… |
 | Ammo Works | wired (Roblox-owned) | 41324890 | – | Roblox (no Get) | Roblox Conveyor Belt as the Ammo Works belt (takes the kit belt's place) |
 | Arms Crate Line | wired (Roblox-owned) | 41324890 | – | Roblox (no Get) | Roblox Conveyor Belt as the Arms Crate Line belt (same load as Ammo Works) |
 | Armor Plate Press | owner pick, waits for promote | 0 | 4362642898 | yes | check passed (28 parts); OmitParts + the P4 second check (part names: its bounds box, and one piece for the Signature role; 28 parts > 3 roles), batch P4 |
 | Rocket Assembly | wired (Roblox-owned) | 31603741 | – | Roblox (no Get) | Roblox Rocket as the rocket body, Fire + Smoke removed |
 | Manual Dropper | owner pick, waits for promote | 0 | 14408455045 | yes | check passed (14 parts); the P4 second check (neon parts, upright pose) + the droppers lane (v1b reads its WE_CatalogProp), batch P4 |
-| Plot Oil Pump | owner pick, waits for promote | 15192621369 | – | yes | promoted (live) |
+| Plot Oil Pump | owner pick, waits for promote | 0 | 15192621369 (not in config) | yes | not in config yet |
 | Oil Rig | kept our build | – | – | yes | [WEAK]; likely over 40 parts; our oil-rig kit is the gameplay platform |
-| Money Collector | owner pick, waits for promote | 18220523228 | – | yes | promoted (live) |
+| Money Collector | owner pick, waits for promote | 0 | 18220523228 (not in config) | yes | not in config yet |
 | Training Yard | rejected | – | – | yes | wrong item: a group-training button board, not a military yard |
 | Premium Pad | kept our build | – | – | no | you said no good match: keep our build |
 | Supply Drop Crate | needs new code first | – | – | yes | needs one call in SupplyDropService (drop crate dress) |
@@ -763,15 +773,15 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Escort Truck | wired (Roblox-owned) | 6418225759 | – | Roblox (no Get) | Roblox pickup body |
 | Cargo Van | wired (Roblox-owned) | 6433316269 | – | Roblox (no Get) | Roblox van body |
 | Premium Razorfang | waits on another job's file | – | – | Roblox (no Get) | VehicleConfig + VehicleService (streaming2-build): premium vehicle def |
-| Armored Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
-| Supply Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
-| Ammo Carrier | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
-| Troop Transport | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
-| Recovery Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
-| Anti Air Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
+| Armored Truck | owner pick, waits for promote | 0 | 8546141386 (not in config) | yes | not in config yet |
+| Supply Truck | owner pick, waits for promote | 0 | 8546141386 (not in config) | yes | not in config yet |
+| Ammo Carrier | owner pick, waits for promote | 0 | 8546141386 (not in config) | yes | not in config yet |
+| Troop Transport | owner pick, waits for promote | 0 | 8546141386 (not in config) | yes | not in config yet |
+| Recovery Truck | owner pick, waits for promote | 0 | 8546141386 (not in config) | yes | not in config yet |
+| Anti Air Truck | owner pick, waits for promote | 0 | 8546141386 (not in config) | yes | not in config yet |
 | Fuel Tanker | rejected | 0 | – | yes | owner check (Open Cloud, v75): 55 parts (cap 40); second check: all 55 are named "Part"… |
 | Engineering Truck | rejected | – | – | yes | cannot be checked: the only picture shows the inside of a block |
-| Flatbed Hauler | owner pick, waits for promote | 0 | 8455894899 | yes | check: 53 parts (over 40); a longer kit: trim known (ChildName 'FlatBed Truck', 9 OmitParts names = 40 parts) but its cab sits past the kit's nose, batch P3 |
+| Flatbed Hauler | owner pick, waits for promote | 0 | 8455894899 (not in config) | yes | not in config yet |
 | Radar Truck | rejected | 0 | – | yes | owner check (Open Cloud, v75): 93 parts (cap 40) |
 | Mine Clearer | rejected | – | – | yes | wrong item (a wheel loader) and unclear origin |
 | Premium Bastion | waits on another job's file | – | – | yes | VehicleConfig + VehicleService (streaming2-build): premium vehicle def |
@@ -800,20 +810,20 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Mobile Artillery | kept our build | – | – | yes | [WEAK]; a crude block gun, worse than our kit |
 | Howitzer Truck | kept our build | – | – | yes | [WEAK]; a crude block gun, worse than our kit |
 | Siege Mortar | kept our build | – | – | yes | [WEAK]; a crude block gun, worse than our kit |
-| Light Scout Heli | owner pick, waits for promote | 0 | 2474869838 | yes | check passed (1 part); a look first: its one mesh has no seats (the cabin seats are placed by eye); nose at -Z (yaw 0, from its ThumbnailCamera), batch P3 |
-| Utility Heli | owner pick, waits for promote | 0 | 2474869838 | yes | check passed (1 part); a look first: its one mesh has no seats (the cabin seats are placed by eye); nose at -Z (yaw 0, from its ThumbnailCamera), batch P3 |
-| Transport Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 109 parts (cap 40) |
-| Heavy Lift Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 109 parts (cap 40) |
-| Light Transport Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 109 parts (cap 40) |
+| Light Scout Heli | owner pick, waits for promote | – | 2474869838 (not in config) | yes | not in config yet |
+| Utility Heli | owner pick, waits for promote | – | 2474869838 (not in config) | yes | not in config yet |
+| Transport Heli | rejected | – | – | yes | owner check (Open Cloud, v75): 109 parts (cap 40) |
+| Heavy Lift Heli | rejected | – | – | yes | owner check (Open Cloud, v75): 109 parts (cap 40) |
+| Light Transport Heli | rejected | – | – | yes | owner check (Open Cloud, v75): 109 parts (cap 40) |
 | Gunship Heli | rejected | – | – | yes | copy of a game-franchise gunship (Half-Life 2) |
 | Attack Helicopter | rejected | – | – | yes | copy of a game-franchise gunship (Half-Life 2) |
 | Escort Heli | rejected | – | – | yes | copy of a game-franchise gunship (Half-Life 2) |
 | Night Attack Heli | rejected | – | – | yes | copy of a game-franchise gunship (Half-Life 2) |
 | Premium Stormwing | rejected | – | – | yes | copy of a game-franchise gunship (Half-Life 2) |
-| Rescue Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 78 parts (cap 40); second check: only "Part" (49) and "W… |
-| Rescue Heli V2 | rejected | 0 | – | yes | your replacement pick (2026-09-28), not used: the origin check failed. Its 7 rotor Mesh… |
-| Medevac Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 78 parts (cap 40); same model as the Rescue Heli pick 11… |
-| Medevac Heli V2 | rejected | 0 | – | yes | your replacement pick (2026-09-28), not used: the origin check failed. Its 7 rotor Mesh… |
+| Rescue Heli | rejected | – | – | yes | owner check (Open Cloud, v75): 78 parts (cap 40); second check: only "Part" (49) and "W… |
+| Rescue Heli V2 | rejected | – | – | yes | your replacement pick (2026-09-28), not used: the origin check failed. Its 7 rotor Mesh… |
+| Medevac Heli | rejected | – | – | yes | owner check (Open Cloud, v75): 78 parts (cap 40); same model as the Rescue Heli pick 11… |
+| Medevac Heli V2 | rejected | – | – | yes | your replacement pick (2026-09-28), not used: the origin check failed. Its 7 rotor Mesh… |
 | VTOL Transport | rejected | – | – | yes | the uploader does not claim it ('Unknown Vtol'); looks ripped |
 | Cargo Plane | rejected | – | – | yes | 47 parts (over 40) and a real cargo-plane look |
 | AWACS Plane | rejected | – | – | yes | 47 parts (over 40) and a real cargo-plane look |
@@ -834,10 +844,10 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Fast Attack Craft | rejected | 0 | – | yes | owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long |
 | Coast Cutter | rejected | 0 | – | yes | owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long |
 | Torpedo Boat | rejected | 0 | – | yes | owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long |
-| Gunboat | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05, batch P3 |
-| Missile Boat | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05, batch P3 |
-| Mine Layer | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05, batch P3 |
-| Coastal Monitor | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05, batch P3 |
+| Gunboat | owner pick, waits for promote | 0 | 15838664806 (not in config) | yes | not in config yet |
+| Missile Boat | owner pick, waits for promote | 0 | 15838664806 (not in config) | yes | not in config yet |
+| Mine Layer | owner pick, waits for promote | 0 | 15838664806 (not in config) | yes | not in config yet |
+| Coastal Monitor | owner pick, waits for promote | 0 | 15838664806 (not in config) | yes | not in config yet |
 | Landing Craft | rejected | – | – | yes | wrong item: a space lander |
 | Assault Landing | rejected | – | – | yes | wrong item: a space lander |
 | Amphib Assault | rejected | – | – | yes | wrong item: a space lander |
@@ -846,13 +856,13 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Frigate | kept our build | – | – | yes | [WEAK]; a plain hull with no guns; our warship kit reads better |
 | Carrier Escort | kept our build | – | – | yes | [WEAK]; a plain hull with no guns; our warship kit reads better |
 | River Boat | rejected | – | – | yes | wrong item (a theme-park raft) and made by someone else |
-| Hover Transport | rejected | 0 | – | yes | owner check (Open Cloud, v75): 211 parts (cap 40) |
+| Hover Transport | rejected | – | – | yes | owner check (Open Cloud, v75): 211 parts (cap 40) |
 | Hospital Ship | rejected | – | – | yes | red-cross emblems and a copy of a named real ship |
-| Supply Ship | rejected | 0 | – | yes | owner check (Open Cloud, v75): 174 parts (cap 40) |
+| Supply Ship | rejected | – | – | yes | owner check (Open Cloud, v75): 174 parts (cap 40) |
 | Premium Tidebreaker | waits on another job's file | – | – | yes | VehicleConfig + VehicleService (streaming2-build): premium vehicle def, then a Studio look |
 | Soldier | wired (Roblox-owned) | 187790284 | – | Roblox (no Get) | Roblox Soldier, animated rig (R-RIG); camo cap; the look every unknown soldier kind fal… |
 | Infantry | wired (Roblox-owned) | 187790284 | – | Roblox (no Get) | Roblox Soldier, animated rig (R-RIG), in the kit colours and kit helmet |
-| Squad | wired (Roblox-owned) | 187790284 | – | Roblox (no Get) | Roblox Soldier, animated rig (R-RIG), camo cap: friendly squad units (the army escorts… |
+| Squad | wired (Roblox-owned) | 0 (expected 187790284) | – | Roblox (no Get) | Roblox Soldier, animated rig (R-RIG), camo cap: friendly squad units (the army escorts… |
 | Heavy Infantry | rejected | – | – | yes | #8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants… |
 | Special Forces | rejected | – | – | yes | wrong item: a beret with a real regiment's badge |
 | Worker | rejected | – | – | yes | #8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants… |
@@ -891,7 +901,7 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Jetty Stub | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY) |
 | Street Lamp | needs new code first | – | – | Roblox (no Get) | needs the world-model overlay job (W-OVERLAY) |
 | Floodlight | needs new code first | – | – | yes | needs a host outside the building-mesh switch, and 5 of its 6 lights removed |
-| Flag Pole | owner pick, waits for promote | 1679839739 | 172755983 | yes | ready, batch P1i (recorded only) |
+| Flag Pole | owner pick, waits for promote | 0 | 172755983 | yes | ready, batch P1i (recorded only) |
 | Radio Antenna | owner pick, waits for promote | 19277831 | 1439808070 | yes | ready, batch P1i (recorded only) |
 | Camo Net | needs new code first | – | – | yes | needs a camp host (W-OVERLAY) and a BuyPathStatic pin lifted |
 | Poi Board | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY) |

@@ -25,8 +25,32 @@ local QualityConfig = {
 	HideAnyBeyondStuds = 420,
 	CheckHz = 1,
 	ShadowsOffWhenLow = true,
+	-- claude-bud JOB 24 §8 (owner: "town buildings vanish / pop when driving fast"): the cause was this governor, not
+	-- instance streaming (StreamingEnabled is OFF). On a phone it is always LOW, and it took whole clusters out beyond
+	-- 180 / 420 studs, checked once a second from the camera: at 60-100+ studs/s a building popped in late / vanished.
+	--   * NeverHideKinds: WE_Cluster kinds (the part after "source:") that are buildings / landmarks: never hidden;
+	--   * LookAheadSeconds: the distance is measured from where the camera will be this far ahead (its velocity);
+	--   * FastHz: the check rate while the camera moves faster than FastStuds per second; ShowSlackStuds: hysteresis.
+	NeverHideKinds = { "block", "tower", "landmark", "square", "town", "fort", "checkpoint", "motorpool", "mast", "ruins", "camp", "hold", "Booth" },
+	LookAheadSeconds = 1.5,
+	FastStuds = 30,
+	FastHz = 3,
+	ShowSlackStuds = 40,
+	-- claude-bud JOB 27 (the city popping; QualityGovernor header): buildings are recognised by SIZE (their bounding box),
+	-- never culled, nor the small clusters on them. CullTownBuildings = true brings back the old behaviour (kill switch).
+	CullTownBuildings = false,
+	BuildingMinStuds = 14, -- a cluster this wide / deep (bounding box) is a building
+	BuildingMinHeight = 10, -- or this tall
+	-- small decoration only: LOAD within / UNLOAD beyond (studs to its bounding box); nothing happens in between
+	Tier2ShowStuds = 220,
+	Tier2HideStuds = 320,
+	AnyShowStuds = 480,
+	AnyHideStuds = 640,
+	CullSeconds = 0.4, -- the one cull manager's period ...
+	FastCullSeconds = 0.2, -- ... while the camera moves faster than FastStuds per second
+	DebugLog = false, -- true: "[BUILDING DEBUG] UNLOADING|LOADING ..." per change (Studio investigation)
 	-- where the decoration lives (resolved from Workspace by name; missing ones are retried every few seconds)
-	Folders = { "WorldFill", "WarEmpireSetup/WorldDressing" } :: { string },
+	Folders = { "WorldFill", "WarEmpireSetup/WorldDressing", "WE_RebirthZones" } :: { string }, -- claude-bud JOB 33: + the rebirth zones
 }
 
 function QualityConfig.LiveFor(userId: any): boolean

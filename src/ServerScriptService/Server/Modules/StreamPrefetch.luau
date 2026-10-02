@@ -90,6 +90,7 @@ function StreamPrefetch.Place(character: Model?, cf: CFrame): boolean
 	if character == nil or character.Parent == nil then
 		return false
 	end
+	require(script.Parent.MoveDebug).Note(character, "PivotTo", "StreamPrefetch.Place") -- v123 /movedebug: tagged writer
 	character:PivotTo(cf)
 	local hrp = character:FindFirstChild("HumanoidRootPart")
 	if hrp and hrp:IsA("BasePart") then

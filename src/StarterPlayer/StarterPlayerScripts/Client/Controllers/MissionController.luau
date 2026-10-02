@@ -26,6 +26,7 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
+local OfflineConfig = require(Shared.Configs.OfflineConfig) -- Code Bot: the Away line's fallback hours (2 h cap)
 local HudConfig = require(Shared.Configs.HudConfig)
 local MissionConfig = require(Shared.Configs.MissionConfig)
 local OpsConfig = require(Shared.Configs.OpsConfig)
@@ -34,6 +35,11 @@ local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
+local StreakStrip = require(script.Parent.Parent.Modules.StreakStrip) -- claude-bud JOB 29
+local SiteActivityConfig = require(Shared.Configs.SiteActivityConfig) -- claude-bud JOB 31
+local RetentionConfig = require(Shared.Configs.RetentionConfig) -- claude-bud JOB 31
+local AchievementConfig = require(Shared.Configs.AchievementConfig) -- claude-bud JOB 34
+local HowTo = require(Shared.Util.HowTo) -- claude-bud JOB 69 C: the "what to do" lines + the how-to card (owner-first)
 
 local MissionController = {}
 
@@ -50,6 +56,7 @@ local dailyInfo: TextLabel? = nil
 local spinBtn: TextButton? = nil
 local spinInfo: TextLabel? = nil
 local state: Types.MissionStatePayload? = nil
+local stateReceivedAt = os.clock() -- claude-bud JOB 49: when the last state arrived (the countdowns)
 
 -- spinner (SpinnerStateUpdate: Ready, CooldownRemaining seconds)
 local spinnerReady = false
@@ -69,6 +76,9 @@ local function emptyState(parent: Instance, message: string)
 	lab.Size = UDim2.new(1, -8, 0, PanelShell.Text(14) * 3 + 8)
 	lab.Font = Enum.Font.GothamMedium
 end
+
+-- Code Bot v180: the mission whose 19 R$ reroll was just prompted (used once when the token arrives)
+local pendingPaidReroll: { Id: string, Until: number }? = nil
 
 local function fire(remoteName: string, ...: any)
 	task.spawn(Remotes.FireServer, remoteName, ...)
@@ -221,6 +231,35 @@ local titleH = 0 -- the list's top with the claim rows inside it
 local CLAIM_READY_ORDER = -300
 local CLAIM_REST_ORDER = -50
 local jobsSubs: { [string]: TextLabel } = {} -- row id -> its sub-line (1 Hz countdown text)
+
+-- claude-bud JOB 69 C: HowTo live (RebirthZonesConfig.Rebuild "HowTo", owner-first) -> every menu row says what to do and
+-- START / GO opens the how-to card first (OFF = the old rows and the instant START / GO)
+local function howToLive(): boolean
+	local ok, live = pcall(HowTo.Live, player.UserId)
+	return ok and live == true
+end
+local function jobSub(r: any): string
+	if howToLive() and HowTo.Find(r.Id) then
+		return HowTo.Line(r.Id, "") .. " · " .. tostring(r.Sub)
+	end
+	return tostring(r.Sub)
+end
+-- the card (ZoneRunController.ShowIntro) with this caller's start path; false = no card (the caller starts at once)
+local function howToCard(id: string, title: string, startText: string, onStart: () -> ()): boolean
+	if not howToLive() then
+		return false
+	end
+	local card = HowTo.Card(id, title)
+	local okZ, Z = pcall(function(): any
+		return require(script.Parent.ZoneRunController)
+	end)
+	if card == nil or not okZ or type(Z) ~= "table" or type(Z.ShowIntro) ~= "function" then
+		return false
+	end
+	card.StartText = startText
+	card.OnStart = onStart
+	return (pcall(Z.ShowIntro, card))
+end
 local jobsKey = "" -- what the built rows show (ids, GO / STOP): rebuilt only when it changes
 local JOBS_UI = OpsConfig.Ui.Jobs
 local JOBS_TEXT = OpsConfig.Text.Row
@@ -248,6 +287,7 @@ local EASY_COLOR = Color3.fromRGB(110, 230, 120)
 
 local onJobGo: (id: string) -> () -- set after setOpen (GO closes the panel)
 local onJobStop: () -> ()
+local closeForCard: () -> () = function() end -- claude-bud JOB 69 C: set after setOpen (the job card closes the panel)
 
 local function jobsRows(): { JobsRow }
 	local src = jobsSource
@@ -342,7 +382,7 @@ local function jobRow(parent: Frame, r: JobsRow, i: number, y: number, rowH: num
 	sub.TextXAlignment = Enum.TextXAlignment.Left
 	sub.TextColor3 = if r.Tracked then Constants.Colors.GoldBright else Constants.Colors.Muted
 	sub.TextTruncate = Enum.TextTruncate.AtEnd
-	sub.Text = r.Sub
+	sub.Text = jobSub(r)
 	sub.Parent = row
 	jobsSubs[r.Id] = sub
 
@@ -353,8 +393,15 @@ local function jobRow(parent: Frame, r: JobsRow, i: number, y: number, rowH: num
 		end)
 	elseif r.Go ~= nil then
 		local id = r.Id
+		local jobTitle = r.Title
 		local btn = rowButton(row, "GoButton", JOBS_TEXT.Go, Constants.Colors.XP, Constants.Colors.TextDark, btnW, btnH)
 		btn.Activated:Connect(function()
+			if howToCard(id, jobTitle, "GO", function()
+				onJobGo(id)
+			end) then
+				closeForCard() -- the card's GO tracks the job (OpsController); the panel closes so the card is clear
+				return
+			end
 			onJobGo(id)
 		end)
 	end
@@ -422,8 +469,9 @@ local function refreshJobs(force: boolean)
 	if not force and jf and jf.Parent == list and key == jobsKey then
 		for _, r in ipairs(rows) do
 			local lab = jobsSubs[r.Id]
-			if lab and lab.Text ~= r.Sub then
-				lab.Text = r.Sub
+			local txt = jobSub(r)
+			if lab and lab.Text ~= txt then
+				lab.Text = txt
 			end
 		end
 		placeClaims()
@@ -507,13 +555,170 @@ function MissionController.JobsChanged()
 	end
 end
 
+-- claude-bud JOB 31: ACTIVITIES (SiteActivityService's FeaturePush "Activities"; the server decides everything)
+local actState: any = nil
+local actActive: string? = nil -- the id this client points the marker at
+local function activitiesLive(): boolean
+	return RetentionConfig.Live(SiteActivityConfig, player.UserId)
+end
+local function onActivities(data: any)
+	actState = data
+	local nowActive: any = nil
+	for _, r in ipairs((data and data.List) or {}) do
+		if r.State == "Active" then
+			nowActive = r
+		end
+	end
+	if nowActive and actActive ~= nowActive.Id then
+		-- a run started: point the ONE objective marker at the site (a manual map pin still wins)
+		ObjectiveMarker.ShowWith({ Short = nowActive.Short, X = nowActive.X, Y = nowActive.Y, Z = nowActive.Z }, { ArriveStuds = 20, TimeoutSeconds = math.max(10, tonumber(nowActive.Left) or 300) })
+		actActive = nowActive.Id
+	elseif nowActive == nil and actActive ~= nil then
+		local cur = ObjectiveMarker.Current()
+		if cur and not ObjectiveMarker.Pinned() then
+			for _, d in ipairs(SiteActivityConfig.Activities) do
+				if d.Id == actActive and cur.Short == d.Short then
+					ObjectiveMarker.Clear()
+				end
+			end
+		end
+		actActive = nil
+	end
+end
+
+-- claude-bud JOB 34: ACHIEVEMENTS (AchievementService's FeaturePush "AchState"; earned / locked + progress bars).
+-- Display only (no buttons); below the daily missions.
+local achState: any = nil
+local function achievementsLive(): boolean
+	return RetentionConfig.Live(AchievementConfig.Live, player.UserId)
+end
+local function short(n: number): string
+	n = math.floor(n)
+	if n >= 1e6 then
+		return (string.format("%.1fM", n / 1e6):gsub("%.0M", "M"))
+	elseif n >= 1e4 then
+		return string.format("%dK", math.floor(n / 1000))
+	end
+	return tostring(n)
+end
+local function achievementRows(parent: Instance)
+	if not achievementsLive() or typeof(achState) ~= "table" or typeof(achState.List) ~= "table" then
+		return
+	end
+	local tS, dS = PanelShell.Text(14), PanelShell.Text(11)
+	local barH = math.max(8, math.floor(dS * 0.6))
+	local rH = 6 + tS + 4 + dS + 8 + barH + 10
+	local head = Instance.new("TextLabel")
+	head.Name = "AchievementsHeader"
+	head.LayoutOrder = 1000
+	head.BackgroundTransparency = 1
+	head.Size = UDim2.new(1, -8, 0, tS + 12)
+	head.Font = Enum.Font.GothamBlack
+	head.TextSize = tS
+	head.TextXAlignment = Enum.TextXAlignment.Left
+	head.TextColor3 = Constants.Colors.Gold
+	head.Text = string.format("ACHIEVEMENTS  %d / %d", tonumber(achState.Earned) or 0, tonumber(achState.Total) or #achState.List)
+	head.Parent = parent
+	for i, a in ipairs(achState.List) do
+		local done = a.Done == true
+		local row = Instance.new("Frame")
+		row.Name = "Achievement_" .. tostring(a.Id)
+		row.LayoutOrder = 1000 + i
+		row.Size = UDim2.new(1, -8, 0, rH)
+		row.BackgroundColor3 = Constants.Colors.Background
+		row.BackgroundTransparency = if done then 0 else 0.25
+		row.BorderSizePixel = 0
+		row.Parent = parent
+		corner(row, 8)
+		if done then
+			local st = Instance.new("UIStroke")
+			st.Color = Constants.Colors.Gold
+			st.Thickness = 2
+			st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			st.Parent = row
+		end
+		local tagW = tS * 6
+		local t = Instance.new("TextLabel")
+		t.BackgroundTransparency = 1
+		t.Position = UDim2.fromOffset(10, 6)
+		t.Size = UDim2.new(1, -(tagW + 24), 0, tS + 2)
+		t.Font = Enum.Font.GothamBold
+		t.TextSize = tS
+		t.TextXAlignment = Enum.TextXAlignment.Left
+		t.TextColor3 = if done then Constants.Colors.Gold else Constants.Colors.Text
+		t.TextTruncate = Enum.TextTruncate.AtEnd
+		t.Text = tostring(a.Title)
+		t.Parent = row
+		local tag = Instance.new("TextLabel")
+		tag.BackgroundTransparency = 1
+		tag.AnchorPoint = Vector2.new(1, 0)
+		tag.Position = UDim2.new(1, -10, 0, 6)
+		tag.Size = UDim2.fromOffset(tagW, tS + 2)
+		tag.Font = Enum.Font.GothamBold
+		tag.TextSize = dS
+		tag.TextXAlignment = Enum.TextXAlignment.Right
+		tag.TextColor3 = if done then Constants.Colors.Gold else Constants.Colors.Muted
+		local reward = if (tonumber(a.Gold) or 0) > 0 and (tonumber(a.Cash) or 0) > 0
+			then string.format("$%s + %d Gold", short(tonumber(a.Cash) or 0), tonumber(a.Gold) or 0)
+			elseif (tonumber(a.Gold) or 0) > 0 then string.format("%d Gold", tonumber(a.Gold) or 0)
+			else "$" .. short(tonumber(a.Cash) or 0)
+		tag.Text = if done then "EARNED" else reward
+		tag.Parent = row
+		local dsc = Instance.new("TextLabel")
+		dsc.BackgroundTransparency = 1
+		dsc.Position = UDim2.fromOffset(10, 6 + tS + 4)
+		dsc.Size = UDim2.new(1, -20, 0, dS + 2)
+		dsc.Font = Enum.Font.GothamMedium
+		dsc.TextSize = dS
+		dsc.TextXAlignment = Enum.TextXAlignment.Left
+		dsc.TextColor3 = Constants.Colors.Muted
+		dsc.TextTruncate = Enum.TextTruncate.AtEnd
+		dsc.Text = tostring(a.Desc)
+		dsc.Parent = row
+		local have, target = tonumber(a.Have) or 0, math.max(1, tonumber(a.Target) or 1)
+		local barY = 6 + tS + 4 + dS + 8
+		local countW = dS * 7
+		local bg = Instance.new("Frame")
+		bg.Name = "Bar"
+		bg.Position = UDim2.fromOffset(10, barY)
+		bg.Size = UDim2.new(1, -(countW + 28), 0, barH)
+		bg.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		bg.BorderSizePixel = 0
+		bg.Parent = row
+		corner(bg, barH)
+		local fillBar = Instance.new("Frame")
+		fillBar.Size = UDim2.fromScale(math.clamp(have / target, 0, 1), 1)
+		fillBar.BackgroundColor3 = if done then Constants.Colors.Gold else Constants.Colors.XP
+		fillBar.BorderSizePixel = 0
+		fillBar.Parent = bg
+		corner(fillBar, barH)
+		local cnt = Instance.new("TextLabel")
+		cnt.BackgroundTransparency = 1
+		cnt.AnchorPoint = Vector2.new(1, 0.5)
+		cnt.Position = UDim2.new(1, -10, 0, barY + barH / 2)
+		cnt.Size = UDim2.fromOffset(countW, dS + 2)
+		cnt.Font = Enum.Font.GothamBold
+		cnt.TextSize = dS
+		cnt.TextXAlignment = Enum.TextXAlignment.Right
+		cnt.TextColor3 = Constants.Colors.Text
+		cnt.Text = short(have) .. " / " .. short(target)
+		cnt.Parent = row
+	end
+end
+
+local closePanel: () -> () = function() end -- set after setOpen (START / GO close the panel)
+local function fmtLeft(n: number): string
+	return string.format("%d:%02d", math.floor(n / 60), n % 60)
+end
+
 local function refresh()
 	if not listFrame then
 		return
 	end
 	paintSpinner()
 	for _, child in ipairs(listFrame:GetChildren()) do
-		if (child:IsA("Frame") and child ~= spinRow and child ~= dailyRow) or (child:IsA("TextLabel") and child.Name == "EmptyState") then
+		-- claude-bud JOB 34: the section headers are rebuilt too (the ACTIVITIES header used to stack up on each refresh)
+		if (child:IsA("Frame") and child ~= spinRow and child ~= dailyRow) or (child:IsA("TextLabel") and (child.Name == "EmptyState" or child.Name == "ActivitiesHeader" or child.Name == "AchievementsHeader")) then
 			child:Destroy()
 		end
 	end
@@ -530,6 +735,187 @@ local function refresh()
 		emptyState(listFrame, "Loading missions… stand by for server sync.")
 		return
 	end
+
+	-- claude-bud JOB 29: the 7-day strip + 1-2 "tomorrow" goals (the server sends Streak7 while ShowTomorrow is live)
+	local s7: any = (state :: any).Streak7
+	if typeof(s7) == "table" then
+		local tSize = PanelShell.Text(13)
+		local tileW = math.max(56, tSize * 3)
+		local tileH = tSize * 2 + 16
+		local lines: { string } = {}
+		local tc = tonumber(s7.TomorrowCash) or 0
+		if tc > 0 then
+			table.insert(lines, string.format("Tomorrow: Day %d reward $%s", tonumber(s7.TomorrowDay) or 1, commas(tc)))
+		end
+		local nextText = StreakStrip.NextText(s7, stateReceivedAt) -- claude-bud JOB 49 A: the real countdown
+		if nextText then
+			table.insert(lines, nextText)
+		end
+		local cap = tonumber(s7.OfflineCap) or 0
+		if cap > 0 then
+			-- claude-bud JOB 49 B: the cap's real hours (the server sends them). Code Bot: the fallback is OfflineConfig's
+			-- cap (2 h), and the amount is the server's min(cap, away) x income/s x OfflineConfig.Rate (10 %) worth
+			local hrs = tonumber(s7.OfflineCapHours) or (OfflineConfig.MaxSeconds / 3600)
+			table.insert(lines, string.format("Away %d h: earn up to $%s", math.max(1, math.floor(hrs)), commas(cap)))
+		end
+		local row = Instance.new("Frame")
+		row.Name = "Streak7Row"
+		row.LayoutOrder = -100
+		row.Size = UDim2.new(1, -8, 0, tileH + 12 + #lines * (tSize + 6))
+		row.BackgroundColor3 = Constants.Colors.Background
+		row.BorderSizePixel = 0
+		row.Parent = listFrame
+		corner(row, 8)
+		local strip = StreakStrip.Build(row, s7, tileW, tileH, tSize)
+		strip.Position = UDim2.fromOffset(10, 6)
+		-- Code Bot (2026-10-01): the strip takes the row's width (the tiles share it, so D7 never runs off a phone
+		-- panel), never wider than its natural size on desktop
+		local natural = strip.Size.X.Offset
+		strip.Size = UDim2.new(1, -20, 0, tileH)
+		local cap = Instance.new("UISizeConstraint")
+		cap.MaxSize = Vector2.new(natural, tileH)
+		cap.Parent = strip
+		for i, text in ipairs(lines) do
+			local l = Instance.new("TextLabel")
+			l.BackgroundTransparency = 1
+			l.Position = UDim2.fromOffset(10, 6 + tileH + 4 + (i - 1) * (tSize + 6))
+			l.Size = UDim2.new(1, -20, 0, tSize + 4)
+			l.Font = Enum.Font.GothamBold
+			l.TextSize = tSize
+			l.TextXAlignment = Enum.TextXAlignment.Left
+			l.TextColor3 = Constants.Colors.Gold
+			l.TextTruncate = Enum.TextTruncate.AtEnd
+			l.Text = text
+			l.Parent = row
+		end
+	end
+
+	-- claude-bud JOB 49 C: the core missions' header: the REAL time to the next reset (the server's clock), rerolls left
+	local coreState: any = (state :: any).Core
+	if typeof(coreState) == "table" and tonumber(coreState.ResetUnix) and tonumber(coreState.ServerNow) then
+		local tSize = PanelShell.Text(13)
+		local left = math.max(0, math.floor(coreState.ResetUnix - coreState.ServerNow - (os.clock() - stateReceivedAt)))
+		local hdr = Instance.new("TextLabel")
+		hdr.Name = "CoreHeader"
+		hdr.LayoutOrder = -90
+		hdr.BackgroundTransparency = 1
+		hdr.Size = UDim2.new(1, -8, 0, tSize + 10)
+		hdr.Font = Enum.Font.GothamBlack
+		hdr.TextSize = tSize
+		hdr.TextXAlignment = Enum.TextXAlignment.Left
+		hdr.TextColor3 = Constants.Colors.Gold
+		hdr.Text = string.format("TODAY'S 3 MISSIONS · new in %dh %02dm%s%s", left // 3600, (left % 3600) // 60,
+			if (tonumber(coreState.RerollsLeft) or 0) > 0 then string.format(" · %d reroll", coreState.RerollsLeft) else "",
+			if coreState.ChestDone == true then " · CHEST OPENED" else " · all 3 = chest")
+		hdr.TextTruncate = Enum.TextTruncate.AtEnd
+		hdr.Parent = listFrame
+	end
+
+	-- claude-bud JOB 31: ACTIVITIES rows (one right-hand button each: START / GO; cooldowns show the time)
+	if activitiesLive() and typeof(actState) == "table" and typeof(actState.List) == "table" and #actState.List > 0 then
+		local tS, dS = PanelShell.Text(14), PanelShell.Text(11)
+		local ui = MissionConfig.Ui
+		local bW = if isTouch then ui.ButtonW else ui.DesktopButtonW
+		local bH = if isTouch then math.max(ui.ButtonH, PanelShell.TouchMinV()) else PanelShell.TouchMinV()
+		local rH = math.max(bH + 12, 6 + tS + 4 + dS + 6 + dS + 10)
+		local head = Instance.new("TextLabel")
+		head.Name = "ActivitiesHeader"
+		head.LayoutOrder = -95
+		head.BackgroundTransparency = 1
+		head.Size = UDim2.new(1, -8, 0, tS + 8)
+		head.Font = Enum.Font.GothamBlack
+		head.TextSize = tS
+		head.TextXAlignment = Enum.TextXAlignment.Left
+		head.TextColor3 = Constants.Colors.Gold
+		head.Text = "ACTIVITIES"
+		head.Parent = listFrame
+		for i, r in ipairs(actState.List) do
+			local row = Instance.new("Frame")
+			row.Name = "Activity_" .. tostring(r.Id)
+			row.LayoutOrder = -94 + i
+			row.Size = UDim2.new(1, -8, 0, rH)
+			row.BackgroundColor3 = Constants.Colors.Background
+			row.BorderSizePixel = 0
+			row.Parent = listFrame
+			corner(row, 8)
+			if r.State == "Active" then
+				local st = Instance.new("UIStroke")
+				st.Color = Constants.Colors.Gold
+				st.Thickness = 2
+				st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+				st.Parent = row
+			end
+			local t = Instance.new("TextLabel")
+			t.BackgroundTransparency = 1
+			t.Position = UDim2.fromOffset(10, 6)
+			t.Size = UDim2.new(1, -(bW + 28), 0, tS + 2)
+			t.Font = Enum.Font.GothamBold
+			t.TextSize = tS
+			t.TextXAlignment = Enum.TextXAlignment.Left
+			t.TextColor3 = Constants.Colors.Text
+			t.TextTruncate = Enum.TextTruncate.AtEnd
+			t.Text = tostring(r.Title)
+			t.Parent = row
+			local dsc = Instance.new("TextLabel")
+			dsc.BackgroundTransparency = 1
+			dsc.Position = UDim2.fromOffset(10, 6 + tS + 4)
+			dsc.Size = UDim2.new(1, -(bW + 28), 0, dS + 2)
+			dsc.Font = Enum.Font.GothamMedium
+			dsc.TextSize = dS
+			dsc.TextXAlignment = Enum.TextXAlignment.Left
+			dsc.TextColor3 = Constants.Colors.Muted
+			dsc.TextTruncate = Enum.TextTruncate.AtEnd
+			dsc.Text = if r.State == "Active" then string.format("%s · %s left", tostring(r.Progress or ""), fmtLeft(tonumber(r.Left) or 0))
+				elseif howToLive() then HowTo.Line(r.Id, tostring(r.Desc)) -- claude-bud JOB 69 C
+				else tostring(r.Desc)
+			dsc.Parent = row
+			local rw = Instance.new("TextLabel")
+			rw.BackgroundTransparency = 1
+			rw.Position = UDim2.fromOffset(10, 6 + tS + 4 + dS + 6)
+			rw.Size = UDim2.new(1, -(bW + 28), 0, dS + 2)
+			rw.Font = Enum.Font.GothamBold
+			rw.TextSize = dS
+			rw.TextXAlignment = Enum.TextXAlignment.Left
+			rw.TextColor3 = Constants.Colors.Gold
+			rw.Text = string.format("★ $%s + %dXP", commas(tonumber(r.Cash) or 0), tonumber(r.XP) or 0)
+			rw.Parent = row
+			local id = tostring(r.Id)
+			if r.State == "Ready" then
+				local b = rowButton(row, "StartButton", "START", Constants.Colors.Accent, Constants.Colors.Text, bW, bH)
+				local actTitle = tostring(r.Title)
+				b.Activated:Connect(function()
+					pcall(AudioController.PlayClick)
+					-- claude-bud JOB 69 C: the how-to card first; its START sends the same request (the server decides)
+					if not howToCard(id, actTitle, "START", function()
+						fire(Constants.RemoteNames.RequestSiteActivity, "start", id)
+					end) then
+						fire(Constants.RemoteNames.RequestSiteActivity, "start", id)
+					end
+					closePanel()
+				end)
+			elseif r.State == "Active" then
+				local b = rowButton(row, "GoButton", "GO", Constants.Colors.XP, Constants.Colors.TextDark, bW, bH)
+				b.Activated:Connect(function()
+					pcall(AudioController.PlayClick)
+					ObjectiveMarker.ShowWith({ Short = r.Short, X = r.X, Y = r.Y, Z = r.Z }, { ArriveStuds = 20, TimeoutSeconds = math.max(10, tonumber(r.Left) or 300) })
+					closePanel()
+				end)
+			else
+				local tag = Instance.new("TextLabel")
+				tag.AnchorPoint = Vector2.new(1, 0.5)
+				tag.Position = UDim2.new(1, -8, 0.5, 0)
+				tag.Size = UDim2.fromOffset(bW, tS + 8)
+				tag.BackgroundTransparency = 1
+				tag.Font = Enum.Font.GothamBold
+				tag.TextSize = tS
+				tag.TextColor3 = Constants.Colors.Muted
+				tag.Text = if r.State == "Cooldown" then fmtLeft(tonumber(r.Left) or 0) else "BUSY"
+				tag.Parent = row
+			end
+		end
+	end
+
+	achievementRows(listFrame) -- claude-bud JOB 34 (LayoutOrder 1000+: below the missions)
 
 	if #state.Daily == 0 then
 		emptyState(listFrame, "No daily missions right now — check back after UTC midnight refresh.")
@@ -574,7 +960,7 @@ local function refresh()
 		desc.TextSize = descSize
 		desc.TextXAlignment = Enum.TextXAlignment.Left
 		desc.TextColor3 = Constants.Colors.Muted
-		desc.Text = mission.Description
+		desc.Text = if howToLive() then HowTo.Line(mission.Id, mission.Description) else mission.Description -- claude-bud JOB 69 C
 		desc.TextTruncate = Enum.TextTruncate.AtEnd
 		desc.Parent = row
 
@@ -633,10 +1019,56 @@ local function refresh()
 			end)
 		else
 			local goEntry: any = mission
-			if MissionController.GoTarget(goEntry, nil) ~= nil then
+			local goDef: any = if type(goEntry.Go) == "string" then MissionConfig.Go[goEntry.Go] else nil
+			if goDef and goDef.Client == true then
+				-- claude-bud JOB 49 C: a core mission's GO acts here (the TARGETS card / the Army panel / his next console)
+				local btn = rowButton(row, "GoButton", "GO", Constants.Colors.XP, Constants.Colors.TextDark, btnW, btnH)
+				btn.Activated:Connect(function()
+					pcall(AudioController.PlayClick)
+					MissionController.ClientGo(goEntry)
+				end)
+			elseif MissionController.GoTarget(goEntry, nil) ~= nil then
 				local btn = rowButton(row, "GoButton", "GO", Constants.Colors.XP, Constants.Colors.TextDark, btnW, btnH)
 				btn.Activated:Connect(function()
 					onGo(goEntry)
+				end)
+			end
+			if goEntry.CanReroll == true then
+				-- claude-bud JOB 49 C: reroll (server-checked; a different mission, never a reward). 48 px real square.
+				local rr = rowButton(row, "RerollButton", "↻", Color3.fromRGB(60, 66, 74), Constants.Colors.Text, TAP, TAP)
+				rr.Position = UDim2.new(1, -(btnW + 16), 0.5, 0)
+				local missionId = goEntry.Id
+				rr.Activated:Connect(function()
+					pcall(AudioController.PlayClick)
+					fire(Constants.RemoteNames.RequestMissionReroll, missionId)
+				end)
+				-- Code Bot v180: the reroll he just paid for: the server granted the token (ProcessReceipt), use it once
+				if pendingPaidReroll ~= nil and pendingPaidReroll.Id == missionId and os.clock() < pendingPaidReroll.Until then
+					pendingPaidReroll = nil
+					fire(Constants.RemoteNames.RequestMissionReroll, missionId)
+				end
+			elseif goEntry.CanBuyReroll == true then
+				-- Code Bot v180: free reroll used: the 19 R$ reroll (DevProducts.MissionReroll). Only the Roblox prompt here;
+				-- the token is granted by the server's ProcessReceipt, the reroll stays server-checked.
+				local price = 19
+				pcall(function()
+					local LP: any = require(Shared.Util.LivePrices)
+					local p = LP.Price("DevProduct", "MissionReroll")
+					if typeof(p) == "number" and p > 0 then
+						price = p
+					end
+				end)
+				local rb = rowButton(row, "RerollBuyButton", "↻ R$" .. tostring(price), Color3.fromRGB(0, 140, 70), Constants.Colors.Text, math.max(TAP, 84), TAP)
+				rb.Position = UDim2.new(1, -(btnW + 16), 0.5, 0)
+				rb.TextScaled = true
+				local missionId = goEntry.Id
+				rb.Activated:Connect(function()
+					pcall(AudioController.PlayClick)
+					pendingPaidReroll = { Id = missionId, Until = os.clock() + 120 }
+					pcall(function()
+						local SC: any = (require :: any)(script.Parent.ShopController)
+						SC.PromptDevProduct("MissionReroll", "missions")
+					end)
 				end)
 			end
 		end
@@ -646,15 +1078,24 @@ local function refresh()
 		local d = state.DailyLogin
 		local reward = DailyRewardConfig.Rewards[d.NextDay]
 		local rewardText = if reward then "$" .. commas(reward.Cash) else ""
+		-- claude-bud JOB 29 (DailyRewardConfig.ShowTomorrow): tomorrow's reward wherever the streak is shown
+		local days = DailyRewardConfig.StreakResetsAfterDay
+		local tomorrowDay = if d.AlreadyClaimedToday then (d.Streak % days) + 1 else (d.NextDay % days) + 1
+		local tomorrow = DailyRewardConfig.Rewards[tomorrowDay]
+		local showTomorrow = DailyRewardConfig.ShowTomorrow == true and tomorrow ~= nil
 		if d.AlreadyClaimedToday then
-			dailyInfo.Text = string.format("Daily streak: Day %d (claimed)", d.Streak)
+			dailyInfo.Text = if showTomorrow and tomorrow
+				then string.format("Day %d done · Tomorrow $%s", d.Streak, commas(tomorrow.Cash))
+				else string.format("Daily streak: Day %d (claimed)", d.Streak)
 			if dailyBtn then
 				dailyBtn.Text = "CLAIMED"
 				dailyBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 60)
 				dailyBtn.Active = false
 			end
 		else
-			dailyInfo.Text = string.format("Claim Day %d reward %s", d.NextDay, rewardText)
+			dailyInfo.Text = if showTomorrow and tomorrow
+				then string.format("Day %d: %s · then $%s", d.NextDay, rewardText, commas(tomorrow.Cash))
+				else string.format("Claim Day %d reward %s", d.NextDay, rewardText)
 			if dailyBtn then
 				dailyBtn.Text = "CLAIM DAILY"
 				dailyBtn.BackgroundColor3 = Constants.Colors.Gold
@@ -678,11 +1119,46 @@ local function setOpen(open: boolean)
 		sh.Sync(open)
 	end
 	if open then
+		if activitiesLive() then
+			fire(Constants.RemoteNames.RequestSiteActivity, "list") -- claude-bud JOB 31: fresh ACTIVITIES rows
+		end
+		if achievementsLive() then
+			fire(Constants.RemoteNames.RequestAchievements) -- claude-bud JOB 34: fresh progress bars
+		end
 		refresh()
 		local list = listFrame
 		if list and jobsFrame then
 			list.CanvasPosition = Vector2.new(0, 0) -- the JOBS rows are the first thing you see
 		end
+	end
+end
+
+closePanel = function()
+	setOpen(false)
+end
+
+-- claude-bud JOB 49 C: a client-side GO: Raid -> the TARGETS list, Recruit -> the Army panel, Build -> the gold line
+-- to his next console (ConsoleWaypoint; the server picked the structure). The panel closes first.
+function MissionController.ClientGo(entry: any)
+	local go = if type(entry) == "table" then entry.Go else nil
+	if closePanel then
+		closePanel()
+	end
+	if go == "Targets" then
+		pcall(function()
+			local RC: any = (require :: any)(script.Parent.RivalController)
+			RC.Open()
+		end)
+	elseif go == "Army" then
+		pcall(function()
+			local AC: any = (require :: any)(script.Parent.ArmyController)
+			AC.Open()
+		end)
+	elseif go == "Build" and type(entry.GoStructure) == "string" then
+		pcall(function()
+			local CW: any = (require :: any)(script.Parent.Parent.Modules.ConsoleWaypoint)
+			CW.Show(entry.GoStructure, tonumber(player:GetAttribute("WE_PlotId")))
+		end)
 	end
 end
 
@@ -718,6 +1194,10 @@ onJobGo = function(id: string)
 	else
 		refreshJobs(true) -- the row went stale (the job closed): show what is open now
 	end
+end
+
+closeForCard = function()
+	setOpen(false)
 end
 
 onJobStop = function()
@@ -875,8 +1355,24 @@ function MissionController.Init()
 			return
 		end
 		state = payload
+		stateReceivedAt = os.clock()
 		if menuOpen then
 			refresh()
+		end
+	end)
+
+	-- claude-bud JOB 31: ACTIVITIES state (and the GO marker when a run starts / ends)
+	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
+		if kind == "Activities" and typeof(data) == "table" then
+			onActivities(data)
+			if menuOpen then
+				refresh()
+			end
+		elseif kind == "AchState" and typeof(data) == "table" then -- claude-bud JOB 34
+			achState = data
+			if menuOpen then
+				refresh()
+			end
 		end
 	end)
 
@@ -904,7 +1400,7 @@ function MissionController.Init()
 		end
 	end)
 
-	local missionsKey: Enum.KeyCode = HudConfig.Keys.Missions or Enum.KeyCode.M
+	local missionsKey: Enum.KeyCode = HudConfig.Keys.Missions or Enum.KeyCode.N -- claude-bud JOB 30: M is the map
 	UserInputService.InputBegan:Connect(function(input, gp)
 		if gp then
 			return

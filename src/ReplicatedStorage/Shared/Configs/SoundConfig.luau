@@ -151,8 +151,23 @@ SoundConfig.Sounds = {
 } :: { [string]: SoundDef }
 
 SoundConfig.Mix = {
+	-- claude-bud JOB 14 sound pass: each bus plays inside one volume band (min, max; before the master), so no cue is
+	-- much louder or quieter than its neighbours. Applied only while BandsLive (GameFeelClient sets it for a player
+	-- the pass is live for); tools/sound_audit.py lists every key outside its band.
+	Bands = {
+		UI = { 0.35, 0.6 },
+		Stinger = { 0.45, 0.8 },
+		World = { 0.15, 0.8 },
+		Music = { 0.15, 0.35 },
+		Loop = { 0.15, 0.5 },
+	} :: { [string]: { number } },
+	BandsLive = false,
 	MaxConcurrent = 12, -- one-shot voices playing at once, 2D + 3D (loops are separate: music, ambience, engine)
 	MaxConcurrent2D = 4, -- of those, non-positional (UI + Stinger)
+	-- v147: AudioController.Init warms each distinct UI / Stinger asset id once, WarmGapSeconds apart, starting
+	-- WarmDelaySeconds after join (was: ~20 Sounds in one frame -> client HTTP 429 sound loads in the error report)
+	WarmDelaySeconds = 4,
+	WarmGapSeconds = 0.35,
 	PoolPerKey = 4, -- pooled Sound instances per key; a 5th overlapping play of one key restarts its oldest voice
 	StingerWindowSeconds = 0.35, -- one audible Stinger per window (higher Priority replaces a lower one)
 	DefaultLengthSeconds = 2, -- voice busy time when neither the file length nor LengthSeconds is known
@@ -255,6 +270,45 @@ SoundConfig.CombatCues = {
 	ImpactMetal = "Impact.Metal",
 	ExplosionSmall = "Explosion.Small",
 	ExplosionLarge = "Explosion.Large",
+}
+
+-- ── claude-bud JOB 59 (B): the sound pass (Shaun's inventory sounds; owner-first) ─────────────────────────────────
+-- New keys (used only by Client/Controllers/AmbienceController while Pass59 is live for the local player). World
+-- sounds are 3D (Bus "World", a MaxDistance) and played only near their spot; the night loops ride the Loop bus (the
+-- SFX toggle). Overrides swap the Id of EXISTING keys for the owner only (OFF = today's sounds exactly).
+SoundConfig.Sounds["Amb.NightCrickets"] = { Id = 9112764546, Volume = 0.16, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0, Bus = "Loop" } -- night crickets 9112764546
+SoundConfig.Sounds["Amb.NightAmbience"] = { Id = 9112835836, Volume = 0.14, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0, Bus = "Loop" } -- night ambience 9112835836
+SoundConfig.Sounds["Amb.HarborNight"] = { Id = 9112792684, Volume = 0.18, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0, Bus = "Loop" } -- harbor night 9112792684
+SoundConfig.Sounds["World.FlagFlap"] = { Id = 9114461215, Volume = 0.3, RollOff = "InverseTapered", MaxDistance = 50, Pitch = 1, CooldownSeconds = 9, Priority = 1, Bus = "World", LengthSeconds = 6 } -- flag flap 9114461215
+SoundConfig.Sounds["World.FlagFlap2"] = { Id = 9114576083, Volume = 0.3, RollOff = "InverseTapered", MaxDistance = 50, Pitch = 1, CooldownSeconds = 9, Priority = 1, Bus = "World", LengthSeconds = 6 } -- flag flap 9114576083
+SoundConfig.Sounds["World.Radio"] = { Id = 9112851398, Volume = 0.28, RollOff = "InverseTapered", MaxDistance = 45, Pitch = 1, CooldownSeconds = 18, Priority = 1, Bus = "World", MaxSeconds = 8, LengthSeconds = 8 } -- radio chatter 9112851398 (Command Center)
+SoundConfig.Sounds["World.Radio2"] = { Id = 9125793009, Volume = 0.28, RollOff = "InverseTapered", MaxDistance = 45, Pitch = 1, CooldownSeconds = 18, Priority = 1, Bus = "World", MaxSeconds = 8, LengthSeconds = 8 } -- radio chatter 9125793009
+SoundConfig.Sounds["Amb.Artillery"] = { Id = 9113169264, Volume = 0.22, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 25, Priority = 1, Bus = "Stinger", LengthSeconds = 4 } -- distant artillery 9113169264 (desert only)
+SoundConfig.Sounds["World.Gate"] = { Id = 9116875342, Volume = 0.45, RollOff = "InverseTapered", MaxDistance = 60, Pitch = 1, CooldownSeconds = 1.5, Priority = 2, Bus = "World", LengthSeconds = 2 } -- gate 9116875342
+SoundConfig.Sounds["Music.Rebirth"] = { Id = 1845181958, Volume = 0.25, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0, Bus = "Music" } -- Military March cut 1845181958 (menu / rebirth; for the rebirth screen to Loop)
+SoundConfig.Sounds["UI.Click2"] = { Id = 15675032796, Volume = 0.5, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0.05, Priority = 1, Bus = "UI", LengthSeconds = 0.3 } -- UI click 15675032796 (the alternative tap)
+SoundConfig.Sounds["Engine.Boat2"] = { Id = 9126201834, Volume = 0.4, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0, Bus = "Loop" } -- boat 9126201834 (the bigger hull's engine; for the boat engine families)
+-- claude-bud JOB 68: the shooting range soldiers (RangeLifeController; client cosmetic, owner-first). The live rifle /
+-- magazine / sand-impact files, quieter and short-range (3D; nothing heard past the range's 80-stud effect radius)
+SoundConfig.Sounds["World.RangeShot"] = { Id = 9113188870, Volume = 0.3, RollOff = "InverseTapered", MaxDistance = 80, Pitch = 1, CooldownSeconds = 0.05, Priority = 1, Bus = "World", MaxSeconds = 0.9, LengthSeconds = 0.5 } -- [PSE] "Assault Rifle 2 (SFX)" 9113188870
+SoundConfig.Sounds["World.RangeReload"] = { Id = 9113104509, Volume = 0.3, RollOff = "InverseTapered", MaxDistance = 40, Pitch = 1, CooldownSeconds = 0.3, Priority = 1, Bus = "World", LengthSeconds = 1.3 } -- [PSE] "Ammo Magazine 3 (SFX)" 9113104509
+SoundConfig.Sounds["World.RangeHit"] = { Id = 9118768193, Volume = 0.18, RollOff = "InverseTapered", MaxDistance = 40, Pitch = 1.2, CooldownSeconds = 0.08, Priority = 1, Bus = "World", LengthSeconds = 0.7 } -- [PSE] "Sand Impacts 5 (SFX)" 9118768193
+SoundConfig.Pass59 = {
+	Enabled = true,
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (claude-bud JOB 59 B): Code Bot flips it after Shaun's phone test
+	Overrides = {
+		["Engine.Heli"] = 9125390124, -- heli 9125390124 (was the takeoff file 9113417759)
+		["Engine.Naval"] = 9112750448, -- boat 9112750448 (was the pitched-down car loop)
+		["Alarm.Raid"] = 9119661640, -- raid siren 9119661640
+		["UI.Click"] = 15675059323, -- UI click 15675059323
+	} :: { [string]: number },
+	NightLoopThreshold = 0.5, -- the night share above which the night loop plays (LightingConfig.Cycle)
+	HarborStuds = 120, -- the harbor loop instead of crickets within this of a water body's spot
+	DesertFromTownStuds = 520, -- the distant artillery plays this far from the map centre (the desert ring)
+	ArtilleryEverySeconds = { 30, 70 },
+	RadioEverySeconds = { 20, 40 },
+	FlagEverySeconds = { 10, 16 },
+	TickSeconds = 1,
 }
 
 return SoundConfig

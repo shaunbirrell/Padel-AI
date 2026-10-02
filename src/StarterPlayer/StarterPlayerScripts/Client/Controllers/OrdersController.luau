@@ -33,6 +33,7 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local OrdersConfig = require(Shared.Configs.OrdersConfig)
 local HudConfig = require(Shared.Configs.HudConfig)
+local ArmyLog = require(Shared.Util.ArmyLog)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
@@ -73,6 +74,19 @@ local HOTKEY_ORDERS: { [Enum.KeyCode]: string } = {
 	[Enum.KeyCode.Three] = "Follow",
 	[Enum.KeyCode.Four] = "Retreat",
 }
+
+-- claude-bud JOB 38 (ArmyOrdersConfig live for this player): a third row, SEND (the map's pick-a-base) and RECALL
+-- (the army marches back), keys 5 / 6; the plan status line under the grid and a small strip while the walkie is shut
+local planUi = (require(Shared.Configs.ArmyOrdersConfig) :: any).LiveFor(Players.LocalPlayer.UserId) == true
+if planUi then
+	table.insert(ORDER_DEFS, { Id = "Send", Label = "SEND", Key = "5" })
+	table.insert(ORDER_DEFS, { Id = "Recall", Label = "RECALL", Key = "6" })
+	HOTKEY_ORDERS[Enum.KeyCode.Five] = "Send"
+	HOTKEY_ORDERS[Enum.KeyCode.Six] = "Recall"
+end
+local statusLabel: TextLabel? = nil
+local planStrip: TextLabel? = nil
+local planText = ""
 
 local HOTKEY_CYCLE = { "Attack", "Hold", "Follow", "Retreat" }
 local CYCLE_KEY: Enum.KeyCode = HudConfig.Keys.OrdersCycle or Enum.KeyCode.T
@@ -117,7 +131,39 @@ local function refresh()
 	end
 end
 
+-- Code Bot army command bug: the server's ArmyState -> the lit Army button
+local STATE_BUTTON: { [string]: string } = {
+	Idle = "Follow",
+	Following = "Follow",
+	Regrouping = "Follow",
+	Holding = "Hold",
+	Attacking = "Attack",
+	EngagingTarget = "Attack",
+	Capturing = "Attack",
+	Retreating = "Retreat",
+	TravellingToBase = "Send",
+	Recalling = "Recall",
+}
+
 local function fireOrder(orderId: string): boolean
+	if orderId == "Send" then
+		-- claude-bud JOB 38: SEND = pick an enemy base on the world map (its card has SEND ARMY + the verdict)
+		-- Code Bot army command bug: the map opens in ArmySend mode (its GO sends the ARMY to the tapped zone / site /
+		-- base; the old plain Open() made GO pin a place for HIM and the army never got an order)
+		NotificationController.Show("Tap a zone or an enemy base, then SEND ARMY", "Info", 3)
+		ArmyLog.Line(player, "ARMY SEND", string.format("SEND pressed: MapController.OpenForArmySend() MapMode=ArmySend ArmyId=%d", player.UserId))
+		local okM, MC = pcall(function(): any
+			return require(script.Parent.MapController)
+		end)
+		if okM and MC and MC.OpenForArmySend then
+			pcall(MC.OpenForArmySend)
+		end
+		return true
+	end
+	if orderId == "Recall" then
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestSquadOrder, "Recall") -- claude-bud JOB 38
+		return true -- (the highlight follows the server's state push: Recalling, then Following)
+	end
 	local flags = OrdersConfig.Orders
 	if typeof(flags) == "table" and (flags :: any)[orderId] == false then
 		NotificationController.Show("Order disabled", "Warn", 2)
@@ -125,8 +171,8 @@ local function fireOrder(orderId: string): boolean
 	end
 	-- RequestSquadOrder via the non-blocking helper (polls ≤ 3 s for the remote, never waits forever)
 	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestSquadOrder, orderId)
-	currentOrder = orderId
-	refresh()
+	-- Code Bot army command bug: no optimistic highlight - the button lights when the SERVER says the state changed
+	-- (SquadOrderStateUpdate.State); a refused order ("No enemies near") leaves the real state lit
 	return true
 end
 
@@ -232,6 +278,12 @@ local function place()
 end
 
 local function setOpen(value: boolean)
+	if value then
+		-- claude-bud JOB 24 §10: "Army opened" (a whitelisted analytics event; the server rate-limits it)
+		pcall(function()
+			Remotes.FireServer(Constants.RemoteNames.RequestAnalyticsEvent, "ArmyOpened")
+		end)
+	end
 	if value and not OrdersConfig.Enabled then
 		return
 	end
@@ -253,6 +305,10 @@ end
 local function build(screen: ScreenGui)
 	-- SizeTouch (216 × 244 v) on phones / tablets, Size (216 × 180 v) with a mouse
 	local size = if isTouch then WALKIE.SizeTouch else WALKIE.Size
+	if planUi then
+		size = if isTouch then (WALKIE :: any).SizeTouchPlan else (WALKIE :: any).SizePlan -- claude-bud JOB 38
+	end
+	local rows = math.ceil(#ORDER_DEFS / 2)
 	local pad = WALKIE.Pad
 	local gap = WALKIE.CellGap
 	local cellH = if isTouch then math.max(WALKIE.MinTouchPx, PanelShell.TouchMinV()) else WALKIE.CellHeightDesktop
@@ -274,7 +330,7 @@ local function build(screen: ScreenGui)
 	borderStroke(frame, WALKIE.Accent, 2)
 	-- hard cap: the popover never grows past PanelMaxWidth × PanelMaxHeight v
 	local sizeCap = Instance.new("UISizeConstraint")
-	sizeCap.MaxSize = Vector2.new(WALKIE.PanelMaxWidth, WALKIE.PanelMaxHeight)
+	sizeCap.MaxSize = Vector2.new(WALKIE.PanelMaxWidth, if planUi then (WALKIE :: any).PanelMaxHeightPlan else WALKIE.PanelMaxHeight)
 	sizeCap.MinSize = Vector2.new(140, 120)
 	sizeCap.Parent = frame
 	panel = frame
@@ -298,7 +354,24 @@ local function build(screen: ScreenGui)
 	grid.Name = "Grid"
 	grid.BackgroundTransparency = 1
 	grid.Position = UDim2.fromOffset(pad, pad + WALKIE.TitleHeight + gap)
-	grid.Size = UDim2.new(1, -2 * pad, 0, 2 * cellH + gap)
+	grid.Size = UDim2.new(1, -2 * pad, 0, rows * cellH + (rows - 1) * gap)
+	if planUi then
+		-- claude-bud JOB 38: the army plan's status ("MARCHING -> Ridge Camp 180 m"), under the grid
+		local s = Instance.new("TextLabel")
+		s.Name = "PlanStatus"
+		s.BackgroundTransparency = 1
+		s.Position = UDim2.fromOffset(pad + 4, pad + WALKIE.TitleHeight + gap + rows * cellH + (rows - 1) * gap + 4)
+		s.Size = UDim2.new(1, -2 * pad - 8, 0, (WALKIE :: any).StatusHeight)
+		s.Font = HudConfig.Fonts.Body
+		s.TextSize = PanelShell.Text(WALKIE.CaptionSize + 4)
+		s.TextColor3 = WALKIE.Accent
+		s.TextXAlignment = Enum.TextXAlignment.Left
+		s.TextTruncate = Enum.TextTruncate.AtEnd
+		s.Text = planText
+		s.ZIndex = 3
+		s.Parent = frame
+		statusLabel = s
+	end
 	grid.ZIndex = 3
 	grid.Parent = frame
 	local layout = Instance.new("UIGridLayout")
@@ -505,10 +578,42 @@ function OrdersController.Init()
 		if typeof(payload) ~= "table" then
 			return
 		end
-		if typeof(payload.Order) == "string" then
+		if typeof(payload.State) == "string" and STATE_BUTTON[payload.State] then
+			currentOrder = STATE_BUTTON[payload.State] -- Code Bot: the server's ArmyState drives the highlight
+		elseif typeof(payload.Order) == "string" then
 			currentOrder = payload.Order
 		end
 		soldierCount = tonumber(payload.Soldiers) or soldierCount
+		-- claude-bud JOB 38: the plan status (walkie line + a small strip in the top stack while the walkie is shut)
+		local plan = payload.Plan
+		planText = if typeof(plan) == "table" and typeof(plan.Text) == "string" then plan.Text else ""
+		if statusLabel then
+			statusLabel.Text = planText
+		end
+		if planUi and screenGui then
+			if planStrip == nil then
+				local ps = Instance.new("TextLabel")
+				ps.Name = "ArmyPlanStrip"
+				ps.AnchorPoint = Vector2.new(0.5, 0)
+				ps.Position = UDim2.new(0.5, 0, 0, 60)
+				ps.Size = UDim2.fromOffset(280, PanelShell.Text(20) + 10)
+				ps.BackgroundColor3 = WALKIE.Bg
+				ps.BackgroundTransparency = 0.15
+				ps.BorderSizePixel = 0
+				ps.Font = HudConfig.Fonts.Display
+				ps.TextSize = PanelShell.Text(18)
+				ps.TextColor3 = Color3.fromRGB(255, 255, 255)
+				ps.TextTruncate = Enum.TextTruncate.AtEnd
+				ps.Visible = false
+				ps.Parent = screenGui
+				UIUtil.Corner(ps, 8)
+				pcall(HudLayout.RegisterTopStack, "ArmyPlan", ps, 26)
+				planStrip = ps
+			end
+			local strip = planStrip :: TextLabel
+			strip.Text = "ARMY: " .. planText
+			strip.Visible = planText ~= "" and not open
+		end
 		refresh()
 	end)
 

@@ -22,6 +22,7 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local SoldierConfig = require(Shared.Configs.SoldierConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local LivePrices = require(Shared.Util.LivePrices) -- Code Bot v156: the real Roblox price (config = fallback)
 
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
@@ -78,7 +79,8 @@ local function synthesizeFromPlayerState(state: any)
 	local baseCap = SoldierConfig.MaxSoldiersBase or 50
 	local per = SoldierConfig.SoldiersPerBarracksLevel or 5
 	local bonus = if entOwned("ExtraSoldierSlot") then armyExpansionBonus() else 0
-	local cap = baseCap + barracks * per + bonus
+	-- claude-bud JOB 33: + the server's rebirth army bonus (perk + Elite Barracks; WE_RebirthArmyBonus)
+	local cap = baseCap + barracks * per + bonus + math.max(0, math.floor(tonumber(player:GetAttribute("WE_RebirthArmyBonus")) or 0))
 	local cost = SoldierConfig.RecruitCostCash or 500
 	local room = math.max(0, cap - count)
 	local tickSec = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.TickSeconds) or 5
@@ -370,7 +372,7 @@ function ArmyController.Init()
 	local robuxDefs: { { Label: string, OnClick: () -> (), Gold: boolean?, Robux: boolean? } } = {}
 	local starterIdx, slotIdx = 0, 0
 	if starterLive and starter then
-		local price = tonumber(starter.RobuxPrice) or 149
+		local price = LivePrices.Price("DevProduct", "StarterBundle") -- Code Bot v156: real price (was config 149, Roblox 249)
 		table.insert(robuxDefs, {
 			Label = string.format("★ COMMANDER PACK  %d R$", price),
 			OnClick = function()
@@ -398,7 +400,7 @@ function ArmyController.Init()
 		local robuxRow = robuxBtns[1].Parent
 		local starterBtn: TextButton? = if starterIdx > 0 then robuxBtns[starterIdx] else nil
 		local slotBtn: TextButton? = if slotIdx > 0 then robuxBtns[slotIdx] else nil
-		local slotPrice = tonumber(extraSlot and extraSlot.RobuxPrice) or 99
+		local slotPrice = LivePrices.Price("DevProduct", "ExtraSoldierSlot") -- Code Bot v156: real price (Roblox 79)
 		local bonus = armyExpansionBonus()
 		local function styleRobux(b: TextButton, mode: string)
 			local st = b:FindFirstChildOfClass("UIStroke")
@@ -549,6 +551,39 @@ function ArmyController.Init()
 			Label = "DISMISS x5",
 			OnClick = function()
 				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestDismissSoldiers, 5)
+			end,
+		},
+	})
+	-- claude-bud JOB 26: army upgrades (Firepower / Training / Toughness = the Soldiers research track) + armour
+	buttonRow({
+		{
+			Label = "ARMY UPGRADES",
+			Gold = true,
+			OnClick = function()
+				local mod = script.Parent:FindFirstChild("ResearchController")
+				if mod and mod:IsA("ModuleScript") then
+					local req: any = require
+					local ok, rc = pcall(req, mod)
+					if ok and typeof(rc) == "table" and typeof(rc.Open) == "function" then
+						setOpen(false)
+						rc.Open("Soldiers")
+					end
+				end
+			end,
+		},
+		{
+			Label = "MY ARMOUR",
+			Gold = true,
+			OnClick = function()
+				local mod = script.Parent:FindFirstChild("ArmourController")
+				if mod and mod:IsA("ModuleScript") then
+					local req: any = require
+					local ok, ac = pcall(req, mod)
+					if ok and typeof(ac) == "table" and typeof(ac.Open) == "function" then
+						setOpen(false)
+						ac.Open()
+					end
+				end
 			end,
 		},
 	})

@@ -1,0 +1,43 @@
+# run_rate_prompt_test.py output (2026-10-01T07:50Z, VERBOSE=1, headless luau stand-in: NOT Roblox)
+ok    nothing before 900 s of play (890 s)
+ok    shows at 900 s: FeaturePush RatePrompt { Trigger = playtime }
+ok    saved at once: Shows 1, LastShownUnix, PlaySeconds
+ok    at most once per session
+ok    one answer per show (a second is ignored)
+ok    a new session 1 day later: nothing (3-day gap)
+ok    3 days after the last show: it shows again (play time already past 900)
+ok    a hit 5 s ago: it waits
+ok    20 s quiet: it shows
+ok    Don't show again -> Never = true
+ok    Never / Shows survive a save + ProfileSchema.Migrate
+ok    after 'never': nothing, even 30 days later and after a rebirth
+ok    Migrate repairs a bad record
+ok    a profile without the record: nil (the defaults)
+ok    the trigger waits its TriggerDelaySeconds (8 s)
+ok    a big achievement shows it early (65 s of play)
+ok    a second trigger in the same session: nothing (once per session)
+ok    tutorial not done: nothing
+ok    the onboarding hold: nothing
+ok    never in the first minute of a session
+ok    OwnerFirst: not live for another player -> nothing
+ok    Decide: all rules pass -> show
+ok    an answer with no show out: ignored
+ok    only later | never | favorite | timeout
+ok    favorite accepted (nothing given)
+ok    telemetry: rate_prompt_shown / rate_prompt_answer only
+ok    no economy / XP call from the service (0 calls)
+ok    the card text has no reward words
+ok    FirstCapture shows it early (65 s of play)
+ok    FirstCapture is spent for good (RatePrompt.Triggered)
+ok    never both in one session (RaidWin after FirstCapture: nothing)
+ok    FirstCapture again on the same profile: nothing (one time per profile)
+ok    RaidWin shows it early once
+ok    the 3-day gap still wins over a big-win trigger
+ok    Never still wins over a big-win trigger
+ok    the Recruit Pack card is out / closed < 20 s ago: the rate card waits
+ok    ... and shows once that card is gone
+ok    the Recruit Pack is still due from the same capture: it goes first
+ok    ... the rate card waits at most WaitForPackMaxSeconds, then may show
+ok    still no economy / XP call (the JOB 40 no-reward rule)
+ok    Triggered survives a save + Migrate
+RATE PROMPT TEST: 0 failed

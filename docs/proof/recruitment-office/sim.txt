@@ -1,0 +1,20 @@
+ROOT CAUSE  nearest possible kiosk -> plaza office distance per plot (studs): P1 771, P2 806, P3 541, P4 628, P5 531, P6 576, P7 1451, P8 1290, P9 1515, P10 1165
+ok    OLD rule: from ANY plot the kiosk is >= 531 studs from the plaza office (> CloseRange 22): the 0.5 s tick always closed it
+ok    NEW: open inside the prompt and walking around (9 / 12 / 16.9 studs from where it was opened): stays open
+ok    NEW: a real walk-away (17.5 / 40 studs): closes
+ok    NEW: no anchor known yet: never a close
+ok    the close range is in the 15-18 hysteresis band (17)
+ok    10 opens in a row beside my kiosk, 10 s each: the loop never closes it
+ok    walking a little (up to 10 studs) while it is open: still open
+ok    walking genuinely away: exactly one close, at 18 studs
+RECRUITMENT OFFICE TEST: 0 failed
+ok    one central OpenRecruitmentOffice / CloseRecruitmentOffice
+ok    the [RECRUITMENT OPEN] / [RECRUITMENT CLOSE] Reason logs
+ok    both interaction points open through it (plaza prompt, the zone kiosk's ZoneOpen with its point)
+ok    the only close reasons: X, WalkAway, Death, OtherMenu (Death, OtherMenu, WalkAway, X)
+ok    nothing listens to the prompt hiding / ending (it can never close the menu)
+ok    a damage scratch no longer closes the Recruitment Office (death does)
+ok    a second open while it is open adds no second loop / connection (only re-points the anchor)
+ok    the kiosk point is HIS (keyed by UserId; only his prompt trigger opens it): another player's office cannot affect mine
+ok    the server's AtStation accepts his own kiosk for Recruitment buys (was plaza-only: kiosk buys were refused)
+RECRUITMENT OFFICE TEST (all): 0 failed

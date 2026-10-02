@@ -45,6 +45,7 @@ local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local LosRule = require(Shared.Util.LosRule) -- claude-bud JOB 32
 local Constants = require(Shared.Constants)
 local OrdersConfig = require(Shared.Configs.OrdersConfig)
 local RigConfig = require(Shared.Configs.RigConfig) -- R-RIG: escort figures per unit (army D14)
@@ -52,9 +53,14 @@ local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P1-
 local ArmyConfig = require(Shared.Configs.ArmyConfig) -- army fix: Follow (lead + catch-up), Recover
 local BaseConfig = require(Shared.Configs.BaseConfig) -- army fix: plot squares (Recover)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local ArmyLog = require(Shared.Util.ArmyLog) -- Code Bot army command bug: the chain logs
 local PlotFrame = require(Shared.Util.PlotFrame) -- army fix: plot centres (Recover)
+local FormationController = require(Shared.Util.FormationController) -- claude-bud JOB 24: the sticky squad target
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local ArmyState = require(script.Parent.Parent.Modules.ArmyState) -- Code Bot army command bug: THE army state (one writer)
+local ArmyCommand = require(script.Parent.Parent.Modules.ArmyCommand) -- Code Bot: the live owner's one command path
+local ArmyBrawl = require(script.Parent.Parent.Modules.ArmyBrawl) -- claude-bud JOB 43: enemy soldiers are targets too
 
 local SquadOrdersService = {}
 -- v90 (Code Bot): the army despawn fix (Follow / Recover / Gate blocks) is live only for owners with
@@ -65,11 +71,19 @@ SquadOrdersService._FixLive = false
 -- think pass (module fields, not locals: this chunk is near the register limit). While it is on, the v85 FollowPace and
 -- the v90 Fix follow / recover paths are off for that owner (ArmyFollow replaces them); shooting stays here.
 SquadOrdersService._AF = require(script.Parent.Parent.Modules.ArmyFollow)
+-- v114 (Code Bot Roblox): ArmyConfig.Follow3 — ONE FOLLOW controller per army (ArmyController), every soldier MoveTo /
+-- PivotTo in SoldierController; in FOLLOW the escort code below only shoots and aims (escortAimOnly)
+SquadOrdersService._AC = require(script.Parent.Parent.Modules.ArmyController)
+SquadOrdersService._SC = require(script.Parent.Parent.Modules.SoldierController)
+SquadOrdersService._Plan = nil :: any -- claude-bud JOB 38: ArmyPlan (set by ArmyPlan.Init; nil = no plans, today's orders)
+SquadOrdersService._Endgame = nil :: any -- claude-bud JOB 39: EndgameService (Elite Training; nil / not live = today's soldiers)
+local escortAimOnly = false -- v114: set around escortUnit for a Follow3 owner: shoot / face only, never walk
 SquadOrdersService._AFOn = false
 
 local DataService: any = nil
 local SoldierService: any = nil
 local NotificationService: any = nil
+local AnalyticsService: any = nil -- claude-bud JOB 24 §10
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AntiExploitService: any = nil
@@ -239,6 +253,47 @@ local function ensureFolder(): Folder
 	return f
 end
 
+-- claude-bud JOB 26: ArmyConfig.StrongerArmy (nil when off: the OrdersConfig numbers, as v118)
+local function strongArmy(): any
+	local c = (ArmyConfig :: any).StrongerArmy
+	return if typeof(c) == "table" and c.Enabled == true then c else nil
+end
+local function armyDamageBase(): number
+	local c = strongArmy()
+	return if c then tonumber(c.Damage) or 8 else OrdersConfig.AttackDamage or 8
+end
+local function armyHealthBase(): number
+	local c = strongArmy()
+	return if c then tonumber(c.Health) or 90 else OrdersConfig.UnitHealth or 90
+end
+
+-- claude-bud JOB 36: Super Soldiers (WE_PerkSuperSoldiers, server-set by ShopOverhaulService from pass ownership):
+-- army damage and soldier HP x ShopOverhaulConfig.SuperSoldiers.Mult. The per-victim PlayerMaxDps cap still applies.
+local function superMult(player: Player?): number
+	if player == nil or player:GetAttribute("WE_PerkSuperSoldiers") ~= true then
+		return 1
+	end
+	return math.clamp(tonumber((require(Shared.Configs.ShopOverhaulConfig) :: any).SuperSoldiers.Mult) or 1, 1, 2)
+end
+
+-- claude-bud JOB 29: the day-7 streak ARMY BOOST (DailyRewardConfig.Day7Boost; MissionService writes WE_ArmyBoostUntil)
+-- claude-bud JOB 36: x Super Soldiers (every army damage site already multiplies this)
+local function armyBoostMult(player: Player?): number
+	if player == nil then
+		return 1
+	end
+	local untilUnix = tonumber(player:GetAttribute("WE_ArmyBoostUntil")) or 0
+	if untilUnix <= os.time() then
+		return superMult(player)
+	end
+	local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig) :: any
+	local b = DailyRewardConfig.Day7Boost
+	if typeof(b) ~= "table" or b.Enabled ~= true then
+		return superMult(player)
+	end
+	return math.clamp(tonumber(b.Mult) or 1, 1, 2) * superMult(player)
+end
+
 local function researchMult(player: Player?, statId: string): number -- v69 research: ≥1, 1 when absent
 	if player == nil or ResearchService == nil or ResearchService.GetBonus == nil then
 		return 1
@@ -248,6 +303,16 @@ local function researchMult(player: Player?, statId: string): number -- v69 rese
 		return m
 	end
 	return 1
+end
+
+-- claude-bud JOB 26: a soldier's shots per second (StrongerArmy.FireRate x Combat Drills research, else AttackFireRate)
+local function armyFireRate(unit: SquadUnit): number
+	local c = strongArmy()
+	if c == nil then
+		return OrdersConfig.AttackFireRate or 1.8
+	end
+	local owner = Players:GetPlayerByUserId(tonumber(unit.OwnerUserId) or 0)
+	return (tonumber(c.FireRate) or 1.8) * researchMult(owner, "SoldierFireRate")
 end
 
 local function researchAdd(player: Player?, statId: string): number -- v69 research: 0..10, 0 when absent
@@ -312,6 +377,9 @@ local function pushState(player: Player)
 		FieldUnits = alive,
 		MaxFieldUnits = (OrdersConfig.MaxFieldUnits or 5) + math.floor(researchAdd(player, "SquadSize")), -- v69 research
 		ShowPanel = show,
+		Plan = if SquadOrdersService._Plan ~= nil then SquadOrdersService._Plan.Status(player.UserId) else nil, -- claude-bud JOB 38
+		State = ArmyState.Of(st), -- Code Bot army command bug: the Army UI highlight is THIS (server state), never a client guess
+		Target = if st then st.ArmyTarget else nil,
 	})
 end
 
@@ -820,7 +888,13 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	weldPart("Rifle", Vector3.new(0.26, 0.26, 2.4), CFrame.new(1.15, 0.15, -0.85), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
 
 	local humanoid = Instance.new("Humanoid")
-	humanoid.MaxHealth = math.floor((OrdersConfig.UnitHealth or 90) * researchMult(owner, "SoldierHealth") + 0.5) -- v69 research
+	humanoid.MaxHealth = math.floor(armyHealthBase() * researchMult(owner, "SoldierHealth") * superMult(owner) + 0.5) -- v69 research; JOB 36 Super Soldiers
+	-- claude-bud JOB 39 phase 3: the slot's type + Elite tier (HP x the tier, with the research bonus capped at MaxMult)
+	local eg = SquadOrdersService._Endgame
+	local elite = if eg and eg.UnitElite then eg.UnitElite(owner, slot) else nil
+	if elite then
+		humanoid.MaxHealth = math.floor(armyHealthBase() * math.min(researchMult(owner, "SoldierHealth") * (if elite.Untrained then 1 else elite.Hp), eg.MaxMult()) * superMult(owner) + 0.5)
+	end
 	humanoid.Health = humanoid.MaxHealth
 	humanoid.WalkSpeed = OrdersConfig.UnitWalkSpeed or 14
 	humanoid.AutoRotate = true
@@ -838,6 +912,12 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 		pcall(function()
 			VisualAssetService.TryAttachCharacterVisual(model, OrdersConfig.VisualKind or "Infantry")
 		end)
+	end
+	if elite then
+		pcall(eg.DressUnit, model, humanoid, elite, 2) -- claude-bud JOB 39: insignia, trim, the tier scale (HipHeight 2 x scale)
+	end
+	if eg and eg.CosmeticUnit then
+		pcall(eg.CosmeticUnit, owner, model) -- claude-bud JOB 39 phase 5: the Black Market beret colour (nothing while not live)
 	end
 	-- Friendly only — do NOT tag WE_NPC (CombatNPC would aggro players)
 	CollectionService:AddTag(model, TAG_SQUAD)
@@ -912,6 +992,9 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 				SquadOrdersService.SyncArmy(plr)
 			end
 		end)
+		if elite and eg and eg.NoteUnitDeath then -- claude-bud JOB 39: its respawn owes the re-train fee
+			pcall(eg.NoteUnitDeath, owner.UserId, elite.Kind, elite.Tier, model:GetAttribute("WE_EliteUntrained") == true)
+		end
 		-- claude-bud JOB 5d: his last field soldier just died: one army prompt (MonetizationConfig.Placement)
 		task.defer(function()
 			local stNow = squadByUser[owner.UserId]
@@ -1111,6 +1194,15 @@ end
 	`avoidB` (the fights this unit gave up on) is never the first result; the nearest such one comes back as the second
 	(its Humanoid, root and distance after the first three). It still goes into `list`. The last two results say
 	whether any live hostile, however far from `fromPos`, still stands within `avoidR` of `avoidA` / `avoidB`. ]]
+-- claude-bud JOB 52: ATTACK at range live for this owner (ArmyOrdersConfig.AttackRange; lazy, nil-safe)
+local function attackRangeLive(owner: Player): boolean
+	local ok, live = pcall(function(): any
+		local AOC: any = require(Shared.Configs.ArmyOrdersConfig)
+		return AOC.AttackRangeLive ~= nil and AOC.AttackRangeLive(owner.UserId)
+	end)
+	return ok and live == true
+end
+
 local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: boolean?, owner: Player?, list: CandList?, listRange: number?, avoidA: Vector3?, avoidB: Vector3?, avoidR: number?): (Humanoid?, BasePart?, number, Humanoid?, BasePart?, number, boolean, boolean)
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil
@@ -1131,6 +1223,8 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 	end
 	local lr = if list then (listRange or maxRange) else -1
 	local cap = candCap()
+	-- claude-bud JOB 52: with ATTACK at range live for the owner, NPC distances are flat (the pick's centre is at Y = 0)
+	local flatPick = owner ~= nil and attackRangeLive(owner)
 	if list then
 		candReset(list)
 	end
@@ -1154,6 +1248,9 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 				heldA = heldA or inA
 				heldB = heldB or inB
 				local d = (p - fromPos).Magnitude
+				if flatPick then
+					d = Vector3.new(p.X - fromPos.X, 0, p.Z - fromPos.Z).Magnitude -- claude-bud JOB 52: flat (no height bias)
+				end
 				if d < bestDist or d < zoneDist or d <= lr or d <= tScan then
 					local id = inst:GetAttribute("NPCId")
 					if not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(owner, id) == false) then
@@ -1291,7 +1388,7 @@ local function faceYaw(root: BasePart, lookAt: Vector3)
 end
 
 local function unitReady(unit: SquadUnit, now: number): boolean
-	return now - unit.LastFireAt >= 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)
+	return now - unit.LastFireAt >= 1 / math.max(armyFireRate(unit), 0.1)
 end
 
 -- squadfair: the unit hit chance at `dist` studs: UnitNearHitChance up to UnitNearStuds, falling linearly to
@@ -1381,7 +1478,7 @@ local function unitShoot(player: Player, unit: SquadUnit, th: Humanoid, now: num
 	if typeof(setShooter) == "function" then
 		setShooter(unit.Model)
 	end
-	local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit) -- v69 research
+	local ok, dealt = pcall(apply, player, th, armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player), credit) -- v69 research; JOB 29 boost; JOB 39 elite
 	if typeof(setShooter) == "function" then
 		setShooter(nil)
 	end
@@ -1428,7 +1525,8 @@ local function unitHasLos(player: Player, unit: SquadUnit, troot: BasePart): boo
 		table.insert(losIgnore, player.Character :: Instance)
 	end
 	losParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true
-	losParams.FilterDescendantsInstances = losIgnore -- the property takes a copy of the list
+	losParams.FilterDescendantsInstances = losIgnore
+	losParams.RespectCanCollide = LosRule.SightRespect(losParams.RespectCanCollide) -- claude-bud JOB 32: the one sight rule -- the property takes a copy of the list
 	local blocked = Workspace:Raycast(eye, delta, losParams) ~= nil
 	table.clear(losIgnore) -- the Lua list holds no model between checks (the next ray's list replaces the property's)
 	return not blocked
@@ -1459,6 +1557,7 @@ local function losFromEye(player: Player, unit: SquadUnit, eye: Vector3, troot: 
 	end
 	losParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true
 	losParams.FilterDescendantsInstances = losIgnore
+	losParams.RespectCanCollide = LosRule.SightRespect(losParams.RespectCanCollide) -- claude-bud JOB 32: the one sight rule
 	local blocked = Workspace:Raycast(eye, delta, losParams) ~= nil
 	table.clear(losIgnore)
 	return not blocked
@@ -1507,7 +1606,7 @@ end
 
 -- squadfair: a check cast rays and found nothing in sight: the next one waits 1 / AttackFireRate
 local function losBlockedFor(unit: SquadUnit, now: number)
-	unit.LosCheckAt = now + 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)
+	unit.LosCheckAt = now + 1 / math.max(armyFireRate(unit), 0.1)
 	unit.LosBlocked = true
 	unit.AimRoot = nil
 	unit.AimHum = nil
@@ -1609,6 +1708,9 @@ end
 -- a shot check found nothing in sight (the target in range): count it; after SideStepAfterBlocked in a row, probe (at
 -- most once per SideStepMinGap, never while a side-step walk is on)
 local function stepBlocked(player: Player, unit: SquadUnit, playerRoot: BasePart, troot: BasePart, now: number)
+	if escortAimOnly then
+		return -- v114 (Follow3): FOLLOW never side-steps (the formation owns the unit's position)
+	end
 	local E = ArmyCfg.Escort
 	if E.SideStep ~= true then
 		return
@@ -1645,9 +1747,9 @@ local function stepMove(unit: SquadUnit, playerRoot: BasePart, troot: BasePart, 
 	end
 	faceYaw(unit.Root, troot.Position)
 	if flatDist(goal, unit.Root.Position) > 1.5 then
-		unit.Humanoid:MoveTo(goal)
+		SquadOrdersService._AF.Command(unit, goal)
 	else
-		unit.Humanoid:MoveTo(unit.Root.Position)
+		SquadOrdersService._AF.Command(unit, unit.Root.Position)
 	end
 	return true
 end
@@ -1703,9 +1805,15 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		elseif rays > 0 then
 			losBlockedFor(unit, now)
 			if escortLive and fromPlayer <= leash and not walkForm then
-				stepBlocked(player, unit, playerRoot, troot, now) -- army lane A0: side-step after SideStepAfterBlocked
+				stepBlocked(player, unit, playerRoot, troot, now) -- army lane A0: side-step after SideStepAfterBlocked (v114: a no-op in Follow3 FOLLOW)
 			end
 		end
+	end
+	if escortAimOnly then
+		-- v114 (Follow3): FOLLOW = the formation; the escort shoots from its slot and only aims (the face gyro target;
+		-- SoldierController gives the gyro torque only while the unit stands in its slot). No MoveTo, no side-step.
+		faceYaw(unit.Root, aimPoint(unit, troot))
+		return true
 	end
 	if walkForm then
 		-- army fix (Follow.EscortWalkInFormation): he walks. No stand to fight and no side-step walk: beyond the
@@ -1727,7 +1835,7 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		local goalW = if offW.Magnitude > maxW then playerPos + offW.Unit * maxW else aimW
 		followSpeed(st, unit, 0, false) -- his pace (a unit that falls beyond the walking leash catches up in followMove)
 		unit.Goal = goalW
-		unit.Humanoid:MoveTo(goalW)
+		SquadOrdersService._AF.Command(unit, goalW)
 		return true
 	end
 	if followCtx.Live and followCtx.Moving then
@@ -1751,11 +1859,13 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 			local goal = (playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position + st.Lead
 			followSpeed(st, unit, flatDist(goal, unitPos), false) -- the owner's pace: never a run into a wall
 			unit.Goal = goal
-			unit.Humanoid:MoveTo(goal)
+			SquadOrdersService._AF.Command(unit, goal)
 		else
 			-- back to the formation slot next to the player (still shooting on the way when possible)
 			SquadOrdersService._PaceSpeed(unit, fromPlayer) -- v85 FollowPace (base speed when not live)
-			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position)
+			-- claude-bud JOB 22: back to the SAME formation slot ArmyFollow uses (never the old wing slots)
+			local home = if SquadOrdersService._AF.StableOn() then SquadOrdersService._AF.HomePoint(player, st, unit, playerRoot, now) else (playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position
+			SquadOrdersService._AF.Command(unit, home)
 		end
 	elseif dist > range * 0.85 then
 		-- close in, but never past 90 % of the leash from the player
@@ -1764,11 +1874,11 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		local goal = if off.Magnitude > maxOff then playerPos + off.Unit * maxOff else aimAt
 		followSpeed(st, unit, 0, false) -- army fix: the owner's pace
 		unit.Goal = goal
-		unit.Humanoid:MoveTo(goal)
+		SquadOrdersService._AF.Command(unit, goal)
 	else
 		followSpeed(st, unit, 0, false)
 		unit.Goal = nil
-		unit.Humanoid:MoveTo(unitPos)
+		SquadOrdersService._AF.Command(unit, unitPos)
 	end
 	return true
 end
@@ -1791,7 +1901,7 @@ local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart,
 			local up = unit.Root.Position
 			if flatDist(slotPos, up) <= stopHoldStuds() and (slotPos.X - up.X) * lv.X + (slotPos.Z - up.Z) * lv.Z < 0 then
 				unit.Goal = nil
-				unit.Humanoid:MoveTo(up)
+				SquadOrdersService._AF.Command(unit, up)
 				faceYaw(unit.Root, up + lv * 8)
 				return
 			end
@@ -1815,13 +1925,13 @@ local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart,
 		local dist = (unit.Root.Position - playerRoot.Position).Magnitude
 		local stop = OrdersConfig.FollowStopDistance or 6
 		if dist > (OrdersConfig.FollowDistance or 10) then
-			unit.Humanoid:MoveTo(target)
+			SquadOrdersService._AF.Command(unit, target)
 			faceYaw(unit.Root, playerRoot.Position)
 		elseif dist > stop then
-			unit.Humanoid:MoveTo(target)
+			SquadOrdersService._AF.Command(unit, target)
 		else
 			unit.Goal = nil
-			unit.Humanoid:MoveTo(unit.Root.Position)
+			SquadOrdersService._AF.Command(unit, unit.Root.Position)
 		end
 		return
 	end
@@ -1849,13 +1959,13 @@ local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart,
 		go = toGoal > arrive or (followCtx.Live and followCtx.Moving) -- v85 FollowPace
 	end
 	if go then
-		unit.Humanoid:MoveTo(target)
+		SquadOrdersService._AF.Command(unit, target)
 		if toGoal > 4 then
 			faceYaw(unit.Root, target)
 		end
 	else
 		unit.Goal = nil
-		unit.Humanoid:MoveTo(unit.Root.Position)
+		SquadOrdersService._AF.Command(unit, unit.Root.Position)
 		faceYaw(unit.Root, unit.Root.Position + playerRoot.CFrame.LookVector * 8)
 	end
 end
@@ -1942,9 +2052,9 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 			local af = attackTidy(player)
 			if af then
 				-- claude-bud (ATTACK fix): its own march spot by seat, never the one point 12 studs ahead of him
-				unit.Humanoid:MoveTo(af.AttackPoint(st, unit, playerRoot.Position, playerRoot.CFrame.LookVector, "march"))
+				SquadOrdersService._AF.Command(unit, af.AttackPoint(st, unit, playerRoot.Position, playerRoot.CFrame.LookVector, "march"))
 			else
-				unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
+				SquadOrdersService._AF.Command(unit, (playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
 			end
 		end
 		return
@@ -2021,7 +2131,7 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		if playerRoot then
 			followMove(st, unit, playerRoot, trail, probe, now)
 		else
-			unit.Humanoid:MoveTo(unit.Root.Position)
+			SquadOrdersService._AF.Command(unit, unit.Root.Position)
 		end
 		return
 	end
@@ -2035,30 +2145,30 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		local ringAt = afA.AttackPoint(st, unit, center, center - (if playerRoot then playerRoot.Position else from), "ring")
 		if unit.AimRoot ~= nil then
 			if (aimAt - from).Magnitude > band then
-				unit.Humanoid:MoveTo(ringAt)
+				SquadOrdersService._AF.Command(unit, ringAt)
 			else
-				unit.Humanoid:MoveTo(from)
+				SquadOrdersService._AF.Command(unit, from)
 			end
 		elseif dist > band or (unit.LosBlocked and CombatFairnessConfig.UnitChaseWithoutLos == true) then
-			unit.Humanoid:MoveTo(ringAt)
+			SquadOrdersService._AF.Command(unit, ringAt)
 		else
-			unit.Humanoid:MoveTo(from)
+			SquadOrdersService._AF.Command(unit, from)
 		end
 		return
 	end
 	if unit.AimRoot ~= nil then
 		-- squadfair: it shoots a visible hostile (the fallback): it closes in on that one only, never on the walled-off one
 		if (aimAt - unit.Root.Position).Magnitude > band then
-			unit.Humanoid:MoveTo(aimAt)
+			SquadOrdersService._AF.Command(unit, aimAt)
 		else
-			unit.Humanoid:MoveTo(unit.Root.Position)
+			SquadOrdersService._AF.Command(unit, unit.Root.Position)
 		end
 	elseif dist > band then
-		unit.Humanoid:MoveTo(nroot.Position)
+		SquadOrdersService._AF.Command(unit, nroot.Position)
 	elseif unit.LosBlocked and CombatFairnessConfig.UnitChaseWithoutLos == true then
-		unit.Humanoid:MoveTo(nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up
+		SquadOrdersService._AF.Command(unit, nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up
 	else
-		unit.Humanoid:MoveTo(unit.Root.Position)
+		SquadOrdersService._AF.Command(unit, unit.Root.Position)
 	end
 end
 
@@ -2520,8 +2630,7 @@ local function recoverUnit(player: Player, st: SquadState, unit: SquadUnit, play
 		return false
 	end
 	local okM, errM = pcall(function()
-		unit.Model:PivotTo(at) -- the same unit, moved: never Destroy, never a new model
-		unit.Root.AssemblyLinearVelocity = Vector3.zero
+		SquadOrdersService._SC.Reposition(unit, at, "recover", true) -- the same unit, moved: never Destroy, never a new model (v114: SoldierController)
 		local gyro = unit.Root:FindFirstChild("NPCFaceGyro")
 		if gyro and gyro:IsA("BodyGyro") then
 			gyro.CFrame = at
@@ -2546,7 +2655,7 @@ local function recoverUnit(player: Player, st: SquadState, unit: SquadUnit, play
 	unit.ProgSum = 0
 	unit.ProgSince = now
 	unit.PlotId = nil
-	unit.Humanoid:MoveTo(at.Position)
+	SquadOrdersService._AF.Command(unit, at.Position)
 	noteLanding(st, at.Position, now)
 	noteRecover(player, st, why :: string, rc, now)
 	return true
@@ -2618,6 +2727,559 @@ local function thinkError(player: Player, err: any, now: number)
 	end
 end
 
+--[[ claude-bud JOB 24 (docs/ARMY-ATTACK-ROOTCAUSE.md): ATTACK with Follow3.AttackSteer (ArmyController.AttackLive).
+	The ArmyController moves every unit (the steered block advances on the target, deploys into a line facing it at
+	AttackStandoff, folds back into the follow block when the target is down or the order changes); here the squad
+	gets ONE target and each unit only shoots and aims.
+	  * pickSquadTarget (once per think pass): the hostiles this squad may hurt (nearestHostile's rules) within
+	    AttackAggroStuds + AttackKeepExtraStuds of the army's centre and AttackLeashStuds of him; the current one kept
+	    (FormationController.PickTarget: sticky, a switch only for one AttackRetargetStuds nearer), else the nearest.
+	    Stored as st._acTarget (server-side NPC Humanoid + root; the client never names a target).
+	  * attackAimOnly (per unit per think): when the gun is ready, the squad target if it is in its fire band and in
+	    sight (squadfair: line of sight), else the nearest hostile in its band it can see (pickShot); it faces what it
+	    shoots. It never walks: no ring seats, no chase, no MoveTo from here. ]]
+-- claude-bud JOB 24 §2: ArmyConfig.ArmyCombat (players / guards / gates for an attacking army)
+local function armyCombat(): any
+	local c = (ArmyConfig :: any).ArmyCombat
+	return if typeof(c) == "table" and c.Enabled == true then c else nil
+end
+
+local guardBuf: { any } = {}
+local protectedNoteAt: { [string]: number } = {}
+local function gateSvc(): any
+	local ok, m = pcall(function()
+		return require(script.Parent.GateDefenseService) :: any
+	end)
+	return if ok then m else nil
+end
+
+-- "X is protected" to the attacker (a victim the army may not shoot: spawn / novice shield), rate-limited per pair
+local function noteProtected(player: Player, victim: Player, why: string)
+	local ac = armyCombat()
+	if ac == nil or why ~= "protected" or NotificationService == nil then
+		return
+	end
+	local key = tostring(player.UserId) .. ":" .. tostring(victim.UserId)
+	local now = os.clock()
+	if now - (protectedNoteAt[key] or -math.huge) < (tonumber(ac.ProtectedNoteSeconds) or 8) then
+		return
+	end
+	protectedNoteAt[key] = now
+	pcall(NotificationService.Notify, player, victim.DisplayName .. " is Protected (shield)", "Warn")
+end
+
+-- v124 (Code Bot): /armydebug [ArmyTarget] lines: every other player's verdict (why he is or is not a candidate), the
+-- guard / NPC counts and the pick, per owner at most every ArmyCombat.TargetLogSeconds
+local targetLogAt: { [number]: number } = {}
+
+local function pickSquadTarget(player: Player, st: SquadState, proot: BasePart?, planOpts: any?)
+	local f3 = (ArmyConfig :: any).Follow3
+	local reach = (tonumber(f3.AttackAggroStuds) or 120) + (tonumber(f3.AttackKeepExtraStuds) or 20)
+	local leash = tonumber(f3.AttackLeashStuds) or 140
+	-- claude-bud JOB 38: an army plan (ArmyPlan) calls this same pick with its own centre / reach / leash (the owner may
+	-- be far away or dead on a SEND): ONE target pick, ONE hostility rule for both paths
+	if planOpts ~= nil then
+		reach = tonumber(planOpts.Reach) or reach
+		leash = tonumber(planOpts.Leash) or leash
+	end
+	local leashFrom: Vector3 = if planOpts ~= nil and typeof(planOpts.LeashFrom) == "Vector3" then planOpts.LeashFrom elseif proot then proot.Position else Vector3.zero
+	local sum, cnt = Vector3.zero, 0
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Root.Parent then
+			sum += Vector3.new(u.Root.Position.X, 0, u.Root.Position.Z)
+			cnt += 1
+		end
+	end
+	if cnt == 0 then
+		(st :: any)._acTarget = nil
+		return
+	end
+	local centre = if planOpts ~= nil and typeof(planOpts.Centre) == "Vector3" then Vector3.new(planOpts.Centre.X, 0, planOpts.Centre.Z) else sum / cnt
+	local ac = armyCombat()
+	-- v124: the per-candidate rejection log (only for an owner with /armydebug on, rate-limited)
+	local acm = SquadOrdersService._AC
+	local now = os.clock()
+	local dbg = acm and acm.DebugFor and acm.DebugFor(player)
+		and now - (targetLogAt[player.UserId] or -math.huge) >= (tonumber(ac and ac.TargetLogSeconds) or 2)
+	local dlines: { string }? = if dbg then {} else nil
+	if dbg then
+		targetLogAt[player.UserId] = now
+	end
+	nearestHostile(centre, reach, false, player, attackCands, reach)
+	local cands: { { Key: any, Pos: Vector3, Pri: number? } } = {}
+	local roots: { [any]: BasePart } = {}
+	local kinds: { [any]: string } = {}
+	local who: { [any]: Player } = {}
+	local function consider(h: Humanoid?, r: BasePart?, kind: string?, pl: Player?, pri: number?): boolean
+		if h and r and h.Health > 0 and r.Parent ~= nil and not roots[h] and flatDist(r.Position, leashFrom) <= leash then
+			roots[h] = r
+			kinds[h] = kind or "NPC"
+			if pl then
+				who[h] = pl
+			end
+			table.insert(cands, { Key = h, Pos = r.Position, Pri = pri or 0 })
+			return true
+		end
+		return false
+	end
+	local nNpc, nGuard = 0, 0
+	for i = 1, attackCands.N do
+		if consider(attackCands.Hum[i], attackCands.Root[i], "NPC") then
+			nNpc += 1
+		end
+	end
+	candReset(attackCands) -- hold no reference to the NPCs between thinks
+	-- JOB 24 §2: enemy players and base defenders are targets too (ArmyConfig.ArmyCombat)
+	-- v124: an enemy player outranks every guard / NPC (ArmyCombat.PreferPlayers), and one who hurt the owner in the
+	-- last ArmyCombat.AggressorSeconds outranks every other player: a sticky NPC target never hides him
+	local preferPlayers = ac ~= nil and ac.PreferPlayers == true
+	local aggroSecs = tonumber(ac and ac.AggressorSeconds) or 0
+	if ac and ac.TargetPlayers == true and CombatService and CombatService.UnitMayHitPlayer then
+		for _, pl in ipairs(Players:GetPlayers()) do
+			if pl ~= player then
+				local ch = pl.Character
+				local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+				local r = ch and ch:FindFirstChild("HumanoidRootPart")
+				local verdict: string
+				if not (hum and r and r:IsA("BasePart")) then
+					verdict = "no_character"
+				elseif hum.Health <= 0 then
+					verdict = "dead"
+				else
+					local dC = flatDist(r.Position, centre)
+					local dO = flatDist(r.Position, leashFrom)
+					if dC > reach then
+						verdict = string.format("out_of_reach dCentre=%.0f>%.0f", dC, reach)
+					else
+						local okM, may, why = pcall(CombatService.UnitMayHitPlayer, player, pl)
+						if not okM then
+							verdict = "error " .. tostring(may)
+						elseif not may then
+							verdict = "rejected " .. tostring(why)
+							noteProtected(player, pl, why)
+						else
+							local pri = 0
+							if preferPlayers then
+								pri = 1
+								if aggroSecs > 0 and CombatService.RecentlyHurtBy and CombatService.RecentlyHurtBy(player, pl, aggroSecs) then
+									pri = 2
+								end
+							end
+							if consider(hum, r, "Player", pl, pri) then
+								verdict = string.format("CANDIDATE pri=%d", pri)
+							else
+								verdict = string.format("leash dOwner=%.0f>%.0f", dO, leash)
+							end
+						end
+					end
+					verdict ..= string.format(" (dCentre=%.0f dOwner=%.0f)", dC, dO)
+				end
+				if dlines then
+					table.insert(dlines, pl.Name .. ": " .. verdict)
+				end
+			end
+		end
+	elseif dlines then
+		table.insert(dlines, "players off (ArmyCombat " .. (if ac then "TargetPlayers=" .. tostring(ac.TargetPlayers) else "disabled") .. ")")
+	end
+	if ac and ac.TargetGuards == true then
+		local gd = gateSvc()
+		if gd and gd.HostileGuards then
+			local okG = pcall(gd.HostileGuards, player, centre, reach, guardBuf)
+			if okG then
+				for _, g in ipairs(guardBuf) do
+					if consider(g.Hum, g.Root, "Guard") then
+						nGuard += 1
+					end
+				end
+			elseif dlines then
+				table.insert(dlines, "HostileGuards error")
+			end
+			table.clear(guardBuf)
+		end
+	end
+	-- claude-bud JOB 43: ARMY VS ARMY. Enemy soldiers are candidates of their own ("Unit") under THE shared army rule
+	-- (CombatService.ArmyHostility); the old pick never had them (nearestHostile skips OwnerUserId models), so the fight
+	-- stopped when the enemy player died. Players keep their tier (PreferPlayers); soldiers sit with the NPCs.
+	local nUnit = 0
+	if ArmyBrawl.LiveFor(player.UserId) and CombatService and CombatService.ArmyHostility then
+		local B = ArmyBrawl.Config()
+		for _, c in ipairs(ArmyBrawl.Candidates(player, squadByUser :: any, centre, reach, CombatService.ArmyHostility, B and B.MaxCandidates)) do
+			if consider(c.Hum, c.Root, "Unit", c.Owner, 0) then
+				nUnit += 1
+			end
+		end
+		if dlines then
+			table.insert(dlines, string.format("enemy soldiers: %d", nUnit))
+		end
+	end
+	local cur = (st :: any)._acTarget
+	if cur and flatDist(cur.Root.Position, centre) <= reach then
+		local stillOk = true
+		if cur.Kind == "Player" and cur.Player and CombatService and CombatService.UnitMayHitPlayer then
+			local okM, may = pcall(CombatService.UnitMayHitPlayer, player, cur.Player)
+			stillOk = okM and may == true
+		elseif cur.Kind == "Unit" and cur.Player and CombatService and CombatService.ArmyHostility then
+			local okM, may = pcall(CombatService.ArmyHostility, player, cur.Player) -- claude-bud JOB 43
+			stillOk = okM and may == true and ArmyBrawl.LiveFor(player.UserId)
+		end
+		if stillOk then
+			-- (the current one counts even when more than candCap() others are nearer; a player keeps his tier)
+			local pri = 0
+			for _, c in ipairs(cands) do
+				if c.Key == cur.Hum then
+					pri = c.Pri or 0
+				end
+			end
+			consider(cur.Hum, cur.Root, cur.Kind, cur.Player, pri)
+		end
+	end
+	local key, tier = FormationController.PickTargetTiered(if cur then cur.Hum else nil, cands, centre, f3)
+	;(st :: any)._acTarget = if key and roots[key] then { Hum = key, Root = roots[key], Kind = kinds[key] or "NPC", Player = who[key] } else nil
+	if dlines then
+		local t = (st :: any)._acTarget
+		local pick = "none"
+		if t then
+			pick = string.format("%s %s tier=%s d=%.0f", t.Kind, if t.Player then t.Player.Name else (t.Hum.Parent and t.Hum.Parent.Name or "?"), tostring(tier), flatDist(t.Root.Position, centre))
+		end
+		print(string.format("[ArmyTarget] %s units=%d npcs=%d guards=%d players=%d pick=%s | %s", player.Name, cnt, nNpc, nGuard, #Players:GetPlayers() - 1, pick,
+			if #dlines > 0 then table.concat(dlines, " ; ") else "no other players"))
+	end
+end
+
+-- JOB 24 §2: the per-army hit log (always counted; printed only for an owner with /armydebug on)
+SquadOrdersService.HitStats = {} :: { [string]: number }
+local hitLogAt: { [number]: number } = {}
+local function hitLog(player: Player, unit: SquadUnit, kind: string, targetName: string, damage: number, dealt: number, reason: string)
+	local k = kind .. ":" .. reason
+	SquadOrdersService.HitStats[k] = (SquadOrdersService.HitStats[k] or 0) + 1
+	local acm = SquadOrdersService._AC
+	if acm and acm.DebugFor and acm.DebugFor(player) then
+		print(string.format("[ArmyHit] %s S%02d -> %s %s dmg=%.1f dealt=%.1f %s", player.Name, tonumber(unit.Slot) or 0, kind, targetName, damage, dealt, reason))
+		local ac = armyCombat()
+		local now = os.clock()
+		if now - (hitLogAt[player.UserId] or -math.huge) >= (tonumber(ac and ac.HitLogSeconds) or 5) then
+			hitLogAt[player.UserId] = now
+			local parts = {}
+			for key, n in pairs(SquadOrdersService.HitStats) do
+				table.insert(parts, key .. "=" .. tostring(n))
+			end
+			table.sort(parts)
+			print("[ArmyHit] totals " .. table.concat(parts, " "))
+		end
+	end
+end
+
+-- JOB 24 §2: the first thing between a unit's eyes and `troot` when it is a gate barrier part (not a guard): the gate
+local function gateBlocking(player: Player, unit: SquadUnit, troot: BasePart): BasePart?
+	local eye = unit.Root.Position + Vector3.new(0, CombatFairnessConfig.NpcEyeHeight, 0)
+	local delta = troot.Position - eye
+	if delta.Magnitude < 1e-3 then
+		return nil
+	end
+	table.clear(losIgnore)
+	table.insert(losIgnore, unit.Model)
+	table.insert(losIgnore, ensureFolder())
+	if troot.Parent then
+		table.insert(losIgnore, troot.Parent)
+	end
+	if player.Character then
+		table.insert(losIgnore, player.Character :: Instance)
+	end
+	losParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true
+	losParams.FilterDescendantsInstances = losIgnore
+	losParams.RespectCanCollide = LosRule.SightRespect(losParams.RespectCanCollide) -- claude-bud JOB 32: the one sight rule
+	local res = Workspace:Raycast(eye, delta, losParams)
+	table.clear(losIgnore)
+	local inst = res and res.Instance
+	if inst and inst:IsA("BasePart") and inst:GetAttribute("GateBarrier") == true and inst:GetAttribute("GateGuardPart") ~= true then
+		return inst
+	end
+	return nil
+end
+
+-- JOB 24 §2: one unit's shot at a PLAYER / GUARD / GATE part (the caller checked the line of sight, or the gate is what
+-- blocks it). The fire cooldown is spent, the hit chance rolled at the distance, the damage applied server-side:
+-- players through CombatService.ApplyUnitPlayerHit (PvP rules, owner credit), guards / gates through
+-- GateDefenseService.ApplyUnitDamage. Per-victim damage per second capped (ArmyCombat.PlayerMaxDps). Returns hit.
+local victimDps: { [string]: { At: number, Dealt: number } } = {}
+local function unitShootAt(player: Player, unit: SquadUnit, tgt: any, part: BasePart, now: number): boolean
+	local ac = armyCombat()
+	if ac == nil or not unitReady(unit, now) then
+		return false
+	end
+	unit.LastFireAt = now
+	local kind = if part ~= tgt.Root and part:GetAttribute("GateGuardPart") ~= true then "Gate" else tgt.Kind
+	local name = if tgt.Player then tgt.Player.Name .. (if kind == "Unit" then "'s soldier" else "") elseif kind == "Gate" then "gate" else "guard"
+	local base = armyDamageBase() * SquadOrdersService._UnitDmg(player, unit) * armyBoostMult(player) -- claude-bud JOB 29 boost; JOB 39 elite
+	if rng:NextNumber() >= unitHitChance((part.Position - unit.Root.Position).Magnitude) then
+		hitLog(player, unit, kind, name, 0, 0, "miss")
+		return false
+	end
+	if kind == "Player" then
+		local dmg = base * (tonumber(ac.PlayerDamageMult) or 1)
+		local key = tostring(player.UserId) .. ":" .. tostring(tgt.Player.UserId)
+		local w = victimDps[key]
+		if w == nil or now - w.At >= 1 then
+			w = { At = now, Dealt = 0 }
+			victimDps[key] = w
+		end
+		local sa = strongArmy()
+		local room = (tonumber(if sa then sa.PlayerMaxDps else ac.PlayerMaxDps) or math.huge) - w.Dealt
+		if room <= 0 then
+			hitLog(player, unit, kind, name, dmg, 0, "dps_cap")
+			return false
+		end
+		dmg = math.min(dmg, room)
+		local ok, dealt, _killed, why = pcall(CombatService.ApplyUnitPlayerHit, player, tgt.Player, dmg, unit.Root.Position) -- v216: shooter pos
+		local d = if ok then tonumber(dealt) or 0 else 0
+		w.Dealt += d
+		hitLog(player, unit, kind, name, dmg, d, if ok then tostring(why) else "error")
+		return d > 0
+	end
+	if kind == "Unit" then
+		-- claude-bud JOB 43: an enemy soldier: CombatService re-checks THE shared army rule and deals the damage
+		local B = ArmyBrawl.Config()
+		local dmg = base * (tonumber(B and B.UnitDamageMult) or 1)
+		local model = tgt.Hum.Parent
+		if model == nil or CombatService == nil or CombatService.ApplyUnitUnitHit == nil then
+			return false
+		end
+		local ok, dealt, killed, why = pcall(CombatService.ApplyUnitUnitHit, player, tgt.Player, model, dmg)
+		local d = if ok then tonumber(dealt) or 0 else 0
+		hitLog(player, unit, kind, name, dmg, d, if ok then (if killed then "kill" else tostring(why)) else "error")
+		return d > 0
+	end
+	local gd = gateSvc()
+	if gd == nil or gd.ApplyUnitDamage == nil then
+		return false
+	end
+	local mult = if kind == "Gate" or kind == "Structure" then tonumber(ac.GateDamageMult) or 1 else tonumber(ac.GuardDamageMult) or 1
+	-- claude-bud JOB 38: a SEND keeps hitting while its sender is dead but in the server (ArmyPlan.DamageOpts)
+	local ok, landed = pcall(gd.ApplyUnitDamage, player, unit.Root.Position, part, base * mult, if SquadOrdersService._Plan ~= nil then SquadOrdersService._Plan.DamageOpts(player) else nil)
+	local hit = ok and landed == true
+	hitLog(player, unit, kind, name, base * mult, if hit then base * mult else 0, if hit then "ok" elseif ok then "refused" else "error")
+	return hit
+end
+
+local function attackAimOnly(player: Player, st: SquadState, unit: SquadUnit, now: number)
+	local tgt = (st :: any)._acTarget
+	if tgt == nil or tgt.Root.Parent == nil or tgt.Hum.Health <= 0 then
+		unit.AimRoot = nil
+		unit.AimHum = nil
+		return
+	end
+	local band = (OrdersConfig.AttackRange or 55) * 0.85 -- the fire band, as attackUnit
+	if tgt.Kind == "Player" or tgt.Kind == "Guard" or tgt.Kind == "Structure" or tgt.Kind == "Unit" then
+		-- JOB 24 §2: an enemy player / base defender: shoot it in sight, else the gate in the way (ShootGates)
+		-- claude-bud JOB 43: "Unit" = an enemy army soldier (same LOS rule, hit chance and fire rate)
+		-- claude-bud JOB 38: "Structure" = a SEND siege's turret / gate part (ArmyPlan), shot through the same path
+		if losCheckDue(unit, now) then
+			local d = (tgt.Root.Position - unit.Root.Position).Magnitude
+			if d <= band then
+				if unitHasLos(player, unit, tgt.Root) then
+					unit.LosBlocked = false
+					local firedAt = unit.LastFireAt
+					local hit = unitShootAt(player, unit, tgt, tgt.Root, now)
+					unitShotFx(player, unit, tgt.Root, firedAt, hit)
+				else
+					local ac = armyCombat()
+					local gate = if ac and ac.ShootGates == true and tgt.Kind == "Player" then gateBlocking(player, unit, tgt.Root) else nil
+					if gate then
+						local firedAt = unit.LastFireAt
+						local hit = unitShootAt(player, unit, tgt, gate, now)
+						unitShotFx(player, unit, gate, firedAt, hit)
+					else
+						hitLog(player, unit, tgt.Kind, if tgt.Player then tgt.Player.Name else "guard", 0, 0, "no_los")
+						losBlockedFor(unit, now)
+					end
+				end
+			end
+		end
+		faceYaw(unit.Root, tgt.Root.Position)
+		return
+	end
+	if losCheckDue(unit, now) then
+		nearestHostile(unit.Root.Position, band, false, player, attackCands, band) -- the in-band fallback candidates
+		local th, troot, rays = pickShot(player, unit, tgt.Hum, tgt.Root, band, attackCands, CombatFairnessConfig.UnitAttackRequireLos == true)
+		candReset(attackCands)
+		if th and troot then
+			unit.LosBlocked = false
+			unit.AimRoot = if th ~= tgt.Hum then troot else nil
+			unit.AimHum = if th ~= tgt.Hum then th else nil
+			local firedAt = unit.LastFireAt
+			-- JOB 24 §2: a steered ATTACK (leashed to him) is credited (ArmyCombat.CreditSteeredAttackKills)
+			local acc = armyCombat()
+			local credit = CombatFairnessConfig.UnitKillCreditOnAttack == true or (acc ~= nil and acc.CreditSteeredAttackKills == true)
+			local hit = unitShoot(player, unit, th, now, credit)
+			hitLog(player, unit, "NPC", th.Parent and th.Parent.Name or "npc", 0, 0, if hit then "hit" else "miss")
+			unitShotFx(player, unit, troot, firedAt, hit)
+		elseif rays > 0 then
+			losBlockedFor(unit, now)
+		end
+	end
+	faceYaw(unit.Root, aimPoint(unit, tgt.Root)) -- (the gyro; SoldierController leaves the aim alone after a shot)
+end
+
+--[[ v133 (Code Bot, phone bug "another player's army stood right in front of me and never fired"). PROVEN (tools/sim +
+	the static trace in codebot_v133.py): a player was only ever a candidate in pickSquadTarget, and the think loop ran
+	that for st.Order == "Attack" only; FOLLOW (every army's default order) and HOLD scan WE_NPC models only
+	(nearestHostile / escortPickLive), so an enemy player could stand in the middle of a FOLLOW army untouched.
+	Fix (ArmyConfig.ArmyCombat.DefendOnFollow): once per think pass a FOLLOW / HOLD army picks the enemy player it may
+	engage under THE shared rule (CombatService.UnitMayHitPlayer: PvP on, not an ally, not spawn / novice protected,
+	its owner not shielded) within DefendPlayerStuds of its centre or its owner, or out to DefendAggressorStuds for one
+	who hurt the owner or his soldiers in the last AggressorSeconds (CombatService.RecentlyHurtBy; soldiers hit by a
+	player note him via CombatService.NoteArmyAggressor) - aggressors first, then nearest, the current one sticky.
+	The units shoot it from where they stand (same LOS rule, hit chance, damage and per-victim DPS cap as ATTACK) and
+	keep their FOLLOW / HOLD movement: no teleport, no speed change, no forced damage.
+	/armydebug: [ArmyDefend] lines when the owner OR the candidate player has it on (a victim sees why every enemy
+	army ignores or engages him). ]]
+local defendLogAt: { [number]: number } = {}
+local function pickDefendTarget(player: Player, st: SquadState, proot: BasePart)
+	local ac = armyCombat()
+	if ac == nil or ac.DefendOnFollow ~= true or ac.TargetPlayers ~= true or CombatService == nil or CombatService.UnitMayHitPlayer == nil then
+		(st :: any)._defTarget = nil
+		return
+	end
+	local sum, cnt = Vector3.zero, 0
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Root.Parent then
+			sum += Vector3.new(u.Root.Position.X, 0, u.Root.Position.Z)
+			cnt += 1
+		end
+	end
+	if cnt == 0 then
+		(st :: any)._defTarget = nil
+		return
+	end
+	local centre = sum / cnt
+	local r0 = tonumber(ac.DefendPlayerStuds) or 47
+	local rA = math.max(r0, tonumber(ac.DefendAggressorStuds) or r0)
+	local aggroSecs = tonumber(ac.AggressorSeconds) or 10
+	local cur = (st :: any)._defTarget
+	local acm = SquadOrdersService._AC
+	local now = os.clock()
+	local logDue = now - (defendLogAt[player.UserId] or -math.huge) >= (tonumber(ac.TargetLogSeconds) or 2)
+	local dlines: { string }? = nil
+	local best: any = nil
+	local bestScore = math.huge
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl ~= player then
+			local dbg = logDue and acm ~= nil and acm.DebugFor ~= nil and (acm.DebugFor(player) or acm.DebugFor(pl))
+			local ch = pl.Character
+			local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+			local r = ch and ch:FindFirstChild("HumanoidRootPart")
+			local verdict: string
+			if not (hum and r and r:IsA("BasePart")) then
+				verdict = "no_character"
+			elseif hum.Health <= 0 then
+				verdict = "dead"
+			else
+				local dC = flatDist(r.Position, centre)
+				local dO = flatDist(r.Position, proot.Position)
+				local d = math.min(dC, dO)
+				local okM, may, why = pcall(CombatService.UnitMayHitPlayer, player, pl)
+				local agg = okM and may == true and CombatService.RecentlyHurtBy ~= nil and CombatService.RecentlyHurtBy(player, pl, aggroSecs) == true
+				local lim = if agg then rA else r0
+				if not okM then
+					verdict = "error " .. tostring(may)
+				elseif d > lim then
+					verdict = string.format("out_of_reach d=%.0f>%.0f rule=%s", d, lim, if may then "ok" else tostring(why))
+				elseif not may then
+					verdict = "rejected " .. tostring(why)
+					noteProtected(player, pl, why)
+				else
+					local score = d - (if agg then 1000 else 0) - (if cur and cur.Player == pl then 10 else 0)
+					verdict = string.format("CANDIDATE%s", if agg then " aggressor" else "")
+					if score < bestScore then
+						bestScore = score
+						best = { Hum = hum, Root = r, Kind = "Player", Player = pl, Aggressor = agg }
+					end
+				end
+				verdict ..= string.format(" (dCentre=%.0f dOwner=%.0f)", dC, dO)
+			end
+			if dbg then
+				dlines = dlines or {}
+				table.insert(dlines :: { string }, pl.Name .. ": " .. verdict)
+			end
+		end
+	end
+	-- claude-bud JOB 43: no enemy player to engage -> the nearest enemy SOLDIER in reach (the brawl goes on after the
+	-- enemy player dies, until one army is wiped or out of reach)
+	if best == nil and ArmyBrawl.LiveFor(player.UserId) and CombatService.ArmyHostility then
+		local B = ArmyBrawl.Config()
+		local list = ArmyBrawl.Candidates(player, squadByUser :: any, centre, r0, CombatService.ArmyHostility, B and B.MaxCandidates)
+		local pick = list[1]
+		if cur and cur.Kind == "Unit" then
+			for _, c in ipairs(list) do
+				if c.Hum == cur.Hum then
+					pick = c -- sticky: keep shooting the same soldier while it is in reach
+				end
+			end
+		end
+		if pick then
+			best = { Hum = pick.Hum, Root = pick.Root, Kind = "Unit", Player = pick.Owner, Aggressor = false }
+			if logDue and acm ~= nil and acm.DebugFor ~= nil and acm.DebugFor(player) then
+				dlines = dlines or {}
+				table.insert(dlines :: { string }, string.format("enemy soldier of %s d=%.0f (%d in reach)", pick.Owner.Name, pick.Dist, #list))
+			end
+		end
+	end
+	(st :: any)._defTarget = best
+	if dlines then
+		defendLogAt[player.UserId] = now
+		print(string.format("[ArmyDefend] %s order=%s units=%d pick=%s | %s", player.Name, tostring(st.Order), cnt,
+			if best then best.Player.Name .. (if best.Kind == "Unit" then "'s soldier" elseif best.Aggressor then " (aggressor)" else "") else "none", table.concat(dlines :: { string }, " ; ")))
+	end
+end
+
+-- v133: one FOLLOW / HOLD unit's shot at the defend target (true = it has one in reach: it aims / fires at it)
+local function defendAimOnly(player: Player, st: SquadState, unit: SquadUnit, now: number): boolean
+	local tgt = (st :: any)._defTarget
+	if tgt == nil or tgt.Root.Parent == nil or tgt.Hum.Health <= 0 then
+		return false
+	end
+	local range = OrdersConfig.AttackRange or 55
+	local band = if tgt.Aggressor then range else range * 0.85 -- the ATTACK fire band; an aggressor out to the full range
+	local d = (tgt.Root.Position - unit.Root.Position).Magnitude
+	if d > band then
+		return false -- this unit is out of reach: it does its usual FOLLOW / HOLD thing
+	end
+	if losCheckDue(unit, now) then
+		if unitHasLos(player, unit, tgt.Root) then
+			unit.LosBlocked = false
+			local firedAt = unit.LastFireAt
+			local hit = unitShootAt(player, unit, tgt, tgt.Root, now)
+			unitShotFx(player, unit, tgt.Root, firedAt, hit)
+		else
+			hitLog(player, unit, "Player", tgt.Player.Name, 0, 0, "no_los")
+			losBlockedFor(unit, now)
+		end
+	end
+	unit.AimRoot = nil
+	unit.AimHum = nil
+	faceYaw(unit.Root, tgt.Root.Position)
+	return true
+end
+
+-- v133: a player's gun / rocket hit on one of this service's soldiers (CombatService.ApplyHit "Unit", after THE shared
+-- rule CombatService.ArmyHostility): the unit's Humanoid when `model` is a LIVE unit of its owner's squad, else nil.
+-- CombatService deals the damage (real Humanoid damage); a unit that dies is re-formed by SyncArmy as on any death.
+local function playerHitUnit(_attacker: Player, model: Model): Humanoid?
+	local uo = model:GetAttribute("OwnerUserId")
+	local st = if typeof(uo) == "number" then squadByUser[uo] else nil
+	if st == nil then
+		return nil
+	end
+	for _, u in ipairs(st.Units) do
+		if u.Model == model then
+			return if u.Alive and u.Humanoid.Health > 0 then u.Humanoid else nil
+		end
+	end
+	return nil
+end
+SquadOrdersService._PlayerHitUnit = playerHitUnit -- (tests)
+
 local function reformRootless(uid: number): boolean
 	local rc = (ArmyConfig :: any).Recover
 	-- off with the Recover kill switch; v90: only for a Rollout.Fix owner
@@ -2635,8 +3297,19 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 	end
 	local order = st.Order
 	local playerRoot = characterRoot(player)
+	if order == "Attack" and SquadOrdersService._AC.AttackLive(player.UserId) then
+		attackAimOnly(player, st, unit, now) -- claude-bud JOB 24: the ArmyController moves it; here it only shoots / aims
+		return
+	end
+	-- v133 (ArmyCombat.DefendOnFollow): FOLLOW / HOLD defend against an enemy player in reach (pickDefendTarget)
+	if (order == "Follow" or order == "Hold") and playerRoot and (st :: any)._defTarget ~= nil then
+		local engaged = defendAimOnly(player, st, unit, now)
+		if engaged and order == "Follow" and SquadOrdersService._AFOn and SquadOrdersService._AC.LiveFor(player.UserId) then
+			return -- Follow3: ArmyController keeps moving it in the formation; here it only shoots / aims
+		end
+	end
 	if order ~= "Follow" then
-		SquadOrdersService._AF.Release(unit) -- v99: HOLD / ATTACK / RETREAT drive it now (one controller per unit)
+		SquadOrdersService._AF.Release(unit, order) -- v99: HOLD / ATTACK / RETREAT drive it now (one controller per unit; JOB 22: its state)
 		SquadOrdersService._PaceSpeed(unit, 0) -- v85 FollowPace: back to UnitWalkSpeed outside FOLLOW
 	end
 
@@ -2647,10 +3320,20 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 			unit.ProgDir = nil
 			return
 		end
+		if SquadOrdersService._AFOn and SquadOrdersService._AC.LiveFor(player.UserId) then
+			-- v114 Follow3: ArmyController moves every FOLLOW unit (0.2 s tick); here the escort only shoots / aims
+			escortAimOnly = true
+			local okE, errE = pcall(escortUnit, player, st, unit, playerRoot, escortHum, escortRoot, now)
+			escortAimOnly = false
+			if not okE then
+				error(errE)
+			end
+			return
+		end
 		if SquadOrdersService._AFOn then
 			-- v91 ArmyFollow: the escort still shoots (and stands to fight only while he stands near a hostile outside his
 			-- base); every walk, catch-up, regroup and the base wait line are ArmyFollow's
-			local moving = st.OwnerSpeed >= 2 or st.Seated
+			local moving = SquadOrdersService._AF.OwnerMoving(st, st.OwnerSpeed) or st.Seated -- claude-bud JOB 22: hysteresis
 			if not (st :: any)._afInBase then
 				followCtx.Live = moving
 				followCtx.Moving = moving
@@ -2660,7 +3343,7 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 				if fought and not moving then
 					-- v99: the escort fight moved it (its own MoveTo): ArmyFollow lets go, and takes it back with fresh
 					-- state (no stale goal / stuck window = no snap-back teleport right after the fight)
-					SquadOrdersService._AF.Release(unit)
+					SquadOrdersService._AF.Release(unit, "Combat") -- claude-bud JOB 22: the escort fight owns it (state Combat)
 					return
 				end
 			end
@@ -2689,9 +3372,9 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 		local holdPos = unit.HoldPos :: Vector3
 		local dist = (unit.Root.Position - holdPos).Magnitude
 		if dist > leash * 0.4 then
-			unit.Humanoid:MoveTo(holdPos)
+			SquadOrdersService._AF.Command(unit, holdPos)
 		else
-			unit.Humanoid:MoveTo(unit.Root.Position)
+			SquadOrdersService._AF.Command(unit, unit.Root.Position)
 		end
 		return
 	end
@@ -2702,14 +3385,14 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 			local dest = cf.Position
 			local dist = (unit.Root.Position - dest).Magnitude
 			if dist > 6 then
-				unit.Humanoid:MoveTo(dest)
+				SquadOrdersService._AF.Command(unit, dest)
 				faceYaw(unit.Root, dest)
 			else
-				unit.Humanoid:MoveTo(unit.Root.Position)
+				SquadOrdersService._AF.Command(unit, unit.Root.Position)
 				unit.HoldPos = unit.Root.Position
 			end
 		elseif playerRoot then
-			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, 8)).Position)
+			SquadOrdersService._AF.Command(unit, (playerRoot.CFrame * CFrame.new(0, 0, 8)).Position)
 		end
 		return
 	end
@@ -2839,7 +3522,9 @@ end
 -- inside the Barracks), at the old grid spot behind the player, else on the player's trail, else in the slot as before
 local function spawnCFrame(player: Player, st: SquadState, root: BasePart?, baseCf: CFrame, slot: number): CFrame
 	local lift = Vector3.new(0, 2, 0)
-	local slotCf = baseCf * CFrame.new(unitOffset(st, slot)) + lift
+	-- v114 (Follow3): a new unit spawns in its own formation cell (it does not walk across the formation to it)
+	local off = if SquadOrdersService._AC.LiveFor(player.UserId) then SquadOrdersService._AC.SpawnOffset(slot) else unitOffset(st, slot)
+	local slotCf = baseCf * CFrame.new(off) + lift
 	local cfg = followPathCfg()
 	if root == nil or cfg == nil then
 		return slotCf
@@ -2897,10 +3582,8 @@ function SquadOrdersService._PaceRecover(player: Player, st: SquadState, unit: S
 	end
 	followCtx.TpAt[unit] = now + (tonumber(c.TeleportCooldown) or 4)
 	local cf = spawnCFrame(player, st, proot, proot.CFrame, unit.Slot)
-	unit.Model:PivotTo(cf)
-	unit.Root.AssemblyLinearVelocity = Vector3.zero
+	SquadOrdersService._SC.Reposition(unit, cf, "pace-recover", true) -- v114: the one emergency PivotTo (moves + MoveTo)
 	unit.Crumb = nil
-	unit.Humanoid:MoveTo(cf.Position)
 	return true
 end
 
@@ -2993,7 +3676,8 @@ function SquadOrdersService.SyncArmy(player: Player)
 		pushState(player)
 		return
 	end
-	while #st.Units < desired do
+	while #st.Units < desired and not (SquadOrdersService._Plan ~= nil and SquadOrdersService._Plan.HoldsRefill(player.UserId)) do
+		-- claude-bud JOB 38: a SEND army does not refill at its owner while it is out
 		-- lane C: the lowest free slot (was #Units + 1, which doubled up a slot after a unit died)
 		local used: { [number]: boolean } = {}
 		for _, u in ipairs(st.Units) do
@@ -3088,12 +3772,103 @@ local function flashOrderBillboard(player: Player, st: SquadState, order: OrderI
 	end)
 end
 
-function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, string?)
+-- an accepted order's side effects (analytics, the first-minutes hint, the billboard echo, the novice shield)
+local function afterOrder(player: Player, st: SquadState, order: string)
+	-- claude-bud JOB 24 §10: the Army funnel / custom events (an order = he used the Army; ATTACK = first attack)
+	if AnalyticsService and AnalyticsService.Log then
+		pcall(AnalyticsService.Log, "ARMY_OPEN", player.UserId, { order = order })
+		if order == "Attack" then
+			pcall(AnalyticsService.Log, "ARMY_ATTACK", player.UserId, {})
+		end
+	end
+	-- claude-bud JOB 7: the first ATTACK ends the first-minutes hint (TutorialService saves it)
+	do
+		local okT, tut = pcall(function(): any
+			return require(script.Parent.TutorialService)
+		end)
+		if okT and tut and tut.OnArmyOrder then
+			pcall(tut.OnArmyOrder, player, order)
+		end
+	end
+	pushState(player)
+	-- the order echo is this flash + the Army popover (no "Squad: X" toast per order — spec §4.2)
+	if VALID[order] then
+		flashOrderBillboard(player, st, order :: OrderId)
+	end
+	-- F6 (owner's 11 features): an accepted order ends the novice shield for good (EndOnSquadOrder)
+	if CombatService and CombatService.EndNoviceShield then
+		pcall(CombatService.EndNoviceShield, player, "order")
+	end
+end
+
+--[[ Code Bot army command bug: ArmyState's OnChange hook - a NEW state (or a forced repeat) starts every unit with no
+	stale chase / given-up / aim / recover window (was inline in SetOrder; now for every transition, plans included). ]]
+local function onStateChange(player: Player, st: any, _old: string, _new: string, _source: string)
+	local now = os.clock()
+	for _, u in ipairs(st.Units) do
+		-- squadfair: a blocked line is never re-checked early (not even by a new order: at most one check per cooldown)
+		u.LosCheckAt = math.max(u.LosCheckAt or 0, now)
+		resetChase(u)
+		u.AimRoot = nil
+		u.AimHum = nil
+		u.FarSince = nil -- army fix: a new order starts the recover windows over
+		u.PlotId = nil
+		u.ProgPos = nil
+		u.ProgDir = nil
+	end
+end
+
+function SquadOrdersService.SetOrder(player: Player, orderRaw: any, source: string?): (boolean, string?)
 	if not OrdersConfig.Enabled then
 		return false, "Disabled"
 	end
 	if typeof(orderRaw) ~= "string" then
 		return false, "InvalidOrder"
+	end
+	-- Code Bot army command bug: a live ArmyOrders owner (OwnerFirst) -> ArmyCommand, THE one command path (validated,
+	-- one ArmyState transition, the plan moves the block). RECALL is his button only.
+	if ArmyCommand.Live(player) and (VALID[orderRaw] or orderRaw == "Recall") then
+		local flagsL = OrdersConfig.Orders
+		if typeof(flagsL) == "table" and (flagsL :: any)[orderRaw] == false then
+			return false, "OrderDisabled"
+		end
+		local soldiersL = if SoldierService then SoldierService.GetCount(player) else 0
+		if soldiersL < (OrdersConfig.MinSoldiersToShow or 1) then
+			return false, "NoSoldiers"
+		end
+		local stL = squadByUser[player.UserId]
+		if not stL then
+			SquadOrdersService.SyncArmy(player)
+			stL = squadByUser[player.UserId]
+		end
+		if not stL then
+			return false, "NoSquad"
+		end
+		stL.OrderAt = os.clock()
+		local okC, why = ArmyCommand.Order(player, stL, orderRaw, source)
+		if not okC then
+			return false, why or "Rejected"
+		end
+		afterOrder(player, stL, orderRaw)
+		return true, nil
+	end
+	-- (not live: the plain order, as before; the JOB 38 plan path below only runs for a live owner)
+	-- claude-bud JOB 38: RECALL, or another order while an army plan runs: the army marches back first (ArmyPlan);
+	-- ATTACK again while auto-clearing keeps the plan
+	if SquadOrdersService._Plan ~= nil then
+		local owns = SquadOrdersService._Plan.Owns(player.UserId)
+		if owns and orderRaw == "Attack" then
+			return true, nil
+		end
+		if orderRaw == "Recall" or owns then
+			if SquadOrdersService._Plan.Recall(player, if orderRaw == "Recall" then nil else orderRaw, squadByUser[player.UserId]) then
+				pushState(player)
+				return true, nil
+			end
+			if orderRaw == "Recall" then
+				orderRaw = "Follow"
+			end
+		end
 	end
 	local order = orderRaw :: string
 	if not VALID[order] then
@@ -3124,53 +3899,42 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 		and st.OrderAt ~= nil
 		and now - (st.OrderAt :: number) < (tonumber(CombatFairnessConfig.UnitRepeatOrderGraceSeconds) or 0)
 	st.OrderAt = now
-	st.Order = order :: OrderId
-	-- claude-bud JOB 7: the first ATTACK ends the first-minutes hint (TutorialService saves it)
-	do
-		local okT, tut = pcall(function(): any
-			return require(script.Parent.TutorialService)
-		end)
-		if okT and tut and tut.OnArmyOrder then
-			pcall(tut.OnArmyOrder, player, order)
-		end
-	end
-	if order == "Hold" then
-		for _, u in ipairs(st.Units) do
-			if u.Alive then
-				u.HoldPos = u.Root.Position
-			end
-		end
-	else
-		for _, u in ipairs(st.Units) do
-			u.HoldPos = nil
-		end
-	end
+	-- Code Bot army command bug: THE one writer (ArmyState.Set: st.ArmyState + st.Order, HoldPos, the unit resets via
+	-- onStateChange; the same order after its grace window is a fresh order again: Force)
+	ArmyState.Set(player, st, ArmyState.OfOrder[order], source or ("order " .. order), { Force = not repeatOrder, NoPush = true })
 	for _, u in ipairs(st.Units) do
-		-- squadfair: a blocked line is never re-checked early (not even by a new order: at most one check per cooldown)
 		u.LosCheckAt = math.max(u.LosCheckAt, now)
-		if not repeatOrder then
-			resetChase(u) -- a new order (or ATTACK again after the grace) starts with no stale chase / given-up state
-			u.AimRoot = nil
-			u.AimHum = nil
-			u.FarSince = nil -- army fix: a new order starts the recover windows over
-			u.PlotId = nil
-			u.ProgPos = nil
-			u.ProgDir = nil
-		end
 	end
-
-	pushState(player)
-	-- the order echo is this flash + the Army popover (no "Squad: X" toast per order — spec §4.2)
-	flashOrderBillboard(player, st, order :: OrderId)
-	-- F6 (owner's 11 features): an accepted order ends the novice shield for good (EndOnSquadOrder)
-	if CombatService and CombatService.EndNoviceShield then
-		pcall(CombatService.EndNoviceShield, player, "order")
-	end
+	afterOrder(player, st, order)
 	return true, nil
 end
 
 function SquadOrdersService.Push(player: Player)
 	pushState(player)
+end
+
+-- claude-bud JOB 38: the owner's squad state (ArmyPlan SEND) and the army's power numbers (ArmySendRules: units x unit HP
+-- x unit DPS, research / boosts included)
+function SquadOrdersService.StateOf(player: Player): any
+	return squadByUser[player.UserId]
+end
+
+function SquadOrdersService.UnitPower(player: Player): (number, number, number)
+	local st = squadByUser[player.UserId]
+	local units, rate = 0, OrdersConfig.AttackFireRate or 1.8
+	if st then
+		for _, u in ipairs(st.Units) do
+			if u.Alive and u.Humanoid.Health > 0 then
+				units += 1
+				rate = armyFireRate(u)
+			end
+		end
+	end
+	local hp = armyHealthBase() * researchMult(player, "SoldierHealth") * superMult(player)
+	local dps = armyDamageBase() * researchMult(player, "SoldierDamage") * armyBoostMult(player) * rate
+	-- claude-bud JOB 39: trained armies are stronger in the SEND verdict (the living units' average Elite HP / damage)
+	local eh, ed = SquadOrdersService._EliteAvg(st)
+	return units, hp * eh, dps * ed
 end
 
 -- army fix (ArmyConfig.Gate): may this owner's army open his gate at `pos`? Only while his squad FOLLOWS him (never
@@ -3224,7 +3988,7 @@ end
 function SquadOrdersService.ApplyResearch(player: Player) -- v69 research: rescale living units' HP, add units
 	local st = squadByUser[player.UserId]
 	if st then
-		local maxHp = math.floor((OrdersConfig.UnitHealth or 90) * researchMult(player, "SoldierHealth") + 0.5)
+		local maxHp = math.floor(armyHealthBase() * researchMult(player, "SoldierHealth") * superMult(player) + 0.5) -- JOB 36
 		for _, u in ipairs(st.Units) do
 			if u.Alive and u.Humanoid.Health > 0 then
 				local ratio = u.Humanoid.Health / math.max(u.Humanoid.MaxHealth, 1)
@@ -3236,17 +4000,76 @@ function SquadOrdersService.ApplyResearch(player: Player) -- v69 research: resca
 	SquadOrdersService.SyncArmy(player)
 end
 
+-- claude-bud JOB 39: a unit's damage factor = the SoldierDamage research x its Elite damage, capped at MaxMult
+function SquadOrdersService._UnitDmg(player: Player, unit: SquadUnit): number
+	local r = researchMult(player, "SoldierDamage")
+	local e = tonumber(unit.Model:GetAttribute("WE_EliteDmg")) or 1
+	if e == 1 then
+		return r
+	end
+	return math.min(r * e, tonumber((require(Shared.Configs.ResearchConfig) :: any).MaxMult) or 3)
+end
+
+-- claude-bud JOB 39: the living units' average Elite HP / damage factors (1, 1 without training)
+function SquadOrdersService._EliteAvg(st: SquadState?): (number, number)
+	local eg = SquadOrdersService._Endgame
+	if st == nil or eg == nil then
+		return 1, 1
+	end
+	local n, h, d = 0, 0, 0
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Humanoid.Health > 0 then
+			n += 1
+			local kind = u.Model:GetAttribute("WE_EliteKind")
+			local tier = tonumber(u.Model:GetAttribute("WE_EliteTier")) or 0
+			local s = if typeof(kind) == "string" then (require(Shared.Configs.EndgameConfig) :: any).EliteStats(kind, tier) else nil
+			h += if s then s.Hp else 1
+			d += tonumber(u.Model:GetAttribute("WE_EliteDmg")) or 1
+		end
+	end
+	if n == 0 then
+		return 1, 1
+	end
+	return h / n, d / n
+end
+
+-- claude-bud JOB 39: a training buy / re-train / Instant Army Refill: every living soldier takes its type's tier now
+-- (MaxHealth rescaled keeping the HP ratio, the look re-dressed; no move, no PivotTo)
+function SquadOrdersService._ReapplyElite(player: Player)
+	local eg = SquadOrdersService._Endgame
+	local st = squadByUser[player.UserId]
+	local profile = DataService and DataService.GetProfile(player)
+	if eg == nil or st == nil or profile == nil then
+		return
+	end
+	for _, u in ipairs(st.Units) do
+		local kind = u.Model:GetAttribute("WE_EliteKind")
+		if u.Alive and u.Humanoid.Health > 0 and typeof(kind) == "string" then
+			local elite = eg.EliteFor(kind, eg.EliteTier(profile, kind))
+			local ratio = u.Humanoid.Health / math.max(u.Humanoid.MaxHealth, 1)
+			u.Humanoid.MaxHealth = math.floor(armyHealthBase() * math.min(researchMult(player, "SoldierHealth") * elite.Hp, eg.MaxMult()) * superMult(player) + 0.5)
+			u.Humanoid.Health = u.Humanoid.MaxHealth * ratio
+			pcall(eg.DressUnit, u.Model, u.Humanoid, elite, 2)
+		end
+	end
+end
+
 function SquadOrdersService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	SoldierService = deps.SoldierService
 	NotificationService = deps.NotificationService
+	AnalyticsService = deps.AnalyticsService -- claude-bud JOB 24 §10
 	RateLimitService = deps.RateLimitService
 	RemoteSetup = deps.RemoteSetup
 	AntiExploitService = deps.AntiExploitService
 	VisualAssetService = deps.VisualAssetService
 	BaseService = deps.BaseService
 	ResearchService = deps.ResearchService -- v69 research
+	SquadOrdersService._Endgame = deps.EndgameService -- claude-bud JOB 39
 	CombatService = deps.CombatService -- F6 novice shield (Init order does not matter: used only on an order)
+	if CombatService and CombatService.SetUnitHitHandler then
+		CombatService.SetUnitHitHandler(playerHitUnit) -- v133: player guns hurt enemy soldiers (THE shared rule in CombatService)
+	end
 
 	if not OrdersConfig.Enabled then
 		print("[WAR EMPIRE] SquadOrdersService disabled (OrdersConfig.Enabled=false)")
@@ -3262,9 +4085,43 @@ function SquadOrdersService.Init(deps: { [string]: any })
 			return OrdersConfig.UnitWalkSpeed or 14
 		end,
 	})
+	SquadOrdersService._AC.Start({ -- v114 Follow3: the one FOLLOW controller (its own 0.2 s tick)
+		Squads = function()
+			return squadByUser
+		end,
+		CharacterRoot = characterRoot,
+		UnitWalkSpeed = function()
+			return OrdersConfig.UnitWalkSpeed or 14
+		end,
+	})
+	-- v123 /movedebug: player-movement watchers + the per-player sampler (quiet unless WE_MoveDebug)
+	require(script.Parent.Parent.Modules.MoveDebug).Start({
+		Squads = function()
+			return squadByUser
+		end,
+	})
 
+	-- Code Bot army command bug: THE army state's hooks + the live owner's command path
+	ArmyState.Bind({ OnChange = onStateChange, Push = pushState })
+	ArmyCommand.Bind({
+		StateOf = function(p: Player): any
+			return squadByUser[p.UserId]
+		end,
+		SyncArmy = SquadOrdersService.SyncArmy,
+		Pick = pickSquadTarget,
+		Push = pushState,
+		OwnerRoot = characterRoot,
+		HomePos = function(p: Player): Vector3?
+			local cf = plotRetreatCFrame(p)
+			return if cf then cf.Position else nil
+		end,
+		NotificationService = NotificationService,
+	})
 	local orderRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSquadOrder) :: RemoteEvent
 	orderRemote.OnServerEvent:Connect(function(player: Player, orderId: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestSquadOrder", orderId) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		local rate = OrdersConfig.OrderRatePerSec or 2
 		local burst = OrdersConfig.OrderBurst or 4
 		if not RateLimitService.Allow(player, "squad_order", rate, burst) then
@@ -3276,7 +4133,11 @@ function SquadOrdersService.Init(deps: { [string]: any })
 		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
+		ArmyLog.Line(player, "SERVER ARMY", string.format("received player=%s command=%s", player.Name, tostring(orderId)))
 		local ok, err = SquadOrdersService.SetOrder(player, orderId)
+		if not ok and not ArmyCommand.Live(player) then
+			ArmyLog.Reject(player, "order " .. tostring(orderId), tostring(err)) -- (ArmyCommand logs its own rejections)
+		end
 		if not ok and NotificationService then
 			local msg = "Order failed"
 			if err == "NoSoldiers" then
@@ -3284,7 +4145,11 @@ function SquadOrdersService.Init(deps: { [string]: any })
 			elseif err == "InvalidOrder" then
 				msg = "Invalid squad order"
 			end
-			NotificationService.Notify(player, msg, "Warn")
+			-- Code Bot: ArmyCommand already told him (its own toast: "No enemies near" ...); the plain path toasts here
+			if not ArmyCommand.Live(player) or err == "NoSoldiers" or err == "OrderDisabled" or err == "NoSquad" or err == "InvalidOrder" then
+				NotificationService.Notify(player, msg, "Warn")
+			end
+			pushState(player) -- the Army UI re-syncs to the real state after a refused order
 		end
 	end)
 
@@ -3398,6 +4263,33 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					-- lane C FollowPath (squadfair: also ATTACK once a unit has given up a chase: it walks the trail)
 					if (st.Order == "Follow" or (st.Order == "Attack" and anyGaveUp(st))) and proot and pathCfg and probe == nil then
 						probe = buildProbe(pathCfg)
+					end
+					-- claude-bud JOB 24: the squad's ONE attack target (sticky), before any unit thinks
+					if st.Order == "Attack" and proot and SquadOrdersService._AC.AttackLive(player.UserId) then
+						local okP, errP = pcall(pickSquadTarget :: any, player, st, proot)
+						if not okP then
+							(st :: any)._acTarget = nil
+							thinkError(player, errP, now)
+						end
+					else
+						(st :: any)._acTarget = nil
+					end
+					-- v133: the FOLLOW / HOLD army's defend target (an enemy player in reach, THE shared rule)
+					if (st.Order == "Follow" or st.Order == "Hold") and proot then
+						local okD, errD = pcall(pickDefendTarget :: any, player, st, proot)
+						if not okD then
+							(st :: any)._defTarget = nil
+							thinkError(player, errD, now)
+						end
+					else
+						(st :: any)._defTarget = nil
+					end
+					-- claude-bud JOB 38: an army plan (ATTACK auto-clear / SEND / RECALL) sets the target and moves the lead
+					if SquadOrdersService._Plan ~= nil and SquadOrdersService._Plan.Owns(player.UserId) then
+						local okPl, errPl = pcall(SquadOrdersService._Plan.Think, player, st, proot, pickSquadTarget, now)
+						if not okPl then
+							thinkError(player, errPl, now)
+						end
 					end
 					for _, unit in ipairs(st.Units) do
 						-- army fix (ArmyConfig.Loop): an error in one unit's think never stops the loop for every army

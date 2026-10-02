@@ -143,8 +143,31 @@ safeInit("OpsController", safeRequire("OpsController", Controllers:WaitForChild(
 safeInit("FeatureController", safeRequire("FeatureController", Controllers:WaitForChild("FeatureController", 5) :: Instance)) -- claude-bud JOB 4/5: FeaturePush cues (airdrop / bounty markers)
 safeInit("QualityGovernor", safeRequire("QualityGovernor", Modules:WaitForChild("QualityGovernor", 5) :: Instance)) -- claude-bud JOB 8: automatic low tier (small screen / low FPS)
 safeInit("Juice", safeRequire("Juice", Modules:WaitForChild("Juice", 5) :: Instance)) -- claude-bud JOB 11: purchase burst + rebirth celebration
+safeInit("ArmourController", safeRequire("ArmourController", Controllers:WaitForChild("ArmourController", 5) :: Instance)) -- claude-bud JOB 26
+safeInit("RetentionController", safeRequire("RetentionController", Controllers:WaitForChild("RetentionController", 5) :: Instance)) -- claude-bud JOB 29
+safeInit("RatePromptController", safeRequire("RatePromptController", Controllers:WaitForChild("RatePromptController", 5) :: Instance)) -- claude-bud JOB 40 part D
+safeInit("RecruitPackController", safeRequire("RecruitPackController", Controllers:WaitForChild("RecruitPackController", 5) :: Instance)) -- claude-bud JOB 41 part B
+safeInit("RebirthZoneController", safeRequire("RebirthZoneController", Controllers:WaitForChild("RebirthZoneController", 5) :: Instance)) -- claude-bud JOB 46: the zone preview card + ZoneOpen
+safeInit("ArmyNearestController", safeRequire("ArmyNearestController", Controllers:WaitForChild("ArmyNearestController", 5) :: Instance)) -- claude-bud JOB 52: the ATTACK nothing-in-range card (PIN / SEND)
+safeInit("NightExposureController", safeRequire("NightExposureController", Controllers:WaitForChild("NightExposureController", 5) :: Instance)) -- claude-bud JOB 54: the night exposure (owner-first)
+safeInit("AmbienceController", safeRequire("AmbienceController", Controllers:WaitForChild("AmbienceController", 5) :: Instance)) -- claude-bud JOB 59 B: the world ambience (owner-first)
+safeInit("ZoneRunController", safeRequire("ZoneRunController", Controllers:WaitForChild("ZoneRunController", 5) :: Instance)) -- claude-bud JOB 69 B: the zone-run how-to card + tracker
+safeInit("RangeLifeController", safeRequire("RangeLifeController", Controllers:WaitForChild("RangeLifeController", 5) :: Instance)) -- claude-bud JOB 68: the shooting range soldiers fire (client cosmetic, owner-first)
+safeInit("RivalController", safeRequire("RivalController", Controllers:WaitForChild("RivalController", 5) :: Instance)) -- claude-bud JOB 41 part C
+safeInit("NukeController", safeRequire("NukeController", Controllers:WaitForChild("NukeController", 5) :: Instance)) -- claude-bud JOB 33
+safeInit("AchievementController", safeRequire("AchievementController", Controllers:WaitForChild("AchievementController", 5) :: Instance)) -- claude-bud JOB 34
+safeInit("ArmoryController", safeRequire("ArmoryController", Controllers:WaitForChild("ArmoryController", 5) :: Instance)) -- claude-bud JOB 35
+safeInit("CheckpointController", safeRequire("CheckpointController", Controllers:WaitForChild("CheckpointController", 5) :: Instance)) -- claude-bud JOB 37
+safeInit("EndgameController", safeRequire("EndgameController", Controllers:WaitForChild("EndgameController", 5) :: Instance)) -- claude-bud JOB 39
+safeInit("BaseMarkerController", safeRequire("BaseMarkerController", Controllers:WaitForChild("BaseMarkerController", 5) :: Instance)) -- claude-bud JOB 40 part E
+safeInit("BuildingTipController", safeRequire("BuildingTipController", Controllers:WaitForChild("BuildingTipController", 5) :: Instance)) -- claude-bud JOB 24 §5
+safeInit("DoubleWeekendController", safeRequire("DoubleWeekendController", Controllers:WaitForChild("DoubleWeekendController", 5) :: Instance)) -- Code Bot v185: DOUBLE WEEKEND (EventConfig); v192: one-time pop-up + live chip under TARGETS (no banner)
+safeInit("ArmyDebugClient", safeRequire("ArmyDebugClient", Modules:WaitForChild("ArmyDebugClient", 5) :: Instance)) -- v115: owner-only army slot markers + labels (ArmyConfig.Follow3.Debug + WE_ArmyDebug; /armydebug)
+safeInit("MoveDebugClient", safeRequire("MoveDebugClient", Modules:WaitForChild("MoveDebugClient", 5) :: Instance)) -- v123: /movedebug player-movement log (WE_MoveDebug; quiet otherwise)
 safeInit("PremiumWeaponsClient", safeRequire("PremiumWeaponsClient", Modules:WaitForChild("PremiumWeaponsClient", 5) :: Instance)) -- claude-bud PREMIUM: FIRE / MISSILE while driving a Robux-only vehicle
 safeInit("EngagementClient", safeRequire("EngagementClient", Modules:WaitForChild("EngagementClient", 5) :: Instance)) -- claude-bud JOB 13: event banner + leaderboard board
+safeInit("GameFeelClient", safeRequire("GameFeelClient", Modules:WaitForChild("GameFeelClient", 5) :: Instance)) -- claude-bud JOB 14: kill feed, vehicle numbers, raid report, sounds
+safeInit("StandFx", safeRequire("StandFx", Modules:WaitForChild("StandFx", 5) :: Instance)) -- claude-bud JOB 19: purchase stand hologram spin + ring pulse
 safeInit("RigAnimator", safeRequire("RigAnimator", Modules:WaitForChild("RigAnimator", 5) :: Instance)) -- R-RIG: soldier animation, army escorts, far LOD (client only; a no-op while RigConfig.Enabled is false)
 safeInit("AircraftBodyClient", safeRequire("AircraftBodyClient", Modules:WaitForChild("AircraftBodyClient", 5) :: Instance)) -- air-looks: store aircraft rotors spin + seated chase camera (client only; nothing to do until a store aircraft body is live)
 

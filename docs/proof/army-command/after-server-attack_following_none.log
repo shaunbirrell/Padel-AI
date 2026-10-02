@@ -1,0 +1,11 @@
+[ArmyController] v115 Follow3 TrailBlock controller started (true, all, debug false)
+[WAR EMPIRE] ArmyPlan Init
+S_WARM Following
+S_BEFORE Following
+[SERVER ARMY] shaunie6 command=Attack state=Following plan=none source=test Attack
+[ARMY MOVE] shaunie6 ATTACK probe from=(-500,3,0) radius=400 -> none
+WARN	[SERVER ARMY] REJECTED shaunie6 ATTACK reason=NoEnemiesNear from=(-500,3,0) radius=400 nearest=none state=Following
+S_OK false
+S_WHY NoEnemiesNear
+S_AFTER Following
+notify	No enemies on the map

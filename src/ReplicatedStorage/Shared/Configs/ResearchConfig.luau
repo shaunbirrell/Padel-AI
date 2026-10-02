@@ -37,6 +37,9 @@ export type UpgradeDef = {
 	EffectText: string, -- string.format(EffectText, FormatAmount(...)) e.g. "%s weapon damage"
 	Note: string?,
 	Enabled: boolean,
+	RebirthScale: number?, -- claude-bud JOB 20: price x (1 + RebirthScale x rebirths)
+	ServiceOnly: boolean?, -- claude-bud JOB 26: bought only through its own service (ArmourService), never the research remote
+	FlatCosts: boolean?, -- claude-bud JOB 24: every level costs the same (e.g. one tower guard per level)
 }
 
 export type ResearchLock = { Code: string, Text: string } -- Code: "Disabled" | "Maxed" | "NeedStructure" | "NeedLab"
@@ -78,9 +81,24 @@ ResearchConfig.StatIds = {
 	"VehicleArmor",
 	"TurretDamage",
 	"SquadSize",
+	-- claude-bud JOB 24 §4a (live: "disabling GuardArmor / GuardRoster / TowerGuards: unknown Stat"): the JOB 20 guard stats
+	-- (GuardConfig.HealthStat / CountStat, BaseGuards hiredCount)
+	"SoldierFireRate", -- claude-bud JOB 26: Combat Drills
+	"PlayerArmour", -- claude-bud JOB 26: personal armour tier (ArmourService; the hidden Armour track)
+	"GuardHP",
+	"GuardCount",
+	"TowerGuards",
 }
 
 ResearchConfig.Tracks = {
+	-- claude-bud JOB 26: personal armour (ArmourService only; NOT in TrackOrder, so the Research panel never shows it)
+	Armour = {
+		Id = "Armour",
+		DisplayName = "Armour",
+		Order = 9,
+		Blurb = "Personal armour, bought at your base.",
+		Requires = { StructureId = "CommandCenter", Level = 1, Text = "Needs a Command Center", Short = "NEEDS HQ" },
+	},
 	Weapons = {
 		Id = "Weapons",
 		DisplayName = "Weapons",
@@ -214,6 +232,40 @@ ResearchConfig.Upgrades = {
 		EffectText = "%s squad damage",
 		Enabled = true,
 	},
+	-- claude-bud JOB 26: personal armour. Bought ONLY at the base through ArmourService (tier order, Command Center level,
+	-- inside his own plot); paid and saved here so the Cash path stays the one research purchase (ServiceOnly: the
+	-- research remote refuses it). Costs / reductions mirror ArmourConfig.Tiers. Kept through rebirth like all research.
+	PersonalArmour = {
+		Id = "PersonalArmour",
+		Track = "Armour",
+		Order = 1,
+		DisplayName = "Personal Armour",
+		Badge = "ARM",
+		Stat = "PlayerArmour",
+		Kind = "Add",
+		PerLevel = 1,
+		MaxLevel = 5,
+		Costs = { 12000, 45000, 150000, 450000, 1200000 },
+		LabLevels = { 0, 0, 0, 0, 0 },
+		EffectText = "armour tier %s",
+		ServiceOnly = true,
+		Enabled = true,
+	},
+	-- claude-bud JOB 26: "Training" for the army (fire rate); Firepower / Toughness are Marksman Training / Body Armor
+	CombatDrills = {
+		Id = "CombatDrills",
+		Track = "Soldiers",
+		Order = 4,
+		DisplayName = "Combat Drills",
+		Badge = "ROF",
+		Stat = "SoldierFireRate",
+		Kind = "Mult",
+		PerLevel = 0.08,
+		MaxLevel = 5,
+		Costs = { 4000, 15000, 45000, 120000, 300000 },
+		EffectText = "%s squad fire rate",
+		Enabled = true,
+	},
 	SquadExpansion = {
 		Id = "SquadExpansion",
 		Track = "Soldiers",
@@ -277,6 +329,54 @@ ResearchConfig.Upgrades = {
 		MaxLevel = 5,
 		Costs = { 3000, 12000, 40000, 110000, 300000 },
 		EffectText = "%s gate guard and auto-gun damage",
+		Enabled = true,
+	},
+	-- claude-bud JOB 20 (GuardConfig): tougher guards, more guards
+	GuardArmor = {
+		Id = "GuardArmor",
+		Track = "Defenses",
+		Order = 2,
+		DisplayName = "Guard Armor",
+		Badge = "ARM",
+		Stat = "GuardHP",
+		Kind = "Mult",
+		PerLevel = 0.2,
+		MaxLevel = 5,
+		Costs = { 5000, 20000, 60000, 150000, 350000 },
+		EffectText = "%s base guard health",
+		Enabled = true,
+	},
+	GuardRoster = {
+		Id = "GuardRoster",
+		Track = "Defenses",
+		Order = 3,
+		DisplayName = "Guard Roster",
+		Badge = "GRD",
+		Stat = "GuardCount",
+		Kind = "Add",
+		PerLevel = 1,
+		MaxLevel = 2,
+		Costs = { 40000, 200000 },
+		EffectText = "%s base guards at your posts",
+		Enabled = true,
+	},
+	-- claude-bud JOB 20: one tower guard per level, on the base corner towers (in order); bought at the tower's prompt
+	-- (or here). RebirthScale: the price is Costs x (1 + RebirthScale x rebirths) (ResearchService.Purchase)
+	TowerGuards = {
+		Id = "TowerGuards",
+		Track = "Defenses",
+		Order = 4,
+		DisplayName = "Tower Guards",
+		Badge = "TWR",
+		Stat = "TowerGuards",
+		Kind = "Add",
+		PerLevel = 1,
+		MaxLevel = 4,
+		Costs = { 25000, 25000, 25000, 25000 }, -- = GuardConfig.Tower.BaseCost
+		RebirthScale = 0.5, -- = GuardConfig.Tower.PerRebirth
+		FlatCosts = true, -- (one tower guard per level, the same price each: ResearchService's sanity check allows it)
+		LabLevels = { 0, 0, 0, 0 }, -- no Research Lab needed: the Watchtowers are
+		EffectText = "%s tower guards on your corner towers",
 		Enabled = true,
 	},
 } :: { [string]: UpgradeDef }

@@ -1,0 +1,49 @@
+# run_rebirth_stations_test.py (2026-10-01T11:44Z, headless luau stand-in: NOT Roblox)
+ok    ROOT CAUSE: before the fix no client code read a zone prompt (only the ObjectText '<Name> $cost') and no zone had an activity but the silo
+ok    WestYard L0 card: TANK FACTORY | $60,000 | +$30/s income | Here: Builds tanks for cash. Ship a batch here every 20 min.
+ok    WestYard L1 card: TANK FACTORY | $180,000 | +$70/s income | Here: Builds tanks for cash. Ship a batch here every 20 min.
+ok    WestYard L2 card: TANK FACTORY | $500,000 | +$140/s income | Here: Builds tanks for cash. Ship a batch here every 20 min.
+ok    WestYard L3 card: TANK FACTORY | MAX | +$140/s income | Here: Builds tanks for cash. Ship a batch here every 20 min.
+ok    StrategicYard L0 card: NUCLEAR SILO | $250,000 | Holds 1 nuke, 60 min charge | Here: Charges nukes. Launch from the silo console.
+ok    StrategicYard L1 card: NUCLEAR SILO | $750,000 | Holds 2 nukes, 45 min charge | Here: Charges nukes. Launch from the silo console.
+ok    StrategicYard L2 card: NUCLEAR SILO | $2,000,000 | Holds 3 nukes, 30 min charge | Here: Charges nukes. Launch from the silo console.
+ok    StrategicYard L3 card: NUCLEAR SILO | MAX | Holds 3 nukes, 30 min charge | Here: Charges nukes. Launch from the silo console.
+ok    WestStrip L0 card: ARTILLERY BATTERY | $90,000 | +$12/s income · Missile reload -90 s | Here: Cuts your missile reload. Call a strike from here.
+ok    WestStrip L1 card: ARTILLERY BATTERY | $270,000 | +$30/s income · Missile reload -180 s | Here: Cuts your missile reload. Call a strike from here.
+ok    WestStrip L2 card: ARTILLERY BATTERY | $700,000 | +$60/s income · Missile reload -270 s | Here: Cuts your missile reload. Call a strike from here.
+ok    WestStrip L3 card: ARTILLERY BATTERY | MAX | +$60/s income · Missile reload -270 s | Here: Cuts your missile reload. Call a strike from here.
+ok    DroneBay L0 card: DRONE HANGAR | $110,000 | +$8/s income · Drones empty your ATM every 60 s | Here: Drones empty your ATM. Launch a sweep any time.
+ok    DroneBay L1 card: DRONE HANGAR | $330,000 | +$20/s income · Drones empty your ATM every 40 s | Here: Drones empty your ATM. Launch a sweep any time.
+ok    DroneBay L2 card: DRONE HANGAR | $850,000 | +$40/s income · Drones empty your ATM every 25 s | Here: Drones empty your ATM. Launch a sweep any time.
+ok    DroneBay L3 card: DRONE HANGAR | MAX | +$40/s income · Drones empty your ATM every 25 s | Here: Drones empty your ATM. Launch a sweep any time.
+ok    EastYard L0 card: ELITE BARRACKS | $130,000 | +$10/s income · +5 soldiers | Here: More soldiers. Drill your army at the yard.
+ok    EastYard L1 card: ELITE BARRACKS | $390,000 | +$24/s income · +10 soldiers | Here: More soldiers. Drill your army at the yard.
+ok    EastYard L2 card: ELITE BARRACKS | $1,000,000 | +$50/s income · +15 soldiers | Here: More soldiers. Drill your army at the yard.
+ok    EastYard L3 card: ELITE BARRACKS | MAX | +$50/s income · +15 soldiers | Here: More soldiers. Drill your army at the yard.
+ok    EastStrip L0 card: OIL REFINERY | $150,000 | +$50/s income | Here: Big cash every tick. Fill a tanker every 20 min.
+ok    EastStrip L1 card: OIL REFINERY | $450,000 | +$120/s income | Here: Big cash every tick. Fill a tanker every 20 min.
+ok    EastStrip L2 card: OIL REFINERY | $1,200,000 | +$240/s income | Here: Big cash every tick. Fill a tanker every 20 min.
+ok    EastStrip L3 card: OIL REFINERY | MAX | +$240/s income | Here: Big cash every tick. Fill a tanker every 20 min.
+ok    WestFlank L0 card: BUNKER COMPLEX | $200,000 | +$16/s income · +120 s raid shield | Here: Longer raid shield. Run a supply drop every 20 min.
+ok    WestFlank L1 card: BUNKER COMPLEX | $600,000 | +$40/s income · +240 s raid shield | Here: Longer raid shield. Run a supply drop every 20 min.
+ok    WestFlank L2 card: BUNKER COMPLEX | $1,500,000 | +$80/s income · +360 s raid shield | Here: Longer raid shield. Run a supply drop every 20 min.
+ok    WestFlank L3 card: BUNKER COMPLEX | MAX | +$80/s income · +360 s raid shield | Here: Longer raid shield. Run a supply drop every 20 min.
+ok    WestYard dressing: 26 parts + 5 kits (StreetLamp,StreetLamp,CrateStack,DrumGroup,ContainerStack), gateway sign, activity kiosk; on the apron, no WE_Building* / Neon
+ok    StrategicYard dressing: 26 parts + 6 kits (StreetLamp,StreetLamp,Jersey,Jersey,RadioMast,CrateStack), gateway sign, activity kiosk; on the apron, no WE_Building* / Neon
+ok    WestStrip dressing: 26 parts + 5 kits (StreetLamp,StreetLamp,CrateStack,SandbagLine,SandbagLine), gateway sign, activity kiosk; on the apron, no WE_Building* / Neon
+ok    DroneBay dressing: 26 parts + 5 kits (StreetLamp,StreetLamp,HoldPad,RadioMast,CrateStack), gateway sign, activity kiosk; on the apron, no WE_Building* / Neon
+ok    EastYard dressing: 48 parts + 2 kits (StreetLamp,StreetLamp), gateway sign, activity kiosk; on the apron, no WE_Building* / Neon
+ok    EastStrip dressing: 26 parts + 5 kits (StreetLamp,StreetLamp,DrumGroup,DrumGroup,PipeRun), gateway sign, activity kiosk; on the apron, no WE_Building* / Neon
+ok    WestFlank dressing: 26 parts + 6 kits (StreetLamp,StreetLamp,SandbagLine,TankTrap,TankTrap,Jersey), gateway sign, activity kiosk; on the apron, no WE_Building* / Neon
+ok    not built yet: no activity
+ok    SHIP TANKS: +$42000 = 10 min of the L2 factory income
+ok    a second shipment within the cooldown: refused (told when)
+ok    after the cooldown it ships again (saved in profile.ZoneShipAt)
+ok    LAUNCH SWEEP on an empty ATM: nothing
+ok    LAUNCH SWEEP: the ATM is emptied now
+ok    a second sweep inside the cooldown: refused
+ok    DRILL opens Elite Training, CALL STRIKE opens the missile panel (ZoneOpen)
+ok    the silo's activity opens the NUKE panel
+ok    SUPPLY RUN / FILL TANKER ship too
+REBIRTH STATIONS LUA: 0 failed
+REBIRTH STATIONS TEST: 0 failed

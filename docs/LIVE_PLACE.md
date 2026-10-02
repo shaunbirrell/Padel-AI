@@ -4,6 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
+- **Current live (Code Bot):** Open Cloud **versionNumber=182** (2026-10-01 Europe/Dublin) — **v184** JOB 52 ARMY ATTACK at range OwnerFirst. PreferMesh OFF. `WE_Build=184`.
 - **Live Published:** Open Cloud **versionNumber=63** (2026-09-21 Europe/Madrid) — **v61 BUY PATH**: `Remotes.FireServer` (≤3s TryGet, no unbounded WaitForChild); WorldPrompt/BaseController toast "Buying…" only after FireServer; EnsureProfile on pad+PurchaseUpgrade; DataService Init before UpgradePad; `WE_Build=63`.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** **Public** since 2026-09-24 17:54 UTC (develop API: privacyType Public, audiences Editors + Public). Under current Roblox rules, Private means only users with Edit permission can play.
@@ -12,10 +13,10 @@
 
 ## Server size
 
-- **Max Players = 6** (public API `games.roblox.com/v1/games?universeIds=10767159222` → `"maxPlayers":6`, checked
-  2026-09-27 15:37 UTC, no auth). One base per player: the map has 6 base plots (`BaseConfig.MaxPlots = 6`, and
-  `GameConfig.MaxPlayersPerServer = 6` records the same number). If Max Players is ever set above 6, a 7th player
-  gets in with no base and waits for one to free up (v69 no-plot path).
+- **Max Players = 10** — claude-bud JOB 21 (2026-09-29): the map now has 10 base plots (`BaseConfig.MaxPlots = 10`,
+  `GameConfig.MaxPlayersPerServer = 10`). **The owner must set the place's Max Players to 10** (it was 6: public API
+  `games.roblox.com/v1/games?universeIds=10767159222` → `"maxPlayers":6`, checked 2026-09-27 15:37 UTC). One base per
+  player; a player who still finds no free plot is told "Server full" and moved to another server (BaseService).
 - Re-check the live value any time: `curl -sS "https://games.roblox.com/v1/games?universeIds=10767159222"`, field
   `maxPlayers`.
 - It is a place setting (Max Players), not code: changing it needs no publish, and it is undone the same way. A change
@@ -53,6 +54,17 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | BiggerArmy | Bigger Army | 2001734404 | 249 | Shop (+10 army cap; owner-only first; Id wired v99) |
 | ExtraGarageSlot | Extra Garage Slot | 1999359549 | 199 | Shop gold ROBUX row (+1 vehicle slot; owner-only first; Id wired v99) |
 | RebirthBoost | Rebirth Boost | 0 | 199 | hidden |
+| WarChest | War Chest | 2002640637 | 799 | Shop (JOB 36 overhaul, owner-first): counts as 2x Cash + Auto Collect + VIP + Bigger Army |
+| SuperSoldiers | Super Soldiers | 1998231741 | 349 | Shop (JOB 36 overhaul): +25% army damage and soldier HP |
+| DoubleHP | Double HP | 2002214665 | 199 | Shop (JOB 36 overhaul): x2 max health |
+| PG_Sovereign | Sovereign Gold Pistol | 2002154652 | 99 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
+| PG_Quake | Quake Grenade Launcher | 2003492417 | 249 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
+| PG_Longshot | Longshot Sniper | 2003180431 | 299 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
+| PG_Havoc | Havoc Rotary Gun | 2002250646 | 349 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
+| PG_Thunderhead | Thunderhead Rocket Launcher | 1999305818 | 399 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
+| PG_Tempest | Tempest Railgun | 2002682646 | 499 | Base armory case + Shop WEAPONS gold row (claude-bud JOB 35; live v137) |
+| PG_ArmoryPass | Armory Pass | 2002868467 | 1299 | Base armory 7th case + Shop WEAPONS (all six guns; claude-bud JOB 35; live v137) |
+| OfflineCap2x | 2x Offline Cash | 2002664894 | 149 | Shop SUPPLY pass row: offline cash cap 8 h -> 16 h (EconomyConfig CapBoost, live for everyone; Code Bot v180) |
 
 ### DevProducts
 | Key | Name | Id | Robux | Shop |
@@ -73,8 +85,15 @@ nothing prompts, no pad is built and the Shop row stays hidden until the Id is p
 | SpeedBoost | Speed Boost | 3713839342 | 99 | Shop; the cyan ATM pad sells it while ImpulseSpeed is 0 |
 | GoldenPumpjack | Golden Pumpjacks | 3714663783 | 49 | Shop row + one gold pad by the pumps (+50% pump income); owner-only while Rollout = "owner" |
 | StarterBundle | Commander Starter Pack | 3713839505 | 149 | Shop + one offer after the tutorial |
+| RecruitPack | Recruit Pack | 3715776659 | 49 | claude-bud JOB 41 B: offered once after the first capture or 10 min (live for all since v166); Creator Hub Id set v167 (takes the Starter Pack slot) |
+| Cash15m | 15 Minutes of Cash | 3715776339 | 25 | claude-bud JOB 42: 15 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
+| Cash30m | 30 Minutes of Cash | 3715776410 | 49 | claude-bud JOB 42: 30 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
+| Cash1h | 1 Hour of Cash | 3715776466 | 89 | claude-bud JOB 42: 60 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
+| Cash2h | 2 Hours of Cash | 3715776582 | 159 | claude-bud JOB 42: 120 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
+| Cash4h | 4 Hours of Cash | 3715776616 | 279 | claude-bud JOB 42: 240 min of income (floor in ShopOverhaulConfig.TimePacks); Shop: all five Ids set v167 (live for all; replaces the old cash rows) |
 | Nuke | Nuke | 0 | 19 | hidden |
 | NukeBundle3 | Nuke x3 | 0 | 49 | hidden |
+| MissionReroll | Mission Reroll | 3715836569 | 19 | Missions panel: the green "↻ R$19" button on an open core mission once the free daily reroll is used; ProcessReceipt grants 1 reroll token per receipt (Code Bot v180; core missions still owner-first) |
 | SoldierRefill | Instant Army Refill | 3715442523 | 49 | Shop / army prompt (owner-only first; Id wired v99) |
 | PlazaAirstrike | Plaza Airstrike | 3715442542 | 79 | Shop / plaza button (owner-only first; Id wired v99) |
 | RebirthKeepBase | Keep-Base Rebirth | 3714663721 | 50 | Rebirth panel only (SoldFrom), never the Shop list; owner-only while Rollout = "owner" |

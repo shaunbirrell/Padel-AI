@@ -33,7 +33,7 @@ must_contain(_cbf_drc, "\t\treturn AdminConfig.IsPlaytestOwner(userId)\n\tend\n\
 _cbf_days = [int(x) for x in re.findall(r"\{ Day = \d+, Cash = (\d+),", read(_cbf_drc) or "")]
 (ok if len(_cbf_days) == 7 and all(b > a for a, b in zip(_cbf_days, _cbf_days[1:])) else bad)(f"CLAUDE-BUD daily: 7-day streak with rising cash {_cbf_days}")
 must_contain(_cbf_ms, "if DailyRewardConfig.AutoClaimLiveFor(player.UserId) then", "CLAUDE-BUD daily: auto-claim gated per player")
-must_contain(_cbf_ms, "local okClaim = MissionService.ClaimDailyLogin(player)", "CLAUDE-BUD daily: auto-claim reuses the server claim (idempotent per day)")
+must_contain(_cbf_ms, "local okClaim = MissionService.ClaimDailyLogin(player, card)", "CLAUDE-BUD daily: auto-claim reuses the server claim (idempotent per day)")
 must_contain(_cbf_ms, "\tif daily.LastClaimDay == today then", "CLAUDE-BUD daily: one claim per UTC day")
 must_contain(_cbf_ms, "\tdaily.LastClaimDay = today\n\tdaily.LastClaimUnix = os.time()", "CLAUDE-BUD daily: the streak day is saved in the profile")
 must_contain(_cbf_ms, "\tDataService.MarkDirty(player)\n\tMissionService.Push(player)\n\treturn true, nil\nend\n\nfunction MissionService.Start", "CLAUDE-BUD daily: the claim marks the save dirty")

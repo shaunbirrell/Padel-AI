@@ -501,6 +501,7 @@ local function placeRider(rec: any, st: State, seat: BasePart, hum: Humanoid, tr
 	if away.Magnitude > 0.5 then
 		spot = CFrame.new(spot.Position) * CFrame.lookAt(Vector3.zero, away.Unit).Rotation
 	end
+	require(script.Parent.MoveDebug).Note(char, "PivotTo", "VehicleWaterGuard.placeRider") -- v123 tagged
 	char:PivotTo(spot)
 	pcall(function()
 		hrp.AssemblyLinearVelocity = Vector3.zero

@@ -1,0 +1,39 @@
+# run_first_minutes_test.py output (2026-10-01T07:17Z, VERBOSE=1, headless luau stand-in: NOT Roblox)
+ok    recruit maths: $10000 start + $1500 payout - $1500 HQ = $10000 >= 3 x $500 -> top-up 0
+ok    the top-up covers exactly the gap (1200 -> 300), capped at GuidedRecruitCashMax
+ok    200 seeded fights (player + 3 soldiers vs 2 Recruits): the player never dies (camp cleared in <= 4.9 s)
+ok    even with every Recruit shot at its near cap he lives 29.8 s (>= 20 s)
+PACE (s): build 8, collect 23 (walk 14), recruit 14, walk+fight 19 (walk 14, fight median 1.7), capture 12
+ok    a new owner profile enters Guided (OrderVersion 4, 9 steps) and lands on the Command Center
+ok    BUILD -> Collect cash
+ok    Collect -> Recruit (no top-up needed: 0 paid)
+ok    Recruit -> FIRST FIGHT: 2 camp NPCs spawned
+ok    the camp: Recruit type, NoRespawn, leashed, hostile only to HIM (TargetFilter)
+ok    the first ATTACK hint shows at the fight (not after the tutorial)
+ok    capture of HIS Home Outpost is blocked while the camp stands (only his)
+ok    both Recruits dead -> CampDone, capture free, step = Capture outpost
+ok    Capture -> REWARD: $2500 once, BASE SECURED! banner + coin burst
+ok    after the reward the next goal is up (the Barracks): never a blank screen
+STEP TIMES (s): FirstBuild 8, Collected 31, Recruited 45, FirstKill(camp cleared) 64, Captured 76, Reward 79, NextBuilding 112
+ok    first BUILD <= 20 s after spawn (8 s)
+ok    Spawned -> Reward inside 4 min at the derived pace (79 s)
+NOTE  the derived pace reaches the Reward in 79 s: FASTER than the brief's 180-240 s estimate (reported, not padded)
+ok    FirstMinutes funnel once each, in order: 1:Spawned,2:FirstBuild,3:Collected,4:Recruited,5:FightStarted,6:FirstKill,7:Captured,8:Reward,9:NextBuilding
+ok    GuidedStepSeconds for every step; one funnel session per profile
+ok    Guided flags survive a save + ProfileSchema.Migrate
+ok    at the fight: camp spawn 1
+ok    rejoin 1: resumes at FIRST FIGHT with a fresh camp (spawn 2)
+ok    rejoin 2: resumes at FIRST FIGHT with a fresh camp (spawn 3)
+ok    after MaxCampSpawns the fight auto-completes with a friendly line (never a soft-lock)
+ok    skip at CommandCenter: done, camp cleared, GuidedSkipped{CommandCenter}
+ok    skip at Income: done, camp cleared, GuidedSkipped{Income}
+ok    skip at RecruitSoldiers: done, camp cleared, GuidedSkipped{RecruitSoldiers}
+ok    skip at FirstFight: done, camp cleared (2 despawned), GuidedSkipped{FirstFight}
+ok    skip at Outpost: done, camp cleared, GuidedSkipped{Outpost}
+ok    skip at Reward: done, camp cleared, GuidedSkipped{Reward}
+ok    returning (first join 2 days ago): never enters Guided
+ok    returning (a building): never enters Guided
+ok    returning (tutorial done): never enters Guided
+ok    not live for another player: OrderVersion 3, 7 steps, no Guided event
+ok    Guided.Enabled = false: today's order (Recruit -> Barracks), no camp, no funnel
+FIRST MINUTES TEST: 0 failed

@@ -172,8 +172,8 @@ must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau
 
 
 # 9) Design competitive pass P0/P1 (ATM / WarzoneProps / showroom / HUD)
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "MoneyCollector = { ModelAssetId = 18220523228", "ATM hero prefer ID [owner pick 18220523228, 2026-09-25]")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "175462478", "ATM fallback ID")
+# claude-bud JOB 24 §4c: retired, superseded in tools/checks/claude_bud_job24b.py (live LoadAsset: not authorized / over the 40-part cap; the id is 0 and the Part kit look stays): #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "MoneyCollector = { ModelAssetId = 18220523228", "ATM hero prefer ID [owner pick 18220523228, 2026-09-25]")
+# claude-bud JOB 24 §4c: retired, superseded in tools/checks/claude_bud_job24b.py (live LoadAsset: not authorized / over the 40-part cap; the id is 0 and the Part kit look stays): #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "175462478", "ATM fallback ID")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "38451313", "MoneyBagFX ID")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "4221608224", "VfxSparkles ID")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "16803204916", "CashCrate ID")
@@ -181,7 +181,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "526
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "5389482912", "ShowroomRotator ID")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "632958370", "TutorialArrow ID [owner pick 632958370, 2026-09-25]")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Sandbag = { ModelAssetId = 15271872710', "WarzoneProps Sandbag label [owner pick 15271872710, 2026-09-25]")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Floodlight = { ModelAssetId = 116763933', "WarzoneProps Floodlight label")
+# v147 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v147.py (live LoadAsset: not authorized; the id is 0 and the Part kit look stays): #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Floodlight = { ModelAssetId = 116763933', "WarzoneProps Floodlight label")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "TryAttachCollectorVisual", "VAS TryAttachCollectorVisual")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "PlayMoneyBagFX", "VAS PlayMoneyBagFX")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "TryAttachShowroomVisual", "VAS TryAttachShowroomVisual")
@@ -222,7 +222,7 @@ must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "9129
 must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "3924234975", "No plastic Rthro CharacterAlt assignment")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "SupplyTruck = { ModelAssetId = 0", "SupplyTruck truck mesh")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "InfantryCarrier = {\n\t\t\tModelAssetId = 9076240315,", "InfantryCarrier APC [owner pick 9076240315, 2026-09-27; wc3: body scale + seats]")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FloodlightTower = { ModelAssetId = 107381977457431", "FloodlightTower prop")
+# claude-bud JOB 24 §4c: retired, superseded in tools/checks/claude_bud_job24b.py (live LoadAsset: not authorized / over the 40-part cap; the id is 0 and the Part kit look stays): #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FloodlightTower = { ModelAssetId = 107381977457431", "FloodlightTower prop")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "CharacterAlt = { ModelAssetId = 0", "CharacterAlt disabled")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "PlotFloorChevrons", "Plot floor chevrons to next pad")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/NotificationController.luau", "Purchase SUCCESSFUL", "High-contrast success toast styling")
@@ -779,7 +779,7 @@ must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 
 must_contain("src/ServerScriptService/Server/Modules/RigBuilder.luau", 'local torsoColor = colorOf("Vest", rootColor)', "R-RIG: each kind keeps its kit colours on the Soldier body")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "\tSpecialForces = { ModelAssetId = 0", "v41 SpecialForces")
 must_contain("src/ReplicatedStorage/Shared/Configs/SoldierConfig.luau", 'SpecialForces = "SpecialForces"', "v41 SF VisualKind")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "OilPumpjack = { ModelAssetId = 15192621369", "v41 OilPumpjack [owner pick 15192621369, 2026-09-25]")
+# claude-bud JOB 24 §4c: retired, superseded in tools/checks/claude_bud_job24b.py (live LoadAsset: not authorized / over the 40-part cap; the id is 0 and the Part kit look stays): #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "OilPumpjack = { ModelAssetId = 15192621369", "v41 OilPumpjack [owner pick 15192621369, 2026-09-25]")
 must_contain("src/ReplicatedStorage/Shared/Configs/PlotOilPumpConfig.luau", 'VisualPropKey = "OilPumpjack"', "v41 PlotOil uses OilPumpjack")
 must_contain("docs/DESIGN_FEATURE_WIRE_v40.md", "85138026", "v41 design wire doc present")
 # No-regress v41 critical safety
@@ -817,7 +817,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Lig
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'AircraftCarrier = { ModelAssetId = 0', "v42 Carrier Part-kit")
 # v88 (Code Bot): retired, superseded in tools/checks/codebot_v88.py: #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'LandingCraft = { ModelAssetId = 0', "v42 LandingCraft Part-kit")
 must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 13195201090", "v42 no Build-a-Boat template")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Squad = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret"', "R-RIG: friendly squads wear the beret, hostile kinds the kit helmet")
+# v120 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v120.py (Squad = the Army Soldier 7703684779, fallback 187790284): #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Squad = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret"', "R-RIG: friendly squads wear the beret, hostile kinds the kit helmet")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'WorkerFallback = { ModelAssetId = 0,', "R-RIG: no third-party fallback body (a failed rig load keeps the Part kit)")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 29", "v42 BuildingDressGen 29")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "local DRESS_GEN = 29", "v42 VAS DRESS_GEN 29")
@@ -1095,8 +1095,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 105)', "v105 WE_Build=105 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 105)', "v105 WE_Build=105 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 222', "v137 WE_Build=147 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 222', "v137 WE_Build=147 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1161,7 +1161,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 105)', "v105 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 222', "v110 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1234,9 +1234,9 @@ must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau
 must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 105)', "v105 WE_Build=105 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 105)', "v105 WE_Build=105 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 105)', "v105 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 222', "v137 WE_Build=147 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 222', "v137 WE_Build=147 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 222', "v110 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1263,9 +1263,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 105)', "v105 WE_Build=105 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 105)', "v105 WE_Build=105 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 105)', "v105 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 222', "v137 WE_Build=147 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 222', "v137 WE_Build=147 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 222', "v110 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1318,9 +1318,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService is nil before BaseService.Init", "v66 Bootstrap warns (no assert) on nil deps.DataService")
 must_not_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "assert(deps.DataService", "v66 Bootstrap has no fatal DataService assert")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 105)', "v105 WE_Build=105 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 105)', "v105 WE_Build=105 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 105)', "v105 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 222', "v137 WE_Build=147 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 222', "v137 WE_Build=147 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 222', "v110 EarlyRemotes WE_Build")
 # Keep v64 hardenings
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")
@@ -1391,10 +1391,12 @@ _hudcfg = read(HUDCFG) or ""
 _tiles = _hudcfg.split("Tiles = {", 1)[1].split("\n\t},", 1)[0] if "Tiles = {" in _hudcfg else ""
 # v102 (Code Bot, owner request 2026-09-29): a 6th tile "Codes" (redeem codes) joins the 5 of spec §3.2; still no Base /
 # Settings tile. layoutRail wraps the rail to a 2nd column on short phones (844x390 / 800x360 → 5 + 1).
-if _tiles and 'Id = "Settings"' not in _tiles and 'Id = "Base"' not in _tiles and _tiles.count('Id = "') == 6 and 'Id = "Codes"' in _tiles:
-    ok("v70/v102 owner decision: 5 rail tiles + Codes (v102), no Base / Settings tile (Settings = TopStrip gear)")
+# claude-bud JOB 30 (owner request 2026-09-30: "a MAP button on the HUD"): retired the "exactly 6" count; replacement below
+# = the 5 of spec §3.2 + Codes + Map (7), still no Base / Settings tile (layoutRail wraps to a 2nd column: 5 + 2).
+if _tiles and 'Id = "Settings"' not in _tiles and 'Id = "Base"' not in _tiles and _tiles.count('Id = "') == 7 and 'Id = "Codes"' in _tiles and 'Id = "Map"' in _tiles:
+    ok("v70/v102/claude-bud J30 owner decision: 5 rail tiles + Codes (v102) + Map (J30), no Base / Settings tile (Settings = TopStrip gear)")
 else:
-    bad("v70/v102 rail tiles must be the 5 of spec §3.2 + Codes (no Base / Settings tile) in HudConfig.Rail.Tiles")
+    bad("v70/v102/claude-bud J30 rail tiles must be the 5 of spec §3.2 + Codes + Map (no Base / Settings tile) in HudConfig.Rail.Tiles")
 must_contain(CL + "/Controllers/HUDController.luau", "SetRailBadge", "v70 HUD rail badges")
 must_contain(CL + "/Controllers/HUDController.luau", "layoutRail", "v70 HUD left rail layout")
 must_contain(CL + "/Controllers/HUDController.luau", '"WE_TopStrip"', "v70 HUD TopStrip (level chip, gear, shield)")
@@ -1828,13 +1830,17 @@ must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau",
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "function MonetizationService.OnPassOwned(fn: PassOwnedListener): () -> ()", "M1 OnPassOwned API")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "firePassOwned(player, passKey, \"purchase\")", "M1 pass purchase event")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "while pending > 0 do", "M1 parallel pass checks (J21)")
-must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "E.AnalyticsEconomyTransactionType.IAP.Name", "M1 economy analytics IAP")
+# v183 / JOB 61: IAP economy goes through AnalyticsService.Economy; type IAP via EconomyTypes.devproduct
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", 'pcall(AnalyticsService.Economy, player, "Source", amount, endingBalance, "devproduct", currency, sku)', "M1 economy analytics IAP")
+must_contain("src/ReplicatedStorage/Shared/Configs/AnalyticsConfig.luau", 'devproduct = "IAP"', "M1 economy analytics IAP type map")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "local source = cleanSource(rawSource)", "M1 purchase source whitelist")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: string?): boolean?", "M1 Starter offer gate")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "if cfg.SoftOfferQuietUntilTutorialComplete == true and DataService then", "M1 no soft offers mid-tutorial")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "-- that lookup can yield (first pass-cache fill): the player and the profile must still be the live ones", "M1 J2 Starter fallback re-checks player/profile after the ownership lookup")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "if ents[need] ~= true or ents[flag] == true then", "M1 goodwill once per profile (StarterGoodwillV2 flag)")
-must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "if not bundle or not profile or profile.StarterBundleOffered == true or profile.TutorialComplete ~= true then", "M1 Starter offer: live Id, once per profile, never mid-tutorial")
+# Code Bot v153 (Shaun approved): the Starter offer no longer waits for the tutorial while MonetizationConfig.FirstOffer
+# is on (the 120 s quiet window times it); once per profile now means once CONFIRMED SHOWN (OfferLedger)
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "if not bundle or not profile or profile.StarterBundleOffered == true or (first == nil and profile.TutorialComplete ~= true) then", "M1 Starter offer: live Id, once per profile (v153: tutorial gate only when FirstOffer is off)")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "if maxPerSession and (softOffersClaimed[player.UserId] or 0) >= maxPerSession then", "M1 D8 server soft-offer budget")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "GrantEntitlements = { \"StarterBundle\", \"AutoCollect\" },", "M1 Starter Pack v2 grants Auto Collect")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "StarterFallbackCash = 25000,", "M1 Starter fallback cash")
@@ -1894,7 +1900,7 @@ must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", 
 must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "From = origin, -- W2 verify", "W2: projectile first ray from the shot origin")
 must_contain("src/ServerScriptService/Server/Modules/Projectile.luau", "Pos = start,", "W2: Projectile starts its ray at From")
 must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if isProjectile and Projectile.AtCap(player.UserId) then", "W2: projectile cap before ammo")
-must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "local isHead = (kind == \"Player\" or kind == \"NPC\") and result.Instance.Name == \"Head\"", "W2: headshot only on the exact ray")
+# v133 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v133.py (the Unit kind joins): #must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "local isHead = (kind == \"Player\" or kind == \"NPC\") and result.Instance.Name == \"Head\"", "W2: headshot only on the exact ray")
 must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if how == \"Miss\" and AimAssistConfig.Enabled then", "W2: assist only after exact ray + claim miss")
 must_contain("src/ServerScriptService/Server/Services/CombatService/CombatAssist.luau", "if CombatDamage.LineOfSight(cur.Origin, torso.Position, shotFilter, model, false, AimAssistConfig.LosPastTorsoStuds) then", "W2: assist needs line of sight")
 must_contain("src/ServerScriptService/Server/Services/CombatService/CombatFx.luau", "if not take(shooterBuckets, shooterKey, fx.PerShooterHz, fx.PerShooterBurst, now()) then", "W2: WeaponFx <= 20 Hz per shooter")
@@ -2687,8 +2693,8 @@ must_not_contain(_E_UPS, 'Instance.new("SurfaceGui")', "fb2 Helipad console line
 
 # --- Owner's 11 features, lane K1 contracts (proposed; Z merges) ---
 must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'ImpulseSpeed = {', 'K1: F8 Speed Pass config ImpulseSpeed exists (never named SpeedBoost)')
-must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'WalkSpeedMult = 1.15,', 'K1: F8 Speed Pass x1.15')
-must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'WalkSpeedMult = 1.25, -- F8', 'K1: F8 Speed Boost product x1.25 from config (not hard-coded)')
+# v126 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v126.py (speed x1.4 / x1.6, paid speed applied after other writers): #must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'WalkSpeedMult = 1.15,', 'K1: F8 Speed Pass x1.15')
+# v126 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v126.py (speed x1.4 / x1.6, paid speed applied after other writers): #must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'WalkSpeedMult = 1.25, -- F8', 'K1: F8 Speed Boost product x1.25 from config (not hard-coded)')
 must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'DeathSpeedOffer = {', 'K1: F8 one death offer per session under its own key')
 must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'PassKey = "ImpulseSpeed",', 'K1: F8 death offer sells the Speed Pass')
 must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'SkipIfOwnsAny = { "ImpulseSpeed", "SpeedBoost" } :: { string },', 'K1: F8 no death offer to owners of either speed SKU')
@@ -2771,7 +2777,8 @@ must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau',
 must_not_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'SPEED_BOOST_MULT', 'M: F8 no hard-coded Speed Boost multiplier (DevProducts.SpeedBoost.WalkSpeedMult)')
 # claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'if m > best and ownsCached(player, passKey) then', 'M: F8 owning both speed SKUs gives the max, never the product')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'local mult = MonetizationService.SpeedMultFor(player)', 'M: F8 walk speed applied from SpeedMultFor')
-must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'hum.WalkSpeed = base * mult', 'M: F8 WalkSpeed = DefaultWalkSpeed x SpeedMultFor')
+# v123 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v123.py (the tagged MoveDebug.SetWalkSpeed(hum, base * mult, ...)): #must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'hum.WalkSpeed = base * mult', 'M: F8 WalkSpeed = DefaultWalkSpeed x SpeedMultFor')
+# v126 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v126.py (speed x1.4 / x1.6, paid speed applied after other writers): #must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'SetWalkSpeed(hum, base * mult,', 'M: F8 WalkSpeed = DefaultWalkSpeed x SpeedMultFor (v123 tagged setter)')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'MonetizationService.OnPassOwned(function(player: Player, passKey: string)', 'M: F8 Speed Pass applies when it flips to owned (join / refresh / purchase)')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', '-- F8: the character can spawn before the pass cache and the profile are ready; apply the speed now', 'M: F8 speed applied after the profile load (spawn-before-load race)')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'function MonetizationService.TryDeathSpeedOffer(victim: Player): boolean', 'M: F8 TryDeathSpeedOffer API (cross-lane)')
@@ -2802,7 +2809,8 @@ must_contain('src/ServerScriptService/Server/Services/CombatService/init.luau', 
 must_contain('src/ServerScriptService/Server/Services/CombatService/init.luau', '\t\tprofile.NoviceShieldDone = true\n\t\tDataService.MarkDirty(player)', 'C: F6 the end is saved (NoviceShieldDone + MarkDirty)')
 must_contain('src/ServerScriptService/Server/Services/CombatService/init.luau', 'guns[state.WeaponId] = math.max(gunAt + minInterval, clock()) -- v69 research\n\t-- F6: the first accepted shot ends the novice shield before any hit is resolved (EndOnFire)\n\tif NS.Active[player.UserId] ~= nil then\n\t\tCombatService.EndNoviceShield(player, "fire")', 'C: F6 first accepted shot ends the shield before hit resolution')
 must_contain('src/ServerScriptService/Server/Services/CombatService/init.luau', 'if drawn == true and NS.Active[player.UserId] ~= nil then\n\t\tCombatService.EndNoviceShield(player, "draw")', 'C: F6 drawing a weapon ends the shield')
-must_contain('src/ServerScriptService/Server/Services/CombatService/init.luau', 'if attacker ~= victim and not NS.allowsAttack(attacker) then -- F6: a shielded player deals no PvP damage', 'C: F6 a shielded player deals no PvP damage')
+# v124 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v124.py (the shared pvpBlock): #must_contain('src/ServerScriptService/Server/Services/CombatService/init.luau', 'if attacker ~= victim and not NS.allowsAttack(attacker) then -- F6: a shielded player deals no PvP damage', 'C: F6 a shielded player deals no PvP damage')
+must_contain('src/ServerScriptService/Server/Services/CombatService/init.luau', 'if not NS.allowsAttack(attacker) then -- F6: a shielded player deals no PvP damage', 'C: F6 a shielded player deals no PvP damage (v124: in the shared pvpBlock)')
 must_contain('src/ServerScriptService/Server/Services/CombatService/init.luau', 'elseif t >= rec.Deadline then\n\t\t\tCombatService.EndNoviceShield(player, "timeout")', 'C: F6 MaxSeconds cap')
 must_contain('src/ServerScriptService/Server/Services/CombatService/init.luau', 'if profile and profile.TutorialComplete == true then\n\t\t\t\tCombatService.EndNoviceShield(player, "tutorial")', 'C: F6 tutorial complete / skip ends it even without a TutorialService call')
 must_contain('src/ServerScriptService/Server/Services/CombatService/init.luau', 'NS.Active[player.UserId] = nil -- F6: an unfinished shield', 'C: F6 session state cleared on leave')
@@ -2894,7 +2902,9 @@ must_not_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Shop
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'stroke.Thickness = if hero then HERO_ROW_STROKE else 0', 'S: F2 the + highlight returns to the hero look')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'if key == speedPassKey and ownsAnyKey(speedOffer.SkipIfOwnsAny) then', 'S: F8 no death offer for owners of any SkipIfOwnsAny key')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'title = "Run faster"', 'S: F8 death offer title')
-must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', '"%s  +%d%% forever"', 'S: F8 death offer sub (Speed Pass  +15% forever)')
+# claude-bud JOB 40 part B: retired the literal "+%d%% forever" (the death card text now comes from the one speed helper);
+# replacement: the death card builds its line from MonetizationConfig.SpeedText with the player's multiplier
+must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'string.format("%s  %s", name, (MonetizationConfig :: any).SpeedText(mult, true))', 'S: F8 death offer sub (claude-bud JOB 40: "Speed Pass  Run 75% faster, forever" from the helper)')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'promptGamePass(offerKey, "death_card")', 'S: F8 death offer prompts report source death_card')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'promptGamePass("AutoCollect", "offer")', 'S: AutoCollect offer source')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'promptDevProduct("CashMega", "offer")', 'S: CashMega offer source')
@@ -3324,7 +3334,9 @@ T_TUS = "src/ServerScriptService/Server/Services/TutorialService.luau"
 T_TC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau"
 # F6 dispatch: the ACTIVE step's AdvanceOn (spec pin `def.AdvanceOn`), no fixed step indexes
 must_contain(T_TUS, "def.AdvanceOn", "F6 TutorialService advances on the step's AdvanceOn (replaces STEP_DROPPER)")
-must_contain(T_TUS, "local def = TutorialConfig.GetStep(step)\n\tif def and typeof(def.AdvanceOn) == \"table\" and table.find(def.AdvanceOn, eventType)\n\t\tand (eventType ~= \"Upgrade\" or (typeof(detail) == \"string\" and detail == def.PadStructureId)) then\n\t\tadvanceTo(player, step)", "F6 only the active step finishes; an Upgrade only for its own PadStructureId")
+# claude-bud JOB 41: retired (the active step now comes from the profile's own list: getStep(profile, step), OrderVersion 4 =
+# the Guided steps); replacement in tools/checks/claude_bud_job41.py:
+#must_contain(T_TUS, "local def = TutorialConfig.GetStep(step)\n\tif def and typeof(def.AdvanceOn) == \"table\" and table.find(def.AdvanceOn, eventType)\n\t\tand (eventType ~= \"Upgrade\" or (typeof(detail) == \"string\" and detail == def.PadStructureId)) then\n\t\tadvanceTo(player, step)", "F6 only the active step finishes; an Upgrade only for its own PadStructureId")
 must_contain(T_TUS, "if eventType == \"PlotAssigned\" and profile.BasePlotId == nil then\n\t\treturn", "F6 no plot yet: the claim step waits")
 for _n in ("STEP_BUSINESS", "BusinessStepIndex", "businessStepStructureId", "STEP_INCOME", "STEP_COMMAND", "STEP_RECRUIT", "STEP_JEEP", "STEP_OUTPOST", "STEP_DROPPER"):
     must_not_contain(T_TUS, _n, f"F6 TutorialService has no fixed step index ({_n}); the order lives in TutorialConfig")
@@ -3539,7 +3551,7 @@ must_contain(WK_, 'Builders.Runway = function(b: B)', 'W3s2 K: the airstrip runw
 must_contain(WK_, 'Watchtower = spec(8, 8, Vector3.new(9, 23, 9), "manmade", true, 2, "POI"),', 'W3s2 K: watchtower catalogue row (8 parts, 23 tall with the headroom)')
 must_not_contain(WK_, 'Instance.new("ParticleEmitter")', 'W3s2 K: kits never add particles (phones)')
 must_not_contain(WK_, 'Instance.new("Fire")', 'W3s2 K: burn drums / flare stack are painted, no Fire')
-must_not_contain(WK_, 'Instance.new("SpotLight")', 'W3s2 K: kits add no spot lights (world light budget)')
+# claude-bud JOB 37: retired (the road checkpoint's tower searchlight is ONE SpotLight, Shadows off, night only; replaced by tools/checks/claude_bud_job37.py: exactly one SpotLight in WorldKits, inside Detail.Checkpoint): must_not_contain(WK_, 'Instance.new("SpotLight")', 'W3s2 K: kits add no spot lights (world light budget)')
 
 # --- W3 step 2 lane P (platform): WorldPOI layouts + activity anchors, camp exemption, hygiene, Dockside, owner lights ---
 must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'WE_ActivityAnchor', 'W3s2 P (spec 8): WorldPOI stamps the activity anchors (header names the tag; the pins below pin the calls)')
@@ -3644,7 +3656,7 @@ must_contain(_BRS, 'local untilT = cooldownUntil(player) -- nil: profile not loa
 must_contain(_BRS, 'if sign:FindFirstChildWhichIsA("SurfaceGui") then', "W3s2 F: EMPIRE BANK painted only when the sign has none")
 must_contain(_BRS, "pcall(WorldKits.Sign, sign, faceToward(sign, SIGN.Facing), SIGN.Text)", "W3s2 F: the bank sign goes through the world sign budget")
 must_contain(_BRS, 'pcall(MissionService.TrackProgress, player, "Heist", 1)', "W3s2 F: a bank job counts for Heist missions")
-must_contain(_BRS, "string.format(TEXT.Reward, formatCash(cash))", "W3s2 F: reward toast with commas")
+must_contain(_BRS, "string.format(TEXT.Reward, formatCash(shown)) .. tag", "W3s2 F: reward toast with commas (v198: the cash credited + 2x tag)")
 must_contain(_BRS, "NotificationService.Notify(player, TEXT.FirstVisit, \"Info\")", "W3s2 F: one-time first-visit tip")
 must_contain(_BRS, 'bb:SetAttribute(LABEL.StateAttribute, if anyRaiding then "raid" else "open")', "W3s2 F: public label state for the client's CLOSED line")
 must_contain(_BRS, 'ReplicatedStorage:WaitForChild("Shared", 60)', "W3s2 F: bounded wait for Shared")
@@ -3664,7 +3676,7 @@ must_not_contain(_SDS, 'WaitForChild("Shared")', "W3s2 F: SupplyDropService neve
 must_contain(_SDS, 'lid.Name = "Lid"', "W3s2 F: 2-part crate (crate + lid)")
 for _needle in ('"Beacon"', "StrapX", "StrapZ", '"Ring"', "TryAttachCashCrateVisual"):
     must_not_contain(_SDS, _needle, "W3s2 F: supply crate has no %s" % _needle)
-must_contain(_SDS, 'NotificationService.Notify(player, "Supply drop +$" .. formatCash(rec.ClaimCash), "Reward")', "W3s2 F: supply toast with commas")
+must_contain(_SDS, 'NotificationService.Notify(player, "Supply drop +$" .. formatCash(shown) .. tag, "Reward")', "W3s2 F: supply toast with commas (v198: the cash credited + 2x tag)")
 
 # W3 step 2 lane M0 (missions) pins: paste above the final `parse_gate()` call. Uses the file's own helpers.
 MC_ = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MissionController.luau"
@@ -4036,7 +4048,7 @@ must_contain(N_CC, 'SpecialNPCTypes', 'W3s2 N: the special NPC list lives in Com
 must_contain(N_NPC, 'Stance', 'W3s2 N: CombatNPC stances (spec §8)')
 # CombatConfig (contract §5.1); FieldBootstrap ships true: the integrator swaps this needle for 'FieldBootstrap = false,' at the cutover
 must_contain(N_CC, 'SpecialNPCTypes = { "BankGuard", "OilRigGuard", "FortGuard" } :: { string },', 'W3s2 N: special types = BankGuard, OilRigGuard, FortGuard (today\'s list, now config)')
-must_contain(N_CC, 'SpecialOverCap = 4,', 'W3s2 N: special / OverCap headroom +4 (18 + 4 = 22)')
+# claude-bud JOB 24 §6: retired, superseded in tools/checks/claude_bud_job24b.py (SpecialOverCap 24 = the bank 4 + OutpostDefenderConfig.MaxTotal 20; defenders exist only near players): #must_contain(N_CC, 'SpecialOverCap = 4,', 'W3s2 N: special / OverCap headroom +4 (18 + 4 = 22)')
 must_contain(N_CC, 'MaxActiveNPCs = 18,', 'W3s2 N: the regular NPC cap stays 18 (spec §4)')
 must_contain(N_CC, '\tFieldBootstrap = true,', 'W3s2 N: legacy field NPCs ship ON until the Ops cutover (swap to false there)')
 must_contain(N_CC, 'ProvokeHoldSeconds = 2,', 'W3s2 N: an on-foot player provokes a Passive group after 2 s')
@@ -4045,7 +4057,8 @@ must_contain(N_CC, 'CampCommander = {', 'W3s2 N: the CampCommander NPC type (Ops
 # CombatService (contract §5.2)
 must_contain(N_CS, 'function CombatService.SpawnNPC(typeId: string?, at: CFrame, opts: NPCSpawnOpts?): NPCRecord?', 'W3s2 N: SpawnNPC(type, at, opts?) (2-argument calls unchanged)')
 must_contain(N_CS, 'local isSpecial = table.find(CombatConfig.SpecialNPCTypes, tid) ~= nil or o.OverCap', 'W3s2 N: the cap reads the special list from config; OverCap counts as special')
-must_contain(N_CS, 'if aliveNPCCount() >= (if isSpecial then cap + CombatConfig.SpecialOverCap else cap) then', 'W3s2 N: cap 18 regular, 22 with the special headroom')
+# codebot_v140: regular spawns count Regular (not Total incl. OverCap defenders) against the cap; superseded pin
+must_contain(N_CS, 'if (if isSpecial then counts.Total >= cap + CombatConfig.SpecialOverCap else counts.Regular >= cap) then', 'W3s2 N / v140: cap 18 regular, Total with the special headroom')
 must_not_contain(N_CS, 'tid == "BankGuard" or tid == "OilRigGuard" or tid == "FortGuard"', 'W3s2 N: no hard-coded special list in SpawnNPC')
 must_contain(N_CS, 'fireNPCDeath(rec, attacker, byUnit == true) -- lane N\n\tif rec.NoRespawn then\n\t\treturn -- lane N: an Ops garrison NPC is never respawned', 'W3s2 N: a killed NoRespawn NPC reports its death and is never respawned')
 must_contain(N_CS, 'fireNPCDeath(rec, nil, false) -- lane N: no killer\n\t\t\tif not rec.NoRespawn then', 'W3s2 N: a death with no killer reports it (Killer nil) and skips the respawn for NoRespawn')
@@ -5321,7 +5334,7 @@ must_contain(XP_XB, 'function XPBalanceConfig.BuildXP(price: number): number\n\t
 must_contain(XP_XB, 'function XPBalanceConfig.IsBuildReason(reason: string?): boolean\n\tif typeof(reason) ~= "string" then\n\t\treturn false\n\tend\n\tfor _, prefix in ipairs(XPBalanceConfig.Build.ReasonPrefixes) do\n\t\tif string.sub(reason, 1, #prefix) == prefix then\n\t\t\treturn true\n\t\tend\n\tend\n\treturn false\nend\n\nreturn XPBalanceConfig\n', 'XP: IsBuildReason = a plain prefix match on the four reasons (whole body), and nothing follows it but the return')
 # purchase hook: success path only, deferred (the whole SpendCash tail)
 must_contain(XP_ECON, '\tXPService = deps.XPService\n', 'XP: EconomyService takes XPService from deps (no require)')
-must_contain(XP_ECON, '\tif not ok then\n\t\twarn("[Economy] SpendCash threw:", a)\n\t\treturn false, "SpendFailed"\n\tend\n\t-- XP rebalance: purchase XP only after a spend that succeeded, deferred so a level-up can never fail or double a\n\t-- purchase. XPService.OnSpend pays only the whitelisted one-time reasons (upgrade_ / research_ / vehicle_ / weapon_).\n\tif a == true and XPService and XPService.OnSpend then task.defer(XPService.OnSpend, player, amount, _reason) end\n\treturn (a :: any) :: boolean, b :: string?\nend\n', 'XP: SpendCash tail: a throw returns false; purchase XP deferred only after a spend that returned true (whole tail)')
+must_contain(XP_ECON, '\tif not ok then\n\t\twarn("[Economy] SpendCash threw:", a)\n\t\treturn false, "SpendFailed"\n\tend\n\t-- XP rebalance: purchase XP only after a spend that succeeded, deferred so a level-up can never fail or double a\n\t-- purchase. XPService.OnSpend pays only the whitelisted one-time reasons (upgrade_ / research_ / vehicle_ / weapon_).\n\tif a == true and XPService and XPService.OnSpend then\n\t\ttask.defer(XPService.OnSpend, player, amount, _reason)\n\tend\n\treturn (a :: any) :: boolean, b :: string?\nend\n', 'XP: SpendCash tail: a throw returns false; purchase XP deferred only after a spend that returned true (whole tail)')
 # XPService: config source, whitelist, block check, battle pass, XP-L2, backfill guards and order, Push robustness
 must_contain(XP_SVC, 'local XP_OFF: any = {\n\tEnabled = false,\n\tBuild = { Enabled = false, Reason = "build", RebirthRebuildMult = 1, ReasonPrefixes = {} },\n\tBackfill = { Enabled = false, Reason = "build_backfill", Toast = "★ LEVEL %d!" },\n\tNoBattlePassMirror = { build = true, build_backfill = true },\n\tBuildXP = function(_price: number): number\n\t\treturn 0\n\tend,\n\tIsBuildReason = function(_reason: string?): boolean\n\t\treturn false\n\tend,\n}\n', 'XP: the fallback config is everything OFF')
 must_contain(XP_SVC, '\tsharedCfg, cfgProblem = ProfileSchema.XPBalance()\n', 'XP (H2): XPService takes its config from ProfileSchema.XPBalance(), the one validated copy')
@@ -5504,7 +5517,17 @@ def _xp_spendcash_sites() -> None:
         "recruit_soldiers": (svc + "SoldierService.luau", "SoldierService.Recruit", False),
         "missile_strike": (svc + "MissileStrikeService.luau", "launch", False),
         "gate_repair": (svc + "GateDefenseService.luau", "GateDefenseService.TryRepair", False),
-        "atm_raid_loss": (svc + "MoneyCollectorService.luau", "completeRaid", False),
+        # claude-bud JOB 38: the raid money move is shared by the in-person and the army raid (completeRaid calls it; the
+        # same one non-paying call): retired "completeRaid", replaced by its helper MoneyCollectorService._MoveLoot
+        "atm_raid_loss": (svc + "MoneyCollectorService.luau", "MoneyCollectorService._MoveLoot", False),
+        # claude-bud JOB 33 (retired the "exactly 8" count; replacement = these 2 more, 10 in all): the rebirth zone
+        # upgrades and the silo rush spend Cash and pay NO purchase XP (XPService.OnSpend's whitelist does not list them)
+        "rebirthzone_": (svc + "RebirthZoneService.luau", "RebirthZoneService.Upgrade", False),
+        "nuke_rush": (svc + "NukeService.luau", "NukeService.Rush", False),
+        # claude-bud JOB 39 (retired the "exactly 10" count; replacement = this 1 more, 11 in all): the endgame's ONE
+        # purchase path (EndgameService.Purchase: "endgame_" .. empire / tier / defence / rebuild, one call) spends Cash
+        # and pays NO purchase XP (not in OnSpend's list)
+        "endgame_": (svc + "EndgameService.luau", "EndgameService.Purchase", False),
     }
     fn_head = re.compile(r"^(?:local\s+)?function\s+([\w.:]+)\s*\(", re.M)
     guard_ok = re.compile(r"\s*(?:(?:==|~=)\s*nil\b|\)?\s*then\b)")
@@ -5577,10 +5600,10 @@ def _xp_spendcash_sites() -> None:
             problems.append(f"reason {reason!r}: expected exactly once in {file} {fn}, found {[(h[0].split('/')[-1], h[1], h[2]) for h in hits]}")
     if defs != 1:
         problems.append(f"{defs} definitions of EconomyService.SpendCash (expected 1)")
-    if seen == 8 and not problems:
-        ok("XP: SpendCash has exactly 8 call sites, each reason in its one file and function, none in a nested / anonymous / assigned function; the 4 paying calls pass (player, cost, ...) and sit in no loop (paying: upgrade_ BaseService.PurchaseUpgrade, research_ ResearchService.Purchase, vehicle_ VehicleService.Purchase, weapon_ CombatService.PurchaseWeapon)")
+    if seen == 11 and not problems:
+        ok("XP: SpendCash has exactly 11 call sites (claude-bud JOB 33: + rebirthzone_ / nuke_rush; JOB 39: + endgame_ (one call, the plan's key); non-paying), each reason in its one file and function, none in a nested / anonymous / assigned function; the 4 paying calls pass (player, cost, ...) and sit in no loop (paying: upgrade_ BaseService.PurchaseUpgrade, research_ ResearchService.Purchase, vehicle_ VehicleService.Purchase, weapon_ CombatService.PurchaseWeapon)")
     else:
-        bad(f"XP: SpendCash call-site pin — {seen} calls (expected 8); " + "; ".join(problems))
+        bad(f"XP: SpendCash call-site pin — {seen} calls (expected 11); " + "; ".join(problems))
 
 def _xp_onspend_callers() -> None:
     """XPService.OnSpend is reached only from EconomyService.SpendCash's success path (and defined in XPService)."""
@@ -5988,6 +6011,8 @@ _XP_HANDONS = {
         "\t\t\tUpgrades = profile.BaseUpgrades,", "\t\tVehicles = profile.Vehicles,", "\t\tWeapons = profile.Weapons,"],
     "src/ServerScriptService/Server/Services/BusinessService.luau": ["\t\tUpgrades = if typeof(profile.BaseUpgrades) == \"table\" then profile.BaseUpgrades else {},"],
     "src/ServerScriptService/Server/Services/CombatService/init.luau": ["\tlocal weapons: any = profile.Weapons"],
+    # Code Bot JOB 67 remainder: the base-prop tier reads the saved levels (LevelSum only sums the numbers, never writes)
+    "src/ServerScriptService/Server/Services/Job67DressService.luau": ["\tlocal sum = if prof then Job67DressService.LevelSum(prof.BaseUpgrades) else 0"],
     "src/ServerScriptService/Server/Services/MissileStrikeService.luau": ["\tlocal ups = profile and profile.BaseUpgrades"],
     "src/ServerScriptService/Server/Services/OpsService/OpsRewards.luau": [
         "\tlocal upgrades = if typeof(profile) == \"table\" and typeof(profile.BaseUpgrades) == \"table\" then profile.BaseUpgrades else nil",
@@ -6509,8 +6534,8 @@ AW_CFG = "src/ReplicatedStorage/Shared/Configs/AircraftWeaponConfig.luau"
 AW_SVC = "src/ServerScriptService/Server/Services/AirWeaponService.luau"
 AW_ORD = "src/ServerScriptService/Server/Modules/AirOrdnance.luau"
 AW_CLI = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/AirWeaponsClient.luau"
-must_contain(AW_CFG, "\tWeaponsLive = false, -- ship dark", "airweapons: WeaponsLive ships false")
-must_contain(AW_CFG, "\treturn AdminConfig.IsPlaytestOwner(userId) == true\n", "airweapons: live for the owner's playtest account only (AdminConfig.IsPlaytestOwner)")
+# v138 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v138.py (aircraft weapons live for everyone): #must_contain(AW_CFG, "\tWeaponsLive = false, -- ship dark", "airweapons: WeaponsLive ships false")
+# v138 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v138.py: #must_contain(AW_CFG, "\treturn AdminConfig.IsPlaytestOwner(userId) == true\n", "airweapons: live for the owner's playtest account only (AdminConfig.IsPlaytestOwner)")
 for _aw_unarmed in ("TransportHeli", "CargoPlane", "MedevacHeli", "AWACSPlane", "TankerPlane", "HeavyLiftHeli", "VTOLTransport"):
     must_contain(AW_CFG, f"\t\t{_aw_unarmed} = true,", f"airweapons: {_aw_unarmed} stays unarmed")
 must_contain(AW_CFG, 'AttackHeli = { "HeliNoseGun", "HeliRockets" },', "airweapons: attack helicopters get a nose gun + rockets")
@@ -6713,7 +6738,7 @@ must_contain(SQF_SO, '\tlocal nearD = C.UnitNearStuds\n', 'squadfair: unit hit c
 must_contain(SQF_SO, '\tlocal hi = math.min(tonumber(C.UnitMaxHitChance) or 0.95, 0.99)\n\tlocal lo = math.min(tonumber(C.UnitMinHitChance) or 0.05, hi)\n\treturn math.clamp(chance, lo, hi)\n', 'squadfair v3: the code caps the unit hit chance at UnitMaxHitChance (never above 0.99, whatever the config says)')
 must_contain(SQF_SO, 'function SquadOrdersService.SetRandomForTests(seedOrRandom: any)', 'squadfair v2: the unit hit roll is seedable by tests only (SetRandomForTests)')
 must_not_contain(SQF_SO, 'function SquadOrdersService.SetRandom(', 'squadfair v2: no SetRandom (renamed SetRandomForTests)')
-must_contain(SQF_SO, 'local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit)', 'squadfair: a unit hit goes through CombatService.ApplyUnitHit (pcall; research damage kept)')
+# claude-bud JOB 26: retired, superseded in tools/checks/claude_bud_job26.py (StrongerArmy: damage / fire rate from ArmyConfig, throttled army hit markers, denser tracers): #must_contain(SQF_SO, 'local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit)', 'squadfair: a unit hit goes through CombatService.ApplyUnitHit (pcall; research damage kept)')
 must_contain(SQF_SO, '\tif not ok then\n\t\t-- squadfair: never silent (every squad would deal 0 damage), never a log flood (one line per UnitHitErrorLogSeconds)\n\t\tif now - hitErrLogAt >= (tonumber(CombatFairnessConfig.UnitHitErrorLogSeconds) or 30) then\n\t\t\twarn(', 'squadfair v2: an ApplyUnitHit error is warned, rate-limited')
 must_contain(SQF_SO, '\t\t\tand typeof(inst:GetAttribute("NPCId")) == "string"\n', 'squadfair: squads target CombatService NPCs only (no statues)')
 must_not_contain(SQF_SO, 'TakeDamage(', 'squadfair: no raw TakeDamage from a squad unit (the NPC damage path only)')
@@ -6732,7 +6757,7 @@ must_contain(SQF_SO, 'escortHum, escortRoot = nearestHostile(proot.Position, r, 
 must_contain(SQF_SO, '\tlocal holds = if skipCalm == true and CombatService then CombatService.NPCHoldsFire else nil\n', 'squadfair: escort target pick asks CombatService which NPCs hold fire')
 must_contain(SQF_SO, '\t\t\t\t\tif not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(owner, id) == false) then\n', 'squadfair v2: the pick skips calm NPCs (escort) and NPCs this squad may not hurt (UnitMayHitNPC)')
 # v2/v3: blocked re-checks throttled; blocked chase gives up; no stale timer; repeated orders
-must_contain(SQF_SO, '\tunit.LosCheckAt = now + 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)\n\tunit.LosBlocked = true', 'squadfair v2: a check that found nothing in sight waits one shot cooldown (LosCheckAt)')
+# claude-bud JOB 26: retired, superseded in tools/checks/claude_bud_job26.py (StrongerArmy: damage / fire rate from ArmyConfig, throttled army hit markers, denser tracers): #must_contain(SQF_SO, '\tunit.LosCheckAt = now + 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)\n\tunit.LosBlocked = true', 'squadfair v2: a check that found nothing in sight waits one shot cooldown (LosCheckAt)')
 must_contain(SQF_SO, '\treturn unitReady(unit, now) and now >= unit.LosCheckAt\n', 'squadfair v2: shot checks honour LosCheckAt')
 must_contain(SQF_SO, '\t\tif since ~= nil and now - since >= giveUpAfter then\n\t\t\tgiveUpFight(unit, nroot.Position) -- nothing in sight for UnitBlockedChaseSeconds', 'squadfair v2 / 3.2: an ATTACK chase with nothing in sight gives up that fight after UnitBlockedChaseSeconds')
 must_contain(SQF_SO, '\t\t\telseif now - unit.ChaseAt >= giveUpAfter then\n\t\t\t\tgiveUpFight(unit, nroot.Position) -- no nearer in UnitBlockedChaseSeconds', 'squadfair v2 / 3.2: an approach that gets no nearer gives up that fight too')
@@ -6763,14 +6788,15 @@ must_contain(SQF_SO, '\tclearChase(unit)\n\tunit.GiveUp = false\n\tunit.GiveUpPo
 must_contain(SQF_SO, '\tlocal s = tonumber(CombatFairnessConfig.UnitGiveUpScopeStuds) or 30\n\treturn if s > 0 then s else math.huge\n', 'squadfair 3.2: the give-up scope reads UnitGiveUpScopeStuds (0 = the round-3 rule)')
 must_contain(SQF_SO, '\tif unit.GiveUp then\n\t\t-- squadfair: no pressing on a wall; back to the owner\'s trail until a shot into that fight, a hostile elsewhere\n\t\t-- or a new order\n\t\tunit.AimRoot = nil\n\t\tunit.AimHum = nil\n\t\tif playerRoot then\n\t\t\tfollowMove(st, unit, playerRoot, trail, probe, now)', 'squadfair v2: a unit that gave up walks its owner\'s trail like FOLLOW (followMove)')
 must_contain(SQF_SO, '\tlocal repeatOrder = order == st.Order\n\t\tand st.OrderAt ~= nil\n\t\tand now - (st.OrderAt :: number) < (tonumber(CombatFairnessConfig.UnitRepeatOrderGraceSeconds) or 0)\n', 'squadfair v3: the same order again within UnitRepeatOrderGraceSeconds is a repeat')
-must_contain(SQF_SO, '\t\tu.LosCheckAt = math.max(u.LosCheckAt, now)\n\t\tif not repeatOrder then\n\t\t\tresetChase(u)', 'squadfair v3: no order ever re-checks a blocked line early; a repeat keeps the chase timers and the give-up')
+# (superseded in tools/checks/codebot_v162.py: the per-unit reset is ArmyState's OnChange hook; a repeat is not Forced, so it keeps the timers)
+must_contain(SQF_SO, '{ Force = not repeatOrder, NoPush = true })\n\tfor _, u in ipairs(st.Units) do\n\t\tu.LosCheckAt = math.max(u.LosCheckAt, now)', 'squadfair v3: no order ever re-checks a blocked line early; a repeat keeps the chase timers and the give-up')
 must_not_contain(SQF_SO, '\t\tu.LosCheckAt = 0\n', 'squadfair v3: an order never zeroes the blocked re-check wait (order spam cost)')
 must_contain(SQF_SO, '\t\t\t\t\tif (st.Order == "Follow" or (st.Order == "Attack" and anyGaveUp(st))) and proot and pathCfg and probe == nil then\n\t\t\t\t\t\tprobe = buildProbe(pathCfg)', 'squadfair v3: ATTACK builds the FollowPath probe only once a unit has given up')
-must_contain(SQF_SO, '\t\tunit.Humanoid:MoveTo(nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up', 'squadfair: an ATTACK unit with nothing in sight closes in (UnitChaseWithoutLos) until the give-up')
+# claude-bud JOB 22: retired, superseded in tools/checks/claude_bud_armyfollow.py (every soldier MoveTo goes through ArmyFollow.Command; Release names the new state): #must_contain(SQF_SO, '\t\tunit.Humanoid:MoveTo(nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up', 'squadfair: an ATTACK unit with nothing in sight closes in (UnitChaseWithoutLos) until the give-up')
 # CombatService: squad hits, provoke by proxy
 must_contain(SQF_CS, 'function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: number, credit: boolean): (number, boolean)', 'squadfair: CombatService.ApplyUnitHit (squad hits)')
 must_contain(SQF_CS, '\tif model == nil or not model:IsA("Model") or Players:GetPlayerFromCharacter(model) ~= nil then\n\t\treturn 0, false -- never a player', 'squadfair: a squad never hurts a player (novice shield, clan ally, anyone)')
-must_contain(SQF_CS, '\tif not unitMayHit(owner, rec) then\n\t\treturn 0, false -- squadfair: a grouped / stance NPC whose owner is not near: no provoke by proxy\n\tend\n\treturn hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = true, NoCredit = credit ~= true })', 'squadfair v3: a squad hit on a grouped / stance NPC is refused while the owner is out of its reach; else hurtNPC (provoke + credit), no per-hit feedback')
+# claude-bud JOB 26: retired, superseded in tools/checks/claude_bud_job26.py (StrongerArmy: damage / fire rate from ArmyConfig, throttled army hit markers, denser tracers): #must_contain(SQF_CS, '\tif not unitMayHit(owner, rec) then\n\t\treturn 0, false -- squadfair: a grouped / stance NPC whose owner is not near: no provoke by proxy\n\tend\n\treturn hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = true, NoCredit = credit ~= true })', 'squadfair v3: a squad hit on a grouped / stance NPC is refused while the owner is out of its reach; else hurtNPC (provoke + credit), no per-hit feedback')
 must_contain(SQF_CS, '\tif CombatFairnessConfig.UnitProvokeNeedsOwner ~= true or not (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then\n\t\treturn true\n\tend\n\tlocal reach = tonumber(CombatFairnessConfig.UnitProvokeOwnerStuds) or 0\n\tif not (reach > 0) then\n\t\treach = rec.Def.AggroRange\n\tend', 'squadfair v3: the owner gate covers EVERY hit on a grouped / stance NPC (calm or provoked; the hurtNPC provoke condition); plain Aggressive NPCs are never gated')
 must_contain(SQF_CS, '\treturn (root.Position - rec.Root.Position).Magnitude <= reach\n', 'squadfair v2: the owner\'s own character must be within that reach')
 must_contain(SQF_CS, 'function CombatService.UnitMayHitNPC(owner: Player, npcId: string): boolean', 'squadfair v2: CombatService.UnitMayHitNPC (the squad pick skips NPCs it may not hurt)')
@@ -6783,7 +6809,7 @@ must_contain(SQF_NPC, '\tlocal held = holdsFire(rec, g)\n', 'squadfair: thinkSta
 must_contain(SQF_NPC, 'function CombatNPC.HoldsFire(rec: any): boolean\n\treturn holdsFire(rec, groups[groupKey(rec)])', 'squadfair: CombatNPC.HoldsFire')
 must_not_contain(SQF_NPC, 'Provoker', 'squadfair v3 (guard, passes on HEAD): no provoker rule in CombatNPC (it let one player switch a guard group off)')
 must_not_contain(SQF_CS, 'NoteProvoker', 'squadfair v3 (guard, passes on HEAD): hurtNPC names no provoker')
-must_contain(SQF_NPC, '\tlocal target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)\n\tif target and g and provoked then\n\t\tg.LastContact = now -- contact keeps a provoked group fighting', 'squadfair v3 (guard, passes on HEAD): a stance NPC targets the nearest player, as on HEAD')
+# claude-bud JOB 51: retired, superseded in tools/checks/claude_bud_job51.py (NearestPlayer also takes the record for the [GuardTarget] debug line; the same nearest pick through the shared rule): #must_contain(SQF_NPC, '\tlocal target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)\n\tif target and g and provoked then\n\t\tg.LastContact = now -- contact keeps a provoked group fighting', 'squadfair v3 (guard, passes on HEAD): a stance NPC targets the nearest player, as on HEAD')
 
 # --- droppers v1b lane L1b (plate server; spec_droppers.md §13 "New pins, v1b" for the L1b files) ---
 # Paste directly above the final `parse_gate()` call, after the v1a L1a block (`_dr_bz_rules()`). A pin here either
@@ -8830,9 +8856,9 @@ def _a0_rules() -> None:
               and not re.search(r"\b(TakeDamage|SetAttribute|Destroy)\b|\bAimTarget\s*=(?!=)|\bLastHitBy\s*=(?!=)", th + ai),
               "NPCThreat / NPCsAimingAt only read the NPC records (AimTarget, LastHitBy)", "NPCThreat / NPCsAimingAt missing or writing")
     uf = _a0_fn(cs, "function CombatService.UnitShotFx(") or ""
-    _a0_check('if cfg.Enabled ~= true or not ArmyConfig.IsLive("Escort", owner) then\n\t\treturn false\n\tend' in uf
-              and "pcall(CombatFx.ArmyBullet, owner.UserId, origin, landed, kind, cfg.PerArmyMinGap, cfg.PerRecipientHz, cfg.PerRecipientBurst)" in uf,
-              "CombatService.UnitShotFx: live owners only, through CombatFx.ArmyBullet with the ShotFx caps (pcall'd)", "UnitShotFx changed or missing")
+    # claude-bud JOB 26: retired, superseded in tools/checks/claude_bud_job26.py (StrongerArmy: damage / fire rate from ArmyConfig, throttled army hit markers, denser tracers): # _a0_check('if cfg.Enabled ~= true or not ArmyConfig.IsLive("Escort", owner) then\n\t\treturn false\n\tend' in uf
+    # and "pcall(CombatFx.ArmyBullet, owner.UserId, origin, landed, kind, cfg.PerArmyMinGap, cfg.PerRecipientHz, cfg.PerRecipientBurst)" in uf,
+    # "CombatService.UnitShotFx: live owners only, through CombatFx.ArmyBullet with the ShotFx caps (pcall'd)", "UnitShotFx changed or missing")
     fx = _a0_code(A0_FX)
     ab = _a0_fn(fx, "function CombatFx.ArmyBullet(") or ""
     fo = _a0_fn(fx, "local function fanOut(") or ""
@@ -9228,10 +9254,12 @@ def _army_fix_pins() -> None:
     else:
         bad(f"army fix: Follow.ThreatStuds must be > 0 and <= CombatFairnessConfig.EscortEngageRadius (got {ts} / {er}); 130 slowed the army on every camp / checkpoint approach, behind the phone camera")
     mult, maxs = _af_num(cu, "SpeedMult"), _af_num(cu, "MaxSpeed")
-    if mult is not None and maxs is not None and 1.0 < mult <= 1.6 and 20 <= maxs <= 30:
-        ok(f"army fix: CatchUp SpeedMult {mult} / MaxSpeed {maxs} (keeps up with an owner at 16 / 18.4 / 20)")
+    # v126 (Code Bot Roblox): MaxSpeed range 20..30 -> 20..40 (Speed Boost x1.6 = 25.6; 25.6 x 1.5 = 38.4)
+    # claude-bud JOB 40 part B: 20..40 -> 20..60 (the x2.5 Speed Boost owner runs 40; 40 x 1.5 = 60)
+    if mult is not None and maxs is not None and 1.0 < mult <= 1.6 and 20 <= maxs <= 60:
+        ok(f"army fix: CatchUp SpeedMult {mult} / MaxSpeed {maxs} (keeps up with an owner at 16 / 22.4 / 25.6)")
     else:
-        bad(f"army fix: CatchUp SpeedMult must be in (1, 1.6] and MaxSpeed in [20, 30] (got {mult} / {maxs})")
+        bad(f"army fix: CatchUp SpeedMult must be in (1, 1.6] and MaxSpeed in [20, 60] (got {mult} / {maxs})")
     # 2) a unit model is removed only on the lifecycle paths: Humanoid.Died (spawnUnit), the SyncArmy not-living cull and
     #    trim, clearSquad on OrdersConfig.Enabled = false (SyncArmy) and on PlayerRemoving (Init). Nothing else.
     spans = _af_fn_spans(so)
@@ -9285,13 +9313,14 @@ def _army_fix_pins() -> None:
         else:
             ok(f"army fix: {fn} never removes, re-forms or re-parents a unit")
     ru = _af_fn(so, "recoverUnit") or ""
-    _af_has(ru, ("unit.Model:PivotTo(at)",), "recoverUnit — the recover is one PivotTo of the same unit")
+    # v114 (Code Bot Roblox): retired, superseded in tools/checks/codebot_v114_army.py (the one PivotTo is SoldierController.Reposition): #_af_has(ru, ("unit.Model:PivotTo(at)",), "recoverUnit — the recover is one PivotTo of the same unit")
+    _af_has(ru, ('SquadOrdersService._SC.Reposition(unit, at, "recover", true)',), "recoverUnit — the recover is one reposition (SoldierController PivotTo) of the same unit")
     _af_has(ru, ('st.Seated and st.OwnerSpeed > cfgNum(rc, "VehicleDeferSpeed", 20)',), "recoverUnit — no recover while the owner drives faster than VehicleDeferSpeed")
     _af_has(ru, ("now - unit.RecoverAt < cooldown",), "recoverUnit — at most one recover per unit per CooldownSeconds")
     _af_has(ru, ("ownerOnWater(player, st, playerRoot, rc, now)",), "recoverUnit — no recover while the owner is on water")
-    _af_has(ru, ("resetChase(unit)", "unit.Humanoid:MoveTo(at.Position)"), "recoverUnit — chase state reset and MoveTo re-issued after a recover")
+    # claude-bud JOB 22: retired, superseded in tools/checks/claude_bud_armyfollow.py (every soldier MoveTo goes through ArmyFollow.Command; Release names the new state): #_af_has(ru, ("resetChase(unit)", "unit.Humanoid:MoveTo(at.Position)"), "recoverUnit — chase state reset and MoveTo re-issued after a recover")
     _af_has(ru, ("noteLanding(st, at.Position, now)",), "recoverUnit — every landing is remembered (units land apart)")
-    i_mm, i_pv = ru.find('if moveBy < cfgNum(rc, "MinMoveStuds", 4) then'), ru.find("unit.Model:PivotTo(at)")
+    i_mm, i_pv = ru.find('if moveBy < cfgNum(rc, "MinMoveStuds", 4) then'), ru.find('SquadOrdersService._SC.Reposition(unit, at, "recover", true)')  # v114: was unit.Model:PivotTo(at)
     if 0 <= i_mm < i_pv and "unit.ProgSince = now" in ru[i_mm:i_pv] and "return false" in ru[i_mm:i_pv]:
         ok("army fix: recoverUnit — a found spot within Recover.MinMoveStuds of the unit is no move (no PivotTo onto itself; the stuck window starts over)")
     else:

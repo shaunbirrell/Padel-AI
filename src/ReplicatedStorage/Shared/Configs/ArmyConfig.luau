@@ -155,7 +155,7 @@ local ArmyConfig = {
 			Enabled = true,
 			Seconds = 0.4, -- = OrdersConfig.ThinkInterval
 			MaxStuds = 4,
-			MaxOwnerSpeed = 40, -- studs/s; faster owner moves are jumps (no lead)
+			MaxOwnerSpeed = 48, -- studs/s; faster owner moves are jumps (no lead). claude-bud JOB 40: was 40 (= the new top run speed)
 			DropOnSlowdown = 0.5,
 			StopHoldStuds = 2,
 			StopHoldSeconds = 1.5, -- ...only right after he stopped (a unit walking back later still does)
@@ -169,7 +169,7 @@ local ArmyConfig = {
 			Enabled = true,
 			StartStuds = 6,
 			SpeedMult = 1.5,
-			MaxSpeed = 28,
+			MaxSpeed = 60, -- claude-bud JOB 40: 40 x 1.5 (was 40). v126: was 28; the Speed Boost owner walks 25.6 (x1.6), 25.6 x 1.5 = 38.4
 			-- ship: the pace comes from his speed smoothed over passes (weight PaceSmooth per 0.4 s pass) and moves only in
 			-- PaceStep studs/s steps: every Humanoid.WalkSpeed write replicates to every client, and a client-owned
 			-- character's replicated position jitters (stand-in, +-0.4 studs per step: 20 writes/s per army at step 0).
@@ -291,6 +291,28 @@ local ArmyConfig = {
 	Follow2 = {
 		Enabled = true,
 		Rollout = "all",
+		-- claude-bud JOB 22 (docs/ARMY-FOLLOW-ROOTCAUSE.md): the stable formation controller (Shared/Util/FormationMath).
+		-- false = the v99 controller exactly. Every threshold below is tunable without code.
+		Stable = true,
+		AnchorPosLagSeconds = 0.25, -- the formation anchor follows him with this lag (no raw-pose jumps)
+		AnchorVelSmoothSeconds = 0.5, -- his velocity is smoothed over this
+		AnchorLeadSeconds = 0.4, -- the slots lead his SMOOTHED velocity by this ...
+		AnchorLeadMaxStuds = 4, -- ... capped
+		HeadingMoveSpeed = 3, -- smoothed speed above which the heading follows his movement
+		HeadingTurnDegPerSec = 90, -- the formation turns at most this fast
+		HeadingDeadzoneDeg = 20, -- turns smaller than this are ignored while moving
+		ReverseDeg = 120, -- a direction change past this (walking back / a hard strafe) ...
+		ReverseHoldSeconds = 1.5, -- ... turns the formation only after holding this long (never a 180 flip)
+		StandAlignDeg = 60, -- standing: re-aim to his facing only past this ...
+		StandAlignSeconds = 1.2, -- ... held this long
+		ArriveDeadzoneStuds = 1.5, -- InPosition within this of its slot ...
+		LeaveDeadzoneStuds = 3, -- ... and stays InPosition until this far (hysteresis: no jitter at rest)
+		MoveReissueStuds = 2.5, -- a new MoveTo only when the target moved this far ...
+		MoveRefreshSeconds = 0.5, -- ... or this long passed
+		MovingOnSpeed = 2.5, -- he counts as moving (escort vs follow) above this ...
+		MovingOffSpeed = 1.2, -- ... until he drops under this (hysteresis)
+		OwnerClearStuds = 3.5, -- soldiers keep this far from him (separation includes the owner)
+		CollideWithPlayers = false, -- soldiers never push or block players (they still collide with the world)
 		WedgeBack = 3, -- rank k: row = ceil(k / 2), back = WedgeBack + row x RowBack, side = +-(WedgeSide + row x RowSide)
 		RowBack = 3,
 		WedgeSide = 2.5,
@@ -308,8 +330,8 @@ local ArmyConfig = {
 		CatchUpMult = 1.35,
 		CatchUpPerStud = 0.6,
 		CatchUpMaxMult = 1.8,
-		CatchUpMin = 34, -- the catch-up cap is never under this (a boosted sprint is 20)
-		MaxSpeed = 50,
+		CatchUpMin = 34, -- the catch-up cap is never under this (v126: Speed Pass 22.4, Speed Boost 25.6; x1.8 = 46 -> MaxSpeed 50)
+		MaxSpeed = 58, -- claude-bud JOB 40: was 50 (the fallback path also stays above a 40 runner)
 		SpeedUpPerThink = 8, -- v99: WalkSpeed rises at most this much per think (0.4 s) ...
 		SpeedDownPerThink = 6, -- ... and falls at most this much (smooth catch-up, no lurch)
 		ArriveStuds = 2,
@@ -363,6 +385,14 @@ local ArmyConfig = {
 			  wedge; the void rescue still runs). ]]
 		Tidy = {
 			Rollout = "all", -- v101
+			-- claude-bud (owner: "still glitchy and despawns when walking"): "Flank" = a file on each side of him, all in
+			-- front of the phone camera (row k: FlankFront + (k-1) x FlankRowBack studs back, negative = ahead; FlankSide +
+			-- (k-1) x FlankRowSide out). "Wedge" = the old formation behind him (RowBack / RowSide below).
+			Formation = "Flank",
+			FlankFront = -1,
+			FlankRowBack = 3,
+			FlankSide = 3.5,
+			FlankRowSide = 2.6,
 			HoldApproachStuds = 6,
 			HoldReleaseStuds = 10,
 			PlotPadStuds = 2,
@@ -387,6 +417,206 @@ local ArmyConfig = {
 			AttackRingMin = 8,
 		},
 		LogSeconds = 5,
+	},
+
+	--[[ v114 (Code Bot Roblox, owner phone test of v113; docs/ARMY-FOLLOW-ROOTCAUSE-2.md): ONE authoritative FOLLOW
+		controller per army (Server/Modules/ArmyController + SoldierController + Shared/Util/FormationController).
+		Enabled = false (or Rollout not "all" / "owner" for him) = the v113 behaviour exactly (Follow2 above).
+		Permanent slots, a clean Flank grid (one row per unit, its escorts further out in the row), a smoothed anchor, a
+		rate-limited heading with deadband + hysteresis, MoveTo only every UpdateSeconds and only when the goal moved,
+		arrival deadzone with hysteresis, catch-up by WalkSpeed, staged stuck recovery, reposition (PivotTo) only as the
+		emergency fallback. In FOLLOW the escort code only shoots / aims (no MoveTo). ]]
+	Follow3 = {
+		Enabled = true,
+		Rollout = "all", -- "all" | "owner" | anything else = off (v113)
+		UpdateSeconds = 0.2, -- the controller tick (MoveTo is never sent more often than this)
+		-- v115 (docs/ARMY-FOLLOW-ROOTCAUSE-3.md): a BLOCK BEHIND him on his breadcrumb trail (FormationController)
+		Formation = "TrailBlock",
+		VelSmoothSeconds = 0.3, -- his velocity is smoothed over this (moving / standing only)
+		MovingOnSpeed = 3, -- he counts as moving above this smoothed speed ...
+		MovingOffSpeed = 1.5, -- ... until he drops under this (rows only turn while he moves)
+		TrailSmoothSeconds = 0.4, -- crumbs are dropped from his position smoothed this much (joystick zig-zags soften)
+		CrumbStuds = 1, -- a crumb every this many studs he travels (none while he stands)
+		TrailKeepStuds = 90, -- path kept (the oldest crumb's direction runs on straight back past it)
+		TangentStuds = 3, -- a row faces his path's direction measured over +- this many studs at its arc
+		FirstRowStuds = 7, -- the front row sits this far behind him ALONG HIS PATH ...
+		RowSpacing = 4.5, -- ... each next row this much further back along it
+		ColSpacing = 5, -- columns this far apart (an even count) ...
+		AisleStuds = 7, -- ... except the two inner ones: this far apart, a lane down his own trail (an about-turn)
+		ColumnsMax = 4, -- columns = ceil(sqrt(units + escorts)) rounded up to even, 2..this
+		RowTurnDegPerSec = 100, -- a row turns at most this fast ...
+		RowDeadbandDeg = 8, -- ... only once its path direction is this far off (stops within 1.5 deg), only while he moves
+		FoldDeg = 120, -- past this (his path doubled back: an about-turn) a row reverses in place, sides mirrored
+		SlotVelBlend = 0.5, -- a slot's velocity (its MoveTo lead and pace) is smoothed by this per tick
+		OwnerClearStuds = 5, -- a goal is never nearer him than this ...
+		OwnerAheadSeconds = 1, -- ... nor in his walking lane (this much of his travel ahead, LaneHalfStuds each side;
+		OwnerAheadMaxStuds = 16, -- ... at most this long): on an about-turn the units on his old path step aside ...
+		YieldSpeed = 24, -- ... at least this fast
+		LaneHalfStuds = 3.5, -- (= AisleStuds / 2: a unit in his lane steps out to the aisle's edge, not into the next column)
+		PartMaxStuds = 5, -- a row he walks back into parts: each half steps out (column order kept) by at most this ...
+		PartRampStuds = 12, -- ... ramped in over this much of his approach beyond his lane
+		EscortTrail = true, -- clients draw each unit's escorts on the unit's OWN path behind it (RigAnimator), RowSpacing apart
+		-- JOB 23 (claude-bud, docs/ARMY-FOLLOW-ROOTCAUSE-4.md): the block is ONE steered body (FormationController.SteerFrames)
+		-- instead of rows riding his trail (their slots turned his corners / hairpins at full speed). Steer = false: v115 rows.
+		Steer = true,
+		FormGain = 3.2, -- its centre closes the gap to its steering point (on his path, behind him) at this per second ...
+		FormAccel = 24, -- ... its velocity speeding up / changing course at most this much per second (it keeps going briefly) ...
+		FormBrake = 60, -- ... slowing down at most this much (he stops: it stops with him; no coasting into his new path) ...
+		FormMaxSpeed = 24, -- ... never faster than this (or FormSpeedMult x his speed in a vehicle), less |turn rate| x radius
+		FormSpeedMult = 1.25,
+		TurnSlowFactor = 1, -- (while turning it travels that much slower: no slot ever moves faster than FormMaxSpeed)
+		BubbleStuds = 3, -- its centre steers no nearer him than its radius + this (no slot swings into him on a corner)
+		WaitAheadStuds = 0, -- he walks back into it (its centre this far ahead of him along his walk): it waits, holding its heading
+		SteerHeadingPath = false, -- its heading steers to his movement direction NOW (true: his path's direction at the block)
+		SlotLateralSpeed = 10, -- turning moves any slot sideways at most this fast: turn rate cap = this / the block's radius
+		TurnGain = 2.5, -- turn rate asked per radian of heading error (its heading = his MOVEMENT direction only) ...
+		TurnAccelSeconds = 0.4, -- ... reached over this (angular inertia); starts past RowDeadbandDeg, ends within 1.5 deg
+		SettleTurnPerSec = 0.8, -- inside RowDeadbandDeg it drifts onto his heading this fast (no standing tilt, no jitter)
+		SteerLeadSeconds = 0.35, -- a soldier walks toward its slot + its slot's velocity x this (capped) ...
+		SteerLeadMaxStuds = 6, -- ... and is re-aimed when it nears that point off its slot (no stop-start inside a turn)
+		SpeedDeadzoneStuds = 1, -- soldier WalkSpeed = its slot's speed + SpeedGain per stud of error past this ...
+		SpeedGain = 0.9,
+		SpeedLatGain = 0.6, -- ... + this per stud beside it (behind: faster, ahead: slower), one continuous law ...
+		SpeedMaxBonus = 14, -- ... at most this over its slot's speed ...
+		SpeedMaxSlow = 8, -- ... at most this under it ...
+		SpeedSmoothSeconds = 0.1, -- ... eased toward it over this (no step at a state change: the states are labels only)
+		-- JOB 24 (claude-bud, docs/ARMY-ATTACK-ROOTCAUSE.md): ATTACK = the same steered block (ArmyController), ONE sticky
+		-- squad target (SquadOrdersService pickSquadTarget; units only shoot / aim). AttackSteer = false: the v116 attack.
+		AttackSteer = true,
+		AttackStandoff = 36, -- the block's centre stops this far from the target on its own side, facing it (fire band 46.75)
+		AttackMaxSpeed = 16, -- it advances (and slides into / out of the line) no faster than this
+		AttackFeedMax = 12, -- a moving target's velocity is fed forward up to this
+		AttackDeployStuds = 8, -- within this of its spot it deploys into the line (folds back past twice this) ...
+		AttackDeploySeconds = 1.2, -- ... over at least this, longer when a slot must slide further than AttackSlideSpeed allows
+		AttackSlideSpeed = 8,
+		AttackLinePerRank = 6, -- the line: this many abreast per rank (centre-out by permanent slot: nobody changes sides) ...
+		AttackLineSpacing = 6, -- ... this far apart; the next rank behind with room for its escorts
+		AttackAggroStuds = 120, -- the squad target: a hostile within this of the army's centre (OrdersConfig.AttackAggroRange) ...
+		AttackKeepExtraStuds = 20, -- ... the current one kept out to this much further ...
+		AttackRetargetStuds = 15, -- ... unless another one is this much nearer ...
+		AttackLeashStuds = 140, -- ... and never one further than this from him (past it the army follows him again)
+		SpikeErrStuds = 6, -- debug: a soldier this far from its slot, or a slot faster than a soldier can run, is logged
+		DebugPanelSeconds = 0.5, -- debug: the owner's formation panel refresh
+		-- v115 debug (owner-visible, toggleable): slot markers + labels on his client, per-soldier logs on the server.
+		-- Debug = false: nothing at all. Default on for DebugUserIds; anyone listed toggles it with /armydebug.
+		Debug = false, -- JOB 24: no debug visuals for anyone by default (true = on by default for DebugUserIds)
+		DebugUserIds = { 470626172 }, -- only these can turn it on (/armydebug, admin allowlist)
+		DebugLogSeconds = 2, -- the per-soldier state line, per army, this often
+		DebugPublishStuds = 0.5, -- WE_SlotPos (the marker) is rewritten only when the slot moved this far
+		-- soldier (SoldierController)
+		ArriveStuds = 2.5, -- in its slot within this (he stands) ...
+		LeaveStuds = 4, -- ... and stays there until this far (hysteresis)
+		ReissueStuds = 2.5, -- a new MoveTo only when the goal moved this far ...
+		RefreshSeconds = 6, -- ... or this long passed (Humanoid.MoveTo gives up after 8 s)
+		MoveLeadSeconds = 0.25, -- while he moves a unit walks toward its slot + ITS SLOT's smoothed velocity x this ...
+		MoveLeadMaxStuds = 4, -- ... capped (it never reaches the goal and stops mid-walk)
+		CatchUpStartStuds = 6, -- catching up past this far from its OWN slot ...
+		CatchUpEndStuds = 3, -- ... until back within this (hysteresis)
+		TrimPerStud = 0.6, -- in step: WalkSpeed = its slot's pace + this per stud behind its slot (- ahead of it) ...
+		LateralPerStud = 0.5, -- ... + this per stud beside it
+		CatchUpPerStud = 0.9, -- catching up: WalkSpeed = its slot's pace + this per stud from its slot ...
+		CatchUpMaxMult = 1.8, -- ... capped at max(his pace x this, CatchUpMin), never over MaxSpeed
+		CatchUpMin = 30,
+		MaxSpeed = 58, -- claude-bud JOB 40: x1.45 of the 40-stud/s Speed Boost owner (v133: 46 for 32). v133 (Code Bot): was 40; the x2 Speed Boost owner runs 32 (the block: max(FormMaxSpeed, his
+		-- speed x FormSpeedMult) = 40): 46 keeps a soldier's catch-up headroom over his pace (x1.45, as at 25.6)
+		MinSpeed = 8,
+		SpeedUpPerTick = 6, -- WalkSpeed changes at most this much per tick up ...
+		SpeedDownPerTick = 5, -- ... and down
+		FaceTurnDegPerSec = 240, -- in its slot the unit turns to the heading at most this fast (no gyro snap)
+		FaceAfterShotSeconds = 1.2, -- after a shot it keeps its aim this long
+		-- stuck (progress < StuckProgressStuds while its goal is beyond the deadzone)
+		StuckProgressStuds = 1,
+		StuckReissueSeconds = 2.5, -- 1) re-issue MoveTo (+ a jump)
+		StuckPathSeconds = 5, -- 2) a path (waypoints)
+		StuckAltSeconds = 7.5, -- 3) a reachable point beside it for StuckAltHoldSeconds
+		StuckAltStuds = 6,
+		StuckAltHoldSeconds = 2,
+		StuckRepositionSeconds = 10, -- 4) reposition, only this far from its slot and out of his view
+		StuckRepositionMinStuds = 20,
+		BlockedPathTicks = 2, -- the straight line to its goal blocked this many ticks in a row: a path
+		PathMinStuds = 8,
+		PathKeepSeconds = 2.5,
+		PathKeepStuds = 10,
+		PathCooldown = 1.5,
+		PathBudgetPerSecond = 8,
+		-- emergency reposition (SoldierController.Reposition, the only PivotTo)
+		FarStuds = 120, -- this far from its slot ...
+		FarSeconds = 4, -- ... this long
+		VoidBelowOwner = 60,
+		VoidMargin = 80,
+		OwnerJumpSpeed = 80, -- he moved faster than this on foot in one tick: a teleport / respawn (anchor snaps)
+		VehicleDeferSpeed = 20, -- no reposition while he drives faster than this
+		RepositionBehindStuds = 16, -- the spot: its slot pushed this far back (behind the phone camera) ...
+		RepositionMinOwnerStuds = 8, -- ... never nearer him than this
+		RepositionCooldown = 5,
+		AuditSeconds = 5, -- collision groups re-checked on every unit part this often
+		YawPublishDeg = 3, -- WE_FormYaw (its row's heading) is written only when it moved this much
+		LogSeconds = 5,
+	},
+	-- claude-bud JOB 24 §2 (docs/ARMY-ATTACK-ROOTCAUSE.md): an ATTACKING army (Follow3.AttackSteer) also fights enemy
+	-- PLAYERS and base defenders, server-side: the squad target may be an enemy player (CombatService.UnitMayHitPlayer:
+	-- PvP, clan ally, spawn / novice shields -> "Protected"), a gate / tower guard of a base that is not his or an ally's,
+	-- or a CombatService NPC; a soldier with no line of sight to a player standing behind a gate shoots the gate. Kills
+	-- are credited to the army owner (players: cash, XP, MOST KILLS; NPCs: as his own kills; guards: the JOB 20 guard
+	-- reward). Enabled = false: the army hits NPCs only, as v116.
+	-- claude-bud JOB 26 (owner: "the attack works but they should be stronger"): the soldier's base numbers (Enabled =
+	-- false: OrdersConfig AttackDamage 8 / AttackFireRate 1.8 / UnitHealth 90 and ArmyCombat.PlayerMaxDps, as v118).
+	-- Research scales them: Marksman Training (SoldierDamage) = Firepower, Combat Drills (SoldierFireRate) = Training,
+	-- Body Armor (SoldierHealth) = Toughness.
+	StrongerArmy = {
+		Enabled = true,
+		Damage = 12, -- per hit (x research), x ArmyCombat.PlayerDamageMult on players
+		FireRate = 2.2, -- shots per second per soldier (x research)
+		Health = 150, -- soldier max HP (x research)
+		PlayerMaxDps = 50, -- per victim per army (a full army kills an unarmoured player in ~2 s, a Titan one in ~4 s)
+		NpcHitMarkersPerSecond = 4, -- the owner sees a hit marker / damage number for his army's NPC hits, this often at most
+		TracerMinGap = 0.15, -- ArmyConfig.ShotFx.PerArmyMinGap while on (more visible tracers; the per-recipient cap stays)
+	},
+	-- claude-bud JOB 43: ARMY VS ARMY BRAWL (Modules/ArmyBrawl). Enemy soldiers are targets too (players first), under
+	-- CombatService.ArmyHostility, re-checked per shot (CombatService.ApplyUnitUnitHit). Owner-first by the SHOOTING
+	-- army's owner; OFF = today (soldiers ignore enemy soldiers).
+	ArmyBrawl = {
+		Enabled = true,
+		OwnerFirst = false, -- codebot_v166 flip-all-live (owner 2026-10-01 10:31): everyone
+		UnitDamageMult = 1, -- x OrdersConfig.AttackDamage (research-scaled) per soldier hit on an enemy soldier
+		MaxCandidates = 8, -- the nearest enemy soldiers considered per think pass
+		KillXP = 10, -- XP to the owner per enemy soldier killed by his army
+		PairCreditPer10Min = 30, -- at most this many credited soldier kills (XP + ARMY KILLS) per owner pair per 10 min
+	},
+	ArmyCombat = {
+		Enabled = true,
+		TargetPlayers = true,
+		TargetGuards = true,
+		ShootGates = true,
+		PlayerDamageMult = 0.6, -- x OrdersConfig.AttackDamage (research-scaled) per soldier hit on a player
+		PlayerMaxDps = 40, -- per victim per army: a full army never deletes a player instantly (time to kill >= 2.5 s)
+		GuardDamageMult = 1,
+		GateDamageMult = 1,
+		CreditSteeredAttackKills = true, -- NPC kills by a steered ATTACK pay the owner (the 140-stud leash keeps him near)
+		ProtectedNoteSeconds = 8, -- "X is protected" to the attacker at most this often per victim
+		HitLogSeconds = 5, -- debug (/armydebug): the per-kind hit / miss / blocked counts, this often
+		-- v124 (Code Bot, phone bug "my ATTACK army shot the bank guards but never the player killing me beside it"):
+		-- the squad target's priority tiers (FormationController.PickTargetTiered). PreferPlayers: an enemy player
+		-- (CombatService.UnitMayHitPlayer: THE shared PvP rule + never a clan ally) in reach outranks every guard / NPC,
+		-- so a sticky NPC target no longer hides him; false = the v123 nearest-first pick. AggressorSeconds: one who hurt
+		-- the owner within this outranks every other player (0 = off).
+		PreferPlayers = true,
+		AggressorSeconds = 10,
+		TargetLogSeconds = 2, -- debug (/armydebug): the [ArmyTarget] per-candidate verdict line, this often per army
+		-- v133 (Code Bot, phone bug "I stood right in front of another player's army and it never fired; my shots did
+		-- nothing to it"). Proven causes: (1) only ATTACK ever looked at players (pickSquadTarget ran for st.Order ==
+		-- "Attack" only; the FOLLOW / HOLD escort scans WE_NPC models only), and every army is on FOLLOW by default;
+		-- (2) every player shot excluded the whole WarEmpireSquads folder (CombatService shotFilterFor), so bullets
+		-- flew through enemy soldiers and no player could hurt one.
+		-- DefendOnFollow: a FOLLOW / HOLD army engages an enemy player in reach under THE shared rule
+		-- (CombatService.UnitMayHitPlayer; protected / ally / PvP off never), from its slot (no movement change).
+		-- DefendPlayerStuds: an enemy player this close to the army's centre (or its owner); one who hurt the owner or
+		-- his soldiers within AggressorSeconds is answered out to DefendAggressorStuds. PlayersHitUnits: player guns /
+		-- rockets hurt enemy soldiers (CombatService.ArmyHostility); false = the v132 pass-through.
+		DefendOnFollow = true,
+		DefendPlayerStuds = 47, -- (= the fire band OrdersConfig.AttackRange 55 x 0.85: the FOLLOW army does not walk out to him)
+		DefendAggressorStuds = 55, -- (the full AttackRange: he shot first)
+		PlayersHitUnits = true,
 	},
 
 	Gate = {
@@ -461,5 +691,13 @@ function ArmyConfig.ThreatStandingFor(userId: any): boolean
 	end
 	return v == "owner" and AdminConfig.IsPlaytestOwner(userId) == true
 end
+
+--[[ claude-bud JOB 32: while the owner is inside (or on the roof of) an enterable building (Modules/Enterables: the
+	PlazaBuildingsConfig houses), FOLLOW forms the block up outside its door, facing it, instead of behind him. The
+	units never walk in, never climb the stair, and are never teleported: the owner's measured speed is zero while he is
+	held, so no jump / far / pace recovery fires. Enabled = false: the army follows him exactly as before. ]]
+ArmyConfig.Indoors = {
+	Enabled = true,
+}
 
 return ArmyConfig

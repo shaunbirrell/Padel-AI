@@ -235,7 +235,9 @@ HudConfig.Rail = {
 		{ Id = "Rebirth", Name = "DockRebirth", Label = "Rebirth", Icon = "Cycle", Accent = Color3.fromRGB(196, 80, 255), Fill = Color3.fromRGB(50, 18, 74), Key = Enum.KeyCode.K },
 		{ Id = "Army", Name = "DockArmy", Label = "Army", Icon = "Helmet", Accent = Color3.fromRGB(72, 220, 96), Fill = Color3.fromRGB(16, 58, 28), Key = Enum.KeyCode.Y },
 		{ Id = "Garage", Name = "DockGarage", Label = "Garage", Icon = "Car", Accent = Color3.fromRGB(40, 212, 200), Fill = Color3.fromRGB(8, 52, 56), Key = Enum.KeyCode.G },
-		{ Id = "Missions", Name = "DockMissions", Label = "Missions", Icon = "Clipboard", Accent = Color3.fromRGB(255, 150, 32), Fill = Color3.fromRGB(80, 42, 6), Key = Enum.KeyCode.M },
+		{ Id = "Missions", Name = "DockMissions", Label = "Missions", Icon = "Clipboard", Accent = Color3.fromRGB(255, 150, 32), Fill = Color3.fromRGB(80, 42, 6), Key = Enum.KeyCode.N }, -- claude-bud JOB 30: M -> N (M is the map)
+		-- claude-bud JOB 30: the world map (MapController; only while MapConfig is live for the player)
+		{ Id = "Map", Name = "DockMap", Label = "Map", Icon = "Map", Accent = Color3.fromRGB(150, 200, 120), Fill = Color3.fromRGB(30, 52, 24), Key = Enum.KeyCode.M },
 		-- Code Bot v102: redeem codes (CodesController). No key. 6th tile: fits one column on 956x440; on 844x390 /
 		-- 800x360 layoutRail wraps it to the top of a 2nd column (same wrap rule as before)
 		{ Id = "Codes", Name = "DockCodes", Label = "Codes", Icon = "Gift", Accent = Color3.fromRGB(255, 214, 72), Fill = Color3.fromRGB(74, 58, 8) },
@@ -258,6 +260,7 @@ HudConfig.Rail = {
 		Garage = "NewVehicle", -- "!" when a vehicle was bought/unlocked and not spawned yet (clears on Garage open)
 		Missions = "Claimables", -- count = completed-unclaimed missions + claimable daily login + (spinner READY ? 1 : 0)
 		Codes = nil, -- Code Bot v102: no badge
+		Map = nil, -- claude-bud JOB 30: no badge
 	},
 	HideWhen = { "Driving", "Dead" },
 }
@@ -283,7 +286,8 @@ HudConfig.CashPill = {
 	NumberSizeDesktop = 32,
 	NumberColor = Color3.fromRGB(255, 255, 255),
 	ShowDollarSign = false, -- the icon says "cash"; prices elsewhere keep "$"
-	AbbreviateAbove = 1e9, -- 1,234,567,890 → "1.23B"
+	AbbreviateAbove = 1e9, -- 1,234,567,890 → "1.235B"
+	AbbreviateDecimalsBig = 3, -- Code Bot v195: decimals for B/T on the cash pill (was 2: "1.00B" hid $1M+ of growth)
 	CountUpSeconds = 0.35,
 	PopScale = 1.08, -- the number pops once per change
 	FlashSeconds = 0.5, -- gain/spend colour (CashFloat.GainColor / SpendColor) settles back to NumberColor
@@ -433,7 +437,7 @@ HudConfig.Hotbar = {
 	MaxSlots = 4,
 	Slot = 64, -- v touch (44.8 real)
 	SlotDesktop = 50, -- v (45 real at 720p)
-	Gap = 12, -- also widens each slot's caption box (slot + Gap + 4 = 80 v) so SHOTGUN keeps ≥ 12 px (CaptionMinTextPx)
+	Gap = 12, -- claude-bud JOB 50 D: the caption no longer reaches into the gap (it stays inside its slot; fitCaption)
 	Bottom = 12,
 	Corner = 8,
 	Bg = Color3.fromRGB(20, 22, 26),
@@ -456,6 +460,14 @@ HudConfig.Hotbar = {
 	HolsterAutoDrawGraceSeconds = 4, -- v99: AutoDrawOnDamage waits this long after the player holstered by hand
 	DrawnOnSpawn = false, -- you spawn holstered: clicks go to the world (droppers, consoles), not the gun
 	AutoDrawOnDamage = true, -- taking damage from a player/NPC draws the last weapon
+	--[[ codebot v216 (owner 2026-10-02, phone: "my army fights far away and MY gun keeps coming out + I stop walking"):
+		AutoDrawOnDamage drew on ANY health drop / Damaged with no check of where it came from. Live
+		(RetentionConfig.Live: Enabled, then OwnerFirst = owner / playtest owner only, Studio): the draw needs real
+		combat - a gun / blast hit (always), an army / defence hit whose shooter (Damaged.From, now the real unit) is
+		within NearStuds (or unknown), or a health drop with no Damaged that has another player / a soldier not yours /
+		an NPC within NearStuds (one scan per drop, no loop). Edge flash + RecentCombat stay on every drop. The player's
+		own shooting (FIRE / keys / hotbar) is input and never goes through here. Enabled = false = v214. ]]
+	AutoDrawGuard = { Enabled = true, OwnerFirst = false, NearStuds = 160, ConfirmSeconds = 0.6 }, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (v216)
 	HideWhen = { "Driving", "Dead", "Modal" },
 }
 
@@ -619,7 +631,13 @@ HudConfig.CombatFx = {
 	TargetBar = { Seconds = 2.5, Width = 120, Height = 6, NamePx = 14 }, -- real px, under the reticle
 	Haptics = { Enabled = true, Hit = 0.2, Kill = 0.5 }, -- touch only (HapticService)
 	-- Roblox-owned animation ids (docs/ASSET_SHORTLIST.md §3.4, creator Roblox); 0 disables
-	Anims = { Hold = { Rifle = 3972151362, Pistol = 507768375, Launcher = 3972164452 }, Reload = 3972131105 },
+	-- A Hold id is played Looped at normal speed (WeaponVisuals.playHold), so it must be a real idle loop. Never
+	-- 3972164452 (the Weapons Kit "RifleAim"): that is a pitch-scrub pose sheet (t = 0 aims 80° down, t = 1 level,
+	-- t = 2 aims 80° up; the kit freezes it and sets TimePosition from the camera pitch) that keys the Waist
+	-- (UpperTorso ~50° twist, -73° -> +28° pitch). Looped it swept the torso and the launcher from down to near
+	-- vertical every 2 s and snapped back: the RPG / launcher wobble (owner report 2026-09-30). The launchers use
+	-- RifleHold (arms only; its UpperTorso pose has Weight 0, t = 0 and t = 2 are the same pose).
+	Anims = { Hold = { Rifle = 3972151362, Pistol = 507768375, Launcher = 3972151362 }, Reload = 3972131105 },
 	-- gun placement in the hand (device tuning knob; zero = the Roblox Tool default: barrel along the
 	-- RightGripAttachment's -Z, top along its +Y). Handle = grip * Rotation(deg, X/Y/Z order) * Offset(studs).
 	Grip = { RotationDeg = Vector3.zero, OffsetStuds = Vector3.zero },
@@ -677,7 +695,8 @@ HudConfig.Keys = {
 	Rebirth = Enum.KeyCode.K,
 	Army = Enum.KeyCode.Y, -- was A (strafe-left toggled the Army panel while walking)
 	Garage = Enum.KeyCode.G,
-	Missions = Enum.KeyCode.M,
+	Missions = Enum.KeyCode.N, -- claude-bud JOB 30: was M (M opens the world map)
+	Map = Enum.KeyCode.M, -- claude-bud JOB 30: the world map (MapController)
 	Settings = nil, -- was O (Roblox camera zoom-out). Gear button only.
 	Base = Enum.KeyCode.B, -- Base menu leaves the HUD; B and the Command Center map table remain
 	Weapons = { Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four }, -- draw / holster

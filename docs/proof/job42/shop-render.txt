@@ -1,0 +1,697 @@
+# run_shop_render_test.py (2026-10-01T08:11Z, headless luau stand-in with the REAL ShopController.Init: NOT Roblox; rows + phone text budgets, no pixel overlap measurement)
+ok    uid 470626172: ShopController.Init finishes 
+ok    List_Supply built
+        rows: fr_daily > fr_airdrop > fr_invite > fr_favorite > Pass_WarChest > Pass_DoubleCash > Pass_VIP > Pass_AutoCollect > StarterBundle > PremiumPass > Pass_BiggerArmy > Pass_SuperSoldiers > Pass_DoubleHP > SpeedBoost > Pass_DoubleXP > Pass_PG_Sovereign > Pass_PG_Quake > Pass_PG_Longshot > Pass_PG_Havoc > Pass_PG_Thunderhead > Pass_PG_Tempest > Pass_PG_ArmoryPass > Pass_PV_Razorfang > Pass_PV_Tidebreaker > Pass_PV_Warlord > Pass_PV_Skylance > Pass_PV_Stormwing > Pass_PV_Leviathan > Pass_ExtraGarageSlot > CashMega > CashLarge > CashMedium > CashSmall > GoldenPumpjack > SoldierRefill > PlazaAirstrike > SupplyCrate
+ok    CashMega row renders (Get $2,000,000 cash right away)
+ok    CashLarge row renders (Get $200,000 cash right away)
+ok    CashMedium row renders (Get $50,000 cash right away)
+ok    CashSmall row renders (Get $10,000 cash right away)
+ok    Cash4h: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash2h: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash1h: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash30m: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash15m: no time row while the time packs are not shown (OFF == OLD)
+ok    WarChest row renders for uid 470626172 (overhaul live for everyone)
+ok    SuperSoldiers row renders for uid 470626172 (overhaul live for everyone)
+ok    DoubleHP row renders for uid 470626172 (overhaul live for everyone)
+ok    VIP row shows 199 R$ (not 349): Pass: VIP | PERMANENT · +50% cash, a daily cash crate and VIP lounge | 199 R$
+ok    VIP row is the overhaul row (PERMANENT)
+        ROW fr_daily | FREE · Daily Reward | Your login streak cash, once a day | CLAIM
+ok    ShopRow_fr_daily: no developer text
+ok    ShopRow_fr_daily: sub fits a phone row (34 chars)
+ok    ShopRow_fr_daily: title fits a phone row (19 chars)
+        ROW fr_airdrop | FREE · Airdrop | A cash crate lands every 10 min: first to reach it wins | TRACK
+ok    ShopRow_fr_airdrop: no developer text
+ok    ShopRow_fr_airdrop: sub fits a phone row (55 chars)
+ok    ShopRow_fr_airdrop: title fits a phone row (14 chars)
+        ROW fr_invite | FREE · Invite friends | $0 per new friend who joins | INVITE
+ok    ShopRow_fr_invite: no developer text
+ok    ShopRow_fr_invite: sub fits a phone row (27 chars)
+ok    ShopRow_fr_invite: title fits a phone row (21 chars)
+        ROW fr_favorite | Favorite WAR EMPIRE | Find us again fast (no reward) | ★
+ok    ShopRow_fr_favorite: no developer text
+ok    ShopRow_fr_favorite: sub fits a phone row (30 chars)
+ok    ShopRow_fr_favorite: title fits a phone row (19 chars)
+        ROW Pass_WarChest | Pass: War Chest | PERMANENT · 2x cash, Auto Collect, VIP and Bigger Army | 799 R$
+ok    ShopRow_Pass_WarChest: no developer text
+ok    ShopRow_Pass_WarChest: sub fits a phone row (54 chars)
+ok    ShopRow_Pass_WarChest: title fits a phone row (15 chars)
+        ROW Pass_DoubleCash | BEST VALUE · 2x Cash | PERMANENT · Double your cash income | 149 R$
+ok    ShopRow_Pass_DoubleCash: no developer text
+ok    ShopRow_Pass_DoubleCash: sub fits a phone row (35 chars)
+ok    ShopRow_Pass_DoubleCash: title fits a phone row (20 chars)
+        ROW Pass_VIP | Pass: VIP | PERMANENT · +50% cash, a daily cash crate and VIP lounge | 199 R$
+ok    ShopRow_Pass_VIP: no developer text
+ok    ShopRow_Pass_VIP: sub fits a phone row (56 chars)
+ok    ShopRow_Pass_VIP: title fits a phone row (9 chars)
+        ROW Pass_AutoCollect | Pass: Auto Collect | PERMANENT · Your ATM cash is collected for you | 99 R$
+ok    ShopRow_Pass_AutoCollect: no developer text
+ok    ShopRow_Pass_AutoCollect: sub fits a phone row (46 chars)
+ok    ShopRow_Pass_AutoCollect: title fits a phone row (18 chars)
+        ROW StarterBundle | Commander Starter Bundle | $50,000 cash plus Auto Collect forever | 249 R$
+ok    ShopRow_StarterBundle: no developer text
+ok    ShopRow_StarterBundle: sub fits a phone row (38 chars)
+ok    ShopRow_StarterBundle: title fits a phone row (24 chars)
+        ROW PremiumPass | Battle Pass Premium | Unlock premium rewards on every Battle Pass tier | 499 R$
+ok    ShopRow_PremiumPass: no developer text
+ok    ShopRow_PremiumPass: sub fits a phone row (48 chars)
+ok    ShopRow_PremiumPass: title fits a phone row (19 chars)
+        ROW Pass_BiggerArmy | Pass: Bigger Army | PERMANENT · +10 soldiers in your army | 249 R$
+ok    ShopRow_Pass_BiggerArmy: no developer text
+ok    ShopRow_Pass_BiggerArmy: sub fits a phone row (37 chars)
+ok    ShopRow_Pass_BiggerArmy: title fits a phone row (17 chars)
+        ROW Pass_SuperSoldiers | Pass: Super Soldiers | PERMANENT · Your soldiers get +25% damage and health | 349 R$
+ok    ShopRow_Pass_SuperSoldiers: no developer text
+ok    ShopRow_Pass_SuperSoldiers: sub fits a phone row (52 chars)
+ok    ShopRow_Pass_SuperSoldiers: title fits a phone row (20 chars)
+        ROW Pass_DoubleHP | Pass: Double HP | PERMANENT · Double your max health | 199 R$
+ok    ShopRow_Pass_DoubleHP: no developer text
+ok    ShopRow_Pass_DoubleHP: sub fits a phone row (34 chars)
+ok    ShopRow_Pass_DoubleHP: title fits a phone row (15 chars)
+        ROW SpeedBoost | Speed Boost | Run 2.5x faster, forever | 99 R$
+ok    ShopRow_SpeedBoost: no developer text
+ok    ShopRow_SpeedBoost: sub fits a phone row (24 chars)
+ok    ShopRow_SpeedBoost: title fits a phone row (11 chars)
+        ROW Pass_DoubleXP | Pass: Double XP | PERMANENT · Double the XP you earn | 99 R$
+ok    ShopRow_Pass_DoubleXP: no developer text
+ok    ShopRow_Pass_DoubleXP: sub fits a phone row (34 chars)
+ok    ShopRow_Pass_DoubleXP: title fits a phone row (15 chars)
+        ROW Pass_PG_Sovereign | ROBUX · Sovereign Gold Pistol | PERMANENT · Gold pistol that fires 2-shot bursts | 99 R$
+ok    ShopRow_Pass_PG_Sovereign: no developer text
+ok    ShopRow_Pass_PG_Sovereign: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_PG_Sovereign: title fits a phone row (29 chars)
+        ROW Pass_PG_Quake | ROBUX · Quake Grenade Launcher | PERMANENT · Lobs grenades, 6 per reload | 249 R$
+ok    ShopRow_Pass_PG_Quake: no developer text
+ok    ShopRow_Pass_PG_Quake: sub fits a phone row (39 chars)
+ok    ShopRow_Pass_PG_Quake: title fits a phone row (30 chars)
+        ROW Pass_PG_Longshot | ROBUX · Longshot Sniper | PERMANENT · Scoped sniper: 110 damage, long range | 299 R$
+ok    ShopRow_Pass_PG_Longshot: no developer text
+ok    ShopRow_Pass_PG_Longshot: sub fits a phone row (49 chars)
+ok    ShopRow_Pass_PG_Longshot: title fits a phone row (23 chars)
+        ROW Pass_PG_Havoc | ROBUX · Havoc Rotary Gun | PERMANENT · Spinning minigun with a 150-round belt | 349 R$
+ok    ShopRow_Pass_PG_Havoc: no developer text
+ok    ShopRow_Pass_PG_Havoc: sub fits a phone row (50 chars)
+ok    ShopRow_Pass_PG_Havoc: title fits a phone row (24 chars)
+        ROW Pass_PG_Thunderhead | ROBUX · Thunderhead Rocket Launcher | PERMANENT · Fires 2 rockets at once | 399 R$
+ok    ShopRow_Pass_PG_Thunderhead: no developer text
+ok    ShopRow_Pass_PG_Thunderhead: sub fits a phone row (35 chars)
+ok    ShopRow_Pass_PG_Thunderhead: title fits a phone row (35 chars)
+        ROW Pass_PG_Tempest | ROBUX · Tempest Railgun | PERMANENT · Charged shot that goes through 3 enemies | 499 R$
+ok    ShopRow_Pass_PG_Tempest: no developer text
+ok    ShopRow_Pass_PG_Tempest: sub fits a phone row (52 chars)
+ok    ShopRow_Pass_PG_Tempest: title fits a phone row (23 chars)
+        ROW Pass_PG_ArmoryPass | ROBUX · Armory Pass | PERMANENT · All 6 premium guns | 1299 R$
+ok    ShopRow_Pass_PG_ArmoryPass: no developer text
+ok    ShopRow_Pass_PG_ArmoryPass: sub fits a phone row (30 chars)
+ok    ShopRow_Pass_PG_ArmoryPass: title fits a phone row (19 chars)
+        ROW Pass_PV_Razorfang | ROBUX · Razorfang GT Interceptor | PERMANENT · Armored car with twin machine guns | 199 R$
+ok    ShopRow_Pass_PV_Razorfang: no developer text
+ok    ShopRow_Pass_PV_Razorfang: sub fits a phone row (46 chars)
+ok    ShopRow_Pass_PV_Razorfang: title fits a phone row (32 chars)
+        ROW Pass_PV_Tidebreaker | ROBUX · Tidebreaker Assault Boat | PERMANENT · Fast assault boat with a machine gun | 299 R$
+ok    ShopRow_Pass_PV_Tidebreaker: no developer text
+ok    ShopRow_Pass_PV_Tidebreaker: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_PV_Tidebreaker: title fits a phone row (32 chars)
+        ROW Pass_PV_Warlord | ROBUX · Warlord Siege Tank | PERMANENT · Heavy tank with a siege cannon | 799 R$
+ok    ShopRow_Pass_PV_Warlord: no developer text
+ok    ShopRow_Pass_PV_Warlord: sub fits a phone row (42 chars)
+ok    ShopRow_Pass_PV_Warlord: title fits a phone row (26 chars)
+        ROW Pass_PV_Skylance | ROBUX · Skylance Interceptor | PERMANENT · Fighter jet with an air cannon | 899 R$
+ok    ShopRow_Pass_PV_Skylance: no developer text
+ok    ShopRow_Pass_PV_Skylance: sub fits a phone row (42 chars)
+ok    ShopRow_Pass_PV_Skylance: title fits a phone row (28 chars)
+        ROW Pass_PV_Stormwing | ROBUX · Stormwing Gunship | PERMANENT · Attack helicopter with a chin gun | 999 R$
+ok    ShopRow_Pass_PV_Stormwing: no developer text
+ok    ShopRow_Pass_PV_Stormwing: sub fits a phone row (45 chars)
+ok    ShopRow_Pass_PV_Stormwing: title fits a phone row (25 chars)
+        ROW Pass_PV_Leviathan | ROBUX · Leviathan Dreadnought | PERMANENT · Giant battleship with a deck cannon | 1199 R$
+ok    ShopRow_Pass_PV_Leviathan: no developer text
+ok    ShopRow_Pass_PV_Leviathan: sub fits a phone row (47 chars)
+ok    ShopRow_Pass_PV_Leviathan: title fits a phone row (29 chars)
+        ROW Pass_ExtraGarageSlot | ROBUX · Extra Garage Slot | PERMANENT · Keep 2 vehicles out at the same time | 199 R$
+ok    ShopRow_Pass_ExtraGarageSlot: no developer text
+ok    ShopRow_Pass_ExtraGarageSlot: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_ExtraGarageSlot: title fits a phone row (25 chars)
+        ROW CashMega | ★ BEST OFFER · Cash Pack Mega | Get $2,000,000 cash right away | 799 R$
+ok    ShopRow_CashMega: no developer text
+ok    ShopRow_CashMega: sub fits a phone row (30 chars)
+ok    ShopRow_CashMega: title fits a phone row (29 chars)
+        ROW CashLarge | Cash Pack L | Get $200,000 cash right away | 399 R$
+ok    ShopRow_CashLarge: no developer text
+ok    ShopRow_CashLarge: sub fits a phone row (28 chars)
+ok    ShopRow_CashLarge: title fits a phone row (11 chars)
+        ROW CashMedium | Cash Pack M | Get $50,000 cash right away | 149 R$
+ok    ShopRow_CashMedium: no developer text
+ok    ShopRow_CashMedium: sub fits a phone row (27 chars)
+ok    ShopRow_CashMedium: title fits a phone row (11 chars)
+        ROW CashSmall | Cash Pack S | Get $10,000 cash right away | 49 R$
+ok    ShopRow_CashSmall: no developer text
+ok    ShopRow_CashSmall: sub fits a phone row (27 chars)
+ok    ShopRow_CashSmall: title fits a phone row (11 chars)
+        ROW GoldenPumpjack | Golden Pumpjacks | Gold oil pumps that earn 50% more, forever | 49 R$
+ok    ShopRow_GoldenPumpjack: no developer text
+ok    ShopRow_GoldenPumpjack: sub fits a phone row (42 chars)
+ok    ShopRow_GoldenPumpjack: title fits a phone row (16 chars)
+        ROW SoldierRefill | Instant Army Refill | Refill your army to full right now | 49 R$
+ok    ShopRow_SoldierRefill: no developer text
+ok    ShopRow_SoldierRefill: sub fits a phone row (34 chars)
+ok    ShopRow_SoldierRefill: title fits a phone row (19 chars)
+        ROW PlazaAirstrike | Plaza Airstrike | 1 airstrike on the plaza: hurts, never kills | 79 R$
+ok    ShopRow_PlazaAirstrike: no developer text
+ok    ShopRow_PlazaAirstrike: sub fits a phone row (44 chars)
+ok    ShopRow_PlazaAirstrike: title fits a phone row (15 chars)
+        ROW SupplyCrate | Supply Crate (locked) | Random loot is policy-pending — not for sale | LOCKED
+ok    ShopRow_SupplyCrate: no developer text
+ok    ShopRow_SupplyCrate: sub fits a phone row (44 chars)
+ok    ShopRow_SupplyCrate: title fits a phone row (21 chars)
+ok    Starter row = the Roblox product: Commander Starter Bundle 249 R$ (Commander Starter Bundle 249 R$)
+ok    Starter row says what you get
+ok    Battle Pass Premium row: plain words, 499 R$
+ok    a live price / name that arrives later updates the row (Cash Pack S (live) 59 R$)
+ok    OpenCashPacks scrolls to Cash Pack Mega: CanvasPosition.Y=2104 want 2104
+ok    uid 470626172: Mega sits 2104 px down (after the passes): reachable through the cash + scroll
+SHOP RENDER TEST uid 470626172: 0 failed
+ok    uid 9: ShopController.Init finishes 
+ok    List_Supply built
+        rows: fr_daily > fr_airdrop > fr_invite > fr_favorite > Pass_WarChest > Pass_DoubleCash > Pass_VIP > Pass_AutoCollect > StarterBundle > PremiumPass > Pass_BiggerArmy > Pass_SuperSoldiers > Pass_DoubleHP > SpeedBoost > Pass_DoubleXP > Pass_PG_Sovereign > Pass_PG_Quake > Pass_PG_Longshot > Pass_PG_Havoc > Pass_PG_Thunderhead > Pass_PG_Tempest > Pass_PG_ArmoryPass > Pass_PV_Razorfang > Pass_PV_Tidebreaker > Pass_PV_Warlord > Pass_PV_Skylance > Pass_PV_Stormwing > Pass_PV_Leviathan > Pass_ExtraGarageSlot > CashMega > CashLarge > CashMedium > CashSmall > GoldenPumpjack > SoldierRefill > PlazaAirstrike > SupplyCrate
+ok    CashMega row renders (Get $2,000,000 cash right away)
+ok    CashLarge row renders (Get $200,000 cash right away)
+ok    CashMedium row renders (Get $50,000 cash right away)
+ok    CashSmall row renders (Get $10,000 cash right away)
+ok    Cash4h: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash2h: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash1h: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash30m: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash15m: no time row while the time packs are not shown (OFF == OLD)
+ok    WarChest row renders for uid 9 (overhaul live for everyone)
+ok    SuperSoldiers row renders for uid 9 (overhaul live for everyone)
+ok    DoubleHP row renders for uid 9 (overhaul live for everyone)
+ok    VIP row shows 199 R$ (not 349): Pass: VIP | PERMANENT · +50% cash, a daily cash crate and VIP lounge | 199 R$
+ok    VIP row is the overhaul row (PERMANENT)
+        ROW fr_daily | FREE · Daily Reward | Your login streak cash, once a day | CLAIM
+ok    ShopRow_fr_daily: no developer text
+ok    ShopRow_fr_daily: sub fits a phone row (34 chars)
+ok    ShopRow_fr_daily: title fits a phone row (19 chars)
+        ROW fr_airdrop | FREE · Airdrop | A cash crate lands every 10 min: first to reach it wins | TRACK
+ok    ShopRow_fr_airdrop: no developer text
+ok    ShopRow_fr_airdrop: sub fits a phone row (55 chars)
+ok    ShopRow_fr_airdrop: title fits a phone row (14 chars)
+        ROW fr_invite | FREE · Invite friends | $0 per new friend who joins | INVITE
+ok    ShopRow_fr_invite: no developer text
+ok    ShopRow_fr_invite: sub fits a phone row (27 chars)
+ok    ShopRow_fr_invite: title fits a phone row (21 chars)
+        ROW fr_favorite | Favorite WAR EMPIRE | Find us again fast (no reward) | ★
+ok    ShopRow_fr_favorite: no developer text
+ok    ShopRow_fr_favorite: sub fits a phone row (30 chars)
+ok    ShopRow_fr_favorite: title fits a phone row (19 chars)
+        ROW Pass_WarChest | Pass: War Chest | PERMANENT · 2x cash, Auto Collect, VIP and Bigger Army | 799 R$
+ok    ShopRow_Pass_WarChest: no developer text
+ok    ShopRow_Pass_WarChest: sub fits a phone row (54 chars)
+ok    ShopRow_Pass_WarChest: title fits a phone row (15 chars)
+        ROW Pass_DoubleCash | BEST VALUE · 2x Cash | PERMANENT · Double your cash income | 149 R$
+ok    ShopRow_Pass_DoubleCash: no developer text
+ok    ShopRow_Pass_DoubleCash: sub fits a phone row (35 chars)
+ok    ShopRow_Pass_DoubleCash: title fits a phone row (20 chars)
+        ROW Pass_VIP | Pass: VIP | PERMANENT · +50% cash, a daily cash crate and VIP lounge | 199 R$
+ok    ShopRow_Pass_VIP: no developer text
+ok    ShopRow_Pass_VIP: sub fits a phone row (56 chars)
+ok    ShopRow_Pass_VIP: title fits a phone row (9 chars)
+        ROW Pass_AutoCollect | Pass: Auto Collect | PERMANENT · Your ATM cash is collected for you | 99 R$
+ok    ShopRow_Pass_AutoCollect: no developer text
+ok    ShopRow_Pass_AutoCollect: sub fits a phone row (46 chars)
+ok    ShopRow_Pass_AutoCollect: title fits a phone row (18 chars)
+        ROW StarterBundle | Commander Starter Bundle | $50,000 cash plus Auto Collect forever | 249 R$
+ok    ShopRow_StarterBundle: no developer text
+ok    ShopRow_StarterBundle: sub fits a phone row (38 chars)
+ok    ShopRow_StarterBundle: title fits a phone row (24 chars)
+        ROW PremiumPass | Battle Pass Premium | Unlock premium rewards on every Battle Pass tier | 499 R$
+ok    ShopRow_PremiumPass: no developer text
+ok    ShopRow_PremiumPass: sub fits a phone row (48 chars)
+ok    ShopRow_PremiumPass: title fits a phone row (19 chars)
+        ROW Pass_BiggerArmy | Pass: Bigger Army | PERMANENT · +10 soldiers in your army | 249 R$
+ok    ShopRow_Pass_BiggerArmy: no developer text
+ok    ShopRow_Pass_BiggerArmy: sub fits a phone row (37 chars)
+ok    ShopRow_Pass_BiggerArmy: title fits a phone row (17 chars)
+        ROW Pass_SuperSoldiers | Pass: Super Soldiers | PERMANENT · Your soldiers get +25% damage and health | 349 R$
+ok    ShopRow_Pass_SuperSoldiers: no developer text
+ok    ShopRow_Pass_SuperSoldiers: sub fits a phone row (52 chars)
+ok    ShopRow_Pass_SuperSoldiers: title fits a phone row (20 chars)
+        ROW Pass_DoubleHP | Pass: Double HP | PERMANENT · Double your max health | 199 R$
+ok    ShopRow_Pass_DoubleHP: no developer text
+ok    ShopRow_Pass_DoubleHP: sub fits a phone row (34 chars)
+ok    ShopRow_Pass_DoubleHP: title fits a phone row (15 chars)
+        ROW SpeedBoost | Speed Boost | Run 2x faster, forever | 99 R$
+ok    ShopRow_SpeedBoost: no developer text
+ok    ShopRow_SpeedBoost: sub fits a phone row (22 chars)
+ok    ShopRow_SpeedBoost: title fits a phone row (11 chars)
+        ROW Pass_DoubleXP | Pass: Double XP | PERMANENT · Double the XP you earn | 99 R$
+ok    ShopRow_Pass_DoubleXP: no developer text
+ok    ShopRow_Pass_DoubleXP: sub fits a phone row (34 chars)
+ok    ShopRow_Pass_DoubleXP: title fits a phone row (15 chars)
+        ROW Pass_PG_Sovereign | ROBUX · Sovereign Gold Pistol | PERMANENT · Gold pistol that fires 2-shot bursts | 99 R$
+ok    ShopRow_Pass_PG_Sovereign: no developer text
+ok    ShopRow_Pass_PG_Sovereign: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_PG_Sovereign: title fits a phone row (29 chars)
+        ROW Pass_PG_Quake | ROBUX · Quake Grenade Launcher | PERMANENT · Lobs grenades, 6 per reload | 249 R$
+ok    ShopRow_Pass_PG_Quake: no developer text
+ok    ShopRow_Pass_PG_Quake: sub fits a phone row (39 chars)
+ok    ShopRow_Pass_PG_Quake: title fits a phone row (30 chars)
+        ROW Pass_PG_Longshot | ROBUX · Longshot Sniper | PERMANENT · Scoped sniper: 110 damage, long range | 299 R$
+ok    ShopRow_Pass_PG_Longshot: no developer text
+ok    ShopRow_Pass_PG_Longshot: sub fits a phone row (49 chars)
+ok    ShopRow_Pass_PG_Longshot: title fits a phone row (23 chars)
+        ROW Pass_PG_Havoc | ROBUX · Havoc Rotary Gun | PERMANENT · Spinning minigun with a 150-round belt | 349 R$
+ok    ShopRow_Pass_PG_Havoc: no developer text
+ok    ShopRow_Pass_PG_Havoc: sub fits a phone row (50 chars)
+ok    ShopRow_Pass_PG_Havoc: title fits a phone row (24 chars)
+        ROW Pass_PG_Thunderhead | ROBUX · Thunderhead Rocket Launcher | PERMANENT · Fires 2 rockets at once | 399 R$
+ok    ShopRow_Pass_PG_Thunderhead: no developer text
+ok    ShopRow_Pass_PG_Thunderhead: sub fits a phone row (35 chars)
+ok    ShopRow_Pass_PG_Thunderhead: title fits a phone row (35 chars)
+        ROW Pass_PG_Tempest | ROBUX · Tempest Railgun | PERMANENT · Charged shot that goes through 3 enemies | 499 R$
+ok    ShopRow_Pass_PG_Tempest: no developer text
+ok    ShopRow_Pass_PG_Tempest: sub fits a phone row (52 chars)
+ok    ShopRow_Pass_PG_Tempest: title fits a phone row (23 chars)
+        ROW Pass_PG_ArmoryPass | ROBUX · Armory Pass | PERMANENT · All 6 premium guns | 1299 R$
+ok    ShopRow_Pass_PG_ArmoryPass: no developer text
+ok    ShopRow_Pass_PG_ArmoryPass: sub fits a phone row (30 chars)
+ok    ShopRow_Pass_PG_ArmoryPass: title fits a phone row (19 chars)
+        ROW Pass_PV_Razorfang | ROBUX · Razorfang GT Interceptor | PERMANENT · Armored car with twin machine guns | 199 R$
+ok    ShopRow_Pass_PV_Razorfang: no developer text
+ok    ShopRow_Pass_PV_Razorfang: sub fits a phone row (46 chars)
+ok    ShopRow_Pass_PV_Razorfang: title fits a phone row (32 chars)
+        ROW Pass_PV_Tidebreaker | ROBUX · Tidebreaker Assault Boat | PERMANENT · Fast assault boat with a machine gun | 299 R$
+ok    ShopRow_Pass_PV_Tidebreaker: no developer text
+ok    ShopRow_Pass_PV_Tidebreaker: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_PV_Tidebreaker: title fits a phone row (32 chars)
+        ROW Pass_PV_Warlord | ROBUX · Warlord Siege Tank | PERMANENT · Heavy tank with a siege cannon | 799 R$
+ok    ShopRow_Pass_PV_Warlord: no developer text
+ok    ShopRow_Pass_PV_Warlord: sub fits a phone row (42 chars)
+ok    ShopRow_Pass_PV_Warlord: title fits a phone row (26 chars)
+        ROW Pass_PV_Skylance | ROBUX · Skylance Interceptor | PERMANENT · Fighter jet with an air cannon | 899 R$
+ok    ShopRow_Pass_PV_Skylance: no developer text
+ok    ShopRow_Pass_PV_Skylance: sub fits a phone row (42 chars)
+ok    ShopRow_Pass_PV_Skylance: title fits a phone row (28 chars)
+        ROW Pass_PV_Stormwing | ROBUX · Stormwing Gunship | PERMANENT · Attack helicopter with a chin gun | 999 R$
+ok    ShopRow_Pass_PV_Stormwing: no developer text
+ok    ShopRow_Pass_PV_Stormwing: sub fits a phone row (45 chars)
+ok    ShopRow_Pass_PV_Stormwing: title fits a phone row (25 chars)
+        ROW Pass_PV_Leviathan | ROBUX · Leviathan Dreadnought | PERMANENT · Giant battleship with a deck cannon | 1199 R$
+ok    ShopRow_Pass_PV_Leviathan: no developer text
+ok    ShopRow_Pass_PV_Leviathan: sub fits a phone row (47 chars)
+ok    ShopRow_Pass_PV_Leviathan: title fits a phone row (29 chars)
+        ROW Pass_ExtraGarageSlot | ROBUX · Extra Garage Slot | PERMANENT · Keep 2 vehicles out at the same time | 199 R$
+ok    ShopRow_Pass_ExtraGarageSlot: no developer text
+ok    ShopRow_Pass_ExtraGarageSlot: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_ExtraGarageSlot: title fits a phone row (25 chars)
+        ROW CashMega | ★ BEST OFFER · Cash Pack Mega | Get $2,000,000 cash right away | 799 R$
+ok    ShopRow_CashMega: no developer text
+ok    ShopRow_CashMega: sub fits a phone row (30 chars)
+ok    ShopRow_CashMega: title fits a phone row (29 chars)
+        ROW CashLarge | Cash Pack L | Get $200,000 cash right away | 399 R$
+ok    ShopRow_CashLarge: no developer text
+ok    ShopRow_CashLarge: sub fits a phone row (28 chars)
+ok    ShopRow_CashLarge: title fits a phone row (11 chars)
+        ROW CashMedium | Cash Pack M | Get $50,000 cash right away | 149 R$
+ok    ShopRow_CashMedium: no developer text
+ok    ShopRow_CashMedium: sub fits a phone row (27 chars)
+ok    ShopRow_CashMedium: title fits a phone row (11 chars)
+        ROW CashSmall | Cash Pack S | Get $10,000 cash right away | 49 R$
+ok    ShopRow_CashSmall: no developer text
+ok    ShopRow_CashSmall: sub fits a phone row (27 chars)
+ok    ShopRow_CashSmall: title fits a phone row (11 chars)
+        ROW GoldenPumpjack | Golden Pumpjacks | Gold oil pumps that earn 50% more, forever | 49 R$
+ok    ShopRow_GoldenPumpjack: no developer text
+ok    ShopRow_GoldenPumpjack: sub fits a phone row (42 chars)
+ok    ShopRow_GoldenPumpjack: title fits a phone row (16 chars)
+        ROW SoldierRefill | Instant Army Refill | Refill your army to full right now | 49 R$
+ok    ShopRow_SoldierRefill: no developer text
+ok    ShopRow_SoldierRefill: sub fits a phone row (34 chars)
+ok    ShopRow_SoldierRefill: title fits a phone row (19 chars)
+        ROW PlazaAirstrike | Plaza Airstrike | 1 airstrike on the plaza: hurts, never kills | 79 R$
+ok    ShopRow_PlazaAirstrike: no developer text
+ok    ShopRow_PlazaAirstrike: sub fits a phone row (44 chars)
+ok    ShopRow_PlazaAirstrike: title fits a phone row (15 chars)
+        ROW SupplyCrate | Supply Crate (locked) | Random loot is policy-pending — not for sale | LOCKED
+ok    ShopRow_SupplyCrate: no developer text
+ok    ShopRow_SupplyCrate: sub fits a phone row (44 chars)
+ok    ShopRow_SupplyCrate: title fits a phone row (21 chars)
+ok    Starter row = the Roblox product: Commander Starter Bundle 249 R$ (Commander Starter Bundle 249 R$)
+ok    Starter row says what you get
+ok    Battle Pass Premium row: plain words, 499 R$
+ok    a live price / name that arrives later updates the row (Cash Pack S (live) 59 R$)
+ok    OpenCashPacks scrolls to Cash Pack Mega: CanvasPosition.Y=2104 want 2104
+ok    uid 9: Mega sits 2104 px down (after the passes): reachable through the cash + scroll
+SHOP RENDER TEST uid 9: 0 failed
+ok    uid 470626172: ShopController.Init finishes 
+ok    List_Supply built
+        rows: fr_daily > fr_airdrop > fr_invite > fr_favorite > Pass_WarChest > Pass_DoubleCash > Pass_VIP > Pass_AutoCollect > StarterBundle > PremiumPass > Pass_BiggerArmy > Pass_SuperSoldiers > Pass_DoubleHP > SpeedBoost > Pass_DoubleXP > Pass_PG_Sovereign > Pass_PG_Quake > Pass_PG_Longshot > Pass_PG_Havoc > Pass_PG_Thunderhead > Pass_PG_Tempest > Pass_PG_ArmoryPass > Pass_PV_Razorfang > Pass_PV_Tidebreaker > Pass_PV_Warlord > Pass_PV_Skylance > Pass_PV_Stormwing > Pass_PV_Leviathan > Pass_ExtraGarageSlot > Cash4h > Cash2h > Cash1h > Cash30m > Cash15m > GoldenPumpjack > SoldierRefill > PlazaAirstrike > SupplyCrate
+ok    Cash4h time row: BEST VALUE · 4 HOURS OF CASH | $200,000 (minimum) | 279 R$
+ok    Cash4h in order (4h first)
+ok    Cash2h time row: 2 HOURS OF CASH | $100,000 (minimum) | 159 R$
+ok    Cash2h in order (4h first)
+ok    Cash1h time row: 1 HOUR OF CASH | $50,000 (minimum) | 89 R$
+ok    Cash1h in order (4h first)
+ok    Cash30m time row: 30 MIN OF CASH | $25,000 (minimum) | 49 R$
+ok    Cash30m in order (4h first)
+ok    Cash15m time row: 15 MIN OF CASH | $10,000 (minimum) | 25 R$
+ok    Cash15m in order (4h first)
+ok    CashMega: the old pack is hidden while the time packs are shown
+ok    CashLarge: the old pack is hidden while the time packs are shown
+ok    CashMedium: the old pack is hidden while the time packs are shown
+ok    CashSmall: the old pack is hidden while the time packs are shown
+ok    WarChest row renders for uid 470626172 (overhaul live for everyone)
+ok    SuperSoldiers row renders for uid 470626172 (overhaul live for everyone)
+ok    DoubleHP row renders for uid 470626172 (overhaul live for everyone)
+ok    VIP row shows 199 R$ (not 349): Pass: VIP | PERMANENT · +50% cash, a daily cash crate and VIP lounge | 199 R$
+ok    VIP row is the overhaul row (PERMANENT)
+        ROW fr_daily | FREE · Daily Reward | Your login streak cash, once a day | CLAIM
+ok    ShopRow_fr_daily: no developer text
+ok    ShopRow_fr_daily: sub fits a phone row (34 chars)
+ok    ShopRow_fr_daily: title fits a phone row (19 chars)
+        ROW fr_airdrop | FREE · Airdrop | A cash crate lands every 10 min: first to reach it wins | TRACK
+ok    ShopRow_fr_airdrop: no developer text
+ok    ShopRow_fr_airdrop: sub fits a phone row (55 chars)
+ok    ShopRow_fr_airdrop: title fits a phone row (14 chars)
+        ROW fr_invite | FREE · Invite friends | $0 per new friend who joins | INVITE
+ok    ShopRow_fr_invite: no developer text
+ok    ShopRow_fr_invite: sub fits a phone row (27 chars)
+ok    ShopRow_fr_invite: title fits a phone row (21 chars)
+        ROW fr_favorite | Favorite WAR EMPIRE | Find us again fast (no reward) | ★
+ok    ShopRow_fr_favorite: no developer text
+ok    ShopRow_fr_favorite: sub fits a phone row (30 chars)
+ok    ShopRow_fr_favorite: title fits a phone row (19 chars)
+        ROW Pass_WarChest | Pass: War Chest | PERMANENT · 2x cash, Auto Collect, VIP and Bigger Army | 799 R$
+ok    ShopRow_Pass_WarChest: no developer text
+ok    ShopRow_Pass_WarChest: sub fits a phone row (54 chars)
+ok    ShopRow_Pass_WarChest: title fits a phone row (15 chars)
+        ROW Pass_DoubleCash | BEST VALUE · 2x Cash | PERMANENT · Double your cash income | 149 R$
+ok    ShopRow_Pass_DoubleCash: no developer text
+ok    ShopRow_Pass_DoubleCash: sub fits a phone row (35 chars)
+ok    ShopRow_Pass_DoubleCash: title fits a phone row (20 chars)
+        ROW Pass_VIP | Pass: VIP | PERMANENT · +50% cash, a daily cash crate and VIP lounge | 199 R$
+ok    ShopRow_Pass_VIP: no developer text
+ok    ShopRow_Pass_VIP: sub fits a phone row (56 chars)
+ok    ShopRow_Pass_VIP: title fits a phone row (9 chars)
+        ROW Pass_AutoCollect | Pass: Auto Collect | PERMANENT · Your ATM cash is collected for you | 99 R$
+ok    ShopRow_Pass_AutoCollect: no developer text
+ok    ShopRow_Pass_AutoCollect: sub fits a phone row (46 chars)
+ok    ShopRow_Pass_AutoCollect: title fits a phone row (18 chars)
+        ROW StarterBundle | Commander Starter Bundle | $50,000 cash plus Auto Collect forever | 249 R$
+ok    ShopRow_StarterBundle: no developer text
+ok    ShopRow_StarterBundle: sub fits a phone row (38 chars)
+ok    ShopRow_StarterBundle: title fits a phone row (24 chars)
+        ROW PremiumPass | Battle Pass Premium | Unlock premium rewards on every Battle Pass tier | 499 R$
+ok    ShopRow_PremiumPass: no developer text
+ok    ShopRow_PremiumPass: sub fits a phone row (48 chars)
+ok    ShopRow_PremiumPass: title fits a phone row (19 chars)
+        ROW Pass_BiggerArmy | Pass: Bigger Army | PERMANENT · +10 soldiers in your army | 249 R$
+ok    ShopRow_Pass_BiggerArmy: no developer text
+ok    ShopRow_Pass_BiggerArmy: sub fits a phone row (37 chars)
+ok    ShopRow_Pass_BiggerArmy: title fits a phone row (17 chars)
+        ROW Pass_SuperSoldiers | Pass: Super Soldiers | PERMANENT · Your soldiers get +25% damage and health | 349 R$
+ok    ShopRow_Pass_SuperSoldiers: no developer text
+ok    ShopRow_Pass_SuperSoldiers: sub fits a phone row (52 chars)
+ok    ShopRow_Pass_SuperSoldiers: title fits a phone row (20 chars)
+        ROW Pass_DoubleHP | Pass: Double HP | PERMANENT · Double your max health | 199 R$
+ok    ShopRow_Pass_DoubleHP: no developer text
+ok    ShopRow_Pass_DoubleHP: sub fits a phone row (34 chars)
+ok    ShopRow_Pass_DoubleHP: title fits a phone row (15 chars)
+        ROW SpeedBoost | Speed Boost | Run 2.5x faster, forever | 99 R$
+ok    ShopRow_SpeedBoost: no developer text
+ok    ShopRow_SpeedBoost: sub fits a phone row (24 chars)
+ok    ShopRow_SpeedBoost: title fits a phone row (11 chars)
+        ROW Pass_DoubleXP | Pass: Double XP | PERMANENT · Double the XP you earn | 99 R$
+ok    ShopRow_Pass_DoubleXP: no developer text
+ok    ShopRow_Pass_DoubleXP: sub fits a phone row (34 chars)
+ok    ShopRow_Pass_DoubleXP: title fits a phone row (15 chars)
+        ROW Pass_PG_Sovereign | ROBUX · Sovereign Gold Pistol | PERMANENT · Gold pistol that fires 2-shot bursts | 99 R$
+ok    ShopRow_Pass_PG_Sovereign: no developer text
+ok    ShopRow_Pass_PG_Sovereign: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_PG_Sovereign: title fits a phone row (29 chars)
+        ROW Pass_PG_Quake | ROBUX · Quake Grenade Launcher | PERMANENT · Lobs grenades, 6 per reload | 249 R$
+ok    ShopRow_Pass_PG_Quake: no developer text
+ok    ShopRow_Pass_PG_Quake: sub fits a phone row (39 chars)
+ok    ShopRow_Pass_PG_Quake: title fits a phone row (30 chars)
+        ROW Pass_PG_Longshot | ROBUX · Longshot Sniper | PERMANENT · Scoped sniper: 110 damage, long range | 299 R$
+ok    ShopRow_Pass_PG_Longshot: no developer text
+ok    ShopRow_Pass_PG_Longshot: sub fits a phone row (49 chars)
+ok    ShopRow_Pass_PG_Longshot: title fits a phone row (23 chars)
+        ROW Pass_PG_Havoc | ROBUX · Havoc Rotary Gun | PERMANENT · Spinning minigun with a 150-round belt | 349 R$
+ok    ShopRow_Pass_PG_Havoc: no developer text
+ok    ShopRow_Pass_PG_Havoc: sub fits a phone row (50 chars)
+ok    ShopRow_Pass_PG_Havoc: title fits a phone row (24 chars)
+        ROW Pass_PG_Thunderhead | ROBUX · Thunderhead Rocket Launcher | PERMANENT · Fires 2 rockets at once | 399 R$
+ok    ShopRow_Pass_PG_Thunderhead: no developer text
+ok    ShopRow_Pass_PG_Thunderhead: sub fits a phone row (35 chars)
+ok    ShopRow_Pass_PG_Thunderhead: title fits a phone row (35 chars)
+        ROW Pass_PG_Tempest | ROBUX · Tempest Railgun | PERMANENT · Charged shot that goes through 3 enemies | 499 R$
+ok    ShopRow_Pass_PG_Tempest: no developer text
+ok    ShopRow_Pass_PG_Tempest: sub fits a phone row (52 chars)
+ok    ShopRow_Pass_PG_Tempest: title fits a phone row (23 chars)
+        ROW Pass_PG_ArmoryPass | ROBUX · Armory Pass | PERMANENT · All 6 premium guns | 1299 R$
+ok    ShopRow_Pass_PG_ArmoryPass: no developer text
+ok    ShopRow_Pass_PG_ArmoryPass: sub fits a phone row (30 chars)
+ok    ShopRow_Pass_PG_ArmoryPass: title fits a phone row (19 chars)
+        ROW Pass_PV_Razorfang | ROBUX · Razorfang GT Interceptor | PERMANENT · Armored car with twin machine guns | 199 R$
+ok    ShopRow_Pass_PV_Razorfang: no developer text
+ok    ShopRow_Pass_PV_Razorfang: sub fits a phone row (46 chars)
+ok    ShopRow_Pass_PV_Razorfang: title fits a phone row (32 chars)
+        ROW Pass_PV_Tidebreaker | ROBUX · Tidebreaker Assault Boat | PERMANENT · Fast assault boat with a machine gun | 299 R$
+ok    ShopRow_Pass_PV_Tidebreaker: no developer text
+ok    ShopRow_Pass_PV_Tidebreaker: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_PV_Tidebreaker: title fits a phone row (32 chars)
+        ROW Pass_PV_Warlord | ROBUX · Warlord Siege Tank | PERMANENT · Heavy tank with a siege cannon | 799 R$
+ok    ShopRow_Pass_PV_Warlord: no developer text
+ok    ShopRow_Pass_PV_Warlord: sub fits a phone row (42 chars)
+ok    ShopRow_Pass_PV_Warlord: title fits a phone row (26 chars)
+        ROW Pass_PV_Skylance | ROBUX · Skylance Interceptor | PERMANENT · Fighter jet with an air cannon | 899 R$
+ok    ShopRow_Pass_PV_Skylance: no developer text
+ok    ShopRow_Pass_PV_Skylance: sub fits a phone row (42 chars)
+ok    ShopRow_Pass_PV_Skylance: title fits a phone row (28 chars)
+        ROW Pass_PV_Stormwing | ROBUX · Stormwing Gunship | PERMANENT · Attack helicopter with a chin gun | 999 R$
+ok    ShopRow_Pass_PV_Stormwing: no developer text
+ok    ShopRow_Pass_PV_Stormwing: sub fits a phone row (45 chars)
+ok    ShopRow_Pass_PV_Stormwing: title fits a phone row (25 chars)
+        ROW Pass_PV_Leviathan | ROBUX · Leviathan Dreadnought | PERMANENT · Giant battleship with a deck cannon | 1199 R$
+ok    ShopRow_Pass_PV_Leviathan: no developer text
+ok    ShopRow_Pass_PV_Leviathan: sub fits a phone row (47 chars)
+ok    ShopRow_Pass_PV_Leviathan: title fits a phone row (29 chars)
+        ROW Pass_ExtraGarageSlot | ROBUX · Extra Garage Slot | PERMANENT · Keep 2 vehicles out at the same time | 199 R$
+ok    ShopRow_Pass_ExtraGarageSlot: no developer text
+ok    ShopRow_Pass_ExtraGarageSlot: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_ExtraGarageSlot: title fits a phone row (25 chars)
+        ROW Cash4h | BEST VALUE · 4 HOURS OF CASH | $200,000 (minimum) | 279 R$
+ok    ShopRow_Cash4h: no developer text
+ok    ShopRow_Cash4h: sub fits a phone row (18 chars)
+ok    ShopRow_Cash4h: title fits a phone row (28 chars)
+        ROW Cash2h | 2 HOURS OF CASH | $100,000 (minimum) | 159 R$
+ok    ShopRow_Cash2h: no developer text
+ok    ShopRow_Cash2h: sub fits a phone row (18 chars)
+ok    ShopRow_Cash2h: title fits a phone row (15 chars)
+        ROW Cash1h | 1 HOUR OF CASH | $50,000 (minimum) | 89 R$
+ok    ShopRow_Cash1h: no developer text
+ok    ShopRow_Cash1h: sub fits a phone row (17 chars)
+ok    ShopRow_Cash1h: title fits a phone row (14 chars)
+        ROW Cash30m | 30 MIN OF CASH | $25,000 (minimum) | 49 R$
+ok    ShopRow_Cash30m: no developer text
+ok    ShopRow_Cash30m: sub fits a phone row (17 chars)
+ok    ShopRow_Cash30m: title fits a phone row (14 chars)
+        ROW Cash15m | 15 MIN OF CASH | $10,000 (minimum) | 25 R$
+ok    ShopRow_Cash15m: no developer text
+ok    ShopRow_Cash15m: sub fits a phone row (17 chars)
+ok    ShopRow_Cash15m: title fits a phone row (14 chars)
+        ROW GoldenPumpjack | Golden Pumpjacks | Gold oil pumps that earn 50% more, forever | 49 R$
+ok    ShopRow_GoldenPumpjack: no developer text
+ok    ShopRow_GoldenPumpjack: sub fits a phone row (42 chars)
+ok    ShopRow_GoldenPumpjack: title fits a phone row (16 chars)
+        ROW SoldierRefill | Instant Army Refill | Refill your army to full right now | 49 R$
+ok    ShopRow_SoldierRefill: no developer text
+ok    ShopRow_SoldierRefill: sub fits a phone row (34 chars)
+ok    ShopRow_SoldierRefill: title fits a phone row (19 chars)
+        ROW PlazaAirstrike | Plaza Airstrike | 1 airstrike on the plaza: hurts, never kills | 79 R$
+ok    ShopRow_PlazaAirstrike: no developer text
+ok    ShopRow_PlazaAirstrike: sub fits a phone row (44 chars)
+ok    ShopRow_PlazaAirstrike: title fits a phone row (15 chars)
+        ROW SupplyCrate | Supply Crate (locked) | Random loot is policy-pending — not for sale | LOCKED
+ok    ShopRow_SupplyCrate: no developer text
+ok    ShopRow_SupplyCrate: sub fits a phone row (44 chars)
+ok    ShopRow_SupplyCrate: title fits a phone row (21 chars)
+ok    Starter row = the Roblox product: Commander Starter Bundle 249 R$ (Commander Starter Bundle 249 R$)
+ok    Starter row says what you get
+ok    Battle Pass Premium row: plain words, 499 R$
+ok    OpenCashPacks scrolls to 4 HOURS OF CASH: CanvasPosition.Y=2104 want 2104
+ok    uid 470626172: Mega sits 2104 px down (after the passes): reachable through the cash + scroll
+SHOP RENDER TEST uid 470626172 (time Ids): 0 failed
+ok    uid 9: ShopController.Init finishes 
+ok    List_Supply built
+        rows: fr_daily > fr_airdrop > fr_invite > fr_favorite > Pass_WarChest > Pass_DoubleCash > Pass_VIP > Pass_AutoCollect > StarterBundle > PremiumPass > Pass_BiggerArmy > Pass_SuperSoldiers > Pass_DoubleHP > SpeedBoost > Pass_DoubleXP > Pass_PG_Sovereign > Pass_PG_Quake > Pass_PG_Longshot > Pass_PG_Havoc > Pass_PG_Thunderhead > Pass_PG_Tempest > Pass_PG_ArmoryPass > Pass_PV_Razorfang > Pass_PV_Tidebreaker > Pass_PV_Warlord > Pass_PV_Skylance > Pass_PV_Stormwing > Pass_PV_Leviathan > Pass_ExtraGarageSlot > CashMega > CashLarge > CashMedium > CashSmall > GoldenPumpjack > SoldierRefill > PlazaAirstrike > SupplyCrate
+ok    CashMega row renders (Get $2,000,000 cash right away)
+ok    CashLarge row renders (Get $200,000 cash right away)
+ok    CashMedium row renders (Get $50,000 cash right away)
+ok    CashSmall row renders (Get $10,000 cash right away)
+ok    Cash4h: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash2h: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash1h: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash30m: no time row while the time packs are not shown (OFF == OLD)
+ok    Cash15m: no time row while the time packs are not shown (OFF == OLD)
+ok    WarChest row renders for uid 9 (overhaul live for everyone)
+ok    SuperSoldiers row renders for uid 9 (overhaul live for everyone)
+ok    DoubleHP row renders for uid 9 (overhaul live for everyone)
+ok    VIP row shows 199 R$ (not 349): Pass: VIP | PERMANENT · +50% cash, a daily cash crate and VIP lounge | 199 R$
+ok    VIP row is the overhaul row (PERMANENT)
+        ROW fr_daily | FREE · Daily Reward | Your login streak cash, once a day | CLAIM
+ok    ShopRow_fr_daily: no developer text
+ok    ShopRow_fr_daily: sub fits a phone row (34 chars)
+ok    ShopRow_fr_daily: title fits a phone row (19 chars)
+        ROW fr_airdrop | FREE · Airdrop | A cash crate lands every 10 min: first to reach it wins | TRACK
+ok    ShopRow_fr_airdrop: no developer text
+ok    ShopRow_fr_airdrop: sub fits a phone row (55 chars)
+ok    ShopRow_fr_airdrop: title fits a phone row (14 chars)
+        ROW fr_invite | FREE · Invite friends | $0 per new friend who joins | INVITE
+ok    ShopRow_fr_invite: no developer text
+ok    ShopRow_fr_invite: sub fits a phone row (27 chars)
+ok    ShopRow_fr_invite: title fits a phone row (21 chars)
+        ROW fr_favorite | Favorite WAR EMPIRE | Find us again fast (no reward) | ★
+ok    ShopRow_fr_favorite: no developer text
+ok    ShopRow_fr_favorite: sub fits a phone row (30 chars)
+ok    ShopRow_fr_favorite: title fits a phone row (19 chars)
+        ROW Pass_WarChest | Pass: War Chest | PERMANENT · 2x cash, Auto Collect, VIP and Bigger Army | 799 R$
+ok    ShopRow_Pass_WarChest: no developer text
+ok    ShopRow_Pass_WarChest: sub fits a phone row (54 chars)
+ok    ShopRow_Pass_WarChest: title fits a phone row (15 chars)
+        ROW Pass_DoubleCash | BEST VALUE · 2x Cash | PERMANENT · Double your cash income | 149 R$
+ok    ShopRow_Pass_DoubleCash: no developer text
+ok    ShopRow_Pass_DoubleCash: sub fits a phone row (35 chars)
+ok    ShopRow_Pass_DoubleCash: title fits a phone row (20 chars)
+        ROW Pass_VIP | Pass: VIP | PERMANENT · +50% cash, a daily cash crate and VIP lounge | 199 R$
+ok    ShopRow_Pass_VIP: no developer text
+ok    ShopRow_Pass_VIP: sub fits a phone row (56 chars)
+ok    ShopRow_Pass_VIP: title fits a phone row (9 chars)
+        ROW Pass_AutoCollect | Pass: Auto Collect | PERMANENT · Your ATM cash is collected for you | 99 R$
+ok    ShopRow_Pass_AutoCollect: no developer text
+ok    ShopRow_Pass_AutoCollect: sub fits a phone row (46 chars)
+ok    ShopRow_Pass_AutoCollect: title fits a phone row (18 chars)
+        ROW StarterBundle | Commander Starter Bundle | $50,000 cash plus Auto Collect forever | 249 R$
+ok    ShopRow_StarterBundle: no developer text
+ok    ShopRow_StarterBundle: sub fits a phone row (38 chars)
+ok    ShopRow_StarterBundle: title fits a phone row (24 chars)
+        ROW PremiumPass | Battle Pass Premium | Unlock premium rewards on every Battle Pass tier | 499 R$
+ok    ShopRow_PremiumPass: no developer text
+ok    ShopRow_PremiumPass: sub fits a phone row (48 chars)
+ok    ShopRow_PremiumPass: title fits a phone row (19 chars)
+        ROW Pass_BiggerArmy | Pass: Bigger Army | PERMANENT · +10 soldiers in your army | 249 R$
+ok    ShopRow_Pass_BiggerArmy: no developer text
+ok    ShopRow_Pass_BiggerArmy: sub fits a phone row (37 chars)
+ok    ShopRow_Pass_BiggerArmy: title fits a phone row (17 chars)
+        ROW Pass_SuperSoldiers | Pass: Super Soldiers | PERMANENT · Your soldiers get +25% damage and health | 349 R$
+ok    ShopRow_Pass_SuperSoldiers: no developer text
+ok    ShopRow_Pass_SuperSoldiers: sub fits a phone row (52 chars)
+ok    ShopRow_Pass_SuperSoldiers: title fits a phone row (20 chars)
+        ROW Pass_DoubleHP | Pass: Double HP | PERMANENT · Double your max health | 199 R$
+ok    ShopRow_Pass_DoubleHP: no developer text
+ok    ShopRow_Pass_DoubleHP: sub fits a phone row (34 chars)
+ok    ShopRow_Pass_DoubleHP: title fits a phone row (15 chars)
+        ROW SpeedBoost | Speed Boost | Run 2x faster, forever | 99 R$
+ok    ShopRow_SpeedBoost: no developer text
+ok    ShopRow_SpeedBoost: sub fits a phone row (22 chars)
+ok    ShopRow_SpeedBoost: title fits a phone row (11 chars)
+        ROW Pass_DoubleXP | Pass: Double XP | PERMANENT · Double the XP you earn | 99 R$
+ok    ShopRow_Pass_DoubleXP: no developer text
+ok    ShopRow_Pass_DoubleXP: sub fits a phone row (34 chars)
+ok    ShopRow_Pass_DoubleXP: title fits a phone row (15 chars)
+        ROW Pass_PG_Sovereign | ROBUX · Sovereign Gold Pistol | PERMANENT · Gold pistol that fires 2-shot bursts | 99 R$
+ok    ShopRow_Pass_PG_Sovereign: no developer text
+ok    ShopRow_Pass_PG_Sovereign: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_PG_Sovereign: title fits a phone row (29 chars)
+        ROW Pass_PG_Quake | ROBUX · Quake Grenade Launcher | PERMANENT · Lobs grenades, 6 per reload | 249 R$
+ok    ShopRow_Pass_PG_Quake: no developer text
+ok    ShopRow_Pass_PG_Quake: sub fits a phone row (39 chars)
+ok    ShopRow_Pass_PG_Quake: title fits a phone row (30 chars)
+        ROW Pass_PG_Longshot | ROBUX · Longshot Sniper | PERMANENT · Scoped sniper: 110 damage, long range | 299 R$
+ok    ShopRow_Pass_PG_Longshot: no developer text
+ok    ShopRow_Pass_PG_Longshot: sub fits a phone row (49 chars)
+ok    ShopRow_Pass_PG_Longshot: title fits a phone row (23 chars)
+        ROW Pass_PG_Havoc | ROBUX · Havoc Rotary Gun | PERMANENT · Spinning minigun with a 150-round belt | 349 R$
+ok    ShopRow_Pass_PG_Havoc: no developer text
+ok    ShopRow_Pass_PG_Havoc: sub fits a phone row (50 chars)
+ok    ShopRow_Pass_PG_Havoc: title fits a phone row (24 chars)
+        ROW Pass_PG_Thunderhead | ROBUX · Thunderhead Rocket Launcher | PERMANENT · Fires 2 rockets at once | 399 R$
+ok    ShopRow_Pass_PG_Thunderhead: no developer text
+ok    ShopRow_Pass_PG_Thunderhead: sub fits a phone row (35 chars)
+ok    ShopRow_Pass_PG_Thunderhead: title fits a phone row (35 chars)
+        ROW Pass_PG_Tempest | ROBUX · Tempest Railgun | PERMANENT · Charged shot that goes through 3 enemies | 499 R$
+ok    ShopRow_Pass_PG_Tempest: no developer text
+ok    ShopRow_Pass_PG_Tempest: sub fits a phone row (52 chars)
+ok    ShopRow_Pass_PG_Tempest: title fits a phone row (23 chars)
+        ROW Pass_PG_ArmoryPass | ROBUX · Armory Pass | PERMANENT · All 6 premium guns | 1299 R$
+ok    ShopRow_Pass_PG_ArmoryPass: no developer text
+ok    ShopRow_Pass_PG_ArmoryPass: sub fits a phone row (30 chars)
+ok    ShopRow_Pass_PG_ArmoryPass: title fits a phone row (19 chars)
+        ROW Pass_PV_Razorfang | ROBUX · Razorfang GT Interceptor | PERMANENT · Armored car with twin machine guns | 199 R$
+ok    ShopRow_Pass_PV_Razorfang: no developer text
+ok    ShopRow_Pass_PV_Razorfang: sub fits a phone row (46 chars)
+ok    ShopRow_Pass_PV_Razorfang: title fits a phone row (32 chars)
+        ROW Pass_PV_Tidebreaker | ROBUX · Tidebreaker Assault Boat | PERMANENT · Fast assault boat with a machine gun | 299 R$
+ok    ShopRow_Pass_PV_Tidebreaker: no developer text
+ok    ShopRow_Pass_PV_Tidebreaker: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_PV_Tidebreaker: title fits a phone row (32 chars)
+        ROW Pass_PV_Warlord | ROBUX · Warlord Siege Tank | PERMANENT · Heavy tank with a siege cannon | 799 R$
+ok    ShopRow_Pass_PV_Warlord: no developer text
+ok    ShopRow_Pass_PV_Warlord: sub fits a phone row (42 chars)
+ok    ShopRow_Pass_PV_Warlord: title fits a phone row (26 chars)
+        ROW Pass_PV_Skylance | ROBUX · Skylance Interceptor | PERMANENT · Fighter jet with an air cannon | 899 R$
+ok    ShopRow_Pass_PV_Skylance: no developer text
+ok    ShopRow_Pass_PV_Skylance: sub fits a phone row (42 chars)
+ok    ShopRow_Pass_PV_Skylance: title fits a phone row (28 chars)
+        ROW Pass_PV_Stormwing | ROBUX · Stormwing Gunship | PERMANENT · Attack helicopter with a chin gun | 999 R$
+ok    ShopRow_Pass_PV_Stormwing: no developer text
+ok    ShopRow_Pass_PV_Stormwing: sub fits a phone row (45 chars)
+ok    ShopRow_Pass_PV_Stormwing: title fits a phone row (25 chars)
+        ROW Pass_PV_Leviathan | ROBUX · Leviathan Dreadnought | PERMANENT · Giant battleship with a deck cannon | 1199 R$
+ok    ShopRow_Pass_PV_Leviathan: no developer text
+ok    ShopRow_Pass_PV_Leviathan: sub fits a phone row (47 chars)
+ok    ShopRow_Pass_PV_Leviathan: title fits a phone row (29 chars)
+        ROW Pass_ExtraGarageSlot | ROBUX · Extra Garage Slot | PERMANENT · Keep 2 vehicles out at the same time | 199 R$
+ok    ShopRow_Pass_ExtraGarageSlot: no developer text
+ok    ShopRow_Pass_ExtraGarageSlot: sub fits a phone row (48 chars)
+ok    ShopRow_Pass_ExtraGarageSlot: title fits a phone row (25 chars)
+        ROW CashMega | ★ BEST OFFER · Cash Pack Mega | Get $2,000,000 cash right away | 799 R$
+ok    ShopRow_CashMega: no developer text
+ok    ShopRow_CashMega: sub fits a phone row (30 chars)
+ok    ShopRow_CashMega: title fits a phone row (29 chars)
+        ROW CashLarge | Cash Pack L | Get $200,000 cash right away | 399 R$
+ok    ShopRow_CashLarge: no developer text
+ok    ShopRow_CashLarge: sub fits a phone row (28 chars)
+ok    ShopRow_CashLarge: title fits a phone row (11 chars)
+        ROW CashMedium | Cash Pack M | Get $50,000 cash right away | 149 R$
+ok    ShopRow_CashMedium: no developer text
+ok    ShopRow_CashMedium: sub fits a phone row (27 chars)
+ok    ShopRow_CashMedium: title fits a phone row (11 chars)
+        ROW CashSmall | Cash Pack S | Get $10,000 cash right away | 49 R$
+ok    ShopRow_CashSmall: no developer text
+ok    ShopRow_CashSmall: sub fits a phone row (27 chars)
+ok    ShopRow_CashSmall: title fits a phone row (11 chars)
+        ROW GoldenPumpjack | Golden Pumpjacks | Gold oil pumps that earn 50% more, forever | 49 R$
+ok    ShopRow_GoldenPumpjack: no developer text
+ok    ShopRow_GoldenPumpjack: sub fits a phone row (42 chars)
+ok    ShopRow_GoldenPumpjack: title fits a phone row (16 chars)
+        ROW SoldierRefill | Instant Army Refill | Refill your army to full right now | 49 R$
+ok    ShopRow_SoldierRefill: no developer text
+ok    ShopRow_SoldierRefill: sub fits a phone row (34 chars)
+ok    ShopRow_SoldierRefill: title fits a phone row (19 chars)
+        ROW PlazaAirstrike | Plaza Airstrike | 1 airstrike on the plaza: hurts, never kills | 79 R$
+ok    ShopRow_PlazaAirstrike: no developer text
+ok    ShopRow_PlazaAirstrike: sub fits a phone row (44 chars)
+ok    ShopRow_PlazaAirstrike: title fits a phone row (15 chars)
+        ROW SupplyCrate | Supply Crate (locked) | Random loot is policy-pending — not for sale | LOCKED
+ok    ShopRow_SupplyCrate: no developer text
+ok    ShopRow_SupplyCrate: sub fits a phone row (44 chars)
+ok    ShopRow_SupplyCrate: title fits a phone row (21 chars)
+ok    Starter row = the Roblox product: Commander Starter Bundle 249 R$ (Commander Starter Bundle 249 R$)
+ok    Starter row says what you get
+ok    Battle Pass Premium row: plain words, 499 R$
+ok    a live price / name that arrives later updates the row (Cash Pack S (live) 59 R$)
+ok    OpenCashPacks scrolls to Cash Pack Mega: CanvasPosition.Y=2104 want 2104
+ok    uid 9: Mega sits 2104 px down (after the passes): reachable through the cash + scroll
+SHOP RENDER TEST uid 9 (time Ids): 0 failed

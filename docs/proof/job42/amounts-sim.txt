@@ -1,0 +1,32 @@
+# AMOUNTS (run_time_packs_test.py, 2026-10-01T08:01Z, headless luau stand-in with the real MonetizationService: NOT Roblox)
+== AMOUNTS ==
+ok    the five packs: 25 / 49 / 89 / 159 / 279 R$
+ok    every new Id = 0, repeatable (not OneTime)
+ok    no 1-day / 7-day pack anywhere (config rows or TimePacks)
+$/min      | Cash15m (25 R$)          | Cash30m (49 R$)          | Cash1h (89 R$)           | Cash2h (159 R$)          | Cash4h (279 R$)         
+0          | $10,000           400 $/R$ | $25,000           510 $/R$ | $50,000           562 $/R$ | $100,000          629 $/R$ | $200,000          717 $/R$
+100        | $10,000           400 $/R$ | $25,000           510 $/R$ | $50,000           562 $/R$ | $100,000          629 $/R$ | $200,000          717 $/R$
+500        | $10,000           400 $/R$ | $25,000           510 $/R$ | $50,000           562 $/R$ | $100,000          629 $/R$ | $200,000          717 $/R$
+1,000      | $15,000           600 $/R$ | $30,000           612 $/R$ | $60,000           674 $/R$ | $120,000          755 $/R$ | $240,000          860 $/R$
+5,000      | $75,000          3000 $/R$ | $150,000         3061 $/R$ | $300,000         3371 $/R$ | $600,000         3774 $/R$ | $1,200,000       4301 $/R$
+25,000     | $375,000        15000 $/R$ | $750,000        15306 $/R$ | $1,500,000      16854 $/R$ | $3,000,000      18868 $/R$ | $6,000,000      21505 $/R$
+100,000    | $1,500,000      60000 $/R$ | $3,000,000      61224 $/R$ | $6,000,000      67416 $/R$ | $12,000,000     75472 $/R$ | $24,000,000     86022 $/R$
+1,000,000  | $15,000,000    600000 $/R$ | $30,000,000    612245 $/R$ | $60,000,000    674157 $/R$ | $120,000,000   754717 $/R$ | $240,000,000   860215 $/R$
+ok    $ per R$ rises with the price in every income row (a bigger pack is always the better deal)
+crossover Cash15m: Floor / Minutes = 667 $/min
+crossover Cash30m: Floor / Minutes = 833 $/min
+crossover Cash1h: Floor / Minutes = 833 $/min
+crossover Cash2h: Floor / Minutes = 833 $/min
+crossover Cash4h: Floor / Minutes = 833 $/min
+ok    crossovers: 667 $/min (15m), 833 (30m .. 4h)
+Cash15m: 0.60 min per R$, 400 floor $ per R$
+Cash30m: 0.61 min per R$, 510 floor $ per R$
+Cash1h: 0.67 min per R$, 562 floor $ per R$
+Cash2h: 0.75 min per R$, 629 floor $ per R$
+Cash4h: 0.86 min per R$, 717 floor $ per R$
+ok    minutes per R$ AND floor $ per R$ rise with the price (BEST VALUE on 4h is honest)
+ok    income nan -> the floor
+ok    income -50 -> the floor
+ok    income 10000000000000 -> the floor
+ok    nil for a non-time pack; capped at 2^53
+ok    BEST VALUE on Cash4h; Enabled, owner-first

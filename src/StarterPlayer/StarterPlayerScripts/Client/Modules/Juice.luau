@@ -71,7 +71,11 @@ local function celebrate(J: any, data: any)
 	if pg == nil then
 		return
 	end
+	local guided = typeof(data) == "table" and data.Guided == true -- claude-bud JOB 41: "BASE SECURED!"
 	local R = J.Rebirth
+	if guided and typeof(J.Guided) == "table" then
+		R = { BannerSeconds = J.Guided.BannerSeconds, Confetti = J.Guided.Confetti, Colors = J.Rebirth.Colors }
+	end
 	local okH, HudLayout = pcall(require, script.Parent.HudLayout)
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WE_RebirthCelebration"
@@ -90,7 +94,8 @@ local function celebrate(J: any, data: any)
 	banner.TextSize = 30
 	banner.TextWrapped = true
 	local p = tonumber(typeof(data) == "table" and data.Prestige) or 0
-	banner.Text = string.format("REBIRTH P%d!\n%s", p, tostring(typeof(data) == "table" and data.Sub or "Cash earnings up"))
+	banner.Text = if guided then string.format("%s\n%s", tostring(data.Title), tostring(data.Sub or ""))
+		else string.format("REBIRTH P%d!\n%s", p, tostring(typeof(data) == "table" and data.Sub or "Cash earnings up"))
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, 12)
 	c.Parent = banner
@@ -148,9 +153,34 @@ function Juice.Init()
 			burst(J)
 		end
 	end)
+	-- claude-bud JOB 48: "see his army grow": every +1 soldier pulses the Army tile and rings the burst at his feet
+	-- (only while the Guided Hook is live for him; owner-first)
+	local TC = require((Shared :: any).Configs.TutorialConfig) :: any
+	if TC.HookLiveFor and TC.HookLiveFor(Players.LocalPlayer.UserId) then
+		local lastCount: number? = nil
+		Remotes.BindEvent(Constants.RemoteNames.SoldierStateUpdate, function(payload: any)
+			local n = if typeof(payload) == "table" then tonumber(payload.Soldiers) else nil
+			if n == nil then
+				return
+			end
+			local before = lastCount
+			lastCount = n
+			if before ~= nil and n > before then
+				burst(J)
+				local okH, HUD = pcall(function(): any
+					return require(script.Parent.Parent.Controllers.HUDController)
+				end)
+				if okH and HUD and HUD.PulseRail then
+					pcall(HUD.PulseRail, "Army")
+				end
+			end
+		end)
+	end
 	Remotes.BindEvent(Constants.RemoteNames.FeaturePush, function(kind: any, data: any)
 		if kind == "Rebirth" then
 			celebrate(J, data)
+		elseif kind == "GuidedReward" and typeof(data) == "table" then -- claude-bud JOB 41
+			celebrate(J, { Guided = true, Title = data.Title, Sub = data.Sub })
 		end
 	end)
 end

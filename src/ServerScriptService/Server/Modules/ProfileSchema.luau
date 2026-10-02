@@ -202,6 +202,192 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	profile.FriendsPaid = nonNegInt(profile.FriendsPaid)
 	profile.ComebackPaidFor = nonNegInt(profile.ComebackPaidFor)
 	profile.ComebackPaidAt = nonNegInt(profile.ComebackPaidAt)
+	-- claude-bud JOB 29: retention bookkeeping (os.time() seconds; 0 / nil = never)
+	profile.LastSeenUnix = nonNegInt(profile.LastSeenUnix)
+	profile.PrevSeenUnix = nil -- session-only (DataService sets it on load)
+	profile.OfflineCapFullAt = nonNegInt(profile.OfflineCapFullAt)
+	profile.LastRaidedAt = nonNegInt(profile.LastRaidedAt)
+	profile.ArmyBoostUntil = nonNegInt(profile.ArmyBoostUntil)
+	profile.StarterPayoutDone = if profile.StarterPayoutDone == true then true else nil
+	-- claude-bud JOB 33: rebirth zones (zoneId -> level 0..3), the silo, the life's play time
+	if typeof(profile.RebirthZones) == "table" then
+		local z = {}
+		for id, lv in pairs(profile.RebirthZones) do
+			if typeof(id) == "string" and #id <= 24 then
+				z[id] = math.clamp(nonNegInt(lv), 0, 3)
+			end
+		end
+		profile.RebirthZones = z
+	else
+		profile.RebirthZones = nil
+	end
+	if typeof(profile.NukeSilo) == "table" then
+		profile.NukeSilo = { Ready = math.clamp(nonNegInt(profile.NukeSilo.Ready), 0, 10), ChargeFrom = nonNegInt(profile.NukeSilo.ChargeFrom) }
+	else
+		profile.NukeSilo = nil
+	end
+	profile.NukeLastLaunch = nonNegInt(profile.NukeLastLaunch)
+	profile.LifePlaySeconds = nonNegInt(profile.LifePlaySeconds)
+	profile.RebirthReadyLogged = if profile.RebirthReadyLogged == true then true else nil
+	-- claude-bud JOB 34: when each achievement was earned (id -> os.time()) + the one-time quiet backfill flag
+	if typeof(profile.AchievementsAt) == "table" then
+		local at = {}
+		for id, t in pairs(profile.AchievementsAt) do
+			if typeof(id) == "string" and #id <= 32 then
+				at[id] = nonNegInt(t)
+			end
+		end
+		profile.AchievementsAt = at
+	else
+		profile.AchievementsAt = nil
+	end
+	profile.AchievementsSeeded = if profile.AchievementsSeeded == true then true else nil
+	if typeof(profile.NotifOptIn) == "table" then
+		local n = profile.NotifOptIn
+		local r = if n.Result == "accepted" or n.Result == "declined" or n.Result == "unavailable" then n.Result else nil
+		profile.NotifOptIn = { Result = r, PromptedAt = nonNegInt(n.PromptedAt), DeclinedAt = nonNegInt(n.DeclinedAt) }
+	else
+		profile.NotifOptIn = nil
+	end
+	-- Code Bot v192: the DOUBLE WEEKEND one-time pop-up, shown once per event Id (id -> os.time())
+	if typeof(profile.EventPopupSeen) == "table" then
+		local seen = {}
+		for id, t in pairs(profile.EventPopupSeen) do
+			if typeof(id) == "string" and #id <= 32 then
+				seen[id] = nonNegInt(t)
+			end
+		end
+		profile.EventPopupSeen = seen
+	else
+		profile.EventPopupSeen = nil
+	end
+	-- claude-bud JOB 46: the last rebirth-zone shipment per zone (unix)
+	if typeof(profile.ZoneShipAt) == "table" then
+		local t = {}
+		for k, v in pairs(profile.ZoneShipAt) do
+			if typeof(k) == "string" and #k <= 24 then
+				t[k] = nonNegInt(v)
+			end
+		end
+		profile.ZoneShipAt = t
+	else
+		profile.ZoneShipAt = nil
+	end
+	-- claude-bud JOB 41 part B: the Recruit Pack card was shown (once per profile)
+	profile.RecruitPackOffered = if profile.RecruitPackOffered == true then true else nil
+	profile.Starter5Offered = if profile.Starter5Offered == true then true else nil -- claude-bud JOB 66: the 5 R$ card was shown
+	-- claude-bud JOB 50 A: the zone runs (cooldowns / bests / first clears per zone id), the bunker banner, the title
+	for _, key in ipairs({ "ZoneRunAt", "ZoneBest", "ZoneFirstClear" }) do
+		local t = profile[key]
+		if typeof(t) == "table" then
+			local clean: { [string]: any } = {}
+			for k, v in pairs(t) do
+				if typeof(k) == "string" and #k <= 24 then
+					if key == "ZoneFirstClear" then
+						clean[k] = if v == true then true else nil
+					else
+						local n = tonumber(v)
+						clean[k] = if n and n == n and n >= 0 and n < 1e12 then n else nil
+					end
+				end
+			end
+			profile[key] = if next(clean) ~= nil then clean else nil
+		else
+			profile[key] = nil
+		end
+	end
+	profile.BunkerBanner = if profile.BunkerBanner ~= nil then math.clamp(nonNegInt(profile.BunkerBanner), 0, 10) else nil
+	profile.ZoneCommander = profile.ZoneCommander == true or nil
+	-- claude-bud JOB 49 A: the streak's grace bookkeeping (missing = no cycle yet / no grace used)
+	if typeof(profile.DailyLogin) == "table" then
+		local dl = profile.DailyLogin
+		dl.Cycle = if dl.Cycle ~= nil then nonNegInt(dl.Cycle) else nil
+		dl.GraceUsedCycle = if dl.GraceUsedCycle ~= nil then nonNegInt(dl.GraceUsedCycle) else nil
+		dl.GraceDay = if dl.GraceDay ~= nil then math.clamp(nonNegInt(dl.GraceDay), 1, 7) else nil
+	end
+	-- claude-bud JOB 49 C: the core missions' per-day state + the (disabled) Robux reroll tokens
+	if typeof(profile.DailyMissions) == "table" then
+		local dm = profile.DailyMissions
+		if typeof(dm.Core) == "table" then
+			local ids = {}
+			for _, id in ipairs(dm.Core) do
+				if typeof(id) == "string" and #id <= 48 and #ids < 6 then
+					table.insert(ids, id)
+				end
+			end
+			dm.Core = if #ids > 0 then ids else nil
+		else
+			dm.Core = nil
+		end
+		dm.RerollsUsed = if dm.RerollsUsed ~= nil then nonNegInt(dm.RerollsUsed) else nil
+		dm.CoreChest = dm.CoreChest == true or nil
+	end
+	profile.MissionRerollTokens = if profile.MissionRerollTokens ~= nil then nonNegInt(profile.MissionRerollTokens) else nil
+	-- claude-bud JOB 41: the Guided first minutes record (missing -> nil; each flag only ever turns on)
+	if typeof(profile.Guided) == "table" then
+		local g = profile.Guided
+		local funnel = {}
+		if typeof(g.Funnel) == "table" then
+			for k, v in pairs(g.Funnel) do
+				if typeof(k) == "string" and #k <= 24 and v == true then
+					funnel[k] = true
+				end
+			end
+		end
+		profile.Guided = {
+			SessionId = if typeof(g.SessionId) == "string" and #g.SessionId <= 64 then g.SessionId else nil,
+			CampDone = g.CampDone == true or nil,
+			CampSpawns = nonNegInt(g.CampSpawns),
+			RewardDone = g.RewardDone == true or nil,
+			RecruitTopUp = if g.RecruitTopUp ~= nil then nonNegInt(g.RecruitTopUp) else nil,
+			Funnel = funnel,
+			-- claude-bud JOB 48: the Hook (raid goal, fallback, fast-raid bonus, reward soldiers, time to the first fight)
+			SoldiersAtCamp = if g.SoldiersAtCamp ~= nil then nonNegInt(g.SoldiersAtCamp) else nil,
+			TimeToFight = if g.TimeToFight ~= nil then nonNegInt(g.TimeToFight) else nil,
+			RewardAt = if g.RewardAt ~= nil then nonNegInt(g.RewardAt) else nil,
+			FastRaidPaid = g.FastRaidPaid == true or nil,
+			GoalMode = if g.GoalMode == "Raid" or g.GoalMode == "Fallback" then g.GoalMode else nil,
+			FallbackKills = if g.FallbackKills ~= nil then nonNegInt(g.FallbackKills) else nil,
+			RewardSoldiers = if typeof(g.RewardSoldiers) == "table"
+				then { Before = nonNegInt(g.RewardSoldiers.Before), After = nonNegInt(g.RewardSoldiers.After) }
+				else nil,
+		}
+	else
+		profile.Guided = nil
+	end
+	-- claude-bud JOB 40 part D: the rate reminder's record (missing -> nil = the defaults; Never sticks across servers)
+	if typeof(profile.RatePrompt) == "table" then
+		local rp = profile.RatePrompt
+		profile.RatePrompt = {
+			LastShownUnix = nonNegInt(rp.LastShownUnix),
+			Shows = nonNegInt(rp.Shows),
+			Never = rp.Never == true,
+			PlaySeconds = nonNegInt(rp.PlaySeconds),
+			-- claude-bud JOB 41 part D: the one-time big-win triggers already used
+			Triggered = if typeof(rp.Triggered) == "table" then {
+				FirstCapture = rp.Triggered.FirstCapture == true or nil,
+				RaidWin = rp.Triggered.RaidWin == true or nil,
+			} else nil,
+		}
+	else
+		profile.RatePrompt = nil
+	end
+	-- claude-bud BOARDS: the notice boards' own counters (validated kills, the week, the biggest army)
+	if typeof(profile.LB) ~= "table" then
+		profile.LB = nil
+	else
+		local lb = profile.LB
+		lb.Week = if typeof(lb.Week) == "string" and #lb.Week <= 8 then lb.Week else nil
+		lb.Kills = nonNegInt(lb.Kills)
+		lb.KillsW = nonNegInt(lb.KillsW)
+		lb.PlazaBase = nonNegInt(lb.PlazaBase)
+		lb.ArmyMax = nonNegInt(lb.ArmyMax)
+		lb.Seeded = if lb.Seeded == true then true else nil
+		lb.SupWBase = if lb.SupWBase ~= nil then nonNegInt(lb.SupWBase) else nil -- Code Bot v175: TOP SUPPORTERS week start (nil = seed once)
+	end
+	if typeof(profile.Settings) == "table" and profile.Settings.SupporterBoardOptOut ~= true then
+		profile.Settings.SupporterBoardOptOut = nil
+	end
 	if profile.GroupRewardClaimed ~= true then
 		profile.GroupRewardClaimed = nil -- claude-bud JOB 5e: true once the group reward was paid
 	end
@@ -532,6 +718,38 @@ local function ensureBuildXPFields(profile: any)
 	profile.BuildXP = { Owed = math.min(nonNegInt(owed), pool), AtPrestige = nonNegInt(profile.Prestige) }
 end
 
+-- claude-bud JOB 39: profile.Endgame (JOB 39 §5), kept through both rebirth paths (PrestigeService never clears it).
+-- Every number is a whole >= 0 capped at its track's end; each map keeps only string keys.
+local ENDGAME_NUMS = { EmpireLevel = 30, BaseTier = 5, Medicine = 5, MedKits = 3, Revive = 1, HeistKit = 3, FreeRetrains = 200 }
+local ENDGAME_MAPS = { Elite = 4, Defence = 10, Workshop = 5, Mastery = 5, Warheads = 1 }
+local function ensureEndgameFields(profile: any)
+	local e = if typeof(profile.Endgame) == "table" then profile.Endgame else {}
+	for k, cap in pairs(ENDGAME_NUMS) do
+		e[k] = math.min(nonNegInt(e[k]), cap)
+	end
+	for k, cap in pairs(ENDGAME_MAPS) do
+		local m = if typeof(e[k]) == "table" then e[k] else {}
+		for key, v in pairs(m) do
+			if typeof(key) ~= "string" then
+				m[key] = nil
+			else
+				m[key] = math.min(nonNegInt(v), cap)
+			end
+		end
+		e[k] = m
+	end
+	for _, k in ipairs({ "Attachments", "Camos", "Contracts", "BlackMarket" }) do
+		if typeof(e[k]) ~= "table" then
+			e[k] = {}
+		end
+	end
+	-- Code Bot v171: his last paid Intel scouting report (kept so a rejoin / server move does not lose it)
+	if e.ScoutReport ~= nil and (typeof(e.ScoutReport) ~= "table" or typeof(e.ScoutReport.Name) ~= "string") then
+		e.ScoutReport = nil
+	end
+	profile.Endgame = e
+end
+
 -- Code Bot v102: redeem codes (idempotent; no DataVersion bump, like ensureFeatureFields).
 --   RedeemedCodes  { [CODE] = os.time() of the redeem | true (pre-v102 saves) }: string keys up to 32 chars only,
 --                  junk values dropped; a code stays redeemed forever (once per player, across rebirths)
@@ -654,6 +872,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		Monetization = defaultMonetization(),
 		AnnouncePurchases = true,
 		VipSupplyAt = 0,
+		Endgame = { EmpireLevel = 0 }, -- claude-bud JOB 39 (ensureEndgameFields fills the rest on load)
 		-- Owner's 11 features: see ensureFeatureFields (Migrate fills the same keys into older saves)
 		KeepBaseRebirths = 0,
 		TutorialOrderVersion = TUTORIAL_ORDER_VERSION,
@@ -910,7 +1129,8 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 			raid = {}
 			;(profile :: any).Raid = raid
 		end
-		for _, k in ipairs({ "ShieldUntil", "StrikeCooldownUntil", "DefensesDownUntil" }) do
+		-- claude-bud JOB 38: the SEND cooldown (sender) and the army protection (victim base), os.time()
+		for _, k in ipairs({ "ShieldUntil", "StrikeCooldownUntil", "DefensesDownUntil", "ArmySendCooldownUntil", "ArmyProtectUntil" }) do
 			if typeof(raid[k]) ~= "number" then
 				raid[k] = 0
 			end
@@ -928,6 +1148,8 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	ensureBuildXPFields(profile)
 	-- Code Bot v102: redeemed codes + the timed Cash boost (idempotent; no version bump)
 	ensureCodesFields(profile)
+	-- claude-bud JOB 39: the endgame progression (idempotent; no version bump)
+	ensureEndgameFields(profile)
 
 	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
 	if typeof(profile.BaseUpgrades) ~= "table" then

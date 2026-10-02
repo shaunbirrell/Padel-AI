@@ -32,6 +32,26 @@ local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local RebirthConfig = require(Shared.Configs.RebirthConfig) -- claude-bud JOB 33
+
+-- claude-bud JOB 33: the level this player needs for his next rebirth (RebirthConfig.LiveFor "Pacing")
+local function minLevelFor(player: Player, profile: any): number
+	return PrestigeConfig.MinLevelFor(tonumber(profile and profile.Prestige) or 0, RebirthConfig.LiveFor(player.UserId, "Pacing"))
+end
+
+-- claude-bud JOB 33: this life's play time (profile.LifePlaySeconds + the running session), for the rebirth funnel
+local sessionFrom: { [number]: number } = {}
+local function lifeSeconds(player: Player, profile: any): number
+	local from = sessionFrom[player.UserId]
+	return (tonumber(profile.LifePlaySeconds) or 0) + (if from then os.clock() - from else 0)
+end
+local function bankPlay(player: Player, profile: any)
+	local from = sessionFrom[player.UserId]
+	if from then
+		profile.LifePlaySeconds = math.floor((tonumber(profile.LifePlaySeconds) or 0) + (os.clock() - from))
+		sessionFrom[player.UserId] = os.clock()
+	end
+end
 
 local PrestigeService = {}
 
@@ -181,7 +201,8 @@ local function applyUnlocks(player: Player, profile: any, newPrestige: number)
 	end
 	local newly: { string } = {}
 	for _, u in ipairs(PrestigeConfig.RebirthUnlocks or {}) do
-		if newPrestige >= u.AtPrestige and not profile.RebirthUnlocks[u.Flag] then
+		local gateOk = (u :: any).Gate == nil or RebirthConfig.LiveFor(player.UserId, (u :: any).Gate) -- claude-bud JOB 33
+		if gateOk and newPrestige >= u.AtPrestige and not profile.RebirthUnlocks[u.Flag] then
 			profile.RebirthUnlocks[u.Flag] = true
 			table.insert(newly, u.DisplayName or u.Flag)
 			if u.GrantOwned and typeof(u.Id) == "string" then
@@ -225,10 +246,39 @@ local function pushState(player: Player)
 		NextUnlock = PrestigeConfig.NextUnlockName(prestige),
 		BusinessesOn = businessesOn(),
 	}
+	-- claude-bud JOB 33 (RebirthConfig.LiveFor "Screen"): what the next rebirth gives, in the GAIN column, and the next 3
+	local screenLive = RebirthConfig.LiveFor(player.UserId, "Screen")
+	local zoneAt: { [number]: string } = {}
+	for _, zid in ipairs(RebirthConfig.ZoneOrder) do
+		local z = RebirthConfig.Zones[zid]
+		if z and RebirthConfig.LiveFor(player.UserId, "Zones") then
+			zoneAt[z.Tier] = z.DisplayName
+		end
+	end
+	if screenLive then
+		local x: any = ctx
+		x.Zone = zoneAt[prestige + 1]
+		if RebirthConfig.LiveFor(player.UserId, "Perks") then
+			x.Soldiers = RebirthConfig.PrestigeSoldierBonus(prestige + 1) - RebirthConfig.PrestigeSoldierBonus(prestige)
+			x.StartCash = RebirthConfig.StartingCash(prestige + 1, false)
+			x.Gold = RebirthConfig.GoldBonus(prestige + 1, false)
+		end
+	end
+	-- claude-bud JOB 39 (EndgameConfig, owner-first): KEEP "Empire and upgrades"; RESET shows the next scaled base price
+	do
+		local EG = require(ReplicatedStorage.Shared.Configs.EndgameConfig)
+		local x: any = ctx
+		if EG.AnyLiveFor(player.UserId) then
+			x.EndgameKeep = true
+		end
+		if EG.LiveFor(player.UserId, "Rebirth") then
+			x.NextBase = EG.LifeCost(EG.RebirthCostScale(prestige + 1))
+		end
+	end
 	local payload: Types.PrestigeStatePayload = {
 		Prestige = prestige,
 		CanPrestige = canPrestige,
-		MinLevel = PrestigeConfig.MinLevelToPrestige,
+		MinLevel = minLevelFor(player, profile), -- claude-bud JOB 33 pacing
 		MaxPrestige = PrestigeConfig.MaxPrestige,
 		CashBonusPerLevel = bonus,
 		CashMultPercent = curMultPct,
@@ -251,7 +301,8 @@ local function pushState(player: Player)
 			Cash = PrestigeConfig.RebirthSummary("Cash", ctx),
 			KeepBase = PrestigeConfig.RebirthSummary("KeepBase", ctx),
 		},
-	}
+	};
+	(payload :: any).Next3 = if screenLive then PrestigeConfig.NextRebirths(prestige, 3, zoneAt) else nil -- claude-bud JOB 33
 	lastPushedCan[player.UserId] = canPrestige
 	remote:FireClient(player, payload)
 end
@@ -276,7 +327,7 @@ function PrestigeService.CanPrestige(player: Player): boolean
 	if not profile then
 		return false
 	end
-	if profile.Level < PrestigeConfig.MinLevelToPrestige or profile.Prestige >= PrestigeConfig.MaxPrestige then
+	if profile.Level < minLevelFor(player, profile) or profile.Prestige >= PrestigeConfig.MaxPrestige then
 		return false
 	end
 	local fee = tonumber(PrestigeConfig.CashFee) or 0
@@ -315,9 +366,10 @@ function PrestigeService.DoPrestige(player: Player, opts: PrestigeOpts?): (boole
 	if profile.Prestige >= PrestigeConfig.MaxPrestige then
 		return false, "MaxPrestige"
 	end
-	if profile.Level < PrestigeConfig.MinLevelToPrestige then
+	if profile.Level < minLevelFor(player, profile) then
 		return false, "LevelTooLow"
 	end
+	local levelAt = tonumber(profile.Level) or 0 -- claude-bud JOB 33: for the rebirth funnel
 	if keepBase and nonNegInt(profile.KeepBaseRebirths) <= 0 then
 		return false, "NoKeepBaseToken"
 	end
@@ -337,7 +389,8 @@ function PrestigeService.DoPrestige(player: Player, opts: PrestigeOpts?): (boole
 		profile.Cash = math.max(0, (tonumber(profile.Cash) or 0) - fee)
 	end
 	if reset.Cash then
-		profile.Cash = PrestigeConfig.StartingCashAfterPrestige
+		-- claude-bud JOB 33 perks: the starting cash steps ($25k at R1 .. $250k at R20) replace the flat 10,000
+		profile.Cash = if RebirthConfig.LiveFor(player.UserId, "Perks") then RebirthConfig.StartingCash(profile.Prestige, false) else PrestigeConfig.StartingCashAfterPrestige
 	end
 	if reset.Level then
 		profile.Level = 1
@@ -363,8 +416,26 @@ function PrestigeService.DoPrestige(player: Player, opts: PrestigeOpts?): (boole
 		publishTokens(player, profile)
 	end
 
-	if PrestigeConfig.GoldBonusOnPrestige > 0 then
-		EconomyService.AddGold(player, PrestigeConfig.GoldBonusOnPrestige, "prestige")
+	-- claude-bud JOB 33 perks: gold 50 + 10 per rebirth (max 250) instead of the flat 50
+	local goldGain = if RebirthConfig.LiveFor(player.UserId, "Perks") then RebirthConfig.GoldBonus(profile.Prestige, false) else PrestigeConfig.GoldBonusOnPrestige
+	if goldGain > 0 then
+		EconomyService.AddGold(player, goldGain, "prestige")
+	end
+	-- claude-bud JOB 33: the rebirth funnel (level + this life's minutes), then a fresh life
+	if AnalyticsService and AnalyticsService.Log then
+		pcall(AnalyticsService.Log, "REBIRTH_CONFIRMED", player.UserId, { level = levelAt, minutes = math.floor(lifeSeconds(player, profile) / 60), prestige = profile.Prestige })
+	end
+	profile.LifePlaySeconds = 0
+	sessionFrom[player.UserId] = os.clock()
+	profile.RebirthReadyLogged = nil
+	-- claude-bud JOB 33: the zones / rank / army bonus for the new rebirth (a zone that just opened appears)
+	do
+		local okRZ, RZ = pcall(function(): any
+			return require(script.Parent.RebirthZoneService)
+		end)
+		if okRZ and RZ and RZ.Refresh then
+			task.defer(RZ.Refresh, player)
+		end
 	end
 
 	-- Reaffirm outpost stacks from owned Territories (never wipe stacks on prestige)
@@ -392,11 +463,11 @@ function PrestigeService.DoPrestige(player: Player, opts: PrestigeOpts?): (boole
 	local unlockNote = if #newly > 0 then (" Unlocked: " .. table.concat(newly, ", ") .. ".") else ""
 	if NotificationService then
 		local msg = if keepBase
-			then string.format("Rebirth P%d!  Base kept  +%d Gold%s", profile.Prestige, PrestigeConfig.GoldBonusOnPrestige, unlockNote)
+			then string.format("Rebirth P%d!  Base kept  +%d Gold%s", profile.Prestige, goldGain, unlockNote)
 			else string.format(
 				"Rebirth P%d! +%d Gold. Cash earnings +%d%%%s",
 				profile.Prestige,
-				PrestigeConfig.GoldBonusOnPrestige,
+				goldGain,
 				bonusPct,
 				unlockNote
 			)
@@ -420,6 +491,22 @@ function PrestigeService.DoPrestige(player: Player, opts: PrestigeOpts?): (boole
 				Prestige = profile.Prestige,
 				Sub = if keepBase then "Base kept" else string.format("Cash earnings +%d%%", bonusPct),
 			})
+		end
+	end
+	-- claude-bud JOB 34: rebirth achievements + the "REBIRTHED for the Nth time!" line (AchievementConfig.Live)
+	do
+		local okA, AS = pcall(function(): any
+			return require(script.Parent.AchievementService)
+		end)
+		if okA and AS and AS.OnRebirth then
+			pcall(AS.OnRebirth, player)
+		end
+		-- claude-bud JOB 40 part D: a rebirth may bring the (no-reward) rate reminder forward
+		local okR, RP = pcall(function(): any
+			return require(script.Parent.RatePromptService)
+		end)
+		if okR and RP and RP.Trigger then
+			pcall(RP.Trigger, player, "rebirth")
 		end
 	end
 	-- claude-bud JOB 5d: a purchase prompt after a rebirth (MonetizationConfig.Placement, owner-only first)
@@ -503,11 +590,17 @@ function PrestigeService.MaybeNearPrestigeToast(player: Player)
 		if last ~= nil and last ~= can then
 			schedulePush(player)
 		end
+		-- claude-bud JOB 33: the rebirth funnel's first step, once per life
+		if can and profile.RebirthReadyLogged ~= true and AnalyticsService and AnalyticsService.Log then
+			profile.RebirthReadyLogged = true
+			DataService.MarkDirty(player)
+			pcall(AnalyticsService.Log, "REBIRTH_AVAILABLE", player.UserId, { level = tonumber(profile.Level) or 0, minutes = math.floor(lifeSeconds(player, profile) / 60) })
+		end
 	end
 	if not NotificationService then
 		return
 	end
-	local minLv = PrestigeConfig.MinLevelToPrestige or 40
+	local minLv = minLevelFor(player, profile) -- claude-bud JOB 33 pacing
 	local near = PrestigeConfig.NearPrestigeLevels or 2
 	local level = tonumber(profile.Level) or 1
 	local prestige = tonumber(profile.Prestige) or 0
@@ -565,7 +658,146 @@ function PrestigeService.AdminGiveKeepBase(player: Player, n: number): (boolean,
 	return true, nil
 end
 
+--[[ Code Bot v168 (Shaun 2026-10-01: "/setrebirth N"; admin allowlist ONLY: AdminService chat + Settings > ADMIN, never a
+	remote of its own). Sets profile.Prestige (the rebirth count) to n (0..MaxPrestige) WITHOUT the reset table: Cash,
+	Level, XP, BaseUpgrades, Gold, Vehicles, Weapons and Endgame are untouched. Then the same follow-ups a real rebirth
+	(DoPrestige) runs, so everything derived from the count is right at once:
+	  * applyUnlocks (the PrestigeConfig.RebirthUnlocks flags and their granted vehicles / guns, additive); lowering n
+	    clears only the FLAGS above n (an item already granted is kept: "don't reset his items");
+	  * RebirthZoneService.Refresh (the zones / rank / +2 soldiers per rebirth army bonus), the outpost stacks, the
+	    cash / XP / base / prestige pushes (the cash multiplier + rebirth-scaled prices are read from profile.Prestige);
+	  * EndgameService.SyncUnlocks / SyncAttributes / SyncBaseTier (the endgame rebirth unlocks, WE_BaseCostScale) and
+	    the base sign;
+	  * MarkDirty + an immediate DataService.SaveProfile.
+	No gold, no rebirth toast / celebration / achievements / analytics funnel (it is not a rebirth). Leaderboards: the
+	admin is excluded at write and read (EngagementService.isBoardExcluded), so his Rebirths value never reaches a board. ]]
+function PrestigeService.AdminSetRebirth(player: Player, n: number): (boolean, string?)
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return false, "NoProfile"
+	end
+	local want = math.clamp(math.floor(tonumber(n) or 0), 0, PrestigeConfig.MaxPrestige)
+	local before = nonNegInt(profile.Prestige)
+	profile.Prestige = want
+	if typeof(profile.RebirthUnlocks) ~= "table" then
+		profile.RebirthUnlocks = {}
+	end
+	for _, u in ipairs(PrestigeConfig.RebirthUnlocks or {}) do
+		if u.AtPrestige > want then
+			profile.RebirthUnlocks[u.Flag] = nil -- the flag only; a granted vehicle / gun stays owned
+		end
+	end
+	applyUnlocks(player, profile, want)
+	do
+		local okE, EG = pcall(function(): any
+			return require(script.Parent.EndgameService)
+		end)
+		if okE and EG and EG.AdminSyncRebirth then
+			pcall(EG.AdminSyncRebirth, player, want)
+		end
+	end
+	DataService.MarkDirty(player)
+	do
+		local okRZ, RZ = pcall(function(): any
+			return require(script.Parent.RebirthZoneService)
+		end)
+		if okRZ and RZ and RZ.Refresh then
+			task.defer(RZ.Refresh, player)
+		end
+	end
+	if EconomyService and EconomyService.SyncOutpostIncomeStacks then
+		pcall(EconomyService.SyncOutpostIncomeStacks, player)
+	end
+	if EconomyService and EconomyService.Push then
+		pcall(EconomyService.Push, player)
+	end
+	if XPService and XPService.Push then
+		pcall(XPService.Push, player)
+	end
+	if BaseService and BaseService.PushState then
+		pcall(BaseService.PushState, player)
+	end
+	pushState(player)
+	if DataService.SaveProfile then
+		task.spawn(function()
+			pcall(DataService.SaveProfile, player)
+		end)
+	end
+	print(string.format("[AdminRebirth] %s setrebirth %d -> %d (cash/items kept)", player.Name, before, want))
+	return true, nil
+end
+
+--[[ Code Bot v169: AdminConfig.OwnerRebirthGrant, once per Key on a profile load (the owner only; see AdminConfig).
+	Returns "applied" | "already" (count >= Rebirths: nothing changed, Key stored) | "done" (Key already stored) | "skip". ]]
+function PrestigeService.ApplyOwnerRebirthGrant(player: Player, profile: any): string
+	local okA, AdminConfig = pcall(function(): any
+		return require(Shared.Configs.AdminConfig)
+	end)
+	local g = okA and AdminConfig and AdminConfig.OwnerRebirthGrant
+	if typeof(g) ~= "table" or typeof(g.Key) ~= "string" or g.Key == "" or typeof(profile) ~= "table" then
+		return "skip"
+	end
+	local uid = tonumber(g.UserId)
+	if uid == nil or player.UserId ~= uid then
+		return "skip"
+	end
+	local listed = false
+	for _, id in ipairs(AdminConfig.UserIds or {}) do
+		if tonumber(id) == uid then
+			listed = true
+		end
+	end
+	if not listed then
+		return "skip"
+	end
+	if typeof(profile.AdminGrants) ~= "table" then
+		profile.AdminGrants = {}
+	end
+	if profile.AdminGrants[g.Key] ~= nil then
+		return "done"
+	end
+	local want = math.clamp(math.floor(tonumber(g.Rebirths) or 0), 0, PrestigeConfig.MaxPrestige)
+	if nonNegInt(profile.Prestige) >= want then
+		profile.AdminGrants[g.Key] = { At = os.time(), From = nonNegInt(profile.Prestige), Applied = false }
+		DataService.MarkDirty(player)
+		print(string.format("[AdminRebirth] %s grant %s: already R%d (>= %d), nothing changed", player.Name, g.Key, nonNegInt(profile.Prestige), want))
+		return "already"
+	end
+	local from = nonNegInt(profile.Prestige)
+	profile.AdminGrants[g.Key] = { At = os.time(), From = from, Applied = true } -- stored before the save inside
+	local ok = PrestigeService.AdminSetRebirth(player, want)
+	if not ok then
+		profile.AdminGrants[g.Key] = nil
+		return "skip"
+	end
+	print(string.format("[AdminRebirth] %s grant %s: R%d -> R%d (one time)", player.Name, g.Key, from, want))
+	return "applied"
+end
+
 function PrestigeService.Init(deps: { [string]: any })
+	-- claude-bud JOB 33: this life's play time (banked into profile.LifePlaySeconds every minute and on leave)
+	task.spawn(function()
+		while true do
+			task.wait(60)
+			for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+				local pr = deps.DataService and deps.DataService.GetProfile(p)
+				if pr and sessionFrom[p.UserId] then
+					bankPlay(p, pr)
+					deps.DataService.MarkDirty(p)
+				end
+			end
+		end
+	end)
+	game:GetService("Players").PlayerRemoving:Connect(function(p: Player)
+		local pr = deps.DataService and deps.DataService.GetProfile(p)
+		if pr then
+			bankPlay(p, pr)
+		end
+		sessionFrom[p.UserId] = nil
+	end)
+	deps.DataService.OnProfileLoaded(function(p: Player, _pr: any)
+		sessionFrom[p.UserId] = os.clock()
+	end)
 	DataService = deps.DataService
 	EconomyService = deps.EconomyService
 	XPService = deps.XPService
@@ -580,6 +812,9 @@ function PrestigeService.Init(deps: { [string]: any })
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestPrestige) :: RemoteEvent
 	-- F7: optional 1st arg `path`. Only the exact string "KeepBase" picks the keep-base path (server-checked token).
 	remote.OnServerEvent:Connect(function(player: Player, rawPath: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPrestige", rawPath) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		-- v69: extra taps are dropped silently (the allowed tap already answered) — never a strike
 		if not RateLimitService.Allow(player, "prestige", 1, 2) then
 			return
@@ -634,6 +869,15 @@ function PrestigeService.Init(deps: { [string]: any })
 		-- Re-apply unlock flags for current prestige (idempotent) in case config grew
 		applyUnlocks(player, profile, profile.Prestige or 0)
 		pushState(player)
+		-- Code Bot v169: the owner's one-time rebirth grant (after the other load handlers: defer)
+		task.defer(function()
+			if player.Parent and DataService.GetProfile(player) == profile then
+				local okG, errG = pcall(PrestigeService.ApplyOwnerRebirthGrant, player, profile)
+				if not okG then
+					warn("[PrestigeService] OwnerRebirthGrant:", errG)
+				end
+			end
+		end)
 		-- UX: remind eligible commanders (MinLevelToPrestige = 40) that Rebirth is ready
 		if PrestigeService.CanPrestige(player) and NotificationService then
 			local msg = string.format(

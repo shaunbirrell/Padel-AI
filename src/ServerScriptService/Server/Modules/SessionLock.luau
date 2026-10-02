@@ -34,6 +34,12 @@ local ACQUIRE_POLL_SECONDS = 2
 -- v70: userIds whose lock THIS server released (leave / shutdown). Refresh never re-claims those; for the
 -- rest it takes over a free or stale lock, so a session whose TryAcquire timed out still ends up holding it.
 local releasedHere: { [number]: boolean } = {}
+-- v147: os.clock() of this server's last lock_<userId> write. A DataStore key written twice within ~6 s queues the
+-- second request ("DataStore request was added to queue"). The 15 s heartbeat and the 60 s autosave's own Refresh both
+-- start at DataService.Init, so every 4th heartbeat landed in the same instant as an autosave Refresh. A Refresh
+-- within REFRESH_MIN_GAP of the last write is skipped: the lock stays fresh (TTL 45 s, worst gap 15 + 7 = 22 s).
+local lastLockWriteAt: { [number]: number } = {}
+local REFRESH_MIN_GAP = 7
 local store: DataStore? = nil
 
 local function getStore(): DataStore?
@@ -181,6 +187,11 @@ function SessionLock.Refresh(userId: number)
 	end
 	local key = "lock_" .. tostring(userId)
 	local jobId = thisJobId()
+	local nowClock = os.clock()
+	if nowClock - (lastLockWriteAt[userId] or -math.huge) < REFRESH_MIN_GAP then
+		return -- v147: written moments ago (autosave + heartbeat in the same instant): no second write on the key
+	end
+	lastLockWriteAt[userId] = nowClock
 	pcall(function()
 		ds:UpdateAsync(key, function(old)
 			local ours = typeof(old) == "table" and tostring((old :: LockInfo).JobId or "") == jobId

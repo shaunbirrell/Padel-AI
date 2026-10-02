@@ -1,0 +1,12 @@
+ok    SEND accepted (true Your army 60,000 vs defences 2,500: much stronger: half loot)
+ok    gate HP falls from real shots (every 4 s: 100,100,100,100,100,87,29,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+ok    the siege target is the gate while the walls stand (Player=13,Structure=19,none=38)
+ok    the gate breaks
+ok    the army goes in through the gate (block centre 217,1)
+ok    the raid loots per the JOB 38 hold rule (4321)
+ok    no teleport
+ok    shots land on the gate (fired=134 gatehits=125 nolos=0 outofband=373)
+ok    75 soldiers: breach true, in true, loot 4321, gate every 4 s 100,100,100,100,100,84,18,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, fired=134 gatehits=125 nolos=0 outofband=1706
+ok    marching past a base with a non-hostile-acting player inside: the block never stalls (longest stand-still 0.0 s), reaches the siege, breach true
+ok    a player shooting his army on the march (in the open, 40 studs off the route) IS answered (killed: Hicktonn94;Chaplin606;), then the march goes on (breach true)
+ARMY SIEGE TEST: 0 failed

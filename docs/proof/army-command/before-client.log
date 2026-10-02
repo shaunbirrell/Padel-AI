@@ -1,0 +1,16 @@
+[WAR EMPIRE] OrdersController ready (Army popover: tile / Y, orders 1-4 / T / tile long-press)
+init ok	true
+SEND button	true
+[ARMY SEND] SEND pressed: MapController.Open() MapMode=Normal (no army mode) ArmyId=470626172
+map open	true	toasts	Tap an enemy base on the map
+[ARMY SEND] tap -> Area Town "Crossroads Town" card: GO only (SEND ARMY hidden: selectBase only)
+card:	WORLD MAP | Crossroads Town | City and Central Plaza
+Outpost: free to capture
++10% Cash from passive income while controlled. | Pinch or + to zoom · tap to pin
+GO visible	true
+[ARMY SEND] GO pressed MapMode=Normal ArmyId=nil BaseId=Area:Town Position=(0,0) Firing remote=none (pinAt: the PLAYER pin)
+map open after GO	false
+REMOTE	RequestAnalyticsEvent	ArmyOpened
+PIN	PIN	0	0	true
+
+

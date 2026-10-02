@@ -1,0 +1,9 @@
+ok    ATTACK with nothing near (AttackRange OFF = the old rule): rejected NoEnemiesNear (logged + toast), state kept Following
+ok    JOB 52 ON, no enemy anywhere: 'No enemies on the map', radius 400, state kept Following
+ok    JOB 52 ON: an enemy 260 studs away -> ATTACK accepted, Attacking (later Following)
+ok    JOB 52 OFF (old SeekRadius 250): an enemy 260 studs away -> 'No enemies near', state Following (the reported bug)
+ok    JOB 52 ON: an enemy 380 studs away -> ATTACK accepted, Attacking (later Following)
+ok    JOB 52 OFF (old SeekRadius 250): an enemy 380 studs away -> 'No enemies near', state Following (the reported bug)
+ok    JOB 52 ON: the nearest enemy at 450 studs (past 400): rejected with its distance in the log (nearest=450) + the PIN / SEND card
+ok    JOB 52 ON: height does not change the verdict (an enemy 380 studs out on a 40-stud rise -> Attacking)
+ARMY COMMAND TEST: 0 failed

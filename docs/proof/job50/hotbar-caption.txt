@@ -1,0 +1,5 @@
+ok    BEFORE: a 80 v caption box in a 64 v slot with a 12 v gap: neighbouring boxes overlapped by 4 v
+ok    AFTER: the caption box is slot - 4 (60 v: 16 v clear of the neighbour's box), no TextScaled stretch, truncates cleanly
+ok    fitCaption sizes each name to fit its slot, floor = CaptionMinTextPx real px (the documented caption exception)
+ok    every named weapon has a distinct ShortName (DMR vs LONGSHOT, HAVOC RL vs HAVOC) 
+HOTBAR CAPTION TEST: 0 failed

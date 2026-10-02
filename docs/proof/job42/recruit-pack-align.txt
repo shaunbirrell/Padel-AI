@@ -1,0 +1,12 @@
+# run_recruit_pack_test.py, the JOB 42 part C lines (2026-10-01T08:16Z, headless, the real MonetizationService: NOT Roblox)
+ok    grant at $0/min: $25000 cash (want $25000)
+ok    grant at $2000/min: $60000 cash (want $60000)
+ok    grant at $9000/min: $150000 cash (want $150000)
+ok    TimePacks live, $0/min: Recruit Pack cash $25000 == the 30 MIN OF CASH amount $25000
+ok    TimePacks live, $500/min: Recruit Pack cash $25000 == the 30 MIN OF CASH amount $25000
+ok    TimePacks live, $2000/min: Recruit Pack cash $59999 == the 30 MIN OF CASH amount $59999
+ok    live: the boost and the trim still grant
+ok    TimePacks live, $9000/min: Recruit Pack cash $270000 == the 30 MIN OF CASH amount $270000
+ok    the row keeps its Id (0 in config) and 49 R$: 49
+ok    the card's $ = the 30 MIN OF CASH amount ($59999)
+RECRUIT PACK TEST: 0 failed

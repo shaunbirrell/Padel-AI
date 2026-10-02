@@ -121,6 +121,9 @@ function SpinnerService.Init(deps: { [string]: any })
 
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestClaimSpinner) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestClaimSpinner") then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		-- v69: extra taps are dropped silently (the allowed tap already answered) — never a strike
 		if not RateLimitService.Allow(player, "spinner_claim", 1, 2) then
 			return

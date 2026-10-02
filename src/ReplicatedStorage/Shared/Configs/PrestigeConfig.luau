@@ -19,6 +19,7 @@ export type RebirthUnlockDef = {
 	Kind: "Flag" | "Vehicle" | "Weapon" | "Structure",
 	Id: string?, -- Vehicle/Weapon/Structure id when Kind is not Flag-only
 	GrantOwned: boolean?, -- auto-grant Vehicles[Id] / Weapons[Id]
+	Gate: string?, -- claude-bud JOB 33: granted only while RebirthConfig.LiveFor(player, Gate)
 }
 
 -- F7 / F11: the two rebirth paths. "Cash" = the free rebirth; "KeepBase" = the 50 R$ keep-base rebirth (token).
@@ -104,6 +105,9 @@ local PrestigeConfig = {
 	--[[
 		Unlock track (shown in K panel). Flags land in profile.RebirthUnlocks.
 		GrantOwned vehicles/weapons are given permanently (kept through further prestiges).
+		claude-bud JOB 33: sorted by AtPrestige (the Frigate R16 / Cruiser R18 order bug is fixed). Rows with Gate are
+		granted only while RebirthConfig.LiveFor(player, Gate): land vehicles fill R6 / 9 / 11 / 13 / 14 / 17 / 19 and the
+		7 rebirth guns (WeaponConfig) unlock at R1 / 3 / 5 / 7 / 9 / 12 / 15.
 	]]
 	RebirthUnlocks = {
 		{
@@ -113,6 +117,15 @@ local PrestigeConfig = {
 			Kind = "Vehicle",
 			Id = "ScoutCar",
 			GrantOwned = true,
+		},
+		{
+			AtPrestige = 1,
+			Flag = "RebirthGunVanguard",
+			DisplayName = "Vanguard Carbine (gun)",
+			Kind = "Weapon",
+			Id = "VanguardCarbine",
+			GrantOwned = true,
+			Gate = "Weapons", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
 		},
 		{
 			AtPrestige = 2,
@@ -131,6 +144,15 @@ local PrestigeConfig = {
 			GrantOwned = true,
 		},
 		{
+			AtPrestige = 3,
+			Flag = "RebirthGunTempest",
+			DisplayName = "Tempest SMG (gun)",
+			Kind = "Weapon",
+			Id = "TempestSMG",
+			GrantOwned = true,
+			Gate = "Weapons", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
+		},
+		{
 			AtPrestige = 4,
 			Flag = "MissileBoatGrant",
 			DisplayName = "Missile Boat (owned)",
@@ -147,12 +169,39 @@ local PrestigeConfig = {
 			GrantOwned = true,
 		},
 		{
+			AtPrestige = 5,
+			Flag = "RebirthGunWarden",
+			DisplayName = "Warden Shotgun (gun)",
+			Kind = "Weapon",
+			Id = "WardenShotgun",
+			GrantOwned = true,
+			Gate = "Weapons", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
+		},
+		{
+			AtPrestige = 6,
+			Flag = "RebirthBuggy",
+			DisplayName = "Recon Buggy (owned)",
+			Kind = "Vehicle",
+			Id = "ReconBuggy",
+			GrantOwned = true,
+			Gate = "Vehicles", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
+		},
+		{
 			AtPrestige = 7,
 			Flag = "GunboatFleet",
 			DisplayName = "Gunboat (owned)",
 			Kind = "Vehicle",
 			Id = "Gunboat",
 			GrantOwned = true,
+		},
+		{
+			AtPrestige = 7,
+			Flag = "RebirthGunLongshot",
+			DisplayName = "Longshot DMR (gun)",
+			Kind = "Weapon",
+			Id = "LongshotDMR",
+			GrantOwned = true,
+			Gate = "Weapons", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
 		},
 		{
 			AtPrestige = 8,
@@ -163,12 +212,39 @@ local PrestigeConfig = {
 			GrantOwned = true,
 		},
 		{
+			AtPrestige = 9,
+			Flag = "RebirthCommand",
+			DisplayName = "Command Vehicle (owned)",
+			Kind = "Vehicle",
+			Id = "CommandVehicle",
+			GrantOwned = true,
+			Gate = "Vehicles", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
+		},
+		{
+			AtPrestige = 9,
+			Flag = "RebirthGunTalon",
+			DisplayName = "Talon Sniper (gun)",
+			Kind = "Weapon",
+			Id = "TalonSniper",
+			GrantOwned = true,
+			Gate = "Weapons", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
+		},
+		{
 			AtPrestige = 10,
 			Flag = "EmpireElite",
 			DisplayName = "Empire Elite (unlocks Super Heavy)",
 			Kind = "Flag",
 			Id = nil,
 			GrantOwned = false,
+		},
+		{
+			AtPrestige = 11,
+			Flag = "RebirthLightTank",
+			DisplayName = "Light Tank (owned)",
+			Kind = "Vehicle",
+			Id = "LightTank",
+			GrantOwned = true,
+			Gate = "Vehicles", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
 		},
 		{
 			AtPrestige = 12,
@@ -179,12 +255,65 @@ local PrestigeConfig = {
 			GrantOwned = false,
 		},
 		{
+			AtPrestige = 12,
+			Flag = "RebirthGunHavoc",
+			DisplayName = "Havoc Launcher (gun)",
+			Kind = "Weapon",
+			Id = "HavocLauncher",
+			GrantOwned = true,
+			Gate = "Weapons", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
+		},
+		{
+			AtPrestige = 13,
+			Flag = "RebirthMortar",
+			DisplayName = "Mortar Carrier (owned)",
+			Kind = "Vehicle",
+			Id = "MortarCarrier",
+			GrantOwned = true,
+			Gate = "Vehicles", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
+		},
+		{
+			AtPrestige = 14,
+			Flag = "RebirthMediumTank",
+			DisplayName = "Medium Tank (owned)",
+			Kind = "Vehicle",
+			Id = "MediumTank",
+			GrantOwned = true,
+			Gate = "Vehicles", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
+		},
+		{
 			AtPrestige = 15,
 			Flag = "DestroyerGrant",
 			DisplayName = "Destroyer (owned)",
 			Kind = "Vehicle",
 			Id = "Destroyer",
 			GrantOwned = true,
+		},
+		{
+			AtPrestige = 15,
+			Flag = "RebirthGunSovereign",
+			DisplayName = "Sovereign Rifle (gun)",
+			Kind = "Weapon",
+			Id = "SovereignRifle",
+			GrantOwned = true,
+			Gate = "Weapons", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
+		},
+		{
+			AtPrestige = 16,
+			Flag = "FrigateGrant",
+			DisplayName = "Frigate (owned)",
+			Kind = "Vehicle",
+			Id = "Frigate",
+			GrantOwned = true,
+		},
+		{
+			AtPrestige = 17,
+			Flag = "RebirthHeavyTank",
+			DisplayName = "Heavy Tank (owned)",
+			Kind = "Vehicle",
+			Id = "HeavyTank",
+			GrantOwned = true,
+			Gate = "Vehicles", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
 		},
 		{
 			AtPrestige = 18,
@@ -195,12 +324,13 @@ local PrestigeConfig = {
 			GrantOwned = true,
 		},
 		{
-			AtPrestige = 16,
-			Flag = "FrigateGrant",
-			DisplayName = "Frigate (owned)",
+			AtPrestige = 19,
+			Flag = "RebirthBattleTank",
+			DisplayName = "Battle Tank (owned)",
 			Kind = "Vehicle",
-			Id = "Frigate",
+			Id = "BattleTank",
 			GrantOwned = true,
+			Gate = "Vehicles", -- claude-bud JOB 33 (RebirthConfig.LiveFor)
 		},
 		{
 			AtPrestige = 20,
@@ -385,8 +515,75 @@ function PrestigeConfig.RebirthSummary(path: RebirthPath, ctx: RebirthSummaryCtx
 	if typeof(ctx.NextUnlock) == "string" and ctx.NextUnlock ~= "" then
 		table.insert(gain, unlockLine(ctx.NextUnlock))
 	end
+	-- claude-bud JOB 33: what else the next rebirth gives (only when the screen part is live: the server fills these)
+	local x: any = ctx
+	if typeof(x.Zone) == "string" and x.Zone ~= "" then
+		add(gain, "New zone: " .. x.Zone)
+	end
+	if typeof(x.Soldiers) == "number" and x.Soldiers > 0 then
+		add(gain, string.format("+%d army soldiers", x.Soldiers))
+	end
+	if typeof(x.StartCash) == "number" and x.StartCash > 0 and reset.Cash then
+		resetLines[1] = fitLine("Cash back to $" .. withCommas(x.StartCash))
+	end
+	-- claude-bud JOB 39 (EndgameConfig, only when the server set them): Empire Level and upgrades are kept; the base
+	-- costs more next life (the rebirth price scale)
+	if x.EndgameKeep == true then
+		add(keep, "Empire and upgrades")
+	end
+	if typeof(x.NextBase) == "number" and x.NextBase > 0 and reset.BaseUpgrades then
+		add(resetLines, string.format("Next base $%.1fM", x.NextBase / 1e6))
+	end
+	if typeof(x.Gold) == "number" and x.Gold > 0 then
+		for i, line in ipairs(keep) do
+			if string.sub(line, 1, 4) == "Gold" then
+				keep[i] = fitLine(string.format("Gold (+%d Gold)", x.Gold))
+			end
+		end
+	end
 
 	return { Keep = keep, Reset = resetLines, Gain = gain }
+end
+
+--[[ claude-bud JOB 33 pacing (RebirthConfig.LiveFor "Pacing"): later rebirths ask for a higher level, so each life takes
+	longer than the one before even with the bigger cash multiplier and starting cash (tools/sim/rebirth_pacing_sim.py).
+	MinLevelFor(p) = MinLevelToPrestige + MinLevelPerPrestige * p, at most MinLevelMax. ]]
+PrestigeConfig.MinLevelPerPrestige = 4 -- claude-bud JOB 33: tools/sim/rebirth_pacing_sim.py (2 still let life 2 run faster than life 1)
+PrestigeConfig.MinLevelMax = 90
+
+function PrestigeConfig.MinLevelFor(prestige: number, pacingLive: boolean): number
+	local base = PrestigeConfig.MinLevelToPrestige
+	if not pacingLive then
+		return base
+	end
+	local p = math.max(0, math.floor(tonumber(prestige) or 0))
+	return math.min(PrestigeConfig.MinLevelMax, base + PrestigeConfig.MinLevelPerPrestige * p)
+end
+
+-- claude-bud JOB 33: the next `n` rebirths after `prestige`, one short line each ("R4  Drone Bay  Missile Boat"),
+-- from the zones (RebirthConfig.Zones) and the unlock track. Display only.
+function PrestigeConfig.NextRebirths(prestige: number, n: number, zoneNames: { [number]: string }?): { string }
+	local out: { string } = {}
+	local p = math.max(0, math.floor(tonumber(prestige) or 0))
+	for r = p + 1, math.min(PrestigeConfig.MaxPrestige, p + 12) do
+		if #out >= n then
+			break
+		end
+		local bits: { string } = {}
+		if zoneNames and zoneNames[r] then
+			table.insert(bits, zoneNames[r])
+		end
+		for _, u in ipairs(PrestigeConfig.RebirthUnlocks) do
+			if u.AtPrestige == r then
+				local name = string.gsub(string.gsub(u.DisplayName or u.Flag, " %(owned%)", ""), " %(gun%)", "")
+				table.insert(bits, name)
+			end
+		end
+		if #bits > 0 then
+			table.insert(out, fitLine(string.format("R%d  %s", r, table.concat(bits, "  "))))
+		end
+	end
+	return out
 end
 
 return PrestigeConfig

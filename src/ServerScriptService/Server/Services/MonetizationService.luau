@@ -12,7 +12,7 @@
 	a whitelisted `source` on RequestPurchase*. Offers: none before the tutorial is complete, the Starter Pack gate
 	TrySoftOfferStarterBundle (TutorialService schedules it), no Speed Boost / death Cash Mega pop-ups, D8 budget.
 	Owner's 11 features, lane M (spec_f11 F7 / F8): SpeedMultFor (the highest WalkSpeedMult among the speed SKUs the
-	player owns: Speed Pass x1.15, Speed Boost x1.25; never multiplied together), re-applied on respawn, on load and
+	player owns: Speed Pass x1.5, Speed Boost x2 (v133; v126 was x1.4 / x1.6); never multiplied together), re-applied on respawn, on load and
 	when a speed pass flips to owned; TryDeathSpeedOffer (the one death offer, MonetizationConfig.DeathSpeedOffer).
 	The Keep-Base Rebirth receipt needs no branch of its own: CounterGrants.GrantKeepBaseRebirths banks the token,
 	it is saved before PurchaseGranted, and PrestigeService runs the rebirth from OnGranted (never in the receipt).
@@ -25,10 +25,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local ShopOverhaulConfig = require(Shared.Configs.ShopOverhaulConfig) -- claude-bud JOB 36 (owner-first)
 local DevConfig = require(Shared.Configs.DevConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local OfferLedger = require(script.Parent.Parent.Modules.OfferLedger) -- Code Bot v153: shown-confirmed soft offers
+local LivePrices = require(Shared.Util.LivePrices) -- Code Bot v156: the real Roblox price / name on every offer
 
 local MonetizationService = {}
 
@@ -72,6 +75,7 @@ type GrantEvent = {
 	Entitlements: { string },
 	Counters: { [string]: number }, -- profile field -> amount added (e.g. Nukes = 3)
 	CurrencySpent: number,
+	PerMinBucket: string?, -- claude-bud JOB 42: the buyer's income bucket on a time pack (analytics)
 	Source: string,
 	FirstPurchase: boolean,
 	At: number, -- os.clock() of the grant (prunes stale pending events)
@@ -90,10 +94,20 @@ local passCacheFilled: { [number]: boolean } = {}
 -- D8 session soft-offer budget, and the session start used by the tutorial quiet window
 local softOffersClaimed: { [number]: number } = {}
 local sessionStartAt: { [number]: number } = {}
+-- Code Bot v153: soft offers sent but not yet confirmed shown by the client (MonetizationConfig.FirstOffer)
+local offerLedger = OfferLedger.new({
+	AckTimeoutSeconds = tonumber(((MonetizationConfig :: any).FirstOffer or {}).AckTimeoutSeconds) or 100,
+	RequeueSeconds = tonumber(((MonetizationConfig :: any).FirstOffer or {}).RequeueSeconds) or 45,
+	MaxSendsPerSession = tonumber(((MonetizationConfig :: any).FirstOffer or {}).MaxSendsPerSession) or 4,
+})
+local firstOfferToken: { [number]: number } = {} -- userId -> the pending ScheduleFirstOffer run (one at a time)
+local firstOfferSeq = 0
 -- F8: the death speed offer was sent this session (userId -> true; cleared on PlayerRemoving)
 local deathSpeedSent: { [number]: boolean } = {}
 -- F8: sanity cap on a WalkSpeedMult config value (a typo must never launch players across the map)
-local MAX_WALK_SPEED_MULT = 2
+-- claude-bud JOB 40: the sanity cap lives in config now (MonetizationConfig.MaxWalkSpeedMult 2.5 = 40: the x2.5 Speed
+-- Boost fits; today's x1.5 / x2 are unchanged under it). v133 was a local 2.0; v126 1.75.
+local MAX_WALK_SPEED_MULT = tonumber((MonetizationConfig :: any).MaxWalkSpeedMult) or 2.0
 
 -- Whole number >= 0; junk (nil, strings, NaN, inf, negatives) becomes 0.
 local function nonNegInt(value: any): number
@@ -115,15 +129,60 @@ local function setEntitlementAttr(player: Player, key: any)
 	end)
 end
 
+-- Code Bot v153: MonetizationConfig.FirstOffer (nil when off)
+local function firstOfferCfg(): any?
+	local f = (MonetizationConfig :: any).FirstOffer
+	if typeof(f) == "table" and f.Enabled == true then
+		return f
+	end
+	return nil
+end
+
+--[[ Code Bot v153: seconds until ClaimSoftOfferSlot could succeed for this player (0 = now), or nil when it never
+	will this session (the session cap is spent). Never yields; claims nothing. ]]
+function MonetizationService.SoftOfferSlotWait(player: Player): number?
+	if not player then
+		return nil
+	end
+	local cfg = MonetizationConfig :: any
+	local now = os.clock()
+	local uid = player.UserId
+	local maxPerSession = tonumber(cfg.SoftOfferSessionMax)
+	if maxPerSession and (softOffersClaimed[uid] or 0) >= maxPerSession then
+		return nil
+	end
+	local wait = 0
+	local first = firstOfferCfg()
+	if first then
+		local started = sessionStartAt[uid]
+		local quiet = tonumber(first.AtPlaySeconds) or 120
+		wait = if started == nil then quiet else math.max(0, quiet - (now - started))
+	end
+	local cd = tonumber(cfg.SoftOfferSessionCooldownSeconds) or 60
+	local last = lastSoftOfferAt[uid]
+	if last ~= nil then
+		wait = math.max(wait, cd - (now - last))
+	end
+	return math.max(0, wait)
+end
+
 function MonetizationService.ClaimSoftOfferSlot(player: Player): boolean
 	if not player then
 		return false
 	end
 	local cfg = MonetizationConfig :: any
 	local now = os.clock()
+	local first = firstOfferCfg()
+	if first then
+		-- Code Bot v153: the quiet window is the first FirstOffer.AtPlaySeconds (120 s) of the session, whatever the
+		-- tutorial state (it was: none until the tutorial was done, or 900 s for players who never finish it)
+		local started = sessionStartAt[player.UserId]
+		if started == nil or now - started < (tonumber(first.AtPlaySeconds) or 120) then
+			return false
+		end
 	-- v71 money (M1): no pop-ups during the tutorial (the Starter Pack offer comes right after it). A player who
 	-- never finishes it becomes offerable after SoftOfferQuietMaxSeconds of play this session.
-	if cfg.SoftOfferQuietUntilTutorialComplete == true and DataService then
+	elseif cfg.SoftOfferQuietUntilTutorialComplete == true and DataService then
 		local profile = DataService.GetProfile(player)
 		if profile and profile.TutorialComplete ~= true then
 			local started = sessionStartAt[player.UserId]
@@ -146,6 +205,32 @@ function MonetizationService.ClaimSoftOfferSlot(player: Player): boolean
 	lastSoftOfferAt[player.UserId] = now
 	softOffersClaimed[player.UserId] = (softOffersClaimed[player.UserId] or 0) + 1
 	return true
+end
+
+--[[ Code Bot v153: give back a slot whose offer the client never showed (OfferLedger drop). slot = { Prev, At } from
+	the claim: the cooldown clock goes back to Prev unless another offer claimed a slot since. ]]
+local function refundSoftOfferSlot(player: Player, slot: any)
+	if typeof(slot) ~= "table" then
+		return
+	end
+	local uid = player.UserId
+	softOffersClaimed[uid] = math.max(0, (softOffersClaimed[uid] or 0) - 1)
+	if lastSoftOfferAt[uid] == slot.At then
+		lastSoftOfferAt[uid] = slot.Prev
+	end
+end
+
+-- claude-bud JOB 41 part B: the same claim with a refund ticket, for an offer the client may report as never shown
+function MonetizationService.ClaimSoftOfferSlotRefundable(player: Player): { Prev: number?, At: number? }?
+	local prev = lastSoftOfferAt[player.UserId]
+	if not MonetizationService.ClaimSoftOfferSlot(player) then
+		return nil
+	end
+	return { Prev = prev, At = lastSoftOfferAt[player.UserId] }
+end
+
+function MonetizationService.RefundSoftOfferSlot(player: Player, slot: any)
+	refundSoftOfferSlot(player, slot)
 end
 
 --[[ v71 money (M1): listener registries. Each returns a function that removes the listener. Listeners run
@@ -180,6 +265,16 @@ local function runListener(label: string, fn: any, ...: any)
 	if not ok then
 		warn("[MonetizationService] " .. label .. " listener error:", err)
 	end
+end
+
+-- claude-bud JOB 36: the passes a bundle pass counts as owning (MonetizationConfig Implies, e.g. the War Chest), only
+-- while the shop overhaul is live for this player; {} otherwise
+local function impliedPasses(player: Player, passKey: string): { string }
+	local def: any = (MonetizationConfig.GamePasses :: any)[passKey]
+	if typeof(def) ~= "table" or typeof(def.Implies) ~= "table" or not ShopOverhaulConfig.LiveFor(player.UserId) then
+		return {}
+	end
+	return def.Implies
 end
 
 local function firePassOwned(player: Player, passKey: string, reason: string)
@@ -219,26 +314,12 @@ local function intentSource(userId: number, intentKey: string): string
 	return "none"
 end
 
---[[ v71 money (M1): Roblox's built-in AnalyticsService economy event (bound as RbxAnalytics: the in-house
-	AnalyticsService dep has the same name). Deferred and pcall'd: it can never block or fail a grant. ]]
+-- JOB 61: IAP economy events go through the one server AnalyticsService wrapper. It
+-- batches the call, applies the central transaction type/SKU policy, and excludes admins.
 local function logEconomySource(player: Player, currency: string, amount: number, endingBalance: number, sku: string)
-	if amount <= 0 then
-		return
-	end
+	if amount <= 0 or not AnalyticsService or not AnalyticsService.Economy then return end
 	task.defer(function()
-		pcall(function()
-			local RbxAnalytics: any = game:GetService("AnalyticsService")
-			local E: any = Enum
-			RbxAnalytics:LogEconomyEvent(
-				player,
-				E.AnalyticsEconomyFlowType.Source,
-				currency,
-				amount,
-				endingBalance,
-				E.AnalyticsEconomyTransactionType.IAP.Name,
-				sku
-			)
-		end)
+		pcall(AnalyticsService.Economy, player, "Source", amount, endingBalance, "devproduct", currency, sku)
 	end)
 end
 
@@ -377,6 +458,13 @@ function MonetizationService.RefreshGamePassCache(player: Player): { [string]: b
 			end
 			cache[passKey] = true
 			setEntitlementAttr(player, passKey)
+			for _, implied in ipairs(impliedPasses(player, passKey)) do -- claude-bud JOB 36: War Chest parts
+				if cache[implied] ~= true then
+					table.insert(flipped, implied)
+				end
+				cache[implied] = true
+				setEntitlementAttr(player, implied)
+			end
 		elseif cache[passKey] == nil then
 			cache[passKey] = false
 		end
@@ -425,6 +513,39 @@ local function ownsCached(player: Player, key: string): boolean
 	return typeof(profile) == "table" and typeof(profile.Entitlements) == "table" and profile.Entitlements[key] == true
 end
 
+-- Code Bot v180: the non-yielding ownership read for other services (RetentionService: the 2x Offline Cash pass)
+function MonetizationService.OwnsCached(player: Player, key: string): boolean
+	return ownsCached(player, key)
+end
+
+--[[ Code Bot v180: a pass is owned NOW. May yield (call it from its own thread, never inside a receipt). The session
+	cache first; when it does not say owned yet (the join check can still be running when the save loads), ONE
+	UserOwnsGamePassAsync for that pass; a confirmed owner goes into the cache + WE_Ent_<key> (display only). ]]
+function MonetizationService.OwnsGamePassNow(player: Player, passKey: string): boolean
+	if ownsCached(player, passKey) then
+		return true
+	end
+	local def = findGamePassByKey(passKey)
+	local passId = if def then tonumber(def.Id) else nil
+	if passId == nil or passId == 0 then
+		return false
+	end
+	local ok, owns = pcall(function()
+		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
+	end)
+	if not (ok and owns == true) or not player.Parent then
+		return false
+	end
+	local cache = gamePassCache[player.UserId]
+	if not cache then
+		cache = {}
+		gamePassCache[player.UserId] = cache
+	end
+	cache[passKey] = true
+	setEntitlementAttr(player, passKey)
+	return true
+end
+
 -- F8: a SKU key (game pass or Developer Product) is owned: its own key, or the entitlement its product grants
 local function ownsSkuCached(player: Player, key: string): boolean
 	if ownsCached(player, key) then
@@ -436,8 +557,9 @@ local function ownsSkuCached(player: Player, key: string): boolean
 end
 
 -- F8: WalkSpeedMult of one config entry (1 when missing or junk; capped at MAX_WALK_SPEED_MULT)
-local function walkSpeedMultOf(def: any): number
-	local m = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
+local function walkSpeedMultOf(def: any, userId: number?): number
+	-- claude-bud JOB 40: the SKU's V2 multiplier while SpeedV2 is live for the player (else WalkSpeedMult)
+	local m = if typeof(def) == "table" then (if userId ~= nil then (MonetizationConfig :: any).SpeedMultOf(def, userId) else tonumber(def.WalkSpeedMult)) else nil
 	if m == nil or m ~= m or m <= 1 then
 		return 1
 	end
@@ -458,22 +580,22 @@ local function isSpeedKey(key: string): boolean
 end
 
 --[[ F8 (owner's 11 features): the walk-speed multiplier for this player = the HIGHEST WalkSpeedMult among the speed
-	SKUs they own (GamePasses.ImpulseSpeed x1.15, DevProducts.SpeedBoost x1.25), never the product of them: owning
-	both gives x1.25. 1 when none is owned. A pass whose Id is 0 is never owned outside Studio mocks. Never yields. ]]
+	SKUs they own (GamePasses.ImpulseSpeed x1.5, DevProducts.SpeedBoost x2; v133), never the product of them: owning
+	both gives x2. 1 when none is owned. A pass whose Id is 0 is never owned outside Studio mocks. Never yields. ]]
 function MonetizationService.SpeedMultFor(player: Player): number
 	local best = 1
 	if typeof(player) ~= "Instance" or not player:IsA("Player") then
 		return best
 	end
 	for passKey, def in pairs(MonetizationConfig.GamePasses :: any) do
-		local m = walkSpeedMultOf(def)
+		local m = walkSpeedMultOf(def, player.UserId)
 		-- claude-bud: the Speed Pass counts only while MonetizationConfig.Rollout is live for this player
 		if m > best and MonetizationConfig.SkuLiveFor(player.UserId, passKey) and ownsCached(player, passKey) then
 			best = m
 		end
 	end
 	for productKey, def in pairs(MonetizationConfig.DevProducts :: any) do
-		local m = walkSpeedMultOf(def)
+		local m = walkSpeedMultOf(def, player.UserId)
 		if m > best and ownsSkuCached(player, productKey) then
 			best = m
 		end
@@ -482,6 +604,33 @@ function MonetizationService.SpeedMultFor(player: Player): number
 end
 
 -- SpeedBoost / Speed Pass: permanent move speed on the current character (F8: SpeedMultFor, the max of the owned SKUs)
+--[[ v126 (owner: "the Speed Boost barely makes me faster"): the paid multiplier is applied AFTER any other writer.
+	Today MonetizationService is the only server writer of a player's WalkSpeed (no armour / gun / combat slowdown).
+	The guard below keeps it that way for the future: when anything else writes this Humanoid's WalkSpeed (value X,
+	not the value this service wrote last) the paid speed becomes min(X x mult, cap) (0 stays 0, a slow stays a
+	slow but still mult x faster than an unpaid player under the same slow). Leaving a seat (vehicle exit) re-applies.
+	One guard per Humanoid (a respawn gets a fresh Humanoid and a fresh guard). ]]
+local speedGuarded: { [Humanoid]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local speedWritten: { [Humanoid]: number } = setmetatable({}, { __mode = "k" }) :: any
+local speedBase: { [Humanoid]: number } = setmetatable({}, { __mode = "k" }) :: any
+
+local function writePaidSpeed(player: Player, hum: Humanoid, base: number, who: string)
+	local mult = MonetizationService.SpeedMultFor(player)
+	if mult <= 1 then
+		return -- nothing owned: WalkSpeed stays what the game set
+	end
+	local GameConfig = require(Shared.Configs.GameConfig)
+	local default = tonumber(GameConfig.DefaultWalkSpeed) or 16
+	local want = math.min(math.max(0, base) * mult, default * MAX_WALK_SPEED_MULT)
+	speedBase[hum] = base
+	speedWritten[hum] = want
+	if math.abs(hum.WalkSpeed - want) < 0.01 then
+		return
+	end
+	-- v123 /movedebug: the tagged setter (the only server write to a player's WalkSpeed)
+	require(script.Parent.Parent.Modules.MoveDebug).SetWalkSpeed(hum, want, who)
+end
+
 local function applySpeedBoostToCharacter(player: Player)
 	local character = player.Character
 	if not character then
@@ -491,13 +640,32 @@ local function applySpeedBoostToCharacter(player: Player)
 	if not hum then
 		return
 	end
-	local mult = MonetizationService.SpeedMultFor(player)
-	if mult <= 1 then
+	if MonetizationService.SpeedMultFor(player) <= 1 then
 		return -- nothing owned: WalkSpeed stays the game default
 	end
 	local GameConfig = require(Shared.Configs.GameConfig)
-	local base = tonumber(GameConfig.DefaultWalkSpeed) or 16
-	hum.WalkSpeed = base * mult
+	local default = tonumber(GameConfig.DefaultWalkSpeed) or 16
+	writePaidSpeed(player, hum, speedBase[hum] or default, "MonetizationService.SpeedBoost")
+	if speedGuarded[hum] then
+		return
+	end
+	speedGuarded[hum] = true
+	-- another writer changed WalkSpeed: apply the paid multiplier on top of ITS value
+	hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+		local wrote = speedWritten[hum]
+		if wrote ~= nil and math.abs(hum.WalkSpeed - wrote) < 0.01 then
+			return -- our own write
+		end
+		if player.Parent and player.Character == character then
+			writePaidSpeed(player, hum, hum.WalkSpeed, "MonetizationService.SpeedBoost(after other writer)")
+		end
+	end)
+	-- vehicle / chair exit: re-apply (defensive; a seat does not change WalkSpeed today)
+	hum.Seated:Connect(function(active: boolean)
+		if not active and player.Parent and player.Character == character then
+			writePaidSpeed(player, hum, speedBase[hum] or default, "MonetizationService.SpeedBoost(seat exit)")
+		end
+	end)
 end
 
 function MonetizationService.SetMockGamePassOwned(player: Player, passKey: string, owned: boolean)
@@ -620,6 +788,9 @@ function MonetizationService.GetCashMultiplier(player: Player): number
 		or MonetizationService.PlayerOwnsGamePass(player, "VIP")
 	if vip and hasVip then
 		local bonus = tonumber(vip.CashBonusMult) or 0
+		if ShopOverhaulConfig.LiveFor(player.UserId) then
+			bonus = tonumber(ShopOverhaulConfig.Vip.CashBonusMult) or bonus -- claude-bud JOB 36: premium VIP +50 %
+		end
 		mult += bonus
 	end
 	local doubleCash = MonetizationConfig.GamePasses.DoubleCash
@@ -630,6 +801,43 @@ function MonetizationService.GetCashMultiplier(player: Player): number
 		mult *= m
 	end
 	return math.max(0, mult)
+end
+
+--[[ claude-bud JOB 36: the player's passive income in $ per minute, cash multipliers included (the base's passive tick
+	x EconomyService.GetCashMult "passive" / TickSeconds x 60). May yield once (a cold pass cache), like any ownership
+	lookup; 0 when unknown. Cash packs, the VIP crate and the Shop's live amounts use it. ]]
+-- claude-bud JOB 42: excludeTimed = leave out the TIMED multipliers (profile.CashBoost and the Double Cash event): the
+-- time packs' income ("4 hours of your cash" must not double while a code / Recruit Pack boost runs). Same function.
+function MonetizationService.PassivePerMin(player: Player, profile: any, excludeTimed: boolean?): number
+	if BaseService == nil or EconomyService == nil or profile == nil then
+		return 0
+	end
+	local okT, perTick = pcall(BaseService.ComputePassiveIncomePerTick, profile, player)
+	local okM, mult = pcall(EconomyService.GetCashMult, player, "passive")
+	local tick = math.max(1, tonumber((require(Shared.Configs.EconomyConfig) :: any).PassiveIncome.TickSeconds) or 5)
+	local t = if okT then tonumber(perTick) or 0 else 0
+	local m = if okM then tonumber(mult) or 1 else 1
+	if excludeTimed == true then
+		local okB, boost = pcall(function()
+			return EconomyService.CashBoostMult and EconomyService.CashBoostMult(profile) or 1
+		end)
+		local okE, ev = pcall(function()
+			local ES: any = require(script.Parent.EngagementService)
+			return ES.CashMult and ES.CashMult(player) or 1
+		end)
+		-- Code Bot v197: the DOUBLE WEEKEND (Modules/DoubleEvent) is timed too: GetCashMult "passive" includes it, so divide
+		-- it out like the code boost and the weekly event (Robux time packs / Recruit Pack must not double in the window;
+		-- income-scaled missions / chest / Day 7 / zone runs apply the event once at grant, not twice)
+		local okD, de = pcall(function()
+			return (require :: any)(script.Parent.Parent.Modules.DoubleEvent).CashMult(player, "passive")
+		end)
+		local b = if okB then tonumber(boost) or 1 else 1
+		local e = if okE then tonumber(ev) or 1 else 1
+		local d = if okD then tonumber(de) or 1 else 1
+		m = m / math.max(1, b) / math.max(1, e) / math.max(1, d)
+	end
+	local v = t * m / tick * 60
+	return if v == v and v > 0 and v < 1e12 then v else 0
 end
 
 function MonetizationService.GetXPMultiplier(player: Player): number
@@ -694,6 +902,14 @@ local function confirmPassPurchase(player: Player, passKey: string, passId: numb
 			-- purchase has no receipt, so the exact Robux amount is unknown)
 			local def = MonetizationConfig.GamePasses[passKey]
 			local price = nonNegInt(def and def.RobuxPrice)
+			-- claude-bud BOARDS: the real price (Roblox's PriceInRobux for this pass), the config price only as a fallback;
+			-- counted once, here, after UserOwnsGamePassAsync confirmed the purchase
+			local okP, info = pcall(function()
+				return MarketplaceService:GetProductInfo(passId, Enum.InfoType.GamePass)
+			end)
+			if okP and typeof(info) == "table" and tonumber((info :: any).PriceInRobux) then
+				price = nonNegInt((info :: any).PriceInRobux)
+			end
 			local source = intentSource(player.UserId, "GP:" .. passKey)
 			local profile = DataService and DataService.GetProfile(player)
 			local first = false
@@ -704,6 +920,7 @@ local function confirmPassPurchase(player: Player, passKey: string, passId: numb
 			if AnalyticsService then
 				AnalyticsService.Log(AnalyticsConfig.Events.PASS_OWNED, player.UserId, {
 					key = passKey,
+					productKey = passKey, -- Code Bot v153: Custom "PassBought" (value = price, field = productKey)
 					price = price,
 					source = source,
 				})
@@ -712,6 +929,13 @@ local function confirmPassPurchase(player: Player, passKey: string, passId: numb
 				logFirstPurchase(player, profile, passKey)
 			end
 			firePassOwned(player, passKey, "purchase")
+			for _, implied in ipairs(impliedPasses(player, passKey)) do -- claude-bud JOB 36: War Chest parts
+				if cache[implied] ~= true then
+					cache[implied] = true
+					setEntitlementAttr(player, implied)
+					firePassOwned(player, implied, "purchase")
+				end
+			end
 		end
 	end)
 end
@@ -734,10 +958,23 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 	if typeof(player) ~= "Instance" or not player:IsA("Player") or not player.Parent or not DataService then
 		return nil
 	end
+	-- claude-bud JOB 41 part B: while the Recruit Pack offer is live for him it takes this pop-up slot (one starter
+	-- offer per profile); the StarterBundle row stays in the Shop
+	if (MonetizationConfig :: any).RecruitPackTakesStarterSlot(player.UserId) then -- Code Bot v166: live AND Id set
+		return nil
+	end
 	local bundle = starterBundleLive()
 	local profile = DataService.GetProfile(player)
-	if not bundle or not profile or profile.StarterBundleOffered == true or profile.TutorialComplete ~= true then
+	local first = firstOfferCfg()
+	-- Code Bot v153: with FirstOffer on the tutorial state no longer matters (the 120 s quiet window times it)
+	if not bundle or not profile or profile.StarterBundleOffered == true or (first == nil and profile.TutorialComplete ~= true) then
 		return nil
+	end
+	if first and offerLedger:IsPending(player.UserId, "StarterBundle") then
+		return true -- already out, waiting for the client's answer
+	end
+	if first and offerLedger:Exhausted(player.UserId, "StarterBundle") then
+		return nil -- every send this session was dropped: next session (the flag is still unset)
 	end
 	if MonetizationService.PlayerOwnsEntitlement(player, "StarterBundle") then
 		return nil
@@ -756,26 +993,181 @@ function MonetizationService.TrySoftOfferStarterBundle(player: Player, reason: s
 			return nil -- the limited window is over: never offered again
 		end
 	end
+	local prevSlotAt = lastSoftOfferAt[player.UserId]
 	if not MonetizationService.ClaimSoftOfferSlot(player) then
 		return false
 	end
-	profile.StarterBundleOffered = true
-	DataService.MarkDirty(player)
+	local ackId: number? = nil
+	if first then
+		-- Code Bot v153 (root cause of "the Starter Pack is lost for good"): NOT marked offered here any more. The
+		-- client often held this card (driving the 4x4 right after the tutorial) and dropped it 60 s later, while
+		-- the saved flag already said "offered". The flag is set when the client answers "shown" (onOfferResult);
+		-- a drop / refusal / no answer re-queues it.
+		ackId = offerLedger:Sent(player.UserId, "StarterBundle", os.clock(), { Prev = prevSlotAt, At = lastSoftOfferAt[player.UserId] })
+		local myAck = ackId
+		task.delay(tonumber(first.AckTimeoutSeconds) or 100, function()
+			MonetizationService._OfferResult(player, "StarterBundle", "timeout", myAck)
+		end)
+	else
+		profile.StarterBundleOffered = true
+		DataService.MarkDirty(player)
+	end
 	if RemoteSetup then
 		local remote = RemoteSetup.Get(Constants.RemoteNames.StarterBundleOffer)
 		if remote and remote:IsA("RemoteEvent") then
 			(remote :: RemoteEvent):FireClient(player, {
 				ProductKey = "StarterBundle",
 				ProductId = bundle.Id,
-				DisplayName = bundle.DisplayName or "Starter Pack",
-				RobuxPrice = bundle.RobuxPrice,
+				DisplayName = LivePrices.Name("DevProduct", "StarterBundle"), -- Code Bot v156: the Roblox product name
+				RobuxPrice = LivePrices.Price("DevProduct", "StarterBundle"), -- Code Bot v156: the real price (was config 149)
 				Reason = if typeof(reason) == "string" then reason else "session",
 				EndsUnix = limitedEnds, -- claude-bud JOB 5d: the toast shows the time left (nil = no limit)
+				AckId = ackId, -- Code Bot v153: echo back on OfferResult ("shown" / "dropped" / "refused")
+				First = ackId ~= nil, -- Code Bot v153: the first offer: not held for the tutorial card
 			})
 		end
 	end
 	-- (no companion Info line: the client offer toast carries the offer — HUD v70 spec §4.2)
 	return true
+end
+
+--[[ Code Bot v153: the client's answer about a confirmed-shown offer (OfferResult remote), or "timeout" from the
+	send's own AckTimeoutSeconds timer. "shown" = mark it (StarterBundleOffered, saved) + OFFER_SHOWN; "dropped" /
+	"refused" / "timeout" = refund the soft-offer slot and re-queue RequeueSeconds later (up to MaxSendsPerSession
+	sends; then it waits for the next session, still unmarked). Only keys the ledger has a pending send for count. ]]
+function MonetizationService._OfferResult(player: Player, key: string, result: string, ackId: number?)
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return
+	end
+	local action, slot = offerLedger:Result(player.UserId, key, result, ackId, os.clock())
+	if action == "ignore" then
+		return
+	end
+	if action == "mark" then
+		local profile = DataService and DataService.GetProfile(player)
+		if profile and key == "StarterBundle" then
+			profile.StarterBundleOffered = true
+			DataService.MarkDirty(player)
+		end
+		if AnalyticsService then
+			AnalyticsService.Log(AnalyticsConfig.Events.OFFER_SHOWN, player.UserId, { productKey = key, key = key })
+		end
+		return
+	end
+	-- dropped / refused / timeout: the player never saw it
+	if player.Parent then
+		refundSoftOfferSlot(player, slot)
+	end
+	if AnalyticsService then
+		AnalyticsService.Log(AnalyticsConfig.Events.OFFER_RESULT, player.UserId, { productKey = key, key = key, result = result, requeued = action == "requeue" })
+	end
+	if action == "requeue" and player.Parent and key == "StarterBundle" then
+		local first = firstOfferCfg()
+		-- the new run starts after the wait (the answer can land while the sending run is still unwinding)
+		task.delay(if first then tonumber(first.RequeueSeconds) or 45 else 45, function()
+			if player.Parent then
+				MonetizationService.ScheduleFirstOffer(player, "requeue", 0)
+			end
+		end)
+	end
+end
+
+-- Code Bot v153: sitting in any seat (driving or riding)
+local function seatedNow(player: Player): boolean
+	local char = player.Character
+	local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+	return hum ~= nil and hum.SeatPart ~= nil
+end
+
+-- Code Bot v153: FirstOffer.FallbackKeys: the best cheap offer when the Starter Pack is not wanted (once per profile;
+-- the existing one-shot TrySoftOffer* gates decide). Returns true when one was sent.
+local function tryFallbackOffer(player: Player, first: any): boolean
+	local keys = if typeof(first.FallbackKeys) == "table" then first.FallbackKeys else {}
+	for _, key in ipairs(keys) do
+		if typeof(key) == "string" and MonetizationConfig.SkuLiveFor(player.UserId, key) and not ownsSkuCached(player, key) then
+			if key == "SpeedBoost" then
+				local profile = DataService and DataService.GetProfile(player)
+				if profile and profile.SpeedBoostOffered ~= true then
+					MonetizationService.TrySoftOfferSpeedBoost(player, "first_offer")
+					return profile.SpeedBoostOffered == true
+				end
+			end
+		end
+	end
+	return false
+end
+
+--[[ Code Bot v153: THE first-offer schedule (MonetizationConfig.FirstOffer). TutorialService calls it at load for
+	every player (delay AtPlaySeconds) and when the tutorial ends; OfferResult re-queues through it. One run per
+	player at a time (a second call while one waits is ignored). Each attempt: wait while seated (SeatedWaitSeconds
+	in total), then TrySoftOfferStarterBundle: true = out (the ledger takes over), false = slot busy / quiet window
+	(wait exactly until it frees, MaxSlotWaits times), nil = not wanted (reason "first_offer": the fallback, once). ]]
+function MonetizationService.ScheduleFirstOffer(player: Player, reason: string, delaySec: number?)
+	local first = firstOfferCfg()
+	if not first or typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return
+	end
+	-- claude-bud JOB 41 part B: the Recruit Pack replaces the first offer (and its fallback) for players it is live for
+	if (MonetizationConfig :: any).RecruitPackTakesStarterSlot(player.UserId) then -- Code Bot v166: live AND Id set
+		return
+	end
+	local uid = player.UserId
+	if firstOfferToken[uid] ~= nil then
+		return
+	end
+	firstOfferSeq += 1
+	local my = firstOfferSeq
+	firstOfferToken[uid] = my
+	local seatedLeft = math.max(0, tonumber(first.SeatedWaitSeconds) or 30)
+	local seatedStep = math.max(0.25, tonumber(first.SeatedCheckSeconds) or 1)
+	local maxWaits = math.max(0, tonumber(first.MaxSlotWaits) or 6)
+	local function attempt(n: number)
+		if firstOfferToken[uid] ~= my then
+			return
+		end
+		if not player.Parent then
+			firstOfferToken[uid] = nil
+			return
+		end
+		if seatedLeft > 0 and seatedNow(player) then
+			seatedLeft -= seatedStep
+			task.delay(seatedStep, attempt, n)
+			return
+		end
+		local ok, res = pcall(MonetizationService.TrySoftOfferStarterBundle, player, reason)
+		if firstOfferToken[uid] ~= my then
+			return
+		end
+		if not ok then
+			warn("[MonetizationService] first offer failed:", res)
+			firstOfferToken[uid] = nil
+			return
+		end
+		if res == true then
+			firstOfferToken[uid] = nil
+			return
+		end
+		if res == nil then
+			firstOfferToken[uid] = nil
+			if reason == "first_offer" then
+				pcall(tryFallbackOffer, player, first)
+			end
+			return
+		end
+		-- false: the quiet window or another offer's cooldown: wait exactly until the slot frees
+		local wait = MonetizationService.SoftOfferSlotWait(player)
+		if wait == nil or n > maxWaits then
+			firstOfferToken[uid] = nil
+			return
+		end
+		task.delay(math.max(1, wait + 0.5), attempt, n + 1)
+	end
+	task.delay(math.max(0, tonumber(delaySec) or 0), attempt, 1)
+end
+
+-- test hook (tools/sim/run_first_offer_test.py reads the ledger through the pure module; this exposes the live one)
+function MonetizationService._Ledger(): any
+	return offerLedger
 end
 
 --[[ v71 money (M1, D2): players who bought the old 249 R$ Starter Bundle get Auto Collect once. Only onto a
@@ -833,20 +1225,38 @@ function MonetizationService.OfferMoment(player: Player, moment: string)
 	if moment == "rebirth" and place.AfterRebirth == true then
 		local dc: any = MonetizationConfig.GamePasses.DoubleCash
 		if dc and (tonumber(dc.Id) or 0) ~= 0 and not ownsCached(player, "DoubleCash") then
-			kind, key, title, cta = "GamePass", "DoubleCash", "Rebuild faster: 2x Cash", tostring(dc.RobuxPrice) .. " R$"
+			kind, key, title, cta = "GamePass", "DoubleCash", "Rebuild faster: 2x Cash", LivePrices.Cta("GamePass", "DoubleCash")
+		elseif ShopOverhaulConfig.TimePacksShown(player.UserId) then
+			-- claude-bud JOB 42: "Fresh start boost" sells the 1 HOUR OF CASH pack (its live amount, timed boosts left out)
+			local prof = DataService and DataService.GetProfile(player)
+			local boost = ShopOverhaulConfig.TimePackAmount("Cash1h", MonetizationService.PassivePerMin(player, prof, ShopOverhaulConfig.TimePacks.ExcludeTimedBoosts == true)) or 0
+			local s = tostring(math.floor(boost)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+			kind, key, title, cta = "DevProduct", "Cash1h", "Fresh start boost: $" .. s, LivePrices.Cta("DevProduct", "Cash1h")
 		else
 			local cl: any = MonetizationConfig.DevProducts.CashLarge
 			if cl and (tonumber(cl.Id) or 0) ~= 0 then
-				kind, key, title, cta = "DevProduct", "CashLarge", "Fresh start boost: $200,000", tostring(cl.RobuxPrice) .. " R$"
+				local boost = 200000
+				if ShopOverhaulConfig.LiveFor(player.UserId) then -- claude-bud JOB 36: the live pack amount
+					local prof = DataService and DataService.GetProfile(player)
+					boost = ShopOverhaulConfig.CashPackAmount("CashLarge", MonetizationService.PassivePerMin(player, prof, true)) or boost
+				end
+				local s = tostring(math.floor(boost)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+				kind, key, title, cta = "DevProduct", "CashLarge", "Fresh start boost: $" .. s, LivePrices.Cta("DevProduct", "CashLarge")
 			end
+		end
+	elseif moment == "army" and place.ArmyWiped == true and ShopOverhaulConfig.LiveFor(player.UserId) then
+		-- claude-bud JOB 36: the army-wiped offer sells Bigger Army (the pass); Army Expansion left the Shop
+		local ba: any = (MonetizationConfig.GamePasses :: any)[ShopOverhaulConfig.ArmyWipedPass]
+		if ba and (tonumber(ba.Id) or 0) ~= 0 and not ownsCached(player, ShopOverhaulConfig.ArmyWipedPass) then
+			kind, key, title, cta = "GamePass", ShopOverhaulConfig.ArmyWipedPass, "Army down! Bigger Army: +10 soldiers", LivePrices.Cta("GamePass", ShopOverhaulConfig.ArmyWipedPass)
 		end
 	elseif moment == "army" and place.ArmyWiped == true then
 		local rf: any = (MonetizationConfig.DevProducts :: any).SoldierRefill
 		local ex: any = (MonetizationConfig.DevProducts :: any).ExtraSoldierSlot
 		if rf and (tonumber(rf.Id) or 0) ~= 0 and MonetizationConfig.SkuLiveFor(player.UserId, "SoldierRefill") then
-			kind, key, title, cta = "DevProduct", "SoldierRefill", "Army down! Refill instantly", tostring(rf.RobuxPrice) .. " R$"
+			kind, key, title, cta = "DevProduct", "SoldierRefill", "Army down! Refill instantly", LivePrices.Cta("DevProduct", "SoldierRefill")
 		elseif ex and (tonumber(ex.Id) or 0) ~= 0 and not ownsCached(player, "ExtraSoldierSlot") then
-			kind, key, title, cta = "DevProduct", "ExtraSoldierSlot", "Bigger army: +10 soldiers", tostring(ex.RobuxPrice) .. " R$"
+			kind, key, title, cta = "DevProduct", "ExtraSoldierSlot", "Bigger army: +10 soldiers", LivePrices.Cta("DevProduct", "ExtraSoldierSlot")
 		end
 	end
 	if key == nil or not MonetizationService.ClaimSoftOfferSlot(player) then
@@ -938,6 +1348,9 @@ function MonetizationService.ApplyPassPerks(player: Player)
 	local vip = MonetizationConfig.VIPPerksLiveFor(player.UserId) and ownsCached(player, "VIP")
 	pcall(function()
 		player:SetAttribute("WE_VIPTag", if vip then true else nil)
+		-- claude-bud JOB 36: the premium VIP's gold chat name (ShopOverhaulConfig.Vip.GoldName, owner-first)
+		local gold = vip and ShopOverhaulConfig.Vip.GoldName == true and ShopOverhaulConfig.LiveFor(player.UserId)
+		player:SetAttribute("WE_VIPGold", if gold then true else nil)
 	end)
 end
 
@@ -955,11 +1368,16 @@ function MonetizationService.Init(deps: { [string]: any })
 	MarketplaceService.ProcessReceipt = function(receiptInfo)
 		return MonetizationService.ProcessReceipt(receiptInfo)
 	end
+	-- Code Bot v156: the real Robux prices / names (GetProductInfo, cached, published on ReplicatedStorage)
+	LivePrices.StartServer()
 
 	-- Client may fire to log intent; grants still ONLY happen in ProcessReceipt
 	local shopRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseDevProduct) :: RemoteEvent
 	-- v71 money (M1): optional 2nd arg `source` (where the prompt came from), whitelisted; analytics only
 	shopRemote.OnServerEvent:Connect(function(player: Player, productKey: any, rawSource: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPurchaseDevProduct", productKey, rawSource) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "shop_prompt", 2, 3) then
 			return
 		end
@@ -983,6 +1401,7 @@ function MonetizationService.Init(deps: { [string]: any })
 			AnalyticsService.Log(AnalyticsConfig.Events.SHOP_PROMPT, player.UserId, {
 				kind = "DevProduct",
 				key = productKey,
+				productKey = productKey, -- Code Bot v153: AnalyticsConfig Custom ProductPrompted reads productKey
 				productId = def.Id,
 				source = source,
 			})
@@ -995,6 +1414,9 @@ function MonetizationService.Init(deps: { [string]: any })
 
 	local passRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseGamePass) :: RemoteEvent
 	passRemote.OnServerEvent:Connect(function(player: Player, passKey: any, rawSource: any)
+		if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestPurchaseGamePass", passKey, rawSource) then -- claude-bud JOB 15: rate ceiling + argument schema
+			return
+		end
 		if not RateLimitService.Allow(player, "shop_pass_prompt", 2, 3) then
 			return
 		end
@@ -1017,6 +1439,7 @@ function MonetizationService.Init(deps: { [string]: any })
 			AnalyticsService.Log(AnalyticsConfig.Events.SHOP_PROMPT, player.UserId, {
 				kind = "GamePass",
 				key = passKey,
+				productKey = passKey, -- Code Bot v153: AnalyticsConfig Custom ProductPrompted reads productKey
 				productId = def.Id,
 				source = source,
 			})
@@ -1056,6 +1479,9 @@ function MonetizationService.Init(deps: { [string]: any })
 		local groupRemote = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.RequestGroupReward)
 		if groupRemote and groupRemote:IsA("RemoteEvent") then
 			(groupRemote :: RemoteEvent).OnServerEvent:Connect(function(player: Player)
+				if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "RequestGroupReward") then -- claude-bud JOB 15: rate ceiling + argument schema
+					return
+				end
 				if RateLimitService and not RateLimitService.Allow(player, "group_reward", 1, 2) then
 					return
 				end
@@ -1070,6 +1496,15 @@ function MonetizationService.Init(deps: { [string]: any })
 	MonetizationService.OnGranted(function(player: Player, productKey: string)
 		if productKey == "SoldierRefill" and SoldierService and SoldierService.ConsumeRefills then
 			SoldierService.ConsumeRefills(player)
+		end
+		-- Code Bot v221: the saved airstrike charge drops at once and takes the Central Plaza (PlazaAirstrikeTakeover)
+		if productKey == "PlazaAirstrike" then
+			local okP, pa = pcall(function(): any
+				return require(script.Parent.Parent.Modules.PlazaAirstrike)
+			end)
+			if okP and pa and pa.FireFromPurchase then
+				pa.FireFromPurchase(player)
+			end
 		end
 	end)
 	do
@@ -1166,7 +1601,28 @@ function MonetizationService.Init(deps: { [string]: any })
 		sessionStartAt[player.UserId] = nil
 		purchaseIntents[player.UserId] = nil
 		deathSpeedSent[player.UserId] = nil -- F8: the next session may get one death offer again
+		offerLedger:Forget(player.UserId) -- Code Bot v153
+		firstOfferToken[player.UserId] = nil
 	end)
+
+	-- Code Bot v153: the client confirms a soft offer SHOWED (or was dropped / refused unseen): OfferLedger
+	do
+		local resultRemote = RemoteSetup.Get(Constants.RemoteNames.OfferResult)
+		if resultRemote and resultRemote:IsA("RemoteEvent") then
+			(resultRemote :: RemoteEvent).OnServerEvent:Connect(function(player: Player, key: any, result: any, ackId: any)
+				if not require(script.Parent.Parent.Modules.RemoteGate).Check(player, "OfferResult", key, result, ackId) then
+					return
+				end
+				if typeof(key) ~= "string" or typeof(result) ~= "string" or (ackId ~= nil and typeof(ackId) ~= "number") then
+					return
+				end
+				if RateLimitService and not RateLimitService.Allow(player, "offer_result", 2, 4) then
+					return
+				end
+				MonetizationService._OfferResult(player, key, result, ackId)
+			end)
+		end
+	end
 
 	-- F8: a speed pass that flips to owned (the join check, a retried check or a confirmed purchase) applies at once
 	MonetizationService.OnPassOwned(function(player: Player, passKey: string)
@@ -1284,7 +1740,15 @@ end
 	change the receipt decision (listeners and economy events are deferred + pcall'd). ]]
 local function afterGrantSaved(player: Player, profile: any, event: GrantEvent)
 	if NotificationService then
-		NotificationService.Notify(player, "Purchase granted: " .. event.DisplayName, "Reward")
+		local tp = ShopOverhaulConfig.TimePacks.Packs[event.ProductKey]
+		if tp then
+			-- claude-bud JOB 42: the real granted number ("+$1,234,567 (4 hours of cash)")
+			local s = tostring(math.floor(event.Cash))
+			local commas = (s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
+			NotificationService.Notify(player, string.format("+$%s (%s)", commas, tp.Label), "Reward")
+		else
+			NotificationService.Notify(player, "Purchase granted: " .. event.DisplayName, "Reward")
+		end
 	end
 	if AnalyticsService then
 		local firstJoin = if typeof(profile) == "table" then nonNegInt(profile.FirstJoinUnix) else 0
@@ -1293,6 +1757,7 @@ local function afterGrantSaved(player: Player, profile: any, event: GrantEvent)
 			productKey = event.ProductKey,
 			receiptId = event.ReceiptId,
 			currencySpent = event.CurrencySpent,
+			perMinBucket = event.PerMinBucket, -- claude-bud JOB 42 (time packs only)
 			source = event.Source,
 			firstPurchase = event.FirstPurchase,
 			daysSinceFirstJoin = if firstJoin > 0 then math.max(0, math.floor((os.time() - firstJoin) / 86400)) else nil,
@@ -1403,6 +1868,43 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 	-- v71 money (M1): the whole grant is computed here, before any mutation. StarterFallbackCash: a buyer who
 	-- already owns Auto Collect gets that much more Cash (the Auto Collect grant would add nothing).
 	local cashGrant = nonNegInt(product.Cash)
+	-- claude-bud JOB 36: a cash pack scales with the buyer's passive income (ShopOverhaulConfig.CashPacks, owner-first):
+	-- max(Floor, Minutes x $/min). The lookup may yield, so it is here, before any mutation, and re-checked after.
+	if ShopOverhaulConfig.CashPacks[productKey :: string] ~= nil and ShopOverhaulConfig.LiveFor(player.UserId) then
+		-- Code Bot v197: excludeTimed (code boost, weekly event, DOUBLE WEEKEND left out: the multiplier-exempt pack never doubles)
+		local perMin = MonetizationService.PassivePerMin(player, profile, true)
+		if not player.Parent or DataService.GetProfile(player) ~= profile then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		cashGrant = nonNegInt(ShopOverhaulConfig.CashPackAmount(productKey :: string, perMin))
+	end
+	-- claude-bud JOB 42: a TIME pack = max(Floor, Minutes x his income at RECEIPT time), timed boosts left out. For ANY
+	-- receipt of a time-pack Id (a paid receipt always gets the real amount); the lookup may yield, so it is here,
+	-- before any mutation, and re-checked after (the same rule as the JOB 36 block above)
+	local timePerMin: number? = nil
+	if ShopOverhaulConfig.TimePacks.Packs[productKey :: string] ~= nil then
+		local perMin = MonetizationService.PassivePerMin(player, profile, ShopOverhaulConfig.TimePacks.ExcludeTimedBoosts == true)
+		if not player.Parent or DataService.GetProfile(player) ~= profile then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		timePerMin = perMin
+		cashGrant = nonNegInt(ShopOverhaulConfig.TimePackAmount(productKey :: string, perMin))
+	end
+	-- claude-bud JOB 41 part B: the Recruit Pack's cash = RecruitPackOffer.IncomeMinutes of his income, clamped
+	-- ($25k..$150k); computed here (the lookup may yield) and re-checked, before any mutation
+	if productKey == "RecruitPack" then
+		-- claude-bud JOB 42 part C: while TimePacks is live for him, the cash = the 30-min pack (CashFromTimePack, the same
+		-- income lookup with timed boosts left out); else the JOB 41 clamp exactly
+		local MCx: any = MonetizationConfig
+		local useTime = MCx.RecruitPackUsesTimePack(player.UserId)
+		local perMin = MonetizationService.PassivePerMin(player, profile, useTime and ShopOverhaulConfig.TimePacks.ExcludeTimedBoosts == true)
+		if not player.Parent or DataService.GetProfile(player) ~= profile then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		cashGrant = nonNegInt(MCx.RecruitPackCashFor(player.UserId, perMin))
+		print(string.format("[RECRUIT] receipt %s %s: cash $%d (perMin %.0f, %s)", tostring(receiptId), player.Name, cashGrant, perMin,
+			if useTime then "the Cash30m time pack" else "the JOB 41 clamp")) -- claude-bud JOB 45 instrumentation
+	end
 	local fallbackCash = nonNegInt(product.StarterFallbackCash)
 	if fallbackCash > 0 then
 		if MonetizationService.PlayerOwnsEntitlement(player, "AutoCollect") then
@@ -1426,6 +1928,7 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 		Entitlements = entitlements,
 		Counters = {},
 		CurrencySpent = nonNegInt(receiptInfo.CurrencySpent),
+		PerMinBucket = if timePerMin then ShopOverhaulConfig.PerMinBucket(timePerMin) else nil, -- claude-bud JOB 42
 		Source = intentSource(player.UserId, "DP:" .. (productKey :: string)),
 		FirstPurchase = false,
 		At = os.clock(),
@@ -1438,6 +1941,16 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 			return Enum.ProductPurchaseDecision.NotProcessedYet
 		end
 	end
+	-- claude-bud JOB 49 C: the Robux mission reroll (DevProducts.MissionReroll: Id 0, no price = never sold until Shaun
+	-- approves one). A token only; MissionService.Reroll spends it (never a reward).
+	if (product :: any).GrantsMissionReroll == true then
+		local okR, granted = pcall(function(): any
+			return (require :: any)(script.Parent.MissionService).GrantRerollToken(player)
+		end)
+		if not okR or granted ~= true then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+	end
 	if cashGrant > 0 then
 		EconomyService.AddCash(player, cashGrant, "devproduct")
 	end
@@ -1447,6 +1960,59 @@ local function processReceipt(receiptInfo: any, receiptId: string): Enum.Product
 	-- DevProduct entitlement flags (AutoCollect / DoubleCash / VIP / StarterBundle + AutoCollect / etc.)
 	for _, ent in ipairs(entitlements) do
 		MonetizationService.GrantEntitlement(player, ent)
+	end
+	-- claude-bud JOB 66: the 5 R$ products. Soldiers through SoldierService.GrantFree (within the army cap, no yield),
+	-- the starter cash (worked out from his income, "devproduct": never multiplied), the 10-minute 2x boost through the
+	-- ONE boost path (CodesService.GrantCashBoost: extends a running boost). All before markProcessed, like every grant.
+	if product.GrantSoldiers then
+		local okS, SS = pcall(function(): any
+			return require(script.Parent.SoldierService)
+		end)
+		if okS and SS and SS.GrantFree then
+			local okG, n = pcall(SS.GrantFree, player, math.floor(tonumber(product.GrantSoldiers) or 0), "starter_pack")
+			print(string.format("[STARTER5] %s soldiers +%s", player.Name, tostring(if okG then n else "FAILED")))
+		end
+	end
+	if product.StarterCash then
+		local perMin = if MonetizationService.PassivePerMin then MonetizationService.PassivePerMin(player, profile, true) else 0
+		local cash = (MonetizationConfig :: any).Starter5Cash(perMin)
+		EconomyService.AddCash(player, cash, "devproduct")
+		print(string.format("[STARTER5] %s cash +%d (perMin %d)", player.Name, cash, math.floor(perMin)))
+	end
+	if typeof(product.GrantsCashBoostMinutes) == "number" and product.GrantsCashBoostMinutes > 0 then
+		local okC, CS = pcall(function(): any
+			return require(script.Parent.CodesService)
+		end)
+		if okC and CS and CS.GrantCashBoost then
+			local okB, untilUnix = pcall(CS.GrantCashBoost, player, product.GrantsCashBoostMinutes, (MonetizationConfig :: any).Starter5.BoostMult)
+			print(string.format("[STARTER5] %s boost %s (until %s)", player.Name, if okB then "granted" else "FAILED", tostring(untilUnix)))
+		end
+	end
+	-- claude-bud JOB 41 part B: the Recruit Pack's 2x cash boost through the ONE boost path (CodesService.GrantCashBoost:
+	-- stacks like codes, capped at CashBoostMaxMinutes; it only mutates the profile, no yield)
+	if productKey == "RecruitPack" then
+		local o: any = (MonetizationConfig :: any).RecruitPackOffer
+		local okC, CS = pcall(function(): any
+			return require(script.Parent.CodesService)
+		end)
+		if okC and CS and CS.GrantCashBoost then
+			local okB, untilUnix = pcall(CS.GrantCashBoost, player, o.BoostMinutes, o.BoostMult)
+			-- claude-bud JOB 45: the boost result is logged (it was silent inside the pcall)
+			print(string.format("[RECRUIT] boost %s: %s (until %s)", player.Name, if okB then "granted" else "FAILED " .. tostring(untilUnix), tostring(untilUnix)))
+		else
+			print("[RECRUIT] boost " .. player.Name .. ": CodesService not available, NOT granted")
+		end
+		-- Code Bot v171: the gold base trim goes on at once: the base-tier builder watches the WE_Ent_RecruitPack attribute
+		-- that GrantEntitlement just set (and its 5 s sweep / every join rebuild it from the saved entitlement); the base
+		-- sign's RECRUIT line refreshes here
+		task.defer(function()
+			local okB, BSS = pcall(function(): any
+				return require(script.Parent.BaseSignService)
+			end)
+			if okB and BSS and BSS.Refresh then
+				pcall(BSS.Refresh, profile.BasePlotId)
+			end
+		end)
 	end
 	-- v71 money (M1): whitelisted counters (GrantNukes -> profile.Nukes + NukeStats.Bought)
 	for _, c in ipairs(counters) do
@@ -1548,8 +2114,8 @@ function MonetizationService.TrySoftOfferVIP(player: Player, reason: string?)
 				(remote :: RemoteEvent):FireClient(player, {
 					ProductKey = "VIP",
 					GamePassId = gp.Id,
-					DisplayName = gp.DisplayName or "VIP",
-					RobuxPrice = gp.RobuxPrice,
+					DisplayName = LivePrices.Name("GamePass", "VIP"), -- Code Bot v156
+					RobuxPrice = LivePrices.Price("GamePass", "VIP"),
 					Reason = reason or "midgame",
 				})
 			end
@@ -1610,8 +2176,8 @@ function MonetizationService.TrySoftOfferSpeedBoost(player: Player, reason: stri
 				(remote :: RemoteEvent):FireClient(player, {
 					ProductKey = "SpeedBoost",
 					ProductId = dp.Id,
-					DisplayName = dp.DisplayName or "Speed Boost",
-					RobuxPrice = dp.RobuxPrice,
+					DisplayName = LivePrices.Name("DevProduct", "SpeedBoost"), -- Code Bot v156
+					RobuxPrice = LivePrices.Price("DevProduct", "SpeedBoost"),
 					Reason = reason or "vehicle_sit",
 				})
 			end
@@ -1641,7 +2207,9 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 			return
 		end
 	end
-	local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.CashMega
+	-- claude-bud JOB 42: the same slot sells the 4h time pack while the time packs are shown for him
+	local megaKey = if ShopOverhaulConfig.TimePacksShown(player.UserId) then ShopOverhaulConfig.TimePacks.BestValueKey else "CashMega"
+	local dp = MonetizationConfig.DevProducts and (MonetizationConfig.DevProducts :: any)[megaKey]
 	if not dp or typeof(dp.Id) ~= "number" or dp.Id == 0 then
 		return
 	end
@@ -1669,10 +2237,10 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 			local remote = RemoteSetup.Get(Constants.RemoteNames.CashMegaOffer)
 			if remote and remote:IsA("RemoteEvent") then
 				(remote :: RemoteEvent):FireClient(player, {
-					ProductKey = "CashMega",
+					ProductKey = megaKey,
 					ProductId = dp.Id,
-					DisplayName = dp.DisplayName or "Cash Pack Mega",
-					RobuxPrice = dp.RobuxPrice,
+					DisplayName = LivePrices.Name("DevProduct", megaKey), -- Code Bot v156
+					RobuxPrice = LivePrices.Price("DevProduct", megaKey),
 					Reason = reason or "pending_collect",
 				})
 			end
@@ -1691,6 +2259,41 @@ end
 	    none of SkipIfOwnsAny (Speed Pass or Speed Boost);
 	  - a D8 soft-offer slot is free (ClaimSoftOfferSlot, claimed last so a refused offer never spends one).
 	Never yields. Returns true when the offer was sent. The client still refuses it for an owner (WE_Ent_*). ]]
+--[[ claude-bud JOB 36: the death offer while the shop overhaul is live: the Speed Boost dev product (the Speed Pass left
+	the Shop). Same rules as the pass offer: once per session, tutorial done, ownership known, no speed owned yet, the
+	soft-offer budget. ]]
+local function deathSpeedProductOffer(victim: Player, cfg: any, productKey: string): boolean
+	local product: any = (MonetizationConfig.DevProducts :: any)[productKey]
+	if typeof(product) ~= "table" or (tonumber(product.Id) or 0) == 0 then
+		return false
+	end
+	local userId = victim.UserId
+	if cfg.OncePerSession ~= false and deathSpeedSent[userId] == true then
+		return false
+	end
+	local profile = DataService.GetProfile(victim)
+	if not profile or (cfg.RequireTutorialComplete ~= false and profile.TutorialComplete ~= true) then
+		return false
+	end
+	if passCacheFilled[userId] ~= true or passRefreshRetries[userId] ~= nil or ownsSkuCached(victim, productKey) then
+		return false
+	end
+	for _, key in ipairs(if typeof(cfg.SkipIfOwnsAny) == "table" then cfg.SkipIfOwnsAny else {}) do
+		if typeof(key) == "string" and ownsSkuCached(victim, key) then
+			return false
+		end
+	end
+	if not MonetizationService.ClaimSoftOfferSlot(victim) then
+		return false
+	end
+	deathSpeedSent[userId] = true
+	local remote = RemoteSetup and RemoteSetup.Get(Constants.RemoteNames.DeathShopOffer)
+	if remote and remote:IsA("RemoteEvent") then
+		(remote :: RemoteEvent):FireClient(victim, { Offers = { productKey } })
+	end
+	return true
+end
+
 function MonetizationService.TryDeathSpeedOffer(victim: Player): boolean
 	if typeof(victim) ~= "Instance" or not victim:IsA("Player") or not victim.Parent or not DataService then
 		return false
@@ -1698,6 +2301,9 @@ function MonetizationService.TryDeathSpeedOffer(victim: Player): boolean
 	local cfg = (MonetizationConfig :: any).DeathSpeedOffer
 	if typeof(cfg) ~= "table" or typeof(cfg.PassKey) ~= "string" then
 		return false
+	end
+	if ShopOverhaulConfig.LiveFor(victim.UserId) then
+		return deathSpeedProductOffer(victim, cfg, ShopOverhaulConfig.DeathOfferProduct) -- claude-bud JOB 36
 	end
 	local passKey: string = cfg.PassKey
 	local pass = (MonetizationConfig.GamePasses :: any)[passKey]

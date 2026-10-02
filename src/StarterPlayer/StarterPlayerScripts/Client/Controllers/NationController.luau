@@ -1105,7 +1105,8 @@ local function blocked(): boolean
 			return true
 		end
 	end
-	return false
+	-- claude-bud JOB 29 FastStart: nothing covers a new player's screen before his Command Center (server attribute)
+	return player:GetAttribute("WE_Onboarding") == true
 end
 
 local function autoWanted(): boolean
@@ -1386,6 +1387,11 @@ function NationController.Init()
 			end
 		end)
 	end
+	player:GetAttributeChangedSignal("WE_Onboarding"):Connect(function()
+		if player:GetAttribute("WE_Onboarding") ~= true and not autoDone and autoReady then
+			scheduleAutoOpen(REOPEN_SETTLE) -- claude-bud JOB 29: the onboarding hold is over
+		end
+	end)
 	HudLayout.FlagChanged:Connect(function(flagName: string, on: boolean)
 		if on or autoDone or not autoReady then
 			return

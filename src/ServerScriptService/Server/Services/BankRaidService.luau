@@ -51,6 +51,21 @@ local WorldLabel = require(Shared.Util.WorldLabel)
 
 local BankRaidService = {}
 
+-- claude-bud JOB 39 phase 5: the raider's heist kit (EndgameService.HeistRules): hold, payout, cooldown, extra guards.
+-- The old numbers without a kit / while EndgameConfig's Heist part is not live.
+function BankRaidService._Heist(player: Player, hold: number, cash: number, cooldown: number): (number, number, number, number)
+	local ok, EGS = pcall(function(): any
+		return require(script.Parent.EndgameService)
+	end)
+	if ok and EGS and EGS.HeistRules then
+		local okR, h, c, cd, g = pcall(EGS.HeistRules, player, hold, cash, cooldown)
+		if okR and typeof(h) == "number" then
+			return h, c, cd, g
+		end
+	end
+	return hold, cash, cooldown, 0
+end
+
 local EconomyService: any = nil
 local NotificationService: any = nil
 local AnalyticsService: any = nil
@@ -199,7 +214,8 @@ function BankRaidService.SanitizeCooldown(value: any, nowUnix: number): (number?
 	if typeof(value) ~= "number" or value ~= value or value <= 0 then
 		return nil, true
 	end
-	local cap = nowUnix + math.max(0, BankRaidConfig.CooldownSeconds or 300)
+	-- claude-bud JOB 39: the Vault Cracker's 30-min cooldown survives a rejoin (the cap is the longest cooldown there is)
+	local cap = nowUnix + math.max(0, BankRaidConfig.CooldownSeconds or 300, 1800)
 	local clean = math.floor(math.min(value, cap))
 	return clean, clean ~= value
 end
@@ -374,6 +390,34 @@ function BankRaidService.GuardPosts(): ({ CFrame }, string)
 		table.insert(out, cf)
 	end
 	return out, "config"
+end
+
+-- claude-bud JOB 39: a heist kit's extra guards: reinforcements from the two street corners (the existing BankGuard
+-- NPC path: LOS + hit chance), cleared 120 s later if still standing. Once per raid per raider.
+BankRaidService._ExtraGuardsSpawned = {} :: { [number]: boolean }
+function BankRaidService._SpawnExtraGuards(n: number)
+	if not CombatService or not CombatService.SpawnNPC then
+		return
+	end
+	local pos = BankRaidConfig.Position
+	local typeId = BankRaidConfig.GuardNPCType or "BankGuard"
+	local recs = {}
+	for i = 1, math.min(n, 8) do
+		local side = if i % 2 == 0 then 1 else -1
+		local cf = CFrame.new(pos.X + side * (30 + (i // 2)), pos.Y + 3, pos.Z + 12 + (i % 3)) * CFrame.Angles(0, math.rad(if side > 0 then 90 else -90), 0)
+		local rec = CombatService.SpawnNPC(typeId, cf, GUARD_OPTS)
+		if rec then
+			rec.Model:SetAttribute("WE_HeistGuard", true)
+			table.insert(recs, rec)
+		end
+	end
+	task.delay(120, function()
+		for _, rec in ipairs(recs) do
+			if rec.Model and rec.Model.Parent then
+				rec.Model:Destroy()
+			end
+		end
+	end)
 end
 
 local function spawnBankGuards()
@@ -646,24 +690,45 @@ local function pushState(player: Player, opts: { InVault: boolean?, UnderFire: b
 	lastPushedProgress[player.UserId] = prog
 end
 
+-- Code Bot v198: DISPLAY ONLY. A cash reward toast shows what was credited (AddCash's 2nd return, multipliers in), plus
+-- " · 2x" while the DOUBLE WEEKEND doubled it (EconomyService.ToastAmount / ToastTag); an economy without them = the old text
+local function toastCash(econ: any, player: Player, base: number, reason: string, ok: any, credited: any): (number, string)
+	local shown = if econ and econ.ToastAmount then econ.ToastAmount(base, ok, credited) else math.floor(base)
+	local tag = if econ and econ.ToastTag then econ.ToastTag(player, reason) else ""
+	return shown, tag
+end
+
 local function completeRaid(player: Player)
 	local cashMin = BankRaidConfig.CashMin or 15000
 	local cashMax = BankRaidConfig.CashMax or 35000
 	local cash = math.random(cashMin, cashMax)
+	local _h, heistCash, heistCd = BankRaidService._Heist(player, 0, cash, BankRaidConfig.CooldownSeconds or 300) -- JOB 39 kit
+	cash = heistCash
+	BankRaidService._ExtraGuardsSpawned[player.UserId] = nil
 	holdProgress[player.UserId] = nil
 	inVaultNow[player.UserId] = false
 	underFireNow[player.UserId] = false
 	blockedNow[player.UserId] = nil
-	-- "bank_raid" is exempt from the cash multipliers (MonetizationConfig.CashMultExemptReasons): the toast is exact
-	if EconomyService.AddCash(player, cash, "bank_raid") ~= true then
+	-- "bank_raid" is exempt from the cash multipliers (MonetizationConfig.CashMultExemptReasons): the toast is exact.
+	-- Code Bot v197: the DOUBLE WEEKEND doubles "bank_raid" (EventConfig.ExtraCashReasons); a heist kit's payout is
+	-- minutes of WE_IncomePerSec (already doubled in the window), so it is paid as "bank_raid_kit" (not doubled again)
+	local okK, kit = pcall(function(): any
+		local EGS: any = require(script.Parent.EndgameService)
+		return EGS.HeistKit and EGS.HeistKit(player) or 0
+	end)
+	local raidReason = if okK and (tonumber(kit) or 0) > 0 then "bank_raid_kit" else "bank_raid"
+	local paidOk, paid = EconomyService.AddCash(player, cash, raidReason)
+	if paidOk ~= true then
 		pushState(player, { InVault = false, UnderFire = false })
 		return -- no profile: nothing paid, so no cooldown either
 	end
 	lastRaidEndAt = os.clock() -- GuardRespawn.AfterRaidSeconds: the bank refills after a payout
-	local cd = BankRaidConfig.CooldownSeconds or 300
+	local cd = heistCd -- claude-bud JOB 39: BankRaidConfig.CooldownSeconds (300) unless the Vault Cracker's 30 min
 	setCooldown(player, os.time() + cd)
 	if BankRaidConfig.NotifyOnRaid and NotificationService then
-		NotificationService.Notify(player, string.format(TEXT.Reward, formatCash(cash)), "Reward")
+		-- Code Bot v198: the cash credited ("bank_raid" doubled in the DOUBLE WEEKEND; a kit's "bank_raid_kit" never) + tag
+		local shown, tag = toastCash(EconomyService, player, cash, raidReason, paidOk, paid)
+		NotificationService.Notify(player, string.format(TEXT.Reward, formatCash(shown)) .. tag, "Reward")
 	end
 	if MissionService and MissionService.TrackProgress then
 		local ok, err = pcall(MissionService.TrackProgress, player, "Heist", 1)
@@ -841,7 +906,12 @@ function BankRaidService.Init(deps: { [string]: any })
 				if not fired then
 					local prog = (holdProgress[uid] or 0) + step
 					holdProgress[uid] = prog
-					if prog >= need then
+					local heistNeed, _c, _cd, extraGuards = BankRaidService._Heist(player, need, 0, 0) -- claude-bud JOB 39 kit
+					if extraGuards > 0 and not BankRaidService._ExtraGuardsSpawned[uid] then
+						BankRaidService._ExtraGuardsSpawned[uid] = true
+						BankRaidService._SpawnExtraGuards(extraGuards)
+					end
+					if prog >= heistNeed then
 						completeRaid(player)
 						-- completeRaid already pushed
 					else

@@ -32,6 +32,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Configs = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs")
 local WorldConfig = require(Configs:WaitForChild("WorldConfig"))
 local StructureVisualConfig = require(Configs:WaitForChild("StructureVisualConfig"))
+local LightingConfig = require(Configs:WaitForChild("LightingConfig")) -- claude-bud JOB 17: the phone-readable night
 
 export type Values = {
 	ClockTime: number,
@@ -45,6 +46,10 @@ export type Values = {
 	Decay: Color3,
 	Glare: number,
 	Haze: number,
+	CCBrightness: number, -- claude-bud JOB 17: WE_NightCC (0 / 0 / 0 / white by day)
+	CCContrast: number,
+	CCSaturation: number,
+	CCTint: Color3,
 }
 export type Handle = { Preset: string, Stop: () -> () }
 
@@ -70,7 +75,7 @@ local function worldLighting(): any
 end
 
 function WorldAtmosphere.NightShare(clock: number): number
-	local c = WorldConfig.Atmosphere
+	local c: any = if LightingConfig.Enabled then LightingConfig.Cycle else WorldConfig.Atmosphere -- claude-bud JOB 17
 	local t = clock % 24
 	if t < c.NightEnd or t > c.NightStart then
 		return 1
@@ -96,6 +101,11 @@ function WorldAtmosphere.Sample(clock: number, preset: string?): Values
 	local _, p = presetOf(preset)
 	local night = WorldAtmosphere.NightShare(clock)
 	local d, n = p.Day, p.Night
+	if LightingConfig.Enabled then
+		n = LightingConfig.Night -- claude-bud JOB 17: moody but readable (no black phones)
+	end
+	local cc = LightingConfig.ColorCorrection
+	local ccOn = if LightingConfig.Enabled then night else 0
 	local wl = worldLighting()
 	local dayAmbient: Color3 = if typeof(wl.DayAmbient) == "Color3" then wl.DayAmbient else d.Ambient
 	return {
@@ -110,6 +120,10 @@ function WorldAtmosphere.Sample(clock: number, preset: string?): Values
 		Decay = lerpColor(d.Decay, n.Decay, night),
 		Glare = r3(d.Glare + (n.Glare - d.Glare) * night),
 		Haze = r3(d.Haze + (n.Haze - d.Haze) * night),
+		CCBrightness = r3(cc.Brightness * ccOn),
+		CCContrast = r3(cc.Contrast * ccOn),
+		CCSaturation = r3(cc.Saturation * ccOn),
+		CCTint = lerpColor(Color3.new(1, 1, 1), cc.Tint, ccOn),
 	}
 end
 
@@ -150,7 +164,12 @@ local FIELDS: { { string } } = {
 	{ "A", "Decay" },
 	{ "A", "Glare" },
 	{ "A", "Haze" },
+	{ "C", "CCBrightness", "Brightness" }, -- claude-bud JOB 17: the moonlit colour correction
+	{ "C", "CCContrast", "Contrast" },
+	{ "C", "CCSaturation", "Saturation" },
+	{ "C", "CCTint", "TintColor" },
 }
+local ccEffect: ColorCorrectionEffect? = nil
 
 -- write only what differs from the last written values; returns the number of property writes
 local function write(atm: Atmosphere?, v: Values, last: Values?): number
@@ -161,8 +180,10 @@ local function write(atm: Atmosphere?, v: Values, last: Values?): number
 		if cur[key] ~= old[key] then
 			n += 1
 			if atm then
-				local obj: any = if f[1] == "L" then Lighting else atm
-				obj[key] = cur[key]
+				local obj: any = if f[1] == "L" then Lighting elseif f[1] == "C" then ccEffect else atm
+				if obj then
+					obj[f[3] or key] = cur[key]
+				end
 			end
 		end
 	end
@@ -175,6 +196,31 @@ local function setNightLights(on: boolean)
 			inst.Enabled = on
 		end
 	end
+	-- claude-bud JOB 17: night glow (lamp heads, lit windows, runway markers, the plaza flag): Neon + its night colour
+	-- only at night; by day its own day material / colour (attributes WE_DayMaterial / WE_DayColor / WE_NightColor)
+	for _, inst in ipairs(CollectionService:GetTagged(LightingConfig.GlowTag)) do
+		if inst:IsA("BasePart") then
+			local dayMat = inst:GetAttribute("WE_DayMaterial")
+			local dayCol = inst:GetAttribute("WE_DayColor")
+			local nightCol = inst:GetAttribute("WE_NightColor")
+			if on then
+				inst.Material = Enum.Material.Neon
+				if typeof(nightCol) == "Color3" then
+					inst.Color = nightCol
+				end
+			else
+				inst.Material = if typeof(dayMat) == "string" and (Enum.Material :: any)[dayMat] then (Enum.Material :: any)[dayMat] else Enum.Material.SmoothPlastic
+				if typeof(dayCol) == "Color3" then
+					inst.Color = dayCol
+				end
+			end
+		end
+	end
+end
+WorldAtmosphere.SetNightLights = setNightLights -- claude-bud JOB 17: NightLights applies the current state after building
+function WorldAtmosphere.IsNight(): boolean
+	local clock: any = Lighting.ClockTime
+	return WorldAtmosphere.NightShare(if type(clock) == "number" then clock else 12) > 0.5
 end
 
 -- counters of the running loop (Counters() returns a copy)
@@ -194,6 +240,19 @@ function WorldAtmosphere.Apply(opts: { Preset: string?, DayCycle: boolean?, Star
 	end)
 	ensureSky()
 	local atm = ensureAtmosphere()
+	-- claude-bud JOB 17: the moonlit colour correction (one effect, written by the day loop like Atmosphere)
+	if LightingConfig.Enabled then
+		local name = LightingConfig.ColorCorrection.Name
+		local existing = Lighting:FindFirstChild(name)
+		if existing and existing:IsA("ColorCorrectionEffect") then
+			ccEffect = existing
+		else
+			local e = Instance.new("ColorCorrectionEffect")
+			e.Name = name
+			e.Parent = Lighting
+			ccEffect = e
+		end
+	end
 
 	local clock = if opts and opts.StartClock then opts.StartClock else cfg.StartClock
 	local last = WorldAtmosphere.Sample(clock, key)

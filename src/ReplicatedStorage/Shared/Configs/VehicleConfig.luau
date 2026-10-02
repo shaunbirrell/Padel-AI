@@ -1098,4 +1098,14 @@ do
 	end
 end
 
+-- Code Bot v219 (Shaun's phone, 2026-10-02: "a yellow ring around the rotor when you enter" on some helicopters): the
+-- Part-kit heli's "RotorDisc" (VehicleService addRotorDisc: a Neon cylinder, 0.55 transparent, rotor x 0.96 wide, in the
+-- rarity accent = YELLOW 230,190,60 on every Uncommon / Epic / Premium heli; blue on Rare, red on Legendary). Live
+-- (owner-first by the VEHICLE owner) = the disc is never built; the rotor hub + blades (RotorHub / RotorA / RotorB, the
+-- AirBodyRig spin parts) are untouched, so the rotor still spins. OFF = the disc as before.
+;(VehicleConfig :: any).HeliRotorRing = {
+	Enabled = true,
+	OwnerFirst = false, -- PUBLIC (Code Bot v220: everything public, Shaun 2026-10-02 07:51); was NEW-OWNER-FIRST (Code Bot v219): flip after Shaun's phone test
+}
+
 return VehicleConfig
