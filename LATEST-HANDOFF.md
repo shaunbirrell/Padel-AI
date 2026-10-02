@@ -1,3 +1,15 @@
+## v223 PUBLISHED (Code Bot Roblox, 2026-10-02 09:47 Dublin): Open Cloud place version **221**. Turret+wall looks ONE config + drivable Synty vehicles OWNER-FIRST (Shaun items 3+4)
+- **Source:** cherry-pick `958cb67` + `60a9ded` (claude/desktop-bud) → phase-7-polish. WE_Build **223**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id / save-key / level change. Servers NOT restarted.
+- **COMPLETED (owner-first):**
+  - **Item 3:** `EndgameConfig.Defence.TurretTiers` is the one turret tier table (Mk I–Mk V / AutoGunT1–5). Guns upgrade text + base console wall row name the look (`EndgameConfig.TierText`, OwnerFirst = true). Save keys / levels / prices untouched.
+  - **Item 4:** `SyntyVehicleConfig` (OwnerFirst = true) dresses ArmoredTruck / ArmedJeep / ScoutCar with Shaun's Synty pack 119390702773907 via `VisualAssetService.TryAttachSyntyVehicleVisual`. Part-kit chassis still drives; tanks stay on kits. Missed piece name → today's body.
+- **HELD:** JOB 64 Referral (Creator Hub), JOB 62 notifications (WE_NOTIFY_KEY). DOUBLE WEEKEND proof checks stay on bud only.
+- **FILES:** `EndgameConfig.luau`, `EndgameService.luau`, `GateDefenseService.luau`, `BaseController.luau`, `SyntyVehicleConfig.luau`, `VehicleService.luau`, `VisualAssetService.luau`, `tools/checks/claude_bud_tier_looks.py`, `tools/checks/claude_bud_synty_vehicles.py`, `tools/checks/codebot_v223.py`, WE_Build pins 222 → 223, `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
+- **TESTING:** BuyPathStatic **PASS=9489 FAIL=0**; `claude_bud_tier_looks.py` + `claude_bud_synty_vehicles.py` + `codebot_v223.py`.
+- **Publish:** HTTP 200, versionNumber **221**, universe 10767159222 / place 97112936860418. **Servers NOT restarted** (join a new server for WE_Build 223).
+- **Phone test (Shaun, new server, WE_Build 223, owner-only):** (1) Engineering Bureau: Turret Guns row names the Mk. (2) Base console: Defensive Walls row says next wall look. (3) Upgrade Turret Guns past L1/L4/L7/L10: gun model gets bigger. (4) Spawn Armored Truck, Armed 4x4, Scout Car — each wears Synty body (or today's body if name miss); drive with thumbstick as before.
+- **NEXT:** flip `TierText.OwnerFirst` and `SyntyVehicleConfig.OwnerFirst` to false after phone OK. Studio owed on Synty: confirm intact piece names + yaw/seat height if body looks wrong.
+
 ## v222 PUBLISHED (Code Bot Roblox, 2026-10-02 09:20 Dublin): Open Cloud place version **220**. Rebirth-zone buildings OWNER-FIRST (Shaun item 2)
 - **Source:** cherry-pick `43380f0` (claude/desktop-bud) → phase-7-polish. WE_Build **222**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id / save-key change. Servers NOT restarted.
 - **COMPLETED:** each rebirth zone's MAIN block building becomes a free desert house on every plot still showing the Part build (`Job67DressConfig.ZoneBuildings`, `OwnerFirst = true`, NEW-OWNER-FIRST by the base owner). `Job67DressService.DressZone` runs from `RebirthZoneService` after the Part build, off-thread. Store-model zones left alone. 7 houses = 1,151 parts ≤ MaxPartsPerPlot 1300. Packs: Prinz 10055885754 / CAG 9939040273 / Imp 15654066038.
