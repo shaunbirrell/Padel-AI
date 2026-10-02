@@ -1,3 +1,106 @@
+## v233 PUBLISHED (Code Bot Roblox, 2026-10-02 15:56 Dublin): Open Cloud place version **231**. JOB 71 ADMIN ABUSE live event (owner panel + public chip/popup)
+- **Source:** Cherry-pick Claude `6c92430` onto phase-7-polish as `d9dde7b` (conflicts resolved: Bootstrap took AdminAbuseService only — ReferralService / JOB 64 held; codebot_v211 keep SupplyDropConfig + DoubleWeekendController exceptions, not EngagementService; job61_pins stayed deleted on live). Code Bot `15ece70` WE_Build **233** + `codebot_v233.py`. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change. Servers NOT restarted (new servers get it).
+- **WHAT:** ADMIN ABUSE live event Sat 10 Oct 2026 20:00–20:30 Dublin (`StartUnix` 1791658800 → `EndUnix` 1791660600). `AdminAbuseConfig` (EventId string `9167160688932684354`, Topic `WE_AdminAbuse`, OwnerFirst=false for public chip/popup). `AdminAbuseService`: RequestAdminAbuse gated on the SERVER by `AdminConfig.IsPlaytestOwner` (+ RemoteGate + rate limit + cooldown); ANNOUNCE filtered for broadcast; one MessagingService topic publishes `{action, args, sentAt, nonce}` (< 900 B); every server applies (nonce once, > 30 s ignored; failed publish applies locally). Actions: CASH RAIN, AIRSTRIKE STORM (visual only, MinHealth 1, no building damage), FREE TANK (loan via SpawnEventVehicle, never saved), 2x CASH (max with Double Weekend, earned only), LOW GRAVITY, SPEED FOR ALL, GIANT BOSS, ANNOUNCE, STOP ALL. Client `AdminAbuseController`: owner panel (Settings > ADMIN), public announce banner + boss bar. `DoubleWeekendController` multi-event chip/details/RSVP for ADMIN ABUSE.
+- **GATE:** Owner panel = AdminConfig forever (no public flag). Public chip / pop-up = OwnerFirst=false as Claude shipped.
+- **FILES:** `AdminAbuseConfig.luau`, `AdminAbuseService.luau`, `AdminAbuseController.luau`, `DoubleEvent.luau`, `DoubleWeekendController.luau`, `SettingsController.luau`, `EconomyService.luau`, `VehicleService.luau`, Bootstrap/RemoteSetup/Constants/SecurityConfig, `tools/checks/claude_bud_job71.py`, `tools/checks/codebot_v233.py`, sims `run_admin_abuse_test.py` / `run_admin_abuse_layout_test.py`, WE_Build pins 232 → 233, `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
+- **TESTING:** BuyPathStatic **PASS=9780 FAIL=0**; claude_bud_job71 0 failed; codebot_v233 all PASS; admin abuse sims 0 failed. Phone: Settings shows WE_Build 233 → Settings > ADMIN > ADMIN ABUSE PANEL (owner) → CASH RAIN / ANNOUNCE; non-owner sees ADMIN ABUSE chip under TARGETS (countdown) + once-per-player RSVP pop-up.
+- **Publish:** HTTP 200, versionNumber **231**, universe 10767159222 / place 97112936860418. **Servers NOT restarted**.
+- **NEXT:** JOB64 (Creator Hub) / JOB62 (WE_NOTIFY_KEY) / DW-proof still held on bud. Double Weekend 2x starts 21:00 tonight if already wired. Admin Abuse event itself is Sat 10 Oct 20:00–20:30 Dublin.
+
+## v232 PUBLISHED (Code Bot Roblox, 2026-10-02 15:50 Dublin): Open Cloud place version **230**. MAP-WIDE NUKE (OWNER-FIRST)
+- **Source:** Code Bot `ca1d265` + wording fix `b54a921` on phase-7-polish; bud merges `3c6cee2` + `17376a6` (on top of Claude's JOB 71 `6c92430`, no conflict except the codebot_v220 allow-list, both kept). WE_Build **232**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change. Servers NOT restarted (new servers get it).
+- **WHAT (Shaun 15:32: map-wide nuke, "Take 25% of each base's ATM"):** silo panel gets a big **MAP-WIDE NUKE** button (only for LiveFor players) -> How-it-works card (RequestNuke `mwprev` -> `NukeMapWidePreview` { Ok, Why, Bases, Skipped, Take, Pct, CooldownLeft }) -> LAUNCH (`mwlaunch`). `NukeService.MapWideLaunch`: one warhead, the SAME 30-min player + 5-min server cooldown + one-nuke-in-the-air lock, the existing 10 s `NukeIncoming` to everyone (MapWide = true, no ground ring), nothing moves before detonation; then every rival base is re-checked and hit through `MoneyCollectorService.NukeRaid(attacker, victim, text, 0.25)` (1:1 transfer, never multiplied, sets the raid shield). Skips: own base, raid shield / new player / low ATM (CanArmyRaid), spawn / novice protection, allies, PvP off, admins, JOB 63 camp cooldown. Victim card `NukeMapWideHit` ("YOU WERE NUKED BY X / LOST -$Y"), launcher `NukeMapWideSummary`, ONE MapWide `NukeBlast` flash. Nothing hit at detonation = warhead + player cooldown refunded. `NukeService.AdminResetCooldowns` added (admin `nukecd`: server cooldown only).
+- **OLD NUKE UNCHANGED** for everyone not in LiveFor: same panel, same launch, same JOB 65 TARGETS -> NUKE raid (NukeRaid fraction nil = full ATM).
+- **GATE:** `NukeMapWideConfig.OwnerFirst = true` (shaunie6 via `AdminConfig.IsPlaytestOwner` + Laumartinez26 11718087109). **Go public:** set `OwnerFirst = false` in `src/ReplicatedStorage/Shared/Configs/NukeMapWideConfig.luau` (and drop it from the v220/v230 owner-first allow-lists).
+- **FILES:** `NukeMapWideConfig.luau` (new), `NukeService.luau`, `MoneyCollectorService.luau` (NukeRaid fraction), `NukeController.luau`, `tools/sim/run_nuke_mapwide_test.py` (real NukeService, all ok), `tools/checks/codebot_v232.py`, v220/v230 allow-lists, WE_Build pins 231 -> 232.
+- **TESTING:** current flow re-proved first (`run_nuke_raid_test.py` 0 failed). BuyPathStatic **PASS=9722 FAIL=0** (bud merge PASS=9793 FAIL=0). Needs Shaun's phone test with at least one rival with ATM cash on the server: silo -> NUKE -> MAP-WIDE NUKE -> LAUNCH.
+
+## v231 PUBLISHED (Code Bot Roblox, 2026-10-02 15:20 Dublin): Open Cloud place version **229**. GO LAUNCH YOUR NUKE prompt + silo arrow (OWNER-FIRST)
+- **Source:** Code Bot `d870315` on phase-7-polish; bud merge `6eb71d5`. WE_Build **231**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change. Servers NOT restarted (new servers get it).
+- **WHAT (Shaun 15:09: "Yes do the go to launch the Nuke"):** after a WON Strategic Yard LAUNCH PREP run (`RebirthZonesConfig.Runs.StrategicYard`, Effect `nukecharge`) `ZoneRuns.finish` -> `deps.OnNukePrepWon` -> `RebirthZoneService.NukeGoLaunch` pushes FeaturePush `NukeGoLaunch` { X, Y, Z, Ready, ChargeLeft, CooldownLeft, Seconds } aimed at HIS `WE_SiloPrompt` part (annex console, else zone board). `NukeController` shows one top-stack card (Order.Objective: stacks under alerts / above toasts, no overlap) with big text **GO LAUNCH YOUR NUKE** / "Go to your silo and tap NUKE", or **NUKE READY IN m:ss** ("Warhead charging" / "Silo cooling down") counting down at 1 Hz, plus the ONE ObjectiveMarker arrow "NUKE SILO". Cleared when the silo panel opens (NukePanel), on the card's X, or after 120 s. No new per-frame loop. New read-only `NukeService.SiloStatus`.
+- **GATE:** `NukeGoLaunchConfig.OwnerFirst = true` (shaunie6 via `AdminConfig.IsPlaytestOwner` + Laumartinez26 11718087109). **Go public:** set `OwnerFirst = false` in `src/ReplicatedStorage/Shared/Configs/NukeGoLaunchConfig.luau` (and drop it from the v220/v230 owner-first allow-lists + flip the codebot_v231 pin).
+- **FILES:** `NukeGoLaunchConfig.luau` (new), `ZoneRuns.luau`, `RebirthZoneService.luau`, `NukeService.luau`, `NukeController.luau`, `tools/checks/codebot_v231.py`, v220/v230 allow-lists, WE_Build pins 230 -> 231.
+- **TESTING:** BuyPathStatic **PASS=9689 FAIL=0** (bud merge PASS=9760 FAIL=0); luau unit run of `NukeGoLaunchConfig.LiveFor` / `.Text`. Needs Shaun's phone test: finish Launch Prep -> card + arrow -> walk to silo -> tap NUKE (card + arrow go).
+
+## v230 PUBLISHED (Code Bot Roblox, 2026-10-02 13:38 Dublin): Open Cloud place version **228**. Public flip (Shaun 13:27: "turn everything on for everyone apart from the 2x weekend")
+- **Source:** Code Bot `160df42` on phase-7-polish; bud merge `24cf1c5`. WE_Build **230**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change. Servers NOT restarted (new servers get it; Migrate to Latest Update if wanted).
+- **NOW PUBLIC:** `Job67DressConfig.ZoneBuildings` (rebirth-zone desert houses, v222), `EndgameConfig.TierText` (turret Mk I-V + wall looks, v223), `SyntyVehicleConfig` (Armored Truck / Armed 4x4 / Scout Car Synty bodies, v223), `VisualAssetConfig.BodyRollout = "all"` (helicopter / bomber / airlifter / VTOL / ship / sub / strike-jet store bodies, incl. hangar/dock showpieces).
+- **LICENCE CHECK (WE_CHECK2L, Open Cloud Luau Execution on place v227, read-only + economy/inventory APIs):** all 15 body models (14669079591, 473576954, 7941124517, 5545544418, 116924692473761, 80886282228822, 11240665977, 10649792198, 12235335847, 2625253037, 3626114334, 6860896505, 104820847233642, 12442299148, 14589101870) are free public-domain Creator Store models and owned by shaunie6; every inner mesh/texture uploaded by the same seller, EXCEPT 5545544418.
+- **HELD OWNER-ONLY:** AmphibAssault body 5545544418 (new per-ref `BodyRolloutHold = "owner"`, honoured in `VisualAssetService.BodyAllowed`): its inner decal 385251431 "HMS Queen Elizabeth II Aircraft Carrier Badge" is another creator's upload (AdamAlHaddad, real-world navy badge). Fix later: swap the body or confirm decal is stripped and Shaun OKs.
+- **STILL OWNER-ONLY BY DESIGN:** `EventConfig.OwnerFirst` (Double Weekend preview before 21:00; window untouched), admin tools (AdminConfig). Unshipped bud features JOB 62/64/DW-proof remain deferred (not on phase-7).
+- **FILES:** 3 OwnerFirst flips, VisualAssetConfig + VisualAssetService (BodyRolloutHold), `tools/checks/codebot_v230.py`, pins updated (v87/v101/v166/v220/v222/v223, claude_bud_zone_buildings/tier_looks/synty_vehicles; v211/v219 byte pins skip BodyRollout/v230 lines), `claude_bud_job70` accepts the eebb65f "SHIPPED LIVE in v217" line (was failing since eebb65f), WE_Build 229 → 230.
+- **TESTING:** BuyPathStatic **PASS=9661 FAIL=0**.
+
+## v229 PUBLISHED (Code Bot Roblox, 2026-10-02 Dublin): Open Cloud place version **227**. 5 free achievement badges wired (batch 3)
+- **Source:** Code Bot `5aac316` on phase-7-polish. WE_Build **229**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change. Servers NOT restarted.
+- **COMPLETED:** Wired Creator Hub free badges (universe 10767159222, verified enabled) into `AchievementConfig` BadgeId fields:
+  1. PlazaCaptured → Plaza Conqueror **2523539979778536**
+  2. PlayerKills100 → Warlord **1556267397534009**
+  3. Rebirth1 → Reborn **1710789554032852**
+  4. Army50 → Grand Army **3674428280965305**
+  5. FirstNuke → Doomsday **3290435300593576**
+  Prior 10 wired ids (v134 + v170) unchanged. Exactly **6** BadgeId=0 remain: Cash100M, Rebirth5, Rebirth10, Rebirth20, Streak7, WeeklyCrown (next daily free batch). Award / join backfill path unchanged (`AchievementService`).
+- **FILES:** `AchievementConfig.luau`, `tools/checks/codebot_v229.py`, zeros pins in `codebot_v134` / `codebot_v170` + `tools/sim/run_achievement_test.py`, WE_Build pins 228 → 229 (src + tools/checks + BuyPathStatic), `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
+- **TESTING:** BuyPathStatic **PASS=9645 FAIL=0**; codebot_v229 all PASS; codebot_v134 / v170 / run_achievement_test PASS.
+- **Publish:** HTTP 200, versionNumber **227**, universe 10767159222 / place 97112936860418. **Servers NOT restarted** (new servers get WE_Build 229; join backfill awards already-unlocked badges).
+- **NEXT:** daily free badge routine for the remaining 6 (max 5/day GMT). JOB64/62 still held.
+
+
+## v228 PUBLISHED (Code Bot Roblox, 2026-10-02 Dublin): Open Cloud place version **226**. Error / warning spam fixes, PUBLIC, no gameplay change
+- **Source:** Code Bot `f4807ef` on phase-7-polish. WE_Build **228**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change. Servers NOT restarted.
+- **COMPLETED:**
+  1. `AnalyticsService.flush`: `LogEconomyEvent` argument 6 (transactionType) is now a **string** (`txTypeName(r.TxType)` → the `Enum.AnalyticsEconomyTransactionType` item's `.Name`, fallback the raw string / "Gameplay"). It was an EnumItem via `enumValue(...)`: Roblox warned on every row (~41.7k/day) and dropped the event, so **economy analytics have been empty since WE_Build 183**; they should start filling from this build. flowType (argument 2) stays the `Enum.AnalyticsEconomyFlowType` item.
+  2. `ArmyController` (server): `[ArmyDebug] SLOT CHANGE ... -> none reason=death/removed` warn now behind `ArmyController.DebugFor(player)` (counter `Stats.SlotChanges` still counts).
+  3. `ArmyController` (server): `[ArmyDebug] LAYOUT CHANGE` warn now behind `debugOn` (set earlier in the same step).
+  4. `VehicleService.onDriverChanged`: a non-owner in the driver seat is ejected in `task.defer`, only if `seat.Occupant == occupant` still (same as the passenger seat code): stops "set the parent of SeatWeld to NULL" warnings. Owner path unchanged.
+- **FILES:** `AnalyticsService.luau`, `Modules/ArmyController.luau`, `VehicleService.luau`, `tools/checks/codebot_v228.py`, WE_Build pins 227 → 228 (src + tools/checks + BuyPathStatic), `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
+- **TESTING:** BuyPathStatic **PASS=9617 FAIL=0**; codebot_v228 13/13 PASS (incl. "argument 6 is a string").
+- **Publish:** HTTP 200, versionNumber **226**, universe 10767159222 / place 97112936860418. **Servers NOT restarted** (new servers get WE_Build 228).
+- **Watch:** Creator Hub error report over the next day: the LogEconomyEvent warning, ArmyDebug SLOT/LAYOUT CHANGE and SeatWeld NULL lines should drop off on WE_Build 228 servers; Creator Hub Economy analytics should start showing Sources/Sinks.
+- **NEXT:** none; JOB64/62 still held.
+
+
+## v227 PUBLISHED (Code Bot Roblox, 2026-10-02 Dublin): Open Cloud place version **225**. Speed Trial = a plain 1 R$ purchase, ONE TIME ONLY (Shaun 10:57 + 10:58)
+- **Source:** Code Bot `ee0e624` on phase-7-polish. WE_Build **227**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change (1 R$, 3715953404). Servers NOT restarted.
+- **SHAUN:** "I don't want the speed trial to be a game. I want it to be a purchase just so people can trial being faster for a few minutes to encourage them to buy the full pass", then: one time only per player, ever; he and Laumartinez26 may re-test.
+- **COMPLETED:**
+  - `SpeedTrialConfig`: ring course / TimeLimit / Reward / HowTo removed. `TrialSeconds = 300`, `UpsellPassKey = "ImpulseSpeed"` (Speed Pass, 99 R$, x1.75 with SpeedV2), `OneTimeOnly = true`, `IsActivity = false`, `ShopRowSub = "Try Speed Pass for 5 min"`, `RepeatAllowedFor` (= AlwaysShowFor: AdminConfig owner 470626172 + 11718087109), `MayGrant`, `NewUntil`, `ChipText`.
+  - `SpeedTrialService` rewritten: `GrantTrial` (ProcessReceipt, same ledger, saved before ack) sets `SpeedTrial.Used = true`, `Grants += 1`, `Until = max(Until, now) + 300`; a used non-tester's receipt is acknowledged, grants nothing, logged `SPEED_TRIAL_REPEAT_REFUSED`. `AfterGrant` / `OnProfileLoaded` apply the Speed Pass speed (`MonetizationConfig.SpeedMultOf(ImpulseSpeed)`) via MoveDebug, re-applied on respawn, restored at the end; never written for a Speed Pass / Speed Boost owner. Attributes `WE_SpeedTrialUntil`, `WE_SpeedTrialUsed`. Rejoin inside the window resumes. `RequestSpeedTrial` remote is still registered but unused.
+  - `ProfileSchema`: `SpeedTrial = { Used, Until, Grants }` (old Entries / Runs > 0 count as Used).
+  - `ShopController`: the row prompts the 1 R$ product directly (no How to play card); hidden once used or for Speed Pass / Speed Boost owners, always shown for the two testers; still sorted right after FREE rows. End pop-up `WE_SpeedTrialUpsell` (SPEED TRIAL OVER, Speed Pass · 99 R$, BUY = existing `promptGamePass`, NO THANKS; 56 px buttons) when the trial ends in-session.
+  - `HUDController`: `SpeedTrialChip` "SPEED 4:59" (same look as the 2x chip, 1 Hz only while running).
+- **FILES:** `SpeedTrialConfig.luau`, `SpeedTrialService.luau`, `MonetizationService.luau`, `ProfileSchema.luau`, `ShopController.luau`, `HUDController.luau`, `tools/sim/run_speed_trial_test.py`, `tools/checks/codebot_v227.py`, older speed trial checks updated (claude_bud_job66_speed_trial, codebot_v224/225/226), WE_Build pins 226 → 227, CLAUDE.md JOB 66 entry, `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
+- **TESTING:** BuyPathStatic **PASS=9604 FAIL=0**; speed trial sim 0 failed; codebot_v227.
+- **Publish:** HTTP 200, versionNumber **225**, universe 10767159222 / place 97112936860418. **Servers NOT restarted** (join a new server for WE_Build 227; a private server must be shut down first).
+- **Phone test:** new server → Settings shows build 227 → Shop → SUPPLY · R$ → "Speed Trial · Try Speed Pass for 5 min" (1 R$, under the FREE rows) → tap → Roblox 1 R$ prompt → buy → "SPEED 5:00" chip counts down → at 0:00 the SPEED TRIAL OVER card (BUY / NO THANKS). Normal players: the row disappears after one use.
+- **Creator Hub:** the 1 R$ product description still describes the old run; suggested new text: "Try Speed Pass speed for 5 minutes. One time only."
+- **NEXT:** none; JOB64/62 still held. Claude: do NOT rebuild the ring run.
+
+
+## v226 PUBLISHED (Code Bot Roblox, 2026-10-02 10:47 Dublin): Open Cloud place version **224**. Speed Trial row right after the FREE rows in SUPPLY · R$
+- **Source:** Code Bot `054d62c` on phase-7-polish. WE_Build **226**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change (1 R$, 3715953404). Servers NOT restarted.
+- **PROVEN CAUSE (two parts):**
+  1. **Sort bug (code, v224 + v225):** `ShopController` builds the Speed Trial row (key `sp_speedtrial`) into the SUPPLY · R$ list (`addRow` → `buildRow(list, ...)`, between FREE Airdrop and FREE Invite). The v206/v207 price sort `applyPriceOrder` → `rowRobuxPrice(rowKey)` looks the key up in `MonetizationConfig.DevProducts` / `GamePasses`; `sp_speedtrial` is in neither (the product lives in `SpeedTrialConfig`, MonetizationService marks its synthetic def `HideFromShop`), so it got `SORT_NO_PRICE` → tier 2 (no-price rows: Favorite, locked Supply Crate) → the very **bottom** of the list, under every paid row. Not a different tab, not a catalog / LivePrices filter (its button text is hard-coded "1 R$").
+  2. **Old server (timing):** Shaun tested ~10:41 in his **private (VIP) server**; v225 published 10:42 (place 223). A Roblox server, private included, keeps the place version it started on until it shuts down (no restart was done), so that server ran v224 or older. In v224 the row is also hidden for a Speed Pass / Speed Boost owner (the OwnerAlwaysShow override only arrived in v225). Older than v224 (before 10:25): no Speed Trial at all.
+  - **Private-server code paths:** none in the shop / Speed Trial path. `PrivateServerId` / `PrivateServerOwnerId` are only read by `BaseGuards`, `OpsRewards` and `CheckpointGuardService` (reward multipliers / guards); `ShopController`, `SpeedTrialConfig`, `SpeedTrialService`, `MonetizationConfig`, `AdminConfig` never branch on them.
+- **FIX:** `rowRobuxPrice` prices `sp_speedtrial` from `SpeedTrialConfig.RobuxPrice` (1) → tier 1, cheapest paid row → right after the FREE rows for everyone who gets the row. Row gate unchanged (`AlwaysShowFor`: shaunie6 470626172 via AdminConfig + Laumartinez26 11718087109; others hidden only if they own Speed Pass / Speed Boost). Same `buildRow` as every row → mobile layout unchanged.
+- **FILES:** `ShopController.luau`, `tools/checks/codebot_v226.py`, WE_Build pins 225 → 226 (src + tools/checks), `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
+- **TESTING:** BuyPathStatic **PASS=9586 FAIL=0**; codebot_v226 (row in Supply list, priced from SpeedTrialConfig, sort sim FREE → Speed Trial → 5 R$ ...).
+- **Publish:** HTTP 200, versionNumber **224**, universe 10767159222 / place 97112936860418. **Servers NOT restarted.**
+- **Phone test (Shaun / Laumartinez26):** the private server must be a NEW one: leave, then in the game page Servers → your private server → (⋯) / Configure → **Shut Down** (or wait until it is empty a few minutes), then join again → Shop → SUPPLY · R$: FREE Airdrop, FREE Invite, then **Speed Trial · 1 R$**, then the 5 R$ rows.
+- **NEXT:** none for this; JOB64/62 still held.
+
+
+## v225 PUBLISHED (Code Bot Roblox, 2026-10-02 10:42 Dublin): Open Cloud place version **223**. Speed Trial OwnerAlwaysShow (owner + tester always see the row)
+- **Source:** Code Bot `3746e9b` on phase-7-polish. WE_Build **225**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change (1 R$, 3715953404). Servers NOT restarted.
+- **COMPLETED:** `SpeedTrialConfig.OwnerAlwaysShow = true` + `AlwaysShowUserIds = { 11718087109 }` (Laumartinez26, tester) + `SpeedTrialConfig.AlwaysShowFor(userId)` (AdminConfig `IsPlaytestOwner` / `UserIds` allowlist → shaunie6 470626172). `ShopController` shows the Speed Trial row for them even when they own Speed Pass / Speed Boost; everyone else unchanged (hidden for those owners). The run itself was never server-gated; a speed owner keeps their own faster speed (trial boost never overwrites it). Tester NOT added to AdminConfig (no admin commands).
+- **FILES:** `SpeedTrialConfig.luau`, `ShopController.luau`, `tools/checks/codebot_v225.py`, WE_Build pins 224 → 225, `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
+- **TESTING:** BuyPathStatic **PASS=9570 FAIL=0**; speed trial sim 0 failed; codebot_v225.
+- **Publish:** HTTP 200, versionNumber **223**, universe 10767159222 / place 97112936860418. **Servers NOT restarted** (join a new server for WE_Build 225).
+- **Phone test (Shaun / Laumartinez26, new server, WE_Build 225):** Shop → Speed Trial row now visible despite Speed Boost → How to play → 1 R$ START → 6 rings → cash. CANCEL ends the run. A non-admin account with Speed Boost still sees no row.
+- **NEXT:** none for this; JOB64/62 still held.
+
+
 ## v224 PUBLISHED (Code Bot Roblox, 2026-10-02 10:25 Dublin): Open Cloud place version **222**. JOB 66 Speed Trial PUBLIC + honest shop text (Shaun items 5+6)
 - **Source:** cherry-pick `d1a07d3` + `e697106` (claude/desktop-bud) → phase-7-polish. WE_Build **224**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no unapproved price change. Servers NOT restarted.
 - **COMPLETED:**
@@ -472,6 +575,95 @@
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 71 ADMIN ABUSE live event (2026-10-02; Sat 10 Oct 20:00–20:30 Dublin; deadline Thu 8 Oct) (branch `claude/desktop-bud`)
+Labelled JOB 71 as in Code Bot's handoff / commits (this branch's CLAUDE.md still says "JOB 70"). Its check is
+`tools/checks/claude_bud_job71.py`; `claude_bud_job70.py` stays the shipped JOB 70 collision / walls check.
+
+**Config:** `Shared/Configs/AdminAbuseConfig.luau`.
+- `Id "AdminAbuse1"`, Start 1791658800 / End 1791660600 (20:00 / 20:30 Dublin), `EventId "9167160688932684354"` (a
+  string).
+- Pop-up title / when / perks / chip text as specified.
+- Every action's seconds, cooldown and amount. Nothing is hard-coded elsewhere.
+
+**Owner panel (ADMIN-ONLY FOREVER):** Settings > ADMIN > **ADMIN ABUSE PANEL**, owner only (`Client/AdminAbuseController`).
+- Two columns of 56 px buttons: ANNOUNCE (+ text box), CASH RAIN, AIRSTRIKE STORM, FREE TANK DROP, 2x CASH 10 MIN,
+  LOW GRAVITY 5 MIN, SPEED FOR ALL 5 MIN, GIANT BOSS, STOP ALL, CLOSE.
+- Each button shows "ON m:ss" / "WAIT m:ss".
+- At 1024×471 the card sits right of the thumbstick zone and left of the jump column, with nothing overlapping (layout
+  sim).
+- Every press is re-checked on the server: `AdminConfig.IsPlaytestOwner` first, then RemoteGate schema + rate limit,
+  then the action's cooldown.
+
+**All servers** (`Server/Services/AdminAbuseService`):
+- One `MessagingService` topic, `WE_AdminAbuse`, payload `{action, args, sentAt, nonce}`, under 900 bytes.
+- Every server, the sender's included, applies it from its subscription. A nonce is applied once; a message older
+  than 30 s is ignored.
+- If the publish fails (Studio or an outage), the action applies on the sender's server.
+- ANNOUNCE text is filtered for broadcast on the sender's server; only the filtered text travels.
+
+**Actions:**
+- **Cash Rain:** up to 30 crates near the players (the audited pack crate + its Box hull). A touch or tap pays $2,500
+  once per crate per player (an EconomyService grant). The crates are gone after 60 s.
+- **Airstrike Storm:** 14 blasts over 20 s near players (the WeaponFx explosion visual, no Explosion instance). Small
+  damage that never kills (health floor 1); protected players are skipped; never a building, wall, gate or ATM.
+- **Free Tank Drop:** every player gets a LightTank for 10 min through the normal spawn path. A one-call loan skips
+  ownership / level / base / cooldown and is never written to the profile. It despawns at expiry, on leave, or on
+  STOP ALL.
+- **2x Cash 10 min:** `EconomyService.cashMultFor` uses `max(DOUBLE WEEKEND, 2x)`, never a product, on the
+  earned-cash branch only. Raid / nuke transfers, codes and Robux are untouched.
+- **Low Gravity 5 min:** Workspace.Gravity 60, with the old value restored exactly.
+- **Speed for all 5 min:** x1.75 through the tagged setter. Respawns and joiners get it too. A pass owner is never
+  touched, and only the players it sped up are restored.
+- **Giant Boss:** one HeavyInfantry Soldier-rig NPC scaled x3, named "WARLORD".
+  - HP = 4,000 + 1,500 per player.
+  - Public boss health bar.
+  - Gone after 5 min.
+  - $25,000 once to everyone who hit it.
+- **Announcement:** a big centred banner on every player's screen on every server, for 6 s.
+- **STOP ALL:** ends every effect. It also runs at server close.
+
+**Public UI** (no OwnerFirst): the DOUBLE WEEKEND chip / details card / once-per-player RSVP pop-up code
+(`DoubleWeekendController`) now runs for a list of events (`run(cfg, slot)`).
+- ADMIN ABUSE gets a countdown chip under TARGETS from 24 h before ("ADMIN ABUSE · in 5h 12m"; tap = details).
+- "ADMIN ABUSE LIVE · 12m" shows in the window and while any owner action runs.
+- The RSVP pop-up is skipped when you are already Going. NOTIFY ME = `PromptRsvpToEventAsync`.
+- `DoubleEvent` saves each event's seen flag in `profile.EventPopupSeen[Id]` (no new save key).
+
+**Proof:**
+- `tools/sim/run_admin_abuse_test.py` (the REAL service with fakes):
+  - a non-owner is refused (nothing published); the owner's press is published once; cooldown;
+  - nonce applied once; a stale message ignored; a failed publish applies locally;
+  - gravity set / restored by STOP ALL and by its timer; 2x on / off;
+  - speed 28 then restored (pass owner untouched);
+  - airstrike 10 hp -> 1, protected and out-of-radius untouched;
+  - 99 crates asked -> 30, and a crate pays once;
+  - tanks for every player (LightTank, 600 s);
+  - boss HP scaling, a reward once to each of 2 hitters, and nothing on a second death;
+  - only the filtered announcement travels, and the banner reaches every player.
+- `tools/sim/run_admin_abuse_layout_test.py`: 1024×471 has 56 px controls, no overlap, out of the thumbstick / jump
+  zones.
+- `tools/checks/claude_bud_job71.py`: every brief proof + both sims.
+
+**Code Bot:**
+- Bump `WE_Build` (lanes never do).
+- Run the Studio 2-server / 2-player test of every action (MessagingService needs a real published game or a Team Test
+  for cross-server).
+- Publish by Thu 8 Oct.
+
+**Test ON HIS PHONE (two servers):**
+1. Settings > ADMIN > ADMIN ABUSE PANEL opens; the buttons are big and nothing overlaps.
+2. Press each button and check a friend on a SECOND server sees it:
+   - crates you can grab once each;
+   - blasts that hurt but never kill;
+   - a free tank for 10 min;
+   - 2x cash;
+   - floaty gravity;
+   - fast running;
+   - the WARLORD with a health bar (its kill pays everyone who hit it);
+   - your typed announcement.
+3. STOP ALL ends everything at once.
+4. Any player sees the ADMIN ABUSE chip under TARGETS and the one-time pop-up with NOTIFY ME.
+
 ## claude-bud HONEST SHOP TEXT (2026-10-02, Shaun item 6) (branch `claude/desktop-bud`)
 **Proven from code:** the VIP and 2x Cash multipliers apply to income, training, kills, missions, dailies, achievements,
 level-ups and bounties. They do NOT apply to jobs (ops), supply drops, oil pumps, ATM / bank raids, offline cash, codes
