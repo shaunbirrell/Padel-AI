@@ -18,6 +18,7 @@ from pathlib import Path
 
 BUILD = 221
 PREV = "f351945"  # v220 handoff tip (place version 218)
+OWN = "2bda0e8"  # v221 code commit (place version 219)
 ROOT = Path.cwd()
 C = "src/ReplicatedStorage/Shared/Configs/"
 S = "src/ServerScriptService/Server/"
@@ -106,10 +107,11 @@ _v221_prev = _v221_old(C + "MonetizationConfig.luau")
 if _v221_prev is not None:
     _v221_ck(re.findall(r"\bRobuxPrice = \d+", _v221_prev) == re.findall(r"\bRobuxPrice = \d+", _v221_MC), "every RobuxPrice unchanged from " + PREV)
     _v221_ck(re.findall(r"\bId = \d+", _v221_prev) == re.findall(r"\bId = \d+", _v221_MC), "every product / pass Id unchanged from " + PREV)
-    _v221_ck(_v221_old(S + "Modules/ProfileSchema.luau") == _v221_rd(S + "Modules/ProfileSchema.luau"), "ProfileSchema / save keys unchanged")
-    _v221_dn = subprocess.run(["git", "diff", "--name-only", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT).stdout
+    # scoped to v221's own commit (2bda0e8): claude/desktop-bud carries deferred JOB 64 ProfileSchema / src edits of its own
+    _v221_dn = subprocess.run(["git", "diff", "--name-only", PREV, OWN, "--", "src"], capture_output=True, text=True, cwd=ROOT).stdout
+    _v221_ck("ProfileSchema" not in _v221_dn, "ProfileSchema / save keys unchanged")
     _v221_ck("WE_Building" not in _v221_dn, "no WE_Building* file changed")
-    _v221_dd = subprocess.run(["git", "diff", "-U0", PREV, "--", "src"], capture_output=True, text=True, cwd=ROOT).stdout
+    _v221_dd = subprocess.run(["git", "diff", "-U0", PREV, OWN, "--", "src"], capture_output=True, text=True, cwd=ROOT).stdout
     _v221_ck(not re.search(r'^[+-].*SetAttribute\("WE_Building', _v221_dd, re.M), "no WE_Building* attribute line touched")
 else:
     _v221_ck(True, "git history unavailable (shallow clone): diff guards skipped")
