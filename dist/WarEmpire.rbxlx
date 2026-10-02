@@ -9286,12 +9286,12 @@ local MonetizationConfig = {
 		-- Code Bot board-text (Shaun, phone: "the writing on the boards is far too small"): the Supply Depot stand signs
 		-- in a big phone layout (Client/Modules/StandSignBig + Shared/Util/StandSignLayout): bold name, ONE short effect
 		-- line (MonetizationConfig.EffectFor: the Effect / SpeedText below, never typed in the client), a big price /
-		-- OWNED pill. Client-local only (the viewer's own copy of the panel), NEW-OWNER-FIRST (RetentionConfig.Live:
+		-- OWNED pill. Client-local only (the viewer's own copy of the panel), PUBLIC (RetentionConfig.Live:
 		-- owner 470626172 + Studio). W stays <= Depot.Step - 5 (neighbours never overlap); the panel grows UP only (its
 		-- bottom and posts stay put, the hologram under it is untouched). No price, Id or prompt change.
 		BigSign = {
 			Enabled = true,
-			OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot board-text): Shaun's phone test first
+			OwnerFirst = false, -- PUBLIC (Code Bot v215): Shaun approved the bigger board text for everyone
 			W = 7.0, -- studs (was SignW 6.4)
 			H = 4.2, -- studs (was SignH 3.4)
 			PixelsPerStud = 60, -- unchanged: canvas 420 x 252
@@ -17529,10 +17529,10 @@ end
 	hidden; a new airdrop guides again) and a Settings toggle "Airdrop guide line: ON / OFF" (saved per player in the
 	NEW key profile.Settings[GuideHide.SettingKey]; no existing save key is touched; the server mirrors it as the player
 	attribute GuideHide.Attr). The Shop's FREE Airdrop TRACK row still guides on purpose (an explicit tap).
-	NEW-OWNER-FIRST (RetentionConfig.Live: owner 470626172 + Studio). ]]
+	PUBLIC (RetentionConfig.Live: owner 470626172 + Studio). ]]
 SupplyDropConfig.GuideHide = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot board-text): Shaun's phone test first
+	OwnerFirst = false, -- PUBLIC (Code Bot v215): Shaun approved the airdrop guide controls for everyone
 	SettingKey = "AirdropGuideOff", -- NEW save key (profile.Settings.AirdropGuideOff = true | nil)
 	Attr = "WE_AirdropGuideOff",
 	Remote = "RequestAirdropGuideSetting", -- = Constants.RemoteNames.RequestAirdropGuideSetting (client -> server boolean, AirdropGuideService)
@@ -32207,7 +32207,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 214)
+		player:SetAttribute("WE_Build", 215)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -73442,10 +73442,10 @@ return AirWeaponService
             <string name="Name">AirdropGuideService</string>
             <string name="Source"><![CDATA[--!strict
 --[[ Code Bot board-text (Shaun: "let me turn the yellow airdrop guide line off"). Server side of Settings ->
-	"Airdrop guide line: ON / OFF" (SupplyDropConfig.GuideHide, NEW-OWNER-FIRST). Saved per player in the NEW key
+	"Airdrop guide line: ON / OFF" (SupplyDropConfig.GuideHide, PUBLIC. Saved per player in the NEW key
 	profile.Settings.AirdropGuideOff (true | nil: no other save key is read or written), mirrored as the player attribute
 	GuideHide.Attr, which the client's FeatureController (no automatic AIRDROP line) and SettingsController (the row's
-	label) read. Validated (RemoteGate boolean schema), rate-limited, refused for a player the switch is not live for.
+	label) read. Validated (RemoteGate boolean schema), rate-limited, refused only when the public switch is disabled.
 	Display only: the airdrop itself, its claim and its cash are unchanged (SupplyDropService). ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -78305,7 +78305,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 214)
+			player:SetAttribute("WE_Build", 215)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -87012,7 +87012,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 214)
+		player:SetAttribute("WE_Build", 215)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -87154,7 +87154,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=214",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=215",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)

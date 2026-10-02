@@ -685,12 +685,12 @@ local MonetizationConfig = {
 		-- Code Bot board-text (Shaun, phone: "the writing on the boards is far too small"): the Supply Depot stand signs
 		-- in a big phone layout (Client/Modules/StandSignBig + Shared/Util/StandSignLayout): bold name, ONE short effect
 		-- line (MonetizationConfig.EffectFor: the Effect / SpeedText below, never typed in the client), a big price /
-		-- OWNED pill. Client-local only (the viewer's own copy of the panel), NEW-OWNER-FIRST (RetentionConfig.Live:
+		-- OWNED pill. Client-local only (the viewer's own copy of the panel), PUBLIC (RetentionConfig.Live:
 		-- owner 470626172 + Studio). W stays <= Depot.Step - 5 (neighbours never overlap); the panel grows UP only (its
 		-- bottom and posts stay put, the hologram under it is untouched). No price, Id or prompt change.
 		BigSign = {
 			Enabled = true,
-			OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot board-text): Shaun's phone test first
+			OwnerFirst = false, -- PUBLIC (Code Bot v215): Shaun approved the bigger board text for everyone
 			W = 7.0, -- studs (was SignW 6.4)
 			H = 4.2, -- studs (was SignH 3.4)
 			PixelsPerStud = 60, -- unchanged: canvas 420 x 252

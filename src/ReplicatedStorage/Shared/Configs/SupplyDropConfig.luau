@@ -68,10 +68,10 @@ end
 	hidden; a new airdrop guides again) and a Settings toggle "Airdrop guide line: ON / OFF" (saved per player in the
 	NEW key profile.Settings[GuideHide.SettingKey]; no existing save key is touched; the server mirrors it as the player
 	attribute GuideHide.Attr). The Shop's FREE Airdrop TRACK row still guides on purpose (an explicit tap).
-	NEW-OWNER-FIRST (RetentionConfig.Live: owner 470626172 + Studio). ]]
+	PUBLIC (RetentionConfig.Live: owner 470626172 + Studio). ]]
 SupplyDropConfig.GuideHide = {
 	Enabled = true,
-	OwnerFirst = true, -- NEW-OWNER-FIRST (Code Bot board-text): Shaun's phone test first
+	OwnerFirst = false, -- PUBLIC (Code Bot v215): Shaun approved the airdrop guide controls for everyone
 	SettingKey = "AirdropGuideOff", -- NEW save key (profile.Settings.AirdropGuideOff = true | nil)
 	Attr = "WE_AirdropGuideOff",
 	Remote = "RequestAirdropGuideSetting", -- = Constants.RemoteNames.RequestAirdropGuideSetting (client -> server boolean, AirdropGuideService)

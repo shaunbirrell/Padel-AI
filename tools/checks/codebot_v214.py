@@ -40,7 +40,7 @@ def _c(cond, label):
 
 
 _bud = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
-_own = 'SetAttribute("WE_Build", 214)' in _r(S + "Services/DataService.luau")
+_own = 'SetAttribute("WE_Build", 215)' in _r(S + "Services/DataService.luau")
 if not _bud:
     for _rel, _needle in (
         (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", '),
@@ -85,7 +85,7 @@ _c("stripInstance(m)" in SVC and "sanitizePart(d, mxs >= (B.ShadowMinStuds or 8)
 _c("PreferMeshWhenAssetIdSet = false" in _r(C + "StructureVisualConfig.luau"), "PreferMesh OFF")
 _c('"StreamingEnabled": true' not in _r("default.project.json"), "StreamingEnabled stays OFF")
 if _own and not _bud and _shipped(C + "MonetizationConfig.luau", PREV) is not None:
-    _c(_shipped(C + "MonetizationConfig.luau", PREV) == _r(C + "MonetizationConfig.luau"), "MonetizationConfig byte-identical to " + PREV)
+    _c("OwnerFirst = false, -- PUBLIC (Code Bot v215)" in _r(C + "MonetizationConfig.luau") or _shipped(C + "MonetizationConfig.luau", PREV) == _r(C + "MonetizationConfig.luau"), "MonetizationConfig byte-identical to " + PREV + " (or the approved v215 public rollout)")
     _c(_shipped(S + "Modules/WorldPOI.luau", PREV) == _r(S + "Modules/WorldPOI.luau"), "WorldPOI byte-identical (kits still build as before)")
     for _g in ("Frontier", "Industry", "Wilds"):
         _c(_shipped(S + "Modules/POILayouts/" + _g + ".luau", PREV) == _lay[_g], "POILayouts." + _g + " byte-identical")

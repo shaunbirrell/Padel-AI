@@ -7,6 +7,7 @@
 # 2. AIRDROP guide line: a big HIDE LINE button (ObjectiveMarker.Clear: the Beam goes) that keeps that airdrop hidden,
 #    and a Settings toggle saved in the NEW key profile.Settings.AirdropGuideOff. A Luau sim of FeatureController's logic.
 # No price change; PreferMesh OFF; StreamingEnabled OFF; WE_Building* untouched; no new Heartbeat.
+# Code Bot v215 rollout: both switches are now public; the v215 check proves non-owner server/client access.
 import os
 import re
 import subprocess
@@ -63,12 +64,12 @@ def _strip_comments(src):
 _bud = (ROOT / S / "Services/ExperienceNotifyService.luau").is_file()  # claude/desktop-bud: ship-only pins skip
 if not _bud:
     for _rel, _needle in (
-        (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 214)'),
-        (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 214)'),
-        (S + "Services/DataService.luau", "WE_Build=214"),
-        (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 214)'),
+        (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 215)'),
+        (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 215)'),
+        (S + "Services/DataService.luau", "WE_Build=215"),
+        (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 215)'),
     ):
-        _c(_needle in _r(_rel), "WE_Build=214 " + _rel.rsplit("/", 1)[-1])
+        _c(_needle in _r(_rel), "WE_Build=215 " + _rel.rsplit("/", 1)[-1])
 
 MC = _r(C + "MonetizationConfig.luau")
 SDC = _r(C + "SupplyDropConfig.luau")
@@ -82,7 +83,7 @@ PS = _r(S + "Modules/PurchaseStands.luau")
 # ───────────── 1. the board ─────────────
 _bi = MC.find("\t\tBigSign = {")
 _bs = MC[_bi:MC.find("\t\t},", _bi)] if _bi > 0 else ""
-_c("Enabled = true," in _bs and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _bs, "PremiumPads.BigSign enabled + OwnerFirst = true")
+_c("Enabled = true," in _bs and "OwnerFirst = false, -- PUBLIC (Code Bot v215)" in _bs, "PremiumPads.BigSign enabled + OwnerFirst = false (public rollout)")
 _num = lambda k: float(re.search(r"\b" + k + r" = ([\d.]+)", _bs).group(1)) if re.search(r"\b" + k + r" = ([\d.]+)", _bs) else 0.0
 BW, BH, BPX = _num("W"), _num("H"), _num("PixelsPerStud")
 _step = float(re.search(r"Depot = \{ X0 = -?\d+, Step = (\d+)", MC).group(1))
@@ -179,7 +180,7 @@ print("LIVE_OWNER " .. tostring(MC.BigSignLiveFor(470626172)) .. " LIVE_OTHER " 
 '''
 _rc, _out = _luau(_sim)
 _c(_rc == 0 and "CANVAS" in _out, "Luau: StandSignLayout.Big + MonetizationConfig.EffectFor ran" + ("" if _rc == 0 else " :: " + _out[-400:]))
-_c("LIVE_OWNER true LIVE_OTHER false" in _out, "BigSignLiveFor: owner yes, other players no (Studio: everyone)")
+_c("LIVE_OWNER true LIVE_OTHER true" in _out, "BigSignLiveFor: owner and non-owner are live (public rollout)")
 
 BOX = {}
 CANVAS = (0, 0, 0)
@@ -299,7 +300,7 @@ if os.environ.get("CODEBOT_V212_REPORT"):
 # ───────────── 2. airdrop guide line ─────────────
 _gi = SDC.find("SupplyDropConfig.GuideHide = {")
 _gs = SDC[_gi:SDC.find("\n}", _gi)] if _gi > 0 else ""
-_c("Enabled = true," in _gs and "OwnerFirst = true, -- NEW-OWNER-FIRST" in _gs, "SupplyDropConfig.GuideHide enabled + OwnerFirst = true")
+_c("Enabled = true," in _gs and "OwnerFirst = false, -- PUBLIC (Code Bot v215)" in _gs, "SupplyDropConfig.GuideHide enabled + OwnerFirst = false (public rollout)")
 _c('SettingKey = "AirdropGuideOff"' in _gs and 'Attr = "WE_AirdropGuideOff"' in _gs, "GuideHide: new save key AirdropGuideOff + attribute")
 _bsz = re.search(r"ButtonSize = Vector2.new\((\d+), (\d+)\)", _gs)
 _c(_bsz is not None and int(_bsz.group(2)) >= 64 and int(_bsz.group(1)) >= 160, "HIDE LINE button >= 64 v tall (>= 44 real px on a phone), wide")
@@ -383,17 +384,18 @@ assert(beams == 0, "Settings OFF: no line")
 ATTR.WE_AirdropGuideOff = nil
 show(700)
 assert(beams == 1, "Settings ON again: line")
--- 5: another player (switch not live): unchanged behaviour (always the line)
+-- 5: another player: public switch honors the saved OFF setting too
 guideHideLive = nil
 LP.UserId = 1
 ATTR.WE_AirdropGuideOff = true
+marker("Airdrop", { Show = false })
 hiddenDropKey = "900:5"
 show(900)
-assert(beams == 1, "non-owner: the line as before")
+assert(beams == 0, "non-owner: public Settings OFF hides the line")
 print("AIRDROP_SIM_OK")
 '''
 _rc2, _out2 = _luau(_fsim)
-_c(_rc2 == 0 and "AIRDROP_SIM_OK" in _out2, "Luau sim: HIDE removes the beam, that airdrop stays hidden, a new one guides, Settings OFF = none, non-owner unchanged" + ("" if _rc2 == 0 else " :: " + _out2[-500:]))
+_c(_rc2 == 0 and "AIRDROP_SIM_OK" in _out2, "Luau sim: HIDE removes the beam, that airdrop stays hidden, a new one guides, Settings OFF = none for owner and non-owner" + ("" if _rc2 == 0 else " :: " + _out2[-500:]))
 
 # ───────────── guards ─────────────
 _c("PreferMeshWhenAssetIdSet = false" in _r(C + "StructureVisualConfig.luau"), "PreferMesh OFF")

@@ -31,8 +31,8 @@ for rel in (
     "Services/DataService.luau",
     "EarlyRemotes.server.luau",
 ):
-    check('SetAttribute("WE_Build", 214)' in read(S / rel), "WE_Build=214 " + rel)
-check("WE_Build=214" in read(S / "Services/DataService.luau"), "DataService loaded log says WE_Build=214")
+    check('SetAttribute("WE_Build", 215)' in read(S / rel), "WE_Build=215 " + rel)
+check("WE_Build=215" in read(S / "Services/DataService.luau"), "DataService loaded log says WE_Build=215")
 
 mc = read(C / "MonetizationConfig.luau")
 check("OwnerFirst = false" in mc[mc.index(").Starter5 = {") : mc.index(").Starter5 = {") + 700], "Starter5 remains public")

@@ -1,9 +1,9 @@
 --!strict
 --[[ Code Bot board-text (Shaun: "let me turn the yellow airdrop guide line off"). Server side of Settings ->
-	"Airdrop guide line: ON / OFF" (SupplyDropConfig.GuideHide, NEW-OWNER-FIRST). Saved per player in the NEW key
+	"Airdrop guide line: ON / OFF" (SupplyDropConfig.GuideHide, PUBLIC. Saved per player in the NEW key
 	profile.Settings.AirdropGuideOff (true | nil: no other save key is read or written), mirrored as the player attribute
 	GuideHide.Attr, which the client's FeatureController (no automatic AIRDROP line) and SettingsController (the row's
-	label) read. Validated (RemoteGate boolean schema), rate-limited, refused for a player the switch is not live for.
+	label) read. Validated (RemoteGate boolean schema), rate-limited, refused only when the public switch is disabled.
 	Display only: the airdrop itself, its claim and its cash are unchanged (SupplyDropService). ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

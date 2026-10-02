@@ -35,12 +35,12 @@ C = "src/ReplicatedStorage/Shared/Configs/"
 
 # All four runtime build pins: BaseService, DataService attribute + load log, EarlyRemotes.
 for rel, needle in (
-    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 214'),
-    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 214'),
-    (S + "Services/DataService.luau", "WE_Build=214"),
-    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 214'),
+    (S + "Services/BaseService.luau", 'SetAttribute("WE_Build", 215'),
+    (S + "Services/DataService.luau", 'SetAttribute("WE_Build", 215'),
+    (S + "Services/DataService.luau", "WE_Build=215"),
+    (S + "EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 215'),
 ):
-    check(needle in read(rel), "CODEBOT v155: WE_Build=214 " + rel.rsplit("/", 1)[-1])
+    check(needle in read(rel), "CODEBOT v155: WE_Build=215 " + rel.rsplit("/", 1)[-1])
 
 bmc = read(C + "BaseMarkerConfig.luau")
 check(re.search(r"Live\s*=\s*\{[^}]*OwnerFirst\s*=\s*false\s*,", bmc, re.S) is not None,
