@@ -1,9 +1,10 @@
-## v222 PUBLISHED (Code Bot Roblox, 2026-10-02 09:20 Dublin): Open Cloud place version PENDING. Rebirth-zone buildings OWNER-FIRST (Shaun item 2)
+## v222 PUBLISHED (Code Bot Roblox, 2026-10-02 09:20 Dublin): Open Cloud place version **220**. Rebirth-zone buildings OWNER-FIRST (Shaun item 2)
 - **Source:** cherry-pick `43380f0` (claude/desktop-bud) → phase-7-polish. WE_Build **222**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id / save-key change. Servers NOT restarted.
 - **COMPLETED:** each rebirth zone's MAIN block building becomes a free desert house on every plot still showing the Part build (`Job67DressConfig.ZoneBuildings`, `OwnerFirst = true`, NEW-OWNER-FIRST by the base owner). `Job67DressService.DressZone` runs from `RebirthZoneService` after the Part build, off-thread. Store-model zones left alone. 7 houses = 1,151 parts ≤ MaxPartsPerPlot 1300. Packs: Prinz 10055885754 / CAG 9939040273 / Imp 15654066038.
 - **HELD:** JOB 64 Referral (Creator Hub), JOB 62 notifications (WE_NOTIFY_KEY). DOUBLE WEEKEND proof checks stay on bud only (no event code change).
 - **FILES:** `Job67DressConfig.luau`, `Job67DressService.luau`, `RebirthZoneService.luau`, `tools/checks/claude_bud_zone_buildings.py`, `tools/checks/codebot_v222.py`, WE_Build pins 221 → 222, `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
 - **TESTING:** BuyPathStatic **PASS=9456 FAIL=0**; `claude_bud_zone_buildings.py` + `codebot_v222.py`.
+- **Publish:** HTTP 200, versionNumber **220**, universe 10767159222 / place 97112936860418. **Servers NOT restarted** (join a new server for WE_Build 222).
 - **Phone test (Shaun, new server, WE_Build 222, owner-only):** visit your rebirth zones — each main building is a detailed desert house; walk into a house (solid); kiosks/consoles/runs still work. Non-owner plots keep the old blocks.
 - **NEXT:** flip `ZoneBuildings.OwnerFirst` to false after phone OK.
 
