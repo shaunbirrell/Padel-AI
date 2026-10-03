@@ -1,3 +1,41 @@
+## v253 — Code Bot (Claude JOB 77 rebirth rewards + Commander Statue, owner-first) — place version 251, code cf974f5
+Published Sat 3 Oct 12:22 Dublin. No restart (new servers pick it up).
+- Cherry-picked Claude `claude/desktop-bud` **4d04222** + **54dd3b0** onto `phase-7-polish`. WE_Build **253**. PreferMesh OFF; no WE_Building*; no price / Id change.
+- **ONE gate:** `RebirthConfig.Rewards` OwnerFirst=true (NEW-OWNER-FIRST): Shaun + Laumartinez26. Everyone else unchanged. Part D label/text fixes (garage rebirth gates, next-level, fee text) go to everyone.
+- **A cash:** one `EconomyService.PrestigeFactor`; oil / crates / jobs get the rebirth bonus; missions / chests / Day 7 / zone runs no longer double it; Rebirth Boost wired (pass Id still 0); titles on leaderboard Rank.
+- **B statue:** `RebirthDressing` loads napoleon **85904106700178** (rip PASS), fallback **5352418094**; never **4565808728**; Part statue if both fail; `/statuetest` owner-only.
+- **C dressing:** R3 CC banner, R5 walk-in banners, R10 Empire Beacon, R25 fireworks, R21-24 camo cosmetics, R50 Commander Statue.
+- Checks: `tools/checks/claude_bud_job77.py` + `codebot_v253.py`; sim `run_rebirth_rewards_test.py` 0 failed. BuyPathStatic PASS FAIL=0.
+- **Phone test (owner):** `/statuetest` on parade ground; rebirth fee/garage labels; collect ATM/oil/crate before/after rebirth (+10%); R10 beam / R25 fireworks; Rank on leaderboard.
+- **Questions for Shaun** (balance, still open in Claude handoff): gold cap at R21, world boss/bank raid prestige, empty R26-49 rows, leaderboard Rebirths column.
+- Deferred unchanged: JOB62 / JOB64 / DW-proof held on bud; JOB73 ON HOLD; JOB78 queued docs only.
+
+## v252 — Code Bot (49 R$ Recruit Pack follow-up card, owner-first) — place version 250, code 8394bf0
+Published Sat 3 Oct 12:05 Dublin. No restart (new servers pick it up).
+- 5 R$ StarterRecruit5 card (3715888533), exact contents: "+3 Soldiers for your army", "+$X cash" (X = the receipt's Starter5Cash for him now). The "2x income 10 min: in the Shop" line is gone from it.
+- New separate one-time 49 R$ Recruit Pack card (3715776659): "+$X cash (30 min of income)" (X = RecruitPackCashFor, the receipt's number), "2x cash for 30 min", "Gold RECRUIT base trim". Fires at first capture or 10 min of play, >= 240 s after the 5 R$ card showed this session; buyers and non-buyers of the 5 R$; never if he owns RecruitPack. RecruitPackService.Step no longer swaps it out once the 5 R$ offer is done (shown or owned).
+- Marked offered only on the client's "shown" (v153 pattern); uses the soft-offer slot (3/session, 4 min).
+- Big phone card (RecruitPackController showCardV2): centred, <= 380 / 92 % wide, 22 px title, 20 px lines, BUY <price> R$ + NO THANKS 56 tall side by side.
+- Gate: MonetizationConfig.RecruitFollowUp (Enabled, OwnerFirst = true: Shaun 470626172 + Studio only). Everyone else: the old cards, unchanged. No price / product change.
+- Owner test: Settings > ADMIN > TEST OFFER CARDS (5 R$ now, 49 R$ 30 s later, nothing marked) and RESET OFFERS (clears Starter5Offered + RecruitPackOffered); chat /testoffers, /testoffers reset. IsPlaytestOwner only.
+- Checks: tools/checks/codebot_v252.py + tools/sim/run_recruit_followup_test.py. Old sims run_starter5_test / run_recruit_pack_test now pin RecruitFollowUp OFF (= old path); codebot_v207/v220/v230 OwnerFirst counters exempt the tagged "NEW-OWNER-FIRST (Code Bot v252)" line. BuyPathStatic PASS=10124 FAIL=0.
+- To go public: RecruitFollowUp.OwnerFirst = false (update those three exemptions).
+
+## v251 PUBLISHED (Code Bot Roblox, 2026-10-03 Dublin): Open Cloud place version **249**. 5 free achievement badges wired (batch 4)
+- **Source:** Code Bot `e1651ab` on phase-7-polish. WE_Build **251**. PreferMesh OFF; StreamingEnabled OFF; `WE_Building*` untouched; no price / Id change. Servers NOT restarted.
+- **COMPLETED:** Wired Creator Hub free badges (universe 10767159222, verified enabled) into `AchievementConfig` BadgeId fields:
+  1. Cash100M → War Tycoon **3205920850751661**
+  2. Rebirth5 → Veteran Reborn **151909155953311**
+  3. Rebirth10 → Legend Reborn **3882967336885398**
+  4. Rebirth20 → Eternal Commander **109196259018949**
+  5. Streak7 → Loyal Soldier **3936067963753872**
+  Prior 15 wired ids (v134 + v170 + v229) unchanged. Exactly **1** BadgeId=0 remains: WeeklyCrown (next daily free batch). Award / join backfill path unchanged (`AchievementService.BackfillBadges` on every join awards already-unlocked achievements' badges).
+- **FILES:** `AchievementConfig.luau`, `tools/checks/codebot_v251.py`, zeros pins in `codebot_v134` / `codebot_v170` / `codebot_v229` + `tools/sim/run_achievement_test.py`, WE_Build pins 250 → 251 (src + tools/checks + BuyPathStatic), `dist/WarEmpire-PERF.rbxlx` (= `dist/WarEmpire.rbxlx`).
+- **TESTING:** BuyPathStatic **PASS=10093 FAIL=0**; codebot_v251 all PASS; codebot_v134 / v170 / v229 PASS.
+- **Publish:** HTTP 200, versionNumber **249**, universe 10767159222 / place 97112936860418. **Servers NOT restarted** (new servers get WE_Build 251; join backfill awards already-unlocked badges).
+- **NEXT:** daily free badge routine for the remaining 1 (WeeklyCrown; max 5/day GMT). JOB64/62/73 still held.
+
+
 ## v250 PUBLISHED (Code Bot Roblox, 2026-10-02 23:46 Dublin): Open Cloud place version **248**. Cherry-pick Claude code-review `14b4afe` only (not whole desktop-bud)
 
 **COMPLETED** (all PUBLIC — security / bug fixes, no owner-first)
@@ -846,6 +884,95 @@ codeCommit=`d80d20f` cherry=`e2d9986`/`b8b22dd` place=233 build=235
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 77 REBIRTH REWARDS (R1-R50) + COMMANDER STATUE (2026-10-03) (branch `claude/desktop-bud`)
+ONE flag: `RebirthConfig.Rewards` (`OwnerFirst = true`, NEW-OWNER-FIRST): Shaun (`AdminConfig.IsPlaytestOwner`) +
+Laumartinez26 (11718087109); OFF = today exactly. The label / text fixes (part D) go to everyone.
+- Check: `tools/checks/claude_bud_job77.py` (J77-01..19).
+- Sim: `tools/sim/run_rebirth_rewards_test.py` (19 ok; prints the R1-50 gaps and the multiplier table).
+- `MonetizationConfig` untouched, no new / renamed save keys, no price changes.
+
+**AUDIT R1-50 (proven in code; the two read-only audits, then re-checked):**
+
+| Reward | Status before | Evidence | Now |
+|---|---|---|---|
+| +10% cash / rebirth | applied once to most earned income | EconomyService cashMultFor | one helper `EconomyService.PrestigeFactor` |
+| oil / crates & airdrops / jobs | **never** got it (pass-exempt fixed pay) | MonetizationConfig CashMultExemptReasons plot_oil / supply_drop / ops | prestige factor ONLY (live) |
+| missions, mission chest, Day-7 daily, zone runs | got it **twice** (sized from PassivePerMin, which already holds it, then paid multiplied) | MissionService incomeScaled / Day7Cash, ZoneRuns perMin | rebirth factor divided out once (live) |
+| offline, VIP supply, checkpoint, heist kit, endgame rewards | once (pre-scaled, exempt) | RetentionService incomePerSecond etc. | unchanged (correct) |
+| transfers (devproduct, atm_raid, army / nuke raid, plaza_tax, collector, codes, refunds) | never multiplied | NEVER_MULTIPLIED + TransferPendingCash | unchanged (correct) |
+| Rebirth Boost +15% / x1.5 start cash | **not wired** (`boosted = false` literals; ExtraCashPerPrestige unread) | PrestigeService StartingCash/GoldBonus calls | reads the pass when live (`PrestigeService._Boosted`); the pass Id is still 0 = nobody owns it |
+| Gold 50 + 10 / rebirth, max 250 | granted | RebirthConfig.GoldBonus, PrestigeService | unchanged (the cap lands at **R21**, see questions) |
+| starting cash steps | granted | RebirthConfig.StartingCash | unchanged (+ Boost x1.5 when live) |
+| +2 soldiers / rebirth, cap +40 | granted, cap really rises | RebirthZoneService.ArmyBonus -> SoldierService.maxSoldiers | unchanged |
+| zones R1-R8 | open at their tier (R7 has none) | RebirthConfig.Zones | unchanged (JOB 69 check covers all 10 plots) |
+| free vehicles / guns R1-R20 | every row granted | PrestigeService.applyUnlocks | unchanged |
+| titles | nameplate + base sign only, **not on the leaderboard** | RebirthZoneService titleTag | + leaderstats "Rank" (live) |
+| Dressing keys (6) | **no reader at all** | grep | all read (below) |
+| garage labels | **wrong** for 4: Super Heavy P5 (gate R10), Battleship P10 (R12), Heavy Bomber P8 (R20), Strategic Bomber P10 (R20); "Rebirth" with no number | VehicleController, VehicleService errorText | one number from the real gate (everyone) |
+| level-40 "PRESTIGE UNLOCKED", "Rebirth READY", "Reach Lv 40" | **flat 40** (real: 40 + 4 / rebirth, max 90) | LevelConfig, HUDController, PrestigeService | the player's real next-rebirth level (everyone) |
+| fee text "Cash -> $10000, +50 Gold" | **stale** | PrestigeConfig.BuildFeeSummary, payload | real next-rebirth cash / Gold / % (everyone) |
+| badges R5 / R10 / R20 | BadgeId 0 (award skips 0 safely) | AchievementConfig | names below for Code Bot |
+| R21-24 | nothing new | sim | cosmetics (below) |
+| R26-29, R31-49 | only the +cash step | sim INFO line | reported (question below) |
+
+**MULTIPLIER** (no cap added). Each rebirth adds 10% (15% with the Rebirth Boost).
+
+| Rebirth | Boost off | Boost on | $/min at a $10,000/min base (off / on) |
+|---|---|---|---|
+| R1 | x1.10 | x1.15 | $11,000 / $11,500 |
+| R4 | x1.40 | x1.60 | $14,000 / $16,000 |
+| R5 | x1.50 | x1.75 | $15,000 / $17,500 |
+| R10 | x2.00 | x2.50 | $20,000 / $25,000 |
+| R20 | x3.00 | x4.00 | $30,000 / $40,000 |
+| R50 | x6.00 | x8.50 | $60,000 / $85,000 |
+
+**DRESSING (live)** (`Server/Modules/RebirthDressing`, built from `EndgameService.SyncBaseTier`'s existing sweep; no new loop):
+- **R1:** the gate banners (RebirthZoneService, now reading `GateBannersAt`) + "★ n" text.
+- **R3:** a Command Center banner ("★ n" + title).
+- **R5:** a banner beside each walk-in (read-only lookup, max 6).
+- **R10:** the Empire Beacon (1 Neon beam + ONE shadowless PointLight).
+- **R25:** a 4 s firework burst (client `RebirthFxController`, <= 40 particles a burst, only players within 400 studs, once a minute at most) on join and rebirth.
+- **R50:** the Commander Statue + nameplate "NAME · SUPREME COMMANDER · ★50" (MaxDistance 150).
+- **Cost:** R50 dressing is about 12 parts + the Part statue's ~20 (well under 40 per plot), 1 light, 0 loops.
+
+**STATUE (part B: WIRED):**
+- Code Bot's rip check (2026-10-03):
+  - 4565808728 Horse Statue **FAIL** (53 parts, foreign meshes / textures / sounds): never used;
+  - **85904106700178 "napoleon"** (maxilou1234) **PASS** (1 MeshPart by its creator, no scripts, 19,997 tris) = `Rewards.Statue.AssetId`;
+  - 5352418094 "Russian Statue" **PASS** = `FallbackAssetId` (loaded only if the first fails).
+- Licence rows: docs/ASSET_LICENSES.md + THIRD_PARTY_NOTICES.md section 7 (`wire-asset-ids.py` only manages VisualAssetConfig rows, so they were added by hand).
+- Loader: one LoadAsset per server (AssetId, then the fallback). It strips scripts / sounds / particles / lights; the model is anchored with no collide / touch / query on the detail, plus one invisible plinth collider. ScaleTo 17 studs (R50) or 12 (T5 Capital), bronze Metal (the mesh is untextured). Both failing = the Part statue; it never errors.
+- One statue per base: `BaseTierBuilder` NoStatue when the model (or the R50 statue) is there, so the Capital tier now shows the model instead of the Part block statue (live players).
+- Spot: the parade ground (-18, 0, 20), the same plot-local spot on all 10 plots. The check asserts it is inside the parade ground and >= 12 studs from every site / kiosk / annex slot.
+- `/statuetest` (owner only, chat) toggles the R50 dressing on his own plot.
+
+**R21-24 COSMETICS (cosmetic only, Shaun can veto):** a camo band on the rank banners + a nameplate colour:
+- R21 Desert Camo (sand / light gold);
+- R22 Woodland Camo (green);
+- R23 Arctic Camo (white / ice blue);
+- R24 Night Camo (dark navy / violet).
+
+**BADGES:** Code Bot's v251 already wired Rebirth5 "Veteran Reborn", Rebirth10 "Legend Reborn" and Rebirth20
+"Eternal Commander" (AchievementConfig BadgeIds). The award still skips a 0 id cleanly.
+
+**QUESTIONS FOR SHAUN (not changed: balance calls):**
+1. **Gold cap at R21:** Gold reaches the 250 cap at R21 (50 + 10 x (rebirth - 1)). Use `x rebirth` to reach it at R20?
+2. **World boss and bank raid:** both stay flat (no rebirth factor) by design. Prestige-only like oil?
+3. **Clan war, spinner, battle pass, manual dropper:** these payouts get no rebirth factor. Earned or bonus?
+4. **Other doubled multipliers:** missions / chests / Day 7 / zone runs also double the OTHER permanent multipliers (the 2x pass, Empire Tax, season, Empire Level), not only the rebirth one. Divide those out too? That would lower those rewards for pass owners.
+5. **Rebirth Boost pass:** it is still Id 0 (hidden). The cash path is ready for it.
+6. **Empty rebirths:** R26-29 and R31-49 add only the +cash step. Add rows (cosmetics / vehicles)?
+7. **Leaderboard column:** a "Rebirths" number on the leaderboard too, or the "Rank" title column only?
+
+**PHONE TEST (TEST place first, OwnerFirst):**
+1. Chat `/statuetest`: on your parade ground you get the bronze commander statue (napoleon model) with its nameplate, plus the CC banner, walk-in banners and roof beam. Nothing blocks the gate / HQ / army; no lag. Chat it again to remove.
+2. With a T5 Capital base: the block statue is replaced by the model (12 studs), and only one statue stands.
+3. Rebirth panel: the fee card shows the real next cash / Gold / +%. The garage shows Super Heavy R10+, Battleship R12+, Heavy Bomber R20+, Strategic Bomber R20+.
+4. Collect ATM / oil / a crate / a job before and after a rebirth: each pays about +10% more (oil / crates / jobs did not before). Missions and zone runs are no longer double-boosted.
+5. R10 (admin set): the roof beam. R25: fireworks on join, short and smooth.
+6. After rebirth 1, level 40 shows no "PRESTIGE UNLOCKED". "REBIRTH UNLOCKED" shows at Lv 44 (R1), 48 (R2) and so on. The HUD shows "Rebirth READY" only then.
+7. The leaderboard shows your Rank (title). R21-24 (admin set): a camo band on the gate banners and a coloured title.
+
 ## claude-bud FULL CODE REVIEW (2026-10-02, at v247) (branch `claude/desktop-bud`)
 Shaun: "run through all the code for any problems or errors".
 

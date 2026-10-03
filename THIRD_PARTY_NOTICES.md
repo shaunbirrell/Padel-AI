@@ -150,3 +150,11 @@ The nation flags (`assets/flags/atlas_<group>.png`, 7 images of 1024 x 512, and 
 Use: the player's own nation flag on their base (NationFlag, lane B) and the nation picker (NationController, lane C).
 Uploaded to Roblox by the game owner as ordinary images (ids in `src/ReplicatedStorage/Shared/Configs/NationFlagIds.luau`).
 The MIT licence allows this use; keep `LICENSE-flag-icons.txt` next to the images.
+
+## 7. Commander Statue models (claude-bud JOB 77)
+
+Free Creator Store models, loaded at run time through InsertService (never copied into the place):
+- 85904106700178 "napoleon" by maxilou1234 (User 1754681209): the R50 / Capital Commander Statue.
+- 5352418094 "Russian Statue" by Westheimer_TLW (User 919163433): the fallback if the first fails to load.
+Both passed the origin check (every mesh uploaded by the model's own creator, no scripts). Credit the creators if the
+statue is shown in promotional material.

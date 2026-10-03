@@ -10269,3 +10269,16 @@ ds_territories.luau T3):
   asset).
 - STOP ALL clears only a WORLD BOSS TEST, never the live Double Weekend bosses ("World Boss Test should also be
   cleared").
+
+## claude-bud JOB 77 rebirth rewards (2026-10-03)
+- "Single multiplier path" = `EconomyService.PrestigeFactor` used by cashMultFor. Pass-exempt fixed payouts that are
+  earned (oil / crates / jobs) get the rebirth factor ONLY, not the pass / tax / season.
+- The double rebirth factor on income-scaled rewards is removed for the rebirth factor only (JOB 77 scope). The other
+  doubled permanent multipliers are a balance call for Shaun.
+- Dressing at R3 / R5 / R10 / R50 lives in its own model (WE_RebirthDressing) built by the Base Tier sweep. The R1 gate
+  banners stay RebirthZoneService's; their "★ n" text and the R21-24 camo band are behind the flag.
+- Walk-in banners stand beside the buildings (their own parts). The buildings are only read (name lookup in
+  RebirthDressing), never changed.
+- The statue stays on the Part fallback until a candidate passes WE_CHECK2 (needs shaunie6 Get Model). AssetId 0 = no
+  load attempted.
+- The title on the leaderboard = a leaderstats StringValue "Rank" (live players only, so others show a blank).
