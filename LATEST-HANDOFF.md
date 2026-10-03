@@ -1,3 +1,30 @@
+## v255 — Code Bot (Claude JOB 78 mid-raid refill lock + one-time Recruit packs + idempotent receipts, PUBLIC) — place version 253, code 3591b94
+Published Sat 3 Oct Dublin. Open Cloud HTTP 200 versionNumber **253** (universe 10767159222 / place 97112936860418). No restart (new servers pick it up). codeCommit=`3591b94` cherry=`b49ef39` place=253 build=255. Cherry-picked Claude `claude/desktop-bud` **b49ef39** only onto `phase-7-polish`. WE_Build **255**. PreferMesh OFF; no WE_Building*; MonetizationConfig prices/ids untouched. No owner-first — live for everyone.
+
+**COMPLETED**
+1. **Mid-raid refill lock:** `GateDefenseService.UnderAttack(plotId)` = hostile hit within `GateDefenseConfig.RaidLockSeconds` (45) OR ATM raid hold. `RaidLockRefuse` toast "Can't repair during a raid" (3 s rate limit). Locked server-side before charge: gate TryRepair ($750), DefensiveWalls buy, Endgame Tier/Defence, HQ Rebuild. Owner `WE_RaidLockUntil`; HQ/Engineers rows LOCKED; wall pad hides BUY. Unlocks ~45 s after last hit.
+2. **One-time Recruit packs:** if `profile.Entitlements[RecruitPack|StarterRecruit5]` already true, receipt grants only `ShopOverhaulConfig.RepeatPackFallback` (10 min income, Floor 5000, capped at pack's own cash) + notice — no soldiers/boost/entitlement again; answers PurchaseGranted.
+3. **Idempotent receipts:** snapshot before first grant; rollback in place if unmarked (error / early NotProcessedYet); markProcessed before save before PurchaseGranted; yielding income lookups before snapshot; `ProcessedReceipts` bounded to newest 200 via `ProcessedReceiptOrder`.
+
+**FILES:** GateDefenseConfig, ShopOverhaulConfig, BaseService, EndgameService, GateDefenseService, MonetizationService, EndgameController, WorldPromptController, `tools/checks/claude_bud_job78.py`, `tools/sim/run_receipt_idempotency_test.py`; WE_Build 254→255. Deferred held (not included): JOB62 `00a76af`, JOB64 `bbb39ce`, DW-proof `a2864fb`; JOB73 ON HOLD.
+
+**TESTING:** `claude_bud_job78.py` J78-01..15 PASS; `run_receipt_idempotency_test.py` 0 failed; BuyPathStatic **PASS=10194 FAIL=0**. PreferMesh OFF.
+
+**NEXT (phone / next join — no forced restart)**
+1. Start/join a raid or attack someone's gate: gate repair, wall BUY, Base Tier / Defence / HQ rebuild should LOCK / refuse with toast "Can't repair during a raid".
+2. After raid quiet ~45s, buys work again.
+3. Re-buy Recruit Pack or 5 R$ starter after already owning: only 10-min income fallback (capped), notice, PurchaseGranted — not full pack again.
+4. No double-grant on receipt retry.
+
+## v254 — Code Bot (Commander Statue fixes from Shaun's v253 phone test, owner-first) — place version 252, code 811952e
+Published Sat 3 Oct 12:44 Dublin. No restart (new servers pick it up).
+- WHERE: the R50 statue now stands OUTSIDE the base, past the pad's front (main gate) edge, beside the gate approach, facing out (RebirthDressing.OutsideSpot). Candidates: 34/42/26 studs either side of the gate, 12/18/24 studs out. A spot is used only if 5 downward raycasts hit ground that is not a road / pad / apron / spawn / water (Asphalt / Water material or those names), slope <= 2.5, and nothing else sits in the footprint. None free = the first candidate at pad height (still outside). Server log: "[RebirthDressing] statue outside the gate at (x, y, z) checked=true|false".
+- FLOATING, ROOT CAUSE: RebirthDressing.Statue did m:PivotTo(base * CFrame.new(0, s2.Y * 0.5, 0)), which places the model PIVOT; the napoleon (85904106700178) pivot is not its box centre (its thin base plate / creator pivot), so it hung off by that offset. FIX: seat() stands the world-axis box bottom on the frame. The R50 statue is on the owned "Statue Podium" model 5267267960 (the showroom's ShowroomPodium; <= 9 wide, <= 4 tall), podium flush with the ground, statue flush on the podium top, one invisible collider.
+- NAMEPLATE: one line "<name> · SUPREME COMMANDER ★50", TextSize 14, no wrap, BillboardGui.StudsOffset 2.5 above the statue's top, MaxDistance 90. (The other "SUPREME COMMANDER" text Shaun saw is likely the R3 Command Center banner behind the old parade-ground spot; that banner is unchanged and no longer behind the statue.)
+- The T5 Capital statue (no R50) stays on the parade ground, now seated flush too. RebirthConfig.Rewards stays OwnerFirst = true. No price / product change.
+- Checks: tools/checks/codebot_v254.py + tools/sim/run_statue_place_test.py (reproduces v253's 10-stud float, then flush; outside; facing out; skips a road and a blocked spot). run_rebirth_rewards_test now expects the one-line plate. BuyPathStatic PASS=10179 FAIL=0.
+- Phone test: rejoin (new server), chat /statuetest (owner) -> walk out of the main gate: statue on its podium beside the gate approach, facing out, plate above its head. /statuetest again turns it off.
+
 ## v253 — Code Bot (Claude JOB 77 rebirth rewards + Commander Statue, owner-first) — place version 251, code cf974f5
 Published Sat 3 Oct 12:22 Dublin. No restart (new servers pick it up).
 - Cherry-picked Claude `claude/desktop-bud` **4d04222** + **54dd3b0** onto `phase-7-polish`. WE_Build **253**. PreferMesh OFF; no WE_Building*; no price / Id change.
@@ -884,6 +911,47 @@ codeCommit=`d80d20f` cherry=`e2d9986`/`b8b22dd` place=233 build=235
 - Files: `AnalyticsService.luau`, `AnalyticsConfig.luau`, `EconomyService.luau`, `MissionService.luau`, `RetentionService.luau`, `ShopController.luau`, and the JOB 61 check.
 
 <!-- Q2-START -->
+## claude-bud JOB 78 RAID REFILL LOCK + ONE-TIME RECRUIT PACKS + IDEMPOTENT RECEIPTS (2026-10-03) (branch `claude/desktop-bud`)
+PUBLIC bug fixes (no OwnerFirst, as the brief says).
+- Check: `tools/checks/claude_bud_job78.py` (J78-01..15).
+- Sim: `tools/sim/run_receipt_idempotency_test.py` (replays one receipt twice; buys each Recruit pack twice; save failure; rollback; bounded list).
+- `MonetizationConfig` untouched (prices / ids), no renamed save keys.
+
+**ROOT CAUSES (proven in code before the fix):**
+1. **Mid-raid refill.** No refill buy looked at the raid state at all:
+   - `GateDefenseService.TryRepair` checked owner / down / breached, then charged $750 and called `rebuildGate`.
+   - `BaseService.PurchaseUpgrade("DefensiveWalls")`: the upgrade hook ran a full `SyncPlot` (a fresh gate at full HP).
+   - `EndgameService._Plan` "Tier" / "Defence": `Purchase` ran a full `SyncPlot` (Defence did this when DefenceFix was off).
+   - `_Plan` "Rebuild": called `InstantRebuild` mid-raid.
+   - The only raid signals were `alertBaseUnderAttack` (a 60 s toast cooldown, no state kept) and `plotRaidActive` (ATM hold only).
+2. **Recruit packs repeatable.** `MonetizationConfig` has `OneTime = true` on both rows, but `processReceipt` never read it. Only the Shop / offer card hid the row, so an old or open prompt granted the full pack again (cash, soldiers, boost).
+3. **Retried receipts.** The PurchaseId was already recorded before the save (`markProcessed`, then `SaveProfile`, then the ack; `hasProcessed` skips a repeat). Three holes remained:
+   - an early `NotProcessedYet` AFTER grants began (the Speed Trial refusal came after AddCash / entitlements), or an error mid-grant, left a partial grant in the profile, and the next save could persist it;
+   - the Starter5 income lookup (which can yield) ran in the middle of the grant section;
+   - `ProcessedReceipts` grew forever.
+
+**FIX:**
+- **ONE raid state:** `GateDefenseService.UnderAttack(plotId)` = a hostile hit on the plot within `GateDefenseConfig.RaidLockSeconds` (45), stamped in `alertBaseUnderAttack`, OR an ATM raid hold running on it.
+  - `RaidLockRefuse(player, plotId)` sends a rate-limited toast "Can't repair during a raid" (every 3 s at most).
+  - It is checked server-side BEFORE any charge in all 4 handlers: TryRepair; the DefensiveWalls buy (before the console / spend); `_Plan` Tier + Defence; `_Plan` Rebuild.
+  - The owner gets `WE_RaidLockUntil`. The HQ / Engineers rows show LOCKED "(Can't repair during a raid)", and the wall pad hides BUY and shows the same reason. Everything works again 45 s after the last hit.
+- **One-time packs:** in `processReceipt`, before any mutation: if the saved `profile.Entitlements[RecruitPack | StarterRecruit5]` is already true, the receipt grants only the fallback.
+  - Fallback = `ShopOverhaulConfig.RepeatPackFallback` (`Minutes = 10`, `Floor = 5000`): 10 min of his income (timed boosts left out), capped at that pack's own full cash.
+  - No entitlement, soldiers or boost again.
+  - A short notice ("You already own that pack: +$X cash instead"), and the receipt answers PurchaseGranted.
+- **Receipts:**
+  - A profile snapshot is taken right before the first grant. The wrapper rolls it back IN PLACE when the receipt ends unmarked (error / early NotProcessedYet). A MARKED receipt whose save failed keeps its grant; the retry only saves and acks.
+  - Every yielding lookup now runs before the snapshot.
+  - `ProcessedReceipts` is bounded to the newest 200 (order kept in the new `profile.ProcessedReceiptOrder`). Roblox never re-delivers an acknowledged receipt.
+  - It covers every dev product, including cash / time packs, the Recruit packs, Speed Trial, nukes and Battle Pass. There is no "Mega Tank loan" dev product: that is the free Admin Abuse loan, not a receipt.
+
+**PHONE TEST (TEST place):**
+1. Have a 2nd player (or Laumartinez26) shoot your gate. While it is under fire, open the HQ console: BASE TIER, REBUILD DEFENCES and the Engineers rows show LOCKED "(Can't repair during a raid)".
+2. Tap the breached gate's Repair prompt: the toast "Can't repair during a raid", no $750 taken. At the walls console: no BUY button.
+3. Stop shooting, wait ~45 s: all of them work again (the cash is charged normally).
+4. If you already own the Recruit Pack, buy it again from an old prompt (or `/testoffers`): you get only ~10 min of income in cash plus the notice. No soldiers, no 2x boost, and no extra gold trim change. The same for the 5 R$ Starter pack.
+5. Buy a time pack normally: the full amount, once.
+
 ## claude-bud JOB 77 REBIRTH REWARDS (R1-R50) + COMMANDER STATUE (2026-10-03) (branch `claude/desktop-bud`)
 ONE flag: `RebirthConfig.Rewards` (`OwnerFirst = true`, NEW-OWNER-FIRST): Shaun (`AdminConfig.IsPlaytestOwner`) +
 Laumartinez26 (11718087109); OFF = today exactly. The label / text fixes (part D) go to everyone.

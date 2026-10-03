@@ -10282,3 +10282,15 @@ ds_territories.luau T3):
 - The statue stays on the Part fallback until a candidate passes WE_CHECK2 (needs shaunie6 Get Model). AssetId 0 = no
   load attempted.
 - The title on the leaderboard = a leaderstats StringValue "Rank" (live players only, so others show a blank).
+
+## claude-bud JOB 78 raid refill + receipts (2026-10-03)
+- "Under attack" = a hostile hit on the plot in the last 45 s (GateDefenseConfig.RaidLockSeconds), or an ATM raid hold.
+  The brief allows any existing raid state. The ATM hold alone missed gate / army sieges, so the hit stamp is added to
+  the existing alertBaseUnderAttack path (one place every hostile defence hit already goes through).
+- The Engineers Defence buys are locked too: their resync refilled the gate (the same exploit). Empire / Hospital /
+  Armory buys are not refills and stay open.
+- The repeat-pack fallback is capped at the pack's own full cash, so a 5 R$ repeat never pays more than the 5 R$ pack.
+  The 10-minute value lives in ShopOverhaulConfig (MonetizationConfig is byte-pinned).
+- Rollback restores the profile in place from a deep copy. Player attributes set by GrantEntitlement before an error
+  are not reverted. The retry sets them again, and the saved profile is the truth.
+- ProcessedReceiptOrder is a new field under the profile (no rename). Ids saved before it existed are kept as they are.
